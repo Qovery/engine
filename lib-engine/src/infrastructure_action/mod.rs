@@ -46,7 +46,7 @@ pub trait InfrastructureAction: Send + Sync {
         };
         let logger = mk_logger(infra_ctx.kubernetes(), step);
         if infra_ctx.context().is_dry_run_deploy() {
-            logger.warn("🚨 Dry run mode is enabled. No changes will be made to the infrastructure");
+            logger.warn("👻 Dry run mode is enabled. No changes will be made to the infrastructure");
         }
 
         logger.info(format!(

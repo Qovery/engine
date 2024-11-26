@@ -1,6 +1,6 @@
 use crate::cmd::terraform::{
     terraform_apply, terraform_apply_with_tf_workers_resources, terraform_destroy, terraform_init_validate,
-    terraform_output, terraform_plan, terraform_state_list,
+    terraform_output, terraform_plan, terraform_remove_resource_from_tf_state, terraform_state_list,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
@@ -94,7 +94,7 @@ impl TerraformInfraResources {
             )
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
         } else {
-            logger.warn("🚨 Dry run mode enabled, skipping actual terraform apply");
+            logger.warn("👻 Dry run mode enabled, skipping actual terraform apply");
         }
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
@@ -102,12 +102,18 @@ impl TerraformInfraResources {
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
     }
 
-    pub fn delete(&self, logger: &impl InfraLogger) -> Result<(), Box<EngineError>> {
+    pub fn delete(
+        &self,
+        state_to_rm_before_destroy: &[&str],
+        logger: &impl InfraLogger,
+    ) -> Result<(), Box<EngineError>> {
         let envs = envs_to_slice(self.envs.as_slice());
         self.prepare_terraform_files()?;
         self.terraform_init(&envs)?;
 
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+        self.delete_resources_from_state(state_to_rm_before_destroy, logger);
+
         logger.info("🏗️ Deleting terraform resources with the following plan");
         terraform_plan(self.destination_folder.to_string_lossy().as_ref(), &envs, true)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?
@@ -159,5 +165,23 @@ impl TerraformInfraResources {
         .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
 
         Ok(())
+    }
+
+    fn delete_resources_from_state(&self, resources: &[&str], logger: &impl InfraLogger) {
+        for resource in resources {
+            if self.is_dry_run {
+                logger.warn(format!("👻 Skipping deletion of resource {} from terraform state", resource));
+                continue;
+            }
+
+            logger.info(format!("Removing resource {} from terraform state", resource));
+            if let Err(err) = terraform_remove_resource_from_tf_state(
+                self.destination_folder.to_string_lossy().as_ref(),
+                resource,
+                &TerraformValidators::None,
+            ) {
+                logger.warn(format!("Cannot remove resource {} from terraform state: {}", resource, err));
+            }
+        }
     }
 }

@@ -239,7 +239,7 @@ fn clean_karpenter_installation(
     }
 
     if kubernetes.context.is_dry_run_deploy() {
-        logger.warn("🚨 Dry run mode enabled. Skipping Karpenter cleanup");
+        logger.warn("👻 Dry run mode enabled. Skipping Karpenter cleanup");
         return Ok(());
     }
 
@@ -335,7 +335,7 @@ fn patch_kube_proxy_for_custom_vpc(
     }
 
     if kubernetes.context.is_dry_run_deploy() {
-        logger.warn("🚨 Dry run mode enabled. Skipping kube proxy patching for user configured network");
+        logger.warn("👻 Dry run mode enabled. Skipping kube proxy patching for user configured network");
         return Ok(());
     }
 

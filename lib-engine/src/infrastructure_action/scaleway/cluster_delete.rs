@@ -48,7 +48,7 @@ pub fn delete_kapsule_cluster(
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     logger.info("Running Terraform destroy");
-    tf_resources.delete(&logger)?;
+    tf_resources.delete(&[], &logger)?;
 
     // delete info on vault
     let vault_conn = QVaultClient::new(event_details.clone());
