@@ -30,6 +30,12 @@ pub struct MountedFile {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct StorageClass(pub String);
 
+impl Display for StorageClass {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Storage {
     pub id: String,

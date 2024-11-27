@@ -2,6 +2,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: scw-sbv-ssd-0
+  annotations:
+    {{- if eq "scw-sbv-ssd-0" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     scw-type: "b_ssd"
     qovery-type: "ssd"

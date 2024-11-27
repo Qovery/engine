@@ -180,6 +180,8 @@ pub fn create_eks_cluster(
     // if it temporarily fails, just ignore it, data will be pushed on the next sync)
     let _ = kubernetes.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
+    let kube_client = infra_ctx.mk_kube_client()?;
+
     let credentials_env_vars = envs_to_string(cloud_provider.credentials_environment_variables());
     if let Some(spot_enabled) = &kubernetes.get_karpenter_parameters().map(|x| x.spot_enabled) {
         if *spot_enabled {
@@ -187,7 +189,6 @@ pub fn create_eks_cluster(
         }
 
         if Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
-            let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::restart(
                 kubernetes,
                 cloud_provider,
