@@ -975,7 +975,6 @@ gitlab-release:
   needs:
     - gitlab-release
   script:
-    - ./helper.sh deploy_engines_envs
     - ./helper.sh deploy_engines_environment_static_ip
   tags:
     - vm-250mcpu-1gmem-0g
