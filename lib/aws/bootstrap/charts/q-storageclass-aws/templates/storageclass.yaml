@@ -2,6 +2,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: aws-ebs-gp3-0
+  annotations:
+    {{- if eq "aws-ebs-gp3-0" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     aws-type: "gp3"
     qovery-type: "ssd"
@@ -18,6 +22,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: aws-ebs-gp2-0
+  annotations:
+    {{- if eq "aws-ebs-gp2-0" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
   labels:
     aws-type: "gp2"
     qovery-type: "ssd"
@@ -34,6 +42,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: aws-ebs-io1-0
+  annotations:
+    {{- if eq "aws-ebs-io1-0" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
   labels:
     aws-type: "io1"
     qovery-type: "nvme"
@@ -51,6 +63,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: aws-ebs-st1-0
+  annotations:
+    {{- if eq "aws-ebs-st1-0" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
   labels:
     aws-type: "st1"
     qovery-type: "hdd"
@@ -67,6 +83,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: aws-ebs-sc1-0
+  annotations:
+    {{- if eq "aws-ebs-sc1-0" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
   labels:
     aws-type: "sc1"
     qovery-type: "cold"

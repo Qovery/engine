@@ -822,6 +822,8 @@ pub enum Tag {
     K8sGetSecretError,
     /// K8sPatchSecretError: represents an error while trying to patch a secret
     K8sPatchSecretError,
+    /// K8sSetDefaultStorageClassError: represents an error while trying to set the default storage class
+    K8sSetDefaultStorageClassError,
     /// CannotFindRequiredBinary: represents an error where a required binary is not found on the system.
     CannotFindRequiredBinary,
     /// SubnetsCountShouldBeEven: represents an error where subnets count should be even to have as many public than private subnets.
@@ -2654,6 +2656,30 @@ impl EngineError {
             Some(raw_k8s_error.into()),
             None,
             Some("Addon has to be updated manually, please reach out Qovery team.".to_string()),
+        )
+    }
+
+    /// Creates new error for kubernetes not being able to set a storage class as default.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `storage_class_name`: Storage class name.
+    /// * `raw_error`: Raw error message.
+    pub fn new_k8s_set_default_storage_class_error(
+        event_details: EventDetails,
+        storage_class_name: String,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Error while trying to set kubernetes storage class `{storage_class_name}` as default.");
+
+        EngineError::new(
+            event_details,
+            Tag::K8sSetDefaultStorageClassError,
+            message,
+            Some(raw_error),
+            None,
+            None,
         )
     }
 

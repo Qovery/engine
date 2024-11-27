@@ -85,6 +85,12 @@ pub(super) fn eks_helm_charts(
             QoveryStorageType::Nvme,
         ]),
         HelmChartNamespaces::KubeSystem,
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_storage_class_fast_ssd
+                .to_model(),
+        ),
     )
     .to_common_helm_chart()?;
 
