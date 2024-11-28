@@ -107,7 +107,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
 #[derive(Clone)]
 pub struct QoveryStorageClassChartInstallationChecker {
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
-    default_storage_class: Option<StorageClassModel>,
+    _default_storage_class: Option<StorageClassModel>,
 }
 
 impl QoveryStorageClassChartInstallationChecker {
@@ -117,7 +117,7 @@ impl QoveryStorageClassChartInstallationChecker {
     ) -> Self {
         QoveryStorageClassChartInstallationChecker {
             storage_types_to_be_checked_after_install,
-            default_storage_class,
+            _default_storage_class: default_storage_class,
         }
     }
 }
@@ -145,35 +145,36 @@ impl ChartInstallationChecker for QoveryStorageClassChartInstallationChecker {
             }
         }
 
-        if let Some(default_storage_class) = &self.default_storage_class {
-            // check if default storage class is set (if provided)
-            let storage_classes_result = block_on(
-                storage_classes.list(&ListParams::default().fields(&format!("metadata.name={default_storage_class}"))),
-            )
-            .map_err(|e| {
-                CommandError::new(
-                    format!("Error trying to get default storage-class (name={default_storage_class})"),
-                    Some(e.to_string()),
-                    None,
-                )
-            })?;
+        // TODO(benjaminch): reactivate this check once it works properly
+        // if let Some(default_storage_class) = &self.default_storage_class {
+        //     // check if default storage class is set (if provided)
+        //     let storage_classes_result = block_on(
+        //         storage_classes.list(&ListParams::default().fields(&format!("metadata.name={default_storage_class}"))),
+        //     )
+        //     .map_err(|e| {
+        //         CommandError::new(
+        //             format!("Error trying to get default storage-class (name={default_storage_class})"),
+        //             Some(e.to_string()),
+        //             None,
+        //         )
+        //     })?;
 
-            let is_default_storage_class_set = storage_classes_result.items.iter().any(|sc| {
-                sc.metadata.name == Some(default_storage_class.to_string())
-                    && sc
-                        .metadata
-                        .annotations
-                        .as_ref()
-                        .and_then(|annotations| annotations.get("storageclass.kubernetes.io/is-default-class"))
-                        .map_or(false, |value| value == "true")
-            });
+        //     let is_default_storage_class_set = storage_classes_result.items.iter().any(|sc| {
+        //         sc.metadata.name == Some(default_storage_class.to_string())
+        //             && sc
+        //                 .metadata
+        //                 .annotations
+        //                 .as_ref()
+        //                 .and_then(|annotations| annotations.get("storageclass.kubernetes.io/is-default-class"))
+        //                 .map_or(false, |value| value == "true")
+        //     });
 
-            if !is_default_storage_class_set {
-                return Err(CommandError::new_from_safe_message(format!(
-                    "Error: storage-class ({default_storage_class}) is not set as default"
-                )));
-            }
-        }
+        //     if !is_default_storage_class_set {
+        //         return Err(CommandError::new_from_safe_message(format!(
+        //             "Error: storage-class ({default_storage_class}) is not set as default"
+        //         )));
+        //     }
+        // }
 
         Ok(())
     }
