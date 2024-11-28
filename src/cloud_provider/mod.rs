@@ -41,7 +41,6 @@ pub mod scaleway;
 pub mod self_managed;
 pub mod service;
 pub mod utilities;
-pub mod vault;
 
 pub trait CloudProvider: Send + Sync {
     fn context(&self) -> &Context;
