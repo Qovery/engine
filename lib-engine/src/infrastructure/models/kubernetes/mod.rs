@@ -125,6 +125,11 @@ pub enum KubernetesVersion {
         patch: Option<u8>,
         suffix: Option<Arc<str>>,
     },
+    V1_31 {
+        prefix: Option<Arc<str>>,
+        patch: Option<u8>,
+        suffix: Option<Arc<str>>,
+    },
 }
 
 impl KubernetesVersion {
@@ -138,6 +143,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { prefix, .. } => prefix,
             KubernetesVersion::V1_29 { prefix, .. } => prefix,
             KubernetesVersion::V1_30 { prefix, .. } => prefix,
+            KubernetesVersion::V1_31 { prefix, .. } => prefix,
         }
     }
 
@@ -151,6 +157,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { .. } => 1,
             KubernetesVersion::V1_29 { .. } => 1,
             KubernetesVersion::V1_30 { .. } => 1,
+            KubernetesVersion::V1_31 { .. } => 1,
         }
     }
 
@@ -164,6 +171,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { .. } => 28,
             KubernetesVersion::V1_29 { .. } => 29,
             KubernetesVersion::V1_30 { .. } => 30,
+            KubernetesVersion::V1_31 { .. } => 31,
         }
     }
 
@@ -177,6 +185,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { patch, .. } => patch,
             KubernetesVersion::V1_29 { patch, .. } => patch,
             KubernetesVersion::V1_30 { patch, .. } => patch,
+            KubernetesVersion::V1_31 { patch, .. } => patch,
         }
     }
 
@@ -190,6 +199,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_28 { suffix, .. } => suffix,
             KubernetesVersion::V1_29 { suffix, .. } => suffix,
             KubernetesVersion::V1_30 { suffix, .. } => suffix,
+            KubernetesVersion::V1_31 { suffix, .. } => suffix,
         }
     }
 
@@ -227,6 +237,11 @@ impl KubernetesVersion {
                 suffix: None,
             }),
             KubernetesVersion::V1_30 { .. } => Some(KubernetesVersion::V1_29 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_31 { .. } => Some(KubernetesVersion::V1_30 {
                 prefix: None,
                 patch: None,
                 suffix: None,
@@ -271,7 +286,12 @@ impl KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            KubernetesVersion::V1_30 { .. } => None,
+            KubernetesVersion::V1_30 { .. } => Some(KubernetesVersion::V1_31 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_31 { .. } => None,
         }
     }
 
@@ -365,6 +385,11 @@ impl FromStr for KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
+            "1.31" => Ok(KubernetesVersion::V1_30 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
             // EC2 specifics
             "v1.23.16+k3s1" => Ok(KubernetesVersion::V1_23 {
                 prefix: Some(Arc::from("v")),
@@ -406,6 +431,7 @@ impl FromStr for KubernetesVersion {
                 patch: Some(5),
                 suffix: Some(Arc::from("+k3s1")),
             }),
+            // Not adding 1.31 for k3s as it will be decommissioned
             _ => Err(()),
         }
     }
@@ -2030,6 +2056,11 @@ mod tests {
                         patch: None,
                         suffix: None,
                     }),
+                    "1.31" => Ok(kubernetes::KubernetesVersion::V1_31 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
                     _ => panic!("unsupported k8s version string"),
                 },
                 K8sVersion::from_str(&k8s_version_str)
@@ -2046,6 +2077,7 @@ mod tests {
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
             "v1.30.5+k3s1",
+            // No 1.31, k3s will be decommissioned
         ] {
             assert_eq!(
                 match k3s_versions {
@@ -2124,6 +2156,7 @@ mod tests {
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
             "v1.30.5+k3s1",
+            // No 1.31, k3s will be decommissioned
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2180,6 +2213,11 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
+                    K8sVersion::V1_31 { .. } => Some(K8sVersion::V1_30 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
                 },
                 k8s_version.previous_version(),
             );
@@ -2195,6 +2233,7 @@ mod tests {
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
             "v1.30.5+k3s1",
+            // No 1.31, k3s will be decommissioned
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2235,6 +2274,7 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
+                    K8sVersion::V1_31 { .. } => None,
                 },
                 k3s_version.previous_version(),
             );
@@ -2282,7 +2322,12 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
-                    K8sVersion::V1_30 { .. } => None,
+                    K8sVersion::V1_30 { .. } => Some(K8sVersion::V1_31 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_31 { .. } => None,
                 },
                 k8s_version.next_version(),
             );
@@ -2298,6 +2343,7 @@ mod tests {
             "v1.28.5+k3s1",
             "v1.29.7+k3s1",
             "v1.30.5+k3s1",
+            // No 1.31, k3s will be decommissioned
         ] {
             let k3s_version = K8sVersion::from_str(k3s_version_str).expect("Unknown k3s string version");
             assert_eq!(
@@ -2338,6 +2384,7 @@ mod tests {
                         suffix: None
                     }),
                     K8sVersion::V1_30 { .. } => None,
+                    K8sVersion::V1_31 { .. } => None,
                 },
                 k3s_version.next_version(),
             );
