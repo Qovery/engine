@@ -195,9 +195,6 @@ pub enum AwsInstancesType {
     D3EN_XLARGE,
     F1_2XLARGE,
     F1_4XLARGE,
-    G3_4XLARGE,
-    G3_8XLARGE,
-    G3S_XLARGE,
     G4AD_16XLARGE,
     G4AD_2XLARGE,
     G4AD_4XLARGE,
@@ -779,9 +776,6 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::D3EN_XLARGE => "d3en.xlarge",
             AwsInstancesType::F1_2XLARGE => "f1.2xlarge",
             AwsInstancesType::F1_4XLARGE => "f1.4xlarge",
-            AwsInstancesType::G3_4XLARGE => "g3.4xlarge",
-            AwsInstancesType::G3_8XLARGE => "g3.8xlarge",
-            AwsInstancesType::G3S_XLARGE => "g3s.xlarge",
             AwsInstancesType::G4AD_16XLARGE => "g4ad.16xlarge",
             AwsInstancesType::G4AD_2XLARGE => "g4ad.2xlarge",
             AwsInstancesType::G4AD_4XLARGE => "g4ad.4xlarge",
@@ -1365,9 +1359,6 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::D3_XLARGE
                 | AwsInstancesType::F1_2XLARGE
                 | AwsInstancesType::F1_4XLARGE
-                | AwsInstancesType::G3S_XLARGE
-                | AwsInstancesType::G3_4XLARGE
-                | AwsInstancesType::G3_8XLARGE
                 | AwsInstancesType::G4AD_16XLARGE
                 | AwsInstancesType::G4AD_2XLARGE
                 | AwsInstancesType::G4AD_4XLARGE
@@ -2116,9 +2107,6 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::D3_XLARGE
                 | AwsInstancesType::F1_2XLARGE
                 | AwsInstancesType::F1_4XLARGE
-                | AwsInstancesType::G3S_XLARGE
-                | AwsInstancesType::G3_4XLARGE
-                | AwsInstancesType::G3_8XLARGE
                 | AwsInstancesType::G4AD_16XLARGE
                 | AwsInstancesType::G4AD_2XLARGE
                 | AwsInstancesType::G4AD_4XLARGE
@@ -2698,9 +2686,6 @@ impl AwsInstancesType {
             AwsInstancesType::D3EN_XLARGE => "d3en.xlarge",
             AwsInstancesType::F1_2XLARGE => "f1.2xlarge",
             AwsInstancesType::F1_4XLARGE => "f1.4xlarge",
-            AwsInstancesType::G3_4XLARGE => "g3.4xlarge",
-            AwsInstancesType::G3_8XLARGE => "g3.8xlarge",
-            AwsInstancesType::G3S_XLARGE => "g3s.xlarge",
             AwsInstancesType::G4AD_16XLARGE => "g4ad.16xlarge",
             AwsInstancesType::G4AD_2XLARGE => "g4ad.2xlarge",
             AwsInstancesType::G4AD_4XLARGE => "g4ad.4xlarge",
@@ -3284,9 +3269,6 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::D3EN_XLARGE => write!(f, "d3en.xlarge"),
             AwsInstancesType::F1_2XLARGE => write!(f, "f1.2xlarge"),
             AwsInstancesType::F1_4XLARGE => write!(f, "f1.4xlarge"),
-            AwsInstancesType::G3_4XLARGE => write!(f, "g3.4xlarge"),
-            AwsInstancesType::G3_8XLARGE => write!(f, "g3.8xlarge"),
-            AwsInstancesType::G3S_XLARGE => write!(f, "g3s.xlarge"),
             AwsInstancesType::G4AD_16XLARGE => write!(f, "g4ad.16xlarge"),
             AwsInstancesType::G4AD_2XLARGE => write!(f, "g4ad.2xlarge"),
             AwsInstancesType::G4AD_4XLARGE => write!(f, "g4ad.4xlarge"),
@@ -3872,9 +3854,6 @@ impl FromStr for AwsInstancesType {
             "d3en.xlarge" => Ok(AwsInstancesType::D3EN_XLARGE),
             "f1.2xlarge" => Ok(AwsInstancesType::F1_2XLARGE),
             "f1.4xlarge" => Ok(AwsInstancesType::F1_4XLARGE),
-            "g3.4xlarge" => Ok(AwsInstancesType::G3_4XLARGE),
-            "g3.8xlarge" => Ok(AwsInstancesType::G3_8XLARGE),
-            "g3s.xlarge" => Ok(AwsInstancesType::G3S_XLARGE),
             "g4ad.16xlarge" => Ok(AwsInstancesType::G4AD_16XLARGE),
             "g4ad.2xlarge" => Ok(AwsInstancesType::G4AD_2XLARGE),
             "g4ad.4xlarge" => Ok(AwsInstancesType::G4AD_4XLARGE),
@@ -4475,9 +4454,6 @@ mod tests {
                     AwsInstancesType::D3EN_XLARGE => "d3en.xlarge",
                     AwsInstancesType::F1_2XLARGE => "f1.2xlarge",
                     AwsInstancesType::F1_4XLARGE => "f1.4xlarge",
-                    AwsInstancesType::G3_4XLARGE => "g3.4xlarge",
-                    AwsInstancesType::G3_8XLARGE => "g3.8xlarge",
-                    AwsInstancesType::G3S_XLARGE => "g3s.xlarge",
                     AwsInstancesType::G4AD_16XLARGE => "g4ad.16xlarge",
                     AwsInstancesType::G4AD_2XLARGE => "g4ad.2xlarge",
                     AwsInstancesType::G4AD_4XLARGE => "g4ad.4xlarge",
