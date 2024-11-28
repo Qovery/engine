@@ -16,7 +16,7 @@ use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
 use qovery_engine::cloud_provider::scaleway::Scaleway;
@@ -30,6 +30,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::models::scaleway::ScwZone;
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
+use qovery_engine::cloud_provider;
 use qovery_engine::cloud_provider::service::Action;
 use qovery_engine::models::abort::AbortStatus;
 use std::str::FromStr;
@@ -332,6 +333,7 @@ pub fn get_environment_test_kubernetes(
     max_nodes: i32,
     cpu_archi: CpuArchitecture,
     engine_location: EngineLocation,
+    default_kubernetes_storage_class: StorageClass,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
@@ -366,6 +368,9 @@ pub fn get_environment_test_kubernetes(
                         aws_vpc_enable_flow_logs: true,
                         aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
                         aws_eks_enable_alb_controller: true,
+                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
+                            default_kubernetes_storage_class,
+                        ),
                         ..Default::default()
                     },
                     None,
@@ -398,6 +403,9 @@ pub fn get_environment_test_kubernetes(
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: false,
+                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
+                            default_kubernetes_storage_class,
+                        ),
                         ..Default::default()
                     },
                     None,
@@ -422,6 +430,9 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
+                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
+                            default_kubernetes_storage_class,
+                        ),
                         ..Default::default()
                     },
                     None,
@@ -449,6 +460,9 @@ pub fn get_environment_test_kubernetes(
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,
+                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
+                            default_kubernetes_storage_class,
+                        ),
                         ..Default::default()
                     },
                     None,
