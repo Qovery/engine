@@ -58,6 +58,12 @@ impl StorageClass {
     }
 }
 
+impl From<StorageClassModel> for StorageClass {
+    fn from(storage_class: StorageClassModel) -> Self {
+        StorageClass(storage_class.0.to_string())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum RegistryMirroringMode {
     #[serde(alias = "cluster", alias = "CLUSTER")]

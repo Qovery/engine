@@ -14,7 +14,7 @@ use qovery_engine::cloud_provider::gcp::kubernetes::{Gke, GkeOptions, VpcMode};
 use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::cloud_provider::gcp::Google;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::errors::ContainerRegistryError;
@@ -189,6 +189,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             max_nodes,
             cpu_archi,
             engine_location,
+            StorageClass(GcpStorageType::Balanced.to_k8s_storage_class()),
         );
 
         InfrastructureContext::new(
