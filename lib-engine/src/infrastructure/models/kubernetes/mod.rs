@@ -385,7 +385,7 @@ impl FromStr for KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            "1.31" => Ok(KubernetesVersion::V1_30 {
+            "1.31" => Ok(KubernetesVersion::V1_31 {
                 prefix: None,
                 patch: None,
                 suffix: None,
@@ -2383,7 +2383,11 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
-                    K8sVersion::V1_30 { .. } => None,
+                    K8sVersion::V1_30 { .. } => Some(K8sVersion::V1_31 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
                     K8sVersion::V1_31 { .. } => None,
                 },
                 k3s_version.next_version(),
