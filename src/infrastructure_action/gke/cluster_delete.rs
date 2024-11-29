@@ -1,4 +1,5 @@
 use crate::cloud_provider::gcp::kubernetes::Gke;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
@@ -42,7 +43,8 @@ pub(super) fn delete_gke_cluster(
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let _: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
