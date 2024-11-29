@@ -30,8 +30,6 @@ pub enum Tag {
     AwsSdkListElasticacheClusters,
     AwsSdkListRdsInstances,
     Base64DecodeIssue,
-    BuilderBuildpackCannotBuildContainerImage,
-    BuilderBuildpackInvalidLanguageFormat,
     BuilderCloningRepositoryError,
     BuilderDockerCannotBuildContainerImage,
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
@@ -348,8 +346,6 @@ impl From<errors::Tag> for Tag {
                 Tag::BuilderDockerCannotExtractEnvVarsFromDockerfile
             }
             errors::Tag::BuilderDockerCannotBuildContainerImage => Tag::BuilderDockerCannotBuildContainerImage,
-            errors::Tag::BuilderBuildpackInvalidLanguageFormat => Tag::BuilderBuildpackInvalidLanguageFormat,
-            errors::Tag::BuilderBuildpackCannotBuildContainerImage => Tag::BuilderBuildpackCannotBuildContainerImage,
             errors::Tag::BuilderGetBuildError => Tag::BuilderGetBuildError,
             errors::Tag::BuilderCloningRepositoryError => Tag::BuilderCloningRepositoryError,
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,

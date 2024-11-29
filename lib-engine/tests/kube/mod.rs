@@ -220,7 +220,6 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 dockerfile_path: Some("Dockerfile".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: None,

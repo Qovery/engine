@@ -9,7 +9,6 @@ use std::time::Duration;
 use std::{fs, thread};
 
 use git2::{Cred, CredentialType, ErrorClass};
-use itertools::Itertools;
 use retry::delay::Fibonacci;
 use retry::OperationResult;
 use time::Instant;
@@ -17,11 +16,10 @@ use uuid::Uuid;
 
 use crate::build_platform::dockerfile_utils::extract_dockerfile_args;
 use crate::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
-use crate::cmd::command::CommandError::Killed;
-use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
+use crate::cmd::command::CommandKiller;
+use crate::cmd::docker;
 use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
-use crate::cmd::{command, docker};
 use crate::deployment_report::logger::EnvLogger;
 
 use crate::fs::workspace_directory;
@@ -31,14 +29,6 @@ use crate::io_models::context::Context;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::models::abort::Abort;
 use crate::utilities::to_short_id;
-
-/// https://github.com/heroku/builder
-const BUILDPACKS_BUILDERS: [&str; 1] = [
-    "heroku/builder:24",
-    // removed because it does not support dynamic port binding
-    //"gcr.io/buildpacks/builder:v1",
-    //"paketobuildpacks/builder:base",
-];
 
 const DOCKER_IGNORE: &str = r#"
 # Ignore all logs
@@ -77,14 +67,6 @@ impl LocalDocker {
             builder_counter: AtomicUsize::new(0),
             metrics_registry,
         })
-    }
-
-    fn get_docker_host_envs(&self) -> Vec<(&str, &str)> {
-        if let Some(socket_path) = self.context.docker.socket_url() {
-            vec![("DOCKER_HOST", socket_path.as_str())]
-        } else {
-            vec![]
-        }
     }
 
     fn build_image_with_docker(
@@ -333,133 +315,6 @@ impl LocalDocker {
         Ok(builder_handle)
     }
 
-    fn build_image_with_buildpacks(
-        &self,
-        build: &Build,
-        into_dir_docker_style: &str,
-        use_build_cache: bool,
-        logger: &EnvLogger,
-        abort: &dyn Abort,
-    ) -> Result<(), BuildError> {
-        const LATEST_TAG: &str = "latest";
-        let name_with_tag = build.image.full_image_name_with_tag();
-        let name_with_latest_tag = format!("{}:{}", build.image.full_image_name(), LATEST_TAG);
-        let mut exit_status: Result<(), command::CommandError> = Err(command::CommandError::ExecutionError(
-            Error::new(ErrorKind::InvalidData, "No builder names".to_string()),
-        ));
-
-        let architectures: Vec<Architecture> = build
-            .architectures
-            .iter()
-            .map(|arch| docker::Architecture::from(arch))
-            .collect();
-        let platforms = architectures.iter().map(|arch| arch.to_platform()).join(",");
-
-        for builder_name in BUILDPACKS_BUILDERS.iter() {
-            // always add 'latest' tag
-            let mut buildpacks_args = vec![
-                "build",
-                name_with_latest_tag.as_str(),
-                "--publish",
-                "--tag",
-                name_with_tag.as_str(),
-            ];
-
-            if !use_build_cache {
-                buildpacks_args.push("--clear-cache");
-            }
-
-            // Build for all requested architectures, if empty build for the current architecture the engine is running on
-            if !architectures.is_empty() {
-                buildpacks_args.extend(vec!["--platform", &platforms]);
-            };
-
-            buildpacks_args.extend(vec!["--path", into_dir_docker_style]);
-
-            let mut args_buffer = Vec::with_capacity(build.environment_variables.len());
-            for (key, value) in &build.environment_variables {
-                args_buffer.push("--env".to_string());
-                args_buffer.push(format!("{key}={value}"));
-            }
-            buildpacks_args.extend(args_buffer.iter().map(|value| value.as_str()).collect::<Vec<&str>>());
-
-            buildpacks_args.push("-B");
-            buildpacks_args.push(builder_name);
-            if let Some(buildpacks_language) = &build.git_repository.buildpack_language {
-                buildpacks_args.push("-b");
-                match buildpacks_language.split('@').collect::<Vec<&str>>().as_slice() {
-                    [builder] => {
-                        // no version specified, so we use the latest builder
-                        buildpacks_args.push(builder);
-                    }
-                    [builder, _version] => {
-                        // version specified, we need to use the specified builder
-                        // but also ensure that the user has set the correct runtime version in his project
-                        // this is language dependent
-                        // https://elements.heroku.com/buildpacks/heroku/heroku-buildpack-python
-                        // https://devcenter.heroku.com/articles/buildpacks
-                        // TODO: Check user project is correctly configured for this builder and version
-                        buildpacks_args.push(builder);
-                    }
-                    _ => {
-                        return Err(BuildError::InvalidConfig {
-                            application: build.image.service_id.clone(),
-                            raw_error_message: format!(
-                                "Invalid buildpacks language format: expected `builder[@version]` got {buildpacks_language}"
-                            ),
-                        });
-                    }
-                }
-            }
-
-            // Just a fallback for now to help our bot loving users deploy their apps
-            // Long term solution requires lots of changes in UI and Core as well
-            // And passing some params to the engine
-            if let Ok(content) = fs::read_to_string(format!("{}/{}", into_dir_docker_style, "Procfile")) {
-                if content.contains("worker") {
-                    buildpacks_args.push("--default-process");
-                    buildpacks_args.push("worker");
-                }
-            }
-
-            // connect to docker registry
-            // buildpacks doesn't reuse the docker config file, so we need a plain docker login (don't store credentials inside file)
-            self.context
-                .docker
-                .login_without_config_file(&build.image.registry_url)
-                .map_err(move |err| BuildError::DockerError {
-                    application: build.image.service_id.clone(),
-                    raw_error: err,
-                })?;
-
-            // buildpacks build
-            let mut cmd = QoveryCommand::new("pack", &buildpacks_args, &self.get_docker_host_envs());
-            cmd.set_kill_grace_period(Duration::from_secs(0));
-            let cmd_killer = CommandKiller::from(build.timeout, abort);
-            exit_status = cmd.exec_with_abort(
-                &mut |line| logger.send_progress(line),
-                &mut |line| logger.send_progress(line),
-                &cmd_killer,
-            );
-
-            if exit_status.is_ok() {
-                // quit now if the builder successfully build the app
-                break;
-            }
-        }
-
-        match exit_status {
-            Ok(_) => Ok(()),
-            Err(Killed(_)) => Err(BuildError::Aborted {
-                application: build.image.service_id.clone(),
-            }),
-            Err(err) => Err(BuildError::BuildpackError {
-                application: build.image.service_id.clone(),
-                raw_error: err,
-            }),
-        }
-    }
-
     fn get_repository_build_root_path(&self, build: &Build) -> Result<PathBuf, BuildError> {
         workspace_directory(
             self.context.workspace_root_dir(),
@@ -689,68 +544,54 @@ impl BuildPlatform for LocalDocker {
             });
         }
 
-        // now we have to decide if we use buildpack or docker to build our application
-        // If no Dockerfile specified, we should use BuildPacks
-        if let Some(dockerfile_path) = &build.git_repository.dockerfile_path {
-            // build container from the provided Dockerfile
+        let dockerfile_path = build
+            .git_repository
+            .dockerfile_path
+            .as_ref()
+            .ok_or(BuildError::InvalidConfig {
+                application: app_id.clone(),
+                raw_error_message: "Dockerfile path is not defined".to_string(),
+            })?;
 
-            let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
+        let dockerfile_absolute_path = repository_root_path.join(dockerfile_path);
 
-            // if the dockerfile content is provided, write it to the file before building
-            if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
-                fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
+        // if the dockerfile content is provided, write it to the file before building
+        if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
+            fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
+                application: app_id.clone(),
+                action_description: "writing dockerfile content".to_string(),
+                raw_error: err,
+            })?;
+
+            if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
+                let docker_ignore_path = dockerfile_directory.join(".dockerignore");
+
+                fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
                     application: app_id.clone(),
-                    action_description: "writing dockerfile content".to_string(),
+                    action_description: "writing .dockerignore content".to_string(),
                     raw_error: err,
                 })?;
-
-                if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
-                    let docker_ignore_path = dockerfile_directory.join(".dockerignore");
-
-                    fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
-                        application: app_id.clone(),
-                        action_description: "writing .dockerignore content".to_string(),
-                        raw_error: err,
-                    })?;
-                }
             }
-
-            // If the dockerfile does not exist, abort
-            if !dockerfile_absolute_path.is_file() {
-                return Err(BuildError::InvalidConfig {
-                    application: app_id,
-                    raw_error_message: format!(
-                        "Specified dockerfile path {:?} does not exist within the repository",
-                        &dockerfile_path
-                    ),
-                });
-            }
-
-            self.build_image_with_docker(
-                build,
-                dockerfile_absolute_path.to_str().unwrap_or_default(),
-                build_context_path.to_str().unwrap_or_default(),
-                logger,
-                metrics_registry.clone(),
-                abort,
-            )
-        } else {
-            // build container with Buildpacks
-            let build_record =
-                metrics_registry.start_record(build.image.service_long_id, StepLabel::Service, StepName::Build);
-            let build_result = self.build_image_with_buildpacks(
-                build,
-                build_context_path.to_str().unwrap_or_default(),
-                !build.disable_cache,
-                logger,
-                abort,
-            );
-            build_record.stop(if build_result.is_ok() {
-                StepStatus::Success
-            } else {
-                StepStatus::Error
-            });
-            build_result
         }
+
+        // If the dockerfile does not exist, abort
+        if !dockerfile_absolute_path.is_file() {
+            return Err(BuildError::InvalidConfig {
+                application: app_id,
+                raw_error_message: format!(
+                    "Specified dockerfile path {:?} does not exist within the repository",
+                    &dockerfile_path
+                ),
+            });
+        }
+
+        self.build_image_with_docker(
+            build,
+            dockerfile_absolute_path.to_str().unwrap_or_default(),
+            build_context_path.to_str().unwrap_or_default(),
+            logger,
+            metrics_registry.clone(),
+            abort,
+        )
     }
 }

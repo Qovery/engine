@@ -247,7 +247,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
                 dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
-                buildpack_language: Some("my_language".to_string()),
             },
             image: Image {
                 service_id: "my_application_id".to_string(),
