@@ -10,3 +10,15 @@ value: 1000000
 globalDefault: false
 description: "This priority class should be used for Qovery service pods only."
 {{ end }}
+{{ if .Values.priorityClass.standardPriority.enable }}
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: "qovery-standard-priority"
+  labels:
+    qovery-type: "qovery-standard-priority"
+value: 1000
+globalDefault: false
+description: "This priority class should be used for Qovery user services pods."
+{{ end }}
