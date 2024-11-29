@@ -776,6 +776,7 @@ pub fn generate_organization_id(region: &str) -> Uuid {
     }
 }
 
+#[cfg(test)]
 pub fn get_pvc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
@@ -789,6 +790,7 @@ pub fn get_pvc(
     )
 }
 
+#[cfg(test)]
 pub fn get_svc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
