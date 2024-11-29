@@ -9,6 +9,7 @@ use crate::errors::CommandError;
 use crate::runtime::block_on;
 use k8s_openapi::api::scheduling::v1::PriorityClass;
 use kube::core::params::ListParams;
+use kube::core::{Expression, Selector};
 use kube::Api;
 use std::collections::HashSet;
 
@@ -54,13 +55,22 @@ impl ToCommonHelmChart for QoveryPriorityClassChart {
                 namespace: self.namespace,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![ChartSetValue {
-                    key: "priorityClass.highPriority.enable".to_string(),
-                    value: self
-                        .priority_classes_to_be_installed
-                        .contains(&QoveryPriorityClass::HighPriority)
-                        .to_string(),
-                }],
+                values: vec![
+                    ChartSetValue {
+                        key: "priorityClass.highPriority.enable".to_string(),
+                        value: self
+                            .priority_classes_to_be_installed
+                            .contains(&QoveryPriorityClass::HighPriority)
+                            .to_string(),
+                    },
+                    ChartSetValue {
+                        key: "priorityClass.standardPriority.enable".to_string(),
+                        value: self
+                            .priority_classes_to_be_installed
+                            .contains(&QoveryPriorityClass::StandardPriority)
+                            .to_string(),
+                    },
+                ],
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryPriorityClassChartInstallationChecker::new(
@@ -88,22 +98,36 @@ impl ChartInstallationChecker for QoveryPriorityClassChartInstallationChecker {
     fn verify_installation(&self, kube_client: &kube::Client) -> Result<(), CommandError> {
         let priority_classes: Api<PriorityClass> = Api::all(kube_client.clone());
 
-        // Check all Qovery's required priority classes are properly set
-        for required_priority_class in self.priority_classes_to_be_checked_after_install.iter() {
-            match block_on(
-                priority_classes
-                    .list(&ListParams::default().fields(format!("metadata.name={required_priority_class}").as_str())),
-            ) {
+        if !self.priority_classes_to_be_checked_after_install.is_empty() {
+            let selector: Selector = Expression::In(
+                "qovery-type".to_string(),
+                self.priority_classes_to_be_checked_after_install
+                    .iter()
+                    .map(|pc| pc.to_string().to_lowercase())
+                    .collect(),
+            )
+            .into();
+
+            match block_on(priority_classes.list(&ListParams::default().labels_from(&selector))) {
                 Ok(priority_classes_result) => {
-                    if priority_classes_result.items.is_empty() {
-                        return Err(CommandError::new_from_safe_message(format!(
-                            "Error: q-priority-class (metadata.name={required_priority_class}) is not set"
-                        )));
+                    let installed_priority_classes: HashSet<String, std::collections::hash_map::RandomState> =
+                        HashSet::from_iter(
+                            priority_classes_result
+                                .items
+                                .into_iter()
+                                .filter_map(|item| item.metadata.name.map(|name| name.to_lowercase())),
+                        );
+                    for required_priority_class in self.priority_classes_to_be_checked_after_install.iter() {
+                        if !installed_priority_classes.contains(&required_priority_class.to_string().to_lowercase()) {
+                            return Err(CommandError::new_from_safe_message(format!(
+                                "Error: q-priority-class (metadata.name={required_priority_class}) is not set"
+                            )));
+                        }
                     }
                 }
                 Err(e) => {
                     return Err(CommandError::new(
-                        format!("Error trying to get q-priority-class (metadata.name={required_priority_class})"),
+                        format!("Error trying to get q-priority-class ({selector})",),
                         Some(e.to_string()),
                         None,
                     ))

@@ -588,7 +588,7 @@ pub(super) fn eks_helm_charts(
     // Qovery priority class
     let q_priority_class_chart = QoveryPriorityClassChart::new(
         chart_prefix_path,
-        HashSet::from_iter(vec![QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
+        HashSet::from_iter(vec![QoveryPriorityClass::StandardPriority, QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
     )
     .to_common_helm_chart()?;

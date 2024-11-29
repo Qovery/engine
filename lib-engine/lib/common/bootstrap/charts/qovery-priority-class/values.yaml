@@ -1,3 +1,5 @@
 priorityClass:
   highPriority:
     enable: true
+  standardPriority:
+    enable: true

@@ -119,12 +119,14 @@ impl ChartValuesGenerated {
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub enum QoveryPriorityClass {
     HighPriority,
+    StandardPriority,
 }
 
 impl Display for QoveryPriorityClass {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             QoveryPriorityClass::HighPriority => "qovery-high-priority",
+            QoveryPriorityClass::StandardPriority => "qovery-standard-priority",
         })
     }
 }
