@@ -42,7 +42,6 @@ pub(super) fn create_gke_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
-
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
 
     // Configure kubectl to be able to connect to cluster

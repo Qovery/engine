@@ -1,3 +1,4 @@
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::Kapsule;
 use crate::engine::InfrastructureContext;
@@ -42,7 +43,8 @@ pub fn delete_kapsule_cluster(
         cluster.short_id()
     ));
     logger.info("Running Terraform apply before running a delete.");
-    let _qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 

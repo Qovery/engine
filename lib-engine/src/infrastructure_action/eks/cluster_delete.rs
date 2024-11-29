@@ -5,6 +5,7 @@ use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups};
 use crate::cloud_provider::CloudProvider;
@@ -113,12 +114,18 @@ pub fn delete_eks_cluster(
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
 
-    let _: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger).inspect_err(|e| {
-        logger.warn(EventMessage::new(
-            "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-            Some(e.to_string()),
-        ));
-    });
+    let tf_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger);
+    match tf_output {
+        Ok(tf_output) => {
+            update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
+        }
+        Err(e) => {
+            logger.warn(EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
+            ));
+        }
+    }
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([

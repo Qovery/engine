@@ -53,7 +53,6 @@ pub fn create_kapsule_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(&logger)?;
-
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
     let kubeconfig_path = cluster.kubeconfig_local_file_path();
 
