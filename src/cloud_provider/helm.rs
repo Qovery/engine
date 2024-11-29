@@ -178,6 +178,11 @@ impl VpaTargetRef {
     }
 }
 
+/// VpaContainerPolicy: holding VPA container policy
+///
+/// Note: GKE autopilot wants memory to cpu ratio to be in the [1, 6.5] range
+/// as a good practice for bin packing, let's do this for all providers
+/// https://cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests
 #[derive(Clone, Debug)]
 pub struct VpaContainerPolicy {
     pub name: String,
@@ -207,6 +212,7 @@ impl VpaContainerPolicy {
 
 impl VpaConfig {
     pub fn new(target_ref: VpaTargetRef, container_policy: VpaContainerPolicy) -> Self {
+        // TODO(benjaminch): make it a try_new and return an error if memory to cpu ratio is not in the [1, 6.5] range
         VpaConfig {
             target_ref,
             container_policy,
