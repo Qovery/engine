@@ -168,7 +168,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }
@@ -324,7 +324,7 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }

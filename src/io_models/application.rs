@@ -285,7 +285,6 @@ pub struct Application {
     pub dockerfile_path: Option<String>,
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
-    pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
     pub public_domain: String,
@@ -571,7 +570,6 @@ impl Application {
                 dockerfile_path,
                 dockerfile_content: None,
                 root_path,
-                buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self

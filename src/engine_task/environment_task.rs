@@ -131,23 +131,14 @@ impl EnvironmentTask {
         option: &DeploymentOption,
         infra_ctx: &InfrastructureContext,
         max_build_in_parallel: usize,
-        env_logger: impl Fn(String),
         mk_logger: impl Fn(&dyn Service) -> EnvLogger + Send + Sync,
         abort: &dyn Abort,
     ) -> Result<(), Box<EngineError>> {
         // Only keep services that have something to build
-        let mut build_needs_buildpacks = false;
         let metrics_registry: Arc<dyn MetricsRegistry> = Arc::from(infra_ctx.metrics_registry().clone_dyn());
         let services = services
             .into_iter()
-            .filter(|srv| {
-                if let Some(build) = srv.build() {
-                    build_needs_buildpacks = build_needs_buildpacks || build.use_buildpacks();
-                    true
-                } else {
-                    false
-                }
-            })
+            .filter(|srv| srv.build().is_some())
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
@@ -155,14 +146,7 @@ impl EnvironmentTask {
             return Ok(());
         };
 
-        let max_build_in_parallel = if build_needs_buildpacks {
-            env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-            env_logger("⚠️ By using buildpacks you cannot build in parallel. Please migrate to Docker to benefit of parallel builds ⚠️".to_string());
-            env_logger("⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️ ⚠️️️".to_string());
-            1
-        } else {
-            max(min(max_build_in_parallel, services.len()), 1)
-        };
+        let max_build_in_parallel = max(min(max_build_in_parallel, services.len()), 1);
 
         // To convert ContainerError to EngineError
         let cr_registry = infra_ctx.container_registry();
@@ -322,7 +306,6 @@ impl EnvironmentTask {
     pub fn deploy_environment(
         mut environment: Environment,
         infra_ctx: &InfrastructureContext,
-        env_logger: impl Fn(String),
         abort: &dyn Abort,
     ) -> Result<(), Box<EngineError>> {
         let mut deployed_services: HashSet<Uuid> = HashSet::new();
@@ -350,7 +333,6 @@ impl EnvironmentTask {
                 },
                 infra_ctx,
                 environment.max_parallel_build as usize,
-                env_logger,
                 |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
                 abort,
             )?;
@@ -533,10 +515,6 @@ impl Task for EnvironmentTask {
         };
 
         // run the actions
-        let env_logger = |msg: String| {
-            self.logger
-                .log(EngineEvent::Info(event_details.clone(), EventMessage::new(msg, None)));
-        };
 
         let metrics_registry = Arc::new(infra_context.metrics_registry().clone_dyn());
         let service_ids = std::iter::empty()
@@ -553,12 +531,8 @@ impl Task for EnvironmentTask {
             .map(|service_id| metrics_registry.start_record(*service_id, StepLabel::Service, StepName::Total))
             .collect();
 
-        let deployment_ret = EnvironmentTask::deploy_environment(
-            environment,
-            &infra_context,
-            env_logger,
-            self.cancel_checker().as_ref(),
-        );
+        let deployment_ret =
+            EnvironmentTask::deploy_environment(environment, &infra_context, self.cancel_checker().as_ref());
 
         Self::stop_total_steps_records(&deployment_ret, record, service_records);
 

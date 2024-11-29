@@ -577,11 +577,6 @@ impl From<BuildError> for CommandError {
                 Some(raw_error.to_string()),
                 None,
             ),
-            BuildError::BuildpackError { application, raw_error } => CommandError::new(
-                format!("Build error, cannot build application `{application}` due to a Buildpack error"),
-                Some(raw_error.to_string()),
-                None,
-            ),
             BuildError::CannotGetCredentials { .. } => {
                 CommandError::new("Build error, cannot get registry credentials".to_string(), None, None)
             }
@@ -961,10 +956,6 @@ pub enum Tag {
     BuilderDockerCannotBuildContainerImage,
     /// BuilderDockerCannotListImages: represents an error while trying to list docker images.
     BuilderDockerCannotListImages,
-    /// BuilderBuildpackInvalidLanguageFormat: represents an error where buildback requested language has wrong format.
-    BuilderBuildpackInvalidLanguageFormat,
-    /// BuilderBuildpackCannotBuildContainerImage: represents an error while trying to build container image with Buildpack.
-    BuilderBuildpackCannotBuildContainerImage,
     /// BuilderGetBuildError: represents an error when builder is trying to get parent build.
     BuilderGetBuildError,
     /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
@@ -3976,58 +3967,6 @@ impl EngineError {
             None,
             None,
             Some("Your Dockerfile is not present at the specified location, check your settings.".to_string()),
-        )
-    }
-
-    /// Creates new error buildpack invalid language format.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `requested_language`: Requested language.
-    pub fn new_buildpack_invalid_language_format(
-        event_details: EventDetails,
-        requested_language: String,
-    ) -> EngineError {
-        let message = format!("Cannot build: Invalid buildpacks language format: `{requested_language}`.");
-
-        EngineError::new(
-            event_details,
-            Tag::BuilderBuildpackInvalidLanguageFormat,
-            message,
-            None,
-            None,
-            Some("Expected format `builder[@version]`.".to_string()),
-        )
-    }
-
-    /// Creates new error when trying to build container.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `container_image_name`: Container image name.
-    /// * `builders`: Builders name list.
-    /// * `raw_error`: Raw error message.
-    pub fn new_buildpack_cannot_build_container_image(
-        event_details: EventDetails,
-        container_image_name: String,
-        builders: Vec<String>,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = "Cannot find a builder to build application.";
-
-        EngineError::new(
-            event_details,
-            Tag::BuilderBuildpackCannotBuildContainerImage,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            Some(format!(
-                "Qovery can't build your container image {} with one of the following builders: {}. Please do provide a valid Dockerfile to build your application or contact the support.",
-                container_image_name,
-                builders.join(", ")
-            ),),
         )
     }
 

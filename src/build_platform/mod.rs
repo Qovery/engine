@@ -2,7 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cmd::command::CommandError;
 use crate::cmd::docker::DockerError;
 use crate::deployment_report::logger::EnvLogger;
 use crate::errors::EngineError;
@@ -78,12 +77,6 @@ pub enum BuildError {
         raw_error: DockerError,
     },
 
-    #[error("Cannot build Application {application:?} due to an error with buildpack: {raw_error:?}")]
-    BuildpackError {
-        application: String,
-        raw_error: CommandError,
-    },
-
     #[error("Cannot get credentials error.")]
     CannotGetCredentials { raw_error_message: String },
 }
@@ -144,10 +137,6 @@ impl Build {
             &self.git_repository.commit_id,
         );
     }
-
-    pub fn use_buildpacks(&self) -> bool {
-        self.git_repository.dockerfile_path.is_none()
-    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -177,7 +166,6 @@ pub struct GitRepository {
     pub dockerfile_path: Option<PathBuf>,
     pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
-    pub buildpack_language: Option<String>,
 }
 impl GitRepository {
     fn credentials(&self) -> Option<anyhow::Result<Credentials>> {

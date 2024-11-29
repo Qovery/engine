@@ -258,7 +258,6 @@ impl Job {
                 dockerfile_path,
                 dockerfile_content: dockerfile_content.clone(),
                 root_path,
-                buildpack_language: None,
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self

@@ -88,7 +88,6 @@ impl Infrastructure for EnvironmentRequest {
             &deployment_option,
             infra_ctx,
             1,
-            |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| AbortStatus::None,
         );
@@ -111,7 +110,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Create;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn pause_environment(
@@ -129,7 +128,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn delete_environment(
@@ -147,7 +146,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn restart_environment(
@@ -165,7 +164,7 @@ impl Infrastructure for EnvironmentRequest {
             .unwrap();
 
         env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 }
 
@@ -241,7 +240,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: "/".to_string(),
                 action: Action::Create,
                 git_credentials: None,
@@ -310,7 +308,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: None,
@@ -379,7 +376,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some(format!("Dockerfile-{version_mongo}")),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 action: Action::Create,
                 root_path: String::from("/"),
                 git_credentials: None,
@@ -561,7 +557,6 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             branch: "basic-app-deploy".to_string(),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
@@ -619,7 +614,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
