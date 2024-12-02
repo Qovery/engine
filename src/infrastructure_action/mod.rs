@@ -13,7 +13,7 @@ use crate::cloud_provider::service::Action;
 use crate::engine::InfrastructureContext;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
 use crate::infrastructure_action::utils::mk_logger;
 use crate::logger::Logger;
 use tera::Context as TeraContext;
@@ -46,7 +46,7 @@ pub trait InfrastructureAction: Send + Sync {
         };
         let logger = mk_logger(infra_ctx.kubernetes(), step);
         if infra_ctx.context().is_dry_run_deploy() {
-            logger.warn("Dry run mode is enabled. No changes will be made to the infrastructure");
+            logger.warn("👻 Dry run mode is enabled. No changes will be made to the infrastructure");
         }
 
         logger.info(format!(
@@ -120,6 +120,8 @@ pub trait InfraLogger {
     fn info(&self, message: impl Into<EventMessage>);
     fn warn(&self, message: impl Into<EventMessage>);
     fn error(self, error: EngineError, message: Option<impl Into<EventMessage>>);
+
+    fn diff(&self, from: InfrastructureDiffType, message: String);
 }
 
 struct InfraLoggerImpl {
@@ -140,5 +142,13 @@ impl InfraLogger for InfraLoggerImpl {
 
     fn error(self, error: EngineError, message: Option<impl Into<EventMessage>>) {
         self.logger.log(EngineEvent::Error(error, message.map(|ev| ev.into())));
+    }
+
+    fn diff(&self, from: InfrastructureDiffType, message: String) {
+        let ev = EventDetails::clone_changing_stage(
+            self.event_details.clone(),
+            Infrastructure(InfrastructureStep::InfrastructureDiff(from)),
+        );
+        self.logger.log(EngineEvent::Info(ev, EventMessage::from(message)));
     }
 }

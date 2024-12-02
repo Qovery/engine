@@ -56,6 +56,12 @@ pub(super) fn gke_helm_charts(
         CloudProviderKind::Gcp,
         HashSet::from_iter(vec![QoveryStorageType::Ssd, QoveryStorageType::Hdd]), // TODO(ENG-1800): Add Cold and Nvme
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_storage_class_fast_ssd
+                .to_model(),
+        ),
     )
     .to_common_helm_chart()?;
 

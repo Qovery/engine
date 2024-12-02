@@ -2,12 +2,16 @@ extern crate serde;
 extern crate serde_derive;
 
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
+use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::dns::dns_provider_qoverydns;
+use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::kubernetes::Options;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
+use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::container_registry::ecr::ECR;
@@ -16,18 +20,14 @@ use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
+use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::models::ToCloudProviderFormat;
 use std::str::FromStr;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
-
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_29 {
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_30 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -127,6 +127,7 @@ impl Cluster<AWS, Options> for AWS {
             max_nodes,
             cpu_archi,
             engine_location,
+            StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
         );
 
         InfrastructureContext::new(

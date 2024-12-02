@@ -66,6 +66,12 @@ pub fn kapsule_helm_charts(
         kind_provider,
         HashSet::from_iter(vec![QoveryStorageType::Ssd]),
         HelmChartNamespaces::KubeSystem,
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_storage_class_fast_ssd
+                .to_model(),
+        ),
     )
     .to_common_helm_chart()?;
 
@@ -88,6 +94,7 @@ pub fn kapsule_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         true,
         HelmChartNamespaces::KubeSystem,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -498,6 +505,24 @@ pub fn kapsule_helm_charts(
     };
 
     // chart deployment order matters!!!
+    let level_0: Vec<Box<dyn HelmChart>> = vec![
+        // This chart is required in order to install CRDs and declare later charts with VPA
+        // It will be installed only if chart doesn't exist already on the cluster in order to avoid
+        // disabling VPA on VPA controller at each update
+        Box::new(
+            VpaChart::new(
+                chart_prefix_path,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                false, // <- VPA not activated
+                HelmChartNamespaces::KubeSystem,
+                true, // <- wont be deployed if already exists
+            )
+            .to_common_helm_chart()?,
+        ),
+    ];
+
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(q_storage_class),
         Box::new(coredns_config),
@@ -548,5 +573,5 @@ pub fn kapsule_helm_charts(
     }
 
     info!("charts configuration preparation finished");
-    Ok(vec![level_1, level_2, level_3, level_4, level_5, level_6, level_7])
+    Ok(vec![level_0, level_1, level_2, level_3, level_4, level_5, level_6, level_7])
 }

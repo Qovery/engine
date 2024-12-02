@@ -43,7 +43,18 @@ impl InfrastructureTask {
             "infrastructure_task",
             organization_id = request.organization_long_id.to_string(),
             cluster_id = request.kubernetes.long_id.to_string(),
-            execution_id = request.id,
+            // used by grafana dashboard to filter by action and compute diff of change
+            action = match request.action {
+                Action::Create
+                    if request
+                        .metadata
+                        .as_ref()
+                        .and_then(|x| x.is_first_cluster_deployment)
+                        .unwrap_or_default() =>
+                    "install".to_string(),
+                Action::Create => "update".to_string(),
+                _ => request.action.to_string(),
+            },
         );
 
         InfrastructureTask {

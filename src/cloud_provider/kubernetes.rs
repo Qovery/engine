@@ -1,5 +1,4 @@
 use super::models::NodeGroupsWithDesiredState;
-use super::vault::ClusterSecrets;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -451,13 +450,6 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn temp_dir(&self) -> &Path;
-
-    fn update_vault_config(
-        &self,
-        event_details: EventDetails,
-        cluster_secrets: ClusterSecrets,
-        kubeconfig_file_path: Option<&Path>,
-    ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
     fn is_karpenter_enabled(&self) -> bool {
@@ -1427,7 +1419,7 @@ mod tests {
     use crate::cloud_provider::models::CpuLimits;
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::errors::EngineError;
-    use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+    use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure_action::InfraLogger;
     use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
@@ -1446,6 +1438,8 @@ mod tests {
         fn warn(&self, _message: impl Into<EventMessage>) {}
 
         fn error(self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
+
+        fn diff(&self, _from: InfrastructureDiffType, _message: String) {}
     }
 
     pub fn kubeconfig_path() -> String {

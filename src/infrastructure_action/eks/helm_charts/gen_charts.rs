@@ -85,6 +85,12 @@ pub(super) fn eks_helm_charts(
             QoveryStorageType::Nvme,
         ]),
         HelmChartNamespaces::KubeSystem,
+        Some(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_storage_class_fast_ssd
+                .to_model(),
+        ),
     )
     .to_common_helm_chart()?;
 
@@ -161,6 +167,7 @@ pub(super) fn eks_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         true,
         HelmChartNamespaces::KubeSystem,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -696,19 +703,39 @@ pub(super) fn eks_helm_charts(
         level_1.push(Box::new(aws_iam_eks_user_mapper));
     }
 
-    let mut level_2: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
+    let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
-    let mut level_3: Vec<Box<dyn HelmChart>> = vec![];
+    let level_3: Vec<Box<dyn HelmChart>> = vec![
+        // This chart is required in order to install CRDs and declare later charts with VPA
+        // It will be installed only if chart doesn't exist already on the cluster in order to avoid
+        // disabling VPA on VPA controller at each update
+        Box::new(
+            VpaChart::new(
+                chart_prefix_path,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                HelmChartResourcesConstraintType::ChartDefault,
+                false, // <- VPA not activated
+                HelmChartNamespaces::KubeSystem,
+                true, // <- wont be deployed if already exists
+            )
+            .to_common_helm_chart()?,
+        ),
+    ];
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![];
+
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+
+    let mut level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {
-        level_5.push(Box::new(qovery_webhook));
+        level_7.push(Box::new(qovery_webhook));
     }
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_8: Vec<Box<dyn HelmChart>> = vec![
         Box::new(metrics_server),
         Box::new(aws_node_term_handler),
         Box::new(external_dns),
@@ -719,12 +746,12 @@ pub(super) fn eks_helm_charts(
         .aws_eks_enable_alb_controller
         || chart_config_prerequisites.alb_controller_already_deployed
     {
-        level_6.push(Box::new(aws_load_balancer_controller));
+        level_8.push(Box::new(aws_load_balancer_controller));
     }
 
-    let level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    let level_9: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
 
-    let level_8: Vec<Box<dyn HelmChart>> = vec![
+    let level_10: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),
         Box::new(cluster_agent),
         Box::new(qovery_shell_agent),
@@ -734,22 +761,22 @@ pub(super) fn eks_helm_charts(
 
     // observability
     if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
-        level_2.push(Box::new(kube_prometheus_stack_chart));
+        level_4.push(Box::new(kube_prometheus_stack_chart));
     }
     if let Some(prometheus_adapter_chart) = prometheus_adapter {
-        level_3.push(Box::new(prometheus_adapter_chart));
+        level_5.push(Box::new(prometheus_adapter_chart));
     }
     if let Some(kube_state_metrics_chart) = kube_state_metrics {
-        level_3.push(Box::new(kube_state_metrics_chart));
+        level_5.push(Box::new(kube_state_metrics_chart));
     }
     if let Some(promtail_chart) = promtail {
-        level_2.push(Box::new(promtail_chart));
+        level_4.push(Box::new(promtail_chart));
     }
     if let Some(loki_chart) = loki {
-        level_3.push(Box::new(loki_chart));
+        level_5.push(Box::new(loki_chart));
     }
     if let Some(grafana_chart) = grafana {
-        level_3.push(Box::new(grafana_chart))
+        level_5.push(Box::new(grafana_chart))
     }
 
     // karpenter
@@ -762,14 +789,16 @@ pub(super) fn eks_helm_charts(
         level_2.push(Box::new(karpenter_configuration));
 
         if chart_config_prerequisites.ff_metrics_history_enabled {
-            level_4.push(Box::new(karpenter_with_monitoring))
+            level_6.push(Box::new(karpenter_with_monitoring))
         }
     } else {
-        level_3.push(Box::new(coredns_config));
+        level_5.push(Box::new(coredns_config));
     }
 
     info!("charts configuration preparation finished");
     Ok(vec![
-        level_0, level_1, level_2, level_3, level_4, level_5, level_6, level_7, level_8,
+        level_0, level_1, level_2, // <- after this point, pods can be created outside of fargate
+        level_3, // <- after this point, VPA can be activated on pods
+        level_4, level_5, level_6, level_7, level_8, level_9, level_10,
     ])
 }

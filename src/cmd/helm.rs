@@ -381,7 +381,7 @@ impl Helm {
         envs: &[(&str, &str)],
         cmd_killer: &CommandKiller,
     ) -> Result<(), HelmError> {
-        return match repository_with_credentials.scheme() {
+        match repository_with_credentials.scheme() {
             "https" => self.download_https_chart(
                 repository_with_credentials,
                 chart_name,
@@ -404,7 +404,7 @@ impl Helm {
                 "Invalid repository scheme {}",
                 repository_with_credentials.scheme()
             ))),
-        };
+        }
     }
 
     pub fn download_oci_chart(
@@ -943,8 +943,10 @@ impl Helm {
         let helm_ret = helm_exec_with_output(
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &self.get_all_envs(envs),
-            &mut |line| {
-                info!("chart {}: {}", chart.name, line);
+            &mut |_line| {
+                // Helm with --debug dump all the content of the charts which flood the logs
+                // We are only interested in stderr where there is the debug messages
+                // info!("chart {}: {}", chart.name, line);
             },
             &mut |line| {
                 warn!("chart {}: {}", chart.name, line);

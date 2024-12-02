@@ -15,7 +15,12 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::utilities::to_short_id;
 
-#[cfg(any(feature = "test-aws-infra", feature = "test-aws-infra-upgrade"))]
+#[cfg(any(
+    feature = "test-aws-infra",
+    feature = "test-aws-infra-arm",
+    feature = "test-aws-infra-nat-gateway",
+    feature = "test-aws-infra-upgrade"
+))]
 fn create_and_destroy_eks_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -47,7 +52,7 @@ fn create_and_destroy_eks_cluster(
     })
 }
 
-#[cfg(any(feature = "test-aws-infra", feature = "test-aws-infra-upgrade"))]
+#[cfg(any(feature = "test-aws-infra-arm", feature = "test-aws-infra-upgrade"))]
 fn create_and_destroy_arm64_eks_cluster(
     region: String,
     test_type: ClusterTestType,
@@ -93,7 +98,7 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
     create_and_destroy_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
 }
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-nat-gateway")]
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_with_nat_gw_in_us_east_2() {
@@ -129,7 +134,7 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
 
 // ARM64
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-arm")]
 #[named]
 #[test]
 fn create_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
@@ -147,7 +152,7 @@ fn create_upgrade_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
 
 // Karpenter
 
-#[cfg(feature = "test-aws-infra")]
+#[cfg(feature = "test-aws-infra-karpenter")]
 #[test]
 #[ignore = "TODO(ENG-1888): To be implemented"]
 fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {}

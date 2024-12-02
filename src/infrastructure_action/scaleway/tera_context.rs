@@ -6,6 +6,7 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure_action::ToInfraTeraContext;
 use crate::io_models::context::Features;
+use crate::models::domain::ToTerraformString;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::string::terraform_list_format;
 use reqwest::header;
@@ -74,6 +75,10 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     context.insert("kubernetes_cluster_id", cluster.short_id());
     context.insert("kubernetes_cluster_name", cluster.cluster_name().as_str());
     context.insert("kubernetes_cluster_version", &cluster.version.to_string());
+    context.insert(
+        "kubernetes_cluster_type",
+        &cluster.options.scaleway_kubernetes_type.to_terraform_format_string(),
+    );
 
     // Qovery
     context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
@@ -143,9 +148,6 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         .acme_url()
         .as_str(),
     );
-
-    // Vault
-    context.insert("vault_auth_method", "none");
 
     // grafana credentials
     context.insert("grafana_admin_user", cluster.options.grafana_admin_user.as_str());

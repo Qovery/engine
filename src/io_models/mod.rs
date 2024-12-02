@@ -102,6 +102,16 @@ impl Action {
         }
     }
 }
+impl Display for Action {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Action::Create => write!(f, "create"),
+            Action::Pause => write!(f, "pause"),
+            Action::Delete => write!(f, "delete"),
+            Action::Restart => write!(f, "restart"),
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MountedFile {

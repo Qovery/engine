@@ -21,6 +21,7 @@ pub struct VpaChart {
     admission_controller_resources: HelmChartResources,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
+    skip_if_already_installed: bool,
 }
 
 impl VpaChart {
@@ -31,6 +32,7 @@ impl VpaChart {
         admission_controller_resources: HelmChartResourcesConstraintType,
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
+        skip_if_already_installed: bool,
     ) -> VpaChart {
         VpaChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -73,6 +75,7 @@ impl VpaChart {
             },
             enable_vpa,
             namespace,
+            skip_if_already_installed,
         }
     }
 
@@ -142,6 +145,7 @@ impl ToCommonHelmChart for VpaChart {
                         value: self.admission_controller_resources.limit_memory.to_string(),
                     },
                 ],
+                skip_if_already_installed: self.skip_if_already_installed,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(VpaChartInstallationChecker::new())),
@@ -247,6 +251,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -277,6 +282,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -311,6 +317,7 @@ mod tests {
             crate::cloud_provider::helm_charts::HelmChartResourcesConstraintType::ChartDefault,
             false,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -1,4 +1,5 @@
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping as LogFormatEscapingModel;
+use crate::cloud_provider::models::StorageClass as StorageClassModel;
 use crate::models::types::Percentage;
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use base64::engine::general_purpose;
@@ -46,6 +47,21 @@ impl From<KindModel> for Kind {
 pub enum AwsEc2MetadataImds {
     Required,
     Optional,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StorageClass(String);
+
+impl StorageClass {
+    pub fn to_model(&self) -> StorageClassModel {
+        StorageClassModel(self.0.to_string())
+    }
+}
+
+impl From<StorageClassModel> for StorageClass {
+    fn from(storage_class: StorageClassModel) -> Self {
+        StorageClass(storage_class.0.to_string())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -173,6 +189,8 @@ pub struct ClusterAdvancedSettings {
     pub qovery_static_ip_mode: Option<bool>,
     #[serde(alias = "k8s.api.allowed_public_access_cidrs")]
     pub k8s_api_allowed_public_access_cidrs: Option<Vec<String>>,
+    #[serde(alias = "storageclass.fast_ssd")]
+    pub k8s_storage_class_fast_ssd: StorageClass,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -225,6 +243,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
+            k8s_storage_class_fast_ssd: StorageClass("".to_string()),
         }
     }
 }

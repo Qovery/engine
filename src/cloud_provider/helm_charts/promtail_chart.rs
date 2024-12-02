@@ -128,12 +128,17 @@ impl ToCommonHelmChart for PromtailChart {
                             VpaTargetRefKind::DaemonSet,
                             "promtail".to_string(),
                         ),
+                        // Note: keep memory to cpu ratio within the [1, 6.5] range
+                        // CPU 	Memory 	    Ratio (MiB/CPU Core)
+                        // 100 	128–650 	1–6.5
+                        // 200 	256–1300	1–6.5
+                        // 500 	512–3328	1–6.5
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(750)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(32)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(3)),
                         ),
                     }],
                 )),

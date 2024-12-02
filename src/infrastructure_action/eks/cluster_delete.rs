@@ -5,10 +5,10 @@ use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
+use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups};
 use crate::cloud_provider::CloudProvider;
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::dns_provider::DnsProvider;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
@@ -25,10 +25,8 @@ use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, g
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
-use crate::secret_manager::vault::QVaultClient;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::utilities::envs_to_string;
-use crate::{cmd, secret_manager};
 use std::collections::HashSet;
 
 pub fn delete_eks_cluster(
@@ -50,7 +48,6 @@ pub fn delete_eks_cluster(
         .aws_sdk_client()
         .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
 
-    let temp_dir = kubernetes.temp_dir();
     let node_groups = node_groups_when_karpenter_is_enabled(
         kubernetes,
         infra_ctx,
@@ -98,7 +95,7 @@ pub fn delete_eks_cluster(
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
         kubernetes.template_directory.join("terraform"),
-        temp_dir.join("terraform"),
+        kubernetes.temp_dir.join("terraform"),
         event_details.clone(),
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
@@ -115,12 +112,18 @@ pub fn delete_eks_cluster(
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
 
-    let _: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger).inspect_err(|e| {
-        logger.warn(EventMessage::new(
-            "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-            Some(e.to_string()),
-        ));
-    });
+    let tf_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger);
+    match tf_output {
+        Ok(tf_output) => {
+            update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
+        }
+        Err(e) => {
+            logger.warn(EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
+            ));
+        }
+    }
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([
@@ -146,59 +149,23 @@ pub fn delete_eks_cluster(
         block_on(delete_eks_nodegroups(
             aws_conn,
             kubernetes.cluster_name(),
-            kubernetes.context().is_first_cluster_deployment(),
             NodeGroupsDeletionType::All,
             event_details.clone(),
         ))?;
     }
 
-    // remove S3 buckets from tf state
-    // TODO: Why do we forgot them ?
-    logger.info("Removing S3 buckets from tf state");
-    let resources_to_be_removed_from_tf_state: Vec<(&str, &str)> = vec![
-        ("aws_s3_bucket.loki_bucket", "S3 logs bucket"),
-        ("aws_s3_bucket_lifecycle_configuration.loki_lifecycle", "S3 logs lifecycle"),
-        ("aws_s3_bucket.vpc_flow_logs", "S3 flow logs bucket"),
-        (
-            "aws_s3_bucket_lifecycle_configuration.vpc_flow_logs_lifecycle",
-            "S3 vpc log flow lifecycle",
-        ),
+    // remove S3 logs buckets from tf state
+    // Because deleting them inside terraform often lead to a timeout
+    // so we delegate the responsibility to delete them to the user
+    let resources_to_be_removed_from_tf_state: &[&str] = &[
+        "aws_s3_bucket.loki_bucket",
+        "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
+        "aws_s3_bucket.vpc_flow_logs",
+        "aws_s3_bucket_lifecycle_configuration.vpc_flow_logs_lifecycle",
     ];
-
-    for resource_to_be_removed_from_tf_state in resources_to_be_removed_from_tf_state {
-        match cmd::terraform::terraform_remove_resource_from_tf_state(
-            temp_dir.join("terraform").to_string_lossy().as_ref(),
-            resource_to_be_removed_from_tf_state.0,
-            &TerraformValidators::None,
-        ) {
-            Ok(_) => {
-                logger.info(format!(
-                    "{} successfully removed from tf state.",
-                    resource_to_be_removed_from_tf_state.1
-                ));
-            }
-            Err(err) => {
-                // We weren't able to remove S3 bucket from tf state, maybe it's not there?
-                // Anyways, this is not blocking
-                logger.warn(EventMessage::new_from_engine_error(EngineError::new_terraform_error(
-                    event_details.clone(),
-                    err,
-                )));
-            }
-        }
-    }
-
-    logger.info("Running Terraform destroy");
-    tf_resources.delete(&logger)?;
+    tf_resources.delete(resources_to_be_removed_from_tf_state, &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");
-
-    // delete info on vault
-    if let Ok(vault_conn) = QVaultClient::new(event_details) {
-        let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
-        // ignore on failure
-        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.short_id());
-    };
 
     Ok(())
 }

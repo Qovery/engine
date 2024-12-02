@@ -1,6 +1,5 @@
-use crate::cloud_provider::kubernetes::{check_workers_upgrade_status, send_progress_on_long_task, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::KubernetesClusterAction;
-use crate::cloud_provider::service::Action;
 use crate::cloud_provider::CloudProvider;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
@@ -81,22 +80,6 @@ pub fn define_cluster_upgrade_timeout(
         }
     };
     (cluster_upgrade_timeout, message)
-}
-
-pub fn check_workers_on_upgrade(
-    kube: &dyn Kubernetes,
-    cloud_provider: &dyn CloudProvider,
-    targeted_version: String,
-    node_selector: Option<&str>,
-) -> Result<(), CommandError> {
-    send_progress_on_long_task(kube, Action::Create, || {
-        check_workers_upgrade_status(
-            kube.kubeconfig_local_file_path(),
-            cloud_provider.credentials_environment_variables(),
-            targeted_version.clone(),
-            node_selector,
-        )
-    })
 }
 
 #[cfg(test)]

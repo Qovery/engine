@@ -2,6 +2,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: gcp-pd-extreme
+  annotations:
+    {{- if eq "gcp-pd-extreme" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     qovery-type: "ssd"
 provisioner: pd.csi.storage.gke.io
@@ -14,6 +18,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: gcp-pd-ssd
+  annotations:
+    {{- if eq "gcp-pd-ssd" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     qovery-type: "ssd"
 provisioner: pd.csi.storage.gke.io
@@ -26,6 +34,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: gcp-pd-balanced
+  annotations:
+    {{- if eq "gcp-pd-balanced" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     qovery-type: "ssd"
 provisioner: pd.csi.storage.gke.io
@@ -38,6 +50,10 @@ kind: StorageClass
 apiVersion: storage.k8s.io/v1
 metadata:
   name: gcp-pd-standard
+  annotations:
+    {{- if eq "gcp-pd-standard" .Values.defaultStorageClassName }}
+    "storageclass.kubernetes.io/is-default-class": "true"
+    {{- end }}
   labels:
     qovery-type: "hdd"
 provisioner: pd.csi.storage.gke.io

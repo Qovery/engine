@@ -73,7 +73,7 @@ fn aws_test_build_phase() {
         let (env, ret) = environment.build_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
 
-        // Check the the image exist in the registry
+        // Check the image exist in the registry
         let img_exist = infra_ctx
             .container_registry()
             .image_exists(&env.applications[0].get_build().image);

@@ -2,12 +2,10 @@ use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
-use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
-use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, InfrastructureStep};
 use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::helm_charts::KapsuleHelmsDeployment;
@@ -18,6 +16,7 @@ use crate::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::OperationResult;
+use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use std::path::PathBuf;
 
 pub fn create_kapsule_cluster(
@@ -29,8 +28,6 @@ pub fn create_kapsule_cluster(
     logger.info("Preparing SCW cluster deployment.");
 
     let temp_dir = cluster.temp_dir();
-    // TODO(benjaminch): move this elsewhere
-    // Create object-storage buckets
     logger.info("Create Qovery managed object storage buckets");
 
     // Logs bucket
@@ -55,15 +52,7 @@ pub fn create_kapsule_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(&logger)?;
-
-    // Dry run is not supported after the terraform action for now
-    if cluster.context().is_dry_run_deploy() {
-        logger.warn("Exiting. Dry run is not supported after the terraform action for now");
-        return Ok(());
-    }
-
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
-    let kubeconfig_path = cluster.kubeconfig_local_file_path();
 
     let cluster_info = cluster.get_scw_cluster_info()?.ok_or_else(|| {
         Box::new(EngineError::new_no_cluster_found_error(
@@ -72,27 +61,42 @@ pub fn create_kapsule_cluster(
         ))
     })?;
 
-    let cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
-        infra_ctx.cloud_provider().access_key_id(),
-        infra_ctx.cloud_provider().secret_access_key(),
-        cluster.options.scaleway_project_id.to_string(),
-        cluster.region().to_string(),
-        cluster.default_zone().unwrap_or("").to_string(),
-        None,
-        cluster_info.cluster_url.clone(),
-        cluster.kind(),
-        infra_ctx.cloud_provider().name().to_string(),
-        cluster.long_id().to_string(),
-        cluster.options.grafana_admin_user.clone(),
-        cluster.options.grafana_admin_password.clone(),
-        infra_ctx.cloud_provider().organization_long_id().to_string(),
-        cluster.context().is_test_cluster(),
-    ));
+    sanitize_node_groups(cluster, event_details.clone(), cluster_info, &logger)?;
 
-    // send cluster info with kubeconfig
-    // create vault connection (Vault connectivity should not be on the critical deployment path,
-    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-    let _ = cluster.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
+    // ensure all nodes are ready on Kubernetes
+    check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
+        .map_err(|e| Box::new(EngineError::new_k8s_node_not_ready(event_details.clone(), e)))?;
+    logger.info("Kubernetes nodes have been successfully created");
+
+    // kubernetes helm deployments on the cluster
+    let helms_deployments = KapsuleHelmsDeployment::new(
+        HelmInfraContext::new(
+            tera_context,
+            PathBuf::from(infra_ctx.context().lib_root_dir()),
+            cluster.template_directory.clone(),
+            cluster.temp_dir().join("helms"),
+            event_details.clone(),
+            envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
+            cluster.context().is_dry_run_deploy(),
+        ),
+        qovery_terraform_output,
+        cluster,
+    );
+    helms_deployments.deploy_charts(infra_ctx, &logger)?;
+
+    Ok(())
+}
+
+fn sanitize_node_groups(
+    cluster: &Kapsule,
+    event_details: EventDetails,
+    cluster_info: ScalewayK8sV1Cluster,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    if cluster.context().is_dry_run_deploy() {
+        logger.info("👻 Dry run mode enabled, skipping node groups sanitization");
+        return Ok(());
+    }
 
     let current_nodegroups = match get_existing_sanitized_node_groups(cluster, cluster_info) {
         Ok(x) => x,
@@ -223,41 +227,6 @@ pub fn create_kapsule_cluster(
         }
     }
     logger.info("All node groups for this cluster are ready from cloud provider API");
-
-    // ensure all nodes are ready on Kubernetes
-    check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
-        .map_err(|e| Box::new(EngineError::new_k8s_node_not_ready(event_details.clone(), e)))?;
-    logger.info("Kubernetes nodes have been successfully created");
-
-    // kubernetes helm deployments on the cluster
-    let credentials_environment_variables: Vec<(String, String)> = infra_ctx
-        .cloud_provider()
-        .credentials_environment_variables()
-        .into_iter()
-        .map(|x| (x.0.to_string(), x.1.to_string()))
-        .collect();
-
-    if let Err(e) = kubectl_are_qovery_infra_pods_executed(&kubeconfig_path, &credentials_environment_variables) {
-        logger.warn(EventMessage::new(
-            "Didn't manage to restart all paused pods".to_string(),
-            Some(e.to_string()),
-        ));
-    }
-
-    let helms_deployments = KapsuleHelmsDeployment::new(
-        HelmInfraContext::new(
-            tera_context,
-            PathBuf::from(infra_ctx.context().lib_root_dir()),
-            cluster.template_directory.clone(),
-            cluster.temp_dir().join("helms"),
-            event_details.clone(),
-            credentials_environment_variables,
-            cluster.context().is_dry_run_deploy(),
-        ),
-        qovery_terraform_output,
-        cluster,
-    );
-    helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
     Ok(())
 }

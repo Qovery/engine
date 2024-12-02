@@ -32,7 +32,6 @@ pub mod models;
 pub mod msg_publisher;
 pub mod object_storage;
 pub mod runtime;
-mod secret_manager;
 pub mod services;
 mod string;
 mod template;

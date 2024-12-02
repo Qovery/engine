@@ -47,12 +47,14 @@ pub struct JsonCredentials {
 // https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gce-pd-csi-driver
 #[derive(Clone, Eq, PartialEq)]
 pub enum GcpStorageType {
+    Ssd,
     Balanced,
 }
 
 impl GcpStorageType {
     pub fn to_k8s_storage_class(&self) -> String {
         match self {
+            GcpStorageType::Ssd => "gcp-pd-ssd",
             GcpStorageType::Balanced => "gcp-pd-balanced",
         }
         .to_string()

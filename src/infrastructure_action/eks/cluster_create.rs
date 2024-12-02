@@ -1,12 +1,10 @@
 use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::KubernetesClusterAction;
-use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
-use crate::cmd::kubectl_utils::kubectl_are_qovery_infra_pods_executed;
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage};
+use crate::events::{EventDetails, InfrastructureStep, Stage};
 use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
@@ -41,21 +39,6 @@ pub fn create_eks_cluster(
     let dns_provider = infra_ctx.dns_provider();
 
     logger.info(format!("Preparing {} cluster deployment.", kubernetes.kind()));
-    let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
-        cloud_provider.access_key_id(),
-        kubernetes.region().to_string(),
-        cloud_provider.secret_access_key(),
-        None,
-        None,
-        kubernetes.kind(),
-        kubernetes.cluster_name(),
-        kubernetes.long_id().to_string(),
-        kubernetes.options.grafana_admin_user.clone(),
-        kubernetes.options.grafana_admin_password.clone(),
-        cloud_provider.organization_long_id().to_string(),
-        kubernetes.context().is_test_cluster(),
-    ));
-    let temp_dir = kubernetes.temp_dir();
 
     // old method with rusoto
     let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider).ok();
@@ -120,7 +103,7 @@ pub fn create_eks_cluster(
         let tf_action = TerraformInfraResources::new(
             tera_context.clone(),
             kubernetes.template_directory.join("terraform"),
-            temp_dir.join("terraform"),
+            kubernetes.temp_dir.join("terraform"),
             event_details.clone(),
             envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
             infra_ctx.context().is_dry_run_deploy(),
@@ -139,7 +122,6 @@ pub fn create_eks_cluster(
                     match block_on(delete_eks_nodegroups(
                         aws_conn.clone(),
                         kubernetes.cluster_name(),
-                        kubernetes.context().is_first_cluster_deployment(),
                         NodeGroupsDeletionType::FailedOnly,
                         event_details.clone(),
                     )) {
@@ -161,7 +143,6 @@ pub fn create_eks_cluster(
     if let Err(e) = block_on(delete_eks_nodegroups(
         aws_conn.clone(),
         kubernetes.cluster_name(),
-        kubernetes.context().is_first_cluster_deployment(),
         NodeGroupsDeletionType::FailedOnly,
         event_details.clone(),
     )) {
@@ -176,36 +157,17 @@ pub fn create_eks_cluster(
 
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply()?;
-    if infra_ctx.context().is_dry_run_deploy() {
-        logger.warn("Exiting. Dry run is not supported after the terraform action for now");
-        return Ok(());
-    }
     update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig)?;
-    let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
 
-    // send cluster info with kubeconfig
-    // create vault connection (Vault connectivity should not be on the critical deployment path,
-    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
-    let _ = kubernetes.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
+    let kube_client = infra_ctx.mk_kube_client()?;
 
-    logger.info("Preparing chart configuration to be deployed");
-    // kubernetes helm deployments on the cluster
-
-    let credentials_environment_variables: Vec<(String, String)> = cloud_provider
-        .credentials_environment_variables()
-        .into_iter()
-        .map(|x| (x.0.to_string(), x.1.to_string()))
-        .collect();
-
-    if kubernetes.is_karpenter_enabled() {
-        if let Some(karpenter_parameters) = &kubernetes.get_karpenter_parameters() {
-            if karpenter_parameters.spot_enabled {
-                block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
-            }
+    let credentials_env_vars = envs_to_string(cloud_provider.credentials_environment_variables());
+    if let Some(spot_enabled) = &kubernetes.get_karpenter_parameters().map(|x| x.spot_enabled) {
+        if *spot_enabled {
+            block_on(Karpenter::create_aws_service_role_for_ec2_spot(&aws_conn, &event_details))?;
         }
 
         if Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
-            let kube_client = infra_ctx.mk_kube_client()?;
             block_on(Karpenter::restart(
                 kubernetes,
                 cloud_provider,
@@ -217,40 +179,97 @@ pub fn create_eks_cluster(
         }
     }
 
-    if let Err(e) = kubectl_are_qovery_infra_pods_executed(&kubeconfig_path, &credentials_environment_variables) {
-        logger.warn(EventMessage::new(
-            "Didn't manage to restart all paused pods".to_string(),
-            Some(e.to_string()),
-        ));
+    patch_kube_proxy_for_custom_vpc(kubernetes, infra_ctx, event_details.clone(), &logger)?;
+    let alb_already_deployed = is_nginx_migrated_to_alb(kubernetes, infra_ctx, event_details.clone())?;
+    let helms_deployments = EksHelmsDeployment::new(
+        HelmInfraContext::new(
+            tera_context,
+            PathBuf::from(infra_ctx.context().lib_root_dir()),
+            kubernetes.template_directory.clone(),
+            kubernetes.temp_dir().join("helms"),
+            event_details.clone(),
+            credentials_env_vars,
+            kubernetes.context().is_dry_run_deploy(),
+        ),
+        eks_tf_output,
+        kubernetes,
+        alb_already_deployed,
+        has_been_upgraded,
+    );
+    helms_deployments.deploy_charts(infra_ctx, &logger)?;
+
+    clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
+
+    Ok(())
+}
+
+// after Karpenter is deployed, we can remove the node groups
+// after Karpenter is deployed, we can remove fargate profile for add-ons
+// TODO: remove this function once every cluster has Karpenter enabled.
+// It is only needed for the transition between nodegroup to karpente
+fn clean_karpenter_installation(
+    kubernetes: &EKS,
+    infra_ctx: &InfrastructureContext,
+    logger: &impl InfraLogger,
+    event_details: EventDetails,
+    aws_eks_client: Option<EksClient>,
+) -> Result<(), Box<EngineError>> {
+    if !kubernetes.is_karpenter_enabled() || kubernetes.context().is_first_cluster_deployment() {
+        return Ok(());
     }
 
-    // When the user control the network/vpc configuration, we may hit a bug of the in tree aws load balancer controller
-    // were if there is a custom dns server set for the VPC, kube-proxy nodes are not correctly configured and load balancer healthcheck are failing
-    // The correct fix would be to stop using the k8s in tree lb controller, and use instead the external aws lb controller.
-    // But as we don't want to do the migration for all users, we will just patch the kube-proxy configuration on the fly
-    // https://aws.amazon.com/premiumsupport/knowledge-center/eks-troubleshoot-unhealthy-targets-nlb/
-    // https://github.com/kubernetes/kubernetes/issues/80579
-    // https://github.com/kubernetes/cloud-provider-aws/issues/87
-    if kubernetes.is_network_managed_by_user()
-        && kubernetes.kind() == Kind::Eks
-        && !kubernetes.advanced_settings().aws_eks_enable_alb_controller
-    {
-        info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
-        block_on(patch_kube_proxy_for_aws_user_network(
-            infra_ctx.mk_kube_client()?.client().clone(),
-        ))
-        .map_err(|e| {
-            EngineError::new_k8s_node_not_ready(
-                event_details.clone(),
-                CommandError::new_from_safe_message(format!(
-                    "Cannot patch kube proxy for user configured network: {e}"
-                )),
-            )
-        })?;
+    if kubernetes.context.is_dry_run_deploy() {
+        logger.warn("👻 Dry run mode enabled. Skipping Karpenter cleanup");
+        return Ok(());
     }
 
-    let qube_client = infra_ctx.mk_kube_client()?;
+    let has_node_group_running = kubernetes.nodes_groups.iter().any(|ng| {
+        matches!(
+            node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
+            Ok(Some(_v))
+        )
+    });
+
+    if !has_node_group_running {
+        return Ok(());
+    }
+
+    // generate terraform files and copy them into temp dir
+    let tera_context = eks_tera_context(
+        kubernetes,
+        infra_ctx.cloud_provider(),
+        infra_ctx.dns_provider(),
+        kubernetes.zones.as_slice(),
+        &[],
+        &kubernetes.options,
+        AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
+        false,
+        &kubernetes.advanced_settings,
+        kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
+    )?;
+
+    logger.info(format!("Deploying {} cluster.", kubernetes.kind()));
+    let tf_action = TerraformInfraResources::new(
+        tera_context.clone(),
+        kubernetes.template_directory.join("terraform"),
+        kubernetes.temp_dir().join("terrafor_karpenter_cleanup"),
+        event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
+        infra_ctx.context().is_dry_run_deploy(),
+    );
+
+    let _: AwsEksQoveryTerraformOutput = tf_action.create(logger)?;
+
+    Ok(())
+}
+
+fn is_nginx_migrated_to_alb(
+    kubernetes: &EKS,
+    infra_ctx: &InfrastructureContext,
+    event_details: EventDetails,
+) -> Result<bool, Box<EngineError>> {
     // before deploying Helm charts, we need to check if Nginx ingress controller needs to move NLB to ALB controller
+    let qube_client = infra_ctx.mk_kube_client()?;
     let nginx_namespace = "nginx-ingress";
     let services = block_on(qube_client.get_services(
         event_details.clone(),
@@ -281,80 +300,42 @@ pub fn create_eks_cluster(
         qube_client
             .get_mutating_webhook_configurations(event_details.clone(), SelectK8sResourceBy::Name("xxx".to_string())),
     )?;
-    let alb_already_deployed = !found_alb_mutating_configs.is_empty();
 
-    let helms_deployments = EksHelmsDeployment::new(
-        HelmInfraContext::new(
-            tera_context,
-            PathBuf::from(infra_ctx.context().lib_root_dir()),
-            kubernetes.template_directory.clone(),
-            kubernetes.temp_dir().join("helms"),
-            event_details.clone(),
-            credentials_environment_variables,
-            kubernetes.context().is_dry_run_deploy(),
-        ),
-        eks_tf_output,
-        kubernetes,
-        alb_already_deployed,
-        has_been_upgraded,
-    );
-    helms_deployments.deploy_charts(infra_ctx, &logger)?;
-
-    clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
-
-    Ok(())
+    Ok(!found_alb_mutating_configs.is_empty())
 }
 
-// after Karpenter is deployed, we can remove the node groups
-// after Karpenter is deployed, we can remove fargate profile for add-ons
-// TODO: remove this function once every cluster has Karpenter enabled.
-// It is only needed for the transition between nodegroup to karpente
-fn clean_karpenter_installation(
+fn patch_kube_proxy_for_custom_vpc(
     kubernetes: &EKS,
     infra_ctx: &InfrastructureContext,
-    logger: &impl InfraLogger,
     event_details: EventDetails,
-    aws_eks_client: Option<EksClient>,
+    logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
-    if !kubernetes.is_karpenter_enabled() {
+    if !kubernetes.is_network_managed_by_user() || kubernetes.advanced_settings().aws_eks_enable_alb_controller {
         return Ok(());
     }
 
-    let has_node_group_running = kubernetes.nodes_groups.iter().any(|ng| {
-        matches!(
-            node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
-            Ok(Some(_v))
+    if kubernetes.context.is_dry_run_deploy() {
+        logger.warn("👻 Dry run mode enabled. Skipping kube proxy patching for user configured network");
+        return Ok(());
+    }
+
+    // When the user control the network/vpc configuration, we may hit a bug of the in tree aws load balancer controller
+    // were if there is a custom dns server set for the VPC, kube-proxy nodes are not correctly configured and load balancer healthcheck are failing
+    // The correct fix would be to stop using the k8s in tree lb controller, and use instead the external aws lb controller.
+    // But as we don't want to do the migration for all users, we will just patch the kube-proxy configuration on the fly
+    // https://aws.amazon.com/premiumsupport/knowledge-center/eks-troubleshoot-unhealthy-targets-nlb/
+    // https://github.com/kubernetes/kubernetes/issues/80579
+    // https://github.com/kubernetes/cloud-provider-aws/issues/87
+    info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
+    block_on(patch_kube_proxy_for_aws_user_network(
+        infra_ctx.mk_kube_client()?.client().clone(),
+    ))
+    .map_err(|e| {
+        EngineError::new_k8s_node_not_ready(
+            event_details.clone(),
+            CommandError::new_from_safe_message(format!("Cannot patch kube proxy for user configured network: {e}")),
         )
-    });
-
-    if !(has_node_group_running || kubernetes.context().is_first_cluster_deployment()) {
-        return Ok(());
-    }
-    // generate terraform files and copy them into temp dir
-    let tera_context = eks_tera_context(
-        kubernetes,
-        infra_ctx.cloud_provider(),
-        infra_ctx.dns_provider(),
-        kubernetes.zones.as_slice(),
-        &[],
-        &kubernetes.options,
-        AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
-        false,
-        &kubernetes.advanced_settings,
-        kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
-    )?;
-
-    logger.info(format!("Deploying {} cluster.", kubernetes.kind()));
-    let tf_action = TerraformInfraResources::new(
-        tera_context.clone(),
-        kubernetes.template_directory.join("terraform"),
-        kubernetes.temp_dir().join("terrafor_karpenter_cleanup"),
-        event_details.clone(),
-        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
-        infra_ctx.context().is_dry_run_deploy(),
-    );
-
-    let _: AwsEksQoveryTerraformOutput = tf_action.create(logger)?;
+    })?;
 
     Ok(())
 }

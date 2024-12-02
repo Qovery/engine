@@ -7,6 +7,7 @@ serviceAccount:
 replicaCount: 1
 
 enableServiceMutatorWebhook: set-by-engine-code
+enableCertManager: true
 
 autoscaling:
   enabled: true

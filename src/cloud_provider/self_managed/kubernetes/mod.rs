@@ -155,16 +155,6 @@ impl Kubernetes for SelfManaged {
         &self.temp_dir
     }
 
-    fn update_vault_config(
-        &self,
-        _event_details: crate::events::EventDetails,
-        _cluster_secrets: crate::cloud_provider::vault::ClusterSecrets,
-        _kubeconfig_file_path: Option<&Path>,
-    ) -> Result<(), Box<EngineError>> {
-        // No-op for self-managed, we don't install clusters
-        Ok(())
-    }
-
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
         &self.advanced_settings
     }
