@@ -1,4 +1,5 @@
 use super::models::NodeGroupsWithDesiredState;
+use super::vault::ClusterSecrets;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
 use crate::cloud_provider::service::Action;
@@ -450,6 +451,13 @@ pub trait Kubernetes: Send + Sync {
     }
 
     fn temp_dir(&self) -> &Path;
+
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        cluster_secrets: ClusterSecrets,
+        kubeconfig_file_path: Option<&Path>,
+    ) -> Result<(), Box<EngineError>>;
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings;
     fn is_karpenter_enabled(&self) -> bool {

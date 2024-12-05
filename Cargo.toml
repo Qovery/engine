@@ -77,6 +77,10 @@ serde_derive = "1.0.204"
 serde_yaml = "0.9.34"
 schemars = "0.8.21"
 
+# Secrets manager
+vaultrs = "0.7.2"
+vaultrs-login = "0.2.1"
+
 # AWS deps
 tokio = { version = "1.38.1", features = ["full"] }
 rusoto_core = { git = "https://github.com/Qovery/rusoto.git", branch = "master" }

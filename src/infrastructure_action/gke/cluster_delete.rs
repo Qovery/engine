@@ -4,12 +4,14 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::ObjectStorage;
+use crate::secret_manager;
+use crate::secret_manager::vault::QVaultClient;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
 
@@ -51,6 +53,9 @@ pub(super) fn delete_gke_cluster(
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(&[], &logger)?;
 
+    // delete info on vault
+    let _ = delete_vault_data(cluster, event_details.clone(), &logger);
+
     delete_object_storage(cluster, &logger)?;
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
@@ -66,6 +71,27 @@ fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(),
             format!("Cannot delete cluster logs object storage `{}`", &cluster.logs_bucket_name()),
             Some(e.to_string()),
         ));
+    }
+
+    Ok(())
+}
+
+fn delete_vault_data(
+    cluster: &Gke,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    let vault_conn = QVaultClient::new(event_details.clone());
+    if let Ok(vault_conn) = vault_conn {
+        let mount = secret_manager::vault::get_vault_mount_name(cluster.context().is_test_cluster());
+
+        // ignore on failure
+        if let Err(e) = vault_conn.delete_secret(mount.as_str(), cluster.long_id().to_string().as_str()) {
+            logger.warn(EventMessage::new(
+                "Cannot delete cluster config from Vault".to_string(),
+                Some(e.to_string()),
+            ));
+        }
     }
 
     Ok(())

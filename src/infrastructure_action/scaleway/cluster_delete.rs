@@ -9,6 +9,8 @@ use crate::infrastructure_action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
+use crate::secret_manager;
+use crate::secret_manager::vault::QVaultClient;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
 
@@ -49,6 +51,15 @@ pub fn delete_kapsule_cluster(
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     logger.info("Running Terraform destroy");
     tf_resources.delete(&[], &logger)?;
+
+    // delete info on vault
+    let vault_conn = QVaultClient::new(event_details.clone());
+    if let Ok(vault_conn) = vault_conn {
+        let mount = secret_manager::vault::get_vault_mount_name(cluster.context().is_test_cluster());
+
+        // ignore on failure
+        let _ = vault_conn.delete_secret(mount.as_str(), cluster.long_id().to_string().as_str());
+    };
 
     logger.info("Kubernetes cluster successfully deleted");
     Ok(())

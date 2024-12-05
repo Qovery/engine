@@ -149,6 +149,9 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         .as_str(),
     );
 
+    // Vault
+    context.insert("vault_auth_method", "none");
+
     // grafana credentials
     context.insert("grafana_admin_user", cluster.options.grafana_admin_user.as_str());
     context.insert("grafana_admin_password", cluster.options.grafana_admin_password.as_str());
