@@ -3,12 +3,15 @@ use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::VpcQoveryNetworkMode;
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, InfrastructureStep};
 use crate::infrastructure_action::ToInfraTeraContext;
 use crate::io_models::context::Features;
 use crate::models::third_parties::LetsEncryptConfig;
 use crate::models::types::Percentage;
 use crate::models::ToCloudProviderFormat;
 use crate::string::terraform_list_format;
+use std::env;
 use tera::Context as TeraContext;
 use time::format_description;
 
@@ -19,6 +22,7 @@ impl ToInfraTeraContext for Gke {
 }
 
 fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<TeraContext, Box<EngineError>> {
+    let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 
     // Qovery
@@ -319,6 +323,36 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             .acme_url()
             .as_str(),
     );
+
+    // Vault
+    context.insert("vault_auth_method", "none");
+
+    // TODO(ENG-1801): to be removed, we are not supposed to get env from here!!
+    if env::var_os("VAULT_ADDR").is_some() {
+        // select the correct used method
+        match env::var_os("VAULT_ROLE_ID") {
+            Some(role_id) => {
+                context.insert("vault_auth_method", "app_role");
+                context.insert("vault_role_id", role_id.to_str().unwrap());
+
+                match env::var_os("VAULT_SECRET_ID") {
+                    Some(secret_id) => context.insert("vault_secret_id", secret_id.to_str().unwrap()),
+                    None => cluster.logger().log(EngineEvent::Error(
+                        EngineError::new_missing_required_env_variable(
+                            event_details.clone(),
+                            "VAULT_SECRET_ID".to_string(),
+                        ),
+                        None,
+                    )),
+                }
+            }
+            None => {
+                if env::var_os("VAULT_TOKEN").is_some() {
+                    context.insert("vault_auth_method", "token")
+                }
+            }
+        }
+    };
 
     // grafana credentials
     context.insert("grafana_admin_user", cluster.options.grafana_admin_user.as_str());

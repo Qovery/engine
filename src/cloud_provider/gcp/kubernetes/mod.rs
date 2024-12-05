@@ -4,6 +4,7 @@ use crate::cloud_provider::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::cloud_provider::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use crate::cloud_provider::qovery::EngineLocation;
+use crate::cloud_provider::vault::ClusterSecrets;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
@@ -19,6 +20,7 @@ use crate::models::gcp::JsonCredentials;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::errors::ObjectStorageError;
 use crate::object_storage::google_object_storage::GoogleOS;
+use crate::secret_manager::vault::QVaultClient;
 use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
@@ -310,6 +312,22 @@ impl Gke {
 
         Ok(())
     }
+
+    pub fn update_gke_vault_config(
+        &self,
+        event_details: EventDetails,
+        cluster_secrets: ClusterSecrets,
+    ) -> Result<(), Box<EngineError>> {
+        let vault_conn = match QVaultClient::new(event_details.clone()) {
+            Ok(x) => Some(x),
+            Err(_) => None,
+        };
+        if let Some(vault) = vault_conn {
+            let _ = cluster_secrets.create_or_update_secret(&vault, false, event_details.clone());
+        };
+
+        Ok(())
+    }
 }
 
 impl Kubernetes for Gke {
@@ -364,6 +382,15 @@ impl Kubernetes for Gke {
 
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
+    }
+
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        cluster_secrets: ClusterSecrets,
+        _kubeconfig_file_path: Option<&Path>,
+    ) -> Result<(), Box<EngineError>> {
+        self.update_gke_vault_config(event_details, cluster_secrets)
     }
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {

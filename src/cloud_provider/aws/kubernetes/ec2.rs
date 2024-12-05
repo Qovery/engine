@@ -5,18 +5,23 @@ use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
 use crate::cloud_provider::kubernetes::{event_details, InstanceType, Kind, Kubernetes, KubernetesVersion};
 use crate::cloud_provider::models::{CpuArchitecture, InstanceEc2, NodeGroups};
+use crate::cloud_provider::vault::ClusterSecrets;
 use crate::cloud_provider::CloudProvider;
-use crate::errors::EngineError;
-use crate::events::EngineEvent;
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EngineEvent, EventDetails};
 use crate::infrastructure_action::InfrastructureAction;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
+use crate::secret_manager::vault::QVaultClient;
 use crate::utilities::to_short_id;
+use base64::engine::general_purpose;
+use base64::Engine;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use uuid::Uuid;
@@ -170,6 +175,43 @@ impl Kubernetes for EC2 {
 
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
+    }
+
+    /// Update the vault with the new cluster information
+    /// !!! Can only work has been just updated with Terraform data !!!
+    fn update_vault_config(
+        &self,
+        event_details: EventDetails,
+        mut cluster_secrets: ClusterSecrets,
+        kubeconfig_file_path: Option<&Path>,
+    ) -> Result<(), Box<EngineError>> {
+        // send cluster info to vault if info mismatch
+        // create vault connection (Vault connectivity should not be on the critical deployment path,
+        // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+        let Ok(vault_conn) = QVaultClient::new(event_details.clone()) else {
+            return Ok(());
+        };
+
+        if let Some(x) = kubeconfig_file_path {
+            // encode base64 kubeconfig
+            let kubeconfig = fs::read_to_string(x)
+                .map_err(|e| {
+                    EngineError::new_cannot_retrieve_cluster_config_file(
+                        event_details.clone(),
+                        CommandError::new_from_safe_message(format!(
+                            "Cannot read kubeconfig file {}: {e}",
+                            x.to_str().unwrap_or_default()
+                        )),
+                    )
+                })
+                .expect("kubeconfig was not found while it should be present");
+            let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
+            cluster_secrets.set_kubeconfig_b64(kubeconfig_b64);
+        }
+
+        cluster_secrets.create_or_update_secret(&vault_conn, true, event_details)?;
+
+        Ok(())
     }
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {

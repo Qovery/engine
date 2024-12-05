@@ -25,6 +25,8 @@ use crate::infrastructure_action::eks::utils::{define_cluster_upgrade_timeout, g
 use crate::infrastructure_action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
+use crate::secret_manager;
+use crate::secret_manager::vault::QVaultClient;
 use crate::services::kube_client::SelectK8sResourceBy;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
@@ -166,6 +168,13 @@ pub fn delete_eks_cluster(
     tf_resources.delete(resources_to_be_removed_from_tf_state, &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");
+
+    // delete info on vault
+    if let Ok(vault_conn) = QVaultClient::new(event_details) {
+        let mount = secret_manager::vault::get_vault_mount_name(kubernetes.context().is_test_cluster());
+        // ignore on failure
+        let _ = vault_conn.delete_secret(mount.as_str(), kubernetes.short_id());
+    };
 
     Ok(())
 }

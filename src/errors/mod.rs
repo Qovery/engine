@@ -1021,8 +1021,18 @@ pub enum Tag {
     KubeconfigSecurityCheckError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
+    /// VaultConnectionError: represents an error while trying to connect ot Vault service
+    VaultConnectionError,
+    /// VaultSecretCouldNotBeRetrieved: represents an error to get the desired secret
+    VaultSecretCouldNotBeRetrieved,
+    /// VaultSecretCouldNotBeCreatedOrUpdated: represent a vault secret creation or update error
+    VaultSecretCouldNotBeCreatedOrUpdated,
+    /// VaultSecretCouldNotBeDeleted, represent a vault secret deletion error
+    VaultSecretCouldNotBeDeleted,
     /// JsonDeserializationError: represent a deserialization issue
     JsonDeserializationError,
+    /// ClusterSecretsManipulationError: represent an error while trying to manipulate ClusterSecrets
+    ClusterSecretsManipulationError,
     /// DnsProviderInformationError: represent an error on DNS provider information provided.
     DnsProviderInformationError,
     /// DnsProviderInvalidCredentials: represent an error on invalid DNS provider credentials.
@@ -4640,14 +4650,115 @@ impl EngineError {
         }
     }
 
+    /// Creates new error when trying to connect to vault endpoint
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_connection_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Couldn't connect to Vault secret manager".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultConnectionError,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be retrieved
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_retrieved(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Vault secret couldn't be retrieved".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeRetrieved,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     pub fn new_scaleway_cannot_fetch_private_networks(event_details: EventDetails, raw_error: String) -> EngineError {
         EngineError::new(
             event_details,
-            Tag::CannotFetchScalewayPrivateNetworks,
+            Tag::VaultSecretCouldNotBeRetrieved,
             format!("Impossible to fetch your cluster private networks: {}", raw_error),
             None,
             None,
             Some("Please check your credentials".to_string()),
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be created or updated
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_created_or_updated(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        let message_safe = "Vault secret couldn't be created or updated".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeCreatedOrUpdated,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when Vault secret couldn't be deleted
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_vault_secret_could_not_be_deleted(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Vault secret couldn't be deleted".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::VaultSecretCouldNotBeDeleted,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error when creating ClusterSecrets
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message.
+    pub fn new_error_when_create_cluster_secrets(event_details: EventDetails, raw_error: CommandError) -> EngineError {
+        let message_safe = "Qovery error when manipulating ClusterSecrets".to_string();
+
+        EngineError::new(
+            event_details,
+            Tag::ClusterSecretsManipulationError,
+            message_safe,
+            Some(raw_error),
+            None,
+            None,
         )
     }
 
