@@ -2,10 +2,11 @@ use crate::cloud_provider::gcp::kubernetes::Gke;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
+use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsGcp};
 use crate::engine::InfrastructureContext;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure_action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure_action::gke::helm_charts::GkeHelmsDeployment;
@@ -13,6 +14,7 @@ use crate::infrastructure_action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure_action::{InfraLogger, ToInfraTeraContext};
 use crate::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
+use base64::Engine;
 use std::path::PathBuf;
 
 pub(super) fn create_gke_cluster(
@@ -49,6 +51,32 @@ pub(super) fn create_gke_cluster(
     check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
         .map_err(|e| Box::new(EngineError::new_k8s_node_not_ready(event_details.clone(), e)))?;
     logger.info("Kubernetes nodes have been successfully created");
+
+    // Update cluster config to vault
+    let cluster_secrets = ClusterSecrets::new_google_gke(ClusterSecretsGcp::new(
+        cluster.options.gcp_json_credentials.clone().into(),
+        cluster.options.gcp_json_credentials.project_id.to_string(),
+        cluster.region.clone(),
+        Some(base64::engine::general_purpose::STANDARD.encode(&qovery_terraform_output.kubeconfig)),
+        Some(qovery_terraform_output.gke_cluster_public_hostname.clone()),
+        cluster.kind(),
+        infra_ctx.cloud_provider().name().to_string(),
+        cluster.long_id().to_string(),
+        cluster.options.grafana_admin_user.clone(),
+        cluster.options.grafana_admin_password.clone(),
+        infra_ctx.cloud_provider().organization_long_id().to_string(),
+        cluster.context().is_test_cluster(),
+    ));
+
+    // vault config is not blocking
+    let _ = cluster
+        .update_gke_vault_config(event_details.clone(), cluster_secrets)
+        .inspect_err(|e| {
+            logger.warn(EventMessage::new(
+                "Cannot push cluster config to Vault".to_string(),
+                Some(e.to_string()),
+            ))
+        });
 
     let helms_deployments = GkeHelmsDeployment::new(
         HelmInfraContext::new(

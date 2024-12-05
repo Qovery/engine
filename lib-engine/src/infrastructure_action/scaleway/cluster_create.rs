@@ -2,6 +2,7 @@ use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubectl_utils::check_workers_on_create;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::scaleway::kubernetes::{Kapsule, ScwNodeGroupErrors};
+use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsScaleway};
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
@@ -53,6 +54,7 @@ pub fn create_kapsule_cluster(
     );
     let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(&logger)?;
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    let kubeconfig_path = cluster.kubeconfig_local_file_path();
 
     let cluster_info = cluster.get_scw_cluster_info()?.ok_or_else(|| {
         Box::new(EngineError::new_no_cluster_found_error(
@@ -60,6 +62,28 @@ pub fn create_kapsule_cluster(
             CommandError::new_from_safe_message("Error, no cluster found from the Scaleway API".to_string()),
         ))
     })?;
+
+    let cluster_secrets = ClusterSecrets::new_scaleway(ClusterSecretsScaleway::new(
+        infra_ctx.cloud_provider().access_key_id(),
+        infra_ctx.cloud_provider().secret_access_key(),
+        cluster.options.scaleway_project_id.to_string(),
+        cluster.region().to_string(),
+        cluster.default_zone().unwrap_or("").to_string(),
+        None,
+        cluster_info.cluster_url.clone(),
+        cluster.kind(),
+        infra_ctx.cloud_provider().name().to_string(),
+        cluster.long_id().to_string(),
+        cluster.options.grafana_admin_user.clone(),
+        cluster.options.grafana_admin_password.clone(),
+        infra_ctx.cloud_provider().organization_long_id().to_string(),
+        cluster.context().is_test_cluster(),
+    ));
+
+    // send cluster info with kubeconfig
+    // create vault connection (Vault connectivity should not be on the critical deployment path,
+    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+    let _ = cluster.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
     sanitize_node_groups(cluster, event_details.clone(), cluster_info, &logger)?;
 

@@ -2,6 +2,7 @@ use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::kubeconfig_helper::update_kubeconfig_file;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::KubernetesClusterAction;
+use crate::cloud_provider::vault::{ClusterSecrets, ClusterSecretsAws};
 use crate::engine::InfrastructureContext;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EventDetails, InfrastructureStep, Stage};
@@ -39,6 +40,20 @@ pub fn create_eks_cluster(
     let dns_provider = infra_ctx.dns_provider();
 
     logger.info(format!("Preparing {} cluster deployment.", kubernetes.kind()));
+    let cluster_secrets = ClusterSecrets::new_aws_eks(ClusterSecretsAws::new(
+        cloud_provider.access_key_id(),
+        kubernetes.region().to_string(),
+        cloud_provider.secret_access_key(),
+        None,
+        None,
+        kubernetes.kind(),
+        kubernetes.cluster_name(),
+        kubernetes.long_id().to_string(),
+        kubernetes.options.grafana_admin_user.clone(),
+        kubernetes.options.grafana_admin_password.clone(),
+        cloud_provider.organization_long_id().to_string(),
+        kubernetes.context().is_test_cluster(),
+    ));
 
     // old method with rusoto
     let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, cloud_provider).ok();
@@ -158,6 +173,12 @@ pub fn create_eks_cluster(
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply()?;
     update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig)?;
+    let kubeconfig_path = kubernetes.kubeconfig_local_file_path();
+
+    // send cluster info with kubeconfig
+    // create vault connection (Vault connectivity should not be on the critical deployment path,
+    // if it temporarily fails, just ignore it, data will be pushed on the next sync)
+    let _ = kubernetes.update_vault_config(event_details.clone(), cluster_secrets, Some(&kubeconfig_path));
 
     let kube_client = infra_ctx.mk_kube_client()?;
 
