@@ -10,11 +10,11 @@ use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use bstr::ByteSlice;
 use qovery_engine::cloud_provider::Kind;
+use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use base64::engine::general_purpose;
 use base64::Engine;
-use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
