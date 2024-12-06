@@ -1,53 +1,19 @@
 use crate::cloud_provider::gcp::kubernetes::GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES;
 use crate::cloud_provider::helm::ChartInfo;
-use crate::cloud_provider::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::cloud_provider::kubectl_utils::{delete_completed_jobs, delete_crashlooping_pods};
 use crate::cloud_provider::kubernetes::{uninstall_cert_manager, Kubernetes};
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::kubectl::{kubectl_exec_delete_namespace, kubectl_exec_get_all_namespaces};
 use crate::deletion_utilities::{get_firsts_namespaces_to_delete, get_qovery_managed_namespaces};
 use crate::engine::InfrastructureContext;
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure_action::InfraLogger;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
-use k8s_openapi::api::core::v1::Namespace;
-use kube::api::DeleteParams;
-use kube::Api;
 use std::collections::HashSet;
-use std::time::Duration;
-
-const DELETE_TIMEOUT: Duration = Duration::from_secs(60 * 10);
-
-fn delete_namespace(
-    ns_to_delete: &str,
-    ns_api: Api<Namespace>,
-    event_details: &EventDetails,
-    logger: &impl InfraLogger,
-) -> Result<(), Box<EngineError>> {
-    match block_on(async {
-        tokio::time::timeout(DELETE_TIMEOUT, ns_api.delete(ns_to_delete, &DeleteParams::foreground())).await
-    }) {
-        Ok(Ok(_)) => logger.info(format!("Deleted successfully namespace `{}`", ns_to_delete)),
-        Ok(Err(err)) => logger.warn(format!("Can't delete the namespace `{}`: {:?}", ns_to_delete, err)),
-        Err(_timeout) => {
-            let msg = format!(
-                "Can't delete the namespace `{}`: due to {:?}s timeout elapsed",
-                ns_to_delete, DELETE_TIMEOUT
-            );
-            logger.warn(&msg);
-            return Err(Box::new(EngineError::new_k8s_delete_service_error(
-                event_details.clone(),
-                CommandError::new_from_safe_message(msg.clone()),
-                msg,
-            )));
-        }
-    }
-
-    Ok(())
-}
 
 pub(super) fn delete_kube_apps(
     cluster: &dyn Kubernetes,
@@ -56,6 +22,7 @@ pub(super) fn delete_kube_apps(
     logger: &impl InfraLogger,
     skip_helm_releases: HashSet<String>,
 ) -> Result<(), Box<EngineError>> {
+    let kubeconfig_path = cluster.kubeconfig_local_file_path();
     // should make the diff between all namespaces and qovery managed namespaces
     let message = format!(
         "Deleting all non-Qovery deployed applications and dependencies for cluster {}/{}",
@@ -64,29 +31,40 @@ pub(super) fn delete_kube_apps(
     );
     logger.info(message);
 
-    let kube = infra_ctx.mk_kube_client()?;
-    let ns_api: Api<Namespace> = Api::all(kube.client().clone());
-    let all_namespaces = block_on(ns_api.list_metadata(&Default::default())).map(|ns| {
-        ns.items
-            .into_iter()
-            .map(|ns| ns.metadata.name.unwrap_or_default())
-            .collect::<Vec<String>>()
-    });
+    let all_namespaces = kubectl_exec_get_all_namespaces(
+        &kubeconfig_path,
+        infra_ctx.cloud_provider().credentials_environment_variables(),
+    );
 
     match all_namespaces {
-        Ok(namespaces) => {
-            let namespaces_as_str = namespaces.iter().map(std::ops::Deref::deref).collect();
-            for ns_to_delete in get_firsts_namespaces_to_delete(namespaces_as_str) {
-                delete_namespace(ns_to_delete, ns_api.clone(), &event_details, logger)?;
+        Ok(namespace_vec) => {
+            let namespaces_as_str = namespace_vec.iter().map(std::ops::Deref::deref).collect();
+            let namespaces_to_delete = get_firsts_namespaces_to_delete(namespaces_as_str);
+
+            logger.info("Deleting non Qovery namespaces");
+            for namespace_to_delete in namespaces_to_delete.iter() {
+                match kubectl_exec_delete_namespace(
+                    &kubeconfig_path,
+                    namespace_to_delete,
+                    infra_ctx.cloud_provider().credentials_environment_variables(),
+                ) {
+                    Ok(_) => logger.info(format!("Namespace `{}` deleted successfully.", namespace_to_delete)),
+                    Err(e) if !e.message(ErrorMessageVerbosity::FullDetails).contains("not found") => {
+                        logger.warn(format!("Can't delete the namespace `{}`", namespace_to_delete));
+                    }
+                    _ => {}
+                }
             }
         }
-
         Err(e) => {
             let message_safe = format!(
                 "Error while getting all namespaces for Kubernetes cluster {}",
-                cluster.name_with_id()
+                cluster.name_with_id(),
             );
-            logger.warn(EventMessage::new(message_safe, Some(e.to_string())));
+            logger.warn(EventMessage::new(
+                message_safe,
+                Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+            ));
         }
     }
 
@@ -99,26 +77,20 @@ pub(super) fn delete_kube_apps(
 
     // delete custom metrics api to avoid stale namespaces on deletion
     let helm = Helm::new(
-        Some(cluster.kubeconfig_local_file_path()),
+        Some(&kubeconfig_path),
         &infra_ctx.cloud_provider().credentials_environment_variables(),
     )
     .map_err(|e| to_engine_error(&event_details, e))?;
-    let chart = ChartInfo::new_from_release_name(&MetricsServerChart::chart_name(), "kube-system");
+    let chart = ChartInfo::new_from_release_name("metrics-server", "kube-system");
 
-    if let Err(e) = helm.uninstall(
-        &chart,
-        &[],
-        &CommandKiller::from_timeout(DELETE_TIMEOUT),
-        &mut |_| {},
-        &mut |_| {},
-    ) {
+    if let Err(e) = helm.uninstall(&chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
         // this error is not blocking
         logger.warn(EventMessage::new_from_engine_error(to_engine_error(&event_details, e)));
     }
 
     // required to avoid namespace stuck on deletion
     if let Err(e) = uninstall_cert_manager(
-        cluster.kubeconfig_local_file_path(),
+        &kubeconfig_path,
         infra_ctx.cloud_provider().credentials_environment_variables(),
         event_details.clone(),
         cluster.logger(),
@@ -139,13 +111,7 @@ pub(super) fn delete_kube_apps(
 
         for chart in charts_to_delete {
             let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-            match helm.uninstall(
-                &chart_info,
-                &[],
-                &CommandKiller::from_timeout(DELETE_TIMEOUT),
-                &mut |_| {},
-                &mut |_| {},
-            ) {
+            match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                 Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
                 Err(e) => {
                     let message_safe = format!("Can't delete chart `{}`", chart.name);
@@ -156,8 +122,19 @@ pub(super) fn delete_kube_apps(
     }
 
     logger.info("Deleting Qovery managed namespaces");
-    for ns_to_delete in qovery_namespaces.iter() {
-        delete_namespace(ns_to_delete, ns_api.clone(), &event_details, logger)?;
+    for qovery_namespace in qovery_namespaces.iter() {
+        let deletion = kubectl_exec_delete_namespace(
+            &kubeconfig_path,
+            qovery_namespace,
+            infra_ctx.cloud_provider().credentials_environment_variables(),
+        );
+        match deletion {
+            Ok(_) => logger.info(format!("Namespace `{}` is fully deleted.", qovery_namespace)),
+            Err(e) if !e.message(ErrorMessageVerbosity::FullDetails).contains("not found") => {
+                logger.warn(format!("Can't delete the namespace `{}`", qovery_namespace));
+            }
+            _ => {}
+        }
     }
 
     logger.info("Deleting all remaining deployed helm applications");
@@ -168,13 +145,7 @@ pub(super) fn delete_kube_apps(
                 .filter(|helm_chart| !skip_helm_releases.contains(&helm_chart.name))
             {
                 let chart_info = ChartInfo::new_from_release_name(&chart.name, &chart.namespace);
-                match helm.uninstall(
-                    &chart_info,
-                    &[],
-                    &CommandKiller::from_timeout(DELETE_TIMEOUT),
-                    &mut |_| {},
-                    &mut |_| {},
-                ) {
+                match helm.uninstall(&chart_info, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {}) {
                     Ok(_) => logger.info(format!("Chart `{}` deleted", chart.name)),
                     Err(e) => {
                         let message_safe = format!("Error deleting chart `{}`", chart.name);
