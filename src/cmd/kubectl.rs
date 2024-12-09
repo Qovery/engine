@@ -331,7 +331,7 @@ where
     _envs.extend(envs);
 
     kubectl_exec_with_output(
-        vec!["delete", "namespace", namespace],
+        vec!["delete", "namespace", namespace, "--timeout 600s"],
         _envs,
         &mut |line| info!("{}", line),
         &mut |line| error!("{}", line),
