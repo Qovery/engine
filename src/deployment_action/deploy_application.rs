@@ -36,6 +36,7 @@ where
                 self.is_stateful(),
                 Duration::from_secs(5 * 60),
                 event_details.clone(),
+                true,
             )
             .unpause_if_needed(target);
 
@@ -104,6 +105,7 @@ where
                     self.is_stateful(),
                     Duration::from_secs(5 * 60),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                    true,
                 );
                 pause_service.on_pause(target)
             },

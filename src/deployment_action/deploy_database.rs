@@ -821,6 +821,7 @@ where
                     true,
                     Duration::from_secs(5 * 60),
                     self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                    true,
                 );
                 pause_service.on_pause(target)
             },
