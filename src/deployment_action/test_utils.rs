@@ -150,6 +150,45 @@ pub fn get_simple_daemon_set() -> DaemonSet {
     .unwrap()
 }
 
+pub fn get_simple_daemonset_with_node_selector() -> DaemonSet {
+    serde_json::from_value(serde_json::json!({
+           "apiVersion":"apps/v1",
+           "kind":"DaemonSet",
+           "metadata":{
+              "name":"restart",
+              "labels":{
+                 "app":"restart"
+              }
+           },
+            "spec": {
+                "selector": {
+                  "matchLabels": {
+                    "app": "restart"
+                  }
+                },
+                "template": {
+                  "metadata": {
+                    "labels": {
+                      "app": "restart"
+                    }
+                  },
+                  "spec": {
+                    "nodeSelector": {
+                        "test-key": "test-value"
+                    },
+                    "containers": [
+                      {
+                        "name": "pause",
+                        "image": "public.ecr.aws/r3m4q3r9/qovery-ci:pause-3.10"
+                      }
+                    ]
+                  }
+                }
+      }
+    }))
+    .unwrap()
+}
+
 pub fn get_simple_hpa() -> HorizontalPodAutoscaler {
     serde_json::from_value(serde_json::json!({
     "apiVersion": "autoscaling/v1",

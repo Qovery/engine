@@ -60,6 +60,18 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 Duration::from_secs(5 * 60),
                 event_details.clone(),
                 self.is_cluster_wide_resources_allowed(),
+                true,
+            )
+            .unpause_if_needed(target);
+
+            // unpause daemonset if necessary
+            let _ = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::DaemonSet,
+                Duration::from_secs(5 * 60),
+                event_details.clone(),
+                self.is_cluster_wide_resources_allowed(),
+                true,
             )
             .unpause_if_needed(target);
 
@@ -102,6 +114,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 Duration::from_secs(5 * 60),
                 self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
                 self.is_cluster_wide_resources_allowed(),
+                false,
             );
             pause_cron_job.on_pause(target)?;
 
@@ -111,6 +124,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 Duration::from_secs(5 * 60),
                 self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
                 self.is_cluster_wide_resources_allowed(),
+                false,
             );
             pause_deployment.on_pause(target)?;
 
@@ -120,8 +134,19 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 Duration::from_secs(5 * 60),
                 self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
                 self.is_cluster_wide_resources_allowed(),
+                false,
             );
-            pause_statefulset.on_pause(target)
+            pause_statefulset.on_pause(target)?;
+
+            let pause_daemonset = PauseServiceAction::new_with_resource_type(
+                self.kube_label_selector(),
+                K8sResourceType::DaemonSet,
+                Duration::from_secs(5 * 60),
+                self.get_event_details(Stage::Environment(EnvironmentStep::Pause)),
+                self.is_cluster_wide_resources_allowed(),
+                true,
+            );
+            pause_daemonset.on_pause(target)
         };
 
         execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Pause), task)

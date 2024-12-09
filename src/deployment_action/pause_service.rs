@@ -3,8 +3,9 @@ use crate::deployment_action::{DeploymentAction, K8sResourceType};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::runtime::block_on;
+use json_patch::{AddOperation, PatchOperation, RemoveOperation};
 use jsonptr::Pointer;
-use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
 use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
 use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Pod;
@@ -43,6 +44,30 @@ fn has_cron_job_suspended_value(suspend: bool) -> impl Condition<CronJob> {
     }
 }
 
+fn has_daemonset_node_selector(selector_key: String, selector_value: String) -> impl Condition<DaemonSet> {
+    move |daemonset: Option<&DaemonSet>| {
+        daemonset
+            .and_then(|d| d.spec.as_ref())
+            .and_then(|spec| spec.template.spec.as_ref())
+            .and_then(|pod_spec| pod_spec.node_selector.as_ref())
+            .map(|selector| selector.get(&selector_key) == Some(&selector_value))
+            .unwrap_or(false)
+    }
+}
+
+fn has_not_daemonset_node_selector(selector_key: String) -> impl Condition<DaemonSet> {
+    move |daemonset: Option<&DaemonSet>| {
+        daemonset
+            .and_then(|d| d.spec.as_ref())
+            .and_then(|spec| spec.template.spec.as_ref())
+            .and_then(|pod_spec| pod_spec.node_selector.as_ref())
+            .map_or(true, |node_selector| node_selector.get(&selector_key).is_none())
+    }
+}
+
+const PAUSE_SELECTOR_KEY: &str = "qovery-pause";
+const PAUSE_SELECTOR_VALUE: &str = "true";
+
 async fn pause_service(
     kube: &kube::Client,
     namespace: &str,
@@ -50,6 +75,7 @@ async fn pause_service(
     desired_size: usize, // only for test, normal behavior assume 0
     k8s_resource_type: K8sResourceType,
     is_cluster_wide_resources_allowed: bool,
+    wait_for_pods: bool,
 ) -> Result<(), kube::Error> {
     // We don't need to remove HPA, if we set desired replicas to 0, hpa disable itself until we change it back
     // https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/#implicit-maintenance-mode-deactivation
@@ -69,14 +95,16 @@ async fn pause_service(
                     let _ = await_condition(statefulsets.clone(), &name, has_statefulset_ready_replicas(0)).await;
                 }
             }
-            wait_for_pods_to_be_in_correct_state(
-                kube,
-                namespace,
-                desired_size,
-                is_cluster_wide_resources_allowed,
-                &list_params,
-            )
-            .await;
+            if wait_for_pods {
+                wait_for_pods_to_be_in_correct_state(
+                    kube,
+                    namespace,
+                    desired_size,
+                    is_cluster_wide_resources_allowed,
+                    &list_params,
+                )
+                .await;
+            }
         }
         K8sResourceType::Deployment => {
             let (list_params, patch_params, patch) = get_patch_merge(selector, desired_size);
@@ -92,14 +120,16 @@ async fn pause_service(
                     let _ = await_condition(deployments.clone(), &name, has_deployment_ready_replicas(0)).await;
                 }
             }
-            wait_for_pods_to_be_in_correct_state(
-                kube,
-                namespace,
-                desired_size,
-                is_cluster_wide_resources_allowed,
-                &list_params,
-            )
-            .await;
+            if wait_for_pods {
+                wait_for_pods_to_be_in_correct_state(
+                    kube,
+                    namespace,
+                    desired_size,
+                    is_cluster_wide_resources_allowed,
+                    &list_params,
+                )
+                .await;
+            }
         }
         K8sResourceType::CronJob => {
             let (list_params, patch_params, patch) = get_patch_suspend(selector, desired_size == 0);
@@ -117,7 +147,49 @@ async fn pause_service(
                 }
             }
         }
-        K8sResourceType::DaemonSet => {}
+        K8sResourceType::DaemonSet => {
+            let list_params = ListParams::default().labels(selector);
+            let daemonsets: Api<DaemonSet> = if is_cluster_wide_resources_allowed {
+                Api::all(kube.clone())
+            } else {
+                Api::namespaced(kube.clone(), namespace)
+            };
+
+            for daemonset in daemonsets.list(&list_params).await? {
+                if let (Some(namespace), Some(name)) = (daemonset.metadata.namespace, daemonset.metadata.name) {
+                    let already_have_some_selectors = daemonset
+                        .spec
+                        .and_then(|spec| spec.template.spec)
+                        .and_then(|pod_spec| pod_spec.node_selector)
+                        .is_some();
+
+                    let (patch_params, patch) = get_patch_add_node_selector(
+                        already_have_some_selectors,
+                        PAUSE_SELECTOR_KEY,
+                        PAUSE_SELECTOR_VALUE,
+                    );
+
+                    let daemon_sets: Api<DaemonSet> = Api::namespaced(kube.clone(), &namespace);
+                    daemon_sets.patch(&name, &patch_params, &patch).await?;
+                    let _ = await_condition(
+                        daemon_sets.clone(),
+                        &name,
+                        has_daemonset_node_selector(PAUSE_SELECTOR_KEY.to_string(), PAUSE_SELECTOR_VALUE.to_string()),
+                    )
+                    .await;
+                }
+            }
+            if wait_for_pods {
+                wait_for_pods_to_be_in_correct_state(
+                    kube,
+                    namespace,
+                    desired_size,
+                    is_cluster_wide_resources_allowed,
+                    &list_params,
+                )
+                .await;
+            }
+        }
         K8sResourceType::Job => {}
     };
 
@@ -178,7 +250,36 @@ async fn unpause_service_if_needed(
                 }
             }
         }
-        K8sResourceType::DaemonSet => {}
+        K8sResourceType::DaemonSet => {
+            let list_params = ListParams::default().labels(selector);
+            let daemonsets: Api<DaemonSet> = if is_cluster_wide_resources_allowed {
+                Api::all(kube.clone())
+            } else {
+                Api::namespaced(kube.clone(), namespace)
+            };
+            for daemonset in daemonsets.list(&list_params).await? {
+                if let (Some(namespace), Some(name)) = (daemonset.metadata.namespace, daemonset.metadata.name) {
+                    let current_selectors = daemonset
+                        .spec
+                        .and_then(|spec| spec.template.spec)
+                        .and_then(|pod_spec| pod_spec.node_selector)
+                        .unwrap_or_default();
+
+                    if current_selectors.contains_key(PAUSE_SELECTOR_KEY) {
+                        let (patch_params, patch) = get_patch_remove_node_selector(PAUSE_SELECTOR_KEY);
+
+                        let daemon_sets: Api<DaemonSet> = Api::namespaced(kube.clone(), &namespace);
+                        daemon_sets.patch(&name, &patch_params, &patch).await?;
+                        let _ = await_condition(
+                            daemon_sets.clone(),
+                            &name,
+                            has_not_daemonset_node_selector(PAUSE_SELECTOR_KEY.to_string()),
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
         K8sResourceType::Job => {}
     }
 
@@ -210,6 +311,38 @@ fn get_patch_suspend(selector: &str, desired_suspend_value: bool) -> (ListParams
     (list_params, patch_params, patch)
 }
 
+fn get_patch_add_node_selector(
+    already_have_some_selectors: bool,
+    node_selector_key: &str,
+    node_selector_value: &str,
+) -> (PatchParams, Patch<Value>) {
+    let patch_params = PatchParams::apply("node-selector-add-patch");
+
+    let mut patch_operations = vec![];
+    if !already_have_some_selectors {
+        patch_operations.push(PatchOperation::Add(AddOperation {
+            path: Pointer::new(["spec", "template", "spec", "nodeSelector"]),
+            value: Value::Object(serde_json::Map::new()),
+        }));
+    }
+    patch_operations.push(PatchOperation::Add(AddOperation {
+        path: Pointer::new(["spec", "template", "spec", "nodeSelector", node_selector_key]),
+        value: Value::String(node_selector_value.to_string()),
+    }));
+
+    (patch_params, Patch::Json(json_patch::Patch(patch_operations)))
+}
+
+fn get_patch_remove_node_selector(key: &str) -> (PatchParams, Patch<Value>) {
+    let patch_params = PatchParams::apply("node-selector-remove-patch");
+
+    let patch_operations = vec![PatchOperation::Remove(RemoveOperation {
+        path: Pointer::new(["spec", "template", "spec", "nodeSelector", key]),
+    })];
+
+    (patch_params, Patch::Json(json_patch::Patch(patch_operations)))
+}
+
 async fn wait_for_pods_to_be_in_correct_state(
     kube: &Client,
     namespace: &str,
@@ -239,6 +372,7 @@ pub struct PauseServiceAction {
     event_details: EventDetails,
     timeout: Duration,
     is_cluster_wide_resources_allowed: bool,
+    wait_for_pods: bool,
 }
 
 impl PauseServiceAction {
@@ -247,6 +381,7 @@ impl PauseServiceAction {
         is_stateful: bool,
         timeout: Duration,
         event_details: EventDetails,
+        wait_for_pods: bool,
     ) -> PauseServiceAction {
         PauseServiceAction {
             selector,
@@ -258,6 +393,7 @@ impl PauseServiceAction {
             timeout,
             event_details,
             is_cluster_wide_resources_allowed: false,
+            wait_for_pods,
         }
     }
 
@@ -267,6 +403,7 @@ impl PauseServiceAction {
         timeout: Duration,
         event_details: EventDetails,
         is_cluster_wide_resources_allowed: bool,
+        wait_for_pods: bool,
     ) -> PauseServiceAction {
         PauseServiceAction {
             selector,
@@ -274,6 +411,7 @@ impl PauseServiceAction {
             timeout,
             event_details,
             is_cluster_wide_resources_allowed,
+            wait_for_pods,
         }
     }
 
@@ -334,6 +472,7 @@ impl DeploymentAction for PauseServiceAction {
             0,
             self.k8s_resource_type.clone(),
             self.is_cluster_wide_resources_allowed,
+            self.wait_for_pods,
         );
 
         // Async block is necessary because tokio::time::timeout require a living tokio runtime, which does not exist
@@ -387,17 +526,20 @@ impl DeploymentAction for PauseServiceAction {
 #[cfg(test)]
 mod tests {
     use crate::deployment_action::pause_service::{
-        has_cron_job_suspended_value, has_deployment_ready_replicas, has_statefulset_ready_replicas, pause_service,
-        unpause_service_if_needed, K8sResourceType,
+        has_cron_job_suspended_value, has_daemonset_node_selector, has_deployment_ready_replicas,
+        has_not_daemonset_node_selector, has_statefulset_ready_replicas, pause_service, unpause_service_if_needed,
+        K8sResourceType, PAUSE_SELECTOR_KEY, PAUSE_SELECTOR_VALUE,
     };
     use crate::deployment_action::test_utils::{
-        get_simple_cron_job, get_simple_deployment, get_simple_hpa, get_simple_statefulset, NamespaceForTest,
+        get_simple_cron_job, get_simple_daemon_set, get_simple_daemonset_with_node_selector, get_simple_deployment,
+        get_simple_hpa, get_simple_statefulset, NamespaceForTest,
     };
     use function_name::named;
-    use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
+    use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
     use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
     use k8s_openapi::api::batch::v1::CronJob;
     use kube::api::PostParams;
+    use kube::runtime::conditions::Condition;
     use kube::runtime::wait::await_condition;
     use kube::Api;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -405,7 +547,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_deployment() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.unwrap();
+        let kube_client = kube::Client::try_default().await.expect("create client");
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -423,8 +565,11 @@ mod tests {
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
 
-        hpas.create(&PostParams::default(), &hpa).await.unwrap();
-        deployments.create(&PostParams::default(), &deployment).await.unwrap();
+        hpas.create(&PostParams::default(), &hpa).await.expect("create hpas");
+        deployments
+            .create(&PostParams::default(), &deployment)
+            .await
+            .expect("create deployment");
         tokio::time::timeout(
             timeout,
             await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
@@ -434,14 +579,22 @@ mod tests {
         // Scaling a service that does not exist should not fail
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, "app=totototo", 0, K8sResourceType::Deployment, false),
+            pause_service(
+                &kube_client,
+                &namespace,
+                "app=totototo",
+                0,
+                K8sResourceType::Deployment,
+                false,
+                true,
+            ),
         )
         .await??;
 
         // Try to scale down our deployment
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::Deployment, false),
+            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::Deployment, false, true),
         )
         .await??;
         tokio::time::timeout(
@@ -453,7 +606,110 @@ mod tests {
         // Try to scale up our deployment
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 1, K8sResourceType::Deployment, false),
+            pause_service(&kube_client, &namespace, &selector, 1, K8sResourceType::Deployment, false, true),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
+        )
+        .await??;
+
+        drop(_ns);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[named]
+    async fn test_scale_deployment_with_statefulset() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.expect("create client");
+        let namespace = format!(
+            "{}-{:?}",
+            function_name!().replace('_', "-"),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        );
+        let timeout = Duration::from_secs(30);
+        let deployments: Api<Deployment> = Api::namespaced(kube_client.clone(), &namespace);
+        let deployment: Deployment = get_simple_deployment();
+        let statefulsets: Api<StatefulSet> = Api::namespaced(kube_client.clone(), &namespace);
+        let statefulset: StatefulSet = get_simple_statefulset();
+        let hpas: Api<HorizontalPodAutoscaler> = Api::namespaced(kube_client.clone(), &namespace);
+        let hpa = get_simple_hpa();
+
+        let app_name = deployment.metadata.name.clone().unwrap_or_default();
+        let selector = format!("app={app_name}");
+
+        // create simple deployment and wait for it to be ready
+        let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
+
+        hpas.create(&PostParams::default(), &hpa).await.expect("create hpas");
+        deployments
+            .create(&PostParams::default(), &deployment)
+            .await
+            .expect("create deployment");
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
+        )
+        .await??;
+
+        statefulsets
+            .create(&PostParams::default(), &statefulset)
+            .await
+            .expect("create statefulset");
+        tokio::time::timeout(
+            timeout,
+            await_condition(statefulsets.clone(), &app_name, has_statefulset_ready_replicas(1)),
+        )
+        .await??;
+
+        // Scaling a service that does not exist should not fail
+        tokio::time::timeout(
+            timeout,
+            pause_service(
+                &kube_client,
+                &namespace,
+                "app=totototo",
+                0,
+                K8sResourceType::Deployment,
+                false,
+                false,
+            ),
+        )
+        .await??;
+
+        // Try to scale down our deployment
+        tokio::time::timeout(
+            timeout,
+            pause_service(
+                &kube_client,
+                &namespace,
+                &selector,
+                0,
+                K8sResourceType::Deployment,
+                false,
+                false,
+            ),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(0)),
+        )
+        .await??;
+
+        // Try to scale up our deployment
+        tokio::time::timeout(
+            timeout,
+            pause_service(
+                &kube_client,
+                &namespace,
+                &selector,
+                1,
+                K8sResourceType::Deployment,
+                false,
+                false,
+            ),
         )
         .await??;
         tokio::time::timeout(
@@ -469,7 +725,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_statefulset() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.unwrap();
+        let kube_client = kube::Client::try_default().await.expect("create client");
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -484,7 +740,10 @@ mod tests {
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
 
-        statefulsets.create(&PostParams::default(), &statefulset).await.unwrap();
+        statefulsets
+            .create(&PostParams::default(), &statefulset)
+            .await
+            .expect("create statefulset");
         tokio::time::timeout(
             timeout,
             await_condition(statefulsets.clone(), &app_name, has_statefulset_ready_replicas(1)),
@@ -494,14 +753,30 @@ mod tests {
         // Scaling a service that does not exist should not fail
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, "app=totototo", 0, K8sResourceType::StateFulSet, false),
+            pause_service(
+                &kube_client,
+                &namespace,
+                "app=totototo",
+                0,
+                K8sResourceType::StateFulSet,
+                false,
+                true,
+            ),
         )
         .await??;
 
         // Try to scale down our deployment
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::StateFulSet, false),
+            pause_service(
+                &kube_client,
+                &namespace,
+                &selector,
+                0,
+                K8sResourceType::StateFulSet,
+                false,
+                true,
+            ),
         )
         .await??;
         tokio::time::timeout(
@@ -513,7 +788,15 @@ mod tests {
         // Try to scale up our deployment
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 1, K8sResourceType::StateFulSet, false),
+            pause_service(
+                &kube_client,
+                &namespace,
+                &selector,
+                1,
+                K8sResourceType::StateFulSet,
+                false,
+                true,
+            ),
         )
         .await??;
         tokio::time::timeout(
@@ -528,7 +811,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_cron_job() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.unwrap();
+        let kube_client = kube::Client::try_default().await.expect("create client");
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -543,7 +826,10 @@ mod tests {
         // create simple cron job and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
 
-        cron_jobs.create(&PostParams::default(), &cron_job).await.unwrap();
+        cron_jobs
+            .create(&PostParams::default(), &cron_job)
+            .await
+            .expect("create cron job");
         tokio::time::timeout(
             timeout,
             await_condition(cron_jobs.clone(), &app_name, has_cron_job_suspended_value(false)),
@@ -553,14 +839,22 @@ mod tests {
         // Scaling a cron job that does not exist should not fail
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, "app=totototo", 0, K8sResourceType::CronJob, false),
+            pause_service(
+                &kube_client,
+                &namespace,
+                "app=totototo",
+                0,
+                K8sResourceType::CronJob,
+                false,
+                true,
+            ),
         )
         .await??;
 
         // Try to suspend our cron-job
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::CronJob, false),
+            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::CronJob, false, true),
         )
         .await??;
         tokio::time::timeout(
@@ -572,7 +866,7 @@ mod tests {
         // Try to resume our cron-job
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 1, K8sResourceType::CronJob, false),
+            pause_service(&kube_client, &namespace, &selector, 1, K8sResourceType::CronJob, false, true),
         )
         .await??;
         tokio::time::timeout(
@@ -587,7 +881,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_unpause_deployment() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.unwrap();
+        let kube_client = kube::Client::try_default().await.expect("create client");
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -605,8 +899,11 @@ mod tests {
         // create simple deployment and wait for it to be ready
         let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
 
-        hpas.create(&PostParams::default(), &hpa).await.unwrap();
-        deployments.create(&PostParams::default(), &deployment).await.unwrap();
+        hpas.create(&PostParams::default(), &hpa).await.expect("create hpas");
+        deployments
+            .create(&PostParams::default(), &deployment)
+            .await
+            .expect("create deployment");
         tokio::time::timeout(
             timeout,
             await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
@@ -616,7 +913,7 @@ mod tests {
         // Try to scale down our deployment
         tokio::time::timeout(
             timeout,
-            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::Deployment, false),
+            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::Deployment, false, true),
         )
         .await??;
         tokio::time::timeout(
@@ -633,6 +930,177 @@ mod tests {
         tokio::time::timeout(
             timeout,
             await_condition(deployments.clone(), &app_name, has_deployment_ready_replicas(1)),
+        )
+        .await??;
+
+        Ok(())
+    }
+
+    fn has_daemon_set_number_ready() -> impl Condition<DaemonSet> {
+        move |daemon_set: Option<&DaemonSet>| {
+            daemon_set
+                .and_then(|d| d.status.as_ref())
+                .map(|status| status.number_ready)
+                .unwrap_or(0)
+                == 1
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[named]
+    async fn test_pause_daemonset() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.expect("kubernetes client");
+        let namespace = format!(
+            "{}-{:?}",
+            function_name!().replace('_', "-"),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        );
+        let timeout = Duration::from_secs(30);
+        let daemonsets: Api<DaemonSet> = Api::namespaced(kube_client.clone(), &namespace);
+        let daemonset: DaemonSet = get_simple_daemon_set();
+
+        let app_name = daemonset.metadata.name.clone().unwrap_or_default();
+        let selector = format!("app={app_name}");
+
+        // create simple deployment and wait for it to be ready
+        let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
+
+        daemonsets
+            .create(&PostParams::default(), &daemonset)
+            .await
+            .expect("daemonset created");
+        tokio::time::timeout(
+            timeout,
+            await_condition(daemonsets.clone(), &app_name, has_daemon_set_number_ready()),
+        )
+        .await??;
+
+        //pause a daemonset that does not exist
+        tokio::time::timeout(
+            timeout,
+            pause_service(
+                &kube_client,
+                &namespace,
+                "app=totototo",
+                0,
+                K8sResourceType::DaemonSet,
+                false,
+                true,
+            ),
+        )
+        .await??;
+
+        // Try to pause our daemonset
+        tokio::time::timeout(
+            timeout,
+            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::DaemonSet, false, true),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_daemonset_node_selector(PAUSE_SELECTOR_KEY.to_string(), PAUSE_SELECTOR_VALUE.to_string()),
+            ),
+        )
+        .await??;
+
+        // Try to restart our daemonset
+        tokio::time::timeout(
+            timeout,
+            unpause_service_if_needed(&kube_client, &namespace, &selector, K8sResourceType::DaemonSet, false),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(daemonsets.clone(), &app_name, has_daemon_set_number_ready()),
+        )
+        .await??;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[named]
+    async fn test_pause_daemonset_having_node_selector() -> Result<(), Box<dyn std::error::Error>> {
+        let kube_client = kube::Client::try_default().await.expect("kubernetes client");
+        let namespace = format!(
+            "{}-{:?}",
+            function_name!().replace('_', "-"),
+            SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs()
+        );
+        let timeout = Duration::from_secs(30);
+        let daemonsets: Api<DaemonSet> = Api::namespaced(kube_client.clone(), &namespace);
+        let daemonset: DaemonSet = get_simple_daemonset_with_node_selector();
+
+        let app_name = daemonset.metadata.name.clone().unwrap_or_default();
+        let selector = format!("app={app_name}");
+
+        // create simple deployment and wait for it to be ready
+        let _ns = NamespaceForTest::new(kube_client.clone(), namespace.to_string()).await?;
+
+        daemonsets
+            .create(&PostParams::default(), &daemonset)
+            .await
+            .expect("daemonset created");
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_daemonset_node_selector("test-key".to_string(), "test-value".to_string()),
+            ),
+        )
+        .await??;
+
+        // Try to pause our daemonset
+        tokio::time::timeout(
+            timeout,
+            pause_service(&kube_client, &namespace, &selector, 0, K8sResourceType::DaemonSet, false, true),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_daemonset_node_selector(PAUSE_SELECTOR_KEY.to_string(), PAUSE_SELECTOR_VALUE.to_string()),
+            ),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_daemonset_node_selector("test-key".to_string(), "test-value".to_string()),
+            ),
+        )
+        .await??;
+
+        // Try to restart our daemonset
+        tokio::time::timeout(
+            timeout,
+            unpause_service_if_needed(&kube_client, &namespace, &selector, K8sResourceType::DaemonSet, false),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_daemonset_node_selector("test-key".to_string(), "test-value".to_string()),
+            ),
+        )
+        .await??;
+        tokio::time::timeout(
+            timeout,
+            await_condition(
+                daemonsets.clone(),
+                &app_name,
+                has_not_daemonset_node_selector(PAUSE_SELECTOR_KEY.to_string()),
+            ),
         )
         .await??;
 
