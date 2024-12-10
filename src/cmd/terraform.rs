@@ -1527,9 +1527,11 @@ fn terraform_exec_from_command(
 
     let result = cmd.exec_with_output(
         &mut |line| {
+            info!(line);
             terraform_output.raw_std_output.push(line);
         },
         &mut |line| {
+            error!(line);
             terraform_output.raw_error_output.push(line);
         },
     );
