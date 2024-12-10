@@ -32,7 +32,7 @@ use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistrySer
 
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::get_environment_test_kubernetes;
+use crate::helpers::kubernetes::{get_environment_test_kubernetes, TargetCluster};
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
@@ -121,7 +121,8 @@ pub fn gcp_container_registry(context: &Context) -> GoogleArtifactRegistry {
     .expect("Cannot create Google Artifact Registry")
 }
 
-pub fn gcp_default_infra_config(
+pub fn gcp_infra_config(
+    targeted_cluster: &TargetCluster,
     context: &Context,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
@@ -146,6 +147,10 @@ pub fn gcp_default_infra_config(
         i32::MAX, // NA on GKE due to autopilot
         CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
+        match targeted_cluster {
+            TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
+            TargetCluster::New => None, // <- creating a new cluster
+        },
     )
 }
 
@@ -163,6 +168,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         max_nodes: i32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
+        kubeconfig: Option<String>,
     ) -> InfrastructureContext {
         // use Google Artifact registry
         let container_registry = Box::new(gcp_container_registry(context));
@@ -190,6 +196,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             cpu_archi,
             engine_location,
             StorageClass(GcpStorageType::Balanced.to_k8s_storage_class()),
+            kubeconfig,
         );
 
         InfrastructureContext::new(
@@ -297,9 +304,10 @@ pub fn try_parse_json_credentials_from_str(raw: &str) -> Result<JsonCredentials,
 pub fn clean_environments(
     context: &Context,
     _environments: Vec<EnvironmentRequest>,
-    secrets: FuncTestsSecrets,
     region: GcpRegion,
 ) -> Result<(), ContainerRegistryError> {
+    let secrets = FuncTestsSecrets::new();
+
     let gcp_project_name = secrets
         .GCP_PROJECT_NAME
         .as_ref()

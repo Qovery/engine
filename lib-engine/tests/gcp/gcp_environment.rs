@@ -1,6 +1,7 @@
 use crate::helpers;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::gcp::{clean_environments, gcp_default_infra_config};
+use crate::helpers::gcp::{clean_environments, gcp_infra_config};
+use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
     context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
 };
@@ -48,7 +49,14 @@ fn gcp_test_build_phase() {
                 .GCP_TEST_CLUSTER_LONG_ID
                 .expect("GCP_TEST_CLUSTER_LONG_ID  should be set"),
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
@@ -97,10 +105,20 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
                 .as_str(),
         )
         .expect("Unknown GCP region");
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let annotations_group_id = Uuid::new_v4();
         let mut environment = helpers::environment::working_minimal_environment(&context);
         // environment.applications.first().unwrap().annotations_group_ids = btreemap! { annotations_group_id };
@@ -131,7 +149,7 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(result.is_ok());
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -159,10 +177,20 @@ fn deploy_a_working_environment_with_shared_registry() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
             secrets.GCP_TEST_CLUSTER_LONG_ID.expect("GCP_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let annotations_group_id = Uuid::new_v4();
 
         let repo_id = Uuid::new_v4().to_string();
@@ -304,10 +332,20 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
                 .as_str(),
         )
         .expect("Unknown GCP region");
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
@@ -324,7 +362,7 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
         let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(matches!(result, Ok(_) | Err(_)));
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -361,10 +399,20 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
                 .as_str(),
         )
         .expect("Unknown GCP region");
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let env_action = environment.clone();
@@ -373,7 +421,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let result = environment.deploy_environment(&env_action, &infra_ctx);
         assert!(result.is_ok());
 
-        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -381,17 +429,18 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = gcp_default_infra_config(&ctx_resume, logger.clone(), metrics_registry.clone());
+        let infra_ctx_resume =
+            gcp_infra_config(&target_cluster_gcp_test, &ctx_resume, logger.clone(), metrics_registry.clone());
         let result = environment.deploy_environment(&env_action, &infra_ctx_resume);
         assert!(result.is_ok());
 
-        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, selector);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -399,7 +448,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
         assert!(result.is_ok());
 
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -427,10 +476,20 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
             secrets.GCP_TEST_CLUSTER_LONG_ID.expect("GCP_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -509,10 +568,20 @@ fn gcp_gke_deploy_container_with_router() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
             secrets.GCP_TEST_CLUSTER_LONG_ID.expect("GCP_TEST_CLUSTER_LONG_ID"),
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 

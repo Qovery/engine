@@ -1,5 +1,6 @@
-use crate::helpers::aws::aws_default_infra_config;
+use crate::helpers::aws::aws_infra_config;
 use crate::helpers::database::StorageSize::NormalSize;
+use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
     context_for_resource, generate_id, get_svc_name, logger, metrics_registry, FuncTestsSecrets,
 };
@@ -45,10 +46,16 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
             .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
         cluster_id,
     );
+    let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+        kubeconfig: secrets
+            .AWS_TEST_KUBECONFIG_b64
+            .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+            .to_string(),
+    };
 
     let logger = logger();
     let metrics_registry = metrics_registry();
-    let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+    let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
 
     let env_id = Uuid::new_v4();
     let mut environment = EnvironmentRequest {
