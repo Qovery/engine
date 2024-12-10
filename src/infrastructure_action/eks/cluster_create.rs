@@ -205,8 +205,7 @@ pub fn create_eks_cluster(
 
 // after Karpenter is deployed, we can remove the node groups
 // after Karpenter is deployed, we can remove fargate profile for add-ons
-// TODO: remove this function once every cluster has Karpenter enabled.
-// It is only needed for the transition between nodegroup to karpente
+// TODO: remove the node groups part of the function once every cluster has Karpenter enabled.
 fn clean_karpenter_installation(
     kubernetes: &EKS,
     infra_ctx: &InfrastructureContext,
@@ -214,7 +213,7 @@ fn clean_karpenter_installation(
     event_details: EventDetails,
     aws_eks_client: Option<EksClient>,
 ) -> Result<(), Box<EngineError>> {
-    if !kubernetes.is_karpenter_enabled() || kubernetes.context().is_first_cluster_deployment() {
+    if !kubernetes.is_karpenter_enabled() {
         return Ok(());
     }
 
@@ -230,7 +229,7 @@ fn clean_karpenter_installation(
         )
     });
 
-    if !has_node_group_running {
+    if !has_node_group_running && !kubernetes.context().is_first_cluster_deployment() {
         return Ok(());
     }
 
