@@ -698,6 +698,7 @@ fn public_postgresql_v15_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn private_postgresql_v16_deploy_a_working_prod_environment() {
     test_postgresql_configuration("16", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -705,8 +706,23 @@ fn private_postgresql_v16_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_postgresql_v16_deploy_a_working_prod_environment() {
     test_postgresql_configuration("16", function_name!(), MANAGED, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v17_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("17", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn public_postgresql_v17_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("17", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
@@ -1001,8 +1017,23 @@ fn private_mysql_v8_0_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mysql_v8_0_deploy_a_working_prod_environment() {
     test_mysql_configuration("8.0", function_name!(), MANAGED, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_mysql_v8_4_deploy_a_working_prod_environment() {
+    test_mysql_configuration("8.4", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn public_mysql_v8_4_deploy_a_working_prod_environment() {
+    test_mysql_configuration("8.4", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**

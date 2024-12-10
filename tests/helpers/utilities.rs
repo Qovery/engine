@@ -845,7 +845,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "0c73aac9bbab7f494da1d89a535ed40e668a8ab4".to_string(),
+                app_commit: "ef8df03b56d942424dc4943ffb9d8d69431e72bb".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() =>VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
                     "MYSQL_PORT".to_string() => VariableInfo { value:general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
@@ -865,7 +865,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "b08d011853265f3c213b84469101e21f9712d3c9".to_string(),
+                app_commit: "f379e5b937c743adf96f9484956260da170bb93c".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_db_name), is_secret:false},
                      "PG_HOST".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
