@@ -612,6 +612,20 @@ fn public_postgresql_v16_deploy_a_working_dev_environment() {
     test_postgresql_configuration("16", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
 // Postgres production environment
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
@@ -871,6 +885,20 @@ fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
 #[test]
 fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 //
