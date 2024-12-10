@@ -1,4 +1,5 @@
-use crate::helpers::scaleway::scw_default_infra_config;
+use crate::helpers::kubernetes::TargetCluster;
+use crate::helpers::scaleway::scw_infra_config;
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
 };
@@ -32,7 +33,7 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
         let logger = logger();
         let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
-        let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let engine = scw_infra_config(&TargetCluster::New, &context, logger.clone(), metrics_registry.clone());
 
         // Deploy
         let tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
@@ -69,7 +70,7 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
         let logger = logger();
         let metrics_registry = metrics_registry();
         let context = context_for_cluster(organization_id, cluster_id, None);
-        let engine = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let engine = scw_infra_config(&TargetCluster::New, &context, logger.clone(), metrics_registry.clone());
 
         // Destroy
         let tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);

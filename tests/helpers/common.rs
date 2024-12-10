@@ -44,6 +44,7 @@ pub trait Cluster<T, U> {
         max_nodes: i32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
+        kubeconfig: Option<String>,
     ) -> InfrastructureContext;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;

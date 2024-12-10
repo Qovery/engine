@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::aws::aws_default_infra_config;
+use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
@@ -15,6 +15,7 @@ use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
+use crate::helpers::kubernetes::TargetCluster;
 use base64::engine::general_purpose;
 use base64::Engine;
 use k8s_openapi::api::core::v1::ConfigMap;
@@ -65,7 +66,13 @@ fn aws_test_build_phase() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
@@ -106,7 +113,13 @@ fn aws_test_build_phase_with_git_lfs() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let mut ea = environment.clone();
@@ -147,9 +160,25 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(
+            &target_cluster_aws_test,
+            &context,
+            logger.clone(),
+            metrics_registry_for_deployment.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let environment = helpers::environment::working_minimal_environment(&context);
 
@@ -272,6 +301,12 @@ fn deploy_a_working_environment_with_shared_registry() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
 
         let repo_id = Uuid::new_v4().to_string();
         let container = helpers::git_server::init_git_server_testcontainer(repo_id.clone());
@@ -285,9 +320,19 @@ fn deploy_a_working_environment_with_shared_registry() {
             repo_id
         );
 
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
+        let infra_ctx = aws_infra_config(
+            &target_cluster_aws_test,
+            &context,
+            logger.clone(),
+            metrics_registry_for_deployment.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let environment =
             helpers::environment::working_minimal_environment_with_custom_git_url(&context, repo_url.as_str());
@@ -382,11 +427,22 @@ fn deploy_a_working_environment_and_pause_it_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
 
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
 
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let environment = helpers::environment::working_minimal_environment(&context);
 
         let ea = environment.clone();
@@ -395,7 +451,7 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -403,17 +459,18 @@ fn deploy_a_working_environment_and_pause_it_eks() {
         assert!(ret.is_ok());
 
         // Check that we have actually 0 pods running for this app
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets.clone());
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
         // Check we can resume the env
         let ctx_resume = context.clone_not_same_execution_id();
-        let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
+        let infra_ctx_resume =
+            aws_infra_config(&target_cluster_aws_test, &ctx_resume, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&ea, &infra_ctx_resume);
         assert!(ret.is_ok());
 
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id, secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), srv_id);
         assert!(ret.is_ok());
         assert!(!ret.unwrap().items.is_empty());
 
@@ -445,9 +502,20 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::non_working_environment(&context);
         environment.routers = vec![];
@@ -490,10 +558,20 @@ fn build_with_buildpacks_and_deploy_a_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
@@ -565,10 +643,20 @@ fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut environment = helpers::environment::working_minimal_environment(&context);
         environment.applications = environment
             .applications
@@ -639,10 +727,20 @@ fn deploy_a_working_environment_with_domain() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
         let environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -689,10 +787,20 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
@@ -774,10 +882,20 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -809,7 +927,7 @@ fn deploy_a_working_environment_with_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
 
-        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -848,10 +966,20 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -941,12 +1069,23 @@ fn redeploy_same_app_with_ebs() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_bis = context.clone_not_same_execution_id();
-        let infra_ctx_bis = aws_default_infra_config(&context_bis, logger.clone(), metrics_registry());
+        let infra_ctx_bis =
+            aws_infra_config(&target_cluster_aws_test, &context_bis, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -981,7 +1120,7 @@ fn redeploy_same_app_with_ebs() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
 
-        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment) {
             Ok(pvc) => assert_eq!(
                 pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                 format!("{storage_size}Gi")
@@ -994,7 +1133,6 @@ fn redeploy_same_app_with_ebs() {
             Kind::Aws,
             &environment_check1,
             &environment_check1.applications[0].long_id,
-            secrets.clone(),
         );
 
         let ret = environment_redeploy.deploy_environment(&ea2, &infra_ctx_bis);
@@ -1005,7 +1143,6 @@ fn redeploy_same_app_with_ebs() {
             Kind::Aws,
             &environment_check2,
             &environment_check2.applications[0].long_id,
-            secrets,
         );
         //nothing change in the app, so, it shouldn't be restarted
         assert!(number.eq(&number2));
@@ -1037,12 +1174,27 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_not_working = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working =
-            aws_default_infra_config(&context_for_not_working, logger.clone(), metrics_registry());
+        let infra_ctx_for_not_working = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_not_working,
+            logger.clone(),
+            metrics_registry(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         // env part generation
         let environment = helpers::environment::working_minimal_environment(&context);
@@ -1105,13 +1257,23 @@ fn deploy_ok_fail_fail_ok_environment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let environment = helpers::environment::working_minimal_environment(&context);
 
         // not working 1
         let context_for_not_working_1 = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working_1 =
-            aws_default_infra_config(&context_for_not_working_1, logger.clone(), metrics_registry());
+        let infra_ctx_for_not_working_1 = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_not_working_1,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut not_working_env_1 = environment.clone();
         not_working_env_1.applications = not_working_env_1
             .applications
@@ -1127,13 +1289,22 @@ fn deploy_ok_fail_fail_ok_environment() {
 
         // not working 2
         let context_for_not_working_2 = context.clone_not_same_execution_id();
-        let infra_ctx_for_not_working_2 =
-            aws_default_infra_config(&context_for_not_working_2, logger.clone(), metrics_registry());
+        let infra_ctx_for_not_working_2 = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_not_working_2,
+            logger.clone(),
+            metrics_registry(),
+        );
         let not_working_env_2 = not_working_env_1.clone();
 
         // work for delete
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -1186,11 +1357,22 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let environment = helpers::environment::non_working_environment(&context);
 
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let mut delete_env = environment.clone();
         delete_env.action = Action::Delete;
 
@@ -1230,9 +1412,20 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
@@ -1336,9 +1529,20 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let whitelist_all_environment =
             helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
                 &context,
@@ -1457,9 +1661,20 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
         let whitelist_all_environment =
             helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
                 &context,
@@ -1574,9 +1789,20 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
         let host_suffix = Uuid::new_v4();
@@ -1703,7 +1929,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             .deployment_affinity_node_required = btreemap! {
             node_selector_key.to_string() => node_selector_value.to_string()
         };
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
@@ -1786,9 +2012,25 @@ fn deploy_container_with_no_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry_for_deployment.clone());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(
+            &target_cluster_aws_test,
+            &context,
+            logger.clone(),
+            metrics_registry_for_deployment.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let _infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let _infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -1911,9 +2153,21 @@ fn deploy_container_with_storages_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2041,9 +2295,20 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2208,9 +2473,20 @@ fn deploy_container_with_router_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2371,9 +2647,20 @@ fn deploy_job_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2474,9 +2761,20 @@ fn deploy_job_on_aws_eks_with_dockerfile_content() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2585,9 +2883,20 @@ fn deploy_cronjob_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2704,9 +3013,20 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2832,9 +3152,20 @@ fn build_and_deploy_job_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -2957,9 +3288,20 @@ fn test_restart_deployment() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3084,9 +3426,20 @@ fn test_restart_statefulset() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3219,9 +3572,20 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
@@ -3368,10 +3732,20 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3416,7 +3790,7 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
 
-        match get_pvc(&infra_ctx, Kind::Aws, &environment, secrets.clone()) {
+        match get_pvc(&infra_ctx, Kind::Aws, &environment) {
             Ok(pvc) => {
                 assert!(pvc.items.is_some());
                 let pvcs = pvc.items.unwrap();
@@ -3449,11 +3823,12 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
         resized_environment.applications[0].storage[0].size_in_gib = resized_size;
         let resized_ea = resized_environment.clone();
         let resized_context = context.clone_not_same_execution_id();
-        let resized_infra_ctx = aws_default_infra_config(&resized_context, logger.clone(), metrics_registry());
+        let resized_infra_ctx =
+            aws_infra_config(&target_cluster_aws_test, &resized_context, logger.clone(), metrics_registry());
         let resized_ret = resized_environment.deploy_environment(&resized_ea, &resized_infra_ctx);
         assert!(resized_ret.is_ok());
 
-        match get_pvc(&resized_infra_ctx, Kind::Aws, &resized_environment, secrets) {
+        match get_pvc(&resized_infra_ctx, Kind::Aws, &resized_environment) {
             Ok(pvc) => {
                 assert!(pvc.items.is_some());
                 let pvcs = pvc.items.unwrap();
@@ -3512,9 +3887,20 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3679,9 +4065,20 @@ fn deploy_helm_chart() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3761,9 +4158,20 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3923,10 +4331,20 @@ fn deploy_helm_chart_and_pause_it() {
                     .AWS_TEST_CLUSTER_LONG_ID
                     .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
             );
-            let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+            let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+                kubeconfig: secrets
+                    .AWS_TEST_KUBECONFIG_b64
+                    .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                    .to_string(),
+            };
+            let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
             let context_for_delete = context.clone_not_same_execution_id();
-            let infra_ctx_for_delete =
-                aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+            let infra_ctx_for_delete = aws_infra_config(
+                &target_cluster_aws_test,
+                &context_for_delete,
+                logger.clone(),
+                metrics_registry(),
+            );
 
             let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -3976,7 +4394,7 @@ fn deploy_helm_chart_and_pause_it() {
             let ret = environment.deploy_environment(&environment, &infra_ctx);
             assert!(ret.is_ok());
 
-            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id);
             assert!(ret.is_ok());
             assert!(!ret.unwrap().items.is_empty());
 
@@ -3984,17 +4402,18 @@ fn deploy_helm_chart_and_pause_it() {
             assert!(ret.is_ok());
 
             // Check that we have actually 0 pods running for this app
-            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id);
             assert!(ret.is_ok());
             assert!(ret.unwrap().items.is_empty());
 
             // Check we can resume the env
             let ctx_resume = context.clone_not_same_execution_id();
-            let infra_ctx_resume = aws_default_infra_config(&ctx_resume, logger.clone(), metrics_registry());
+            let infra_ctx_resume =
+                aws_infra_config(&target_cluster_aws_test, &ctx_resume, logger.clone(), metrics_registry());
             let ret = environment.deploy_environment(&environment, &infra_ctx_resume);
             assert!(ret.is_ok());
 
-            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets);
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id);
             assert!(ret.is_ok());
             assert!(!ret.unwrap().items.is_empty());
 
@@ -4030,10 +4449,20 @@ fn deploy_helm_chart_and_restart_it() {
                     .AWS_TEST_CLUSTER_LONG_ID
                     .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
             );
-            let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry());
+            let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+                kubeconfig: secrets
+                    .AWS_TEST_KUBECONFIG_b64
+                    .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                    .to_string(),
+            };
+            let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
             let context_for_delete = context.clone_not_same_execution_id();
-            let infra_ctx_for_delete =
-                aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry());
+            let infra_ctx_for_delete = aws_infra_config(
+                &target_cluster_aws_test,
+                &context_for_delete,
+                logger.clone(),
+                metrics_registry(),
+            );
 
             let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -4083,7 +4512,7 @@ fn deploy_helm_chart_and_restart_it() {
             let ret = environment.deploy_environment(&environment, &infra_ctx);
             assert!(ret.is_ok());
 
-            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id, secrets.clone());
+            let ret = get_pods(&infra_ctx, Kind::Aws, &environment.clone(), &service_id);
             assert!(ret.is_ok());
             assert!(!ret.unwrap().items.is_empty());
 
@@ -4114,10 +4543,20 @@ fn deploy_helm_chart_with_router() {
                 .AWS_TEST_CLUSTER_LONG_ID
                 .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 

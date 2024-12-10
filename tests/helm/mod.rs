@@ -689,6 +689,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         5,
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
+        test_kube.kubeconfig_local_file_path().to_str().map(|s| s.to_string()),
     )
 }
 

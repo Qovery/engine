@@ -7,7 +7,9 @@ use uuid::Uuid;
 
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::kubernetes::{
+    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
 use qovery_engine::build_platform::Build;
 use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
@@ -76,7 +78,8 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     .unwrap()
 }
 
-pub fn scw_default_infra_config(
+pub fn scw_infra_config(
+    targeted_cluster: &TargetCluster,
     context: &Context,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
@@ -101,6 +104,10 @@ pub fn scw_default_infra_config(
         KUBERNETES_MAX_NODES,
         CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
+        match targeted_cluster {
+            TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
+            TargetCluster::New => None, // <- creating a new cluster
+        },
     )
 }
 
@@ -118,6 +125,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         max_nodes: i32,
         _cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
+        kubeconfig: Option<String>,
     ) -> InfrastructureContext {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -142,6 +150,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             CpuArchitecture::AMD64,
             engine_location,
             StorageClass(ScwStorageType::SbvSsd.to_k8s_storage_class()),
+            kubeconfig,
         );
 
         InfrastructureContext::new(
@@ -253,9 +262,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 pub fn clean_environments(
     context: &Context,
     environments: Vec<EnvironmentRequest>,
-    secrets: FuncTestsSecrets,
     zone: ScwZone,
 ) -> Result<(), ContainerRegistryError> {
+    let secrets = FuncTestsSecrets::new();
     let secret_token = secrets.SCALEWAY_SECRET_KEY.unwrap();
     let project_id = secrets.SCALEWAY_DEFAULT_PROJECT_ID.unwrap();
 
