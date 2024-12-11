@@ -4,7 +4,9 @@ extern crate serde_derive;
 use crate::helpers::aws_ec2::container_registry_ecr_ec2;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::{get_environment_test_kubernetes, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
+use crate::helpers::kubernetes::{
+    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+};
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
 use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::cloud_provider::aws::kubernetes::Options;
@@ -59,7 +61,8 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
-pub fn aws_default_infra_config(
+pub fn aws_infra_config(
+    targeted_cluster: &TargetCluster,
     context: &Context,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
@@ -84,6 +87,10 @@ pub fn aws_default_infra_config(
         KUBERNETES_MAX_NODES,
         CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
+        match targeted_cluster {
+            TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
+            TargetCluster::New => None, // <- creating a new cluster
+        },
     )
 }
 
@@ -101,6 +108,7 @@ impl Cluster<AWS, Options> for AWS {
         max_nodes: i32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
+        kubeconfig: Option<String>,
     ) -> InfrastructureContext {
         // use ECR
         let container_registry = match kubernetes_kind {
@@ -128,6 +136,7 @@ impl Cluster<AWS, Options> for AWS {
             cpu_archi,
             engine_location,
             StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
+            kubeconfig,
         );
 
         InfrastructureContext::new(

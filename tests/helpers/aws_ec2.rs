@@ -48,7 +48,7 @@ pub fn container_registry_ecr_ec2(context: &Context, logger: Box<dyn Logger>, re
     .unwrap()
 }
 
-pub fn aws_ec2_default_infra_config(
+pub fn aws_ec2_infra_config(
     context: &Context,
     logger: Box<dyn Logger>,
     metrics_registry: Box<dyn MetricsRegistry>,
@@ -73,5 +73,6 @@ pub fn aws_ec2_default_infra_config(
         AWS_EC2_KUBERNETES_MAX_NODES,
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
+        None,
     )
 }

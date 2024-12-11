@@ -839,6 +839,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context,
@@ -853,6 +854,7 @@ pub fn test_db(
                     1,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
@@ -867,6 +869,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => Gke::docker_cr_engine(
                     &context,
@@ -881,6 +884,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
+                    secrets.GCP_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
@@ -901,7 +905,7 @@ pub fn test_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), &environment) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{}Gi", storage_size.size())
@@ -909,7 +913,7 @@ pub fn test_db(
                 Err(e) => panic!("Error: {e}"),
             };
 
-            match get_svc(infra_ctx, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -925,7 +929,7 @@ pub fn test_db(
             };
         }
         MANAGED => {
-            match get_svc(infra_ctx, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -970,6 +974,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.AWS_TEST_KUBECONFIG_b64,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context_for_delete,
@@ -984,6 +989,7 @@ pub fn test_db(
                     1,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                    secrets.AWS_EC2_KUBECONFIG,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -998,6 +1004,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                 ),
                 KubernetesKind::Gke => Gke::docker_cr_engine(
                     &context_for_delete,
@@ -1012,6 +1019,7 @@ pub fn test_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.GCP_TEST_KUBECONFIG_b64,
                 ),
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
@@ -1176,6 +1184,7 @@ pub fn test_pause_managed_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context,
@@ -1190,6 +1199,7 @@ pub fn test_pause_managed_db(
                     1,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
@@ -1204,6 +1214,7 @@ pub fn test_pause_managed_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
@@ -1220,7 +1231,7 @@ pub fn test_pause_managed_db(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
+            match get_pvc(infra_ctx, provider_kind.clone(), &environment) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{storage_size}Gi")
@@ -1228,7 +1239,7 @@ pub fn test_pause_managed_db(
                 Err(e) => panic!("Error: {e}"),
             };
 
-            match get_svc(infra_ctx, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment) {
                 Ok(svc) => {
                     assert!(svc.items.is_some());
                     assert_eq!(
@@ -1247,7 +1258,7 @@ pub fn test_pause_managed_db(
             };
         }
         MANAGED => {
-            match get_svc(infra_ctx, provider_kind, environment, secrets) {
+            match get_svc(infra_ctx, provider_kind, environment) {
                 Ok(svc) => {
                     assert!(svc.items.is_some());
                     let service = svc
@@ -1289,6 +1300,7 @@ pub fn test_pause_managed_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.AWS_TEST_KUBECONFIG_b64,
                 ),
                 KubernetesKind::Ec2 => AWS::docker_cr_engine(
                     &context_for_delete,
@@ -1303,6 +1315,7 @@ pub fn test_pause_managed_db(
                     1,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide, // EC2 is not meant to run Engine
+                    secrets.AWS_EC2_KUBECONFIG,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -1317,6 +1330,7 @@ pub fn test_pause_managed_db(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
@@ -1488,6 +1502,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1504,6 +1519,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),
@@ -1514,7 +1530,7 @@ pub fn test_db_on_upgrade(
 
     match database_mode {
         CONTAINER => {
-            match get_pvc(&infra_ctx, provider_kind.clone(), &environment, secrets.clone()) {
+            match get_pvc(&infra_ctx, provider_kind.clone(), &environment) {
                 Ok(pvc) => assert_eq!(
                     pvc.items.expect("No items in pvc")[0].spec.resources.requests.storage,
                     format!("{storage_size}Gi")
@@ -1522,7 +1538,7 @@ pub fn test_db_on_upgrade(
                 Err(e) => panic!("Error: {e}"),
             };
 
-            match get_svc(&infra_ctx, provider_kind.clone(), environment, secrets) {
+            match get_svc(&infra_ctx, provider_kind.clone(), environment) {
                 Ok(svc) => assert_eq!(
                     svc.items
                         .expect("No items in svc")
@@ -1538,7 +1554,7 @@ pub fn test_db_on_upgrade(
             };
         }
         MANAGED => {
-            match get_svc(&infra_ctx, provider_kind.clone(), environment, secrets) {
+            match get_svc(&infra_ctx, provider_kind.clone(), environment) {
                 Ok(svc) => {
                     let service = svc
                         .items
@@ -1577,6 +1593,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            secrets.AWS_TEST_KUBECONFIG_b64,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
@@ -1593,6 +1610,7 @@ pub fn test_db_on_upgrade(
             KUBERNETES_MAX_NODES,
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            secrets.SCALEWAY_TEST_KUBECONFIG_b64,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),

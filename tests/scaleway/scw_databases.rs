@@ -13,8 +13,9 @@ use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::{database_test_environment, test_db, StorageSize};
+use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::scaleway::{
-    clean_environments, scw_default_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
+    clean_environments, scw_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
     SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
 };
 use base64::engine::general_purpose;
@@ -69,10 +70,20 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .SCALEWAY_TEST_KUBECONFIG_b64
+                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             None,
@@ -92,7 +103,7 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         assert!(result.is_ok());
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -117,6 +128,10 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let cluster_id = secrets
             .SCALEWAY_TEST_CLUSTER_LONG_ID
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
+        let default_test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
         let region = ScwZone::from_str(
             secrets
                 .SCALEWAY_TEST_CLUSTER_REGION
@@ -132,17 +147,23 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .SCALEWAY_TEST_KUBECONFIG_b64
+                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
+            default_test_domain.as_str(),
             None,
             SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
             Kind::Scw,
@@ -160,13 +181,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(result.is_ok());
 
         // Check that we have actually 0 pods running for this db
-        let ret = get_pods(
-            &infra_ctx,
-            ProviderKind::Scw,
-            &environment,
-            &environment.databases[0].long_id,
-            secrets.clone(),
-        );
+        let ret = get_pods(&infra_ctx, ProviderKind::Scw, &environment, &environment.databases[0].long_id);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -174,7 +189,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(result.is_ok());
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -206,11 +221,21 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
+        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .SCALEWAY_TEST_KUBECONFIG_b64
+                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
 
-        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            scw_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -246,7 +271,6 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         if let Err(e) = clean_environments(
             &context,
             vec![environment, environment_delete],
-            secrets.clone(),
             ScwZone::from_str(
                 secrets
                     .SCALEWAY_TEST_CLUSTER_REGION
@@ -297,14 +321,28 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
+        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .SCALEWAY_TEST_KUBECONFIG_b64
+                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
 
-        let infra_ctx = scw_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let infra_ctx_for_redeploy =
-            scw_default_infra_config(&context_for_redeploy, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_redeploy = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_redeploy,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            scw_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -412,7 +450,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             ProviderKind::Scw,
             &environment_check,
             &environment_check.databases[0].long_id,
-            secrets.clone(),
         );
         assert!(ret);
 
@@ -420,7 +457,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(result, Ok(_) | Err(_)));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -626,6 +663,20 @@ fn private_postgresql_v16_deploy_a_working_dev_environment() {
 #[test]
 fn public_postgresql_v16_deploy_a_working_dev_environment() {
     test_postgresql_configuration("16", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, true);
 }
 
 // Postgres production environment
@@ -867,6 +918,20 @@ fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
 #[test]
 fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("7.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, true);
 }
 
 /**

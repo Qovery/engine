@@ -19,6 +19,7 @@ use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
@@ -235,6 +236,7 @@ where
                 )?;
                 set_of_pods_already_processed.insert(pod_name.clone());
 
+                // FIXME(ENG-1941) correctly handle cancel
                 let should_force_cancel = async {
                     while !target.abort.status().should_force_cancel() {
                         tokio::time::sleep(Duration::from_secs(1)).await;
@@ -398,11 +400,20 @@ where
                 )
             })?;
 
-            let mut job_template = cronjob.spec.unwrap().job_template;
+            let mut job_template = cronjob.spec.expect("Cronjob should have a job_template").job_template;
             // For kube to automatically cleanup the job for us
-            job_template.spec.as_mut().unwrap().ttl_seconds_after_finished = Some(10);
+            job_template
+                .spec
+                .as_mut()
+                .expect("job_template should be editable")
+                .ttl_seconds_after_finished = Some(10);
+            // add a suffix in name to avoid conflict with jobs created by cronjob
+            let job_name = format!("{}-force-trigger", job.kube_name(),);
             let job_to_start = K8sJob {
-                metadata: job_template.metadata.unwrap(),
+                metadata: ObjectMeta {
+                    name: Some(job_name.to_string()),
+                    ..job_template.metadata.expect("job_template should have metadata")
+                },
                 spec: job_template.spec,
                 status: None,
             };
@@ -410,10 +421,12 @@ where
                 EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {err}"))
             })?;
 
+            // FIXME(ENG-1942) correctly handle cancel
             let fut = async {
                 match tokio::time::timeout(
+                    // TODO is it the right duration to wait here? shouldn't we take the user-configured timeout value?
                     std::time::Duration::from_secs(3800), // We wait 1h + delta max for the job to be terminated
-                    await_condition(k8s_job_api, job.kube_name(), is_job_terminated()),
+                    await_condition(k8s_job_api, &job_name, is_job_terminated()),
                 )
                 .await
                 {

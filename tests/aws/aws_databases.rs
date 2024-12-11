@@ -1,9 +1,10 @@
 use crate::helpers;
-use crate::helpers::aws::{aws_default_infra_config, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::aws::{aws_infra_config, AWS_DATABASE_INSTANCE_TYPE};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{
     test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db, StorageSize,
 };
+use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
     context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
 };
@@ -51,16 +52,26 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set"),
+        };
+
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
@@ -97,26 +108,36 @@ fn deploy_an_environment_with_db_and_pause_it() {
         let secrets = FuncTestsSecrets::new();
         let logger = logger();
         let metrics_registry = metrics_registry();
+        let default_test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .to_string();
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
+            default_test_domain.as_str(),
             Some(Box::new(AWS_DATABASE_INSTANCE_TYPE)),
             &AwsStorageType::GP2.to_k8s_storage_class(),
             Kind::Aws,
@@ -134,7 +155,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
 
         // Check that we have actually 0 pods running for this db
-        let ret = get_pods(&infra_ctx, Kind::Aws, &environment, &environment.databases[0].long_id, secrets);
+        let ret = get_pods(&infra_ctx, Kind::Aws, &environment, &environment.databases[0].long_id);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -163,16 +184,26 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            aws_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
             .as_ref()
@@ -236,19 +267,33 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         let cluster_id = secrets
             .AWS_TEST_CLUSTER_LONG_ID
             .expect("AWS_TEST_CLUSTER_LONG_ID is not set");
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
         let context = context_for_resource(
             secrets
                 .AWS_TEST_ORGANIZATION_LONG_ID
                 .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = aws_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let infra_ctx_for_redeploy =
-            aws_default_infra_config(&context_for_redeploy, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_redeploy = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_redeploy,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            aws_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
@@ -354,7 +399,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             Kind::Aws,
             &environment_check,
             &environment_check.databases[0].long_id,
-            secrets,
         );
         assert!(ret);
 
@@ -610,6 +654,20 @@ fn private_postgresql_v16_deploy_a_working_dev_environment() {
 #[test]
 fn public_postgresql_v16_deploy_a_working_dev_environment() {
     test_postgresql_configuration("16", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 // Postgres production environment
@@ -871,6 +929,20 @@ fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
 #[test]
 fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 //

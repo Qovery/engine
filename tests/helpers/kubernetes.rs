@@ -39,6 +39,12 @@ use tracing::{span, Level};
 pub const KUBERNETES_MIN_NODES: i32 = 3;
 pub const KUBERNETES_MAX_NODES: i32 = 10;
 
+#[derive(Clone)]
+pub enum TargetCluster {
+    MutualizedTestCluster { kubeconfig: String },
+    New,
+}
+
 pub enum ClusterTestType {
     Classic,
     WithPause,
@@ -107,6 +113,7 @@ pub fn cluster_test(
             KUBERNETES_MAX_NODES,
             cpu_archi,
             EngineLocation::ClientSide,
+            None, // <- no kubeconfig provided, new cluster
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -121,6 +128,7 @@ pub fn cluster_test(
             KUBERNETES_MAX_NODES,
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            None, // <- no kubeconfig provided, new cluster
         ),
         Kind::Gcp => Gke::docker_cr_engine(
             &context,
@@ -135,6 +143,7 @@ pub fn cluster_test(
             i32::MAX, // NA due to GKE autopilot
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
+            None, // <- no kubeconfig provided, new cluster
         ),
         Kind::OnPremise => todo!(),
     };
@@ -194,6 +203,7 @@ pub fn cluster_test(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -208,6 +218,7 @@ pub fn cluster_test(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::Gcp => Gke::docker_cr_engine(
                     &context,
@@ -222,6 +233,7 @@ pub fn cluster_test(
                     KUBERNETES_MAX_NODES,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::OnPremise => todo!(),
             };
@@ -253,6 +265,7 @@ pub fn cluster_test(
                     max_nodes,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -267,6 +280,7 @@ pub fn cluster_test(
                     max_nodes,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::Gcp => Gke::docker_cr_engine(
                     &context,
@@ -281,6 +295,7 @@ pub fn cluster_test(
                     max_nodes,
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
+                    None, // <- no kubeconfig provided, new cluster
                 ),
                 Kind::OnPremise => todo!(),
             };
@@ -334,6 +349,7 @@ pub fn get_environment_test_kubernetes(
     cpu_archi: CpuArchitecture,
     engine_location: EngineLocation,
     default_kubernetes_storage_class: StorageClass,
+    kubeconfig: Option<String>,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
@@ -374,7 +390,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    secrets.AWS_TEST_KUBECONFIG_b64,
+                    kubeconfig,
                     temp_dir,
                     None,
                 )

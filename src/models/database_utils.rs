@@ -6,8 +6,8 @@ use std::sync::Arc;
 pub fn is_allowed_containered_postgres_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
 
-    // Allow only major from 10 to 16
-    if !&["10", "11", "12", "13", "14", "15", "16"].contains(&requested_version.major.as_str()) {
+    // Allow only major from 10 to 17
+    if !&["10", "11", "12", "13", "14", "15", "16", "17"].contains(&requested_version.major.as_str()) {
         return Err(DatabaseError::UnsupportedDatabaseVersion {
             database_type: DatabaseType::PostgreSQL,
             database_version: Arc::from(requested_version.to_string()),
@@ -40,8 +40,8 @@ pub fn is_allowed_containered_mysql_version(requested_version: &VersionsNumber) 
 pub fn is_allowed_containered_mongodb_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
     // https://hub.docker.com/r/bitnami/mongodb/tags?page=1&ordering=last_updated
 
-    // Allow only major 4, 5, 6 and 7
-    if !&["4", "5", "6", "7"].contains(&requested_version.major.as_str()) {
+    // Allow only major 4, 5, 6, 7 and 8
+    if !&["4", "5", "6", "7", "8"].contains(&requested_version.major.as_str()) {
         return Err(DatabaseError::UnsupportedDatabaseVersion {
             database_type: DatabaseType::MongoDB,
             database_version: Arc::from(requested_version.to_string()),
@@ -223,6 +223,16 @@ mod tests {
             &VersionsNumberBuilder::new().major(7).minor(5).patch(6).build()
         )
         .is_ok());
+
+        // v8
+        assert!(is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).build()).is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).minor(4).build()).is_ok()
+        );
+        assert!(is_allowed_containered_mongodb_version(
+            &VersionsNumberBuilder::new().major(8).minor(5).patch(6).build()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -237,10 +247,10 @@ mod tests {
             }
         );
         assert_eq!(
-            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).build()).unwrap_err(),
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(9).build()).unwrap_err(),
             DatabaseError::UnsupportedDatabaseVersion {
                 database_type: DatabaseType::MongoDB,
-                database_version: Arc::from("8"),
+                database_version: Arc::from("9"),
             }
         );
     }
@@ -306,6 +316,16 @@ mod tests {
             &VersionsNumberBuilder::new().major(16).minor(12).patch(7).build()
         )
         .is_ok());
+
+        // v17
+        assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).build()).is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).minor(11).build()).is_ok()
+        );
+        assert!(is_allowed_containered_postgres_version(
+            &VersionsNumberBuilder::new().major(17).minor(12).patch(7).build()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -320,10 +340,10 @@ mod tests {
             }
         );
         assert_eq!(
-            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).build()).unwrap_err(),
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(18).build()).unwrap_err(),
             DatabaseError::UnsupportedDatabaseVersion {
                 database_type: DatabaseType::PostgreSQL,
-                database_version: Arc::from("17"),
+                database_version: Arc::from("18"),
             }
         );
     }

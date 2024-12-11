@@ -655,20 +655,43 @@ fn curl_path(path: &str) -> bool {
     }
 }
 
-type KubernetesCredentials<'a> = Vec<(&'a str, &'a str)>;
+type KubernetesCredentials = Vec<(String, String)>;
 
-fn get_cloud_provider_credentials(provider_kind: Kind, secrets: &FuncTestsSecrets) -> KubernetesCredentials {
+fn get_cloud_provider_credentials(provider_kind: Kind) -> KubernetesCredentials {
+    let secrets = FuncTestsSecrets::new();
     match provider_kind {
         Kind::Aws => vec![
-            (AWS_ACCESS_KEY_ID, secrets.AWS_ACCESS_KEY_ID.as_ref().unwrap().as_str()),
-            (AWS_SECRET_ACCESS_KEY, secrets.AWS_SECRET_ACCESS_KEY.as_ref().unwrap().as_str()),
+            (
+                AWS_ACCESS_KEY_ID.to_string(),
+                secrets
+                    .AWS_ACCESS_KEY_ID
+                    .expect("AWS_ACCESS_KEY_ID is not set in secrets"),
+            ),
+            (
+                AWS_SECRET_ACCESS_KEY.to_string(),
+                secrets
+                    .AWS_SECRET_ACCESS_KEY
+                    .expect("AWS_SECRET_ACCESS_KEY is not set in secrets"),
+            ),
         ],
         Kind::Scw => vec![
-            (SCW_ACCESS_KEY, secrets.SCALEWAY_ACCESS_KEY.as_ref().unwrap().as_str()),
-            (SCW_SECRET_KEY, secrets.SCALEWAY_SECRET_KEY.as_ref().unwrap().as_str()),
             (
-                SCW_DEFAULT_PROJECT_ID,
-                secrets.SCALEWAY_DEFAULT_PROJECT_ID.as_ref().unwrap().as_str(),
+                SCW_ACCESS_KEY.to_string(),
+                secrets
+                    .SCALEWAY_ACCESS_KEY
+                    .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
+            ),
+            (
+                SCW_SECRET_KEY.to_string(),
+                secrets
+                    .SCALEWAY_SECRET_KEY
+                    .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
+            ),
+            (
+                SCW_DEFAULT_PROJECT_ID.to_string(),
+                secrets
+                    .SCALEWAY_DEFAULT_PROJECT_ID
+                    .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
             ),
         ],
         Kind::Gcp => vec![],
@@ -681,7 +704,6 @@ pub fn is_pod_restarted_env(
     provider_kind: Kind,
     environment_check: &EnvironmentRequest,
     service_id: &Uuid,
-    secrets: FuncTestsSecrets,
 ) -> (bool, String) {
     let kubeconfig = infra_ctx.kubernetes().kubeconfig_local_file_path();
 
@@ -689,7 +711,10 @@ pub fn is_pod_restarted_env(
         kubeconfig,
         environment_check.kube_name.as_str(),
         service_id,
-        get_cloud_provider_credentials(provider_kind, &secrets),
+        get_cloud_provider_credentials(provider_kind)
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
     );
     match restarted_database {
         Ok(count) => match count.trim().eq("0") {
@@ -705,13 +730,15 @@ pub fn get_pods(
     provider_kind: Kind,
     environment_check: &EnvironmentRequest,
     service_id: &Uuid,
-    secrets: FuncTestsSecrets,
 ) -> Result<KubernetesList<KubernetesPod>, CommandError> {
     cmd::kubectl::kubectl_exec_get_pods(
         infra_ctx.kubernetes().kubeconfig_local_file_path(),
         Some(environment_check.kube_name.as_str()),
         Some(&format!("qovery.com/service-id={}", service_id)),
-        get_cloud_provider_credentials(provider_kind, &secrets),
+        get_cloud_provider_credentials(provider_kind)
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
     )
 }
 
@@ -780,12 +807,14 @@ pub fn get_pvc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: &EnvironmentRequest,
-    secrets: FuncTestsSecrets,
 ) -> Result<PVC, CommandError> {
     kubectl_get_pvc(
         infra_ctx.kubernetes().kubeconfig_local_file_path(),
         &environment_check.kube_name,
-        get_cloud_provider_credentials(provider_kind, &secrets),
+        get_cloud_provider_credentials(provider_kind)
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
     )
 }
 
@@ -793,12 +822,14 @@ pub fn get_svc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
     environment_check: EnvironmentRequest,
-    secrets: FuncTestsSecrets,
 ) -> Result<SVC, CommandError> {
     kubectl_get_svc(
         infra_ctx.kubernetes().kubeconfig_local_file_path(),
         &environment_check.kube_name,
-        get_cloud_provider_credentials(provider_kind, &secrets),
+        get_cloud_provider_credentials(provider_kind)
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect(),
     )
 }
 
@@ -827,7 +858,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "ff9028ee18177daed83393c158dac6059824573b".to_string(),
+                app_commit: "5884401a4151f29e29718f1dc6635ff25c5f2e18".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED).to_string()), is_secret:false},
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

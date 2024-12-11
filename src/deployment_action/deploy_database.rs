@@ -13,7 +13,7 @@ use crate::deployment_action::DeploymentAction;
 use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::database::{
     get_database_with_invalid_storage_size, Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed,
@@ -728,9 +728,10 @@ where
                         )?;
                     }
                 }
-                Err(e) => target
-                    .env_logger(self, EnvironmentStep::Deploy)
-                    .send_warning(e.to_string()),
+                Err(e) => target.kubernetes.logger().log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_safe(e.to_string()),
+                )),
             }
 
             let chart = ChartInfo {

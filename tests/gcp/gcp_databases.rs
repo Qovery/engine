@@ -2,9 +2,10 @@ use crate::helpers;
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{database_test_environment, test_db, StorageSize};
 use crate::helpers::gcp::{
-    clean_environments, gcp_default_infra_config, GCP_MANAGED_DATABASE_DISK_TYPE, GCP_MANAGED_DATABASE_INSTANCE_TYPE,
+    clean_environments, gcp_infra_config, GCP_MANAGED_DATABASE_DISK_TYPE, GCP_MANAGED_DATABASE_INSTANCE_TYPE,
     GCP_SELF_HOSTED_DATABASE_DISK_TYPE,
 };
+use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
     context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
     logger, metrics_registry, FuncTestsSecrets,
@@ -49,10 +50,20 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
                 .GCP_TEST_CLUSTER_LONG_ID
                 .expect("GCP_TEST_CLUSTER_LONG_ID is not set"),
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            gcp_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::database::environment_3_apps_3_databases(
             &context,
             None,
@@ -98,17 +109,27 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID is not set"),
             cluster_id,
         );
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            gcp_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_deletion = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
-            secrets
-                .clone()
-                .DEFAULT_TEST_DOMAIN
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
-                .as_str(),
+            test_domain.as_str(),
             None,
             &GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
             Kind::Gcp,
@@ -126,7 +147,7 @@ fn deploy_an_environment_with_db_and_pause_it() {
         assert!(ret.is_ok());
 
         // Check that we have actually 0 pods running for this db
-        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, &environment.databases[0].long_id, secrets);
+        let ret = get_pods(&infra_ctx, Kind::Gcp, &environment, &environment.databases[0].long_id);
         assert!(ret.is_ok());
         assert!(ret.unwrap().items.is_empty());
 
@@ -159,15 +180,31 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
-
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
-        let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion =
-            gcp_default_infra_config(&context_for_deletion, logger.clone(), metrics_registry.clone());
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let default_region = GcpRegion::from_str(
+            secrets
+                .GCP_DEFAULT_REGION
+                .as_ref()
+                .expect("GCP_DEFAULT_REGION is not set"),
+        )
+        .expect("Unknown GCP region");
         let test_domain = secrets
             .DEFAULT_TEST_DOMAIN
-            .as_ref()
             .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_deletion = context.clone_not_same_execution_id();
+        let infra_ctx_for_deletion = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_deletion,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
@@ -196,18 +233,7 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         assert!(result.is_ok());
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(
-            &context,
-            vec![environment, environment_delete],
-            secrets.clone(),
-            GcpRegion::from_str(
-                secrets
-                    .GCP_DEFAULT_REGION
-                    .expect("GCP_DEFAULT_REGION is not set")
-                    .as_str(),
-            )
-            .expect("Unknown GCP region"),
-        ) {
+        if let Err(e) = clean_environments(&context, vec![environment, environment_delete], default_region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -248,14 +274,28 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 .expect("GCP_TEST_ORGANIZATION_LONG_ID"),
             cluster_id,
         );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
 
-        let infra_ctx = gcp_default_infra_config(&context, logger.clone(), metrics_registry.clone());
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_redeploy = context.clone_not_same_execution_id();
-        let infra_ctx_for_redeploy =
-            gcp_default_infra_config(&context_for_redeploy, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_redeploy = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_redeploy,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
         let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete =
-            gcp_default_infra_config(&context_for_delete, logger.clone(), metrics_registry.clone());
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
@@ -363,7 +403,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             ProviderKind::Gcp,
             &environment_check,
             &environment_check.databases[0].long_id,
-            secrets.clone(),
         );
         assert!(ret);
 
@@ -371,7 +410,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
         assert!(matches!(result, Ok(_) | Err(_)));
 
         // delete images created during test from registries
-        if let Err(e) = clean_environments(&context, vec![environment], secrets, region) {
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
             warn!("cannot clean environments, error: {:?}", e);
         }
 
@@ -575,6 +614,20 @@ fn public_postgresql_v16_deploy_a_working_dev_environment() {
     test_postgresql_configuration("16", function_name!(), CONTAINER, true);
 }
 
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v17_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("17", function_name!(), CONTAINER, true);
+}
+
 /**
  **
  ** MongoDB tests
@@ -695,6 +748,20 @@ fn private_mongodb_v7_0_deploy_a_working_dev_environment() {
 #[test]
 fn public_mongodb_v7_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("7.0", function_name!(), CONTAINER, true);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.0", function_name!(), CONTAINER, true);
 }
 
 /**
