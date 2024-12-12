@@ -10,11 +10,6 @@ use strum_macros::EnumIter;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumIter)]
 #[allow(non_camel_case_types)]
 pub enum AwsInstancesType {
-    A1_2XLARGE,
-    A1_4XLARGE,
-    A1_LARGE,
-    A1_MEDIUM,
-    A1_XLARGE,
     C3_2XLARGE,
     C3_4XLARGE,
     C3_8XLARGE,
@@ -260,6 +255,16 @@ pub enum AwsInstancesType {
     I4I_8XLARGE,
     I4I_LARGE,
     I4I_XLARGE,
+    I7IE_2XLARGE,
+    I7IE_3XLARGE,
+    I7IE_6XLARGE,
+    I7IE_LARGE,
+    I7IE_XLARGE,
+    I8G_2XLARGE,
+    I8G_4XLARGE,
+    I8G_8XLARGE,
+    I8G_LARGE,
+    I8G_XLARGE,
     IM4GN_16XLARGE,
     IM4GN_2XLARGE,
     IM4GN_4XLARGE,
@@ -591,11 +596,6 @@ pub enum AwsInstancesType {
 impl InstanceType for AwsInstancesType {
     fn to_cloud_provider_format(&self) -> String {
         match self {
-            AwsInstancesType::A1_2XLARGE => "a1.2xlarge",
-            AwsInstancesType::A1_4XLARGE => "a1.4xlarge",
-            AwsInstancesType::A1_LARGE => "a1.large",
-            AwsInstancesType::A1_MEDIUM => "a1.medium",
-            AwsInstancesType::A1_XLARGE => "a1.xlarge",
             AwsInstancesType::C3_2XLARGE => "c3.2xlarge",
             AwsInstancesType::C3_4XLARGE => "c3.4xlarge",
             AwsInstancesType::C3_8XLARGE => "c3.8xlarge",
@@ -841,6 +841,16 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
             AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+            AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
+            AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
+            AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
+            AwsInstancesType::I7IE_LARGE => "i7ie.large",
+            AwsInstancesType::I7IE_XLARGE => "i7ie.xlarge",
+            AwsInstancesType::I8G_2XLARGE => "i8g.2xlarge",
+            AwsInstancesType::I8G_4XLARGE => "i8g.4xlarge",
+            AwsInstancesType::I8G_8XLARGE => "i8g.8xlarge",
+            AwsInstancesType::I8G_LARGE => "i8g.large",
+            AwsInstancesType::I8G_XLARGE => "i8g.xlarge",
             AwsInstancesType::IM4GN_16XLARGE => "im4gn.16xlarge",
             AwsInstancesType::IM4GN_2XLARGE => "im4gn.2xlarge",
             AwsInstancesType::IM4GN_4XLARGE => "im4gn.4xlarge",
@@ -1174,12 +1184,7 @@ impl InstanceType for AwsInstancesType {
     fn is_instance_allowed(&self) -> bool {
         matches!(
             self,
-            AwsInstancesType::A1_2XLARGE
-                | AwsInstancesType::A1_4XLARGE
-                | AwsInstancesType::A1_LARGE
-                | AwsInstancesType::A1_MEDIUM
-                | AwsInstancesType::A1_XLARGE
-                | AwsInstancesType::C3_2XLARGE
+            AwsInstancesType::C3_2XLARGE
                 | AwsInstancesType::C3_4XLARGE
                 | AwsInstancesType::C3_8XLARGE
                 | AwsInstancesType::C3_LARGE
@@ -1424,6 +1429,16 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I4I_8XLARGE
                 | AwsInstancesType::I4I_LARGE
                 | AwsInstancesType::I4I_XLARGE
+                | AwsInstancesType::I7IE_2XLARGE
+                | AwsInstancesType::I7IE_3XLARGE
+                | AwsInstancesType::I7IE_6XLARGE
+                | AwsInstancesType::I7IE_LARGE
+                | AwsInstancesType::I7IE_XLARGE
+                | AwsInstancesType::I8G_2XLARGE
+                | AwsInstancesType::I8G_4XLARGE
+                | AwsInstancesType::I8G_8XLARGE
+                | AwsInstancesType::I8G_LARGE
+                | AwsInstancesType::I8G_XLARGE
                 | AwsInstancesType::IM4GN_16XLARGE
                 | AwsInstancesType::IM4GN_2XLARGE
                 | AwsInstancesType::IM4GN_4XLARGE
@@ -1755,12 +1770,7 @@ impl InstanceType for AwsInstancesType {
     fn is_arm_instance(&self) -> bool {
         matches!(
             self,
-            AwsInstancesType::A1_2XLARGE
-                | AwsInstancesType::A1_4XLARGE
-                | AwsInstancesType::A1_LARGE
-                | AwsInstancesType::A1_MEDIUM
-                | AwsInstancesType::A1_XLARGE
-                | AwsInstancesType::C6GD_12XLARGE
+            AwsInstancesType::C6GD_12XLARGE
                 | AwsInstancesType::C6GD_16XLARGE
                 | AwsInstancesType::C6GD_2XLARGE
                 | AwsInstancesType::C6GD_4XLARGE
@@ -1830,6 +1840,11 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I4G_8XLARGE
                 | AwsInstancesType::I4G_LARGE
                 | AwsInstancesType::I4G_XLARGE
+                | AwsInstancesType::I8G_2XLARGE
+                | AwsInstancesType::I8G_4XLARGE
+                | AwsInstancesType::I8G_8XLARGE
+                | AwsInstancesType::I8G_LARGE
+                | AwsInstancesType::I8G_XLARGE
                 | AwsInstancesType::IM4GN_16XLARGE
                 | AwsInstancesType::IM4GN_2XLARGE
                 | AwsInstancesType::IM4GN_4XLARGE
@@ -1933,11 +1948,7 @@ impl InstanceType for AwsInstancesType {
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,
-            AwsInstancesType::A1_2XLARGE
-                | AwsInstancesType::A1_4XLARGE
-                | AwsInstancesType::A1_LARGE
-                | AwsInstancesType::A1_XLARGE
-                | AwsInstancesType::C3_2XLARGE
+            AwsInstancesType::C3_2XLARGE
                 | AwsInstancesType::C3_4XLARGE
                 | AwsInstancesType::C3_8XLARGE
                 | AwsInstancesType::C3_XLARGE
@@ -2172,6 +2183,16 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I4I_8XLARGE
                 | AwsInstancesType::I4I_LARGE
                 | AwsInstancesType::I4I_XLARGE
+                | AwsInstancesType::I7IE_2XLARGE
+                | AwsInstancesType::I7IE_3XLARGE
+                | AwsInstancesType::I7IE_6XLARGE
+                | AwsInstancesType::I7IE_LARGE
+                | AwsInstancesType::I7IE_XLARGE
+                | AwsInstancesType::I8G_2XLARGE
+                | AwsInstancesType::I8G_4XLARGE
+                | AwsInstancesType::I8G_8XLARGE
+                | AwsInstancesType::I8G_LARGE
+                | AwsInstancesType::I8G_XLARGE
                 | AwsInstancesType::IM4GN_16XLARGE
                 | AwsInstancesType::IM4GN_2XLARGE
                 | AwsInstancesType::IM4GN_4XLARGE
@@ -2501,11 +2522,6 @@ impl InstanceType for AwsInstancesType {
 impl AwsInstancesType {
     pub fn as_str(&self) -> &str {
         match self {
-            AwsInstancesType::A1_2XLARGE => "a1.2xlarge",
-            AwsInstancesType::A1_4XLARGE => "a1.4xlarge",
-            AwsInstancesType::A1_LARGE => "a1.large",
-            AwsInstancesType::A1_MEDIUM => "a1.medium",
-            AwsInstancesType::A1_XLARGE => "a1.xlarge",
             AwsInstancesType::C3_2XLARGE => "c3.2xlarge",
             AwsInstancesType::C3_4XLARGE => "c3.4xlarge",
             AwsInstancesType::C3_8XLARGE => "c3.8xlarge",
@@ -2751,6 +2767,16 @@ impl AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
             AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+            AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
+            AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
+            AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
+            AwsInstancesType::I7IE_LARGE => "i7ie.large",
+            AwsInstancesType::I7IE_XLARGE => "i7ie.xlarge",
+            AwsInstancesType::I8G_2XLARGE => "i8g.2xlarge",
+            AwsInstancesType::I8G_4XLARGE => "i8g.4xlarge",
+            AwsInstancesType::I8G_8XLARGE => "i8g.8xlarge",
+            AwsInstancesType::I8G_LARGE => "i8g.large",
+            AwsInstancesType::I8G_XLARGE => "i8g.xlarge",
             AwsInstancesType::IM4GN_16XLARGE => "im4gn.16xlarge",
             AwsInstancesType::IM4GN_2XLARGE => "im4gn.2xlarge",
             AwsInstancesType::IM4GN_4XLARGE => "im4gn.4xlarge",
@@ -3084,11 +3110,6 @@ impl AwsInstancesType {
 impl fmt::Display for AwsInstancesType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AwsInstancesType::A1_2XLARGE => write!(f, "a1.2xlarge"),
-            AwsInstancesType::A1_4XLARGE => write!(f, "a1.4xlarge"),
-            AwsInstancesType::A1_LARGE => write!(f, "a1.large"),
-            AwsInstancesType::A1_MEDIUM => write!(f, "a1.medium"),
-            AwsInstancesType::A1_XLARGE => write!(f, "a1.xlarge"),
             AwsInstancesType::C3_2XLARGE => write!(f, "c3.2xlarge"),
             AwsInstancesType::C3_4XLARGE => write!(f, "c3.4xlarge"),
             AwsInstancesType::C3_8XLARGE => write!(f, "c3.8xlarge"),
@@ -3334,6 +3355,16 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => write!(f, "i4i.8xlarge"),
             AwsInstancesType::I4I_LARGE => write!(f, "i4i.large"),
             AwsInstancesType::I4I_XLARGE => write!(f, "i4i.xlarge"),
+            AwsInstancesType::I7IE_2XLARGE => write!(f, "i7ie.2xlarge"),
+            AwsInstancesType::I7IE_3XLARGE => write!(f, "i7ie.3xlarge"),
+            AwsInstancesType::I7IE_6XLARGE => write!(f, "i7ie.6xlarge"),
+            AwsInstancesType::I7IE_LARGE => write!(f, "i7ie.large"),
+            AwsInstancesType::I7IE_XLARGE => write!(f, "i7ie.xlarge"),
+            AwsInstancesType::I8G_2XLARGE => write!(f, "i8g.2xlarge"),
+            AwsInstancesType::I8G_4XLARGE => write!(f, "i8g.4xlarge"),
+            AwsInstancesType::I8G_8XLARGE => write!(f, "i8g.8xlarge"),
+            AwsInstancesType::I8G_LARGE => write!(f, "i8g.large"),
+            AwsInstancesType::I8G_XLARGE => write!(f, "i8g.xlarge"),
             AwsInstancesType::IM4GN_16XLARGE => write!(f, "im4gn.16xlarge"),
             AwsInstancesType::IM4GN_2XLARGE => write!(f, "im4gn.2xlarge"),
             AwsInstancesType::IM4GN_4XLARGE => write!(f, "im4gn.4xlarge"),
@@ -3669,11 +3700,6 @@ impl FromStr for AwsInstancesType {
 
     fn from_str(s: &str) -> Result<AwsInstancesType, CommandError> {
         match s {
-            "a1.2xlarge" => Ok(AwsInstancesType::A1_2XLARGE),
-            "a1.4xlarge" => Ok(AwsInstancesType::A1_4XLARGE),
-            "a1.large" => Ok(AwsInstancesType::A1_LARGE),
-            "a1.medium" => Ok(AwsInstancesType::A1_MEDIUM),
-            "a1.xlarge" => Ok(AwsInstancesType::A1_XLARGE),
             "c3.2xlarge" => Ok(AwsInstancesType::C3_2XLARGE),
             "c3.4xlarge" => Ok(AwsInstancesType::C3_4XLARGE),
             "c3.8xlarge" => Ok(AwsInstancesType::C3_8XLARGE),
@@ -3919,6 +3945,16 @@ impl FromStr for AwsInstancesType {
             "i4i.8xlarge" => Ok(AwsInstancesType::I4I_8XLARGE),
             "i4i.large" => Ok(AwsInstancesType::I4I_LARGE),
             "i4i.xlarge" => Ok(AwsInstancesType::I4I_XLARGE),
+            "i7ie.2xlarge" => Ok(AwsInstancesType::I7IE_2XLARGE),
+            "i7ie.3xlarge" => Ok(AwsInstancesType::I7IE_3XLARGE),
+            "i7ie.6xlarge" => Ok(AwsInstancesType::I7IE_6XLARGE),
+            "i7ie.large" => Ok(AwsInstancesType::I7IE_LARGE),
+            "i7ie.xlarge" => Ok(AwsInstancesType::I7IE_XLARGE),
+            "i8g.2xlarge" => Ok(AwsInstancesType::I8G_2XLARGE),
+            "i8g.4xlarge" => Ok(AwsInstancesType::I8G_4XLARGE),
+            "i8g.8xlarge" => Ok(AwsInstancesType::I8G_8XLARGE),
+            "i8g.large" => Ok(AwsInstancesType::I8G_LARGE),
+            "i8g.xlarge" => Ok(AwsInstancesType::I8G_XLARGE),
             "im4gn.16xlarge" => Ok(AwsInstancesType::IM4GN_16XLARGE),
             "im4gn.2xlarge" => Ok(AwsInstancesType::IM4GN_2XLARGE),
             "im4gn.4xlarge" => Ok(AwsInstancesType::IM4GN_4XLARGE),
@@ -4269,11 +4305,6 @@ mod tests {
             let result_to_string = instance_type.to_cloud_provider_format();
             assert_eq!(
                 match instance_type {
-                    AwsInstancesType::A1_2XLARGE => "a1.2xlarge",
-                    AwsInstancesType::A1_4XLARGE => "a1.4xlarge",
-                    AwsInstancesType::A1_LARGE => "a1.large",
-                    AwsInstancesType::A1_MEDIUM => "a1.medium",
-                    AwsInstancesType::A1_XLARGE => "a1.xlarge",
                     AwsInstancesType::C3_2XLARGE => "c3.2xlarge",
                     AwsInstancesType::C3_4XLARGE => "c3.4xlarge",
                     AwsInstancesType::C3_8XLARGE => "c3.8xlarge",
@@ -4519,6 +4550,16 @@ mod tests {
                     AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
                     AwsInstancesType::I4I_LARGE => "i4i.large",
                     AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+                    AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
+                    AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
+                    AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
+                    AwsInstancesType::I7IE_LARGE => "i7ie.large",
+                    AwsInstancesType::I7IE_XLARGE => "i7ie.xlarge",
+                    AwsInstancesType::I8G_2XLARGE => "i8g.2xlarge",
+                    AwsInstancesType::I8G_4XLARGE => "i8g.4xlarge",
+                    AwsInstancesType::I8G_8XLARGE => "i8g.8xlarge",
+                    AwsInstancesType::I8G_LARGE => "i8g.large",
+                    AwsInstancesType::I8G_XLARGE => "i8g.xlarge",
                     AwsInstancesType::IM4GN_16XLARGE => "im4gn.16xlarge",
                     AwsInstancesType::IM4GN_2XLARGE => "im4gn.2xlarge",
                     AwsInstancesType::IM4GN_4XLARGE => "im4gn.4xlarge",
