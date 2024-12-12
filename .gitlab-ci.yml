@@ -1,6 +1,6 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
-image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2024-11-15T08-02-02
+image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2024-12-12T05-39-31
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
   DOCKER_HOST: tcp://localhost:2375
@@ -8,6 +8,7 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
   GIT_DEPTH: 10
+  SLACK_PRODUCT_NOTIFICATIONS_WEBHOOK: https://hooks.slack.com/services/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
 
 services:
   - docker:dind
@@ -109,9 +110,7 @@ release-image:
       --push .
   parallel:
     matrix:
-      - IMAGE_ARCH:
-          - amd64
-          - arm64
+      - IMAGE_ARCH: [amd64, arm64]
   tags:
     - vm-1cpu-1gmem-0g
   interruptible: true
@@ -888,8 +887,8 @@ gitlab-release:
   # patch versions based on tags and use goreleaser to perform a release
   script:
     - ./helper.sh update_engine_version
-    - apt-get update && apt-get install -y golang
-    - unset GITHUB_TOKEN ; curl -sfL https://goreleaser.com/static/run | VERSION=v2.4.4 bash -s -- release --skip=validate --clean
+    - unset GITHUB_TOKEN ; goreleaser release --skip=validate --clean
+    - curl -X POST --data-urlencode "payload={\"channel\":\"#product-notifications\",\"username\":\"Engine release\",\"text\":\"🎉 New release done *${CI_COMMIT_TAG}* on ${CI_PROJECT_NAME}!\n<${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}|See release>\"}" $SLACK_PRODUCT_NOTIFICATIONS_WEBHOOK
   tags:
     - vm-1cpu-1gmem-0g
   rules:
