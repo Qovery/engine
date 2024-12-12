@@ -21,20 +21,17 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../lib-engine" }
-crossbeam-channel = "0.5.8"
 serde_json = "1.0.120"
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
 chrono = "0.4.38"
-ctrlc = { version = "3.4.1", features = ["termination"] } # sig term handler wrapper
 retry = "2.0.0"
 dirs = "5.0.1"
 url = "2.5.2"
-regex = "1"
 anyhow = "1.0.86"
 scopeguard = "1.2.0"
-reqwest = { version = "0.12.5", features = ["blocking", "json", "gzip"] }
+reqwest = { version = "0.12.9", features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots"] }
 serde = "1.0.188"
-clap = { version = "4.5.9", features = ["derive", "env"]}
+clap = { version = "4.5.9", features = ["derive", "env"] }
 
 # Webserver (For Prometheus, Healthcheck, ...)
 tokio = { version = "1.38.1", features = ["full"] }
@@ -67,7 +64,7 @@ shadow-rs = { version = "0.33.0", features = [] }
 
 [dev-dependencies]
 reqwest = { version = "0.12.5", features = ["blocking"] }
-hyper-util = {  version = "0.1.7", features = ["tokio"] }
+hyper-util = { version = "0.1.7", features = ["tokio"] }
 tower = { version = "0.5.0", features = ["util"] }
 
 

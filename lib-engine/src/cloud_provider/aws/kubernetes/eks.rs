@@ -8,20 +8,16 @@ use crate::cloud_provider::kubernetes::{event_details, Kind, Kubernetes, Kuberne
 use crate::cloud_provider::models::CpuArchitecture;
 use crate::cloud_provider::models::NodeGroups;
 use crate::cloud_provider::CloudProvider;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, InfrastructureStep};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::logger::Logger;
 use crate::models::ToCloudProviderFormat;
 use crate::object_storage::s3::S3;
-use crate::secret_manager::vault::QVaultClient;
-use base64::engine::general_purpose;
-use base64::Engine;
 use std::borrow::Borrow;
 use std::collections::HashMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::infrastructure_action::InfrastructureAction;
@@ -163,44 +159,6 @@ impl Kubernetes for EKS {
 
     fn temp_dir(&self) -> &Path {
         &self.temp_dir
-    }
-
-    fn update_vault_config(
-        &self,
-        event_details: EventDetails,
-        cluster_secrets: crate::cloud_provider::vault::ClusterSecrets,
-        kubeconfig_file_path: Option<&Path>,
-    ) -> Result<(), Box<EngineError>> {
-        let vault_conn = match QVaultClient::new(event_details.clone()) {
-            Ok(x) => Some(x),
-            Err(_) => None,
-        };
-        if let Some(vault) = vault_conn {
-            // encode base64 kubeconfig
-            let kubeconfig = match kubeconfig_file_path {
-                Some(x) => fs::read_to_string(x)
-                    .map_err(|e| {
-                        EngineError::new_cannot_retrieve_cluster_config_file(
-                            event_details.clone(),
-                            CommandError::new_from_safe_message(format!(
-                                "Cannot read kubeconfig file {}: {e}",
-                                x.to_str().unwrap_or_default()
-                            )),
-                        )
-                    })
-                    .expect("kubeconfig was not found while it should be present"),
-                None => "".to_string(),
-            };
-            let kubeconfig_b64 = general_purpose::STANDARD.encode(kubeconfig);
-
-            let mut cluster_secrets_update = cluster_secrets;
-            cluster_secrets_update.set_kubeconfig_b64(kubeconfig_b64);
-
-            // update info without taking care of the kubeconfig because we don't have it yet
-            let _ = cluster_secrets_update.create_or_update_secret(&vault, false, event_details.clone());
-        };
-
-        Ok(())
     }
 
     fn advanced_settings(&self) -> &ClusterAdvancedSettings {
