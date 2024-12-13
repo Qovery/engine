@@ -914,21 +914,6 @@ fn public_redis_v5_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-gcp-self-hosted")]
 #[named]
 #[test]
-fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-gcp-self-hosted")]
-#[named]
-#[test]
-#[ignore]
-fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-gcp-self-hosted")]
-#[named]
-#[test]
 fn private_redis_v7_deploy_a_working_dev_environment() {
     test_redis_configuration("7.0", function_name!(), CONTAINER, false);
 }

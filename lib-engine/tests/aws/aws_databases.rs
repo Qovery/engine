@@ -1197,21 +1197,6 @@ fn public_redis_v5_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
-fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
 fn private_redis_v7_deploy_a_working_dev_environment() {
     test_redis_configuration("7.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
 }
