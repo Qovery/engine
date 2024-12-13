@@ -48,6 +48,9 @@ resource "aws_eks_cluster" "eks_cluster" {
   version         = var.eks_k8s_versions.masters
 
   enabled_cluster_log_types = ["api","audit","authenticator","controllerManager","scheduler"]
+  upgrade_policy {
+      support_type = "STANDARD"
+  }
 
 {% if aws_eks_encrypt_secrets_kms_key_arn -%}
   encryption_config {
