@@ -3,7 +3,7 @@ use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 use crate::build_platform::local_docker::LocalDocker;
-use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
+use crate::cloud_provider::aws::kubernetes::eks::EKS;
 use crate::cloud_provider::aws::regions::AwsRegion;
 use crate::cloud_provider::aws::AWS;
 use crate::cloud_provider::gcp::kubernetes::{Gke, GkeOptions};
@@ -177,7 +177,6 @@ impl<T> EngineRequest<T> {
     pub fn is_self_managed(&self) -> bool {
         match self.kubernetes.kind {
             cloud_provider::kubernetes::Kind::Eks => false,
-            cloud_provider::kubernetes::Kind::Ec2 => false,
             cloud_provider::kubernetes::Kind::ScwKapsule => false,
             cloud_provider::kubernetes::Kind::Gke => false,
             cloud_provider::kubernetes::Kind::EksSelfManaged => true,
@@ -453,39 +452,6 @@ impl Kubernetes {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            cloud_provider::kubernetes::Kind::Ec2 => {
-                let ec2_instance = match self.nodes_groups.len() != 1 {
-                    true => {
-                        return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
-                            cloud_provider
-                                .get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-                            "unknown for EC2 nodegroup".to_string(),
-                        )));
-                    }
-                    false => self.nodes_groups[0].to_ec2_instance(),
-                };
-                match EC2::new(
-                    context.clone(),
-                    self.long_id,
-                    self.name.as_str(),
-                    KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                    cloud_provider.zones().clone(),
-                    cloud_provider,
-                    serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
-                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                    ec2_instance,
-                    logger,
-                    self.advanced_settings.clone(),
-                    decoded_helm_charts_override,
-                    self.kubeconfig.clone(),
-                    temp_dir,
-                ) {
-                    Ok(res) => Ok(Box::new(res)),
-                    Err(e) => Err(e),
-                }
-            }
             cloud_provider::kubernetes::Kind::Gke => {
                 let options = serde_json::from_value::<io_models::gke::GkeOptions>(self.options.clone()).map_err(
                     |e: serde_json::Error| {

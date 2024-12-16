@@ -270,7 +270,6 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
         HelmChartType::CloudProviderSpecific(provider_kind) => match &helm_chart_location.contains("/common/") {
             false => match provider_kind {
                 KubernetesKind::Eks | Kind::EksSelfManaged => "aws",
-                KubernetesKind::Ec2 => "aws-ec2",
                 KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
                 KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
                 Kind::OnPremiseSelfManaged => "on-premise",
@@ -402,16 +401,6 @@ mod tests {
                 ),
                 chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Eks),
                 expected_sub_folder: "aws".to_string(),
-            },
-            TestCase {
-                helm_path_input: HelmPath::new(
-                    HelmPathType::Chart,
-                    None,
-                    HelmChartDirectoryLocation::CloudProviderFolder,
-                    "whatever".to_string(),
-                ),
-                chart_type_input: HelmChartType::CloudProviderSpecific(KubernetesKind::Ec2),
-                expected_sub_folder: "aws-ec2".to_string(),
             },
             TestCase {
                 helm_path_input: HelmPath::new(

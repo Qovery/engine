@@ -1,7 +1,7 @@
 use crate::cloud_provider::aws::kubernetes::Options;
 use crate::cloud_provider::aws::regions::AwsZone;
 use crate::cloud_provider::io::ClusterAdvancedSettings;
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
 use crate::cloud_provider::CloudProvider;
 use crate::dns_provider::DnsProvider;
@@ -458,49 +458,43 @@ pub fn eks_tera_context(
     );
 
     // EKS Addons
-    if kubernetes.kind() != Kind::Ec2 {
-        // CNI
-        context.insert(
-            "eks_addon_vpc_cni",
-            &(match &options.aws_addon_cni_version_override {
-                None => vpc_cni_addon::AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
+    // CNI
+    context.insert(
+        "eks_addon_vpc_cni",
+        &(match &options.aws_addon_cni_version_override {
+            None => vpc_cni_addon::AwsVpcCniAddon::new_from_k8s_version(kubernetes.version()),
 
-                Some(overridden_version) => {
-                    vpc_cni_addon::AwsVpcCniAddon::new_with_overridden_version(overridden_version)
-                }
-            }),
-        );
-        // Kube-proxy
-        context.insert(
-            "eks_addon_kube_proxy",
-            &(match &options.aws_addon_kube_proxy_version_override {
-                None => kube_proxy_addon::AwsKubeProxyAddon::new_from_k8s_version(kubernetes.version()),
-                Some(overridden_version) => {
-                    kube_proxy_addon::AwsKubeProxyAddon::new_with_overridden_version(overridden_version)
-                }
-            }),
-        );
-        // EBS CSI
-        context.insert(
-            "eks_addon_ebs_csi",
-            &(match &options.aws_addon_ebs_csi_version_override {
-                None => ebs_csi_addon::AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
-                Some(overridden_version) => {
-                    ebs_csi_addon::AwsEbsCsiAddon::new_with_overridden_version(overridden_version)
-                }
-            }),
-        );
-        // COREDNS
-        context.insert(
-            "eks_addon_coredns",
-            &(match &options.aws_addon_coredns_version_override {
-                None => core_dns_addon::AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version()),
-                Some(overridden_version) => {
-                    core_dns_addon::AwsCoreDnsAddon::new_with_overridden_version(overridden_version)
-                }
-            }),
-        );
-    }
+            Some(overridden_version) => vpc_cni_addon::AwsVpcCniAddon::new_with_overridden_version(overridden_version),
+        }),
+    );
+    // Kube-proxy
+    context.insert(
+        "eks_addon_kube_proxy",
+        &(match &options.aws_addon_kube_proxy_version_override {
+            None => kube_proxy_addon::AwsKubeProxyAddon::new_from_k8s_version(kubernetes.version()),
+            Some(overridden_version) => {
+                kube_proxy_addon::AwsKubeProxyAddon::new_with_overridden_version(overridden_version)
+            }
+        }),
+    );
+    // EBS CSI
+    context.insert(
+        "eks_addon_ebs_csi",
+        &(match &options.aws_addon_ebs_csi_version_override {
+            None => ebs_csi_addon::AwsEbsCsiAddon::new_from_k8s_version(kubernetes.version()),
+            Some(overridden_version) => ebs_csi_addon::AwsEbsCsiAddon::new_with_overridden_version(overridden_version),
+        }),
+    );
+    // COREDNS
+    context.insert(
+        "eks_addon_coredns",
+        &(match &options.aws_addon_coredns_version_override {
+            None => core_dns_addon::AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version()),
+            Some(overridden_version) => {
+                core_dns_addon::AwsCoreDnsAddon::new_with_overridden_version(overridden_version)
+            }
+        }),
+    );
 
     Ok(context)
 }

@@ -25,7 +25,6 @@ use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
-use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
 use qovery_engine::cloud_provider::models::CpuArchitecture;
 use qovery_engine::cloud_provider::service::Service;
 use qovery_engine::deployment_report::logger::EnvLogger;
@@ -696,18 +695,11 @@ pub fn test_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            match kubernetes_kind {
-                KubernetesKind::Ec2 => secrets
-                    .AWS_EC2_TEST_CLUSTER_DOMAIN
-                    .as_ref()
-                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
-                    .to_string(),
-                _ => secrets
-                    .DEFAULT_TEST_DOMAIN
-                    .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN must be set")
-                    .to_string(),
-            }
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN must be set")
+                .to_string()
         )
     );
 
@@ -810,7 +802,6 @@ pub fn test_db(
     let kubernetes_version = match kubernetes_kind {
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
         KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
@@ -834,21 +825,6 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
@@ -970,21 +946,6 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
                 ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG,
-                ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -1027,14 +988,6 @@ pub fn test_db(
     let ret = environment_delete.delete_environment(&ea_delete, infra_ctx_for_delete);
     assert!(ret.is_ok());
 
-    if kubernetes_kind == KubernetesKind::Ec2 {
-        let ret = infra_ctx_for_delete
-            .kubernetes()
-            .as_infra_actions()
-            .delete_cluster(infra_ctx_for_delete);
-        assert!(ret.is_ok());
-    }
-
     test_name.to_string()
 }
 
@@ -1071,18 +1024,11 @@ pub fn test_pause_managed_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            match kubernetes_kind {
-                KubernetesKind::Ec2 => secrets
-                    .AWS_EC2_TEST_CLUSTER_DOMAIN
-                    .as_ref()
-                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
-                    .to_string(),
-                _ => secrets
-                    .DEFAULT_TEST_DOMAIN
-                    .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN must be set")
-                    .to_string(),
-            }
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
         )
     );
 
@@ -1179,21 +1125,6 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
@@ -1295,21 +1226,6 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,

@@ -1,5 +1,4 @@
 pub mod aws;
-pub mod aws_ec2;
 pub mod common;
 pub mod database;
 pub mod dns;

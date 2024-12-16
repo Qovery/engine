@@ -12,7 +12,6 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cloud_provider::models::{
     CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
 };
@@ -33,11 +32,10 @@ use crate::io_models::{
 use crate::models;
 use crate::models::application::{ApplicationError, ApplicationService};
 use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
+use crate::models::types::{OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 
 use super::{PodAntiAffinity, UpdateStrategy};
@@ -350,73 +348,38 @@ impl Application {
                 // Note: we check if kubernetes is EC2 to map to the proper implementation
                 // This is far from ideal, it should be checked against an exhaustive match
                 // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::application::Application::<AWS>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name,
-                        self.public_domain,
-                        self.ports,
-                        self.min_instances,
-                        self.max_instances,
-                        build,
-                        self.command_args,
-                        self.entrypoint,
-                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsAppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
-                    )?))
-                } else {
-                    Ok(Box::new(models::application::Application::<AWSEc2>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name,
-                        self.public_domain,
-                        self.ports,
-                        self.min_instances,
-                        self.max_instances,
-                        build,
-                        self.command_args,
-                        self.entrypoint,
-                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsEc2AppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
-                    )?))
-                }
+                Ok(Box::new(models::application::Application::<AWS>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name,
+                    self.public_domain,
+                    self.ports,
+                    self.min_instances,
+                    self.max_instances,
+                    build,
+                    self.command_args,
+                    self.entrypoint,
+                    self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    self.mounted_files
+                        .iter()
+                        .map(|e| e.to_domain())
+                        .collect::<BTreeSet<_>>(),
+                    self.readiness_probe.map(|p| p.to_domain()),
+                    self.liveness_probe.map(|p| p.to_domain()),
+                    self.advanced_settings,
+                    AwsAppExtraSettings {},
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                    KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                    KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                    KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                    KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                    self.should_delete_shared_registry,
+                )?))
             }
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,

@@ -12,7 +12,6 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-pub mod ec2;
 pub mod eks;
 pub mod node;
 

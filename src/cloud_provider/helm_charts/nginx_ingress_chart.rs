@@ -11,7 +11,6 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::kubernetes::Kind::Ec2;
 use crate::cloud_provider::models::{
     CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
 };
@@ -241,11 +240,7 @@ defaultBackend:
             },
             ChartSetValue {
                 key: "controller.autoscaling.enabled".to_string(),
-                value: if self.kubernetes_kind == Ec2 {
-                    false.to_string()
-                } else {
-                    true.to_string()
-                },
+                value: true.to_string(),
             },
             ChartSetValue {
                 key: "controller.config.enable-real-ip".to_string(),
@@ -385,13 +380,12 @@ defaultBackend:
             Kind::Gcp => {}
             Kind::OnPremise => {}
         }
+
         // external dns
-        if self.kubernetes_kind != KubernetesKind::Ec2 {
-            chart_set_values.push(ChartSetValue {
-                key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
-                value: self.domain.wildcarded().to_string(),
-            })
-        };
+        chart_set_values.push(ChartSetValue {
+            key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
+            value: self.domain.wildcarded().to_string(),
+        });
 
         Ok(CommonChart {
             chart_info: ChartInfo {
@@ -589,7 +583,7 @@ mod tests {
                 "z00000000".to_string(),
                 "10000000-0000-4000-8000-000000000000".to_string(),
                 "z10000000".to_string(),
-                KubernetesKind::Ec2,
+                KubernetesKind::Eks,
                 None,
                 None,
                 None,

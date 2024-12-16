@@ -11,7 +11,6 @@ use thiserror::Error;
 
 // Those types are just marker types that are use to tag our struct/object model
 pub struct AWS {}
-pub struct AWSEc2 {}
 pub struct SCW {}
 pub struct OnPremise {}
 pub struct GCP {}

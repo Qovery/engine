@@ -1,5 +1,5 @@
 use super::{PodAntiAffinity, UpdateStrategy};
-use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::container_registry::ecr::ECR;
@@ -14,13 +14,12 @@ use crate::io_models::variable_utils::{default_environment_vars_with_info, Varia
 use crate::io_models::{Action, MountedFile};
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::container::{ContainerError, ContainerService};
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
+use crate::models::types::{OnPremise, AWS, GCP, SCW};
 use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
@@ -405,73 +404,37 @@ impl Container {
             .collect_vec();
 
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
-            CPKind::Aws => {
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Box::new(models::container::Container::<AWS>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.command_args,
-                        self.entrypoint,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.min_instances,
-                        self.max_instances,
-                        self.public_domain,
-                        self.ports,
-                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsAppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                    )?)
-                } else {
-                    Box::new(models::container::Container::<AWSEc2>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.command_args,
-                        self.entrypoint,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.min_instances,
-                        self.max_instances,
-                        self.public_domain,
-                        self.ports,
-                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsEc2AppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                    )?)
-                }
-            }
+            CPKind::Aws => Box::new(models::container::Container::<AWS>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.command_args,
+                self.entrypoint,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.min_instances,
+                self.max_instances,
+                self.public_domain,
+                self.ports,
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                AwsAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+            )?),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
                 self.long_id,

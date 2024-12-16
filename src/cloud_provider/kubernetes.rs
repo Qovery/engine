@@ -469,7 +469,6 @@ pub trait KubernetesNode {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Eks,
-    Ec2,
     ScwKapsule,
     Gke,
     EksSelfManaged,
@@ -481,7 +480,7 @@ pub enum Kind {
 impl Kind {
     pub fn get_cloud_provider_kind(&self) -> CloudProviderKind {
         match self {
-            Kind::Eks | Kind::EksSelfManaged | Kind::Ec2 => CloudProviderKind::Aws,
+            Kind::Eks | Kind::EksSelfManaged => CloudProviderKind::Aws,
             Kind::ScwKapsule | Kind::ScwSelfManaged => CloudProviderKind::Scw,
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
             Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
@@ -500,7 +499,6 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Eks => "EKS",
-            Kind::Ec2 => "K3S",
             Kind::ScwKapsule => "ScwKapsule",
             Kind::Gke => "GKE",
             Kind::EksSelfManaged => "EKS Self Managed",

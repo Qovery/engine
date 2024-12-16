@@ -1,5 +1,5 @@
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{CloudProvider, Kind};
@@ -18,13 +18,12 @@ use crate::io_models::{
 };
 use crate::models;
 use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
 use crate::models::gcp::GcpAppExtraSettings;
 use crate::models::job::{ImageSource, JobError, JobService};
 use crate::models::registry_image_source::RegistryImageSource;
 use crate::models::scaleway::ScwAppExtraSettings;
 use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
+use crate::models::types::{OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -380,75 +379,38 @@ impl Job {
             .collect_vec();
 
         let service: Box<dyn JobService> = match cloud_provider.kind() {
-            Kind::Aws => {
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Box::new(models::job::Job::<AWS>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.schedule,
-                        self.max_nb_restart,
-                        Duration::from_secs(self.max_duration_in_sec),
-                        self.default_port,
-                        self.command_args,
-                        self.entrypoint,
-                        self.force_trigger,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.advanced_settings,
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        AwsAppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        self.should_delete_shared_registry,
-                    )?)
-                } else {
-                    Box::new(models::job::Job::<AWSEc2>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.schedule,
-                        self.max_nb_restart,
-                        Duration::from_secs(self.max_duration_in_sec),
-                        self.default_port,
-                        self.command_args,
-                        self.entrypoint,
-                        self.force_trigger,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.advanced_settings,
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        AwsEc2AppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        self.should_delete_shared_registry,
-                    )?)
-                }
-            }
+            Kind::Aws => Box::new(models::job::Job::<AWS>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.schedule,
+                self.max_nb_restart,
+                Duration::from_secs(self.max_duration_in_sec),
+                self.default_port,
+                self.command_args,
+                self.entrypoint,
+                self.force_trigger,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.advanced_settings,
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                AwsAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.should_delete_shared_registry,
+            )?),
             Kind::Scw => Box::new(models::job::Job::<SCW>::new(
                 context,
                 self.long_id,

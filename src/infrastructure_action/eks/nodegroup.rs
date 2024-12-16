@@ -1,4 +1,4 @@
-use crate::cloud_provider::kubernetes::{Kind, Kubernetes};
+use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesClusterAction, NodeGroups, NodeGroupsWithDesiredState};
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
@@ -142,11 +142,6 @@ pub fn get_nodegroup_autoscaling_config_from_aws(
     node_group: NodeGroups,
     eks_client: EksClient,
 ) -> Result<Option<NodegroupScalingConfig>, Box<EngineError>> {
-    // In case of EC2, there is no need to care about auto scaling
-    if kubernetes.kind() == Kind::Ec2 {
-        return Ok(None);
-    }
-
     let eks_node_groups = match block_on(eks_client.list_nodegroups(ListNodegroupsRequest {
         cluster_name: kubernetes.cluster_name(),
         ..Default::default()

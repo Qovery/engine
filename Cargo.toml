@@ -140,35 +140,29 @@ test-all = [
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
 test-aws-minimal = ["env-logger-check"]
-test-aws-ec2-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
 test-gcp-minimal = ["env-logger-check"]
 test-all-minimal = [
     "test-aws-minimal",
-    "test-aws-ec2-minimal",
     "test-scw-minimal",
     "test-gcp-minimal",
 ]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check", "test-git-container"]
-test-aws-ec2-self-hosted = ["env-logger-check"]
 test-scw-self-hosted = ["env-logger-check", "test-git-container"]
 test-gcp-self-hosted = ["env-logger-check", "test-git-container"]
 test-all-self-hosted = [
     "test-aws-self-hosted",
-    "test-aws-ec2-self-hosted",
     "test-scw-self-hosted",
     "test-gcp-self-hosted",
 ]
 
 test-aws-managed-services = ["env-logger-check"]
-test-aws-ec2-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
 test-gcp-managed-services = ["env-logger-check"]
 test-all-managed-services = [
     "test-aws-managed-services",
-    "test-aws-ec2-managed-services",
     "test-scw-managed-services",
     "test-gcp-managed-services",
 ]
@@ -177,7 +171,6 @@ test-aws-infra = []
 test-aws-infra-karpenter = []
 test-aws-infra-arm = []
 test-aws-infra-nat-gateway = []
-test-aws-ec2-infra = []
 test-scw-infra = []
 test-gcp-infra = []
 test-all-infra = [
@@ -185,29 +178,24 @@ test-all-infra = [
     "test-aws-infra-karpenter",
     "test-aws-infra-arm",
     "test-aws-infra-nat-gateway",
-    "test-aws-ec2-infra",
     "test-scw-infra",
     "test-gcp-infra",
 ]
 
 test-aws-infra-upgrade = []
-test-aws-ec2-infra-upgrade = []
 test-scw-infra-upgrade = []
 test-gcp-infra-upgrade = []
 test-all-infra-upgrade = [
     "test-aws-infra-upgrade",
-    "test-aws-ec2-infra-upgrade",
     "test-scw-infra-upgrade",
     "test-gcp-infra-upgrade",
 ]
 
 test-aws-whole-enchilada = []
-test-aws-ec2-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
     "test-aws-whole-enchilada",
-    "test-aws-ec2-whole-enchilada",
     "test-scw-whole-enchilada",
     "test-gcp-whole-enchilada",
 ]
@@ -218,12 +206,6 @@ test-aws-all = [
     "test-aws-managed-services",
     "test-aws-self-hosted",
     "test-aws-whole-enchilada",
-]
-test-aws-ec2-all = [
-    "test-aws-ec2-infra",
-    "test-aws-ec2-managed-services",
-    "test-aws-ec2-self-hosted",
-    "test-aws-ec2-whole-enchilada",
 ]
 test-scw-all = [
     "test-scw-infra",
