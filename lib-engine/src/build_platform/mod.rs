@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
 use crate::cmd::docker::DockerError;
 use crate::deployment_report::logger::EnvLogger;
 use crate::errors::EngineError;
@@ -137,6 +136,10 @@ impl Build {
             &self.git_repository.commit_id,
         );
     }
+
+    pub fn use_buildpacks(&self) -> bool {
+        self.git_repository.dockerfile_path.is_none()
+    }
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -197,11 +200,8 @@ impl Image {
     pub fn registry_host(&self) -> &str {
         self.registry_url.host_str().unwrap()
     }
-    pub fn registry_secret_name(&self, kubernetes_kind: KubernetesKind) -> &str {
-        match kubernetes_kind {
-            KubernetesKind::Ec2 => "awsecr-cred", // required for registry-creds
-            _ => self.registry_host(),
-        }
+    pub fn registry_secret_name(&self) -> &str {
+        self.registry_host()
     }
     pub fn repository_name(&self) -> &str {
         match self.shared_image_feature_enabled {

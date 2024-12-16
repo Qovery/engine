@@ -1,6 +1,4 @@
-use crate::cloud_provider::kubernetes::{
-    kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists, kube_does_secret_exists, Kind,
-};
+use crate::cloud_provider::kubernetes::kube_create_namespace_if_not_exists;
 use crate::cloud_provider::DeploymentTarget;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
@@ -48,31 +46,6 @@ impl DeploymentAction for NamespaceDeployment {
                 ),
             )
         })?;
-
-        // upmc-enterprises/registry-creds sometimes is too long to copy the secret to the namespace
-        // this workaround speed up the process to avoid application fails with ImagePullError on the first deployment
-        if target.kubernetes.kind() == Kind::Ec2 {
-            let from_namespace = "default";
-            match block_on(kube_does_secret_exists(&target.kube, "awsecr-cred", "default")) {
-                Ok(x) if x => {
-                    block_on(kube_copy_secret_to_another_namespace(
-                        &target.kube,
-                        "awsecr-cred",
-                        from_namespace,
-                        target.environment.namespace(),
-                    ))
-                    .map_err(|e| {
-                        EngineError::new_copy_secrets_to_another_namespace_error(
-                            self.event_details.clone(),
-                            e,
-                            from_namespace,
-                            target.environment.namespace(),
-                        )
-                    })?;
-                }
-                _ => {}
-            };
-        };
 
         Ok(())
     }

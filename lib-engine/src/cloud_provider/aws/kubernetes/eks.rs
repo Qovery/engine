@@ -1,5 +1,4 @@
 use crate::cloud_provider::aws::kubernetes;
-use crate::cloud_provider::aws::kubernetes::ec2::mk_s3;
 use crate::cloud_provider::aws::kubernetes::{KarpenterParameters, Options};
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::io::ClusterAdvancedSettings;
@@ -69,7 +68,13 @@ impl EKS {
         let aws_zones = kubernetes::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
 
-        let s3 = mk_s3(&region, cloud_provider);
+        let s3 = S3::new(
+            "s3-temp-id".to_string(),
+            "default-s3".to_string(),
+            cloud_provider.access_key_id(),
+            cloud_provider.secret_access_key(),
+            region.clone(),
+        );
 
         let cluster = EKS {
             context,

@@ -18,7 +18,6 @@ use crate::cloud_provider::Kind;
 
 use crate::dns_provider::DnsProviderConfiguration;
 use crate::errors::CommandError;
-use crate::models::domain::Domain;
 
 use super::KapsuleChartsConfigPrerequisites;
 use crate::cloud_provider::helm_charts::cert_manager_chart::CertManagerChart;
@@ -38,6 +37,7 @@ use crate::cloud_provider::helm_charts::qovery_priority_class_chart::QoveryPrior
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::infrastructure_action::deploy_helms::mk_customer_chart_override_fn;
 use crate::io_models::QoveryIdentifier;
+use crate::models::domain::Domain;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;

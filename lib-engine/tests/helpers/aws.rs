@@ -1,7 +1,6 @@
 extern crate serde;
 extern crate serde_derive;
 
-use crate::helpers::aws_ec2::container_registry_ecr_ec2;
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
@@ -12,7 +11,7 @@ use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInsta
 use qovery_engine::cloud_provider::aws::kubernetes::Options;
 use qovery_engine::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kind, KubernetesVersion};
+use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::cloud_provider::qovery::EngineLocation;
 use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
@@ -111,11 +110,7 @@ impl Cluster<AWS, Options> for AWS {
         kubeconfig: Option<String>,
     ) -> InfrastructureContext {
         // use ECR
-        let container_registry = match kubernetes_kind {
-            Kind::Eks => Box::new(container_registry_ecr(context, logger.clone())),
-            Kind::Ec2 => Box::new(container_registry_ecr_ec2(context, logger.clone(), region)),
-            _ => panic!("Invalid cluster kind {kubernetes_kind}"),
-        };
+        let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
@@ -157,21 +152,10 @@ impl Cluster<AWS, Options> for AWS {
             "EuWest3" => {
                 AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
             }
-            "UsEast2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_MANAGED_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
-            "UsWest2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_CONTAINER_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
-            "EuWest1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
             "eu-west-3" => {
                 AwsRegion::from_str(secrets.AWS_DEFAULT_REGION.unwrap().as_str()).expect("AWS region not supported")
             }
-            "us-east-2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_MANAGED_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
-            "us-west-2" => AwsRegion::from_str(secrets.AWS_EC2_TEST_CONTAINER_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
-            "eu-west-1" => AwsRegion::from_str(secrets.AWS_EC2_TEST_INSTANCE_REGION.unwrap().as_str())
-                .expect("AWS region not supported"),
+            "us-east-2" => AwsRegion::UsEast2,
             _ => panic!("Invalid cluster localisation {localisation}"),
         };
 
