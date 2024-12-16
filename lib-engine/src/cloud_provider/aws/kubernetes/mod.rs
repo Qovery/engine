@@ -4,8 +4,13 @@ use crate::cloud_provider::models::{CpuArchitecture, VpcCustomRoutingTable, VpcQ
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
-use serde::{Deserialize, Serialize};
+use crate::models::domain::ToHelmString;
+use duration_str::deserialize_duration;
+use itertools::Itertools;
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
+use std::fmt::Formatter;
+use std::time::Duration;
 
 pub mod ec2;
 pub mod eks;
@@ -82,61 +87,6 @@ pub struct Options {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KarpenterNodePool {
-    pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KarpenterNodePoolRequirement {
-    pub key: KarpenterNodePoolRequirementKey,
-    pub values: Vec<String>,
-    pub operator: Option<KarpenterRequirementOperator>,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum KarpenterNodePoolRequirementKey {
-    InstanceCategory,
-    InstanceFamily,
-    InstanceGeneration,
-    InstanceSize,
-    InstanceType,
-    Arch,
-    CapacityType,
-    Os,
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum KarpenterRequirementOperator {
-    In,
-    Gt,
-}
-
-impl fmt::Display for KarpenterRequirementOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let output = match self {
-            KarpenterRequirementOperator::In => "In",
-            KarpenterRequirementOperator::Gt => "Gt",
-        };
-        write!(f, "{}", output)
-    }
-}
-
-impl KarpenterNodePoolRequirementKey {
-    pub(crate) fn to_k8s_label(&self) -> String {
-        match self {
-            KarpenterNodePoolRequirementKey::InstanceCategory => "karpenter.k8s.aws/instance-category".to_string(),
-            KarpenterNodePoolRequirementKey::InstanceFamily => "karpenter.k8s.aws/instance-family".to_string(),
-            KarpenterNodePoolRequirementKey::InstanceGeneration => "karpenter.k8s.aws/instance-generation".to_string(),
-            KarpenterNodePoolRequirementKey::InstanceSize => "karpenter.k8s.aws/instance-size".to_string(),
-            KarpenterNodePoolRequirementKey::InstanceType => "node.kubernetes.io/instance-type".to_string(),
-            KarpenterNodePoolRequirementKey::Arch => "kubernetes.io/arch".to_string(),
-            KarpenterNodePoolRequirementKey::CapacityType => "karpenter.sh/capacity-type".to_string(),
-            KarpenterNodePoolRequirementKey::Os => "kubernetes.io/os".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterParameters {
     pub spot_enabled: bool,
     pub max_node_drain_time_in_secs: Option<i32>,
@@ -197,4 +147,352 @@ fn aws_zones(
     }
 
     Ok(aws_zones)
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterNodePool {
+    pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
+    #[serde(deserialize_with = "default_serializer_for_stable_override")]
+    pub stable_override: KarpenterNodePoolOverride,
+}
+
+// TODO (COR-XXX) Remove default value when every Karpenter cluster will have a stable override
+fn default_serializer_for_stable_override<'a, D>(deserializer: D) -> Result<KarpenterNodePoolOverride, D::Error>
+where
+    D: Deserializer<'a>,
+{
+    match KarpenterNodePoolOverride::deserialize(deserializer) {
+        Ok(value) => Ok(value),
+        Err(_) => Ok(default_karpenter_node_pool_stable_override()),
+    }
+}
+
+fn default_karpenter_node_pool_stable_override() -> KarpenterNodePoolOverride {
+    KarpenterNodePoolOverride {
+        budgets: vec![KarpenterNodePoolDisruptionBudget {
+            nodes: "0".to_string(),
+            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+            duration: Duration::from_secs(24 * 3600), // 24h
+            schedule: "0 0 * * *".to_string(),
+        }],
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KarpenterNodePoolRequirement {
+    pub key: KarpenterNodePoolRequirementKey,
+    pub values: Vec<String>,
+    pub operator: Option<KarpenterRequirementOperator>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum KarpenterNodePoolRequirementKey {
+    InstanceCategory,
+    InstanceFamily,
+    InstanceGeneration,
+    InstanceSize,
+    InstanceType,
+    Arch,
+    CapacityType,
+    Os,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum KarpenterRequirementOperator {
+    In,
+    Gt,
+}
+
+impl fmt::Display for KarpenterRequirementOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let output = match self {
+            KarpenterRequirementOperator::In => "In",
+            KarpenterRequirementOperator::Gt => "Gt",
+        };
+        write!(f, "{}", output)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterNodePoolOverride {
+    pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterNodePoolDisruptionBudget {
+    pub nodes: String,
+    pub reasons: Vec<KarpenterNodePoolDisruptionReason>,
+    #[serde(deserialize_with = "deserialize_duration")]
+    pub duration: Duration,
+    pub schedule: KarpenterNodePoolDisruptionBudgetSchedule,
+}
+
+pub type KarpenterNodePoolDisruptionBudgetSchedule = String;
+
+impl KarpenterNodePoolDisruptionBudget {
+    pub fn get_karpenter_budget_duration_as_string(&self) -> String {
+        let total_seconds = self.duration.as_secs();
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+
+        match (hours, minutes) {
+            (0, m) => format!("{}m", m),
+            (h, 0) => format!("{}h", h),
+            (h, m) => format!("{}h{}m", h, m),
+        }
+    }
+}
+
+impl ToHelmString for Vec<KarpenterNodePoolDisruptionReason> {
+    fn to_helm_format_string(&self) -> String {
+        let reasons_join = self.iter().map(|it| it.to_string()).join(",");
+        format!("{{{reasons_join}}}")
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum KarpenterNodePoolDisruptionReason {
+    Underutilized,
+}
+
+impl fmt::Display for KarpenterNodePoolDisruptionReason {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let output = match self {
+            KarpenterNodePoolDisruptionReason::Underutilized => "Underutilized",
+        };
+        write!(f, "{}", output)
+    }
+}
+
+impl KarpenterNodePoolRequirementKey {
+    pub(crate) fn to_k8s_label(&self) -> String {
+        match self {
+            KarpenterNodePoolRequirementKey::InstanceCategory => "karpenter.k8s.aws/instance-category".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceFamily => "karpenter.k8s.aws/instance-family".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceGeneration => "karpenter.k8s.aws/instance-generation".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceSize => "karpenter.k8s.aws/instance-size".to_string(),
+            KarpenterNodePoolRequirementKey::InstanceType => "node.kubernetes.io/instance-type".to_string(),
+            KarpenterNodePoolRequirementKey::Arch => "kubernetes.io/arch".to_string(),
+            KarpenterNodePoolRequirementKey::CapacityType => "karpenter.sh/capacity-type".to_string(),
+            KarpenterNodePoolRequirementKey::Os => "kubernetes.io/os".to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cloud_provider::aws::kubernetes::{
+        default_karpenter_node_pool_stable_override, KarpenterNodePoolDisruptionBudget,
+        KarpenterNodePoolDisruptionReason, KarpenterNodePoolOverride, KarpenterParameters,
+    };
+
+    #[test]
+    fn should_deserialize_correctly_when_no_node_pool_override_is_present() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "stable_override": null
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("result should be Ok");
+        let stable_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .expect("qovery_node_pools should be present")
+            .stable_override;
+        assert_eq!(stable_node_pool_override, default_karpenter_node_pool_stable_override());
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_node_pool_override_is_present() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "stable_override": {
+              "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "22h30m",
+                  "schedule": "30 3 * * 1"
+                },
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "142h30m",
+                  "schedule": "30 3 * * 2"
+                }
+              ]
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("result should be Ok");
+        let stable_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .expect("qovery_node_pools should be present")
+            .stable_override;
+        assert_eq!(
+            stable_node_pool_override,
+            KarpenterNodePoolOverride {
+                budgets: vec![
+                    KarpenterNodePoolDisruptionBudget {
+                        nodes: "0".to_string(),
+                        reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                        duration: duration_str::parse("22h30m").expect("22h30m should be a valid Duration"),
+                        schedule: "30 3 * * 1".to_string(),
+                    },
+                    KarpenterNodePoolDisruptionBudget {
+                        nodes: "0".to_string(),
+                        reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                        duration: duration_str::parse("142h30m").expect("142h30m should be a valid Duration"),
+                        schedule: "30 3 * * 2".to_string(),
+                    }
+                ],
+            }
+        )
+    }
+
+    #[test]
+    fn should_fail_to_deserialize_when_budget_duration_is_not_well_formatted() {
+        // given
+        let wrong_durations = vec!["word", "-/@", "8hh", "123"];
+
+        // when
+        wrong_durations.into_iter().for_each(|wrong_duration| {
+            let karpenter_node_pool_override_json = r#"
+            {
+              "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "22h30m",
+                  "schedule": "30 3 * * 1"
+                },
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": {wrong_duration}
+                  "schedule": "30 3 * * 2"
+                }
+              ]
+            }
+        "#
+            .replace("{duration}", wrong_duration);
+
+            // when
+            let result = serde_json::from_str::<KarpenterNodePoolOverride>(karpenter_node_pool_override_json.as_str());
+
+            // then
+            assert!(result.is_err());
+            let err = result.expect_err("result should be an Err");
+            assert!(err
+                .to_string()
+                .contains("invalid type: map, expected expect duration string"));
+        });
+    }
+
+    #[test]
+    fn should_parse_duration_to_karpenter_budget_format() {
+        // given
+        let duration_test_cases_with_expectations = vec![
+            (duration_str::parse("2h").expect("2h should be a valid Duration"), "2h"),
+            (duration_str::parse("20m").expect("20m should be a valid Duration"), "20m"),
+            (
+                duration_str::parse("72h30m").expect("72h30m should be a valid Duration"),
+                "72h30m",
+            ),
+            (duration_str::parse("180m").expect("180m should be a valid Duration"), "3h"),
+            (duration_str::parse("1h180m").expect("1h180m should be a valid Duration"), "4h"),
+            (
+                duration_str::parse("1h190m").expect("1h190m should be a valid Duration"),
+                "4h10m",
+            ),
+        ];
+        duration_test_cases_with_expectations
+            .into_iter()
+            .for_each(|(duration, expected_karpenter_budget_duration)| {
+                let budget = KarpenterNodePoolDisruptionBudget {
+                    nodes: "".to_string(),
+                    reasons: vec![],
+                    duration,
+                    schedule: "".to_string(),
+                };
+
+                // when
+                let karpenter_formatted_duration = budget.get_karpenter_budget_duration_as_string();
+
+                // then
+                assert_eq!(karpenter_formatted_duration, expected_karpenter_budget_duration);
+            });
+    }
 }

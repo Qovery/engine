@@ -9,6 +9,7 @@ use crate::cloud_provider::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::errors::CommandError;
+use crate::models::domain::ToHelmString;
 use itertools::Itertools;
 use kube::Client;
 
@@ -211,7 +212,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
         }
 
         let karpenter_node_pools_requirements =
-            Self::get_karpenter_node_pools_requirements(spot_enabled, qovery_node_pools);
+            Self::get_karpenter_node_pools_requirements(spot_enabled, qovery_node_pools.clone());
 
         karpenter_node_pools_requirements
             .iter()
@@ -243,6 +244,35 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     value: format!("{{{}}}", formated_values),
                 });
             });
+
+        // Inject node pools consolidation
+        if let Some(pools) = qovery_node_pools {
+            pools
+                .stable_override
+                .budgets
+                .iter()
+                .enumerate()
+                .for_each(|(index, it)| {
+                    let prefix = format!("stable_node_pool.consolidation.budgets[{index}]");
+
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.nodes"),
+                        value: it.nodes.to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.reasons"),
+                        value: it.reasons.to_helm_format_string().to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.duration"),
+                        value: it.get_karpenter_budget_duration_as_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.schedule"),
+                        value: it.schedule.to_string(),
+                    });
+                })
+        }
 
         let mut values_string: Vec<ChartSetValue> = vec![];
         if self.pleco_resources_ttl > 0 {
@@ -307,7 +337,8 @@ mod tests {
     use uuid::Uuid;
 
     use crate::cloud_provider::aws::kubernetes::{
-        KarpenterNodePool, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
+        KarpenterNodePool, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
+        KarpenterNodePoolOverride, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
         KarpenterRequirementOperator,
     };
     use crate::cloud_provider::helm_charts::{
@@ -425,6 +456,14 @@ mod tests {
                             values: vec!["AMD64".to_string()],
                         },
                     ]),
+                    stable_override: KarpenterNodePoolOverride {
+                        budgets: vec![KarpenterNodePoolDisruptionBudget {
+                            nodes: "0".to_string(),
+                            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                            duration: duration_str::parse("2h").unwrap(),
+                            schedule: "0 1 * * 3".to_string(),
+                        }],
+                    },
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -443,6 +482,14 @@ mod tests {
                             values: vec!["AMD64".to_string()],
                         },
                     ]),
+                    stable_override: KarpenterNodePoolOverride {
+                        budgets: vec![KarpenterNodePoolDisruptionBudget {
+                            nodes: "0".to_string(),
+                            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                            duration: duration_str::parse("2h").unwrap(),
+                            schedule: "0 1 * * 3".to_string(),
+                        }],
+                    },
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -466,6 +513,14 @@ mod tests {
                             values: vec!["spot".to_string()],
                         },
                     ]),
+                    stable_override: KarpenterNodePoolOverride {
+                        budgets: vec![KarpenterNodePoolDisruptionBudget {
+                            nodes: "0".to_string(),
+                            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                            duration: duration_str::parse("2h").unwrap(),
+                            schedule: "0 1 * * 3".to_string(),
+                        }],
+                    },
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -485,6 +540,14 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
+    struct Budget {
+        nodes: String,
+        reasons: Option<Vec<String>>,
+        duration: Option<String>,
+        schedule: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize, PartialEq)]
     struct Requirement {
         key: String,
         operator: String,
@@ -497,6 +560,11 @@ mod tests {
     }
 
     #[derive(Debug, Deserialize)]
+    struct Disruption {
+        budgets: Vec<Budget>,
+    }
+
+    #[derive(Debug, Deserialize)]
     struct Template {
         spec: SpecT,
     }
@@ -504,6 +572,7 @@ mod tests {
     #[derive(Debug, Deserialize)]
     struct Spec {
         template: Template,
+        disruption: Disruption,
     }
 
     #[derive(Debug, Deserialize)]
@@ -654,6 +723,8 @@ mod tests {
         );
         for node_pool in node_pools {
             assert_eq!(node_pool.kind, "NodePool");
+
+            // Check requirements
             let reqs = &node_pool.spec.template.spec.requirements;
 
             assert_requirement_exists(reqs, "karpenter.k8s.aws/instance-category", "In", vec!["c".to_string()]);
@@ -668,6 +739,18 @@ mod tests {
                     vec!["on-demand".to_string()]
                 },
             );
+
+            // Check stable node pool
+            if node_pool.metadata.name == "stable" {
+                assert_stable_node_pool_exists(&node_pool.spec.disruption.budgets, "10%", None, None, None);
+                assert_stable_node_pool_exists(
+                    &node_pool.spec.disruption.budgets,
+                    "0",
+                    Some(vec!["Underutilized".to_string()]),
+                    Some("2h".to_string()),
+                    Some("0 1 * * 3".to_string()),
+                );
+            }
         }
     }
 
@@ -681,5 +764,27 @@ mod tests {
             "Expected {} requirement to be present",
             key
         );
+    }
+
+    fn assert_stable_node_pool_exists(
+        budgets: &[Budget],
+        nodes: &str,
+        reasons: Option<Vec<String>>,
+        duration: Option<String>,
+        schedule: Option<String>,
+    ) {
+        assert!(
+            budgets.contains(&Budget {
+                nodes: nodes.to_string(),
+                reasons: reasons.clone(),
+                duration: duration.clone(),
+                schedule: schedule.clone(),
+            }),
+            "Expected ({}-{}-{}-{}) budget to be present",
+            nodes,
+            reasons.unwrap_or(vec!["NO_REASONS".to_string()]).join(","),
+            duration.unwrap_or("NO_DURATION".to_string()),
+            schedule.unwrap_or("NO_SCHEDULE".to_string()),
+        )
     }
 }

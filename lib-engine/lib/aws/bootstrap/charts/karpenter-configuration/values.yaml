@@ -22,3 +22,6 @@ tags:
 global_node_pools:
   requirements: []
   terminationGracePeriod: 48h
+stable_node_pool:
+  consolidation:
+    budgets: []
