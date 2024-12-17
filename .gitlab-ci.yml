@@ -946,10 +946,8 @@ gitlab-release:
     - gitlab-release
   script:
     - curl -s https://get.qovery.com | bash
-    - ./qovery admin cluster deploy \
-      --parallel-run 50 \
-      --filters IsProduction=false \
-      --execution-mode=on-the-fly --no-confirm
+    - echo 'You can follow the dry-run diff overview at https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1'
+    - ./qovery admin cluster deploy --parallel-run=50 --filters IsProduction=false --execution-mode=on-the-fly --no-confirm
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
