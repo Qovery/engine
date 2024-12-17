@@ -946,7 +946,7 @@ gitlab-release:
     - gitlab-release
   script:
     - curl -s https://get.qovery.com | bash
-    - /usr/local/bin/qovery admin cluster deploy \
+    - ./qovery admin cluster deploy \
       --parallel-run 50 \
       --filters IsProduction=false \
       --execution-mode=on-the-fly --no-confirm
@@ -956,6 +956,7 @@ gitlab-release:
     - if: $CI_COMMIT_TAG
       when: manual
   variables:
+    ADMIN_URL: https://api-admin.qovery.com
     QOVERY_CLI_ACCESS_TOKEN: $CI_ADMIN_TOKEN
 
 2-deploy-qovery-infra-engines-prod:
