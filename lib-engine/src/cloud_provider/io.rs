@@ -1,5 +1,6 @@
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::{
     LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationHttpSnippet as NginxConfigurationHttpSnippetModel,
+    NginxConfigurationServerSnippet as NginxConfigurationServerSnippetModel,
 };
 use crate::cloud_provider::models::StorageClass as StorageClassModel;
 use crate::models::types::Percentage;
@@ -108,6 +109,15 @@ pub struct NginxConfigurationHttpSnippet(String);
 impl NginxConfigurationHttpSnippet {
     pub fn to_model(&self) -> NginxConfigurationHttpSnippetModel {
         NginxConfigurationHttpSnippetModel::new(self.0.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub struct NginxConfigurationServerSnippet(String);
+
+impl NginxConfigurationServerSnippet {
+    pub fn to_model(&self) -> NginxConfigurationServerSnippetModel {
+        NginxConfigurationServerSnippetModel::new(self.0.to_string())
     }
 }
 
@@ -448,6 +458,19 @@ mod tests {
     }
 
     #[test]
+    fn test_nginx_server_snippet_to_model() {
+        // setup:
+        let snippet_json = r#"{"test": "coucou"}"#;
+        let nginx_server_snippet_io = super::NginxConfigurationServerSnippet(snippet_json.to_string());
+
+        // execute:
+        let model = nginx_server_snippet_io.to_model();
+
+        // verify:
+        assert_eq!(snippet_json, model.get_snippet_value());
+    }
+
+    #[test]
     fn test_nginx_http_snippet_to_model() {
         // setup:
         let snippet_json = r#"{"test": "coucou"}"#;
@@ -455,9 +478,7 @@ mod tests {
         let nginx_http_snippet_io = super::NginxConfigurationHttpSnippet(nginx_http_snippet.to_string());
 
         // execute:
-        let model = nginx_http_snippet_io
-            .to_model()
-            .expect("should be able to convert to model");
+        let model = nginx_http_snippet_io.to_model();
 
         // verify:
         assert_eq!(snippet_json, model.get_snippet_value());

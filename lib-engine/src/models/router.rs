@@ -160,6 +160,19 @@ impl<T: CloudProvider> Router<T> {
                 context.insert("associated_service_long_id", &service_id);
                 context.insert("associated_service_type", "application");
 
+                if let Some(network_ingress_nginx_controller_server_snippet) = &application
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_server_snippet
+                {
+                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_server_snippet",
+                        &network_ingress_nginx_controller_server_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
+
                 (application.kube_name(), application.public_ports())
             } else if let Some(container) = &environment
                 .containers
@@ -170,6 +183,19 @@ impl<T: CloudProvider> Router<T> {
                 context.insert("advanced_settings", &container.advanced_settings());
                 context.insert("associated_service_long_id", &service_id);
                 context.insert("associated_service_type", "container");
+
+                if let Some(network_ingress_nginx_controller_server_snippet) = &container
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_server_snippet
+                {
+                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_server_snippet",
+                        &network_ingress_nginx_controller_server_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
 
                 (container.kube_name(), container.public_ports())
             } else {
