@@ -939,6 +939,25 @@ gitlab-release:
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/cef5383b-c50d-496d-b19f-d42914408888/settings/general
     deployment_tier: staging
 
+2-dry-run-deploy-dev-clusters:
+  stage: deploy-staging
+  retry: 0
+  needs:
+    - gitlab-release
+  script:
+    - curl -s https://get.qovery.com | bash
+    - /usr/local/bin/qovery admin cluster deploy \
+      --parallel-run 50 \
+      --filters IsProduction=false \
+      --execution-mode=on-the-fly --no-confirm
+  tags:
+    - vm-250mcpu-1gmem-0g
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+  variables:
+    QOVERY_CLI_ACCESS_TOKEN: $CI_ADMIN_TOKEN
+
 2-deploy-qovery-infra-engines-prod:
   stage: deploy-prod
   extends: .deploy-qovery-infra-engines
