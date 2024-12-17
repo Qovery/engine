@@ -54,6 +54,9 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/server-snippet: |
+      {%- if nginx_ingress_controller_server_snippet %}
+      {{ nginx_ingress_controller_server_snippet | indent(prefix="      ") }}
+      {%- endif %}
       grpc_socket_keepalive on;
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";

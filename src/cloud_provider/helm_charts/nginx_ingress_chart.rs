@@ -57,6 +57,20 @@ impl NginxConfigurationHttpSnippet {
     }
 }
 
+// TODO(bchastanier): this should probably be structured better than a string in the future
+#[derive(Clone)]
+pub struct NginxConfigurationServerSnippet(String);
+
+impl NginxConfigurationServerSnippet {
+    pub fn new(snippet: String) -> Self {
+        NginxConfigurationServerSnippet(snippet)
+    }
+
+    pub fn get_snippet_value(&self) -> &str {
+        &self.0
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,

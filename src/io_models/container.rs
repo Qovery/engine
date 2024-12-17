@@ -1,4 +1,5 @@
 use super::{PodAntiAffinity, UpdateStrategy};
+use crate::cloud_provider::io::NginxConfigurationHttpServerSnippet;
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
@@ -274,6 +275,8 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_denylist_source_range: String,
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
+    #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationHttpServerSnippet>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -323,6 +326,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_ingress_nginx_controller_server_snippet: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
