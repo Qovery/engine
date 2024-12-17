@@ -43,6 +43,20 @@ impl Display for LogFormatEscaping {
     }
 }
 
+// TODO(bchastanier): this should probably be structured better than a string in the future
+#[derive(Clone)]
+pub struct NginxConfigurationHttpSnippet(String);
+
+impl NginxConfigurationHttpSnippet {
+    pub fn new(snippet: String) -> Self {
+        NginxConfigurationHttpSnippet(snippet)
+    }
+
+    pub fn get_snippet_value(&self) -> &str {
+        &self.0
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -67,6 +81,7 @@ pub struct NginxIngressChart {
     compute_full_forwarded_for: bool,
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
+    http_snippet: Option<NginxConfigurationHttpSnippet>,
 }
 
 impl NginxIngressChart {
@@ -93,6 +108,7 @@ impl NginxIngressChart {
         compute_full_forwarded_for: bool,
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
+        http_snippet: Option<NginxConfigurationHttpSnippet>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -142,6 +158,7 @@ impl NginxIngressChart {
             compute_full_forwarded_for,
             log_format_escaping,
             is_alb_enabled,
+            http_snippet,
         }
     }
 
@@ -224,6 +241,7 @@ defaultBackend:
                 })?,
         );
 
+        let mut chart_set_values_string = vec![]; // Holding string values
         let mut chart_set_values = vec![
             ChartSetValue {
                 key: "controller.allowSnippetAnnotations".to_string(),
@@ -272,6 +290,12 @@ defaultBackend:
             chart_set_values.push(ChartSetValue {
                 key: "controller.autoscaling.targetCPUUtilizationPercentage".to_string(),
                 value: value.to_string(),
+            })
+        }
+        if let Some(value) = &self.http_snippet {
+            chart_set_values_string.push(ChartSetValue {
+                key: "controller.config.http-snippet".to_string(),
+                value: value.get_snippet_value().to_string(),
             })
         }
         match self.log_format_escaping {
@@ -380,7 +404,6 @@ defaultBackend:
             Kind::Gcp => {}
             Kind::OnPremise => {}
         }
-
         // external dns
         chart_set_values.push(ChartSetValue {
             key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
@@ -397,6 +420,7 @@ defaultBackend:
                 timeout_in_seconds: 60 * 60,
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,
+                values_string: chart_set_values_string,
                 yaml_files_content: {
                     // order matters: last one overrides previous ones, so customer override should be last
                     let mut x = vec![rendered_nginx_override];
@@ -498,6 +522,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -545,6 +570,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -594,6 +620,7 @@ mod tests {
                 true,
                 log_format_escaping.clone(),
                 false,
+                None,
             );
 
             // execute:
@@ -647,6 +674,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -330,5 +330,12 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
     }
 
+    if let Some(nginx_controller_http_snippet) = &cluster.advanced_settings().nginx_controller_http_snippet {
+        context.insert(
+            "nginx_controller_http_snippet",
+            &nginx_controller_http_snippet.to_model().get_snippet_value(),
+        );
+    }
+
     Ok(context)
 }

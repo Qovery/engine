@@ -541,6 +541,11 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites
             .cluster_advanced_settings
             .aws_eks_enable_alb_controller,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_http_snippet
+            .as_ref()
+            .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
     )
     .to_common_helm_chart()?;
 
