@@ -103,6 +103,13 @@ pub fn eks_tera_context(
         context.insert("nginx_controller_log_format_upstream", &nginx_controller_log_format_upstream);
     }
 
+    if let Some(nginx_controller_http_snippet) = &kubernetes.advanced_settings().nginx_controller_http_snippet {
+        context.insert(
+            "nginx_controller_http_snippet",
+            &nginx_controller_http_snippet.to_model().get_snippet_value(),
+        );
+    }
+
     context.insert(
         "aws_enable_vpc_flow_logs",
         &kubernetes.advanced_settings().aws_vpc_enable_flow_logs,

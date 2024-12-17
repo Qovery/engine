@@ -1,4 +1,6 @@
-use crate::cloud_provider::helm_charts::nginx_ingress_chart::LogFormatEscaping as LogFormatEscapingModel;
+use crate::cloud_provider::helm_charts::nginx_ingress_chart::{
+    LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationHttpSnippet as NginxConfigurationHttpSnippetModel,
+};
 use crate::cloud_provider::models::StorageClass as StorageClassModel;
 use crate::models::types::Percentage;
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
@@ -8,10 +10,17 @@ use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str;
 use std::time::Duration;
+use thiserror::Error;
 
 pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
 ];
+
+#[derive(Error, Debug, Clone, PartialEq, Eq)]
+pub enum InputError {
+    #[error("Invalid input field value for `{field_name}`: `{message}`")]
+    InvalidInputFieldValue { field_name: String, message: String },
+}
 
 fn default_registry_mirroring_mode() -> RegistryMirroringMode {
     RegistryMirroringMode::Service
@@ -90,6 +99,15 @@ impl LogFormatEscaping {
             LogFormatEscaping::None => LogFormatEscapingModel::None,
             LogFormatEscaping::JSON => LogFormatEscapingModel::JSON,
         }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct NginxConfigurationHttpSnippet(String);
+
+impl NginxConfigurationHttpSnippet {
+    pub fn to_model(&self) -> NginxConfigurationHttpSnippetModel {
+        NginxConfigurationHttpSnippetModel::new(self.0.to_string())
     }
 }
 
@@ -177,6 +195,8 @@ pub struct ClusterAdvancedSettings {
         default = "default_nginx_controller_log_format_escaping"
     )]
     pub nginx_controller_log_format_escaping: LogFormatEscaping,
+    #[serde(alias = "nginx.controller.http_snippet")]
+    pub nginx_controller_http_snippet: Option<NginxConfigurationHttpSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
@@ -233,6 +253,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_compute_full_forwarded_for: false,
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
+            nginx_controller_http_snippet: None,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             gcp_vpc_enable_flow_logs: false,
@@ -424,5 +445,21 @@ mod tests {
         );
         assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
         assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
+    }
+
+    #[test]
+    fn test_nginx_http_snippet_to_model() {
+        // setup:
+        let snippet_json = r#"{"test": "coucou"}"#;
+        let nginx_http_snippet = base64::engine::general_purpose::STANDARD.encode(snippet_json.as_bytes());
+        let nginx_http_snippet_io = super::NginxConfigurationHttpSnippet(nginx_http_snippet.to_string());
+
+        // execute:
+        let model = nginx_http_snippet_io
+            .to_model()
+            .expect("should be able to convert to model");
+
+        // verify:
+        assert_eq!(snippet_json, model.get_snippet_value());
     }
 }

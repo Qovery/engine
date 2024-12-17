@@ -356,6 +356,11 @@ pub fn kapsule_helm_charts(
             .nginx_controller_log_format_escaping
             .to_model(),
         false, // AWS only
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_http_snippet
+            .as_ref()
+            .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
     )
     .to_common_helm_chart()?;
 

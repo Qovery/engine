@@ -12,6 +12,7 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
 
+use crate::cloud_provider::io::InputError;
 use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::{command, terraform};
 use crate::events::{EventDetails, Stage};
@@ -661,6 +662,14 @@ impl From<RouterError> for CommandError {
     }
 }
 
+impl From<InputError> for CommandError {
+    fn from(input_error: InputError) -> Self {
+        match input_error {
+            InputError::InvalidInputFieldValue { .. } => CommandError::new_from_safe_message(input_error.to_string()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 /// Tag: unique identifier for an error.
 pub enum Tag {
@@ -1306,8 +1315,6 @@ impl EngineError {
 
     /// Creates new error for Engine API input cannot be deserialized.
     ///
-    ///
-    ///
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
@@ -1321,6 +1328,30 @@ impl EngineError {
             Tag::InvalidEngineApiInputCannotBeDeserialized,
             "Input is invalid and cannot be deserialized.".to_string(),
             Some(raw_error.into()),
+            None,
+            Some("This is a Qovery issue, please contact our support team".to_string()),
+        )
+    }
+
+    /// Creates new error for Engine API payload that are not valid.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message`: Raw error message.
+    pub fn new_invalid_engine_payload_invalid_field_value(
+        event_details: EventDetails,
+        input_error: InputError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEnginePayload,
+            match &input_error {
+                InputError::InvalidInputFieldValue { field_name, message } => {
+                    format!("Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`")
+                }
+            },
+            Some(CommandError::from(input_error)),
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
         )
