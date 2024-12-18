@@ -5,7 +5,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::container_registry::errors::ContainerRegistryError;
 use crate::container_registry::RegistryTags;
-use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use crate::deployment_report::logger::EnvProgressLogger;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 
@@ -114,7 +114,7 @@ pub fn delete_cached_image(
     last_image: Option<String>,
     is_service_deletion: bool,
     target: &DeploymentTarget,
-    logger: &EnvSuccessLogger,
+    logger: &dyn Fn(String),
 ) -> Result<(), ContainerRegistryError> {
     if target.kubernetes.advanced_settings().registry_mirroring_mode == RegistryMirroringMode::Cluster {
         // Do no delete image when mirroring mode is Cluster because it can be used by another service
@@ -127,8 +127,7 @@ pub fn delete_cached_image(
         .and_then(|img| img.split(':').last().map(str::to_string))
     {
         if is_service_deletion || last_image_tag != current_image_tag {
-            logger.send_success(format!("🪓 Deleting previous cached image {last_image_tag}"));
-
+            logger(format!("🪓 Deleting previous cached image {last_image_tag}"));
             let mirror_repo_name = get_mirror_repository_name(
                 service_id,
                 target.kubernetes.long_id(),

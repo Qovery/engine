@@ -137,17 +137,17 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     }
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
-        // If job should be force trigerred, display a specific message saying so
+        // If job should be force triggered, display a specific message saying so
         self.metrics_registry
             .start_record(self.long_id, StepLabel::Service, StepName::Deployment);
         if self.is_force_trigger {
             match &self.job_type {
                 JobType::CronJob(schedule) => self.logger.send_progress(format!(
-                    "🚀 Force trigerring deployment of cronjob with schedule `{}` at tag {} is starting",
+                    "🚀 Force triggering deployment of cronjob with schedule `{}` at tag {} is starting",
                     schedule, self.tag
                 )),
                 JobType::Job(_) => self.logger.send_progress(format!(
-                    "🚀 Force trigerring deployment of Job at tag {} is starting with a timeout/max duration of {}",
+                    "🚀 Force triggering deployment of Job at tag {} is starting with a timeout/max duration of {}",
                     self.tag,
                     self.max_duration_human_str()
                 )),
@@ -156,7 +156,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             return;
         }
 
-        // Normal flow, checking if the job should be trigerred on this event
+        // Normal flow, checking if the job should be triggered on this event
         match &self.job_type {
             JobType::Job(trigger_on_action) => {
                 if self.action == *trigger_on_action {
