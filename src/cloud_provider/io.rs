@@ -474,8 +474,7 @@ mod tests {
     fn test_nginx_http_snippet_to_model() {
         // setup:
         let snippet_json = r#"{"test": "coucou"}"#;
-        let nginx_http_snippet = base64::engine::general_purpose::STANDARD.encode(snippet_json.as_bytes());
-        let nginx_http_snippet_io = super::NginxConfigurationHttpSnippet(nginx_http_snippet.to_string());
+        let nginx_http_snippet_io = super::NginxConfigurationHttpSnippet(snippet_json.to_string());
 
         // execute:
         let model = nginx_http_snippet_io.to_model();
