@@ -132,6 +132,28 @@ impl MountedFile {
     }
 }
 
+// TODO(bchastanier): this should probably be structured better than a string in the future
+#[derive(Clone)]
+pub struct NginxConfigurationServerSnippet(String);
+
+impl NginxConfigurationServerSnippet {
+    pub fn new(snippet: String) -> Self {
+        NginxConfigurationServerSnippet(snippet)
+    }
+
+    pub fn get_snippet_value(&self) -> &str {
+        &self.0
+    }
+}
+
+pub enum RateLimiting {
+    Enabled {
+        max_requests_per_minute: u32,
+        burst_multiplier: u32,
+    },
+    Disabled,
+}
+
 // Retrieve ssh keys from env variables, values are base64 encoded
 pub fn ssh_keys_from_env_vars(environment_vars: &BTreeMap<String, VariableInfo>) -> Vec<SshKey> {
     // Retrieve ssh keys from env variables

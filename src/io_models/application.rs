@@ -171,6 +171,10 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
     pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationHttpServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_limit_rpm")]
+    pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
+    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -224,6 +228,8 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
@@ -268,6 +274,8 @@ impl ApplicationAdvancedSettings {
             network_ingress_basic_auth_env_var: self.network_ingress_basic_auth_env_var.clone(),
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
+            network_ingress_nginx_limit_rpm: self.network_ingress_nginx_limit_rpm,
+            network_ingress_nginx_limit_burst_multiplier: self.network_ingress_nginx_limit_burst_multiplier,
             network_ingress_nginx_controller_server_snippet: self
                 .network_ingress_nginx_controller_server_snippet
                 .clone(),

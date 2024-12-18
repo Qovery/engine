@@ -348,17 +348,17 @@ defaultBackend:
                                 value: "true".to_string(),
                             });
                             chart_set_values.push(ChartSetValue {
-                            key:
+                                key:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
                                     .to_string(),
-                            value: format!("qovery-{}-nginx-ingress", self.cluster_short_id),
-                        });
+                                value: format!("qovery-{}-nginx-ingress", self.cluster_short_id),
+                            });
                             chart_set_values.push(ChartSetValue {
-                            key:
+                                key:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
                                     .to_string(),
-                            value: "external".to_string(),
-                        });
+                                value: "external".to_string(),
+                            });
                             chart_set_values.push(ChartSetValue {
                                 key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-scheme"
                                     .to_string(),
@@ -377,25 +377,25 @@ defaultBackend:
                                 value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
                             });
                             chart_set_values.push(ChartSetValue {
-                            key:
+                                key:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags"
                                     .to_string(),
-                            value: format!(
-                                "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
-                                self.organization_long_id,
-                                self.organization_short_id,
-                                self.cluster_long_id,
-                                self.cluster_short_id,
-                            ),
-                        });
+                                value: format!(
+                                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
+                                    self.organization_long_id,
+                                    self.organization_short_id,
+                                    self.cluster_long_id,
+                                    self.cluster_short_id,
+                                ),
+                            });
                         }
                         false => {
                             chart_set_values.push(ChartSetValue {
-                            key:
+                                key:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
                                     .to_string(),
-                            value: "nlb".to_string(),
-                        });
+                                value: "nlb".to_string(),
+                            });
                         }
                     };
                 };
