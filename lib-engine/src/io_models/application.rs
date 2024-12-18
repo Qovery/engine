@@ -12,7 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::io::NginxConfigurationHttpServerSnippet;
+use crate::cloud_provider::io::NginxConfigurationServerSnippet;
 use crate::cloud_provider::models::{
     CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
 };
@@ -170,7 +170,7 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
-    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationHttpServerSnippet>,
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationServerSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
