@@ -3,8 +3,8 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, metrics_registry,
-    FuncTestsSecrets,
+    check_tcp_port_is_open, check_udp_port_is_open, context_for_resource, engine_run_test, get_pods, get_pvc, init,
+    is_pod_restarted_env, logger, metrics_registry, FuncTestsSecrets, TcpCheckSource,
 };
 use ::function_name::named;
 use bstr::ByteSlice;
@@ -3698,7 +3698,6 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
 #[named]
 #[test]
 fn deploy_container_with_udp_tcp_public_ports() {
-    use qovery_engine::cloud_provider::utilities::{check_tcp_port_is_open, check_udp_port_is_open, TcpCheckSource};
     use tracing::info;
 
     engine_run_test(|| {

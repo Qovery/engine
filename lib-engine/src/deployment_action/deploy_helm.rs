@@ -1,9 +1,9 @@
-use crate::cloud_provider::helm::{ChartInfo, HelmChart, ServiceChart};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
 use crate::deployment_action::DeploymentAction;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::helm::{ChartInfo, HelmChart, ServiceChart};
 use crate::template::generate_and_copy_all_files_into_dir;
 use std::env;
 use std::path::{Path, PathBuf};
@@ -137,10 +137,10 @@ impl DeploymentAction for HelmDeployment {
 #[cfg(feature = "test-local-kube")]
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::ChartInfo;
     use crate::cmd::helm::Helm;
     use crate::deployment_action::deploy_helm::{default_helm_timeout, HelmDeployment};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::helm::ChartInfo;
     use crate::io_models::QoveryIdentifier;
     use function_name::named;
 

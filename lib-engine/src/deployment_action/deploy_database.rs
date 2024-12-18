@@ -1,4 +1,3 @@
-use crate::cloud_provider::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{get_database_terraform_config, Action, Service};
 use crate::cloud_provider::Kind::{self, Aws};
 use crate::cloud_provider::{service, DeploymentTarget};
@@ -14,6 +13,7 @@ use crate::deployment_report::database::reporter::DatabaseDeploymentReporter;
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::database::{
     get_database_with_invalid_storage_size, Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed,
@@ -27,7 +27,6 @@ use semver::Version;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use crate::cloud_provider::utilities::{are_pvcs_bound, update_pvcs};
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use async_trait::async_trait;
@@ -41,7 +40,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use super::utils::delete_nlb_or_alb_service;
+use super::utils::{are_pvcs_bound, delete_nlb_or_alb_service, update_pvcs};
 
 const DB_READY_STATE: &str = "available";
 const DB_STOPPED_STATE: &str = "stopped";

@@ -1,6 +1,5 @@
 use crate::build_platform::{Credentials, SshKey};
 
-use crate::cloud_provider::helm::{ChartInfo, HelmChartError};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::command::CommandKiller;
@@ -13,6 +12,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::git;
+use crate::helm::{ChartInfo, HelmChartError};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::models::helm_chart::{HelmChart, HelmChartSource, HelmValueSource};
 use crate::models::types::CloudProvider;

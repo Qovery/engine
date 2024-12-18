@@ -15,7 +15,7 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_tasks::action::InfrastructureAction;
 use crate::models::domain::ToTerraformString;
 use crate::models::scaleway::ScwZone;
 use crate::object_storage::scaleway_object_storage::ScalewayOS;

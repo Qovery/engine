@@ -1,8 +1,8 @@
-use crate::cloud_provider::helm_charts::nginx_ingress_chart::{
+use crate::cloud_provider::models::StorageClass as StorageClassModel;
+use crate::infrastructure_tasks::helm_charts::nginx_ingress_chart::{
     LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationSnippet as NginxConfigurationSnippetModel,
     NginxHttpSnippet as NginxHttpSnippetModel, NginxServerSnippet as NginxServerSnippetModel,
 };
-use crate::cloud_provider::models::StorageClass as StorageClassModel;
 use crate::models::types::Percentage;
 use crate::{cloud_provider::Kind as KindModel, errors::EngineError, events::EventDetails};
 use base64::engine::general_purpose;

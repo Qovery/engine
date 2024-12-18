@@ -15,14 +15,6 @@ use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
-pub fn delete_file_if_exists(file: &Path) -> Result<(), Error> {
-    if !file.exists() {
-        return Ok(());
-    }
-
-    fs::remove_file(file)
-}
-
 pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), Error> {
     let files = WalkDir::new(from).follow_links(true).into_iter().filter_map(|e| e.ok());
 
@@ -310,45 +302,6 @@ pub fn indent_file(path: String) -> Result<String, CommandError> {
         )),
         Ok(_) => Ok(path),
     }
-}
-
-pub fn list_yaml_backup_files<P>(working_root_dir: P) -> Result<Vec<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let files = WalkDir::new(working_root_dir)
-        .follow_links(true)
-        .into_iter()
-        .filter_map(|e| e.ok());
-    let mut backup_paths: Vec<String> = vec![];
-    for file in files {
-        if file
-            .file_name()
-            .to_str()
-            .ok_or_else(|| {
-                CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {file:?}."))
-            })?
-            .to_string()
-            .contains("-q-backup.yaml")
-        {
-            backup_paths.push(
-                file.path()
-                    .to_str()
-                    .ok_or_else(|| {
-                        CommandError::new_from_safe_message(format!("Unable to get YAML backup file name {file:?}."))
-                    })?
-                    .to_string(),
-            )
-        }
-    }
-
-    if backup_paths.is_empty() {
-        return Err(CommandError::new_from_safe_message(
-            "Unable to get YAML backup files".to_string(),
-        ));
-    }
-
-    Ok(backup_paths)
 }
 
 pub fn create_yaml_file_from_secret<P>(working_root_dir: P, secret: SecretItem) -> Result<String, CommandError>

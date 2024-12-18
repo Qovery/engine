@@ -16,8 +16,9 @@ mod deploy_terraform;
 mod pause_service;
 mod restart_service;
 #[cfg(test)]
-mod test_utils;
+pub mod test_utils;
 mod utils;
+pub use utils::update_pvcs;
 
 pub trait DeploymentAction: Send + Sync {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>>;

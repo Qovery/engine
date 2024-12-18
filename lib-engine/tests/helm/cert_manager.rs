@@ -1,5 +1,5 @@
-use qovery_engine::cloud_provider::helm::{ChartInfo, ChartSetValue, CommonChart, HelmChartNamespaces};
 use qovery_engine::cmd::helm::Helm;
+use qovery_engine::helm::{ChartInfo, ChartSetValue, CommonChart, HelmChartNamespaces};
 
 use serde_derive::Deserialize;
 use serde_derive::Serialize;

@@ -10,8 +10,8 @@ use qovery_engine::cloud_provider::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
 };
 use qovery_engine::cloud_provider::service::ServiceType;
-use qovery_engine::cloud_provider::utilities::update_pvcs;
 use qovery_engine::cloud_provider::DeploymentTarget;
+use qovery_engine::deployment_action::update_pvcs;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};

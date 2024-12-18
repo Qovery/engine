@@ -49,7 +49,7 @@ use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
 };
-use qovery_engine::git::initialize_git_opts;
+use qovery_engine::initialize_git_opts;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::log_file_writer::LogFileWriter;

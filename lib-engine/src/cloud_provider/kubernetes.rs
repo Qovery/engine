@@ -13,7 +13,7 @@ use crate::cmd::structs::KubernetesNodeCondition;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
-use crate::infrastructure_action::{InfraLogger, InfrastructureAction};
+use crate::infrastructure_tasks::action::{InfraLogger, InfrastructureAction};
 use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
@@ -1418,7 +1418,7 @@ mod tests {
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
     use crate::errors::EngineError;
     use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage, Transmitter};
-    use crate::infrastructure_action::InfraLogger;
+    use crate::infrastructure_tasks::action::InfraLogger;
     use crate::io_models::QoveryIdentifier;
     use crate::logger::StdIoLogger;
     use crate::models::types::VersionsNumber;

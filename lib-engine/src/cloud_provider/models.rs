@@ -7,7 +7,7 @@ use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
 
-use super::helm::ChartValuesGenerated;
+use crate::helm::ChartValuesGenerated;
 
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {

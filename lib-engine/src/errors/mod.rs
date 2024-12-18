@@ -4,13 +4,13 @@ extern crate derivative;
 extern crate url;
 
 use crate::build_platform::BuildError;
-use crate::cloud_provider::helm::HelmChartError;
 use crate::cloud_provider::service::DatabaseType;
 use crate::cloud_provider::Kind;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::container_registry::errors::ContainerRegistryError;
+use crate::helm::HelmChartError;
 
 use crate::cloud_provider::io::InputError;
 use crate::cloud_provider::kubernetes::KubernetesError;

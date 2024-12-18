@@ -8,6 +8,8 @@ extern crate core;
 extern crate trust_dns_resolver;
 
 pub mod build_platform;
+#[cfg(test)]
+mod byok_chart_gen;
 pub mod cloud_provider;
 pub mod cmd;
 pub mod constants;
@@ -21,8 +23,10 @@ pub mod engine_task;
 pub mod errors;
 pub mod events;
 pub mod fs;
-pub mod git;
-mod infrastructure_action;
+mod git;
+pub use git::initialize_git_opts;
+pub mod helm;
+pub mod infrastructure_tasks;
 pub mod io_models;
 pub mod kubers_utils;
 pub mod log_file_writer;

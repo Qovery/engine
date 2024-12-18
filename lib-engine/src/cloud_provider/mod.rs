@@ -28,19 +28,15 @@ use crate::services::kube_client::QubeClient;
 pub mod aws;
 pub mod environment;
 pub mod gcp;
-pub mod helm;
-pub mod helm_charts;
 pub mod io;
 pub mod kubeconfig_helper;
 pub mod kubectl_utils;
 pub mod kubernetes;
-pub mod metrics;
 pub mod models;
 pub mod qovery;
 pub mod scaleway;
 pub mod self_managed;
 pub mod service;
-pub mod utilities;
 
 pub trait CloudProvider: Send + Sync {
     fn context(&self) -> &Context;
