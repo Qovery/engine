@@ -60,6 +60,13 @@ metadata:
     nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ sanitized_name }}
     nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
     {%- endif %}
+    # RATE LIMITING
+    {%- if advanced_settings.network_ingress_nginx_limit_rpm %}
+    nginx.ingress.kubernetes.io/limit-rpm: {{ advanced_settings.network_ingress_nginx_limit_rpm }}
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: {{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}
+    {%- endif %}
     {%- if nginx_ingress_controller_server_snippet %}
     server-snippet: |
       {{ nginx_ingress_controller_server_snippet | indent(prefix="        ") }}
