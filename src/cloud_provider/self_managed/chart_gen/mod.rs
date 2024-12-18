@@ -78,8 +78,6 @@ impl PartialEq for ChartMeta {
 pub enum ChartSourcePath {
     #[display("lib/aws/bootstrap/charts")]
     AwsBootstrapCharts,
-    #[display("lib/aws-ec2/bootstrap/charts")]
-    AwsEC2BootstrapCharts,
     #[display("lib/common/bootstrap/charts")]
     CommonBoostrapCharts,
     #[display("lib/common/charts")]
@@ -94,8 +92,6 @@ pub enum ChartSourcePath {
 pub enum ValuesSourcePath {
     #[display("lib/aws/bootstrap/chart_values")]
     AwsBootstrapChartValues,
-    #[display("lib/aws-ec2/bootstrap/chart_values")]
-    AwsEC2BootstrapChartValues,
     #[display("lib/common/bootstrap/chart_values")]
     CommonBoostrapChartValues,
     #[display("lib/gcp/bootstrap/chart_values")]
@@ -114,8 +110,6 @@ pub enum SupportedCharts {
     QoveryGcpStorageClass,
     #[display("q-storageclass-scaleway")]
     QoveryScalewayStorageClass,
-    #[display("aws-ebs-csi-driver")]
-    AwsEbsCsiDriver,
     #[display("aws-load-balancer-controller")]
     AlbController,
     #[display("ingress-nginx")]
@@ -341,12 +335,6 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
-                name: SupportedCharts::AwsEbsCsiDriver,
-                category: ChartCategory::Aws,
-                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
                 name: SupportedCharts::AlbController,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
@@ -440,12 +428,6 @@ mod tests {
                 name: SupportedCharts::QoveryAwsStorageClass,
                 category: ChartCategory::Aws,
                 source_path: ChartSourcePath::AwsBootstrapCharts,
-                values_source_path: None,
-            },
-            ChartMeta {
-                name: SupportedCharts::AwsEbsCsiDriver,
-                category: ChartCategory::Aws,
-                source_path: ChartSourcePath::AwsEC2BootstrapCharts,
                 values_source_path: None,
             },
             ChartMeta {
