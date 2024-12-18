@@ -23,7 +23,7 @@ use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_tasks::action::InfrastructureAction;
 use crate::utilities::to_short_id;
 use governor::{Quota, RateLimiter};
 use ipnet::IpNet;

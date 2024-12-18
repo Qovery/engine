@@ -1,4 +1,3 @@
-use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -8,20 +7,20 @@ use crate::deployment_report::application::reporter::ApplicationDeploymentReport
 use crate::deployment_report::execute_long_deployment;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
+use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::application::{get_application_with_invalid_storage_size, Application, ApplicationService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
-use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_report::logger::EnvProgressLogger;
 use std::path::PathBuf;
 use std::time::Duration;
 use tera::Context;
 
-use super::utils::delete_nlb_or_alb_service;
+use super::utils::{delete_nlb_or_alb_service, update_pvcs};
 
 impl<T: CloudProvider> DeploymentAction for Application<T>
 where

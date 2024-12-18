@@ -1458,7 +1458,7 @@ pub fn terraform_plan(
     envs: &[(&str, &str)],
     is_destroy: bool,
 ) -> Result<TerraformOutput, TerraformError> {
-    // Terraform init, validate, plan and apply
+    // Terraform init, validate, plan and appl
     let validators = if is_destroy {
         TerraformValidators::None
     } else {

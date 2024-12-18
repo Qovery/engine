@@ -17,10 +17,11 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use std::env;
 use std::io::{Error, ErrorKind};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use std::{env, io};
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 use url::Url;
@@ -934,5 +935,55 @@ pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str 
             Kind::Aws => "redismyredis-master",
             _ => "redis-my-redis-master",
         },
+    }
+}
+
+pub enum TcpCheckErrors {
+    DomainNotResolvable,
+    PortNotOpen,
+    UnknownError,
+}
+
+pub enum TcpCheckSource<'a> {
+    SocketAddr(SocketAddr),
+    DnsName(&'a str),
+}
+
+pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(), TcpCheckErrors> {
+    let timeout = Duration::from_secs(1);
+
+    let ip = match address {
+        TcpCheckSource::SocketAddr(x) => *x,
+        TcpCheckSource::DnsName(x) => {
+            let address = format!("{x}:{port}");
+            match address.to_socket_addrs() {
+                Ok(x) => {
+                    let ips: Vec<SocketAddr> = x.collect();
+                    ips[0]
+                }
+                Err(_) => return Err(TcpCheckErrors::DomainNotResolvable),
+            }
+        }
+    };
+
+    match std::net::TcpStream::connect_timeout(&ip, timeout) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(TcpCheckErrors::PortNotOpen),
+    }
+}
+
+pub fn check_udp_port_is_open(address: &str, port: u16) -> io::Result<bool> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    let full_address = format!("{}:{}", address, port);
+    socket.set_read_timeout(Some(Duration::from_secs(5)))?;
+
+    socket.send_to(b"qovery", full_address)?;
+
+    // Attempt to receive a response
+    let mut buf = [0; 512];
+    match socket.recv_from(&mut buf) {
+        Ok(_) => Ok(true),                                            // A response was received, port is open
+        Err(ref e) if e.kind() == ErrorKind::WouldBlock => Ok(false), // Timeout, port is closed
+        Err(e) => Err(e),                                             // An actual error occurred
     }
 }

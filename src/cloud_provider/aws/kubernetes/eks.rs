@@ -19,7 +19,7 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_tasks::action::InfrastructureAction;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
 

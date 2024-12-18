@@ -19,6 +19,10 @@ use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
 
+use crate::cloud_provider::models::InvalidStatefulsetStorage;
+use crate::cloud_provider::service::{increase_storage_size, Service};
+use crate::kubers_utils::kube_get_resources_by_selector;
+use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use kube::api::ListParams;
 use kube::Api;
 use retry::delay::{Fibonacci, Fixed};
@@ -441,4 +445,51 @@ pub async fn get_last_deployed_image(
             )
         }
     }
+}
+
+pub fn are_pvcs_bound(
+    service: &dyn Service,
+    namespace: &str,
+    event_details: &EventDetails,
+    kube_client: &kube::Client,
+) -> Result<(), Box<EngineError>> {
+    let selector = service.kube_label_selector();
+    match block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+        kube_client,
+        namespace,
+        &selector,
+    )) {
+        Ok(pvcs) => {
+            for pvc in pvcs.items {
+                if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name) {
+                    if let Some(phase) = status.phase {
+                        if phase.to_lowercase().as_str() != "bound" {
+                            return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
+                                event_details.clone(),
+                                CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
+                                service.name(),
+                            )));
+                        };
+                    }
+                }
+            }
+
+            Ok(())
+        }
+        Err(e) => Err(Box::new(EngineError::new_k8s_enable_to_get_pvc(event_details.clone(), e))),
+    }
+}
+
+pub fn update_pvcs(
+    service: &dyn Service,
+    invalid_statefulset: &InvalidStatefulsetStorage,
+    namespace: &str,
+    event_details: &EventDetails,
+    client: &kube::Client,
+) -> Result<(), Box<EngineError>> {
+    block_on(increase_storage_size(namespace, invalid_statefulset, event_details, client))?;
+
+    are_pvcs_bound(service, namespace, event_details, client)?;
+
+    Ok(())
 }

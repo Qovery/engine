@@ -11,12 +11,11 @@ use k8s_openapi::api::{
 use k8s_openapi::ByteString;
 use kube::core::ObjectList;
 
+use crate::helm::ChartReleaseData;
 use crate::{
-    cloud_provider::helm::ChartReleaseData,
     errors::{CommandError, EngineError},
     events::EventDetails,
 };
-
 /**********
 PODS & COMMON
 ***********/

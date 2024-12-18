@@ -1,4 +1,3 @@
-use crate::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::{DeploymentTarget, Kind};
 use crate::deployment_action::deploy_helm::HelmDeployment;
@@ -8,16 +7,17 @@ use crate::deployment_report::application::reporter::ApplicationDeploymentReport
 use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
+use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
 use crate::models::container::{get_container_with_invalid_storage_size, Container, ContainerService};
 use crate::models::types::{CloudProvider, ToTeraContext};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
-use crate::cloud_provider::utilities::update_pvcs;
 use crate::deployment_action::restart_service::RestartServiceAction;
 use crate::deployment_action::utils::{
-    delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind,
+    delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary, update_pvcs,
+    KubeObjectKind,
 };
 use crate::deployment_report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;

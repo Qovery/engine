@@ -1,4 +1,3 @@
-pub mod chart_gen;
 use uuid::Uuid;
 
 use crate::io_models::context::Context;

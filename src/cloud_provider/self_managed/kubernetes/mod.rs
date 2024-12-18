@@ -15,7 +15,7 @@ use crate::cmd::docker;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use crate::infrastructure_action::InfrastructureAction;
+use crate::infrastructure_tasks::action::InfrastructureAction;
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::utilities::to_short_id;

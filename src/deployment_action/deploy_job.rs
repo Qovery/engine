@@ -1,5 +1,4 @@
 use super::utils::delete_cached_image;
-use crate::cloud_provider::helm::{ChartInfo, HelmChartNamespaces};
 use crate::cloud_provider::service::{Action, Service};
 use crate::cloud_provider::DeploymentTarget;
 use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
@@ -13,6 +12,7 @@ use crate::deployment_report::{execute_long_deployment, DeploymentTaskImpl};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
+use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::models::job::{ImageSource, Job, JobService};
 use crate::models::types::{CloudProvider, ToTeraContext};
