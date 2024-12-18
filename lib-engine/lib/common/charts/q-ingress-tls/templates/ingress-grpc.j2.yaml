@@ -51,10 +51,10 @@ metadata:
     {%- endif %}
     # RATE LIMITING
     {%- if advanced_settings.network_ingress_nginx_limit_rpm %}
-    nginx.ingress.kubernetes.io/limit-rpm: {{ advanced_settings.network_ingress_nginx_limit_rpm }}
+    nginx.ingress.kubernetes.io/limit-rpm: "{{ advanced_settings.network_ingress_nginx_limit_rpm }}"
     {%- endif %}
     {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
-    nginx.ingress.kubernetes.io/limit-burst-multiplier: {{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
     {%- endif %}
     # GRPC SPECIFIC
     # https://kubernetes.github.io/ingress-nginx/examples/grpc/
