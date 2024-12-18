@@ -472,13 +472,24 @@ where
         match &job.image_source {
             ImageSource::Registry { source } => {
                 let mirrored_image_tag = source.tag_for_mirror(job.long_id());
+
+                // In case the job is running due to the hook on on_delete
+                // we don't to transition to a final state/deleted state
+                // so we override the logger to not send a success message
+                let empty_logger = |_: String| {};
+                let normal_logger = |msg| logger.send_success(msg);
+                let logger = if job.action() == &Action::Delete {
+                    &empty_logger as &dyn Fn(String)
+                } else {
+                    &normal_logger as &dyn Fn(String)
+                };
                 if let Err(err) = delete_cached_image(
                     job.long_id(),
                     mirrored_image_tag,
                     state.last_deployed_image,
                     false,
                     target,
-                    logger,
+                    &logger,
                 ) {
                     error!("Failed to delete previous image from cache: {}", err);
                 }
@@ -554,7 +565,7 @@ where
                     state.last_deployed_image,
                     true,
                     target,
-                    logger,
+                    &|msg| logger.send_success(msg),
                 ) {
                     let user_msg = format!("Failed to delete previous image from cache: {err}");
                     logger.send_success(user_msg);

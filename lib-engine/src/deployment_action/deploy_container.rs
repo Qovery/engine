@@ -133,7 +133,7 @@ where
                 state.last_deployed_image,
                 false,
                 target,
-                logger,
+                &|msg| logger.send_success(msg),
             )
             .map_err(|err| {
                 error!("Error while deleting cached image: {}", err);
@@ -262,7 +262,7 @@ where
                 last_deployed_image,
                 true,
                 target,
-                logger,
+                &|msg| logger.send_success(msg),
             )
             .map_err(|err| {
                 error!("Error while deleting cached image: {}", err);
