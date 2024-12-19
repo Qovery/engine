@@ -45,11 +45,11 @@ impl Display for LogFormatEscaping {
 
 // TODO(bchastanier): this should probably be structured better than a string in the future
 #[derive(Clone)]
-pub struct NginxConfigurationHttpSnippet(String);
+pub struct NginxHttpSnippet(String);
 
-impl NginxConfigurationHttpSnippet {
+impl NginxHttpSnippet {
     pub fn new(snippet: String) -> Self {
-        NginxConfigurationHttpSnippet(snippet)
+        NginxHttpSnippet(snippet)
     }
 
     pub fn get_snippet_value(&self) -> &str {
@@ -59,11 +59,25 @@ impl NginxConfigurationHttpSnippet {
 
 // TODO(bchastanier): this should probably be structured better than a string in the future
 #[derive(Clone)]
-pub struct NginxConfigurationServerSnippet(String);
+pub struct NginxConfigurationSnippet(String);
 
-impl NginxConfigurationServerSnippet {
+impl NginxConfigurationSnippet {
     pub fn new(snippet: String) -> Self {
-        NginxConfigurationServerSnippet(snippet)
+        NginxConfigurationSnippet(snippet)
+    }
+
+    pub fn get_snippet_value(&self) -> &str {
+        &self.0
+    }
+}
+
+// TODO(bchastanier): this should probably be structured better than a string in the future
+#[derive(Clone)]
+pub struct NginxServerSnippet(String);
+
+impl NginxServerSnippet {
+    pub fn new(snippet: String) -> Self {
+        NginxServerSnippet(snippet)
     }
 
     pub fn get_snippet_value(&self) -> &str {
@@ -95,7 +109,7 @@ pub struct NginxIngressChart {
     compute_full_forwarded_for: bool,
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
-    http_snippet: Option<NginxConfigurationHttpSnippet>,
+    http_snippet: Option<NginxHttpSnippet>,
 }
 
 impl NginxIngressChart {
@@ -122,7 +136,7 @@ impl NginxIngressChart {
         compute_full_forwarded_for: bool,
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
-        http_snippet: Option<NginxConfigurationHttpSnippet>,
+        http_snippet: Option<NginxHttpSnippet>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(

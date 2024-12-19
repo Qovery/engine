@@ -1,5 +1,5 @@
 use crate::build_platform::SshKey;
-use crate::cloud_provider::io::NginxConfigurationServerSnippet;
+use crate::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::cloud_provider::service::ServiceType;
 use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::engine_task::qovery_api::QoveryApi;
@@ -78,7 +78,9 @@ pub struct HelmChartAdvancedSettings {
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
-    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationServerSnippet>,
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -112,6 +114,7 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_nginx_limit_rpm: None,
             network_ingress_nginx_limit_burst_multiplier: None,
             network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
         }
