@@ -1,7 +1,10 @@
 use crate::cloud_provider::service::ServiceType;
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
+use std::str::FromStr;
 use uuid::Uuid;
 
 use super::helm::ChartValuesGenerated;
@@ -214,14 +217,41 @@ pub struct InvalidPVCStorage {
     pub required_disk_size_in_gib: u32,
 }
 
+pub static KUBERNETES_CPU_RESOURCE_VALUE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let pattern = r"^(\d+)(m)$";
+    Regex::new(pattern).unwrap()
+});
+
 /// Represents Kubernetes CPU resource unit
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-cpu
-///
-/// TODO(benjaminch): Implement From<String> for KubernetesCpuResourceUnit
-#[derive(Serialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum KubernetesCpuResourceUnit {
     /// Milli CPU
     MilliCpu(u32),
+}
+
+impl FromStr for KubernetesCpuResourceUnit {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let cpu_value_with_unit = match KUBERNETES_CPU_RESOURCE_VALUE_REGEX.captures(s) {
+            None => return Err(format!("Cannot get KubernetesCpuResourceUnit from string '{s}'")),
+            Some(capture) => capture,
+        };
+
+        let cpu_size = match cpu_value_with_unit[1].parse::<u32>() {
+            Ok(cpu_size) => cpu_size,
+            Err(err) => return Err(format!("Cannot parse cpu size part: {err}")),
+        };
+
+        let unit = &cpu_value_with_unit[2];
+        let kubernetes_cpu_resource_unit = match unit {
+            "m" => KubernetesCpuResourceUnit::MilliCpu(cpu_size),
+            _ => return Err(format!("Unsupported cpu unit found: '{unit}' (only Mi,Gi,M,G are supported)")),
+        };
+
+        Ok(kubernetes_cpu_resource_unit)
+    }
 }
 
 impl Display for KubernetesCpuResourceUnit {
@@ -235,17 +265,20 @@ impl Display for KubernetesCpuResourceUnit {
     }
 }
 
+pub static KUBERNETES_MEMORY_RESOURCE_VALUE_REGEX: Lazy<Regex> = Lazy::new(|| {
+    let pattern = r"^(\d+)(Mi|Gi|M|G)$";
+    Regex::new(pattern).unwrap()
+});
+
 /// Represents Kubernetes memory resource unit
 /// https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/#meaning-of-memory
-///
-/// TODO(benjaminch): Implement From<String> for KubernetesMemoryResourceUnit
-#[derive(Serialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum KubernetesMemoryResourceUnit {
-    /// MebiByte: 1 Mebibyte (MiB) = (1024)^2 bytes = 1,048,576 bytes.
+    /// MebiByte: 1 Mebibyte (Mi) = (1024)^2 bytes = 1,048,576 bytes.
     MebiByte(u32),
-    /// MegaByte: 1 Megabyte (MB) = (1000)^2 bytes = 1,000,000 bytes.
+    /// MegaByte: 1 Megabyte (M) = (1000)^2 bytes = 1,000,000 bytes.
     MegaByte(u32),
-    /// GibiByte: 1 Gibibyte (MiB) = 2^30 bytes bytes = 1,073,741,824 bytes.
+    /// GibiByte: 1 Gibibyte (Gi) = 2^30 bytes bytes = 1,073,741,824 bytes.
     GibiByte(u32),
     /// GigaByte: 1 Gigabyte (G) = 10^9 bytes = 1,000,000,000 bytes
     GigaByte(u32),
@@ -262,6 +295,37 @@ impl Display for KubernetesMemoryResourceUnit {
             }
             .as_str(),
         )
+    }
+}
+
+impl FromStr for KubernetesMemoryResourceUnit {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let memory_value_with_unit = match KUBERNETES_MEMORY_RESOURCE_VALUE_REGEX.captures(s) {
+            None => return Err(format!("Cannot get KubernetesMemoryResourceUnit from string '{s}'")),
+            Some(capture) => capture,
+        };
+
+        let memory_size = match memory_value_with_unit[1].parse::<u32>() {
+            Ok(memory_size) => memory_size,
+            Err(err) => return Err(format!("Cannot parse memory size part: {err}")),
+        };
+
+        let unit = &memory_value_with_unit[2];
+        let kubernetes_memory_resource_unit = match unit {
+            "Mi" => KubernetesMemoryResourceUnit::MebiByte(memory_size),
+            "Gi" => KubernetesMemoryResourceUnit::GibiByte(memory_size),
+            "M" => KubernetesMemoryResourceUnit::MegaByte(memory_size),
+            "G" => KubernetesMemoryResourceUnit::GigaByte(memory_size),
+            _ => {
+                return Err(format!(
+                    "Unsupported memory unit found: '{unit}' (only Mi,Gi,M,G are supported)"
+                ))
+            }
+        };
+
+        Ok(kubernetes_memory_resource_unit)
     }
 }
 
@@ -283,6 +347,10 @@ impl CustomerHelmChartsOverride {
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+    use serde::Deserialize;
+    use serde_derive::Serialize;
+    use serde_with::DisplayFromStr;
+    use std::str::FromStr;
 
     #[test]
     fn test_kubernetes_cpu_resource_unit_to_string() {
@@ -306,6 +374,35 @@ mod tests {
         for tc in test_cases {
             // execute & verify:
             assert_eq!(tc.output, tc.input.to_string());
+        }
+    }
+
+    #[test]
+    fn should_get_kubernetes_cpu_unit_from_string() {
+        // setup:
+        struct TestCase<'a> {
+            input: &'a str,
+            output: KubernetesCpuResourceUnit,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "0m",
+                output: KubernetesCpuResourceUnit::MilliCpu(0),
+            },
+            TestCase {
+                input: "100m",
+                output: KubernetesCpuResourceUnit::MilliCpu(100),
+            },
+        ];
+
+        for tc in test_cases {
+            // execute & verify:
+            assert_eq!(
+                tc.output,
+                KubernetesCpuResourceUnit::from_str(tc.input)
+                    .unwrap_or_else(|_| panic!("{} failed to be computed", tc.input))
+            );
         }
     }
 
@@ -356,5 +453,106 @@ mod tests {
             // execute & verify:
             assert_eq!(tc.output, tc.input.to_string());
         }
+    }
+
+    #[test]
+    fn should_get_kubernetes_memory_unit_from_string() {
+        // given
+        // setup:
+        struct TestCase<'a> {
+            input: &'a str,
+            output: KubernetesMemoryResourceUnit,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "0Mi",
+                output: KubernetesMemoryResourceUnit::MebiByte(0),
+            },
+            TestCase {
+                input: "100Mi",
+                output: KubernetesMemoryResourceUnit::MebiByte(100),
+            },
+            TestCase {
+                input: "0M",
+                output: KubernetesMemoryResourceUnit::MegaByte(0),
+            },
+            TestCase {
+                input: "100M",
+                output: KubernetesMemoryResourceUnit::MegaByte(100),
+            },
+            TestCase {
+                input: "0Gi",
+                output: KubernetesMemoryResourceUnit::GibiByte(0),
+            },
+            TestCase {
+                input: "100Gi",
+                output: KubernetesMemoryResourceUnit::GibiByte(100),
+            },
+            TestCase {
+                input: "0G",
+                output: KubernetesMemoryResourceUnit::GigaByte(0),
+            },
+            TestCase {
+                input: "100G",
+                output: KubernetesMemoryResourceUnit::GigaByte(100),
+            },
+        ];
+
+        // when
+        for tc in test_cases {
+            // execute & verify:
+            assert_eq!(
+                tc.output,
+                KubernetesMemoryResourceUnit::from_str(tc.input)
+                    .unwrap_or_else(|_| panic!("{} failed to be computed", tc.input))
+            );
+        }
+    }
+
+    #[test]
+    fn should_deserialize_kubernetes_units() {
+        // given
+        #[serde_with::serde_as]
+        #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+        struct DeserializeTarget {
+            #[serde_as(as = "DisplayFromStr")]
+            pub memory_in_gi: KubernetesMemoryResourceUnit,
+            #[serde_as(as = "DisplayFromStr")]
+            pub memory_in_mi: KubernetesMemoryResourceUnit,
+            #[serde_as(as = "DisplayFromStr")]
+            pub memory_in_g: KubernetesMemoryResourceUnit,
+            #[serde_as(as = "DisplayFromStr")]
+            pub memory_in_m: KubernetesMemoryResourceUnit,
+            #[serde_as(as = "DisplayFromStr")]
+            pub cpu_in_m: KubernetesCpuResourceUnit,
+        }
+
+        let json = r#"
+        {
+           "memory_in_gi": "10Gi",
+           "memory_in_mi": "20Mi",
+           "memory_in_g": "30G",
+           "memory_in_m": "40M",
+           "cpu_in_m": "1000m"
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<DeserializeTarget>(json);
+
+        // then
+        assert!(result.is_ok());
+        let deserialize_target = result.expect("Should be Ok");
+        assert_eq!(
+            deserialize_target,
+            DeserializeTarget {
+                memory_in_gi: KubernetesMemoryResourceUnit::GibiByte(10),
+                memory_in_mi: KubernetesMemoryResourceUnit::MebiByte(20),
+                memory_in_g: KubernetesMemoryResourceUnit::GigaByte(30),
+                memory_in_m: KubernetesMemoryResourceUnit::MegaByte(40),
+                cpu_in_m: KubernetesCpuResourceUnit::MilliCpu(1000),
+            }
+        );
     }
 }

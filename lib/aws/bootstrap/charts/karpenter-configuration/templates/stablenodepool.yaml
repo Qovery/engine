@@ -35,7 +35,7 @@ spec:
       # The consolidation budgets injected below contain:
       # - either a forbidden rule for Underutilized when the user hasn't configured any disruption period
       # - or some custom forbidden rules which are the complementary of what they configured on core side
-      {{- range .Values.stable_node_pool.consolidation.budgets }}
+      {{- range .Values.stableNodePool.consolidation.budgets }}
       - nodes: {{ .nodes | quote }}
         reasons:
           {{- range .reasons }}
@@ -44,4 +44,9 @@ spec:
         duration: {{ .duration }}
         schedule: {{ .schedule | quote }}
       {{- end }}
+  {{- if not (and (empty .Values.stableNodePool.limits.maxCpu) (empty .Values.stableNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.stableNodePool.limits.maxCpu }}
+    memory: {{ .Values.stableNodePool.limits.maxMemory }}
+  {{- end }}
   weight: 10

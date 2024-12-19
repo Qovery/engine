@@ -245,33 +245,56 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 });
             });
 
-        // Inject node pools consolidation
+        // Inject node pools values
         if let Some(pools) = qovery_node_pools {
-            pools
-                .stable_override
-                .budgets
-                .iter()
-                .enumerate()
-                .for_each(|(index, it)| {
-                    let prefix = format!("stable_node_pool.consolidation.budgets[{index}]");
+            // Stable node pool consolidation
+            let stable_pool_override = pools.stable_override;
+            stable_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
+                let prefix = format!("stableNodePool.consolidation.budgets[{index}]");
 
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.nodes"),
-                        value: it.nodes.to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.reasons"),
-                        value: it.reasons.to_helm_format_string().to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.duration"),
-                        value: it.get_karpenter_budget_duration_as_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.schedule"),
-                        value: it.schedule.to_string(),
-                    });
-                })
+                values.push(ChartSetValue {
+                    key: format!("{prefix}.nodes"),
+                    value: it.nodes.to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{prefix}.reasons"),
+                    value: it.reasons.to_helm_format_string().to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{prefix}.duration"),
+                    value: it.get_karpenter_budget_duration_as_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{prefix}.schedule"),
+                    value: it.schedule.to_string(),
+                });
+            });
+
+            // Stable node pool limits
+            if let Some(limits) = stable_pool_override.limits {
+                values.push(ChartSetValue {
+                    key: "stableNodePool.limits.maxCpu".to_string(),
+                    value: limits.max_cpu.to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: "stableNodePool.limits.maxMemory".to_string(),
+                    value: limits.max_memory.to_string(),
+                });
+            }
+
+            // Default node pool limits
+            if let Some(default_node_pool_limits) =
+                pools.default_override.map(|default_override| default_override.limits)
+            {
+                values.push(ChartSetValue {
+                    key: "defaultNodePool.limits.maxCpu".to_string(),
+                    value: default_node_pool_limits.max_cpu.to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: "defaultNodePool.limits.maxMemory".to_string(),
+                    value: default_node_pool_limits.max_memory.to_string(),
+                });
+            }
         }
 
         let mut values_string: Vec<ChartSetValue> = vec![];
@@ -337,9 +360,10 @@ mod tests {
     use uuid::Uuid;
 
     use crate::cloud_provider::aws::kubernetes::{
-        KarpenterNodePool, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
-        KarpenterNodePoolOverride, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
-        KarpenterRequirementOperator,
+        KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
+        KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
+        KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
+        KarpenterStableNodePoolOverride,
     };
     use crate::cloud_provider::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
@@ -347,6 +371,7 @@ mod tests {
     };
     use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
     use crate::cloud_provider::models::CpuArchitecture::ARM64;
+    use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
     use crate::cmd::helm::Helm;
     use crate::infrastructure_action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 
@@ -456,14 +481,16 @@ mod tests {
                             values: vec!["AMD64".to_string()],
                         },
                     ]),
-                    stable_override: KarpenterNodePoolOverride {
+                    stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
                             duration: duration_str::parse("2h").unwrap(),
                             schedule: "0 1 * * 3".to_string(),
                         }],
+                        limits: None,
                     },
+                    default_override: None,
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -482,14 +509,16 @@ mod tests {
                             values: vec!["AMD64".to_string()],
                         },
                     ]),
-                    stable_override: KarpenterNodePoolOverride {
+                    stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
                             duration: duration_str::parse("2h").unwrap(),
                             schedule: "0 1 * * 3".to_string(),
                         }],
+                        limits: None,
                     },
+                    default_override: None,
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -513,14 +542,57 @@ mod tests {
                             values: vec!["spot".to_string()],
                         },
                     ]),
-                    stable_override: KarpenterNodePoolOverride {
+                    stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
                             duration: duration_str::parse("2h").unwrap(),
                             schedule: "0 1 * * 3".to_string(),
                         }],
+                        limits: Some(KarpenterNodePoolLimits {
+                            max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
+                            max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                        }),
                     },
+                    default_override: None,
+                }),
+                verify_fn: verify_custom_node_pools,
+            },
+            TestCase {
+                with_spot: false,
+                qovery_node_pools: Some(KarpenterNodePool {
+                    requirements: Some(vec![
+                        KarpenterNodePoolRequirement {
+                            key: KarpenterNodePoolRequirementKey::InstanceCategory,
+                            operator: Some(KarpenterRequirementOperator::In),
+                            values: vec!["c".to_string()],
+                        },
+                        KarpenterNodePoolRequirement {
+                            key: KarpenterNodePoolRequirementKey::Arch,
+                            operator: Some(KarpenterRequirementOperator::In),
+                            values: vec!["AMD64".to_string()],
+                        },
+                        KarpenterNodePoolRequirement {
+                            key: KarpenterNodePoolRequirementKey::CapacityType,
+                            operator: Some(KarpenterRequirementOperator::In),
+                            values: vec!["spot".to_string()],
+                        },
+                    ]),
+                    stable_override: KarpenterStableNodePoolOverride {
+                        budgets: vec![KarpenterNodePoolDisruptionBudget {
+                            nodes: "0".to_string(),
+                            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                            duration: duration_str::parse("2h").unwrap(),
+                            schedule: "0 1 * * 3".to_string(),
+                        }],
+                        limits: None,
+                    },
+                    default_override: Some(KarpenterDefaultNodePoolOverride {
+                        limits: KarpenterNodePoolLimits {
+                            max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
+                            max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
+                        },
+                    }),
                 }),
                 verify_fn: verify_custom_node_pools,
             },
@@ -528,15 +600,35 @@ mod tests {
 
         // Iterate through each test case
         for test_case in test_cases {
-            let yaml = generate_chart_yaml(test_case.with_spot, test_case.qovery_node_pools.clone());
-            (test_case.verify_fn)(&yaml, test_case.with_spot);
+            let with_spot = test_case.with_spot;
+            let has_default_node_pool_limits = test_case
+                .qovery_node_pools
+                .as_ref()
+                .and_then(|it| it.default_override.as_ref())
+                .is_some();
+            let has_stable_node_pool_limits = test_case
+                .qovery_node_pools
+                .as_ref()
+                .and_then(|it| it.stable_override.limits.as_ref())
+                .is_some();
+
+            let yaml = generate_chart_yaml(with_spot, test_case.qovery_node_pools);
+
+            (test_case.verify_fn)(&yaml, with_spot, has_default_node_pool_limits, has_stable_node_pool_limits);
         }
     }
 
+    #[derive(Debug)]
     struct TestCase {
         with_spot: bool,
         qovery_node_pools: Option<KarpenterNodePool>,
-        verify_fn: fn(&str, bool),
+        verify_fn: fn(&str, bool, bool, bool),
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Limits {
+        cpu: String,
+        memory: String,
     }
 
     #[derive(Debug, Deserialize, PartialEq)]
@@ -573,6 +665,7 @@ mod tests {
     struct Spec {
         template: Template,
         disruption: Disruption,
+        limits: Option<Limits>,
     }
 
     #[derive(Debug, Deserialize)]
@@ -637,7 +730,7 @@ mod tests {
             .expect("Failed to get Helm template")
     }
 
-    fn verify_default_node_pools(yaml: &str, with_spot: bool) {
+    fn verify_default_node_pools(yaml: &str, with_spot: bool, _: bool, _: bool) {
         let deserializer = serde_yaml::Deserializer::from_str(yaml);
 
         let node_pools: Vec<_> = deserializer
@@ -701,7 +794,12 @@ mod tests {
         }
     }
 
-    fn verify_custom_node_pools(yaml: &str, with_spot: bool) {
+    fn verify_custom_node_pools(
+        yaml: &str,
+        with_spot: bool,
+        has_default_node_pool_limits: bool,
+        has_stable_node_pool_limits: bool,
+    ) {
         let deserializer = serde_yaml::Deserializer::from_str(yaml);
 
         let node_pools: Vec<_> = deserializer
@@ -742,6 +840,7 @@ mod tests {
 
             // Check stable node pool
             if node_pool.metadata.name == "stable" {
+                // Consolidation
                 assert_stable_node_pool_exists(&node_pool.spec.disruption.budgets, "10%", None, None, None);
                 assert_stable_node_pool_exists(
                     &node_pool.spec.disruption.budgets,
@@ -750,6 +849,30 @@ mod tests {
                     Some("2h".to_string()),
                     Some("0 1 * * 3".to_string()),
                 );
+
+                // Limits
+                if has_stable_node_pool_limits {
+                    let limits = node_pool
+                        .spec
+                        .limits
+                        .as_ref()
+                        .expect("should have stable node pool limits");
+                    assert_eq!(&limits.cpu, "10000m");
+                    assert_eq!(&limits.memory, "20Gi");
+                } else {
+                    assert!(node_pool.spec.limits.is_none());
+                }
+            }
+
+            // Check default node pool
+            if node_pool.metadata.name == "default" {
+                if has_default_node_pool_limits {
+                    let limits = node_pool.spec.limits.expect("should have default node pool limits");
+                    assert_eq!(&limits.cpu, "30000m");
+                    assert_eq!(&limits.memory, "40Gi");
+                } else {
+                    assert!(node_pool.spec.limits.is_none());
+                }
             }
         }
     }

@@ -1,6 +1,9 @@
 use crate::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::cloud_provider::kubernetes::ProviderOptions;
-use crate::cloud_provider::models::{CpuArchitecture, VpcCustomRoutingTable, VpcQoveryNetworkMode};
+use crate::cloud_provider::models::{
+    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcCustomRoutingTable,
+    VpcQoveryNetworkMode,
+};
 use crate::cloud_provider::qovery::EngineLocation;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
@@ -8,6 +11,7 @@ use crate::models::domain::ToHelmString;
 use duration_str::deserialize_duration;
 use itertools::Itertools;
 use serde::{Deserialize, Deserializer, Serialize};
+use serde_with::DisplayFromStr;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
@@ -150,29 +154,34 @@ fn aws_zones(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterNodePool {
     pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
-    #[serde(deserialize_with = "default_serializer_for_stable_override")]
-    pub stable_override: KarpenterNodePoolOverride,
+    #[serde(
+        deserialize_with = "default_serializer_for_stable_override",
+        default = "default_karpenter_node_pool_stable_override"
+    )]
+    pub stable_override: KarpenterStableNodePoolOverride,
+    pub default_override: Option<KarpenterDefaultNodePoolOverride>,
 }
 
 // TODO (COR-XXX) Remove default value when every Karpenter cluster will have a stable override
-fn default_serializer_for_stable_override<'a, D>(deserializer: D) -> Result<KarpenterNodePoolOverride, D::Error>
+fn default_serializer_for_stable_override<'a, D>(deserializer: D) -> Result<KarpenterStableNodePoolOverride, D::Error>
 where
     D: Deserializer<'a>,
 {
-    match KarpenterNodePoolOverride::deserialize(deserializer) {
+    match KarpenterStableNodePoolOverride::deserialize(deserializer) {
         Ok(value) => Ok(value),
         Err(_) => Ok(default_karpenter_node_pool_stable_override()),
     }
 }
 
-fn default_karpenter_node_pool_stable_override() -> KarpenterNodePoolOverride {
-    KarpenterNodePoolOverride {
+fn default_karpenter_node_pool_stable_override() -> KarpenterStableNodePoolOverride {
+    KarpenterStableNodePoolOverride {
         budgets: vec![KarpenterNodePoolDisruptionBudget {
             nodes: "0".to_string(),
             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
             duration: Duration::from_secs(24 * 3600), // 24h
             schedule: "0 0 * * *".to_string(),
         }],
+        limits: None,
     }
 }
 
@@ -212,8 +221,9 @@ impl fmt::Display for KarpenterRequirementOperator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
-pub struct KarpenterNodePoolOverride {
+pub struct KarpenterStableNodePoolOverride {
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
+    pub limits: Option<KarpenterNodePoolLimits>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -277,15 +287,31 @@ impl KarpenterNodePoolRequirementKey {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterDefaultNodePoolOverride {
+    pub limits: KarpenterNodePoolLimits,
+}
+
+#[serde_with::serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterNodePoolLimits {
+    #[serde_as(as = "DisplayFromStr")]
+    pub max_cpu: KubernetesCpuResourceUnit,
+    #[serde_as(as = "DisplayFromStr")]
+    pub max_memory: KubernetesMemoryResourceUnit,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cloud_provider::aws::kubernetes::{
-        default_karpenter_node_pool_stable_override, KarpenterNodePoolDisruptionBudget,
-        KarpenterNodePoolDisruptionReason, KarpenterNodePoolOverride, KarpenterParameters,
+        default_karpenter_node_pool_stable_override, KarpenterDefaultNodePoolOverride,
+        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
+        KarpenterParameters, KarpenterStableNodePoolOverride,
     };
+    use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
     #[test]
-    fn should_deserialize_correctly_when_no_node_pool_override_is_present() {
+    fn should_deserialize_correctly_when_no_stable_node_pool_override_is_present() {
         // given
         let karpenter_parameters_json = r#"
         {
@@ -317,8 +343,7 @@ mod tests {
                   "ARM64"
                 ]
               }
-            ],
-            "stable_override": null
+            ]
           }
         }
         "#;
@@ -337,7 +362,7 @@ mod tests {
     }
 
     #[test]
-    fn should_deserialize_correctly_when_node_pool_override_is_present() {
+    fn should_deserialize_correctly_when_stable_node_pool_override_is_present_with_consolidation() {
         // given
         let karpenter_parameters_json = r#"
         {
@@ -384,7 +409,8 @@ mod tests {
                   "duration": "142h30m",
                   "schedule": "30 3 * * 2"
                 }
-              ]
+              ],
+              "limits": null
             }
           }
         }
@@ -402,7 +428,7 @@ mod tests {
             .stable_override;
         assert_eq!(
             stable_node_pool_override,
-            KarpenterNodePoolOverride {
+            KarpenterStableNodePoolOverride {
                 budgets: vec![
                     KarpenterNodePoolDisruptionBudget {
                         nodes: "0".to_string(),
@@ -417,6 +443,7 @@ mod tests {
                         schedule: "30 3 * * 2".to_string(),
                     }
                 ],
+                limits: None,
             }
         )
     }
@@ -449,7 +476,8 @@ mod tests {
             .replace("{duration}", wrong_duration);
 
             // when
-            let result = serde_json::from_str::<KarpenterNodePoolOverride>(karpenter_node_pool_override_json.as_str());
+            let result =
+                serde_json::from_str::<KarpenterStableNodePoolOverride>(karpenter_node_pool_override_json.as_str());
 
             // then
             assert!(result.is_err());
@@ -493,5 +521,153 @@ mod tests {
                 // then
                 assert_eq!(karpenter_formatted_duration, expected_karpenter_budget_duration);
             });
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_stable_node_pool_override_is_present_with_limits() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "stable_override": {
+              "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "24h",
+                  "schedule": "0 0 * * *"
+                }
+              ],
+              "limits": {
+                "max_cpu": "6000m",
+                "max_memory": "20Gi"
+              }
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("should be Ok");
+        let stable_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .expect("qovery_node_pools should be present")
+            .stable_override;
+        assert_eq!(
+            stable_node_pool_override,
+            KarpenterStableNodePoolOverride {
+                budgets: vec![
+                    // default budgets from deserialization
+                    KarpenterNodePoolDisruptionBudget {
+                        nodes: "0".to_string(),
+                        reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                        duration: duration_str::parse("24h").expect("24h should be a valid Duration"),
+                        schedule: "0 0 * * *".to_string(),
+                    },
+                ],
+                limits: Some(KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                })
+            }
+        )
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_default_override_is_present() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "default_override": {
+              "limits": {
+                "max_cpu": "6000m",
+                "max_memory": "20Gi"
+              }
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("should be Ok");
+        let default_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .expect("qovery_node_pools should be present")
+            .default_override
+            .expect("default_override should be present");
+        assert_eq!(
+            default_node_pool_override,
+            KarpenterDefaultNodePoolOverride {
+                limits: KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                }
+            }
+        )
     }
 }
