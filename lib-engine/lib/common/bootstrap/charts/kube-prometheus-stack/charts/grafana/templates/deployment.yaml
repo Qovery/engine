@@ -14,7 +14,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if and (not .Values.autoscaling.enabled) (.Values.replicas) }}
+  {{- if (not .Values.autoscaling.enabled) }}
   replicas: {{ .Values.replicas }}
   {{- end }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
@@ -28,7 +28,7 @@ spec:
   template:
     metadata:
       labels:
-        {{- include "grafana.selectorLabels" . | nindent 8 }}
+        {{- include "grafana.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

@@ -20,8 +20,22 @@ charts:
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 62.6.0
+    version: 67.3.1
     comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
+  - name: kube-state-metrics
+    repo_name: prometheus-community
+    version: 5.27.0
+    comment: |
+      Chart upgrade will require 1.25+
+      https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
+  - name: prometheus-adapter
+    repo_name: prometheus-community
+    version: 4.11.0
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
+  - name: prometheus-nginx-exporter
+    repo_name: prometheus-community
+    version: 0.2.2
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: aws-node-termination-handler
     repo_name: aws
     dest: aws-bootstrap
@@ -58,16 +72,6 @@ charts:
     repo_name: metrics-server
     version: 3.12.1
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
-  - name: kube-state-metrics
-    repo_name: prometheus-community
-    version: 5.25.1
-    comment: |
-      Chart upgrade will require 1.25+
-      https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
-  - name: prometheus-adapter
-    repo_name: prometheus-community
-    version: 4.11.0
-    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: loki
     repo_name: grafana
     version: 5.41.4
