@@ -212,7 +212,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
                     .unwrap_or(&cluster.options.gcp_json_credentials.project_id), // If no project set, use the current one
             );
             context.insert("vpc_name", &vpc_name);
-            context.insert("subnetwork", &subnetwork_name);
+            context.insert("subnetwork", subnetwork_name.as_deref().unwrap_or(""));
             context.insert("cluster_ipv4_cidr_block", "");
             context.insert("services_ipv4_cidr_block", "");
             context.insert(
