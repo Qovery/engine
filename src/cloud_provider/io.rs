@@ -1,6 +1,6 @@
 use crate::cloud_provider::helm_charts::nginx_ingress_chart::{
-    LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationHttpSnippet as NginxConfigurationHttpSnippetModel,
-    NginxConfigurationServerSnippet as NginxConfigurationServerSnippetModel,
+    LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationSnippet as NginxConfigurationSnippetModel,
+    NginxHttpSnippet as NginxHttpSnippetModel, NginxServerSnippet as NginxServerSnippetModel,
 };
 use crate::cloud_provider::models::StorageClass as StorageClassModel;
 use crate::models::types::Percentage;
@@ -104,20 +104,29 @@ impl LogFormatEscaping {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
-pub struct NginxConfigurationHttpSnippet(String);
+pub struct NginxHttpSnippet(String);
 
-impl NginxConfigurationHttpSnippet {
-    pub fn to_model(&self) -> NginxConfigurationHttpSnippetModel {
-        NginxConfigurationHttpSnippetModel::new(self.0.to_string())
+impl NginxHttpSnippet {
+    pub fn to_model(&self) -> NginxHttpSnippetModel {
+        NginxHttpSnippetModel::new(self.0.to_string())
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
-pub struct NginxConfigurationServerSnippet(String);
+pub struct NginxServerSnippet(String);
 
-impl NginxConfigurationServerSnippet {
-    pub fn to_model(&self) -> NginxConfigurationServerSnippetModel {
-        NginxConfigurationServerSnippetModel::new(self.0.to_string())
+impl NginxServerSnippet {
+    pub fn to_model(&self) -> NginxServerSnippetModel {
+        NginxServerSnippetModel::new(self.0.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub struct NginxConfigurationSnippet(String);
+
+impl NginxConfigurationSnippet {
+    pub fn to_model(&self) -> NginxConfigurationSnippetModel {
+        NginxConfigurationSnippetModel::new(self.0.to_string())
     }
 }
 
@@ -206,7 +215,9 @@ pub struct ClusterAdvancedSettings {
     )]
     pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.controller.http_snippet")]
-    pub nginx_controller_http_snippet: Option<NginxConfigurationHttpSnippet>,
+    pub nginx_controller_http_snippet: Option<NginxHttpSnippet>,
+    #[serde(alias = "nginx.controller.configuration_snippet")]
+    pub nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
     #[serde(alias = "scaleway.enable_private_network_migration")]
@@ -264,6 +275,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             nginx_controller_http_snippet: None,
+            nginx_controller_configuration_snippet: None,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             gcp_vpc_enable_flow_logs: false,
@@ -461,7 +473,7 @@ mod tests {
     fn test_nginx_server_snippet_to_model() {
         // setup:
         let snippet_json = r#"{"test": "coucou"}"#;
-        let nginx_server_snippet_io = super::NginxConfigurationServerSnippet(snippet_json.to_string());
+        let nginx_server_snippet_io = super::NginxServerSnippet(snippet_json.to_string());
 
         // execute:
         let model = nginx_server_snippet_io.to_model();
@@ -474,10 +486,23 @@ mod tests {
     fn test_nginx_http_snippet_to_model() {
         // setup:
         let snippet_json = r#"{"test": "coucou"}"#;
-        let nginx_http_snippet_io = super::NginxConfigurationHttpSnippet(snippet_json.to_string());
+        let nginx_http_snippet_io = super::NginxHttpSnippet(snippet_json.to_string());
 
         // execute:
         let model = nginx_http_snippet_io.to_model();
+
+        // verify:
+        assert_eq!(snippet_json, model.get_snippet_value());
+    }
+
+    #[test]
+    fn test_nginx_configuration_snippet_to_model() {
+        // setup:
+        let snippet_json = r#"{"test": "coucou"}"#;
+        let nginx_configuration_snippet_io = super::NginxConfigurationSnippet(snippet_json.to_string());
+
+        // execute:
+        let model = nginx_configuration_snippet_io.to_model();
 
         // verify:
         assert_eq!(snippet_json, model.get_snippet_value());

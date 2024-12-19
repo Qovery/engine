@@ -73,6 +73,10 @@ metadata:
 
     {%- if advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      {%- if nginx_ingress_controller_configuration_snippet %}
+      {{ nginx_ingress_controller_configuration_snippet | indent(prefix="      ") }}
+      {%- endif %}
+
       {%- for key, value in advanced_settings.network_ingress_add_headers %}
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}

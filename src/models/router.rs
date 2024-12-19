@@ -164,10 +164,23 @@ impl<T: CloudProvider> Router<T> {
                     .advanced_settings()
                     .network_ingress_nginx_controller_server_snippet
                 {
-                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
                     context.insert(
                         "nginx_ingress_controller_server_snippet",
                         &network_ingress_nginx_controller_server_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
+
+                if let Some(network_ingress_nginx_controller_configuration_snippet) = &application
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_configuration_snippet
+                {
+                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_configuration_snippet",
+                        &network_ingress_nginx_controller_configuration_snippet
                             .to_model()
                             .get_snippet_value(),
                     );
@@ -197,6 +210,19 @@ impl<T: CloudProvider> Router<T> {
                     );
                 }
 
+                if let Some(network_ingress_nginx_controller_configuration_snippet) = &container
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_configuration_snippet
+                {
+                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_configuration_snippet",
+                        &network_ingress_nginx_controller_configuration_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
+
                 (container.kube_name(), container.public_ports())
             } else {
                 let helm_chart = environment
@@ -209,6 +235,32 @@ impl<T: CloudProvider> Router<T> {
                 context.insert("advanced_settings", &helm_chart.advanced_settings());
                 context.insert("associated_service_long_id", &service_id);
                 context.insert("associated_service_type", "helm");
+
+                if let Some(network_ingress_nginx_controller_server_snippet) = &helm_chart
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_server_snippet
+                {
+                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_server_snippet",
+                        &network_ingress_nginx_controller_server_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
+
+                if let Some(network_ingress_nginx_controller_configuration_snippet) = &helm_chart
+                    .advanced_settings()
+                    .network_ingress_nginx_controller_configuration_snippet
+                {
+                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
+                    context.insert(
+                        "nginx_ingress_controller_configuration_snippet",
+                        &network_ingress_nginx_controller_configuration_snippet
+                            .to_model()
+                            .get_snippet_value(),
+                    );
+                }
 
                 (helm_chart.kube_name(), helm_chart.public_ports())
             };

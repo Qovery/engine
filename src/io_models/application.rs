@@ -12,7 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::io::NginxConfigurationServerSnippet;
+use crate::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::cloud_provider::models::{
     CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
 };
@@ -170,7 +170,9 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
-    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationServerSnippet>,
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
@@ -228,6 +230,7 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_nginx_limit_rpm: None,
             network_ingress_nginx_limit_burst_multiplier: None,
             hpa_cpu_average_utilization_percent: 60,
@@ -278,6 +281,9 @@ impl ApplicationAdvancedSettings {
             network_ingress_nginx_limit_burst_multiplier: self.network_ingress_nginx_limit_burst_multiplier,
             network_ingress_nginx_controller_server_snippet: self
                 .network_ingress_nginx_controller_server_snippet
+                .clone(),
+            network_ingress_nginx_controller_configuration_snippet: self
+                .network_ingress_nginx_controller_configuration_snippet
                 .clone(),
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
             hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,

@@ -1,5 +1,5 @@
 use super::{PodAntiAffinity, UpdateStrategy};
-use crate::cloud_provider::io::NginxConfigurationServerSnippet;
+use crate::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::cloud_provider::kubernetes::Kubernetes;
 use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cloud_provider::{CloudProvider, Kind as CPKind};
@@ -276,7 +276,9 @@ pub struct ContainerAdvancedSettings {
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
-    pub network_ingress_nginx_controller_server_snippet: Option<NginxConfigurationServerSnippet>,
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
@@ -333,6 +335,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_nginx_limit_rpm: None,
             network_ingress_nginx_limit_burst_multiplier: None,
             network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
