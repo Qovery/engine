@@ -61,7 +61,9 @@ resource "google_container_cluster" "primary" {
     }
   }
 
+  {% if subnetwork %}
   subnetwork = "projects/${local.network_project_id}/regions/${local.region}/subnetworks/${var.subnetwork}"
+  {% endif %}
 
   default_snat_status {
     disabled = var.disable_default_snat
