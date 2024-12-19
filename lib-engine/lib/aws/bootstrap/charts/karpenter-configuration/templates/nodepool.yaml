@@ -28,4 +28,9 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     budgets:
     - nodes: 10%
+  {{- if not (and (empty .Values.defaultNodePool.limits.maxCpu) (empty .Values.defaultNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.defaultNodePool.limits.maxCpu }}
+    memory: {{ .Values.defaultNodePool.limits.maxMemory }}
+  {{- end }}
   weight: 50
