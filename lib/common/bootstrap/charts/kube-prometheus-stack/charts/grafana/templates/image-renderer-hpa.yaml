@@ -7,7 +7,6 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ include "grafana.name" . }}-image-renderer
     helm.sh/chart: {{ include "grafana.chart" . }}
-    app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
   scaleTargetRef:

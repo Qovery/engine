@@ -46,6 +46,7 @@ spec:
       {{- with .Values.imageRenderer.serviceAccountName }}
       serviceAccountName: "{{ . }}"
       {{- end }}
+      automountServiceAccountToken: {{ .Values.imageRenderer.automountServiceAccountToken }}
       {{- with .Values.imageRenderer.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
