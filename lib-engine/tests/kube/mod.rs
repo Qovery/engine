@@ -5,8 +5,9 @@ use crate::helpers::utilities::{
     context_for_resource, generate_id, get_svc_name, logger, metrics_registry, FuncTestsSecrets,
 };
 use chrono::Utc;
-use qovery_engine::cloud_provider::Kind::Aws;
-use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::environment::models::aws::AwsStorageType;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::cloud_provider::Kind::Aws;
 use qovery_engine::io_models::application::{Application, Port, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
@@ -15,7 +16,6 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::{Action, QoveryIdentifier};
-use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use url::Url;

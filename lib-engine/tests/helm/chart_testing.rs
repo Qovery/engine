@@ -4,7 +4,7 @@ use crate::helm::{
 };
 use kube::core::DynamicObject;
 use qovery_engine::cmd::helm::Helm;
-use qovery_engine::deployment_action::deploy_helm::HelmDeployment;
+use qovery_engine::environment::action::deploy_helm::HelmDeployment;
 use qovery_engine::helm::CommonChart;
 use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use std::collections::HashMap;

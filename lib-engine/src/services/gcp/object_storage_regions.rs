@@ -1,6 +1,6 @@
-use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::models::ToCloudProviderFormat;
-use crate::object_storage::StorageRegion;
+use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use crate::infrastructure::models::object_storage::StorageRegion;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;
@@ -199,8 +199,8 @@ impl FromStr for GcpStorageRegion {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::gcp::locations::GcpRegion;
-    use crate::models::ToCloudProviderFormat;
+    use crate::environment::models::ToCloudProviderFormat;
+    use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
     use crate::services::gcp::object_storage_regions::GcpStorageRegion;
     use std::str::FromStr;
     use strum::IntoEnumIterator;

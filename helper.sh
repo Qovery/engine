@@ -429,8 +429,7 @@ function update_qovery_chart() {
 
   git clone git@github.com:Qovery/qovery-chart.git qovery-chart
   # generate chart
-  cargo test --package qovery-engine --lib --all-features -- cloud_provider::self_managed::chart_gen::tests::generate_helm_chart
-  WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib cargo test --package qovery-engine --lib --all-features -- cloud_provider::self_managed::chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
+  WORKSPACE_ROOT_DIR=/builds/qovery/backend/engine/lib-engine LIB_ROOT_DIR=$WORKSPACE_ROOT_DIR/lib cargo test --package qovery-engine --lib --all-features -- byok_chart_gen::tests::generate_helm_chart --exact --nocapture --ignored
   # copy chart to github chart repo
   set -x
   rm -Rf qovery-chart/charts

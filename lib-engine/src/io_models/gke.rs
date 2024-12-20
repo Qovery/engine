@@ -1,8 +1,8 @@
-use crate::cloud_provider::gcp::kubernetes::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
-use crate::cloud_provider::models::VpcQoveryNetworkMode;
-use crate::cloud_provider::qovery::EngineLocation;
-use crate::models::gcp::io::JsonCredentials;
-use crate::models::gcp::JsonCredentials as GkeJsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials;
+use crate::environment::models::gcp::JsonCredentials as GkeJsonCredentials;
+use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
+use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::models::VpcQoveryNetworkMode;
 use ipnet::IpNet;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
@@ -152,8 +152,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_provider::gcp::kubernetes::VpcMode as GkeVpcMode;
-    use crate::cloud_provider::qovery::EngineLocation;
+    use crate::io_models::engine_location::EngineLocation;
     use ipnet::IpNet;
     use std::str::FromStr;
 

@@ -1,4 +1,4 @@
-use crate::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::application::GitCredentials;
 use anyhow::anyhow;
 use std::collections::HashMap;

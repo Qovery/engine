@@ -1,7 +1,7 @@
-use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::container_registry::{DockerImage, Repository};
-use crate::models::gcp::JsonCredentials;
-use crate::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::runtime::block_on;
 use crate::services::gcp::google_cloud_sdk_types::{from_gcp_repository, new_gcp_credentials_file_from_credentials};
 use google_cloud_artifact_registry::client::{Client, ClientConfig};

@@ -3,8 +3,8 @@ use crate::grpc::engine::{ClusterCredentialsUpdate, GitTokenRequest, ServiceVers
 use crate::tokio_utils::block_on;
 use anyhow::Context;
 use chrono::DateTime;
-use qovery_engine::cloud_provider::service::ServiceType;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::io_models::application::GitCredentials;
 use std::future::Future;
 use std::thread;

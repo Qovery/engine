@@ -15,12 +15,12 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::models::kubernetes::{K8sDeployment, K8sMutatingWebhookConfiguration};
+use crate::environment::models::kubernetes::{K8sDeployment, K8sMutatingWebhookConfiguration};
+use crate::environment::models::kubernetes::{K8sPod, K8sSecret, K8sService, K8sStatefulset};
 use crate::utilities::create_kube_client_in_cluster;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
-    models::kubernetes::{K8sPod, K8sSecret, K8sService, K8sStatefulset},
     runtime::block_on,
     utilities::create_kube_client,
 };

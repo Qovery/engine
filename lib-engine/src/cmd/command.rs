@@ -6,7 +6,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 
 use crate::cmd::command::CommandError::{ExecutionError, ExitStatusError, Killed, TimeoutError};
 
-use crate::models::abort::Abort;
+use crate::environment::models::abort::Abort;
 use itertools::Itertools;
 use std::time::{Duration, Instant};
 use timeout_readwrite::TimeoutReader;
@@ -423,7 +423,7 @@ mod tests {
     use crate::cmd::command::{
         does_binary_exist, run_version_command_for, CommandError, CommandKiller, ExecutableCommand, QoveryCommand,
     };
-    use crate::models::abort::{AbortStatus, AtomicAbortStatus};
+    use crate::environment::models::abort::{AbortStatus, AtomicAbortStatus};
     use std::sync::atomic::Ordering;
     use std::sync::{Arc, Barrier};
     use std::thread;

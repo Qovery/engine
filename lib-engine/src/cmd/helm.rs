@@ -1694,7 +1694,7 @@ impl Drop for HelmRegistry<'_> {
 mod tests {
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
-    use crate::deployment_action::deploy_helm::default_helm_timeout;
+    use crate::environment::action::deploy_helm::default_helm_timeout;
     use crate::helm::{ChartInfo, ChartSetValue};
     use crate::io_models::container::Registry::GenericCr;
     use semver::Version;

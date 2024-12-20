@@ -1,9 +1,9 @@
-use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::container_registry::{DockerImage, Repository};
-use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use crate::models::gcp::{CredentialsError, JsonCredentials};
-use crate::models::ToCloudProviderFormat;
-use crate::object_storage::{Bucket, BucketRegion};
+use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::environment::models::gcp::{CredentialsError, JsonCredentials};
+use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use crate::infrastructure::models::container_registry::{DockerImage, Repository};
+use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
 use crate::runtime::block_on;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_auth::credentials::CredentialsFile;

@@ -73,7 +73,7 @@ mod tests {
     #[cfg(feature = "test-local-kube")]
     pub fn test_chart_dot_yaml_generation() {
         use super::ChartDotYaml;
-        use crate::cloud_provider::kubernetes::KubernetesVersion;
+        use crate::infrastructure::models::kubernetes::KubernetesVersion;
         use semver::Version;
 
         // Without dependencies

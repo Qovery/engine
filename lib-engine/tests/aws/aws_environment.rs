@@ -11,14 +11,15 @@ use bstr::ByteSlice;
 use k8s_openapi::api::batch::v1::CronJob;
 use kube::api::ListParams;
 use kube::Api;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::engine::general_purpose;
 use base64::Engine;
 use k8s_openapi::api::core::v1::ConfigMap;
+use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
@@ -31,7 +32,6 @@ use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
-use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
@@ -1223,7 +1223,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_sticky_session() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1340,7 +1340,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1472,7 +1472,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {

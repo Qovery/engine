@@ -42,14 +42,14 @@ use crate::grpc::GrpcEngineClient;
 use crate::models::TaskSelector;
 use crate::utils::check_libs_directory;
 use qovery_engine::cmd::docker::Docker;
-use qovery_engine::engine_task::environment_task::EnvironmentTask;
-use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::Task;
+use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::{
     EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
 };
-use qovery_engine::initialize_git_opts;
+use qovery_engine::git_initialize_opts;
+use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::log_file_writer::LogFileWriter;
@@ -284,7 +284,7 @@ pub fn main() -> io::Result<()> {
     }
 
     info!("Setting git opts for timeout config");
-    initialize_git_opts(Duration::from_secs(10), Duration::from_secs(20));
+    git_initialize_opts(Duration::from_secs(10), Duration::from_secs(20));
 
     // ensure docker host is reachable to avoid error like: ERROR: Cannot connect to the Docker daemon at tcp://0.0.0.0:2375. Is the docker daemon running?
     // docker daemon is slower to start than the engine

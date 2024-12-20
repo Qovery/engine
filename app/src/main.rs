@@ -21,10 +21,10 @@ use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd::docker::Docker;
-use qovery_engine::engine_task::environment_task::EnvironmentTask;
-use qovery_engine::engine_task::infrastructure_task::InfrastructureTask;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
 use qovery_engine::engine_task::Task;
+use qovery_engine::environment::task::EnvironmentTask;
+use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::MetricsRegistry;

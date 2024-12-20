@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
 use crate::byok_chart_gen::values_dot_yaml::{BuildContainer, QoveryEngine};
-use semver::Version;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -17,14 +16,12 @@ use super::{
 
 #[derive(Error, Debug)]
 pub enum ChartDotYamlError {
-    #[error("semver version not valid: {0}")]
-    SemVerParseError(semver::Error),
     #[error("yaml error: {0}")]
-    SerdeYamlError(serde_yaml::Error),
+    SerdeYaml(serde_yaml::Error),
     #[error("read file error: {0}")]
-    ReadFileError(std::io::Error),
+    ReadFile(std::io::Error),
     #[error("write file error: {0}")]
-    WriteFileError(std::io::Error),
+    WriteFile(std::io::Error),
 }
 
 // https://helm.sh/docs/topics/charts/#the-chartyaml-file
@@ -50,32 +47,6 @@ pub struct ChartDotYaml {
 }
 
 impl ChartDotYaml {
-    pub fn to_model(&self) -> Result<chart_dot_yaml::ChartDotYaml, ChartDotYamlError> {
-        let dependencies = match self.dependencies.as_ref() {
-            Some(x) => {
-                let mut deps = Vec::with_capacity(x.len());
-                for dep in x {
-                    deps.push(dep.to_model()?);
-                }
-                Some(deps)
-            }
-            None => None,
-        };
-
-        Ok(chart_dot_yaml::ChartDotYaml {
-            api_version: self.api_version.to_model(),
-            name: self.name.clone(),
-            description: self.description.clone(),
-            dependencies,
-            r#type: self.r#type.clone().map(|t| t.to_model()),
-            version: Version::parse(self.version.as_str()).map_err(ChartDotYamlError::SemVerParseError)?,
-            app_version: Version::parse(self.app_version.as_str()).map_err(ChartDotYamlError::SemVerParseError)?,
-            kube_version: self.kube_version.clone(),
-            home: self.home.clone(),
-            icon: self.icon.clone(),
-        })
-    }
-
     pub fn from_model(model: chart_dot_yaml::ChartDotYaml) -> Self {
         Self {
             api_version: ChartDotYamlApiVersion::from_model(model.api_version),
@@ -101,8 +72,8 @@ impl ChartDotYaml {
         for chart_meta in qovery_chart.charts_source_path {
             let chart_file_path = format!("{prefix}/{}/{}/Chart.yaml", chart_meta.source_path, chart_meta.name);
             println!("for chart.yaml, parsing: {chart_file_path}");
-            let f = std::fs::File::open(chart_file_path).map_err(ChartDotYamlError::ReadFileError)?;
-            let chart_version: ChartDotYaml = serde_yaml::from_reader(f).map_err(ChartDotYamlError::SerdeYamlError)?;
+            let f = std::fs::File::open(chart_file_path).map_err(ChartDotYamlError::ReadFile)?;
+            let chart_version: ChartDotYaml = serde_yaml::from_reader(f).map_err(ChartDotYamlError::SerdeYaml)?;
 
             deps.push(ChartDotYamlDependencies {
                 name: chart_meta.name.to_string(),
@@ -141,8 +112,8 @@ impl ChartDotYaml {
 
     pub fn save_to_file(&self, destination: &Path) -> Result<(), ChartDotYamlError> {
         let file_destination = format!("{}/Chart.yaml", destination.to_string_lossy());
-        let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFileError)?;
-        serde_yaml::to_writer(f, &self).map_err(ChartDotYamlError::SerdeYamlError)?;
+        let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFile)?;
+        serde_yaml::to_writer(f, &self).map_err(ChartDotYamlError::SerdeYaml)?;
         Ok(())
     }
 }
@@ -473,8 +444,8 @@ impl ValuesFile {
 
     pub fn save_to_file(&self, destination: &Path, filename: String) -> Result<(), ChartDotYamlError> {
         let file_destination = format!("{}/{filename}", destination.to_string_lossy());
-        let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFileError)?;
-        serde_yaml::to_writer(f, &self).map_err(ChartDotYamlError::SerdeYamlError)?;
+        let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFile)?;
+        serde_yaml::to_writer(f, &self).map_err(ChartDotYamlError::SerdeYaml)?;
         Ok(())
     }
 }
@@ -489,13 +460,6 @@ pub enum ChartDotYamlApiVersion {
 }
 
 impl ChartDotYamlApiVersion {
-    pub fn to_model(&self) -> chart_dot_yaml::ChartDotYamlApiVersion {
-        match self {
-            ChartDotYamlApiVersion::V1 => chart_dot_yaml::ChartDotYamlApiVersion::V1,
-            ChartDotYamlApiVersion::V2 => chart_dot_yaml::ChartDotYamlApiVersion::V2,
-        }
-    }
-
     pub fn from_model(model: chart_dot_yaml::ChartDotYamlApiVersion) -> Self {
         match model {
             chart_dot_yaml::ChartDotYamlApiVersion::V1 => ChartDotYamlApiVersion::V1,
@@ -516,16 +480,6 @@ pub struct ChartDotYamlDependencies {
 }
 
 impl ChartDotYamlDependencies {
-    pub fn to_model(&self) -> Result<chart_dot_yaml::ChartDotYamlDependencies, ChartDotYamlError> {
-        Ok(chart_dot_yaml::ChartDotYamlDependencies {
-            name: self.name.clone(),
-            alias: self.alias.clone(),
-            condition: format!("services.{}", self.condition),
-            version: Version::parse(self.version.as_str()).map_err(ChartDotYamlError::SemVerParseError)?,
-            repository: self.repository.clone(),
-        })
-    }
-
     pub fn from_model(model: chart_dot_yaml::ChartDotYamlDependencies) -> Self {
         Self {
             name: model.name,
@@ -544,12 +498,6 @@ pub enum ChartDotYamlType {
 }
 
 impl ChartDotYamlType {
-    pub fn to_model(&self) -> chart_dot_yaml::ChartDotYamlType {
-        match self {
-            ChartDotYamlType::Application => chart_dot_yaml::ChartDotYamlType::Application,
-        }
-    }
-
     pub fn from_model(model: chart_dot_yaml::ChartDotYamlType) -> Self {
         match model {
             chart_dot_yaml::ChartDotYamlType::Application => ChartDotYamlType::Application,

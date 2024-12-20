@@ -491,7 +491,7 @@ mod test {
 
     use qovery_engine::events::EngineEvent;
 
-    use qovery_engine::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
+    use qovery_engine::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex, RwLock};

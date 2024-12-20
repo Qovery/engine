@@ -1,7 +1,7 @@
-use crate::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
-use crate::models::gcp::JsonCredentials;
-use crate::models::ToCloudProviderFormat;
-use crate::object_storage::{Bucket, BucketObject};
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
+use crate::infrastructure::models::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
 use crate::services::gcp::cloud_job_service::CloudJobService;
 use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;

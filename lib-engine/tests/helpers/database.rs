@@ -11,41 +11,41 @@ use core::default::Default;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
+use qovery_engine::environment::models::environment::Environment;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use qovery_engine::io_models::engine_location::EngineLocation;
 
-use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::io_models::application::{Application, Port, Protocol};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
-use qovery_engine::cloud_provider::models::CpuArchitecture;
-use qovery_engine::cloud_provider::service::Service;
-use qovery_engine::deployment_report::logger::EnvLogger;
-use qovery_engine::engine_task::environment_task::{DeploymentOption, EnvironmentTask};
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::report::logger::EnvLogger;
+use qovery_engine::environment::task::{DeploymentOption, EnvironmentTask};
 use qovery_engine::events::EnvironmentStep;
+use qovery_engine::infrastructure::models::cloud_provider::service::Service;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::models::CpuArchitecture;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use qovery_engine::models::database::DatabaseInstanceType;
 
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
-use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::environment::models::types::VersionsNumber;
 use qovery_engine::errors::EngineError;
-use qovery_engine::models::abort::AbortStatus;
-use qovery_engine::models::types::VersionsNumber;
+use qovery_engine::infrastructure::models::kubernetes::gcp::Gke;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
@@ -108,7 +108,7 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Create;
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Create;
         EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
@@ -126,7 +126,7 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Pause;
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Pause;
         EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
@@ -144,7 +144,7 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Delete;
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Delete;
         EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
@@ -162,7 +162,7 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Restart;
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Restart;
         EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 }

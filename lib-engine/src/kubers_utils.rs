@@ -1,5 +1,5 @@
-use crate::cloud_provider::models::InvalidPVCStorage;
 use crate::errors::CommandError;
+use crate::io_models::models::InvalidPVCStorage;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use k8s_openapi::NamespaceResourceScope;
