@@ -13,9 +13,9 @@ use crate::helpers::utilities::{
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};

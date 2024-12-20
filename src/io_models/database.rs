@@ -1,16 +1,16 @@
-use crate::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use crate::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
-use crate::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
+use crate::environment::models;
+use crate::environment::models::database::{
+    Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
+};
+use crate::environment::models::types::{CloudProvider as CloudProviderTrait, GCP};
+use crate::environment::models::types::{OnPremise, VersionsNumber, AWS, SCW};
+use crate::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
+use crate::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
+use crate::infrastructure::models::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::Action;
-use crate::models;
-use crate::models::database::{
-    Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
-};
-use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
-use crate::models::types::{OnPremise, VersionsNumber, AWS, SCW};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};

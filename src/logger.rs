@@ -1,4 +1,4 @@
-use crate::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
+use crate::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use crate::events::{EngineEvent, EventMessageVerbosity};
 use tokio::sync::mpsc::UnboundedSender;
 use tracing;
@@ -119,10 +119,10 @@ impl Logger for UnboundedSenderLogger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cloud_provider::Kind;
     use crate::errors;
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use tracing_test::traced_test;
     use url::Url;

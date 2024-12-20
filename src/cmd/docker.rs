@@ -1,5 +1,5 @@
-use crate::cloud_provider::models::CpuArchitecture;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
+use crate::io_models::models::CpuArchitecture;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 use std::cmp::max;

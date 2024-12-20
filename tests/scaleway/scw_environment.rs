@@ -9,13 +9,14 @@ use crate::helpers::utilities::{
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use bstr::ByteSlice;
-use qovery_engine::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::engine::general_purpose;
 use base64::Engine;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
+use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
@@ -25,7 +26,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
@@ -1206,7 +1206,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1337,7 +1337,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1480,7 +1480,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {

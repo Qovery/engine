@@ -11,32 +11,32 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
-use crate::cloud_provider::models::{
-    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
-};
-use crate::cloud_provider::service::ServiceType;
-use crate::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::models;
+use crate::environment::models::application::{ApplicationError, ApplicationService};
+use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::scaleway::ScwAppExtraSettings;
+use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::infrastructure::models::container_registry::ContainerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
+use crate::io_models::models::{
+    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
+};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
     MountedFile, QoveryIdentifier,
 };
-use crate::models;
-use crate::models::application::{ApplicationError, ApplicationService};
-use crate::models::aws::AwsAppExtraSettings;
-use crate::models::gcp::GcpAppExtraSettings;
-use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 
 use super::{PodAntiAffinity, UpdateStrategy};
@@ -600,8 +600,8 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn to_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
+    pub fn to_storage(&self) -> crate::io_models::models::Storage {
+        crate::io_models::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),

@@ -3,23 +3,23 @@ pub mod io;
 extern crate derivative;
 extern crate url;
 
-use crate::build_platform::BuildError;
-use crate::cloud_provider::service::DatabaseType;
-use crate::cloud_provider::Kind;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
-use crate::container_registry::errors::ContainerRegistryError;
 use crate::helm::HelmChartError;
+use crate::infrastructure::models::build_platform::BuildError;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
+use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 
-use crate::cloud_provider::io::InputError;
-use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::{command, terraform};
+use crate::environment::models::database::DatabaseError;
+use crate::environment::models::router::RouterError;
+use crate::environment::models::types::VersionsNumber;
 use crate::events::{EventDetails, Stage};
-use crate::models::database::DatabaseError;
-use crate::models::router::RouterError;
-use crate::models::types::VersionsNumber;
-use crate::object_storage::errors::ObjectStorageError;
+use crate::infrastructure::models::cloud_provider::io::InputError;
+use crate::infrastructure::models::kubernetes::KubernetesError;
+use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
 use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
 use aws_sdk_ec2::error::SdkError as Ec2SdkError;
@@ -5111,9 +5111,9 @@ impl Display for EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::Kind;
     use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
 

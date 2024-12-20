@@ -5,12 +5,12 @@ use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::models::CpuArchitecture;
-use qovery_engine::cloud_provider::models::VpcQoveryNetworkMode::WithNatGateways;
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::ToCloudProviderFormat;
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+use qovery_engine::io_models::models::CpuArchitecture;
+use qovery_engine::io_models::models::VpcQoveryNetworkMode::WithNatGateways;
 use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 

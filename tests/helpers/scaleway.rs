@@ -11,26 +11,26 @@ use crate::helpers::kubernetes::{
     get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
 };
 use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
-use qovery_engine::build_platform::Build;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
-use qovery_engine::cloud_provider::scaleway::kubernetes::{KapsuleClusterType, KapsuleOptions};
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::{CloudProvider, TerraformStateCredentials};
-use qovery_engine::container_registry::errors::ContainerRegistryError;
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::container_registry::ContainerRegistry;
-use qovery_engine::dns_provider::DnsProvider;
-use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
+use qovery_engine::environment::models::scaleway::{ScwStorageType, ScwZone};
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::build_platform::Build;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
+use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
+use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
+use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
+use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use qovery_engine::models::scaleway::{ScwStorageType, ScwZone};
 
 pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_30 {
     prefix: None,

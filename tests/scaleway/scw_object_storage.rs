@@ -3,9 +3,9 @@ use function_name::named;
 use std::time::Duration;
 
 use crate::helpers::scaleway::SCW_BUCKET_TTL_IN_SECONDS;
-use qovery_engine::models::scaleway::ScwZone;
-use qovery_engine::object_storage::scaleway_object_storage::ScalewayOS;
-use qovery_engine::object_storage::{BucketDeleteStrategy, ObjectStorage};
+use qovery_engine::environment::models::scaleway::ScwZone;
+use qovery_engine::infrastructure::models::object_storage::scaleway_object_storage::ScalewayOS;
+use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use tempfile::NamedTempFile;
 use tracing::log::info;
 use tracing::{span, Level};

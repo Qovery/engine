@@ -27,10 +27,6 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
 
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
@@ -38,11 +34,18 @@ use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
 };
-use qovery_engine::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
-use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
+use qovery_engine::environment::models::aws::AwsStorageType;
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::build_platform::local_docker::LocalDocker;
+use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -50,9 +53,6 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
-use qovery_engine::models::aws::AwsStorageType;
-use qovery_engine::models::database::DatabaseInstanceType;
-use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::msg_publisher::StdMsgPublisher;
 
 use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};

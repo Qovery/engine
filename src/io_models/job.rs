@@ -1,29 +1,29 @@
-use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::kubernetes::Kubernetes;
-use crate::cloud_provider::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
-use crate::cloud_provider::service::ServiceType;
-use crate::cloud_provider::{CloudProvider, Kind};
-use crate::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::models;
+use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::job::{ImageSource, JobError, JobService};
+use crate::environment::models::registry_image_source::RegistryImageSource;
+use crate::environment::models::scaleway::ScwAppExtraSettings;
+use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
+use crate::infrastructure::models::container_registry::{ContainerRegistry, ContainerRegistryInfo};
+use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, GitCredentials};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
+use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
     MountedFile, QoveryIdentifier,
 };
-use crate::models;
-use crate::models::aws::AwsAppExtraSettings;
-use crate::models::gcp::GcpAppExtraSettings;
-use crate::models::job::{ImageSource, JobError, JobService};
-use crate::models::registry_image_source::RegistryImageSource;
-use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
 use base64::Engine;

@@ -3,7 +3,7 @@ use semver::Version;
 use std::path::Path;
 use url::Url;
 
-use crate::cloud_provider::kubernetes::KubernetesVersion;
+use crate::infrastructure::models::kubernetes::KubernetesVersion;
 
 use self::chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType};
 use self::values_dot_yaml::ChartCategory;
@@ -74,14 +74,13 @@ impl PartialEq for ChartMeta {
     }
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Display, PartialEq, Ord, PartialOrd, Eq, Debug)]
 pub enum ChartSourcePath {
     #[display("lib/aws/bootstrap/charts")]
     AwsBootstrapCharts,
     #[display("lib/common/bootstrap/charts")]
     CommonBoostrapCharts,
-    #[display("lib/common/charts")]
-    CommonCharts,
     #[display("lib/gcp/bootstrap/charts")]
     GcpBootstrapCharts,
     #[display("lib/scaleway/bootstrap/charts")]
@@ -89,6 +88,7 @@ pub enum ChartSourcePath {
 }
 
 #[derive(Clone, Display, PartialEq, Eq, Ord, PartialOrd, Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum ValuesSourcePath {
     #[display("lib/aws/bootstrap/chart_values")]
     AwsBootstrapChartValues,
@@ -348,7 +348,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
@@ -444,7 +444,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
@@ -533,7 +533,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
@@ -616,7 +616,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
@@ -699,7 +699,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
@@ -782,7 +782,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
@@ -859,7 +859,7 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::ExternalDNS,
-                category: ChartCategory::DNS,
+                category: ChartCategory::Dns,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },

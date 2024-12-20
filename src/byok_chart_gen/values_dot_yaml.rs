@@ -12,7 +12,7 @@ pub enum ChartCategory {
     #[display("ingress")]
     Ingress,
     #[display("dns")]
-    DNS,
+    Dns,
     #[display("logging")]
     Logging,
     #[display("certificates")]

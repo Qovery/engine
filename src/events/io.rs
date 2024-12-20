@@ -314,10 +314,10 @@ impl From<events::EventDetails> for EventDetails {
 
 #[cfg(test)]
 mod test {
-    use crate::cloud_provider::Kind;
     use crate::errors::EngineError;
     use crate::events::io::EngineEvent as EngineEventIo;
     use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
 

@@ -1,4 +1,4 @@
-use crate::models::types::Percentage;
+use crate::environment::models::types::Percentage;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer};
 use std::fmt;

@@ -4,11 +4,11 @@ use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::models::{CpuArchitecture, VpcQoveryNetworkMode};
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::ToCloudProviderFormat;
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::utilities::to_short_id;
 
 #[cfg(any(feature = "test-gcp-infra", feature = "test-gcp-infra-upgrade"))]

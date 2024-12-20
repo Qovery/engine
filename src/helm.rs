@@ -1,4 +1,3 @@
-use crate::cloud_provider::qovery::EngineLocation;
 use crate::cmd::helm::{Helm, HelmError};
 use crate::cmd::helm_utils::{
     apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade, update_crds_on_upgrade,
@@ -7,6 +6,7 @@ use crate::cmd::helm_utils::{
 use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
 use crate::errors::{CommandError, EngineError};
 use crate::helm::HelmAction::Deploy;
+use crate::io_models::engine_location::EngineLocation;
 
 use semver::Version;
 use serde_derive::{Deserialize, Serialize};
@@ -15,11 +15,11 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
-use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::cmd::command::CommandKiller;
-use crate::deployment_action::deploy_helm::default_helm_timeout;
+use crate::environment::action::deploy_helm::default_helm_timeout;
 use crate::events::EventDetails;
-use crate::infrastructure_tasks::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
+use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::fs;
 
 #[derive(Error, Debug, Clone)]
@@ -506,21 +506,19 @@ pub trait HelmChart: Send {
                     return Ok(payload);
                 }
 
-                let upgrade_status = match prepare_chart_backup_on_upgrade(
+                let upgrade_status = prepare_chart_backup_on_upgrade(
                     kubernetes_config,
                     chart_info.clone(),
                     envs,
                     installed_chart_version,
-                ) {
-                    Ok(status) => status,
-                    Err(e) => {
-                        warn!("error while trying to prepare backup: {:?}", e);
-                        BackupStatus {
-                            is_backupable: false,
-                            backup_path: PathBuf::new(),
-                        }
+                )
+                .unwrap_or_else(|e| {
+                    warn!("error while trying to prepare backup: {:?}", e);
+                    BackupStatus {
+                        is_backupable: false,
+                        backup_path: PathBuf::new(),
                     }
-                };
+                });
 
                 // Verify that we don't need to upgrade the CRDS
                 update_crds_on_upgrade(kubernetes_config, chart_info.clone(), envs, &helm)?;
@@ -903,9 +901,9 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::models::KubernetesCpuResourceUnit;
-    use crate::cloud_provider::models::KubernetesMemoryResourceUnit;
     use crate::helm::{CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaTargetRefApiVersion, VpaTargetRefKind};
+    use crate::io_models::models::KubernetesCpuResourceUnit;
+    use crate::io_models::models::KubernetesMemoryResourceUnit;
 
     use super::{ChartInfo, VpaConfig, VpaContainerPolicy, VpaTargetRef};
 
