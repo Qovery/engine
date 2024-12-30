@@ -16,6 +16,7 @@ use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use reqwest::StatusCode;
 use tera::{Context, Tera};
 
 #[derive(Clone)]
@@ -83,6 +84,18 @@ impl NginxServerSnippet {
     }
 }
 
+pub struct NginxLimitRequestStatusCode(StatusCode);
+
+impl NginxLimitRequestStatusCode {
+    pub fn new(status_code: StatusCode) -> Self {
+        NginxLimitRequestStatusCode(status_code)
+    }
+
+    pub fn as_u16(&self) -> u16 {
+        self.0.as_u16()
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -108,6 +121,7 @@ pub struct NginxIngressChart {
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
     http_snippet: Option<NginxHttpSnippet>,
+    limit_request_status_code: Option<NginxLimitRequestStatusCode>,
 }
 
 impl NginxIngressChart {
@@ -135,6 +149,7 @@ impl NginxIngressChart {
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
         http_snippet: Option<NginxHttpSnippet>,
+        limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -185,6 +200,7 @@ impl NginxIngressChart {
             log_format_escaping,
             is_alb_enabled,
             http_snippet,
+            limit_request_status_code,
         }
     }
 
@@ -316,6 +332,12 @@ defaultBackend:
             chart_set_values.push(ChartSetValue {
                 key: "controller.autoscaling.targetCPUUtilizationPercentage".to_string(),
                 value: value.to_string(),
+            })
+        }
+        if let Some(value) = &self.limit_request_status_code {
+            chart_set_values_string.push(ChartSetValue {
+                key: "controller.config.limit-request-status-code".to_string(),
+                value: value.as_u16().to_string(),
             })
         }
         if let Some(value) = &self.http_snippet {
@@ -549,6 +571,7 @@ mod tests {
             LogFormatEscaping::Default,
             false,
             None,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -596,6 +619,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
             None,
         );
 
@@ -646,6 +670,7 @@ mod tests {
                 true,
                 log_format_escaping.clone(),
                 false,
+                None,
                 None,
             );
 
@@ -700,6 +725,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
             None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
