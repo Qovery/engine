@@ -1,8 +1,8 @@
-use crate::cloud_provider::gcp::locations::GcpRegion;
 use crate::cmd::command::ExecutableCommand;
 use crate::cmd::command::QoveryCommand;
-use crate::models::gcp::JsonCredentials;
-use crate::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::services::gcp::auth_service::GoogleAuthService;
 use std::collections::HashMap;
 use thiserror::Error;

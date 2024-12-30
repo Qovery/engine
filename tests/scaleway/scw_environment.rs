@@ -9,13 +9,14 @@ use crate::helpers::utilities::{
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use bstr::ByteSlice;
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::cmd::kubectl::kubectl_get_secret;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::engine::general_purpose;
 use base64::Engine;
+use qovery_engine::cmd::kubectl::kubectl_get_secret;
+use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
@@ -25,7 +26,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
@@ -420,95 +420,6 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 
         // Cleanup
         let result = environment.delete_environment(&env_action, &infra_ctx_for_delete);
-        assert!(result.is_ok());
-
-        if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
-        }
-
-        test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[ignore] // we don't want to support buildpack in middle term, and we know this one randomly fails
-#[test]
-fn scaleway_kapsule_build_with_buildpacks_and_deploy_a_working_environment() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name,);
-        let _enter = span.enter();
-
-        let logger = logger();
-        let metrics_registry = metrics_registry();
-        let secrets = FuncTestsSecrets::new();
-        let context = context_for_resource(
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
-                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
-            secrets
-                .SCALEWAY_TEST_CLUSTER_LONG_ID
-                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID"),
-        );
-        let region = ScwZone::from_str(
-            secrets
-                .SCALEWAY_TEST_CLUSTER_REGION
-                .as_ref()
-                .expect("SCALEWAY_TEST_CLUSTER_REGION is not set")
-                .to_string()
-                .as_str(),
-        )
-        .expect("Unknown SCW region");
-        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
-            kubeconfig: secrets
-                .SCALEWAY_TEST_KUBECONFIG_b64
-                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
-                .to_string(),
-        };
-        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry.clone());
-        let context_for_delete = context.clone_not_same_execution_id();
-        let infra_ctx_for_delete = scw_infra_config(
-            &target_cluster_scw_test,
-            &context_for_delete,
-            logger.clone(),
-            metrics_registry.clone(),
-        );
-        let mut environment = helpers::environment::working_minimal_environment(&context);
-        environment.applications = environment
-            .applications
-            .into_iter()
-            .map(|mut app| {
-                app.ports = vec![Port {
-                    long_id: Default::default(),
-                    port: 3000,
-                    name: "p3000".to_string(),
-                    is_default: true,
-                    publicly_accessible: true,
-                    protocol: Protocol::HTTP,
-                    service_name: None,
-                    namespace: None,
-                    additional_service: None,
-                }];
-                app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
-                app.branch = "simple-node-app".to_string();
-                app.dockerfile_path = None;
-                app
-            })
-            .collect::<Vec<qovery_engine::io_models::application::Application>>();
-
-        let mut environment_for_delete = environment.clone();
-        environment_for_delete.action = Action::Delete;
-
-        let env_action = environment.clone();
-        let env_action_for_delete = environment_for_delete.clone();
-
-        let result = environment.deploy_environment(&env_action, &infra_ctx);
-        assert!(result.is_ok());
-
-        let result = environment_for_delete.delete_environment(&env_action_for_delete, &infra_ctx_for_delete);
         assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
@@ -1295,7 +1206,7 @@ fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1426,7 +1337,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1569,7 +1480,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
 #[named]
 #[test]
 fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {

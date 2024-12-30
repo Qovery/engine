@@ -1,15 +1,13 @@
+use crate::environment::models::abort::Abort;
 use crate::fs::workspace_directory;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::Archive;
 use crate::log_file_writer::LogFileWriter;
-use crate::models::abort::Abort;
 use reqwest::header::CONTENT_TYPE;
 use std::path::Path;
 use std::time::Duration;
 use tokio::sync::broadcast;
 
-pub mod environment_task;
-pub mod infrastructure_task;
 pub mod qovery_api;
 
 pub trait Task: Send + Sync {
@@ -21,7 +19,7 @@ pub trait Task: Send + Sync {
     fn await_terminated(&self) -> broadcast::Receiver<()>;
 }
 
-fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), anyhow::Error> {
+pub fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), anyhow::Error> {
     let archive = match archive {
         Some(archive) => archive,
         None => {
@@ -52,7 +50,7 @@ fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), any
     Ok(())
 }
 
-fn enable_log_file_writer(context: &Context, log_file_writer: &Option<LogFileWriter>) {
+pub fn enable_log_file_writer(context: &Context, log_file_writer: &Option<LogFileWriter>) {
     if let Some(log_file_writer) = &log_file_writer {
         let temp_dir = workspace_directory(context.workspace_root_dir(), context.execution_id(), "logs");
         if let Ok(temp_dir) = temp_dir {
@@ -61,7 +59,7 @@ fn enable_log_file_writer(context: &Context, log_file_writer: &Option<LogFileWri
     }
 }
 
-fn disable_log_file_writer(log_file_writer: &Option<LogFileWriter>) {
+pub fn disable_log_file_writer(log_file_writer: &Option<LogFileWriter>) {
     if let Some(log_file_writer) = log_file_writer {
         log_file_writer.disable();
     }

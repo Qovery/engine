@@ -27,8 +27,26 @@ spec:
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
-    consolidationPolicy: WhenEmpty
+    consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 30s
     budgets:
+      # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
       - nodes: 10%
+      # The consolidation budgets injected below contain:
+      # - either a forbidden rule for Underutilized when the user hasn't configured any disruption period
+      # - or some custom forbidden rules which are the complementary of what they configured on core side
+      {{- range .Values.stableNodePool.consolidation.budgets }}
+      - nodes: {{ .nodes | quote }}
+        reasons:
+          {{- range .reasons }}
+          - "{{ . }}"
+          {{- end }}
+        duration: {{ .duration }}
+        schedule: {{ .schedule | quote }}
+      {{- end }}
+  {{- if not (and (empty .Values.stableNodePool.limits.maxCpu) (empty .Values.stableNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.stableNodePool.limits.maxCpu }}
+    memory: {{ .Values.stableNodePool.limits.maxMemory }}
+  {{- end }}
   weight: 10

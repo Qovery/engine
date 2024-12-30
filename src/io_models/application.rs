@@ -11,33 +11,32 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
-use crate::build_platform::{Build, GitRepository, Image, SshKey};
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::models::{
-    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
-};
-use crate::cloud_provider::service::ServiceType;
-use crate::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::container_registry::ContainerRegistryInfo;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::models;
+use crate::environment::models::application::{ApplicationError, ApplicationService};
+use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::scaleway::ScwAppExtraSettings;
+use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::infrastructure::models::container_registry::ContainerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
+use crate::io_models::models::{
+    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
+};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
     MountedFile, QoveryIdentifier,
 };
-use crate::models;
-use crate::models::application::{ApplicationError, ApplicationService};
-use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
-use crate::models::gcp::GcpAppExtraSettings;
-use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use crate::utilities::to_short_id;
 
 use super::{PodAntiAffinity, UpdateStrategy};
@@ -170,6 +169,14 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_denylist_source_range: String,
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
+    #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
+    #[serde(alias = "network.ingress.nginx_limit_rpm")]
+    pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
+    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -222,6 +229,10 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
@@ -266,6 +277,14 @@ impl ApplicationAdvancedSettings {
             network_ingress_basic_auth_env_var: self.network_ingress_basic_auth_env_var.clone(),
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
+            network_ingress_nginx_limit_rpm: self.network_ingress_nginx_limit_rpm,
+            network_ingress_nginx_limit_burst_multiplier: self.network_ingress_nginx_limit_burst_multiplier,
+            network_ingress_nginx_controller_server_snippet: self
+                .network_ingress_nginx_controller_server_snippet
+                .clone(),
+            network_ingress_nginx_controller_configuration_snippet: self
+                .network_ingress_nginx_controller_configuration_snippet
+                .clone(),
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
             hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
         }
@@ -285,7 +304,6 @@ pub struct Application {
     pub dockerfile_path: Option<String>,
     pub command_args: Vec<String>,
     pub entrypoint: Option<String>,
-    pub buildpack_language: Option<String>,
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
     pub public_domain: String,
@@ -351,73 +369,38 @@ impl Application {
                 // Note: we check if kubernetes is EC2 to map to the proper implementation
                 // This is far from ideal, it should be checked against an exhaustive match
                 // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::application::Application::<AWS>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name,
-                        self.public_domain,
-                        self.ports,
-                        self.min_instances,
-                        self.max_instances,
-                        build,
-                        self.command_args,
-                        self.entrypoint,
-                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsAppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
-                    )?))
-                } else {
-                    Ok(Box::new(models::application::Application::<AWSEc2>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name,
-                        self.public_domain,
-                        self.ports,
-                        self.min_instances,
-                        self.max_instances,
-                        build,
-                        self.command_args,
-                        self.entrypoint,
-                        self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsEc2AppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.should_delete_shared_registry,
-                    )?))
-                }
+                Ok(Box::new(models::application::Application::<AWS>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name,
+                    self.public_domain,
+                    self.ports,
+                    self.min_instances,
+                    self.max_instances,
+                    build,
+                    self.command_args,
+                    self.entrypoint,
+                    self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                    environment_variables,
+                    self.mounted_files
+                        .iter()
+                        .map(|e| e.to_domain())
+                        .collect::<BTreeSet<_>>(),
+                    self.readiness_probe.map(|p| p.to_domain()),
+                    self.liveness_probe.map(|p| p.to_domain()),
+                    self.advanced_settings,
+                    AwsAppExtraSettings {},
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                    KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                    KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                    KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                    KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                    self.should_delete_shared_registry,
+                )?))
             }
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
@@ -571,7 +554,6 @@ impl Application {
                 dockerfile_path,
                 dockerfile_content: None,
                 root_path,
-                buildpack_language: self.buildpack_language.clone(),
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self
@@ -618,8 +600,8 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn to_storage(&self) -> crate::cloud_provider::models::Storage {
-        crate::cloud_provider::models::Storage {
+    pub fn to_storage(&self) -> crate::io_models::models::Storage {
+        crate::io_models::models::Storage {
             id: self.id.clone(),
             long_id: self.long_id,
             name: self.name.clone(),

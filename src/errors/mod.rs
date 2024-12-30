@@ -3,22 +3,23 @@ pub mod io;
 extern crate derivative;
 extern crate url;
 
-use crate::build_platform::BuildError;
-use crate::cloud_provider::helm::HelmChartError;
-use crate::cloud_provider::service::DatabaseType;
-use crate::cloud_provider::Kind;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
-use crate::container_registry::errors::ContainerRegistryError;
+use crate::helm::HelmChartError;
+use crate::infrastructure::models::build_platform::BuildError;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
+use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 
-use crate::cloud_provider::kubernetes::KubernetesError;
 use crate::cmd::{command, terraform};
+use crate::environment::models::database::DatabaseError;
+use crate::environment::models::router::RouterError;
+use crate::environment::models::types::VersionsNumber;
 use crate::events::{EventDetails, Stage};
-use crate::models::database::DatabaseError;
-use crate::models::router::RouterError;
-use crate::models::types::VersionsNumber;
-use crate::object_storage::errors::ObjectStorageError;
+use crate::infrastructure::models::cloud_provider::io::InputError;
+use crate::infrastructure::models::kubernetes::KubernetesError;
+use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
 use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
 use aws_sdk_ec2::error::SdkError as Ec2SdkError;
@@ -577,11 +578,6 @@ impl From<BuildError> for CommandError {
                 Some(raw_error.to_string()),
                 None,
             ),
-            BuildError::BuildpackError { application, raw_error } => CommandError::new(
-                format!("Build error, cannot build application `{application}` due to a Buildpack error"),
-                Some(raw_error.to_string()),
-                None,
-            ),
             BuildError::CannotGetCredentials { .. } => {
                 CommandError::new("Build error, cannot get registry credentials".to_string(), None, None)
             }
@@ -662,6 +658,14 @@ impl From<RouterError> for CommandError {
                 Some(router_error.to_string()),
                 None,
             ),
+        }
+    }
+}
+
+impl From<InputError> for CommandError {
+    fn from(input_error: InputError) -> Self {
+        match input_error {
+            InputError::InvalidInputFieldValue { .. } => CommandError::new_from_safe_message(input_error.to_string()),
         }
     }
 }
@@ -961,10 +965,6 @@ pub enum Tag {
     BuilderDockerCannotBuildContainerImage,
     /// BuilderDockerCannotListImages: represents an error while trying to list docker images.
     BuilderDockerCannotListImages,
-    /// BuilderBuildpackInvalidLanguageFormat: represents an error where buildback requested language has wrong format.
-    BuilderBuildpackInvalidLanguageFormat,
-    /// BuilderBuildpackCannotBuildContainerImage: represents an error while trying to build container image with Buildpack.
-    BuilderBuildpackCannotBuildContainerImage,
     /// BuilderGetBuildError: represents an error when builder is trying to get parent build.
     BuilderGetBuildError,
     /// BuilderCloningRepositoryError: represents an error when builder is trying to clone a git repository.
@@ -1021,18 +1021,8 @@ pub enum Tag {
     KubeconfigSecurityCheckError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
-    /// VaultConnectionError: represents an error while trying to connect ot Vault service
-    VaultConnectionError,
-    /// VaultSecretCouldNotBeRetrieved: represents an error to get the desired secret
-    VaultSecretCouldNotBeRetrieved,
-    /// VaultSecretCouldNotBeCreatedOrUpdated: represent a vault secret creation or update error
-    VaultSecretCouldNotBeCreatedOrUpdated,
-    /// VaultSecretCouldNotBeDeleted, represent a vault secret deletion error
-    VaultSecretCouldNotBeDeleted,
     /// JsonDeserializationError: represent a deserialization issue
     JsonDeserializationError,
-    /// ClusterSecretsManipulationError: represent an error while trying to manipulate ClusterSecrets
-    ClusterSecretsManipulationError,
     /// DnsProviderInformationError: represent an error on DNS provider information provided.
     DnsProviderInformationError,
     /// DnsProviderInvalidCredentials: represent an error on invalid DNS provider credentials.
@@ -1325,8 +1315,6 @@ impl EngineError {
 
     /// Creates new error for Engine API input cannot be deserialized.
     ///
-    ///
-    ///
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
@@ -1340,6 +1328,30 @@ impl EngineError {
             Tag::InvalidEngineApiInputCannotBeDeserialized,
             "Input is invalid and cannot be deserialized.".to_string(),
             Some(raw_error.into()),
+            None,
+            Some("This is a Qovery issue, please contact our support team".to_string()),
+        )
+    }
+
+    /// Creates new error for Engine API payload that are not valid.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `message`: Raw error message.
+    pub fn new_invalid_engine_payload_invalid_field_value(
+        event_details: EventDetails,
+        input_error: InputError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEnginePayload,
+            match &input_error {
+                InputError::InvalidInputFieldValue { field_name, message } => {
+                    format!("Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`")
+                }
+            },
+            Some(CommandError::from(input_error)),
             None,
             Some("This is a Qovery issue, please contact our support team".to_string()),
         )
@@ -3989,58 +4001,6 @@ impl EngineError {
         )
     }
 
-    /// Creates new error buildpack invalid language format.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `requested_language`: Requested language.
-    pub fn new_buildpack_invalid_language_format(
-        event_details: EventDetails,
-        requested_language: String,
-    ) -> EngineError {
-        let message = format!("Cannot build: Invalid buildpacks language format: `{requested_language}`.");
-
-        EngineError::new(
-            event_details,
-            Tag::BuilderBuildpackInvalidLanguageFormat,
-            message,
-            None,
-            None,
-            Some("Expected format `builder[@version]`.".to_string()),
-        )
-    }
-
-    /// Creates new error when trying to build container.
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `container_image_name`: Container image name.
-    /// * `builders`: Builders name list.
-    /// * `raw_error`: Raw error message.
-    pub fn new_buildpack_cannot_build_container_image(
-        event_details: EventDetails,
-        container_image_name: String,
-        builders: Vec<String>,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message = "Cannot find a builder to build application.";
-
-        EngineError::new(
-            event_details,
-            Tag::BuilderBuildpackCannotBuildContainerImage,
-            message.to_string(),
-            Some(raw_error),
-            None,
-            Some(format!(
-                "Qovery can't build your container image {} with one of the following builders: {}. Please do provide a valid Dockerfile to build your application or contact the support.",
-                container_image_name,
-                builders.join(", ")
-            ),),
-        )
-    }
-
     /// Creates new error when trying to get build.
     ///
     /// Arguments:
@@ -4650,115 +4610,14 @@ impl EngineError {
         }
     }
 
-    /// Creates new error when trying to connect to vault endpoint
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_vault_connection_error(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message_safe = "Couldn't connect to Vault secret manager".to_string();
-
-        EngineError::new(
-            event_details,
-            Tag::VaultConnectionError,
-            message_safe,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when Vault secret couldn't be retrieved
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_vault_secret_could_not_be_retrieved(
-        event_details: EventDetails,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message_safe = "Vault secret couldn't be retrieved".to_string();
-
-        EngineError::new(
-            event_details,
-            Tag::VaultSecretCouldNotBeRetrieved,
-            message_safe,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
     pub fn new_scaleway_cannot_fetch_private_networks(event_details: EventDetails, raw_error: String) -> EngineError {
         EngineError::new(
             event_details,
-            Tag::VaultSecretCouldNotBeRetrieved,
+            Tag::CannotFetchScalewayPrivateNetworks,
             format!("Impossible to fetch your cluster private networks: {}", raw_error),
             None,
             None,
             Some("Please check your credentials".to_string()),
-        )
-    }
-
-    /// Creates new error when Vault secret couldn't be created or updated
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_vault_secret_could_not_be_created_or_updated(
-        event_details: EventDetails,
-        raw_error: CommandError,
-    ) -> EngineError {
-        let message_safe = "Vault secret couldn't be created or updated".to_string();
-
-        EngineError::new(
-            event_details,
-            Tag::VaultSecretCouldNotBeCreatedOrUpdated,
-            message_safe,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when Vault secret couldn't be deleted
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_vault_secret_could_not_be_deleted(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message_safe = "Vault secret couldn't be deleted".to_string();
-
-        EngineError::new(
-            event_details,
-            Tag::VaultSecretCouldNotBeDeleted,
-            message_safe,
-            Some(raw_error),
-            None,
-            None,
-        )
-    }
-
-    /// Creates new error when creating ClusterSecrets
-    ///
-    /// Arguments:
-    ///
-    /// * `event_details`: Error linked event details.
-    /// * `raw_error`: Raw error message.
-    pub fn new_error_when_create_cluster_secrets(event_details: EventDetails, raw_error: CommandError) -> EngineError {
-        let message_safe = "Qovery error when manipulating ClusterSecrets".to_string();
-
-        EngineError::new(
-            event_details,
-            Tag::ClusterSecretsManipulationError,
-            message_safe,
-            Some(raw_error),
-            None,
-            None,
         )
     }
 
@@ -5252,9 +5111,9 @@ impl Display for EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::Kind;
     use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
 

@@ -22,3 +22,13 @@ tags:
 global_node_pools:
   requirements: []
   terminationGracePeriod: 48h
+stableNodePool:
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+defaultNodePool:
+  limits:
+    maxCpu: ""
+    maxMemory: ""

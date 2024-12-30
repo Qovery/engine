@@ -3,22 +3,23 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, metrics_registry,
-    FuncTestsSecrets,
+    check_tcp_port_is_open, check_udp_port_is_open, context_for_resource, engine_run_test, get_pods, get_pvc, init,
+    is_pod_restarted_env, logger, metrics_registry, FuncTestsSecrets, TcpCheckSource,
 };
 use ::function_name::named;
 use bstr::ByteSlice;
 use k8s_openapi::api::batch::v1::CronJob;
 use kube::api::ListParams;
 use kube::Api;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::engine::general_purpose;
 use base64::Engine;
 use k8s_openapi::api::core::v1::ConfigMap;
+use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};
@@ -31,7 +32,6 @@ use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
-use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
@@ -531,176 +531,6 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
         assert!(matches!(ret, Ok(_) | Err(_)));
-
-        test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-#[ignore = "Buildpacks to be deactivated soon PRDT-1339"]
-fn build_with_buildpacks_and_deploy_a_working_environment() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context_for_resource(
-            secrets
-                .AWS_TEST_ORGANIZATION_LONG_ID
-                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
-            secrets
-                .AWS_TEST_CLUSTER_LONG_ID
-                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
-        );
-        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
-            kubeconfig: secrets
-                .AWS_TEST_KUBECONFIG_b64
-                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
-                .to_string(),
-        };
-        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
-        let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_infra_config(
-            &target_cluster_aws_test,
-            &context_for_deletion,
-            logger.clone(),
-            metrics_registry(),
-        );
-        let mut environment = helpers::environment::working_minimal_environment(&context);
-        environment.applications = environment
-            .applications
-            .into_iter()
-            .map(|mut app| {
-                app.ports = vec![Port {
-                    long_id: Default::default(),
-                    port: 3000,
-                    name: "p3000".to_string(),
-                    is_default: true,
-                    publicly_accessible: true,
-                    protocol: HTTP,
-                    service_name: None,
-                    namespace: None,
-                    additional_service: None,
-                }];
-                app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
-                app.branch = "simple-node-app".to_string();
-                app.dockerfile_path = None;
-                app.readiness_probe = Some(Probe {
-                    r#type: ProbeType::Tcp { host: None },
-                    port: 3000,
-                    failure_threshold: 9,
-                    success_threshold: 1,
-                    initial_delay_seconds: 15,
-                    period_seconds: 10,
-                    timeout_seconds: 10,
-                });
-                app.liveness_probe = None;
-                app
-            })
-            .collect::<Vec<qovery_engine::io_models::application::Application>>();
-
-        let mut environment_delete = environment.clone();
-        environment_delete.action = Action::Delete;
-
-        let ea = environment.clone();
-        let ea_delete = environment_delete.clone();
-
-        let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(ret.is_ok());
-
-        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(ret.is_ok());
-
-        test_name.to_string()
-    })
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-#[ignore = "Buildpacks to be deactivated soon PRDT-1339"]
-fn build_worker_with_buildpacks_and_deploy_a_working_environment() {
-    let test_name = function_name!();
-    engine_run_test(|| {
-        init();
-
-        let span = span!(Level::INFO, "test", name = test_name);
-        let _enter = span.enter();
-
-        let logger = logger();
-        let secrets = FuncTestsSecrets::new();
-        let context = context_for_resource(
-            secrets
-                .AWS_TEST_ORGANIZATION_LONG_ID
-                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
-            secrets
-                .AWS_TEST_CLUSTER_LONG_ID
-                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
-        );
-        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
-            kubeconfig: secrets
-                .AWS_TEST_KUBECONFIG_b64
-                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
-                .to_string(),
-        };
-        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
-        let context_for_deletion = context.clone_not_same_execution_id();
-        let infra_ctx_for_deletion = aws_infra_config(
-            &target_cluster_aws_test,
-            &context_for_deletion,
-            logger.clone(),
-            metrics_registry(),
-        );
-        let mut environment = helpers::environment::working_minimal_environment(&context);
-        environment.applications = environment
-            .applications
-            .into_iter()
-            .map(|mut app| {
-                app.ports = vec![Port {
-                    long_id: Default::default(),
-                    port: 3000,
-                    is_default: true,
-                    name: "p3000".to_string(),
-                    publicly_accessible: true,
-                    protocol: HTTP,
-                    service_name: None,
-                    namespace: None,
-                    additional_service: None,
-                }];
-                app.commit_id = "8fa91f8d44de4c88b065fd0897e6c71b44093bc1".to_string();
-                app.branch = "simple-node-app".to_string();
-                app.dockerfile_path = None;
-                app.readiness_probe = Some(Probe {
-                    r#type: ProbeType::Tcp { host: None },
-                    port: 3000,
-                    failure_threshold: 9,
-                    success_threshold: 1,
-                    initial_delay_seconds: 15,
-                    period_seconds: 10,
-                    timeout_seconds: 10,
-                });
-                app.liveness_probe = None;
-                app
-            })
-            .collect::<Vec<qovery_engine::io_models::application::Application>>();
-
-        let mut environment_delete = environment.clone();
-        environment_delete.action = Action::Delete;
-
-        let ea = environment.clone();
-        let ea_delete = environment_delete.clone();
-
-        let ret = environment.deploy_environment(&ea, &infra_ctx);
-        assert!(ret.is_ok());
-
-        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(ret.is_ok());
 
         test_name.to_string()
     })
@@ -1393,7 +1223,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_sticky_session() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1510,7 +1340,7 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -1642,7 +1472,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 #[named]
 #[test]
 fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
-    use qovery_engine::models::router::RouterAdvancedSettings;
+    use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
     let test_name = function_name!();
     engine_run_test(|| {
@@ -3868,7 +3698,6 @@ fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
 #[named]
 #[test]
 fn deploy_container_with_udp_tcp_public_ports() {
-    use qovery_engine::cloud_provider::utilities::{check_tcp_port_is_open, check_udp_port_is_open, TcpCheckSource};
     use tracing::info;
 
     engine_run_test(|| {

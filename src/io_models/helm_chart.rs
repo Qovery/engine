@@ -1,20 +1,21 @@
-use crate::build_platform::SshKey;
-use crate::cloud_provider::service::ServiceType;
-use crate::cloud_provider::{kubernetes, CloudProvider};
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::models;
+use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
+use crate::environment::models::scaleway::ScwAppExtraSettings;
+use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::build_platform::SshKey;
+use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::kubernetes;
 use crate::io_models::application::{GitCredentials, Port};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
-use crate::models;
-use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
-use crate::models::gcp::GcpAppExtraSettings;
-use crate::models::helm_chart::{HelmChartError, HelmChartService};
-use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -73,6 +74,14 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_denylist_source_range: String,
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
+    #[serde(alias = "network.ingress.nginx_limit_rpm")]
+    pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
+    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -103,6 +112,10 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_whitelist_source_range: "0.0.0.0/0".to_string(),
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
         }
@@ -283,31 +296,6 @@ impl HelmChart {
                     self.ports,
                 )?)
             }
-            kubernetes::Kind::Ec2 => Box::new(models::helm_chart::HelmChart::<AWSEc2>::new(
-                context,
-                self.long_id,
-                self.name,
-                self.kube_name,
-                self.action.to_service_action(),
-                Self::to_chart_source_domain(
-                    self.chart_source.clone(),
-                    &ssh_keys,
-                    context.qovery_api.clone(),
-                    self.long_id,
-                ),
-                Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
-                self.set_values,
-                self.set_string_values,
-                self.set_json_values,
-                self.command_args,
-                std::time::Duration::from_secs(self.timeout_sec),
-                self.allow_cluster_wide_resources,
-                environment_variables_with_info,
-                self.advanced_settings,
-                AwsEc2AppExtraSettings {},
-                |transmitter| context.get_event_details(transmitter),
-                self.ports,
-            )?),
             kubernetes::Kind::ScwKapsule | kubernetes::Kind::ScwSelfManaged => {
                 Box::new(models::helm_chart::HelmChart::<SCW>::new(
                     context,

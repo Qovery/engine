@@ -1,10 +1,10 @@
 use crate::helpers::scaleway::random_valid_registry_name;
 use crate::helpers::utilities::{context_for_resource, engine_run_test, init, FuncTestsSecrets};
 use function_name::named;
-use qovery_engine::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
-use qovery_engine::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::container_registry::ContainerRegistry;
-use qovery_engine::models::scaleway::ScwZone;
+use qovery_engine::environment::models::scaleway::ScwZone;
+use qovery_engine::infrastructure::models::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
+use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use tracing::debug;

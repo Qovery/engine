@@ -1458,8 +1458,14 @@ pub fn terraform_plan(
     envs: &[(&str, &str)],
     is_destroy: bool,
 ) -> Result<TerraformOutput, TerraformError> {
-    // Terraform init, validate, plan and apply
-    terraform_plan_internal(root_dir, envs, &TerraformValidators::None, is_destroy)
+    // Terraform init, validate, plan and appl
+    let validators = if is_destroy {
+        TerraformValidators::None
+    } else {
+        TerraformValidators::Default
+    };
+
+    terraform_plan_internal(root_dir, envs, &validators, is_destroy)
 }
 
 pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {
@@ -1527,11 +1533,11 @@ fn terraform_exec_from_command(
 
     let result = cmd.exec_with_output(
         &mut |line| {
-            info!(line);
+            info!("{}", line);
             terraform_output.raw_std_output.push(line);
         },
         &mut |line| {
-            error!(line);
+            error!("{}", line);
             terraform_output.raw_error_output.push(line);
         },
     );

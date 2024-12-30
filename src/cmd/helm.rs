@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use tracing::{error, info};
 
-use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
 use crate::cmd::helm::HelmError::{
@@ -15,6 +14,7 @@ use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::helm::ChartInfo;
 use crate::io_models::container::Registry;
 use semver::Version;
 use serde_derive::Deserialize;
@@ -1692,10 +1692,10 @@ impl Drop for HelmRegistry<'_> {
 #[cfg(feature = "test-local-kube")]
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::helm::{ChartInfo, ChartSetValue};
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
-    use crate::deployment_action::deploy_helm::default_helm_timeout;
+    use crate::environment::action::deploy_helm::default_helm_timeout;
+    use crate::helm::{ChartInfo, ChartSetValue};
     use crate::io_models::container::Registry::GenericCr;
     use semver::Version;
     use std::fs::OpenOptions;

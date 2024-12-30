@@ -1,10 +1,10 @@
 use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, FuncTestsSecrets};
 use function_name::named;
-use qovery_engine::build_platform::Image;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::ContainerImage;
-use qovery_engine::container_registry::github_cr::GithubCr;
-use qovery_engine::container_registry::ContainerRegistry;
+use qovery_engine::infrastructure::models::build_platform::Image;
+use qovery_engine::infrastructure::models::container_registry::github_cr::GithubCr;
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use tracing::{span, Level};
 use url::Url;
 use uuid::Uuid;
@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[named]
 #[test]
 fn test_github_cr() {
-    use qovery_engine::container_registry::RegistryTags;
+    use qovery_engine::infrastructure::models::container_registry::RegistryTags;
 
     let test_name = function_name!();
     engine_run_test(|| {

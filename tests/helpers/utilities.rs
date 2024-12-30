@@ -17,19 +17,16 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use std::env;
 use std::io::{Error, ErrorKind};
+use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use std::{env, io};
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
 
-use qovery_engine::build_platform::local_docker::LocalDocker;
-use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
@@ -37,11 +34,18 @@ use qovery_engine::cmd::structs::{KubernetesList, KubernetesPod, PVC, SVC};
 use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
 };
-use qovery_engine::deployment_report::obfuscation_service::{ObfuscationService, StdObfuscationService};
-use qovery_engine::engine::InfrastructureContext;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
+use qovery_engine::environment::models::aws::AwsStorageType;
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::build_platform::local_docker::LocalDocker;
+use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -49,9 +53,6 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
-use qovery_engine::models::aws::AwsStorageType;
-use qovery_engine::models::database::DatabaseInstanceType;
-use qovery_engine::models::ToCloudProviderFormat;
 use qovery_engine::msg_publisher::StdMsgPublisher;
 
 use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
@@ -173,22 +174,12 @@ pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
     pub AWS_TEST_KUBECONFIG_b64: Option<String>,
-    pub AWS_EC2_KUBECONFIG: Option<String>,
-    pub AWS_EC2_DEFAULT_REGION: Option<String>,
-    pub AWS_EC2_TEST_MANAGED_REGION: Option<String>,
-    pub AWS_EC2_TEST_CONTAINER_REGION: Option<String>,
-    pub AWS_EC2_TEST_INSTANCE_REGION: Option<String>,
-    pub AWS_EC2_TEST_CLUSTER_REGION: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
-    pub AWS_EC2_TEST_CLUSTER_ID: Option<String>,
-    pub AWS_EC2_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub AWS_TEST_CLUSTER_LONG_ID: Option<Uuid>,
-    pub AWS_EC2_TEST_CLUSTER_DOMAIN: Option<String>,
     pub AWS_TEST_ORGANIZATION_ID: Option<String>,
     pub AWS_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub AWS_TEST_CLUSTER_REGION: Option<String>,
-    pub AWS_EC2_DEFAULT_CLUSTER_ID: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
@@ -287,22 +278,12 @@ impl FuncTestsSecrets {
             AWS_ACCESS_KEY_ID: None,
             AWS_DEFAULT_REGION: None,
             AWS_TEST_KUBECONFIG_b64: None,
-            AWS_EC2_KUBECONFIG: None,
-            AWS_EC2_DEFAULT_REGION: None,
-            AWS_EC2_TEST_MANAGED_REGION: None,
-            AWS_EC2_TEST_CONTAINER_REGION: None,
-            AWS_EC2_TEST_INSTANCE_REGION: None,
-            AWS_EC2_TEST_CLUSTER_REGION: None,
             AWS_SECRET_ACCESS_KEY: None,
             AWS_TEST_CLUSTER_ID: None,
-            AWS_EC2_TEST_CLUSTER_ID: None,
-            AWS_EC2_TEST_CLUSTER_LONG_ID: None,
             AWS_TEST_CLUSTER_LONG_ID: None,
-            AWS_EC2_TEST_CLUSTER_DOMAIN: None,
             AWS_TEST_ORGANIZATION_ID: None,
             AWS_TEST_ORGANIZATION_LONG_ID: None,
             AWS_TEST_CLUSTER_REGION: None,
-            AWS_EC2_DEFAULT_CLUSTER_ID: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
@@ -399,24 +380,6 @@ impl FuncTestsSecrets {
                 )
                 .ok(),
             ),
-            AWS_EC2_KUBECONFIG: Self::select_secret("AWS_EC2_KUBECONFIG", secrets.AWS_EC2_KUBECONFIG),
-            AWS_EC2_DEFAULT_REGION: Self::select_secret("AWS_EC2_DEFAULT_REGION", secrets.AWS_EC2_DEFAULT_REGION),
-            AWS_EC2_TEST_MANAGED_REGION: Self::select_secret(
-                "AWS_EC2_TEST_MANAGED_REGION",
-                secrets.AWS_EC2_TEST_MANAGED_REGION,
-            ),
-            AWS_EC2_TEST_CONTAINER_REGION: Self::select_secret(
-                "AWS_EC2_TEST_CONTAINER_REGION",
-                secrets.AWS_EC2_TEST_CONTAINER_REGION,
-            ),
-            AWS_EC2_TEST_INSTANCE_REGION: Self::select_secret(
-                "AWS_EC2_TEST_INSTANCE_REGION",
-                secrets.AWS_EC2_TEST_INSTANCE_REGION,
-            ),
-            AWS_EC2_TEST_CLUSTER_REGION: Self::select_secret(
-                "AWS_EC2_TEST_CLUSTER_REGION",
-                secrets.AWS_EC2_TEST_CLUSTER_REGION,
-            ),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
@@ -425,20 +388,7 @@ impl FuncTestsSecrets {
             ),
             AWS_TEST_CLUSTER_REGION: Self::select_secret("AWS_TEST_CLUSTER_REGION", secrets.AWS_TEST_CLUSTER_REGION),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
-            AWS_EC2_TEST_CLUSTER_ID: Self::select_secret("AWS_EC2_TEST_CLUSTER_ID", secrets.AWS_EC2_TEST_CLUSTER_ID),
-            AWS_EC2_TEST_CLUSTER_LONG_ID: Self::select_secret(
-                "AWS_EC2_TEST_CLUSTER_LONG_ID",
-                secrets.AWS_EC2_TEST_CLUSTER_LONG_ID,
-            ),
             AWS_TEST_CLUSTER_LONG_ID: Self::select_secret("AWS_TEST_CLUSTER_LONG_ID", secrets.AWS_TEST_CLUSTER_LONG_ID),
-            AWS_EC2_TEST_CLUSTER_DOMAIN: Self::select_secret(
-                "AWS_EC2_TEST_CLUSTER_DOMAIN",
-                secrets.AWS_EC2_TEST_CLUSTER_DOMAIN,
-            ),
-            AWS_EC2_DEFAULT_CLUSTER_ID: Self::select_secret(
-                "AWS_EC2_DEFAULT_CLUSTER_ID",
-                secrets.AWS_EC2_DEFAULT_CLUSTER_ID,
-            ),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
             CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
@@ -803,6 +753,7 @@ pub fn generate_organization_id(region: &str) -> Uuid {
     }
 }
 
+#[cfg(test)]
 pub fn get_pvc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
@@ -818,6 +769,7 @@ pub fn get_pvc(
     )
 }
 
+#[cfg(test)]
 pub fn get_svc(
     infra_ctx: &InfrastructureContext,
     provider_kind: Kind,
@@ -983,5 +935,55 @@ pub fn get_svc_name(db_kind: DatabaseKind, provider_kind: Kind) -> &'static str 
             Kind::Aws => "redismyredis-master",
             _ => "redis-my-redis-master",
         },
+    }
+}
+
+pub enum TcpCheckErrors {
+    DomainNotResolvable,
+    PortNotOpen,
+    UnknownError,
+}
+
+pub enum TcpCheckSource<'a> {
+    SocketAddr(SocketAddr),
+    DnsName(&'a str),
+}
+
+pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(), TcpCheckErrors> {
+    let timeout = Duration::from_secs(1);
+
+    let ip = match address {
+        TcpCheckSource::SocketAddr(x) => *x,
+        TcpCheckSource::DnsName(x) => {
+            let address = format!("{x}:{port}");
+            match address.to_socket_addrs() {
+                Ok(x) => {
+                    let ips: Vec<SocketAddr> = x.collect();
+                    ips[0]
+                }
+                Err(_) => return Err(TcpCheckErrors::DomainNotResolvable),
+            }
+        }
+    };
+
+    match std::net::TcpStream::connect_timeout(&ip, timeout) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(TcpCheckErrors::PortNotOpen),
+    }
+}
+
+pub fn check_udp_port_is_open(address: &str, port: u16) -> io::Result<bool> {
+    let socket = UdpSocket::bind("0.0.0.0:0")?;
+    let full_address = format!("{}:{}", address, port);
+    socket.set_read_timeout(Some(Duration::from_secs(5)))?;
+
+    socket.send_to(b"qovery", full_address)?;
+
+    // Attempt to receive a response
+    let mut buf = [0; 512];
+    match socket.recv_from(&mut buf) {
+        Ok(_) => Ok(true),                                            // A response was received, port is open
+        Err(ref e) if e.kind() == ErrorKind::WouldBlock => Ok(false), // Timeout, port is closed
+        Err(e) => Err(e),                                             // An actual error occurred
     }
 }

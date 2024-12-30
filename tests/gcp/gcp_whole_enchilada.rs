@@ -2,11 +2,11 @@ use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use ::function_name::named;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KKind;
-use qovery_engine::cloud_provider::models::CpuArchitecture;
-use qovery_engine::cloud_provider::Kind;
-use qovery_engine::models::ToCloudProviderFormat;
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+use qovery_engine::io_models::models::CpuArchitecture;
 use qovery_engine::utilities::to_short_id;
 
 use crate::helpers::utilities::{

@@ -429,6 +429,42 @@ alertmanager:
     #   hosts:
     #   - alertmanager.example.com
 
+  # -- BETA: Configure the gateway routes for the chart here.
+  # More routes can be added by adding a dictionary key like the 'main' route.
+  # Be aware that this is an early beta of this feature,
+  # kube-prometheus-stack does not guarantee this works and is subject to change.
+  # Being BETA this can/will change in the future without notice, do not use unless you want to take that risk
+  # [[ref]](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1alpha2)
+  route:
+    main:
+      # -- Enables or disables the route
+      enabled: false
+
+      # -- Set the route apiVersion, e.g. gateway.networking.k8s.io/v1 or gateway.networking.k8s.io/v1alpha2
+      apiVersion: gateway.networking.k8s.io/v1
+      # -- Set the route kind
+      # Valid options are GRPCRoute, HTTPRoute, TCPRoute, TLSRoute, UDPRoute
+      kind: HTTPRoute
+
+      annotations: {}
+      labels: {}
+
+      hostnames: []
+      # - my-filter.example.com
+      parentRefs: []
+      # - name: acme-gw
+
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+
+      ## Filters define the filters that are applied to requests that match this rule.
+      filters: []
+
+      ## Additional custom rules that can be added to the route
+      additionalRules: []
+
   ## Configuration for Alertmanager secret
   ##
   secret:
@@ -807,7 +843,7 @@ alertmanager:
     ## The value "hard" means that the scheduler is *required* to not schedule two replica pods onto the same node.
     ## The value "" will disable pod anti-affinity so that no anti-affinity rules will be configured.
     ##
-    podAntiAffinity: ""
+    podAntiAffinity: "soft"
 
     ## If anti-affinity is enabled sets the topologyKey to use for anti-affinity.
     ## This can be changed to, for example, failure-domain.beta.kubernetes.io/zone
@@ -922,6 +958,9 @@ alertmanager:
     ## clusterPushpullInterval determines interval between pushpull attempts.
     ## Needs to be specified as GoDuration, a time duration that can be parsed by Go’s time.ParseDuration() (e.g. 45ms, 30s, 1m, 1h20m15s)
     clusterPushpullInterval: ""
+
+    ## clusterLabel defines the identifier that uniquely identifies the Alertmanager cluster.
+    clusterLabel: ""
 
     ## ForceEnableClusterMode ensures Alertmanager does not deactivate the cluster mode when running with a single replica.
     ## Use case is e.g. spanning an Alertmanager cluster across Kubernetes clusters with a single replica in each.
@@ -1120,7 +1159,8 @@ grafana:
   # - name: prometheus-sample
   #   access: proxy
   #   basicAuth: true
-  #   basicAuthPassword: pass
+  #   secureJsonData:
+  #       basicAuthPassword: pass
   #   basicAuthUser: daco
   #   editable: false
   #   jsonData:
@@ -1254,6 +1294,10 @@ kubeApiServer:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping the kubelet and kubelet-hosted cAdvisor
 ##
 kubelet:
@@ -1277,6 +1321,11 @@ kubelet:
     ## If true, Prometheus ingests metrics with timestamp provided by exporter. If false, Prometheus ingests metrics with timestamp of scrape.
     ##
     honorTimestamps: true
+
+    ## If true, defines whether Prometheus tracks staleness of the metrics that have an explicit timestamp present in scraped data. Has no effect if `honorTimestamps` is false.
+    ## We recommend enabling this if you want the best possible accuracy for container_ metrics scraped from cadvisor.
+    ## For more details see: https://github.com/prometheus-community/helm-charts/pull/5063#issuecomment-2545374849
+    trackTimestampsStaleness: true
 
     ## SampleLimit defines per-scrape limit on number of scraped samples that will be accepted.
     ##
@@ -1313,10 +1362,6 @@ kubelet:
     ##
     insecureSkipVerify: true
 
-    ## Enable scraping /metrics/cadvisor from kubelet's service
-    ##
-    cAdvisor: true
-
     ## Enable scraping /metrics/probes from kubelet's service
     ##
     probes: true
@@ -1327,7 +1372,18 @@ kubelet:
     resource: false
     # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
     resourcePath: "/metrics/resource/v1alpha1"
+    ## Configure the scrape interval for resource metrics. This is configured to the default Kubelet cAdvisor
+    ## minimum housekeeping interval in order to avoid missing samples. Note, this value is ignored
+    ## if kubelet.serviceMonitor.interval is not empty.
+    resourceInterval: 10s
 
+    ## Enable scraping /metrics/cadvisor from kubelet's service
+    ##
+    cAdvisor: true
+    ## Configure the scrape interval for cAdvisor. This is configured to the default Kubelet cAdvisor
+    ## minimum housekeeping interval in order to avoid missing samples. Note, this value is ignored
+    ## if kubelet.serviceMonitor.interval is not empty.
+    cAdvisorInterval: 10s
     ## MetricRelabelConfigs to apply to samples after scraping, but before ingestion.
     ## ref: https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#relabelconfig
     ##
@@ -1460,6 +1516,10 @@ kubelet:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping the kube controller manager
 ##
 kubeControllerManager:
@@ -1563,6 +1623,10 @@ kubeControllerManager:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping coreDns. Use either this or kubeDns
 ##
 coreDns:
@@ -1640,6 +1704,10 @@ coreDns:
     ##
     additionalLabels: {}
     #  foo: bar
+
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
 
 ## Component scraping kubeDns. Use either this or coreDns
 ##
@@ -1734,6 +1802,10 @@ kubeDns:
     ##
     additionalLabels: {}
     #  foo: bar
+
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
 
 ## Component scraping etcd
 ##
@@ -1840,6 +1912,10 @@ kubeEtcd:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping kube scheduler
 ##
 kubeScheduler:
@@ -1942,6 +2018,10 @@ kubeScheduler:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping kube proxy
 ##
 kubeProxy:
@@ -2030,6 +2110,10 @@ kubeProxy:
     additionalLabels: {}
     #  foo: bar
 
+    ## defines the labels which are transferred from the associated Kubernetes Service object onto the ingested metrics.
+    ## https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/api.md#servicemonitor
+    targetLabels: []
+
 ## Component scraping kube state metrics
 ##
 kubeStateMetrics:
@@ -2110,6 +2194,8 @@ nodeExporter:
   enabled: true
   operatingSystems:
     linux:
+      enabled: true
+    aix:
       enabled: true
     darwin:
       enabled: true
@@ -2197,6 +2283,12 @@ prometheus-node-exporter:
       #   targetLabel: nodename
       #   replacement: $1
       #   action: replace
+
+      ## Attach node metadata to discovered targets. Requires Prometheus v2.35.0 and above.
+      ##
+      # attachMetadata:
+      #   node: false
+
   rbac:
     ## If true, create PSPs for node-exporter
     ##
@@ -2310,6 +2402,7 @@ prometheusOperator:
       ## ref: https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/
       ##
       serviceAccount:
+        annotations: {}
         automountServiceAccountToken: false
         create: true
         name: ""
@@ -2531,6 +2624,7 @@ prometheusOperator:
       ##
       serviceAccount:
         create: true
+        annotations: {}
         automountServiceAccountToken: true
 
     # Security context for create job container
@@ -2612,6 +2706,7 @@ prometheusOperator:
     create: true
     name: ""
     automountServiceAccountToken: true
+    annotations: {}
 
   ## Configuration for Prometheus operator service
   ##
@@ -2691,6 +2786,16 @@ prometheusOperator:
     selector: ""
     ## Use '{{ template "kube-prometheus-stack.fullname" . }}-kubelet' by default
     name: ""
+
+  ## Create Endpoints objects for kubelet targets.
+  kubeletEndpointsEnabled: true
+  ## Create EndpointSlice objects for kubelet targets.
+  kubeletEndpointSliceEnabled: false
+
+  ## Extra arguments to pass to prometheusOperator
+  # https://github.com/prometheus-operator/prometheus-operator/blob/main/Documentation/operator.md
+  extraArgs: []
+  #  - --labels="cluster=talos-cluster"
 
   ## Create a servicemonitor for the operator
   ##
@@ -2906,7 +3011,7 @@ prometheusOperator:
   thanosImage:
     registry: quay.io
     repository: thanos/thanos
-    tag: v0.36.1
+    tag: v0.37.2
     sha: ""
 
   ## Set a Label Selector to filter watched prometheus and prometheusAgent
@@ -3289,6 +3394,42 @@ prometheus:
       #   hosts:
       #     - prometheus.example.com
 
+  # -- BETA: Configure the gateway routes for the chart here.
+  # More routes can be added by adding a dictionary key like the 'main' route.
+  # Be aware that this is an early beta of this feature,
+  # kube-prometheus-stack does not guarantee this works and is subject to change.
+  # Being BETA this can/will change in the future without notice, do not use unless you want to take that risk
+  # [[ref]](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1alpha2)
+  route:
+    main:
+      # -- Enables or disables the route
+      enabled: false
+
+      # -- Set the route apiVersion, e.g. gateway.networking.k8s.io/v1 or gateway.networking.k8s.io/v1alpha2
+      apiVersion: gateway.networking.k8s.io/v1
+      # -- Set the route kind
+      # Valid options are GRPCRoute, HTTPRoute, TCPRoute, TLSRoute, UDPRoute
+      kind: HTTPRoute
+
+      annotations: {}
+      labels: {}
+
+      hostnames: []
+      # - my-filter.example.com
+      parentRefs: []
+      # - name: acme-gw
+
+      matches:
+      - path:
+          type: PathPrefix
+          value: /
+
+      ## Filters define the filters that are applied to requests that match this rule.
+      filters: []
+
+      ## Additional custom rules that can be added to the route
+      additionalRules: []
+
   ## Configuration for creating an Ingress that will map to each Prometheus replica service
   ## prometheus.servicePerReplica must be enabled
   ##
@@ -3496,7 +3637,7 @@ prometheus:
     image:
       registry: quay.io
       repository: prometheus/prometheus
-      tag: v2.54.1
+      tag: v3.0.1
       sha: ""
 
     ## Tolerations for use with node taints
@@ -3687,6 +3828,9 @@ prometheus:
     ## prometheus resource to be created with selectors based on values in the helm deployment,
     ## which will also match the scrapeConfigs created
     ##
+    ## If null and scrapeConfigSelector is also null, exclude field from the prometheusSpec
+    ## (keeping downward compatibility with older versions of CRD)
+    ##
     scrapeConfigSelectorNilUsesHelmValues: true
 
     ## scrapeConfigs to be selected for target discovery.
@@ -3699,6 +3843,7 @@ prometheus:
     #     prometheus: somelabel
 
     ## If nil, select own namespace. Namespaces to be selected for scrapeConfig discovery.
+    ## If null, exclude the field from the prometheusSpec (keeping downward compatibility with older versions of CRD)
     scrapeConfigNamespaceSelector: {}
     ## Example which selects scrapeConfig in namespaces with label "prometheus" set to "somelabel"
     # scrapeConfigNamespaceSelector:
@@ -3765,7 +3910,7 @@ prometheus:
     ## The default value "soft" means that the scheduler should *prefer* to not schedule two replica pods onto the same node but no guarantee is provided.
     ## The value "hard" means that the scheduler is *required* to not schedule two replica pods onto the same node.
     ## The value "" will disable pod anti-affinity so that no anti-affinity rules will be configured.
-    podAntiAffinity: ""
+    podAntiAffinity: "soft"
 
     ## If anti-affinity is enabled sets the topologyKey to use for anti-affinity.
     ## This can be changed to, for example, failure-domain.beta.kubernetes.io/zone
@@ -4174,6 +4319,18 @@ prometheus:
     ## Label selector for services to which this ServiceMonitor applies
     ##
     # selector: {}
+      ## Example which selects all services to be monitored
+      ## with label "monitoredby" with values any of "example-service-1" or "example-service-2"
+      # matchExpressions:
+      #   - key: "monitoredby"
+      #     operator: In
+      #     values:
+      #       - example-service-1
+      #       - example-service-2
+
+      ## label selector for services
+      ##
+      # matchLabels: {}
 
     ## Namespaces from which services are selected
     ##
@@ -4274,6 +4431,18 @@ prometheus:
     ## Label selector for pods to which this PodMonitor applies
     ##
     # selector: {}
+      ## Example which selects all Pods to be monitored
+      ## with label "monitoredby" with values any of "example-pod-1" or "example-pod-2"
+      # matchExpressions:
+      #   - key: "monitoredby"
+      #     operator: In
+      #     values:
+      #       - example-pod-1
+      #       - example-pod-2
+
+      ## label selector for pods
+      ##
+      # matchLabels: {}
 
     ## PodTargetLabels transfers labels on the Kubernetes Pod onto the target.
     ##
@@ -4360,6 +4529,42 @@ thanosRuler:
     # - secretName: thanosruler-general-tls
     #   hosts:
     #   - thanosruler.example.com
+
+  # -- BETA: Configure the gateway routes for the chart here.
+  # More routes can be added by adding a dictionary key like the 'main' route.
+  # Be aware that this is an early beta of this feature,
+  # kube-prometheus-stack does not guarantee this works and is subject to change.
+  # Being BETA this can/will change in the future without notice, do not use unless you want to take that risk
+  # [[ref]](https://gateway-api.sigs.k8s.io/references/spec/#gateway.networking.k8s.io%2fv1alpha2)
+  route:
+    main:
+      # -- Enables or disables the route
+      enabled: false
+
+      # -- Set the route apiVersion, e.g. gateway.networking.k8s.io/v1 or gateway.networking.k8s.io/v1alpha2
+      apiVersion: gateway.networking.k8s.io/v1
+      # -- Set the route kind
+      # Valid options are GRPCRoute, HTTPRoute, TCPRoute, TLSRoute, UDPRoute
+      kind: HTTPRoute
+
+      annotations: {}
+      labels: {}
+
+      hostnames: []
+      # - my-filter.example.com
+      parentRefs: []
+      # - name: acme-gw
+
+      matches:
+        - path:
+            type: PathPrefix
+            value: /
+
+      ## Filters define the filters that are applied to requests that match this rule.
+      filters: []
+
+      ## Additional custom rules that can be added to the route
+      additionalRules: []
 
   ## Configuration for ThanosRuler service
   ##
@@ -4488,7 +4693,7 @@ thanosRuler:
     image:
       registry: quay.io
       repository: thanos/thanos
-      tag: v0.36.1
+      tag: v0.37.2
       sha: ""
 
     ## Namespaces to be selected for PrometheusRules discovery.
@@ -4563,7 +4768,7 @@ thanosRuler:
       existingSecret: {}
         # name: ""
         # key: ""
-      # will render render alertmanagersConfig secret data and configure it to be used by Thanos Ruler custom resource, ignored when alertmanagersConfig.existingSecret is set
+      # will render alertmanagersConfig secret data and configure it to be used by Thanos Ruler custom resource, ignored when alertmanagersConfig.existingSecret is set
       # https://thanos.io/tip/components/rule.md/#alertmanager
       secret: {}
         # alertmanagers:
@@ -4675,7 +4880,7 @@ thanosRuler:
     ## The value "hard" means that the scheduler is *required* to not schedule two replica pods onto the same node.
     ## The value "" will disable pod anti-affinity so that no anti-affinity rules will be configured.
     ##
-    podAntiAffinity: ""
+    podAntiAffinity: "soft"
 
     ## If anti-affinity is enabled sets the topologyKey to use for anti-affinity.
     ## This can be changed to, for example, failure-domain.beta.kubernetes.io/zone

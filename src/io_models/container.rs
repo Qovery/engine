@@ -1,26 +1,26 @@
 use super::{PodAntiAffinity, UpdateStrategy};
-use crate::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes};
-use crate::cloud_provider::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
-use crate::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::container_registry::ecr::ECR;
-use crate::container_registry::errors::ContainerRegistryError;
-use crate::container_registry::ContainerRegistry;
+use crate::environment::models;
+use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::container::{ContainerError, ContainerService};
+use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::registry_image_source::RegistryImageSource;
+use crate::environment::models::scaleway::ScwAppExtraSettings;
+use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
+use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::infrastructure::models::container_registry::ecr::ECR;
+use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
+use crate::infrastructure::models::container_registry::ContainerRegistry;
+use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{to_environment_variable, Port, Storage};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{Action, MountedFile};
-use crate::models;
-use crate::models::aws::AwsAppExtraSettings;
-use crate::models::aws_ec2::AwsEc2AppExtraSettings;
-use crate::models::container::{ContainerError, ContainerService};
-use crate::models::gcp::GcpAppExtraSettings;
-use crate::models::registry_image_source::RegistryImageSource;
-use crate::models::scaleway::ScwAppExtraSettings;
-use crate::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::models::types::{AWSEc2, OnPremise, AWS, GCP, SCW};
 use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
 use rusoto_credential::StaticProvider;
@@ -275,6 +275,14 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_denylist_source_range: String,
     #[serde(alias = "network.ingress.basic_auth_env_var")]
     pub network_ingress_basic_auth_env_var: String,
+    #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
+    pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
+    pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
+    #[serde(alias = "network.ingress.nginx_limit_rpm")]
+    pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
+    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -324,6 +332,10 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
@@ -405,73 +417,37 @@ impl Container {
             .collect_vec();
 
         let service: Box<dyn ContainerService> = match cloud_provider.kind() {
-            CPKind::Aws => {
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Box::new(models::container::Container::<AWS>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.command_args,
-                        self.entrypoint,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.min_instances,
-                        self.max_instances,
-                        self.public_domain,
-                        self.ports,
-                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsAppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                    )?)
-                } else {
-                    Box::new(models::container::Container::<AWSEc2>::new(
-                        context,
-                        self.long_id,
-                        self.name,
-                        self.kube_name,
-                        self.action.to_service_action(),
-                        image_source,
-                        self.command_args,
-                        self.entrypoint,
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
-                        KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
-                        KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
-                        self.min_instances,
-                        self.max_instances,
-                        self.public_domain,
-                        self.ports,
-                        self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
-                        environment_variables,
-                        self.mounted_files
-                            .iter()
-                            .map(|e| e.to_domain())
-                            .collect::<BTreeSet<_>>(),
-                        self.readiness_probe.map(|p| p.to_domain()),
-                        self.liveness_probe.map(|p| p.to_domain()),
-                        self.advanced_settings,
-                        AwsEc2AppExtraSettings {},
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        labels_groups,
-                    )?)
-                }
-            }
+            CPKind::Aws => Box::new(models::container::Container::<AWS>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.command_args,
+                self.entrypoint,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.min_instances,
+                self.max_instances,
+                self.public_domain,
+                self.ports,
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                AwsAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+            )?),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
                 self.long_id,

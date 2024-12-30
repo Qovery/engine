@@ -3,10 +3,10 @@ use crate::helm::{
     lib_dir, managed_database_context, TestInfo,
 };
 use kube::core::DynamicObject;
-use qovery_engine::cloud_provider::helm::CommonChart;
-use qovery_engine::cloud_provider::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use qovery_engine::cmd::helm::Helm;
-use qovery_engine::deployment_action::deploy_helm::HelmDeployment;
+use qovery_engine::environment::action::deploy_helm::HelmDeployment;
+use qovery_engine::helm::CommonChart;
+use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{read_dir, File};

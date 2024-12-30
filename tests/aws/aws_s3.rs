@@ -1,10 +1,10 @@
 use crate::helpers::aws::AWS_RESOURCE_TTL_IN_SECONDS;
 use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSecrets};
 use function_name::named;
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::models::ToCloudProviderFormat;
-use qovery_engine::object_storage::s3::S3;
-use qovery_engine::object_storage::{BucketDeleteStrategy, ObjectStorage};
+use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::infrastructure::models::object_storage::s3::S3;
+use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use retry::delay::Fixed;
 use std::str::FromStr;
 use std::thread;

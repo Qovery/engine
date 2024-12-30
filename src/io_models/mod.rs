@@ -1,8 +1,7 @@
-use crate::build_platform::{Credentials, SshKey};
-use crate::cloud_provider;
-use crate::cloud_provider::service;
-use crate::cloud_provider::service::ServiceType;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::infrastructure::models::build_platform::{Credentials, SshKey};
+use crate::infrastructure::models::cloud_provider::service;
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use base64::engine::general_purpose;
@@ -19,12 +18,14 @@ pub mod application;
 pub mod container;
 pub mod context;
 pub mod database;
+pub mod engine_location;
 pub mod engine_request;
 pub mod environment;
 mod gke;
 pub mod helm_chart;
 pub mod job;
 pub mod labels_group;
+pub mod models;
 pub mod probe;
 pub mod router;
 mod types;
@@ -122,14 +123,36 @@ pub struct MountedFile {
 }
 
 impl MountedFile {
-    pub fn to_domain(&self) -> cloud_provider::models::MountedFile {
-        cloud_provider::models::MountedFile {
+    pub fn to_domain(&self) -> models::MountedFile {
+        models::MountedFile {
             id: self.id.to_string(),
             long_id: self.long_id,
             mount_path: self.mount_path.to_string(),
             file_content_b64: self.file_content_b64.to_string(),
         }
     }
+}
+
+// TODO(bchastanier): this should probably be structured better than a string in the future
+#[derive(Clone)]
+pub struct NginxConfigurationServerSnippet(String);
+
+impl NginxConfigurationServerSnippet {
+    pub fn new(snippet: String) -> Self {
+        NginxConfigurationServerSnippet(snippet)
+    }
+
+    pub fn get_snippet_value(&self) -> &str {
+        &self.0
+    }
+}
+
+pub enum RateLimiting {
+    Enabled {
+        max_requests_per_minute: u32,
+        burst_multiplier: u32,
+    },
+    Disabled,
 }
 
 // Retrieve ssh keys from env variables, values are base64 encoded

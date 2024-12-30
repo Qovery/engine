@@ -3,7 +3,7 @@ use crate::helpers::utilities::{
     logger, metrics_registry, FuncTestsSecrets,
 };
 use ::function_name::named;
-use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use std::str::FromStr;
 use tracing::{span, warn, Level};
@@ -20,15 +20,15 @@ use crate::helpers::scaleway::{
 };
 use base64::engine::general_purpose;
 use base64::Engine;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::models::scaleway::ScwZone;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
-use qovery_engine::models::database::DatabaseInstanceType;
-use qovery_engine::models::scaleway::ScwZone;
 use qovery_engine::utilities::to_short_id;
 
 /**
@@ -1100,21 +1100,6 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-scw-self-hosted")]
-#[named]
-#[test]
-#[ignore]
-fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]

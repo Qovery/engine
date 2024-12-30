@@ -13,9 +13,9 @@ use crate::helpers::utilities::{
 use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
@@ -909,21 +909,6 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, true);
-}
-
-#[cfg(feature = "test-gcp-self-hosted")]
-#[named]
-#[test]
-fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, false);
-}
-
-#[cfg(feature = "test-gcp-self-hosted")]
-#[named]
-#[test]
-#[ignore]
-fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-gcp-self-hosted")]

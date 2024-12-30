@@ -2,43 +2,44 @@ use chrono::{DateTime, Utc};
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
-use crate::build_platform::local_docker::LocalDocker;
-use crate::cloud_provider::aws::kubernetes::{ec2::EC2, eks::EKS};
-use crate::cloud_provider::aws::regions::AwsRegion;
-use crate::cloud_provider::aws::AWS;
-use crate::cloud_provider::gcp::kubernetes::{Gke, GkeOptions};
-use crate::cloud_provider::gcp::locations::GcpRegion;
-use crate::cloud_provider::gcp::Google;
-use crate::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
-use crate::cloud_provider::kubernetes::{event_details, KubernetesVersion};
-use crate::cloud_provider::models::NodeGroups;
-use crate::cloud_provider::scaleway::kubernetes::Kapsule;
-use crate::cloud_provider::scaleway::Scaleway;
-use crate::cloud_provider::self_managed::SelfManaged;
-use crate::container_registry::ecr::ECR;
-use crate::container_registry::generic_cr::GenericCr;
-use crate::container_registry::github_cr::{GithubCr, RegistryType};
-use crate::container_registry::google_artifact_registry::GoogleArtifactRegistry;
-use crate::container_registry::scaleway_container_registry::ScalewayCR;
-use crate::dns_provider::cloudflare::Cloudflare;
-use crate::dns_provider::io::Kind;
-use crate::dns_provider::qoverydns::QoveryDns;
-use crate::engine::InfrastructureContext;
+use crate::environment::models::domain::Domain;
+use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
+use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use crate::infrastructure::models::cloud_provider::aws::AWS;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use crate::infrastructure::models::cloud_provider::gcp::Google;
+use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
+use crate::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use crate::infrastructure::models::cloud_provider::self_managed::SelfManaged;
+use crate::infrastructure::models::container_registry::ecr::ECR;
+use crate::infrastructure::models::container_registry::generic_cr::GenericCr;
+use crate::infrastructure::models::container_registry::github_cr::{GithubCr, RegistryType};
+use crate::infrastructure::models::container_registry::google_artifact_registry::GoogleArtifactRegistry;
+use crate::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
+use crate::infrastructure::models::dns_provider::cloudflare::Cloudflare;
+use crate::infrastructure::models::dns_provider::io::Kind;
+use crate::infrastructure::models::dns_provider::qoverydns::QoveryDns;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
+use crate::infrastructure::models::kubernetes::{event_details, Kubernetes, KubernetesVersion};
+use crate::infrastructure::models::{build_platform, cloud_provider, container_registry, dns_provider, kubernetes};
+use crate::io_models;
 use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
+use crate::io_models::models::NodeGroups;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
-use crate::models::domain::Domain;
-use crate::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use crate::models::gcp::JsonCredentials;
-use crate::models::scaleway::{ScwRegion, ScwZone};
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
-use crate::{build_platform, cloud_provider, container_registry, dns_provider, io_models};
 use anyhow::{anyhow, Context as OtherContext};
 use derivative::Derivative;
 use governor::{Quota, RateLimiter};
@@ -66,14 +67,14 @@ pub struct EngineRequest<T> {
     pub cloud_provider: CloudProvider,
     pub dns_provider: DnsProvider,
     pub container_registry: ContainerRegistry,
-    pub kubernetes: Kubernetes,
+    pub kubernetes: KubernetesDto,
     pub target_environment: T,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
 }
 
 impl<T> EngineRequest<T> {
-    pub fn engine(
+    pub fn to_infrastructure_context(
         &self,
         context: &Context,
         event_details: EventDetails,
@@ -176,14 +177,13 @@ impl<T> EngineRequest<T> {
 
     pub fn is_self_managed(&self) -> bool {
         match self.kubernetes.kind {
-            cloud_provider::kubernetes::Kind::Eks => false,
-            cloud_provider::kubernetes::Kind::Ec2 => false,
-            cloud_provider::kubernetes::Kind::ScwKapsule => false,
-            cloud_provider::kubernetes::Kind::Gke => false,
-            cloud_provider::kubernetes::Kind::EksSelfManaged => true,
-            cloud_provider::kubernetes::Kind::GkeSelfManaged => true,
-            cloud_provider::kubernetes::Kind::ScwSelfManaged => true,
-            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged => true,
+            kubernetes::Kind::Eks => false,
+            kubernetes::Kind::ScwKapsule => false,
+            kubernetes::Kind::Gke => false,
+            kubernetes::Kind::EksSelfManaged => true,
+            kubernetes::Kind::GkeSelfManaged => true,
+            kubernetes::Kind::ScwSelfManaged => true,
+            kubernetes::Kind::OnPremiseSelfManaged => true,
         }
     }
 }
@@ -264,7 +264,7 @@ impl CloudProvider {
         &self,
         context: Context,
         region: &str,
-        cluster_kind: cloud_provider::kubernetes::Kind,
+        cluster_kind: kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
         let terraform_state_credentials = cloud_provider::TerraformStateCredentials {
             access_key_id: self.terraform_state_credentials.access_key_id.clone(),
@@ -346,8 +346,8 @@ pub struct KubernetesConnection {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct Kubernetes {
-    pub kind: cloud_provider::kubernetes::Kind,
+pub struct KubernetesDto {
+    pub kind: kubernetes::Kind,
     pub long_id: Uuid,
     pub name: String,
     pub version: String,
@@ -360,13 +360,13 @@ pub struct Kubernetes {
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
 }
 
-impl Kubernetes {
+impl KubernetesDto {
     pub fn to_engine_kubernetes<'a>(
         &self,
         context: &Context,
         cloud_provider: &dyn cloud_provider::CloudProvider,
         logger: Box<dyn Logger>,
-    ) -> Result<Box<dyn cloud_provider::kubernetes::Kubernetes + 'a>, Box<EngineError>> {
+    ) -> Result<Box<dyn Kubernetes + 'a>, Box<EngineError>> {
         let event_details = event_details(cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
 
         let temp_dir = workspace_directory(
@@ -406,7 +406,7 @@ impl Kubernetes {
             };
 
         match self.kind {
-            cloud_provider::kubernetes::Kind::Eks => match EKS::new(
+            kubernetes::Kind::Eks => match EKS::new(
                 context.clone(),
                 self.long_id,
                 self.name.as_str(),
@@ -415,7 +415,7 @@ impl Kubernetes {
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 cloud_provider.zones().clone(),
                 cloud_provider,
-                serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
+                serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
                 logger,
@@ -428,7 +428,7 @@ impl Kubernetes {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            cloud_provider::kubernetes::Kind::ScwKapsule => match Kapsule::new(
+            kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
                 self.long_id,
                 self.name.clone(),
@@ -442,7 +442,7 @@ impl Kubernetes {
                 }),
                 cloud_provider,
                 self.nodes_groups.clone(),
-                serde_json::from_value::<cloud_provider::scaleway::kubernetes::KapsuleOptions>(self.options.clone())
+                serde_json::from_value::<kubernetes::scaleway::kapsule::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
                 logger,
                 self.advanced_settings.clone(),
@@ -453,40 +453,7 @@ impl Kubernetes {
                 Ok(res) => Ok(Box::new(res)),
                 Err(e) => Err(e),
             },
-            cloud_provider::kubernetes::Kind::Ec2 => {
-                let ec2_instance = match self.nodes_groups.len() != 1 {
-                    true => {
-                        return Err(Box::new(EngineError::new_missing_nodegroup_information_error(
-                            cloud_provider
-                                .get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterResources)),
-                            "unknown for EC2 nodegroup".to_string(),
-                        )));
-                    }
-                    false => self.nodes_groups[0].to_ec2_instance(),
-                };
-                match EC2::new(
-                    context.clone(),
-                    self.long_id,
-                    self.name.as_str(),
-                    KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                    cloud_provider.zones().clone(),
-                    cloud_provider,
-                    serde_json::from_value::<cloud_provider::aws::kubernetes::Options>(self.options.clone())
-                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                    ec2_instance,
-                    logger,
-                    self.advanced_settings.clone(),
-                    decoded_helm_charts_override,
-                    self.kubeconfig.clone(),
-                    temp_dir,
-                ) {
-                    Ok(res) => Ok(Box::new(res)),
-                    Err(e) => Err(e),
-                }
-            }
-            cloud_provider::kubernetes::Kind::Gke => {
+            kubernetes::Kind::Gke => {
                 let options = serde_json::from_value::<io_models::gke::GkeOptions>(self.options.clone()).map_err(
                     |e: serde_json::Error| {
                         Box::new(EngineError::new_invalid_engine_payload(
@@ -499,7 +466,7 @@ impl Kubernetes {
                 let options = GkeOptions::try_from(options).map_err(|e: String| {
                     Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
                 })?;
-                match Gke::new(
+                match kubernetes::gcp::Gke::new(
                     context.clone(),
                     self.long_id,
                     &self.name,
@@ -522,11 +489,11 @@ impl Kubernetes {
                     Err(e) => Err(e),
                 }
             }
-            cloud_provider::kubernetes::Kind::OnPremiseSelfManaged
-            | cloud_provider::kubernetes::Kind::EksSelfManaged
-            | cloud_provider::kubernetes::Kind::GkeSelfManaged
-            | cloud_provider::kubernetes::Kind::ScwSelfManaged => {
-                match cloud_provider::self_managed::kubernetes::SelfManaged::new(
+            kubernetes::Kind::OnPremiseSelfManaged
+            | kubernetes::Kind::EksSelfManaged
+            | kubernetes::Kind::GkeSelfManaged
+            | kubernetes::Kind::ScwSelfManaged => {
+                match kubernetes::self_managed::on_premise::SelfManaged::new(
                     context.clone(),
                     self.long_id,
                     self.name.to_string(),
@@ -534,7 +501,7 @@ impl Kubernetes {
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     cloud_provider,
-                    serde_json::from_value::<cloud_provider::self_managed::kubernetes::SelfManagedOptions>(
+                    serde_json::from_value::<kubernetes::self_managed::on_premise::SelfManagedOptions>(
                         self.options.clone(),
                     )
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
@@ -795,13 +762,13 @@ pub struct GcpCrOptions {
 /// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
 fn gcp_credentials_from_str<'de, D>(
     deserializer: D,
-) -> Result<Option<crate::models::gcp::io::JsonCredentials>, D::Error>
+) -> Result<Option<crate::environment::models::gcp::io::JsonCredentials>, D::Error>
 where
     D: Deserializer<'de>,
 {
     let gcp_credentials_option: Option<String> = Option::deserialize(deserializer)?;
     match gcp_credentials_option {
-        Some(c) => match crate::models::gcp::io::JsonCredentials::try_new_from_json_str(&c) {
+        Some(c) => match crate::environment::models::gcp::io::JsonCredentials::try_new_from_json_str(&c) {
             Ok(credentials) => Ok(Some(credentials)),
             Err(e) => Err(de::Error::custom(e.to_string())),
         },

@@ -1,4 +1,4 @@
-use crate::models::probe as models;
+use crate::environment::models::probe as models;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]

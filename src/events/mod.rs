@@ -7,8 +7,8 @@ pub mod io;
 extern crate derivative;
 extern crate url;
 
-use crate::cloud_provider::Kind;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::infrastructure::models::cloud_provider::Kind;
 use crate::io_models::QoveryIdentifier;
 use crate::metrics_registry::StepRecord;
 use derivative::Derivative;
@@ -757,12 +757,12 @@ impl EventDetails {
 
 #[cfg(test)]
 mod tests {
-    use crate::cloud_provider::Kind;
     use crate::errors::{CommandError, EngineError};
     use crate::events::{
         EngineEvent, EnvironmentStep, EventDetails, EventMessage, EventMessageVerbosity, InfrastructureStep, Stage,
         Transmitter,
     };
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
 

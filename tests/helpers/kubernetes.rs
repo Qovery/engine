@@ -1,4 +1,3 @@
-use crate::helpers::aws_ec2::{ec2_kubernetes_instance, AWS_EC2_KUBERNETES_VERSION};
 use crate::helpers::common::{Cluster, ClusterDomain};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
@@ -8,31 +7,30 @@ use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_RESOURCE_TTL_IN_SECON
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
-use qovery_engine::cloud_provider::aws::kubernetes::ec2::EC2;
-use qovery_engine::cloud_provider::aws::kubernetes::eks::EKS;
-use qovery_engine::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
-use qovery_engine::cloud_provider::gcp::locations::GcpRegion;
-use qovery_engine::cloud_provider::io::ClusterAdvancedSettings;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::scaleway::kubernetes::Kapsule;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::{CloudProvider, Kind};
-use qovery_engine::engine_task::environment_task::EnvironmentTask;
+use qovery_engine::environment::models::scaleway::ScwZone;
+use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::fs::workspace_directory;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, Kind};
+use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
+use qovery_engine::infrastructure::models::kubernetes::gcp::Gke;
+use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
+use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, Kubernetes, KubernetesVersion};
 use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::models::{CpuArchitecture, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use qovery_engine::models::scaleway::ScwZone;
 
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
-use qovery_engine::cloud_provider;
-use qovery_engine::cloud_provider::service::Action;
-use qovery_engine::models::abort::AbortStatus;
+use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::infrastructure::models::cloud_provider;
+use qovery_engine::infrastructure::models::cloud_provider::service::Action;
 use std::str::FromStr;
 use tracing::{span, Level};
 
@@ -76,12 +74,6 @@ pub fn cluster_test(
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => match test_type {
             ClusterTestType::WithUpgrade => AWS_KUBERNETES_VERSION.previous_version().expect("No previous version"),
             _ => AWS_KUBERNETES_VERSION,
-        },
-        KubernetesKind::Ec2 => match test_type {
-            ClusterTestType::WithUpgrade => AWS_EC2_KUBERNETES_VERSION
-                .previous_version()
-                .expect("No previous version"),
-            _ => AWS_EC2_KUBERNETES_VERSION.clone(),
         },
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => match test_type {
             ClusterTestType::WithUpgrade => SCW_KUBERNETES_VERSION.previous_version().expect("No previous version"),
@@ -167,8 +159,8 @@ pub fn cluster_test(
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Create;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Create;
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }
@@ -323,8 +315,8 @@ pub fn cluster_test(
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, |_| {}, &|| AbortStatus::None) {
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Delete;
+        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
     }
@@ -382,7 +374,8 @@ pub fn get_environment_test_kubernetes(
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
-                        aws_eks_ec2_metadata_imds: qovery_engine::cloud_provider::io::AwsEc2MetadataImds::Required,
+                        aws_eks_ec2_metadata_imds:
+                            qovery_engine::infrastructure::models::cloud_provider::io::AwsEc2MetadataImds::Required,
                         aws_eks_enable_alb_controller: true,
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
@@ -395,40 +388,6 @@ pub fn get_environment_test_kubernetes(
                     None,
                 )
                 .unwrap(),
-            )
-        }
-        KubernetesKind::Ec2 => {
-            let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::QoverySide, None);
-            if let Some(vpc_network_mode) = vpc_network_mode {
-                options.vpc_qovery_network_mode = vpc_network_mode;
-            }
-
-            Box::new(
-                EC2::new(
-                    context.clone(),
-                    *context.cluster_long_id(),
-                    format!("qovery-{}", context.cluster_short_id()).as_str(),
-                    kubernetes_version,
-                    region.clone(),
-                    region.get_zones_to_string(),
-                    cloud_provider,
-                    options,
-                    ec2_kubernetes_instance(),
-                    logger,
-                    ClusterAdvancedSettings {
-                        pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
-                        aws_vpc_enable_flow_logs: false,
-                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
-                            default_kubernetes_storage_class,
-                        ),
-                        ..Default::default()
-                    },
-                    None,
-                    secrets.AWS_EC2_KUBECONFIG,
-                    temp_dir,
-                )
-                .expect("Cannot instantiate AWS EKS"),
             )
         }
         KubernetesKind::ScwKapsule => {

@@ -3,43 +3,43 @@ use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, F
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
-use qovery_engine::build_platform::{Build, GitRepository, Image, SshKey};
-use qovery_engine::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use qovery_engine::cloud_provider::aws::{
-    kubernetes::eks::EKS,
+use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::environment::models::application::Application;
+use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use qovery_engine::environment::models::container::Container;
+use qovery_engine::environment::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
+use qovery_engine::environment::models::environment::Environment;
+use qovery_engine::environment::models::job::{ImageSource, Job};
+use qovery_engine::environment::models::probe::{Probe, ProbeType};
+use qovery_engine::environment::models::registry_image_source::RegistryImageSource;
+use qovery_engine::environment::models::router::{Router, RouterAdvancedSettings};
+use qovery_engine::environment::models::types::{VersionsNumber, AWS as AWSType};
+use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
+use qovery_engine::fs::workspace_directory;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
+use qovery_engine::infrastructure::models::cloud_provider::aws::{
     regions::{AwsRegion, AwsZone},
     AWS,
 };
-use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
-use qovery_engine::cloud_provider::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{
-    CpuArchitecture, CustomDomain, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-    MountedFile, Route, Storage, StorageClass,
-};
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::service::{Action, Service};
-use qovery_engine::cloud_provider::{CloudProvider, DeploymentTarget};
-use qovery_engine::engine::InfrastructureContext;
-use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
-use qovery_engine::fs::workspace_directory;
+use qovery_engine::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
+use qovery_engine::infrastructure::models::cloud_provider::service::{Action, Service};
+use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, DeploymentTarget};
+use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
+use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
+use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
+use qovery_engine::io_models::models::{
+    CpuArchitecture, CustomDomain, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+    MountedFile, Route, Storage, StorageClass,
+};
 use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
-use qovery_engine::models::abort::AbortStatus;
-use qovery_engine::models::application::Application;
-use qovery_engine::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
-use qovery_engine::models::container::Container;
-use qovery_engine::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
-use qovery_engine::models::job::{ImageSource, Job};
-use qovery_engine::models::probe::{Probe, ProbeType};
-use qovery_engine::models::registry_image_source::RegistryImageSource;
-use qovery_engine::models::router::{Router, RouterAdvancedSettings};
-use qovery_engine::models::types::{VersionsNumber, AWS as AWSType};
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -247,7 +247,6 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
                 dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
-                buildpack_language: Some("my_language".to_string()),
             },
             image: Image {
                 service_id: "my_application_id".to_string(),
@@ -333,6 +332,10 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
             hpa_cpu_average_utilization_percent: 31,
             hpa_memory_average_utilization_percent: None,
             deployment_affinity_node_required: BTreeMap::new(),
@@ -434,6 +437,10 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_controller_server_snippet: None,
+            network_ingress_nginx_controller_configuration_snippet: None,
             hpa_cpu_average_utilization_percent: 41,
             hpa_memory_average_utilization_percent: None,
             security_service_account_name: "".to_string(),

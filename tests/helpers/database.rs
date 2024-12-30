@@ -11,42 +11,41 @@ use core::default::Default;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
-use qovery_engine::cloud_provider::aws::AWS;
-use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::cloud_provider::scaleway::Scaleway;
-use qovery_engine::cloud_provider::Kind;
 use qovery_engine::cmd::structs::SVCItem;
+use qovery_engine::environment::models::environment::Environment;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use qovery_engine::io_models::engine_location::EngineLocation;
 
-use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::io_models::application::{Application, Port, Protocol};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 
-use crate::helpers::aws_ec2::AWS_EC2_KUBERNETES_VERSION;
-use qovery_engine::cloud_provider::models::CpuArchitecture;
-use qovery_engine::cloud_provider::service::Service;
-use qovery_engine::deployment_report::logger::EnvLogger;
-use qovery_engine::engine_task::environment_task::{DeploymentOption, EnvironmentTask};
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::report::logger::EnvLogger;
+use qovery_engine::environment::task::{DeploymentOption, EnvironmentTask};
 use qovery_engine::events::EnvironmentStep;
+use qovery_engine::infrastructure::models::cloud_provider::service::Service;
 use qovery_engine::io_models::environment::EnvironmentRequest;
+use qovery_engine::io_models::models::CpuArchitecture;
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use qovery_engine::models::database::DatabaseInstanceType;
 
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use base64::engine::general_purpose;
 use base64::Engine;
-use qovery_engine::cloud_provider::gcp::kubernetes::Gke;
+use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::environment::models::types::VersionsNumber;
 use qovery_engine::errors::EngineError;
-use qovery_engine::models::abort::AbortStatus;
-use qovery_engine::models::types::VersionsNumber;
+use qovery_engine::infrastructure::models::kubernetes::gcp::Gke;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
@@ -88,7 +87,6 @@ impl Infrastructure for EnvironmentRequest {
             &deployment_option,
             infra_ctx,
             1,
-            |_| {},
             |srv: &dyn Service| EnvLogger::new(srv, EnvironmentStep::Build, logger.clone()),
             &|| AbortStatus::None,
         );
@@ -110,8 +108,8 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Create;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Create;
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn pause_environment(
@@ -128,8 +126,8 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Pause;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Pause;
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn delete_environment(
@@ -146,8 +144,8 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Delete;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Delete;
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 
     fn restart_environment(
@@ -164,8 +162,8 @@ impl Infrastructure for EnvironmentRequest {
             )
             .unwrap();
 
-        env.action = qovery_engine::cloud_provider::service::Action::Restart;
-        EnvironmentTask::deploy_environment(env, infra_ctx, |_| {}, &|| AbortStatus::None)
+        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Restart;
+        EnvironmentTask::deploy_environment(env, infra_ctx, &|| AbortStatus::None)
     }
 }
 
@@ -241,7 +239,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: "/".to_string(),
                 action: Action::Create,
                 git_credentials: None,
@@ -310,7 +307,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: None,
@@ -379,7 +375,6 @@ pub fn environment_3_apps_3_databases(
                 dockerfile_path: Some(format!("Dockerfile-{version_mongo}")),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 action: Action::Create,
                 root_path: String::from("/"),
                 git_credentials: None,
@@ -561,7 +556,6 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             branch: "basic-app-deploy".to_string(),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
@@ -619,7 +613,6 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
@@ -702,18 +695,11 @@ pub fn test_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            match kubernetes_kind {
-                KubernetesKind::Ec2 => secrets
-                    .AWS_EC2_TEST_CLUSTER_DOMAIN
-                    .as_ref()
-                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
-                    .to_string(),
-                _ => secrets
-                    .DEFAULT_TEST_DOMAIN
-                    .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN must be set")
-                    .to_string(),
-            }
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN must be set")
+                .to_string()
         )
     );
 
@@ -816,7 +802,6 @@ pub fn test_db(
     let kubernetes_version = match kubernetes_kind {
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
-        KubernetesKind::Ec2 => AWS_EC2_KUBERNETES_VERSION.clone(),
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
         KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
     };
@@ -840,21 +825,6 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
@@ -976,21 +946,6 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
                 ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG,
-                ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
                     logger.clone(),
@@ -1033,14 +988,6 @@ pub fn test_db(
     let ret = environment_delete.delete_environment(&ea_delete, infra_ctx_for_delete);
     assert!(ret.is_ok());
 
-    if kubernetes_kind == KubernetesKind::Ec2 {
-        let ret = infra_ctx_for_delete
-            .kubernetes()
-            .as_infra_actions()
-            .delete_cluster(infra_ctx_for_delete);
-        assert!(ret.is_ok());
-    }
-
     test_name.to_string()
 }
 
@@ -1077,18 +1024,11 @@ pub fn test_pause_managed_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            match kubernetes_kind {
-                KubernetesKind::Ec2 => secrets
-                    .AWS_EC2_TEST_CLUSTER_DOMAIN
-                    .as_ref()
-                    .expect("AWS_EC2_TEST_CLUSTER_DOMAIN must be set")
-                    .to_string(),
-                _ => secrets
-                    .DEFAULT_TEST_DOMAIN
-                    .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN must be set")
-                    .to_string(),
-            }
+            secrets
+                .DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
         )
     );
 
@@ -1185,21 +1125,6 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG.as_ref().map(|s| s.to_string()),
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
@@ -1301,21 +1226,6 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
-                ),
-                KubernetesKind::Ec2 => AWS::docker_cr_engine(
-                    &context_for_delete,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Ec2,
-                    kubernetes_version,
-                    &cluster_domain,
-                    None,
-                    1,
-                    1,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide, // EC2 is not meant to run Engine
-                    secrets.AWS_EC2_KUBECONFIG,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,

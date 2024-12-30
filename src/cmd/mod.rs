@@ -1,5 +1,6 @@
 pub mod command;
 pub mod docker;
+pub mod git;
 pub mod git_lfs;
 pub mod helm;
 pub mod helm_utils;

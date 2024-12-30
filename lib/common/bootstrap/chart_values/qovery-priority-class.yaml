@@ -1,3 +1,5 @@
 priorityClass:
   highPriority:
     enable: set-by-engine
+  standardPriority:
+    enable: set-by-engine

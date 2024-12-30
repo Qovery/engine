@@ -22,4 +22,4 @@ name: prometheus-node-exporter
 sources:
 - https://github.com/prometheus/node_exporter/
 type: application
-version: 4.39.0
+version: 4.42.0

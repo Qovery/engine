@@ -1,4 +1,3 @@
-use crate::cloud_provider::helm::ChartInfo;
 use crate::cmd::helm::HelmError::CmdError;
 use crate::cmd::helm::{Helm, HelmCommand, HelmError};
 use crate::cmd::kubectl::{
@@ -11,6 +10,7 @@ use crate::fs::{
     create_yaml_backup_file, create_yaml_file_from_secret, indent_file, remove_lines_starting_with,
     truncate_file_from_word,
 };
+use crate::helm::ChartInfo;
 use retry::delay::Fixed;
 use retry::OperationResult;
 use semver::Version;

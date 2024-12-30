@@ -49,11 +49,21 @@ metadata:
     nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ sanitized_name }}
     nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
     {%- endif %}
+    # RATE LIMITING
+    {%- if advanced_settings.network_ingress_nginx_limit_rpm %}
+    nginx.ingress.kubernetes.io/limit-rpm: "{{ advanced_settings.network_ingress_nginx_limit_rpm }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
+    {%- endif %}
     # GRPC SPECIFIC
     # https://kubernetes.github.io/ingress-nginx/examples/grpc/
     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
     nginx.ingress.kubernetes.io/server-snippet: |
+      {%- if nginx_ingress_controller_server_snippet %}
+      {{ nginx_ingress_controller_server_snippet | indent(prefix="      ") }}
+      {%- endif %}
       grpc_socket_keepalive on;
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
@@ -63,6 +73,10 @@ metadata:
 
     {%- if advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      {%- if nginx_ingress_controller_configuration_snippet %}
+      {{ nginx_ingress_controller_configuration_snippet | indent(prefix="      ") }}
+      {%- endif %}
+
       {%- for key, value in advanced_settings.network_ingress_add_headers %}
       add_header {{ key }} "{{ value | nginx_header_value_escape }}";
       {%- endfor %}

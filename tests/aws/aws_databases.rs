@@ -12,8 +12,9 @@ use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env}
 use ::function_name::named;
 use base64::engine::general_purpose;
 use base64::Engine;
-use qovery_engine::cloud_provider::kubernetes::Kind as KubernetesKind;
-use qovery_engine::cloud_provider::Kind;
+use qovery_engine::environment::models::aws::AwsStorageType;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
@@ -21,7 +22,6 @@ use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::Action;
-use qovery_engine::models::aws::AwsStorageType;
 use qovery_engine::utilities::to_short_id;
 use std::thread::sleep;
 use std::time::Duration;
@@ -1192,21 +1192,6 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 #[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-fn private_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
-}
-
-#[cfg(feature = "test-aws-self-hosted")]
-#[named]
-#[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
-fn public_redis_v6_deploy_a_working_dev_environment() {
-    test_redis_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]

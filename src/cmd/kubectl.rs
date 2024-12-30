@@ -8,18 +8,14 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-use retry::delay::Fibonacci;
-use retry::OperationResult;
 use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
-use crate::cloud_provider::metrics::KubernetesApiMetrics;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
-    Configmap, Daemonset, Item, KubernetesDeployment, KubernetesEvent, KubernetesIngress,
-    KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind, KubernetesList, KubernetesNode,
-    KubernetesPod, KubernetesPodStatusPhase, KubernetesPodStatusReason, KubernetesService, KubernetesStatefulSet,
-    KubernetesVersion, MetricsServer, Namespace, Secrets, HPA, PDB, PVC, SVC,
+    Configmap, Item, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
+    KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer,
+    Secrets, PDB, PVC, SVC,
 };
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
@@ -102,28 +98,6 @@ where
     Ok(output_string)
 }
 
-pub fn kubectl_exec_get_external_ingress_hostname<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let result = kubectl_exec::<P, KubernetesService>(
-        vec!["get", "-n", namespace, "svc", name, "-o", "json"],
-        kubernetes_config,
-        envs,
-    )?;
-
-    if result.status.load_balancer.ingress.is_empty() {
-        return Ok(None);
-    }
-
-    Ok(Some(result.status.load_balancer.ingress.first().unwrap().hostname.clone()))
-}
-
 pub fn kubectl_exec_get_external_ingress<P>(
     kubernetes_config: P,
     namespace: &str,
@@ -144,37 +118,6 @@ where
     }
 
     Ok(Some(result.status.load_balancer.ingress.first().unwrap().clone()))
-}
-
-pub fn kubectl_exec_is_pod_ready_with_retry<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let result = retry::retry(Fibonacci::from_millis(3000).take(10), || {
-        let r = kubectl_exec_is_pod_ready(kubernetes_config.as_ref(), namespace, selector, envs.clone());
-
-        match r {
-            Ok(is_ready) => match is_ready {
-                Some(true) => OperationResult::Ok(true),
-                _ => {
-                    let t = format!("pod with selector: {selector} is not ready yet");
-                    info!("{}", t.as_str());
-                    OperationResult::Retry(t)
-                }
-            },
-            Err(err) => OperationResult::Err(format!("command error: {err:?}")),
-        }
-    });
-
-    match result {
-        Err(_) => Ok(Some(false)),
-        Ok(_) => Ok(Some(true)),
-    }
 }
 
 pub fn kubectl_exec_get_secrets<P>(
@@ -201,143 +144,6 @@ where
         kubernetes_config,
         envs,
     )
-}
-
-pub fn kubectl_exec_is_pod_ready<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let result = kubectl_exec_get_pods(kubernetes_config, Some(namespace), Some(selector), envs)?;
-
-    if result.items.is_empty() || result.items.first().unwrap().status.container_statuses.is_none() {
-        return Ok(None);
-    }
-
-    let first_item = result.items.first().unwrap();
-
-    let is_ready = matches!(first_item.status.phase, KubernetesPodStatusPhase::Running);
-    Ok(Some(is_ready))
-}
-
-pub fn kubectl_exec_is_job_ready<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    job_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<bool>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let job_result = kubectl_exec::<P, KubernetesJob>(
-        vec!["get", "job", "-o", "json", "-n", namespace, job_name],
-        kubernetes_config,
-        envs,
-    )?;
-
-    if job_result.status.succeeded > 0 {
-        return Ok(Some(true));
-    }
-
-    Ok(Some(false))
-}
-
-// used for testing the does_contain_terraform_tfstate
-pub fn does_contain_terraform_tfstate<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    envs: &[(&str, &str)],
-) -> Result<bool, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    _envs.extend(envs);
-
-    let result = kubectl_exec::<P, KubernetesList<Item>>(
-        vec![
-            "get",
-            "secrets",
-            "--namespace",
-            namespace,
-            "-l",
-            "app.kubernetes.io/managed-by=terraform,tfstate=true",
-            "-o",
-            "json",
-        ],
-        kubernetes_config,
-        _envs,
-    );
-
-    match result {
-        Ok(out) => {
-            if out.items.is_empty() {
-                Ok(false)
-            } else {
-                Ok(true)
-            }
-        }
-        Err(e) => Err(e),
-    }
-}
-
-pub fn kubectl_exec_get_all_namespaces<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let result =
-        kubectl_exec::<P, KubernetesList<Namespace>>(vec!["get", "namespaces", "-o", "json"], kubernetes_config, envs);
-
-    let mut to_return: Vec<String> = Vec::new();
-
-    match result {
-        Ok(out) => {
-            for item in out.items {
-                to_return.push(item.metadata.name);
-            }
-        }
-        Err(e) => return Err(e),
-    };
-
-    Ok(to_return)
-}
-
-pub fn kubectl_exec_delete_namespace<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    if does_contain_terraform_tfstate(&kubernetes_config, namespace, &envs)? {
-        return Err(CommandError::new_from_safe_message(
-            "Namespace contains terraform tfstates in secret, can't delete it !".to_string(),
-        ));
-    }
-
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    let kubernetes_config = kubernetes_config.as_ref();
-    if kubernetes_config.exists() {
-        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
-    }
-    _envs.extend(envs);
-
-    kubectl_exec_with_output(
-        vec!["delete", "namespace", namespace, "--timeout 600s"],
-        _envs,
-        &mut |line| info!("{}", line),
-        &mut |line| error!("{}", line),
-    )?;
-
-    Ok(())
 }
 
 pub fn kubectl_exec_delete_crd<P>(
@@ -391,89 +197,11 @@ where
     Ok(())
 }
 
-pub fn kubectl_exec_logs<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Vec<String>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    let kubernetes_config = kubernetes_config.as_ref();
-    if kubernetes_config.exists() {
-        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
-    }
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    kubectl_exec_with_output(
-        vec!["logs", "--tail", "1000", "-n", namespace, "-l", selector],
-        _envs,
-        &mut |line| output_vec.push(line),
-        &mut |line| error!("{}", line),
-    )?;
-
-    Ok(output_vec)
-}
-
-pub fn kubectl_exec_describe_pod<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    selector: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    let kubernetes_config = kubernetes_config.as_ref();
-    if kubernetes_config.exists() {
-        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
-    }
-    _envs.extend(envs);
-
-    let mut output_vec: Vec<String> = Vec::with_capacity(50);
-    kubectl_exec_with_output(
-        vec!["describe", "pod", "-n", namespace, "-l", selector],
-        _envs,
-        &mut |line| output_vec.push(line),
-        &mut |line| error!("{}", line),
-    )?;
-
-    Ok(output_vec.join("\n"))
-}
-
 pub fn kubectl_exec_version<P>(kubernetes_config: P, envs: Vec<(&str, &str)>) -> Result<KubernetesVersion, CommandError>
 where
     P: AsRef<Path>,
 {
     kubectl_exec::<P, KubernetesVersion>(vec!["version", "-o", "json"], kubernetes_config, envs)
-}
-
-pub fn kubectl_exec_get_daemonset<P>(
-    kubernetes_config: P,
-    name: &str,
-    namespace: &str,
-    selectors: Option<&str>,
-    envs: Vec<(&str, &str)>,
-) -> Result<Daemonset, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut args = vec!["-n", namespace, "get", "daemonset"];
-    match selectors {
-        Some(x) => {
-            args.push("-l");
-            args.push(x);
-        }
-        None => args.push(name),
-    };
-    args.push("-o");
-    args.push("json");
-
-    kubectl_exec::<P, Daemonset>(args, kubernetes_config, envs)
 }
 
 pub fn kubectl_exec_rollout_restart_deployment<P>(
@@ -559,60 +287,6 @@ where
     kubectl_exec::<P, KubernetesList<KubernetesPod>>(cmd_args, kubernetes_config, envs)
 }
 
-pub fn kubectl_exec_get_deployments<P>(
-    kubernetes_config: P,
-    namespace: Option<&str>,
-    selector: Option<&str>,
-    envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesDeployment>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut cmd_args = vec!["get", "deployment", "-o", "json"];
-
-    match namespace {
-        Some(n) => {
-            cmd_args.push("-n");
-            cmd_args.push(n);
-        }
-        None => cmd_args.push("--all-namespaces"),
-    }
-
-    if let Some(s) = selector {
-        cmd_args.push("--selector");
-        cmd_args.push(s);
-    }
-
-    kubectl_exec::<P, KubernetesList<KubernetesDeployment>>(cmd_args, kubernetes_config, envs)
-}
-
-pub fn kubectl_exec_get_statefulsets<P>(
-    kubernetes_config: P,
-    namespace: Option<&str>,
-    selector: Option<&str>,
-    envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesStatefulSet>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut cmd_args = vec!["get", "statefulset", "-o", "json"];
-
-    match namespace {
-        Some(n) => {
-            cmd_args.push("-n");
-            cmd_args.push(n);
-        }
-        None => cmd_args.push("--all-namespaces"),
-    }
-
-    if let Some(s) = selector {
-        cmd_args.push("--selector");
-        cmd_args.push(s);
-    }
-
-    kubectl_exec::<P, KubernetesList<KubernetesStatefulSet>>(cmd_args, kubernetes_config, envs)
-}
-
 /// kubectl_exec_get_pod_by_name: allows to retrieve a pod by its name
 ///
 /// # Arguments
@@ -656,22 +330,6 @@ where
 {
     kubectl_exec::<P, Configmap>(
         vec!["get", "configmap", "-o", "json", "-n", namespace, name],
-        kubernetes_config,
-        envs,
-    )
-}
-
-pub fn kubectl_exec_get_json_events<P>(
-    kubernetes_config: P,
-    namespace: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<KubernetesList<KubernetesEvent>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // Note: can't use app selector with kubectl get event..
-    kubectl_exec::<P, KubernetesList<KubernetesEvent>>(
-        vec!["get", "event", "-o", "json", "-n", namespace],
         kubernetes_config,
         envs,
     )
@@ -731,30 +389,6 @@ where
     }
 }
 
-/// Get custom metrics values
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-/// * `envs` - environment variables required for kubernetes connection
-/// * `namespace` - kubernetes namespace
-/// * `pod_name` - add a pod name or None to specify all pods
-/// * `metric_name` - metric name
-pub fn kubectl_exec_api_custom_metrics<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: &str,
-    specific_pod_name: Option<&str>,
-    metric_name: &str,
-) -> Result<KubernetesApiMetrics, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let pods = specific_pod_name.unwrap_or("*");
-    let api_url = format!("/apis/custom.metrics.k8s.io/v1beta1/namespaces/{namespace}/pods/{pods}/{metric_name}");
-    kubectl_exec::<P, KubernetesApiMetrics>(vec!["get", "--raw", api_url.as_str()], kubernetes_config, envs)
-}
-
 /// scale down replicas by name
 ///
 /// # Arguments
@@ -802,91 +436,6 @@ where
         &mut |_| {},
         &mut |_| {},
     )
-}
-
-/// scale down replicas by selector
-///
-/// # Arguments
-///
-/// * `kubernetes_config` - kubernetes config path
-/// * `envs` - environment variables required for kubernetes connection
-/// * `namespace` - kubernetes namespace
-/// * `kind` - kind of kubernetes resource to scale
-/// * `selector` - ressources that must match the selector
-/// * `replicas_count` - desired number of replicas
-pub fn kubectl_exec_scale_replicas_by_selector<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: &str,
-    kind: ScalingKind,
-    selector: &str,
-    replicas_count: u32,
-) -> Result<(), CommandError>
-where
-    P: AsRef<Path>,
-{
-    match kind {
-        ScalingKind::Deployment => {
-            if let Ok(deployments) =
-                kubectl_exec_get_deployments(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
-            {
-                if deployments.items.is_empty() {
-                    return Ok(());
-                }
-            }
-        }
-        ScalingKind::Statefulset => {
-            if let Ok(statefulsets) =
-                kubectl_exec_get_statefulsets(&kubernetes_config, Some(namespace), Some(selector), envs.clone())
-            {
-                if statefulsets.items.is_empty() {
-                    return Ok(());
-                }
-            }
-        }
-    };
-
-    let kind_formatted = match kind {
-        ScalingKind::Deployment => "deployment",
-        ScalingKind::Statefulset => "statefulset",
-    };
-
-    let mut _envs = Vec::with_capacity(envs.len() + 1);
-    let kubernetes_config = kubernetes_config.as_ref();
-    if kubernetes_config.exists() {
-        _envs.push((KUBECONFIG, kubernetes_config.to_str().unwrap()));
-    }
-    _envs.extend(envs.clone());
-
-    kubectl_exec_with_output(
-        vec![
-            "-n",
-            namespace,
-            "scale",
-            "--replicas",
-            &replicas_count.to_string(),
-            kind_formatted,
-            "--selector",
-            selector,
-        ],
-        _envs.clone(),
-        &mut |_| {},
-        &mut |_| {},
-    )?;
-
-    // deleting pdb in order to be able to upgrade kubernetes version
-    kubectl_exec_with_output(
-        vec!["-n", namespace, "delete", "pdb", "--selector", selector],
-        _envs,
-        &mut |_| {},
-        &mut |_| {},
-    )?;
-
-    let condition = match replicas_count {
-        0 => PodCondition::Delete,
-        _ => PodCondition::Ready,
-    };
-    kubectl_exec_wait_for_pods_condition(kubernetes_config, envs, namespace, selector, condition)
 }
 
 pub fn kubectl_exec_wait_for_pods_condition<P>(
@@ -1189,27 +738,6 @@ where
     let cmd_args = vec!["get", "--raw", "/apis/metrics.k8s.io"];
 
     kubectl_exec::<P, MetricsServer>(cmd_args, kubernetes_config, envs)
-}
-
-pub fn kubernetes_get_all_hpas<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: Option<&str>,
-) -> Result<HPA, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let mut cmd_args = vec!["get", "hpa", "-o", "json"];
-
-    match namespace {
-        Some(n) => {
-            cmd_args.push("-n");
-            cmd_args.push(n);
-        }
-        None => cmd_args.push("--all-namespaces"),
-    }
-
-    kubectl_exec::<P, HPA>(cmd_args, kubernetes_config, envs)
 }
 
 pub fn kubectl_get_resource_yaml<P>(

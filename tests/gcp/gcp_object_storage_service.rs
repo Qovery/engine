@@ -2,7 +2,7 @@ use crate::helpers::gcp::{try_parse_json_credentials_from_str, GCP_REGION, GCP_R
 use crate::helpers::gcp::{GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER, GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER};
 use crate::helpers::utilities::FuncTestsSecrets;
 use function_name::named;
-use qovery_engine::object_storage::{Bucket, BucketObject, BucketRegion};
+use qovery_engine::infrastructure::models::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
 use retry::delay::Fibonacci;

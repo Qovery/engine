@@ -6,20 +6,20 @@ use base64::engine::general_purpose;
 use base64::Engine;
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use qovery_engine::cloud_provider::models::{
+use qovery_engine::environment::action::update_pvcs;
+use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::environment::models::application::{get_application_with_invalid_storage_size, Application};
+use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsStorageType};
+use qovery_engine::environment::models::types::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
+use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
+use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
 };
-use qovery_engine::cloud_provider::service::ServiceType;
-use qovery_engine::cloud_provider::utilities::update_pvcs;
-use qovery_engine::cloud_provider::DeploymentTarget;
-use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
-use qovery_engine::models::abort::AbortStatus;
-use qovery_engine::models::application::{get_application_with_invalid_storage_size, Application};
-use qovery_engine::models::aws::{AwsAppExtraSettings, AwsStorageType};
-use qovery_engine::models::types::AWS;
 use qovery_engine::runtime::block_on;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::{span, Level};

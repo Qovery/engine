@@ -3,13 +3,13 @@ extern crate serde_derive;
 
 use crate::helpers::utilities::FuncTestsSecrets;
 
-use qovery_engine::cloud_provider::environment::Environment;
-use qovery_engine::cloud_provider::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::cloud_provider::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
-use qovery_engine::cloud_provider::qovery::EngineLocation;
-use qovery_engine::engine::InfrastructureContext;
+use qovery_engine::environment::models::environment::Environment;
 use qovery_engine::errors::EngineError;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::context::Context;
+use qovery_engine::io_models::engine_location::EngineLocation;
+use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;

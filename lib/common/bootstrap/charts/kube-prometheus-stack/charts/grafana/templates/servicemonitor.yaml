@@ -38,6 +38,10 @@ spec:
     metricRelabelings:
       {{- toYaml . | nindent 6 }}
     {{- end }}
+    {{- with .Values.serviceMonitor.basicAuth }}
+    basicAuth:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
   jobLabel: "{{ .Release.Name }}"
   selector:
     matchLabels:

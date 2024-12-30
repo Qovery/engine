@@ -1,10 +1,10 @@
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::utilities::FuncTestsSecrets;
-use qovery_engine::dns_provider::cloudflare::Cloudflare;
-use qovery_engine::dns_provider::qoverydns::QoveryDns;
-use qovery_engine::dns_provider::DnsProvider;
+use qovery_engine::environment::models::domain::Domain;
+use qovery_engine::infrastructure::models::dns_provider::cloudflare::Cloudflare;
+use qovery_engine::infrastructure::models::dns_provider::qoverydns::QoveryDns;
+use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::io_models::context::Context;
-use qovery_engine::models::domain::Domain;
 use url::Url;
 use uuid::Uuid;
 

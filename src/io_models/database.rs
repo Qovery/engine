@@ -1,17 +1,16 @@
-use crate::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
-use crate::cloud_provider::kubernetes::Kind as KubernetesKind;
-use crate::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
-use crate::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
+use crate::environment::models;
+use crate::environment::models::database::{
+    Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
+};
+use crate::environment::models::types::{CloudProvider as CloudProviderTrait, GCP};
+use crate::environment::models::types::{OnPremise, VersionsNumber, AWS, SCW};
+use crate::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
+use crate::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
+use crate::infrastructure::models::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::Action;
-use crate::models;
-use crate::models::database::{
-    Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
-};
-use crate::models::types::{AWSEc2, OnPremise, VersionsNumber, AWS, SCW};
-use crate::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
@@ -136,453 +135,213 @@ impl Database {
 
         match (cloud_provider.kind(), &self.kind, &self.mode) {
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Managed, PostgresSQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, PostgresSQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Managed, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    database_instance_type,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Container, PostgresSQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
 
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Managed, MySQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, MySQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Managed, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    database_instance_type,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Container, MySQL>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Managed, Redis>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, Redis>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Managed, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    database_instance_type,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Container, Redis>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Managed, MongoDB>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Managed, MongoDB>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        database_instance_type,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Managed, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    database_instance_type,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Aws, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
-                // Note: we check if kubernetes is EC2 to map to the proper implementation
-                // This is far from ideal, it should be checked against an exhaustive match
-                // But for the time being, it does the trick since we are already in AWS
-                if cloud_provider.kubernetes_kind() == KubernetesKind::Eks {
-                    Ok(Box::new(models::database::Database::<AWS, Container, MongoDB>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                } else {
-                    Ok(Box::new(models::database::Database::<AWSEc2, Container, MongoDB>::new(
-                        context,
-                        self.long_id,
-                        self.action.to_service_action(),
-                        self.name.as_str(),
-                        self.kube_name.clone(),
-                        version,
-                        self.created_at,
-                        self.fqdn.as_str(),
-                        self.fqdn_id.as_str(),
-                        self.cpu_request_in_milli,
-                        self.cpu_limit_in_milli,
-                        self.ram_request_in_mib,
-                        self.ram_limit_in_mib,
-                        database_options.disk_size_in_gib,
-                        None,
-                        database_options.publicly_accessible,
-                        database_options.port,
-                        database_options,
-                        |transmitter| context.get_event_details(transmitter),
-                        annotations_groups,
-                        additional_annotations,
-                        labels_groups,
-                    )?))
-                }
+                Ok(Box::new(models::database::Database::<AWS, Container, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
 
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {

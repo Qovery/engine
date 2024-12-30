@@ -21,7 +21,7 @@ trust-dns-resolver = "0.23.2"
 rand = "0.8.5"
 semver = "1.0.23"
 gethostname = "0.5.0"
-reqwest = { version = "0.12.5", features = ["blocking", "json"] }
+reqwest = { version = "0.12.9", features = ["blocking", "json", "rustls-tls-native-roots", "gzip", "zstd"] }
 futures = "0.3.30"
 timeout-readwrite = "0.3.3"
 uuid = { version = "1.10.0", features = ["v4", "serde"] }
@@ -75,11 +75,9 @@ serde = "1.0.204"
 serde_json = "1.0.120"
 serde_derive = "1.0.204"
 serde_yaml = "0.9.34"
+serde_with = "3.9.0"
 schemars = "0.8.21"
-
-# Secrets manager
-vaultrs = "0.7.2"
-vaultrs-login = "0.2.1"
+duration-str = "0.11.3"
 
 # AWS deps
 tokio = { version = "1.38.1", features = ["full"] }
@@ -104,7 +102,7 @@ aws-smithy-async = { version = "1.2.1", features = ["rt-tokio"] }
 aws-credential-types = "1.2.0"
 
 # Scaleway Deps
-scaleway_api_rs = "=0.1.2"
+scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "engine" }
 
 # GCP deps
 google-cloud-auth = "0.17.0"
@@ -122,7 +120,6 @@ tempfile = "3.10.1"
 maplit = "1.0.2"
 tracing-test = "0.2.5"
 passwords = "3.1.16"
-const_format = "0.2.32"
 hashicorp_vault = "2.1.1"
 curl = "0.4.46"
 dotenv = "0.15.0"
@@ -144,35 +141,29 @@ test-all = [
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
 test-aws-minimal = ["env-logger-check"]
-test-aws-ec2-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
 test-gcp-minimal = ["env-logger-check"]
 test-all-minimal = [
     "test-aws-minimal",
-    "test-aws-ec2-minimal",
     "test-scw-minimal",
     "test-gcp-minimal",
 ]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check", "test-git-container"]
-test-aws-ec2-self-hosted = ["env-logger-check"]
 test-scw-self-hosted = ["env-logger-check", "test-git-container"]
 test-gcp-self-hosted = ["env-logger-check", "test-git-container"]
 test-all-self-hosted = [
     "test-aws-self-hosted",
-    "test-aws-ec2-self-hosted",
     "test-scw-self-hosted",
     "test-gcp-self-hosted",
 ]
 
 test-aws-managed-services = ["env-logger-check"]
-test-aws-ec2-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
 test-gcp-managed-services = ["env-logger-check"]
 test-all-managed-services = [
     "test-aws-managed-services",
-    "test-aws-ec2-managed-services",
     "test-scw-managed-services",
     "test-gcp-managed-services",
 ]
@@ -181,7 +172,6 @@ test-aws-infra = []
 test-aws-infra-karpenter = []
 test-aws-infra-arm = []
 test-aws-infra-nat-gateway = []
-test-aws-ec2-infra = []
 test-scw-infra = []
 test-gcp-infra = []
 test-all-infra = [
@@ -189,29 +179,24 @@ test-all-infra = [
     "test-aws-infra-karpenter",
     "test-aws-infra-arm",
     "test-aws-infra-nat-gateway",
-    "test-aws-ec2-infra",
     "test-scw-infra",
     "test-gcp-infra",
 ]
 
 test-aws-infra-upgrade = []
-test-aws-ec2-infra-upgrade = []
 test-scw-infra-upgrade = []
 test-gcp-infra-upgrade = []
 test-all-infra-upgrade = [
     "test-aws-infra-upgrade",
-    "test-aws-ec2-infra-upgrade",
     "test-scw-infra-upgrade",
     "test-gcp-infra-upgrade",
 ]
 
 test-aws-whole-enchilada = []
-test-aws-ec2-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
     "test-aws-whole-enchilada",
-    "test-aws-ec2-whole-enchilada",
     "test-scw-whole-enchilada",
     "test-gcp-whole-enchilada",
 ]
@@ -222,12 +207,6 @@ test-aws-all = [
     "test-aws-managed-services",
     "test-aws-self-hosted",
     "test-aws-whole-enchilada",
-]
-test-aws-ec2-all = [
-    "test-aws-ec2-infra",
-    "test-aws-ec2-managed-services",
-    "test-aws-ec2-self-hosted",
-    "test-aws-ec2-whole-enchilada",
 ]
 test-scw-all = [
     "test-scw-infra",

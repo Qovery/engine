@@ -13,6 +13,8 @@ grafana.ini: |
   {{- if not (kindIs "map" $elemVal) }}
   {{- if kindIs "invalid" $elemVal }}
   {{ $elem }} =
+  {{- else if kindIs "slice" $elemVal }}
+  {{ $elem }} = {{ toJson $elemVal }}
   {{- else if kindIs "string" $elemVal }}
   {{ $elem }} = {{ tpl $elemVal $ }}
   {{- else }}
@@ -26,6 +28,8 @@ grafana.ini: |
   {{- range $elem, $elemVal := $value }}
   {{- if kindIs "invalid" $elemVal }}
   {{ $elem }} =
+  {{- else if kindIs "slice" $elemVal }}
+  {{ $elem }} = {{ toJson $elemVal }}
   {{- else if kindIs "string" $elemVal }}
   {{ $elem }} = {{ tpl $elemVal $ }}
   {{- else }}

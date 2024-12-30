@@ -2,7 +2,8 @@ use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
 use base64::engine::general_purpose;
 use base64::Engine;
 use chrono::Utc;
-use qovery_engine::cloud_provider::Kind;
+use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
@@ -12,7 +13,6 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
-use qovery_engine::models::database::DatabaseInstanceType;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::error;
@@ -58,7 +58,6 @@ pub fn working_environment(
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
@@ -293,7 +292,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: None,
@@ -362,7 +360,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
-                buildpack_language: None,
                 root_path: String::from("/"),
                 action: Action::Create,
                 git_credentials: None,
@@ -502,7 +499,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
@@ -619,7 +615,6 @@ pub fn environment_only_http_server(
             dockerfile_path: Some("Dockerfile".to_string()),
             command_args: vec![],
             entrypoint: None,
-            buildpack_language: None,
             root_path: String::from("/"),
             action: Action::Create,
             git_credentials: None,
