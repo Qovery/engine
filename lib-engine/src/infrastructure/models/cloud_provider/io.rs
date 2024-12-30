@@ -1,13 +1,15 @@
 use crate::environment::models::types::Percentage;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationSnippet as NginxConfigurationSnippetModel,
-    NginxHttpSnippet as NginxHttpSnippetModel, NginxServerSnippet as NginxServerSnippetModel,
+    NginxHttpSnippet as NginxHttpSnippetModel, NginxLimitRequestStatusCode as NginxLimitRequestStatusCodeModel,
+    NginxServerSnippet as NginxServerSnippetModel,
 };
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::engine::general_purpose;
 use base64::Engine;
+use reqwest::StatusCode;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str;
@@ -131,6 +133,19 @@ impl NginxConfigurationSnippet {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub struct NginxLimitRequestStatusCode(u16);
+
+impl NginxLimitRequestStatusCode {
+    pub fn to_model(&self) -> Result<NginxLimitRequestStatusCodeModel, InputError> {
+        let status_code = StatusCode::from_u16(self.0).map_err(|_e| InputError::InvalidInputFieldValue {
+            field_name: "nginx.controller.limit_request_status_code".to_string(),
+            message: "Should be a proper HTTP status code".to_string(),
+        })?;
+        Ok(NginxLimitRequestStatusCodeModel::new(status_code))
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -217,6 +232,8 @@ pub struct ClusterAdvancedSettings {
     pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.controller.http_snippet")]
     pub nginx_controller_http_snippet: Option<NginxHttpSnippet>,
+    #[serde(alias = "nginx.controller.limit_request_status_code")]
+    pub nginx_controller_limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     #[serde(alias = "nginx.controller.configuration_snippet")]
     pub nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
@@ -277,6 +294,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             nginx_controller_http_snippet: None,
             nginx_controller_configuration_snippet: None,
+            nginx_controller_limit_request_status_code: None,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             gcp_vpc_enable_flow_logs: false,
@@ -343,7 +361,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::infrastructure::models::cloud_provider::io::{
-        validate_aws_cloudwatch_eks_logs_retention_days, ClusterAdvancedSettings, LogFormatEscaping,
+        validate_aws_cloudwatch_eks_logs_retention_days, ClusterAdvancedSettings, InputError, LogFormatEscaping,
         RegistryMirroringMode,
     };
     use crate::{
@@ -509,5 +527,39 @@ mod tests {
 
         // verify:
         assert_eq!(snippet_json, model.get_snippet_value());
+    }
+
+    #[test]
+    fn test_nginx_limit_request_status_code_to_model() {
+        // setup:
+        let status_code = 200;
+        let nginx_limit_request_status_code_io = super::NginxLimitRequestStatusCode(status_code);
+
+        // execute:
+        let res = nginx_limit_request_status_code_io
+            .to_model()
+            .expect("Should be a proper HTTP status code");
+
+        // verify:
+        assert_eq!(status_code, res.as_u16());
+    }
+
+    #[test]
+    fn test_nginx_limit_request_status_code_to_model_wrong_http_code_value() {
+        // setup:
+        let status_code = 2000;
+        let nginx_limit_request_status_code_io = super::NginxLimitRequestStatusCode(status_code);
+
+        // execute:
+        let res = nginx_limit_request_status_code_io.to_model();
+
+        // verify:
+        assert_eq!(
+            InputError::InvalidInputFieldValue {
+                field_name: "nginx.controller.limit_request_status_code".to_string(),
+                message: "Should be a proper HTTP status code".to_string(),
+            },
+            res.err().expect("Should be an error")
+        );
     }
 }
