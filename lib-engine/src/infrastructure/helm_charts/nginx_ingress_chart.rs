@@ -121,6 +121,7 @@ pub struct NginxIngressChart {
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
     http_snippet: Option<NginxHttpSnippet>,
+    server_snippet: Option<NginxServerSnippet>,
     limit_request_status_code: Option<NginxLimitRequestStatusCode>,
 }
 
@@ -149,6 +150,7 @@ impl NginxIngressChart {
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
         http_snippet: Option<NginxHttpSnippet>,
+        server_snippet: Option<NginxServerSnippet>,
         limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     ) -> Self {
         NginxIngressChart {
@@ -200,6 +202,7 @@ impl NginxIngressChart {
             log_format_escaping,
             is_alb_enabled,
             http_snippet,
+            server_snippet,
             limit_request_status_code,
         }
     }
@@ -343,6 +346,12 @@ defaultBackend:
         if let Some(value) = &self.http_snippet {
             chart_set_values_string.push(ChartSetValue {
                 key: "controller.config.http-snippet".to_string(),
+                value: value.get_snippet_value().to_string(),
+            })
+        }
+        if let Some(value) = &self.server_snippet {
+            chart_set_values_string.push(ChartSetValue {
+                key: "controller.config.server-snippet".to_string(),
                 value: value.get_snippet_value().to_string(),
             })
         }
@@ -572,6 +581,7 @@ mod tests {
             false,
             None,
             None,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -619,6 +629,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
             None,
             None,
         );
@@ -670,6 +681,7 @@ mod tests {
                 true,
                 log_format_escaping.clone(),
                 false,
+                None,
                 None,
                 None,
             );
@@ -725,6 +737,7 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
             None,
             None,
         );

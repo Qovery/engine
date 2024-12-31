@@ -223,6 +223,13 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         );
     }
 
+    if let Some(nginx_controller_server_snippet) = &cluster.advanced_settings().nginx_controller_server_snippet {
+        context.insert(
+            "nginx_controller_server_snippet",
+            &nginx_controller_server_snippet.to_model().get_snippet_value(),
+        );
+    }
+
     Ok(context)
 }
 

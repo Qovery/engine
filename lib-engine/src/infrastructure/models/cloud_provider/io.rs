@@ -232,6 +232,8 @@ pub struct ClusterAdvancedSettings {
     pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.controller.http_snippet")]
     pub nginx_controller_http_snippet: Option<NginxHttpSnippet>,
+    #[serde(alias = "nginx.controller.server_snippet")]
+    pub nginx_controller_server_snippet: Option<NginxServerSnippet>,
     #[serde(alias = "nginx.controller.limit_request_status_code")]
     pub nginx_controller_limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     #[serde(alias = "nginx.controller.configuration_snippet")]
@@ -293,6 +295,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             nginx_controller_http_snippet: None,
+            nginx_controller_server_snippet: None,
             nginx_controller_configuration_snippet: None,
             nginx_controller_limit_request_status_code: None,
             scaleway_enable_private_network_migration: false,
