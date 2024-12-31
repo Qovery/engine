@@ -363,6 +363,11 @@ pub fn kapsule_helm_charts(
             .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
         chart_config_prerequisites
             .cluster_advanced_settings
+            .nginx_controller_server_snippet
+            .as_ref()
+            .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
+        chart_config_prerequisites
+            .cluster_advanced_settings
             .nginx_controller_limit_request_status_code
             .as_ref()
             .map(|v| v.to_model().map_err(CommandError::from))
