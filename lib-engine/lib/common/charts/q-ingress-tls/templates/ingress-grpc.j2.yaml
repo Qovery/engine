@@ -59,6 +59,9 @@ metadata:
     {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
     {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_connections %}
+    nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
+    {%- endif %}
     # GRPC SPECIFIC
     # https://kubernetes.github.io/ingress-nginx/examples/grpc/
     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"

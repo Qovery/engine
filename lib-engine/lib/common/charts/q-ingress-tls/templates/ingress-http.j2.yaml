@@ -70,6 +70,9 @@ metadata:
     {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
     {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_connections %}
+    nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
+    {%- endif %}
     {%- if nginx_ingress_controller_server_snippet %}
     server-snippet: |
       {{ nginx_ingress_controller_server_snippet | indent(prefix="        ") }}
