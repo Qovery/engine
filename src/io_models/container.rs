@@ -281,6 +281,8 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_rps")]
+    pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
 
@@ -333,6 +335,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,

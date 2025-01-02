@@ -76,6 +76,8 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_rps")]
+    pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
@@ -113,6 +115,7 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
