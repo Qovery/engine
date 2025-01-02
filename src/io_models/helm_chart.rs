@@ -80,6 +80,8 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_connections")]
+    pub network_ingress_nginx_limit_connections: Option<u32>,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
     pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
     #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
@@ -117,6 +119,7 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_nginx_limit_rpm: None,
             network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_grpc_send_timeout_seconds: 60,
