@@ -17,6 +17,7 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
+use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
@@ -408,7 +409,8 @@ where
                 .expect("job_template should be editable")
                 .ttl_seconds_after_finished = Some(10);
             // add a suffix in name to avoid conflict with jobs created by cronjob
-            let job_name = format!("{}-force-trigger", job.kube_name(),);
+            // truncate original name to 63 chars minus "-force-trigger" length to avoid k8s name length limit
+            let job_name = format!("{}-force-trigger", job.kube_name().chars().take(63 - 14).join("").as_str(),);
             let job_to_start = K8sJob {
                 metadata: ObjectMeta {
                     name: Some(job_name.to_string()),
