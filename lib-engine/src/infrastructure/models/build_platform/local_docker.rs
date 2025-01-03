@@ -564,7 +564,7 @@ impl BuildPlatform for LocalDocker {
             })?;
 
             if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
-                let docker_ignore_path = dockerfile_directory.join("../../../../../.dockerignore");
+                let docker_ignore_path = dockerfile_directory.join(".dockerignore");
 
                 fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
                     application: app_id.clone(),
