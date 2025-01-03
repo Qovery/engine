@@ -27,7 +27,6 @@ mod database;
 mod jobs;
 
 /// This mod holds kubernetes tests for features not specific to any cloud providers.
-
 pub enum TestEnvOption {
     WithDB,
     WithContainer,

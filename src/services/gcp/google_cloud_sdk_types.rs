@@ -19,7 +19,6 @@ use std::time::Duration;
 /// Handle conversion and deal with external types for Google cloud
 /// defined here https://github.com/yoshidan/google-cloud-rust
 /// Keeping it isolated prevent from high coupling with third party crate
-
 pub fn new_gcp_credentials_file_from_credentials(
     credentials: JsonCredentials,
 ) -> Result<CredentialsFile, CredentialsError> {
@@ -56,7 +55,7 @@ impl TryFrom<GcpBucket> for Bucket {
                         _ => false,
                     })
                     .and_then(|r| r.condition.clone())
-                    .map(|c| Duration::from_secs(c.age as u64 * 60 * 60 * 24)),
+                    .map(|c| Duration::from_secs(c.age.unwrap_or_default() as u64 * 60 * 60 * 24)),
                 None => None,
             },
             versioning_activated: match gcp_bucket.versioning {

@@ -14,7 +14,6 @@ use tracing::error;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on bucket / objects
-
 struct BucketParams {
     project_id: String,
     bucket_name: String,

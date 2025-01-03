@@ -156,7 +156,7 @@ pub struct EnvProgressLogger<'a> {
     logger: &'a EnvLogger,
 }
 
-impl<'a> EnvProgressLogger<'a> {
+impl EnvProgressLogger<'_> {
     pub fn new(env_logger: &EnvLogger) -> EnvProgressLogger {
         EnvProgressLogger { logger: env_logger }
     }
@@ -186,7 +186,7 @@ pub struct EnvSuccessLogger<'a> {
     logger: &'a EnvLogger,
 }
 
-impl<'a> EnvSuccessLogger<'a> {
+impl EnvSuccessLogger<'_> {
     pub fn new(env_logger: &EnvLogger) -> EnvSuccessLogger {
         EnvSuccessLogger { logger: env_logger }
     }

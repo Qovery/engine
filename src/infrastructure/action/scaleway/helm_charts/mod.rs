@@ -105,7 +105,7 @@ impl<'a> KapsuleHelmsDeployment<'a> {
     }
 }
 
-impl<'a> HelmInfraResources for KapsuleHelmsDeployment<'a> {
+impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
     type ChartPrerequisite = KapsuleChartsConfigPrerequisites;
 
     fn charts_context(&self) -> &HelmInfraContext {

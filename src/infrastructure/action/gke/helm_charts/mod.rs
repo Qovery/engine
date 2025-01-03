@@ -89,7 +89,7 @@ impl<'a> GkeHelmsDeployment<'a> {
     }
 }
 
-impl<'a> HelmInfraResources for GkeHelmsDeployment<'a> {
+impl HelmInfraResources for GkeHelmsDeployment<'_> {
     type ChartPrerequisite = GkeChartsConfigPrerequisites;
 
     fn charts_context(&self) -> &HelmInfraContext {

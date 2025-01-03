@@ -692,12 +692,12 @@ where
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let command_error = CommandError::new_from_safe_message("Cannot restart Managed Database".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
+        Err(Box::new(EngineError::new_cannot_restart_service(
             self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
             target.environment.namespace(),
             &self.kube_label_selector(),
             command_error,
-        )));
+        )))
     }
 }
 

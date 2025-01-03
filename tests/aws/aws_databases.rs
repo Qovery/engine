@@ -28,13 +28,12 @@ use std::time::Duration;
 use tracing::{span, Level};
 use uuid::Uuid;
 
+// to check overload between several databases and apps
 /**
 **
 ** Global database tests
 **
 **/
-
-// to check overload between several databases and apps
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]

@@ -291,7 +291,7 @@ fn write_helm_value_with_replacement<'a>(
     // Writes all lines into the files
     for line in lines {
         output_writer.write_all(line.as_bytes())?;
-        output_writer.write_all(&[b'\n'])?;
+        output_writer.write_all(b"\n")?;
     }
 
     output_writer.flush()?;

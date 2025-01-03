@@ -137,7 +137,7 @@ impl DeploymentAction for TerraformDeployment {
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let command_error =
             CommandError::new_from_safe_message("Cannot restart Terraform managed resource".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
+        Err(Box::new(EngineError::new_cannot_restart_service(
             EventDetails::clone_changing_stage(
                 self.event_details.clone(),
                 Stage::Environment(EnvironmentStep::Restart),
@@ -145,6 +145,6 @@ impl DeploymentAction for TerraformDeployment {
             target.environment.namespace(),
             "",
             command_error,
-        )));
+        )))
     }
 }

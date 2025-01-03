@@ -174,7 +174,7 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
     }
 }
 
-impl<'a> DeploymentAction for CheckDnsForDomains<'a> {
+impl DeploymentAction for CheckDnsForDomains<'_> {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         for domain in &self.resolve_to_ip {
             check_domain_resolve_ip(domain, &self.log, target.abort);
