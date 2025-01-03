@@ -238,7 +238,7 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
             )
         });
 
-    return JobRenderContext {
+    JobRenderContext {
         name: job_name.to_string(),
         state,
         message,
@@ -246,7 +246,7 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
             .into_iter()
             .flat_map(to_event_context)
             .collect(),
-    };
+    }
 }
 
 pub fn to_pods_render_context_by_state(

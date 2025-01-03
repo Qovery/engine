@@ -94,7 +94,7 @@ impl<'a> EksHelmsDeployment<'a> {
     }
 }
 
-impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
+impl HelmInfraResources for EksHelmsDeployment<'_> {
     type ChartPrerequisite = EksChartsConfigPrerequisites;
 
     fn charts_context(&self) -> &HelmInfraContext {

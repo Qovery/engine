@@ -239,9 +239,8 @@ fn mirror_image(
         ));
 
         let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
-            target.docker.login(&url).map_err(|err| {
+            target.docker.login(&url).inspect_err(|_err| {
                 logger.warning("🔓 Retrying to login to registry due to error...".to_string());
-                err
             })
         });
 

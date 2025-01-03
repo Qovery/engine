@@ -17,7 +17,7 @@ impl<'de> Deserialize<'de> for Percentage {
 
 struct PercentageVisitor;
 
-impl<'de> Visitor<'de> for PercentageVisitor {
+impl Visitor<'_> for PercentageVisitor {
     type Value = f64;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

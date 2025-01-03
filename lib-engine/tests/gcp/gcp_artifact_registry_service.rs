@@ -18,7 +18,6 @@ use url::Url;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on repositories / images
-
 #[cfg(feature = "test-gcp-minimal")]
 #[test]
 #[named]

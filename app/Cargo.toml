@@ -21,53 +21,53 @@ test-full = ["test-functional"]
 
 [dependencies]
 qovery-engine = { path = "../lib-engine" }
-serde_json = "1.0.120"
-uuid = { version = "1.10.0", features = ["v4", "serde"] }
-chrono = "0.4.38"
+serde_json = "1.0.134"
+uuid = { version = "1.11.0", features = ["v4", "serde"] }
+chrono = "0.4.39"
 retry = "2.0.0"
 dirs = "5.0.1"
-url = "2.5.2"
-anyhow = "1.0.86"
+url = "2.5.4"
+anyhow = "1.0.95"
 scopeguard = "1.2.0"
-reqwest = { version = "0.12.9", features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots"] }
-serde = "1.0.188"
-clap = { version = "4.5.9", features = ["derive", "env"] }
+reqwest = { version = "0.12.12", features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots"] }
+serde = "1.0.217"
+clap = { version = "4.5.23", features = ["derive", "env"] }
 
 # Webserver (For Prometheus, Healthcheck, ...)
-tokio = { version = "1.38.1", features = ["full"] }
-tokio-stream = "0.1.15"
+tokio = { version = "1.42.0", features = ["full"] }
+tokio-stream = "0.1.17"
 warp = "0.3.7"
-once_cell = "1.19.0"
+once_cell = "1.20.2"
 prometheus = { git = "https://github.com/tikv/rust-prometheus", rev = "ac86a264223c8d918a43e739ca3c48bb4aaedb90", features = ["process"] }
 
 # Kubernetes
-kube = { version = "0.93.1", features = ["default"] }
-k8s-openapi = { version = "0.22.0", default-features = false, features = ["v1_27"] }
+kube = { version = "0.98.0", features = ["default"] }
+k8s-openapi = { version = "0.24.0", default-features = false, features = ["v1_30"] }
 
 # GRPC
-tonic = { version = "0.12.1", features = ["tls", "tls-roots", "zstd", "transport"] }
-prost = "0.13.1"
-prost-types = "0.13.1"
-tower = "0.5.0"
-futures-util = "0.3.28"
+tonic = { version = "0.12.3", features = ["tls", "tls-roots", "zstd", "transport"] }
+prost = "0.13.4"
+prost-types = "0.13.4"
+tower = "0.5.2"
+futures-util = "0.3.31"
 
 # tracing
-tracing = { version = "0.1.37", features = ["log"] }
+tracing = { version = "0.1.41", features = ["log"] }
 tracing-futures = { version = "0.2.5", features = ["futures-03"] }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter", "fmt", "local-time"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "local-time"] }
 tracing-appender = "0.2.3"
 
 # To load .env file into env variables
 dotenv = "0.15.0"
 # To get build info (commit, version, ...) at runtime
-shadow-rs = { version = "0.33.0", features = [] }
+shadow-rs = { version = "0.37.0", features = [] }
 
 [dev-dependencies]
-reqwest = { version = "0.12.5", features = ["blocking"] }
-hyper-util = { version = "0.1.7", features = ["tokio"] }
-tower = { version = "0.5.0", features = ["util"] }
+reqwest = { version = "0.12.12", features = ["blocking"] }
+hyper-util = { version = "0.1.10", features = ["tokio"] }
+tower = { version = "0.5.2", features = ["util"] }
 
 
 [build-dependencies]
-tonic-build = { version = "0.12.1", features = ["prost"] }
-shadow-rs = { version = "0.33.0", features = [] }
+tonic-build = { version = "0.12.3", features = ["prost"] }
+shadow-rs = { version = "0.37.0", features = [] }

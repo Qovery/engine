@@ -143,7 +143,7 @@ impl EnvironmentTask {
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        if services.first().is_none() {
+        if services.is_empty() {
             return Ok(());
         };
 

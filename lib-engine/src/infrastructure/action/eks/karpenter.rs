@@ -223,7 +223,7 @@ impl Karpenter {
             .await?;
 
         let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
-            path: Pointer::new(["metadata", "finalizers"]),
+            path: Pointer::from_static("/metadata/finalizers").to_buf(),
         })];
 
         for node in nodes {

@@ -71,7 +71,7 @@ where
     pub post_run_success: &'a Post,
 }
 
-impl<'a, Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskImpl<'a, Pre, Run, Post, Ret>
+impl<Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskImpl<'_, Pre, Run, Post, Ret>
 where
     Pre: Fn(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
     Run: Fn(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,

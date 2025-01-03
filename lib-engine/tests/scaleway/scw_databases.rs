@@ -31,13 +31,12 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 
+// to check overload between several databases and apps
 /**
 **
 ** Global database tests
 **
 **/
-
-// to check overload between several databases and apps
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]

@@ -108,7 +108,7 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 }
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), Error> {
-    return match root_workspace_directory(working_root_dir, execution_id) {
+    match root_workspace_directory(working_root_dir, execution_id) {
         Ok(workspace_dir) => {
             let workspace_dir = workspace_dir.to_string_lossy();
             match fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
@@ -126,7 +126,7 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
             error!("error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}");
             Err(err)
         }
-    };
+    }
 }
 
 pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<PathBuf, Error> {

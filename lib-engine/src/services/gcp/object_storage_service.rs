@@ -259,7 +259,7 @@ impl ObjectStorageService {
                         storage_class: None,
                     }),
                     condition: Some(Condition {
-                        age: bucket_ttl_max_age,
+                        age: Some(bucket_ttl_max_age),
                         ..Default::default()
                     }),
                 }],

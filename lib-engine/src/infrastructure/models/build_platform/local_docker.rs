@@ -153,9 +153,8 @@ impl LocalDocker {
             ));
 
             let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
-                self.context.docker.login(&url).map_err(|err| {
+                self.context.docker.login(&url).inspect_err(|_err| {
                     logger.send_warning("🔓 Retrying to login to registry due to error...".to_string());
-                    err
                 })
             });
 

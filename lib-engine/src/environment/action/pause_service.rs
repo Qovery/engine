@@ -4,7 +4,7 @@ use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::runtime::block_on;
 use json_patch::{AddOperation, PatchOperation, RemoveOperation};
-use jsonptr::Pointer;
+use jsonptr::{Pointer, PointerBuf};
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
 use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
 use k8s_openapi::api::batch::v1::CronJob;
@@ -304,7 +304,7 @@ fn get_patch_suspend(selector: &str, desired_suspend_value: bool) -> (ListParams
     let list_params = ListParams::default().labels(selector);
     let patch_params = PatchParams::default();
     let json_patch = json_patch::Patch(vec![json_patch::PatchOperation::Replace(json_patch::ReplaceOperation {
-        path: Pointer::new(["spec", "suspend"]),
+        path: Pointer::from_static("/spec/suspend").to_buf(),
         value: Value::Bool(desired_suspend_value),
     })]);
     let patch = Patch::Json(json_patch);
@@ -321,12 +321,13 @@ fn get_patch_add_node_selector(
     let mut patch_operations = vec![];
     if !already_have_some_selectors {
         patch_operations.push(PatchOperation::Add(AddOperation {
-            path: Pointer::new(["spec", "template", "spec", "nodeSelector"]),
+            path: Pointer::from_static("/spec/template/spec/nodeSelector").to_buf(),
             value: Value::Object(serde_json::Map::new()),
         }));
     }
+    let patch_path_str = format!("/spec/template/spec/nodeSelector/{}", node_selector_key);
     patch_operations.push(PatchOperation::Add(AddOperation {
-        path: Pointer::new(["spec", "template", "spec", "nodeSelector", node_selector_key]),
+        path: PointerBuf::parse(&patch_path_str).unwrap_or_default(),
         value: Value::String(node_selector_value.to_string()),
     }));
 
@@ -336,8 +337,9 @@ fn get_patch_add_node_selector(
 fn get_patch_remove_node_selector(key: &str) -> (PatchParams, Patch<Value>) {
     let patch_params = PatchParams::apply("node-selector-remove-patch");
 
+    let patch_path_str = format!("/spec/template/spec/nodeSelector/{}", key);
     let patch_operations = vec![PatchOperation::Remove(RemoveOperation {
-        path: Pointer::new(["spec", "template", "spec", "nodeSelector", key]),
+        path: PointerBuf::parse(&patch_path_str).unwrap_or_default(),
     })];
 
     (patch_params, Patch::Json(json_patch::Patch(patch_operations)))

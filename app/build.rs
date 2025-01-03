@@ -4,9 +4,9 @@ use std::fs::File;
 use std::io::Write;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure().compile(&["proto/engine.proto"], &[""])?;
+    tonic_build::configure().compile_protos(&["proto/engine.proto"], &[""])?;
 
-    shadow_rs::new_hook(hook).unwrap();
+    shadow_rs::ShadowBuilder::builder().hook(hook).build().unwrap();
     Ok(())
 }
 
@@ -22,6 +22,7 @@ fn append_engine_version_from_env(mut file: &File) -> SdResult<()> {
     } else {
         r#"pub const ENGINE_VERSION: &str = SHORT_COMMIT;"#.to_string()
     };
-    writeln!(file, "{engine_version}")?;
+    let clippy_header = "#[allow(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery)]";
+    writeln!(file, "{clippy_header}\n{engine_version}")?;
     Ok(())
 }

@@ -45,7 +45,7 @@ pub enum CommandKillerTrigger<'a> {
 
 const LOGGING_INTERVAL: Duration = Duration::from_secs(120);
 
-impl<'a> CommandKillerTrigger<'a> {
+impl CommandKillerTrigger<'_> {
     pub fn should_abort(&self) -> Option<AbortReason> {
         match self {
             CommandKillerTrigger::Timeout(since, timeout) => {
