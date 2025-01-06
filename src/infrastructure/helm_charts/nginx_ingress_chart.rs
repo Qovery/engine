@@ -339,7 +339,7 @@ defaultBackend:
         }
         if let Some(value) = &self.limit_request_status_code {
             chart_set_values_string.push(ChartSetValue {
-                key: "controller.config.limit-request-status-code".to_string(),
+                key: "controller.config.limit-req-status-code".to_string(),
                 value: value.as_u16().to_string(),
             })
         }
