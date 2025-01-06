@@ -122,6 +122,7 @@ pub struct Build {
     pub architectures: Vec<CpuArchitecture>,
     pub max_cpu_in_milli: u32,
     pub max_ram_in_gib: u32,
+    pub ephemeral_storage_in_gib: Option<u32>,
     // registries used by the build where we need to login to pull image
     pub registries: Vec<Registry>,
 }

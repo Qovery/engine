@@ -62,6 +62,9 @@ pub struct JobAdvancedSettings {
     pub build_cpu_max_in_milli: u32,
     #[serde(alias = "build.ram_max_in_gib")]
     pub build_ram_max_in_gib: u32,
+    #[serde(default)]
+    #[serde(alias = "build.ephemeral_storage_in_gib")]
+    pub build_ephemeral_storage_in_gib: Option<u32>,
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
@@ -83,6 +86,7 @@ impl Default for JobAdvancedSettings {
             build_timeout_max_sec: 30 * 60, // 30 minutes
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
+            build_ephemeral_storage_in_gib: None,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
@@ -283,6 +287,7 @@ impl Job {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
             registries: self.container_registries.registries.clone(),
         };
 

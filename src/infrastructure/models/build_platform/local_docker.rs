@@ -265,6 +265,7 @@ impl LocalDocker {
             .rsplit_once('-')
             .unwrap_or((self.context.execution_id(), ""))
             .0;
+
         let builder_handle = loop {
             match self.context.docker.spawn_builder(
                 &format!("{}-{}", exec_id, self.builder_counter.fetch_add(1, Ordering::Relaxed)),
@@ -273,6 +274,7 @@ impl LocalDocker {
                 &arch,
                 (max_cpu, max_cpu),
                 (max_ram, max_ram),
+                build.ephemeral_storage_in_gib,
                 should_abort,
                 http_registries
                     .iter()
