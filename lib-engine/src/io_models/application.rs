@@ -127,6 +127,9 @@ pub struct ApplicationAdvancedSettings {
     pub build_cpu_max_in_milli: u32,
     #[serde(alias = "build.ram_max_in_gib")]
     pub build_ram_max_in_gib: u32,
+    #[serde(default)]
+    #[serde(alias = "build.ephemeral_storage_in_gib")]
+    pub build_ephemeral_storage_in_gib: Option<u32>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -207,6 +210,7 @@ impl Default for ApplicationAdvancedSettings {
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
+            build_ephemeral_storage_in_gib: None,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
@@ -580,6 +584,7 @@ impl Application {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: None,
             registries: self.container_registries.clone(),
         };
 

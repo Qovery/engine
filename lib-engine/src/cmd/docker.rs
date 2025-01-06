@@ -323,6 +323,7 @@ impl Docker {
         requested_architectures: &[Architecture],
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
         (memory_request_gib, memory_limit_gib): (u32, u32),
+        ephemeral_storage_gib: Option<u32>,
         should_abort: &CommandKiller,
         http_registries: &[&str],
         tls_invalid_registries: &[&str],
@@ -398,6 +399,9 @@ impl Docker {
                     ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
                     if *enable_rootless {
                         driver_opt.push_str(",\"rootless=true\"");
+                    }
+                    if let Some(ephemeral_storage) = ephemeral_storage_gib {
+                        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={}Gi\"", ephemeral_storage));
                     }
 
                     let mut args = vec![
@@ -900,6 +904,7 @@ impl Docker {
                     self.builder_location.supported_architectures(),
                     (0, 0),
                     (0, 0),
+                    None,
                     &CommandKiller::never(),
                     &[http_registries.as_str()],
                     &[],
@@ -1179,6 +1184,7 @@ mod tests {
                 CPU_ARCHITECTURE,
                 (0, 1000),
                 (0, 1),
+                Some(1),
                 &CommandKiller::never(),
                 &[],
                 &[],
