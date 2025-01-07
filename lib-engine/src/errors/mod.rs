@@ -2807,11 +2807,16 @@ impl EngineError {
         // All Terraform issues are handled here.
         // TODO(benjaminch): Add some point, safe message should be moved inside Terraform impl directly
         match terraform_error {
-            TerraformError::Unknown { .. } => EngineError::new(
+            TerraformError::Unknown { ref raw_message, ..} => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
                 terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
-                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                Some(
+                    CommandError::new(
+                        terraform_error.to_string(),
+                        Some(raw_message.clone()),
+                        None,
+                    )), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
