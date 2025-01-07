@@ -98,6 +98,11 @@ impl TerraformInfraResources {
         }
         logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
 
+        self.output::<T>()
+    }
+
+    pub fn output<T: DeserializeOwned>(&self) -> Result<T, Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
         terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), &envs)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
     }
