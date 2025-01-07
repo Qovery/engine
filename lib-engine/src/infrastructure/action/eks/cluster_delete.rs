@@ -111,19 +111,19 @@ pub fn delete_eks_cluster(
 
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
-
-    let tf_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger);
-    match tf_output {
-        Ok(tf_output) => {
-            update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
-        }
+    let tf_output: AwsEksQoveryTerraformOutput = match tf_resources.create(&logger) {
+        Ok(tf_output) => tf_output,
         Err(e) => {
             logger.warn(EventMessage::new(
                 "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
                 Some(e.to_string()),
             ));
+            // We want to refresh the kubeconfig if possible even in case of failure.
+            // To be able to delete namespaces on the cluster
+            tf_resources.output()?
         }
-    }
+    };
+    update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([
