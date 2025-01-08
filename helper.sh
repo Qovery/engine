@@ -323,50 +323,49 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   prepare_tests
   use_sccache
 
-  if [ $filter_tests = "unit-tests" ] ; then
+  if [ "$filter_tests" = "unit-tests" ]; then
     # will execute only default features (unit tests)
-   features_to_test_option=(
-     --lib
-     --bins
-   )
+    features_to_test_option=(
+      --lib
+      --bins
+    )
   else
-   # will execute only the features specified form tests/ folder (integration tests)
-   features_to_test_option=(
-     --lib
-     --tests
-     -E 'kind(test)'
-     --features $filter_tests
-     --no-default-features
-   )
+    # will execute only the features specified form tests/ folder (integration tests)
+    features_to_test_option=(
+      --lib
+      --tests
+      -E 'kind(test)'
+      --features "$filter_tests"
+      --no-default-features
+    )
   fi
 
   STARTTIME=$(date +%s)
   cd $ENGINE_DIR
 
-  mkdir -p $GITLAB_LOG_OUTPUT_DIR
-  touch $GITLAB_LOG_OUTPUT_DIR/tests.logs
+  mkdir -p "$GITLAB_LOG_OUTPUT_DIR"
 
   # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
   # set -x
   # Removing from Gitlab pipeline output non ERROR / WARN logs avoiding to have output over 100MB has it's the limit
   # and we cannot increase it properly for the time being CF: https://docs.gitlab.com/ee/administration/instance_limits.html#maximum-file-size-for-job-logs
   output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
-  touch $output_log_file
-  tail -f $output_log_file &
+  touch "$output_log_file"
+  tail -f "$output_log_file" &
 
   # Using nextest to run tests (mainly because its compatibility with junit)
   # https://nexte.st/docs/machine-readable/junit/
-  cargo nextest run ${features_to_test_option[@]} --message-format human --manifest-path Cargo.toml --tool-config-file ci:$(pwd)/nextest.config.toml --no-fail-fast --profile default -- >> $output_log_file 2>&1
+  cargo nextest run "${features_to_test_option[@]}" --message-format human --manifest-path Cargo.toml --tool-config-file ci:"$(pwd)"/nextest.config.toml --no-fail-fast --profile default --no-tests=pass -- >>"$output_log_file" 2>&1
   TESTS_STATUS="${PIPESTATUS[0]}"
   echo "Test status: $TESTS_STATUS"
 
   ENDTIME=$(date +%s)
-  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete cargo build and test..."
+  echo -e "\e[95mIt takes $((ENDTIME - STARTTIME)) seconds to complete cargo build and test..."
 
   ENDTIME=$(date +%s)
-  echo -e "\e[95mIt takes $(($ENDTIME - $STARTTIME)) seconds to complete sort and print failed tests"
+  echo -e "\e[95mIt takes $((ENDTIME - STARTTIME)) seconds to complete sort and print failed tests"
 
-  return $TESTS_STATUS
+  return "$TESTS_STATUS"
 }
 
 function cargo_version() {
