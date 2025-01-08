@@ -302,12 +302,17 @@ fn mirror_image(
         let docker_mirror_thread = scope.spawn(|| {
             // making sure to pass the current span to the new thread not to lose any tracing info
             let _span = current_span.enter();
+            let mut err_logs = Vec::new();
             if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
+                err_logs.clear();
                 match target.docker.mirror(
                     &source_image,
                     dest_image,
                     &mut |line| info!("{}", line),
-                    &mut |line| warn!("{}", line),
+                    &mut |line| {
+                        warn!("{}", &line);
+                        err_logs.push(line);
+                    },
                     // Set timeout at 15min (arbitrary value)
                     &CommandKiller::from(Duration::from_secs(60 * 15), target.abort),
                 ) {
@@ -320,10 +325,15 @@ fn mirror_image(
                     }
                 }
             }) {
-                let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
+                let msg = format!(
+                    "❌ Failed to mirror image {}:{} due to {}\n{}",
+                    source.image,
+                    source.tag,
+                    err,
+                    err_logs.join("\n")
+                );
                 logger.warning(msg.clone());
                 let user_err = EngineError::new_docker_error(event_details, err.error);
-
                 return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
             }
 
