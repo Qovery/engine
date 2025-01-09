@@ -41,3 +41,9 @@ variable "instance_class" {
   default = "{{ database_instance_type }}"
   type = string
 }
+
+variable "encrypt_disk" {
+  description = "Enable disk encryption"
+  default = "{{ encrypt_disk }}"
+  type = string
+}
