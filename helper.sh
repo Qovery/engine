@@ -89,18 +89,15 @@ function check_untracked_files() {
   fi
 }
 
-function get_gitlab_engine_commit_id() {
+function generate_image_tag() {
   # Ensure we're in the correct folder
   if [ "$(git config --get remote.origin.url | $grep -c "gitlab.com:qovery/backend/engine.git")" != "1" ] && [ -z $CI_REPOSITORY_URL ] ; then
     (fatal "You're not in the correct directory and should be in the gitlab repo: $(pwd)")
   fi
-  git rev-parse HEAD
+
+  git describe --exact-match --tags
 }
 
-function generate_image_tag() {
-  gitlab_commit_id=$(get_gitlab_engine_commit_id)
-  echo "${gitlab_commit_id:0:7}"
-}
 
 #############################
 # Build and image functions #
