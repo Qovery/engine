@@ -67,6 +67,10 @@ prometheus:
           resources:
             requests:
               storage: "50Gi"
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 8Gi
 
 prometheusOperator:
   resources:
