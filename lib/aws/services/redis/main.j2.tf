@@ -101,6 +101,7 @@ resource "aws_elasticache_replication_group" "elasticache_cluster" {
 
   # Security
   security_group_ids = data.aws_security_group.selected.*.id
+  at_rest_encryption_enabled = var.encrypt_disk
 
   # Maintenance and upgrades
   apply_immediately = var.apply_changes_now
