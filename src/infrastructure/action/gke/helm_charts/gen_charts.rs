@@ -9,7 +9,9 @@ use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
+    GcpCloudStoragePrometheusChartConfiguration, KubePrometheusStackChart, PrometheusConfiguration,
+};
 use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
@@ -140,22 +142,32 @@ pub(super) fn gke_helm_charts(
     };
 
     // Kube prometheus stack
-    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled
-    {
-        false => None,
-        true => Some(Box::new(
-            KubePrometheusStackChart::new(
-                chart_prefix_path,
-                GcpStorageType::Balanced.to_k8s_storage_class(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace,
-                true,
-                get_chart_override_fn.clone(),
-                true,
-                false,
-            )
-            .to_common_helm_chart()?,
-        )),
+    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match &chart_config_prerequisites.prometheus_config {
+        Some(c) => match c {
+            PrometheusConfiguration::GcpCloudStorage(_config) => Some(Box::new(
+                KubePrometheusStackChart::new(
+                    chart_prefix_path,
+                    GcpStorageType::Balanced.to_k8s_storage_class(),
+                    prometheus_internal_url.to_string(),
+                    prometheus_namespace,
+                    PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {}),
+                    true,
+                    get_chart_override_fn.clone(),
+                    true,
+                    false,
+                )
+                .to_common_helm_chart()?,
+            )),
+            PrometheusConfiguration::AwsS3(_) | PrometheusConfiguration::ScalewayObjectStorage(_) => {
+                return Err(CommandError::new(
+                    "Prometheus config is not Google Cloud Object Storage".to_string(),
+                    None,
+                    None,
+                ))
+            }
+            PrometheusConfiguration::Custom => None,
+        },
+        None => None,
     };
 
     // Prometheus adapter

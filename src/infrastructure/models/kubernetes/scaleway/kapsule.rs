@@ -2,6 +2,7 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
@@ -137,6 +138,7 @@ pub struct Kapsule {
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub prometheus_config: Option<PrometheusConfiguration>,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
 }
@@ -154,6 +156,7 @@ impl Kapsule {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        prometheus_config: Option<PrometheusConfiguration>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
@@ -226,6 +229,7 @@ impl Kapsule {
             logger,
             advanced_settings,
             customer_helm_charts_override,
+            prometheus_config,
             kubeconfig,
             temp_dir,
         };

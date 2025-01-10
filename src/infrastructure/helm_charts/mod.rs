@@ -235,9 +235,10 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
                 }
 
                 if i < fields_len - 1 {
-                    current_value = current_value[f]
-                        .as_mapping()
-                        .expect("Error while trying to get nested field");
+                    current_value = match current_value.get(f) {
+                        Some(v) => v.as_mapping().expect("Error while trying to get nested field"),
+                        None => panic!("Missing key/value '{}' in file '{}'", value.key, chart_values_path),
+                    }
                 }
             }
         }

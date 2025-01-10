@@ -26,6 +26,7 @@ pub(super) trait HelmInfraResources {
         infra_ctx: &InfrastructureContext,
         config: Self::ChartPrerequisite,
     ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, Box<EngineError>>;
+
     fn deploy_charts(
         &self,
         infra_ctx: &InfrastructureContext,
@@ -36,8 +37,10 @@ pub(super) trait HelmInfraResources {
         logger.info("⚓ 📥 chart is going to be updated");
         logger.info("⚓ 📤 chart is going to be uninstalled");
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
+
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
+        let ev_details = &self.charts_context().event_details;
         let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
 
         logger.info("🛳️ Going to deploy Helm charts in this sequence:");
@@ -45,7 +48,6 @@ pub(super) trait HelmInfraResources {
             logger.info(format!("Level {}: {}", ix, charts_names_user_str(charts_lvl)));
         });
 
-        let ev_details = &self.charts_context().event_details;
         let envs = self
             .charts_context()
             .envs
@@ -108,6 +110,12 @@ pub(super) trait HelmInfraResources {
 
         Ok(())
     }
+
+    fn missing_metrics_crds(
+        &self,
+        event_details: EventDetails,
+        infra_ctx: &InfrastructureContext,
+    ) -> Result<Vec<String>, Box<EngineError>>;
 }
 
 fn charts_names_user_str(charts: &[Box<dyn HelmChart>]) -> String {

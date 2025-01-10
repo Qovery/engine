@@ -1,6 +1,6 @@
 use crate::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartError,
+    HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
 };
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -41,7 +41,9 @@ use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::grafana_chart::{
     CloudWatchConfig, GrafanaAdminUser, GrafanaChart, GrafanaDatasources,
 };
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
+    AwsS3PrometheusChartConfiguration, KubePrometheusStackChart, PrometheusConfiguration,
+};
 use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
@@ -62,12 +64,14 @@ pub(super) fn eks_helm_charts(
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
+    are_metrics_crd_installed: bool,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
+    let enable_metrics_history = are_metrics_crd_installed && chart_config_prerequisites.ff_metrics_history_enabled;
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
@@ -171,29 +175,23 @@ pub(super) fn eks_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    // Karpenter
-    let karpenter = KarpenterChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites.cluster_name.to_string(),
-        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
-        chart_config_prerequisites.is_karpenter_enabled,
-        false,
-        chart_config_prerequisites.kubernetes_version_upgrade_requested,
-    )
-    .to_common_helm_chart()?;
-
     // Karpenter CRD
     let karpenter_crd = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
-    let karpenter_with_monitoring = KarpenterChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites.cluster_name.to_string(),
-        chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
-        chart_config_prerequisites.is_karpenter_enabled,
-        true,
-        chart_config_prerequisites.kubernetes_version_upgrade_requested,
-    )
-    .to_common_helm_chart()?;
+    // Karpenter
+    let karpenter_chart_prepare = |metrics_enabled: bool| -> Result<CommonChart, HelmChartError> {
+        KarpenterChart::new(
+            chart_prefix_path,
+            chart_config_prerequisites.cluster_name.to_string(),
+            chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
+            chart_config_prerequisites.is_karpenter_enabled,
+            metrics_enabled,
+            chart_config_prerequisites.kubernetes_version_upgrade_requested,
+        )
+        .to_common_helm_chart()
+    };
+    let karpenter = karpenter_chart_prepare(false)?;
+    let karpenter_with_monitoring = karpenter_chart_prepare(true)?;
 
     // Karpenter Configuration
     let karpenter_configuration = KarpenterConfigurationChart::new(
@@ -220,7 +218,7 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites.cluster_name.to_string(),
         chart_config_prerequisites.aws_iam_cluster_autoscaler_role_arn.clone(),
         prometheus_namespace,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        enable_metrics_history,
         chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
@@ -349,21 +347,33 @@ pub(super) fn eks_helm_charts(
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
     // Kube prometheus stack
-    let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(
-            KubePrometheusStackChart::new(
-                chart_prefix_path,
-                AwsStorageType::GP2.to_k8s_storage_class(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace,
-                true,
-                get_chart_override_fn.clone(),
-                true,
-                chart_config_prerequisites.is_karpenter_enabled,
-            )
-            .to_common_helm_chart()?,
-        ),
+    let kube_prometheus_stack = match &chart_config_prerequisites.prometheus_config {
+        Some(c) => match c {
+            PrometheusConfiguration::AwsS3(config) => Some(
+                KubePrometheusStackChart::new(
+                    chart_prefix_path,
+                    AwsStorageType::GP2.to_k8s_storage_class(),
+                    prometheus_internal_url.to_string(),
+                    prometheus_namespace,
+                    PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
+                        region: chart_config_prerequisites.region.to_cloud_provider_format().to_string(),
+                        bucketname: config.bucketname.clone(),
+                        aws_iam_prometheus_role_arn: config.aws_iam_prometheus_role_arn.clone(),
+                        endpoint: config.endpoint.clone(),
+                    }),
+                    true,
+                    get_chart_override_fn.clone(),
+                    true,
+                    chart_config_prerequisites.is_karpenter_enabled,
+                )
+                .to_common_helm_chart()?,
+            ),
+            PrometheusConfiguration::GcpCloudStorage(_) | PrometheusConfiguration::ScalewayObjectStorage(_) => {
+                return Err(CommandError::new("Prometheus config is not AWS S3".to_string(), None, None))
+            }
+            PrometheusConfiguration::Custom => None,
+        },
+        None => None,
     };
 
     // Prometheus adapter

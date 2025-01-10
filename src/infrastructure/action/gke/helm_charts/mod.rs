@@ -1,10 +1,12 @@
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
+use crate::events::EventDetails;
 use crate::helm::HelmChart;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::gke::helm_charts::gen_charts::gke_helm_charts;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
@@ -29,6 +31,7 @@ pub struct GkeChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     pub loki_logging_service_account_email: String,
     pub logs_bucket_name: String,
+    pub prometheus_config: Option<PrometheusConfiguration>,
     // qovery options form json input
     pub infra_options: GkeOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -49,6 +52,7 @@ impl GkeChartsConfigPrerequisites {
         dns_provider_config: DnsProviderConfiguration,
         loki_logging_service_account_email: String,
         logs_bucket_name: String,
+        prometheus_config: Option<PrometheusConfiguration>,
         infra_options: GkeOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -66,6 +70,7 @@ impl GkeChartsConfigPrerequisites {
             dns_provider_config,
             loki_logging_service_account_email,
             logs_bucket_name,
+            prometheus_config,
             infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
@@ -113,6 +118,7 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             infra_ctx.dns_provider().provider_configuration(),
             self.terraform_output.loki_logging_service_account_email.clone(),
             self.cluster.logs_bucket_name(),
+            None,
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.cluster.customer_helm_charts_override.clone(),
@@ -131,5 +137,13 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
+    }
+
+    fn missing_metrics_crds(
+        &self,
+        _event_details: EventDetails,
+        _infra_ctx: &InfrastructureContext,
+    ) -> Result<Vec<String>, Box<EngineError>> {
+        todo!()
     }
 }

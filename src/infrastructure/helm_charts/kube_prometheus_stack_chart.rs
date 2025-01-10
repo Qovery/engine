@@ -10,23 +10,66 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::io_models::metrics::MetricsIoConfig;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
 
 pub type StorageClassName = String;
 
+#[derive(Clone)]
+pub struct AwsS3PrometheusChartConfiguration {
+    pub region: String,
+    pub bucketname: String,
+    pub endpoint: String,
+    pub aws_iam_prometheus_role_arn: String,
+}
+
+#[derive(Clone)]
+pub struct GcpCloudStoragePrometheusChartConfiguration;
+
+#[derive(Clone)]
+pub struct ScalewayObjectStoragePrometheusChartConfiguration;
+
+#[derive(Clone)]
+pub enum PrometheusConfiguration {
+    AwsS3(AwsS3PrometheusChartConfiguration),
+    GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration),
+    ScalewayObjectStorage(ScalewayObjectStoragePrometheusChartConfiguration),
+    Custom,
+}
+
+impl PrometheusConfiguration {
+    pub fn from_metrics_config(metrics_config: &MetricsIoConfig) -> Self {
+        match metrics_config {
+            MetricsIoConfig::AwsS3(aws_s3_prometheus_config) => {
+                PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
+                    region: aws_s3_prometheus_config.region.to_string(),
+                    bucketname: aws_s3_prometheus_config.bucket_name.to_string(),
+                    endpoint: aws_s3_prometheus_config.endpoint.to_string(),
+                    aws_iam_prometheus_role_arn: aws_s3_prometheus_config.aws_iam_prometheus_role_arn.to_string(),
+                })
+            }
+            MetricsIoConfig::GcpCloudStorage(_) => {
+                PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {})
+            }
+            MetricsIoConfig::Custom => PrometheusConfiguration::Custom,
+        }
+    }
+}
+
 pub struct KubePrometheusStackChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     storage_class_name: StorageClassName,
+    prometheus_object_bucket_configuration: PrometheusConfiguration,
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
     kubelet_service_monitor_resource_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
-    additional_char_path: Option<HelmChartValuesFilePath>,
+    additional_chart_path: Option<HelmChartValuesFilePath>,
 }
 
 impl KubePrometheusStackChart {
@@ -35,6 +78,7 @@ impl KubePrometheusStackChart {
         storage_class_name: StorageClassName,
         prometheus_internal_url: String,
         prometheus_namespace: HelmChartNamespaces,
+        prometheus_object_bucket_configuration: PrometheusConfiguration,
         kubelet_service_monitor_resource_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
@@ -53,12 +97,13 @@ impl KubePrometheusStackChart {
                 KubePrometheusStackChart::chart_name(),
             ),
             storage_class_name,
+            prometheus_object_bucket_configuration,
             prometheus_internal_url,
             prometheus_namespace,
             kubelet_service_monitor_resource_enabled,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
-            additional_char_path: match karpenter_enabled {
+            additional_chart_path: match karpenter_enabled {
                 true => Some(HelmChartValuesFilePath::new(
                     chart_prefix_path,
                     HelmChartDirectoryLocation::CloudProviderFolder,
@@ -77,22 +122,56 @@ impl KubePrometheusStackChart {
 impl ToCommonHelmChart for KubePrometheusStackChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         let mut values_files = vec![self.chart_values_path.to_string()];
-        if let Some(additional_char_path) = &self.additional_char_path {
-            values_files.push(additional_char_path.to_string());
+        if let Some(additional_chart_path) = &self.additional_chart_path {
+            values_files.push(additional_chart_path.to_string());
         }
 
-        Ok(CommonChart {
+        // thanos object storage configuration
+        let mut object_storage_configs = match self.prometheus_object_bucket_configuration.clone() {
+            PrometheusConfiguration::AwsS3(s3_prometheus_chart_configuration) => {
+                vec![
+                    ChartSetValue {
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.bucket".to_string(),
+                        value: s3_prometheus_chart_configuration.bucketname.clone(),
+                    },
+                    ChartSetValue {
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.region".to_string(),
+                        value: s3_prometheus_chart_configuration.region.clone(),
+                    },
+                    ChartSetValue {
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.endpoint".to_string(),
+                        value: format!("s3.{}.amazonaws.com", s3_prometheus_chart_configuration.region.clone()),
+                    },
+                    ChartSetValue {
+                        key: r"prometheus.serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                        value: s3_prometheus_chart_configuration.aws_iam_prometheus_role_arn.clone(),
+                    },
+                    // Make sure you use a correct signature version. Currently AWS requires signature v4, so it needs signature_version2: false.
+                    // If you don’t specify it, you will get an Access Denied error. On the other hand, several S3 compatible APIs use signature_version2: true.
+                    ChartSetValue {
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.signature_version2"
+                            .to_string(),
+                        value: false.to_string(),
+                    },
+                ]
+            }
+            PrometheusConfiguration::GcpCloudStorage(_) => vec![],
+            PrometheusConfiguration::ScalewayObjectStorage(_) => vec![],
+            PrometheusConfiguration::Custom => vec![],
+        };
+
+        let mut common_chart = CommonChart {
             chart_info: ChartInfo {
                 name: KubePrometheusStackChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: self.prometheus_namespace,
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(51, 0, 2)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(67, 3,1)),
                 // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
                 // to upgrade because of the CRD and the number of elements it has to deploy
                 timeout_in_seconds: 480,
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
                 crds_update: Some(CRDSUpdate{
-                    path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.68.0/example/prometheus-operator-crd".to_string(),
+                    path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.79.0/example/prometheus-operator-crd".to_string(),
                     resources: vec![
                         "monitoring.coreos.com_alertmanagerconfigs.yaml".to_string(),
                         "monitoring.coreos.com_alertmanagers.yaml".to_string(),
@@ -196,7 +275,11 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 )),
                 false => None,
             },
-        })
+        };
+
+        common_chart.chart_info.values.append(&mut object_storage_configs);
+
+        Ok(common_chart)
     }
 }
 
@@ -228,16 +311,22 @@ impl ChartInstallationChecker for KubePrometheusStackChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use std::env;
+    use std::sync::Arc;
+
     use crate::helm::HelmChartNamespaces;
-    use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{KubePrometheusStackChart, StorageClassName};
+    use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
+        AwsS3PrometheusChartConfiguration, GcpCloudStoragePrometheusChartConfiguration, PrometheusConfiguration,
+        ScalewayObjectStoragePrometheusChartConfiguration, StorageClassName,
+    };
     use crate::infrastructure::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartType, ToCommonHelmChart,
     };
-    use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+    use crate::infrastructure::models::kubernetes::Kind;
     use crate::io_models::models::CustomerHelmChartsOverride;
-    use std::env;
-    use std::sync::Arc;
+
+    use super::KubePrometheusStackChart;
 
     fn get_prometheus_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
         Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
@@ -256,6 +345,12 @@ mod tests {
             StorageClassName::new(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
+            PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
+                region: "whatever".to_string(),
+                bucketname: "whatever".to_string(),
+                endpoint: "whatever".to_string(),
+                aws_iam_prometheus_role_arn: "whatever".to_string(),
+            }),
             true,
             get_prometheus_chart_override(),
             false,
@@ -288,6 +383,12 @@ mod tests {
             StorageClassName::new(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
+            PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
+                region: "whatever".to_string(),
+                bucketname: "whatever".to_string(),
+                endpoint: "whatever".to_string(),
+                aws_iam_prometheus_role_arn: "whatever".to_string(),
+            }),
             true,
             get_prometheus_chart_override(),
             false,
@@ -295,7 +396,7 @@ mod tests {
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
-        for provider_kind in [KubernetesKind::Eks, KubernetesKind::Gke, KubernetesKind::ScwKapsule] {
+        for provider_kind in [Kind::Eks, Kind::Gke, Kind::ScwKapsule] {
             let chart_values_path = format!(
                 "{}/lib/{}/bootstrap/chart_values/{}.yaml",
                 current_directory
@@ -324,21 +425,38 @@ mod tests {
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
-        // setup:
-        let chart = KubePrometheusStackChart::new(
-            None,
-            "whatever".to_string(),
-            "whatever".to_string(),
-            HelmChartNamespaces::Prometheus,
-            true,
-            get_prometheus_chart_override(),
-            false,
-            false,
-        );
-        let common_chart = chart.to_common_helm_chart().unwrap();
-
         // execute:
-        for provider_kind in [KubernetesKind::Eks, KubernetesKind::Gke, KubernetesKind::ScwKapsule] {
+        for provider_kind in [Kind::Eks, Kind::Gke, Kind::ScwKapsule] {
+            // setup:
+            let chart = KubePrometheusStackChart::new(
+                None,
+                "whatever".to_string(),
+                "whatever".to_string(),
+                HelmChartNamespaces::Prometheus,
+                match provider_kind {
+                    Kind::Eks => PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
+                        region: "whatever".to_string(),
+                        bucketname: "whatever".to_string(),
+                        endpoint: "whatever".to_string(),
+                        aws_iam_prometheus_role_arn: "whatever".to_string(),
+                    }),
+                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage(
+                        ScalewayObjectStoragePrometheusChartConfiguration {},
+                    ),
+                    Kind::Gke => {
+                        PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {})
+                    }
+                    Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
+                        PrometheusConfiguration::Custom
+                    }
+                },
+                true,
+                get_prometheus_chart_override(),
+                false,
+                false,
+            );
+            let common_chart = chart.to_common_helm_chart().unwrap();
+
             let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
                 common_chart.clone(),
                 format!(

@@ -816,6 +816,8 @@ pub enum Tag {
     K8sGetDeploymentError,
     /// K8sGetWebhookConfigurationError: Kubernetes get Webhook configuration error
     K8sGetWebHookConfigurationError,
+    /// K8sGetCrdError: Kubernetes get CRD error
+    K8sGetCrdError,
     /// K8sDeleteDeploymentError: Kubernetes delete deployment error
     K8sDeleteDeploymentError,
     /// K8sGetStatefulsetError: Kubernetes get statefulset error
@@ -3534,6 +3536,16 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_crd_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(event_details, Tag::K8sGetCrdError, error.to_string(), Some(error), None, None)
     }
 
     /// Creates new error from a command error

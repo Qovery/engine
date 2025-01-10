@@ -75,6 +75,9 @@ pub enum HelmError {
 
     #[error("Cannot get credentials error.")]
     CannotGetCredentials(String),
+
+    #[error("Unsupported Prometheus object bucket configuration. Qovery Engine does not support it.")]
+    UnsupportedPrometheusObjectBucketConfiguration,
 }
 
 #[derive(Debug, Clone)]

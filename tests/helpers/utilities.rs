@@ -111,7 +111,9 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         is_first_cluster_deployment: Some(false),
     };
-    let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    // todo(pmavro): temporary remove metrics while implementing them
+    // let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    let mut enabled_features = vec![Features::LogsHistory];
     if let Some(kkind) = kind {
         if kkind == KKind::Eks {
             enabled_features.push(Features::Grafana)

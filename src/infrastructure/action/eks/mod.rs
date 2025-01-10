@@ -116,5 +116,9 @@ pub struct AwsEksQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
     #[serde(deserialize_with = "from_terraform_value")]
+    pub aws_iam_eks_prometheus_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub aws_s3_prometheus_bucket_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
     pub kubeconfig: String,
 }

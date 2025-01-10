@@ -4,9 +4,11 @@ use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::scaleway::ScwZone;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
+use crate::events::EventDetails;
 use crate::helm::HelmChart;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
@@ -38,6 +40,7 @@ pub struct KapsuleChartsConfigPrerequisites {
     pub infra_options: KapsuleOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub loki_storage_config_scaleway_s3: String,
+    pub prometheus_config: Option<PrometheusConfiguration>,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
 
@@ -60,6 +63,7 @@ impl KapsuleChartsConfigPrerequisites {
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         loki_storage_config_scaleway_s3: String,
+        prometheus_config: Option<PrometheusConfiguration>,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Self {
         KapsuleChartsConfigPrerequisites {
@@ -80,6 +84,7 @@ impl KapsuleChartsConfigPrerequisites {
             infra_options,
             cluster_advanced_settings,
             loki_storage_config_scaleway_s3,
+            prometheus_config,
             customer_helm_charts_override,
         }
     }
@@ -141,6 +146,7 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.terraform_output.loki_storage_config_scaleway_s3.clone(),
+            self.cluster.prometheus_config.clone(),
             self.cluster.customer_helm_charts_override.clone(),
         )
     }
@@ -157,5 +163,13 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
+    }
+
+    fn missing_metrics_crds(
+        &self,
+        _event_details: EventDetails,
+        _infra_ctx: &InfrastructureContext,
+    ) -> Result<Vec<String>, Box<EngineError>> {
+        todo!()
     }
 }
