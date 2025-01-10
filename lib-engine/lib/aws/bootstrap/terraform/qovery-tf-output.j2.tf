@@ -8,6 +8,8 @@ output "aws_account_id" { value = data.aws_caller_identity.current.account_id }
 output "karpenter_controller_aws_role_arn" { value = aws_iam_role.karpenter_controller_role.arn }
 output "cluster_security_group_id" { value = aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id }
 output "aws_iam_alb_controller_arn" { value = aws_iam_role.aws_load_balancer_controller.arn }
+output "aws_iam_eks_prometheus_role_arn" { value = aws_iam_role.iam_eks_prometheus.arn }
+output "aws_s3_prometheus_bucket_name" { value = aws_s3_bucket.prometheus_bucket.id }
 output "kubeconfig" {
   sensitive = true
   depends_on = [aws_eks_cluster.eks_cluster]

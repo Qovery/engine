@@ -21,7 +21,9 @@ charts:
   - name: kube-prometheus-stack
     repo_name: prometheus-community
     version: 67.3.1
-    comment: https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
+    comment: |
+      !!! On version upgrade, do not forget to update CRDs !!!
+      https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 5.27.0

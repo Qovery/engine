@@ -43,7 +43,25 @@ kubeStateMetrics:
 
 prometheus:
   enabled: true
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "set-by-engine-code"
+  thanosService:
+    enabled: true
+  thanosServiceMonitor:
+    enabled: true
   prometheusSpec:
+    thanos:
+      objectStorageConfig:
+         secret:
+           type: S3
+           config:
+             aws_sdk_auth: true
+             bucket: "set-by-engine-code"
+             endpoint: "set-by-engine-code"
+             region: "set-by-engine-code"
+             signature_version2: "set-by-engine-code" 
+
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     retention: 90d

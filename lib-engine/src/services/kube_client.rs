@@ -15,7 +15,7 @@ use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
 
-use crate::environment::models::kubernetes::{K8sDeployment, K8sMutatingWebhookConfiguration};
+use crate::environment::models::kubernetes::{K8sCrd, K8sDeployment, K8sMutatingWebhookConfiguration};
 use crate::environment::models::kubernetes::{K8sPod, K8sSecret, K8sService, K8sStatefulset};
 use crate::utilities::create_kube_client_in_cluster;
 use crate::{
@@ -24,6 +24,7 @@ use crate::{
     runtime::block_on,
     utilities::create_kube_client,
 };
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
 use schemars::JsonSchema;
 
 #[derive(Clone)]
@@ -544,12 +545,44 @@ impl QubeClient {
         }
     }
 
-    fn is_error_code(e: &kube::Error, http_code_number: u16) -> bool {
-        matches!(e, kube::Error::Api(x) if x.code == http_code_number)
-    }
+    pub async fn get_crds(
+        &self,
+        event_details: EventDetails,
+        select_resource: SelectK8sResourceBy,
+    ) -> Result<Vec<K8sCrd>, Box<EngineError>> {
+        let client: Api<CustomResourceDefinition> = Api::all(self.client.clone());
 
-    pub fn client(&self) -> &kube::Client {
-        &self.client
+        let mut labels = "".to_string();
+        let params = match select_resource.clone() {
+            SelectK8sResourceBy::LabelsSelector(x) => {
+                labels = x;
+                ListParams::default().labels(labels.as_str())
+            }
+            _ => ListParams::default(),
+        };
+
+        match select_resource {
+            SelectK8sResourceBy::LabelsSelector(_) | SelectK8sResourceBy::All => match client.list(&params).await {
+                Ok(x) => Ok(K8sCrd::from_k8s_crd_objectlist(event_details, x)),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_crd_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes crds with labels `{labels}`. {e}"
+                    )),
+                ))),
+            },
+            SelectK8sResourceBy::Name(crd_name) => match client.get(crd_name.as_str()).await {
+                Ok(x) => Ok(vec![K8sCrd::from_k8s_crd(event_details, x)?]),
+                Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+                Err(e) => Err(Box::new(EngineError::new_k8s_get_crd_error(
+                    event_details,
+                    CommandError::new_from_safe_message(format!(
+                        "Error while trying to get kubernetes crds from {crd_name}. {e}",
+                    )),
+                ))),
+            },
+        }
     }
 
     pub async fn get_ec2_node_classes(
@@ -566,6 +599,14 @@ impl QubeClient {
                 CommandError::new_from_safe_message(format!("Error while trying to get Ec2NodeClasses {e}")),
             ))),
         }
+    }
+
+    fn is_error_code(e: &kube::Error, http_code_number: u16) -> bool {
+        matches!(e, kube::Error::Api(x) if x.code == http_code_number)
+    }
+
+    pub fn client(&self) -> &kube::Client {
+        &self.client
     }
 }
 

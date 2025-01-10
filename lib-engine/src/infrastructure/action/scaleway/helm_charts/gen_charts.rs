@@ -3,6 +3,9 @@ use crate::helm::{
     PriorityClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
+use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
+    KubePrometheusStackChart, PrometheusConfiguration, ScalewayObjectStoragePrometheusChartConfiguration,
+};
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
@@ -28,7 +31,6 @@ use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerCo
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
 use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
@@ -160,32 +162,29 @@ pub fn kapsule_helm_charts(
         ),
     };
 
-    /* Example to delete an old chart
-    let old_prometheus_operator = PrometheusOperatorConfigChart {
-        chart_info: ChartInfo {
-            name: "prometheus-operator".to_string(),
-            namespace: prometheus_namespace,
-            action: HelmAction::Destroy,
-            ..Default::default()
-        },
-    };*/
-
     // Kube prometheus stack
-    let kube_prometheus_stack = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(
-            KubePrometheusStackChart::new(
-                chart_prefix_path,
-                "scw-sbv-ssd-0".to_string(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace,
-                true,
-                get_chart_override_fn.clone(),
-                true,
-                false,
-            )
-            .to_common_helm_chart()?,
-        ),
+    let kube_prometheus_stack = match &chart_config_prerequisites.prometheus_config {
+        Some(c) => match c {
+            PrometheusConfiguration::AwsS3(_) | PrometheusConfiguration::GcpCloudStorage(_) => todo!(),
+            PrometheusConfiguration::ScalewayObjectStorage(_config) => Some(
+                KubePrometheusStackChart::new(
+                    chart_prefix_path,
+                    "scw-sbv-ssd-0".to_string(),
+                    prometheus_internal_url.to_string(),
+                    prometheus_namespace,
+                    PrometheusConfiguration::ScalewayObjectStorage(
+                        ScalewayObjectStoragePrometheusChartConfiguration {},
+                    ),
+                    true,
+                    get_chart_override_fn.clone(),
+                    true,
+                    false,
+                )
+                .to_common_helm_chart()?,
+            ),
+            PrometheusConfiguration::Custom => None,
+        },
+        None => None,
     };
 
     // Prometheus adapter

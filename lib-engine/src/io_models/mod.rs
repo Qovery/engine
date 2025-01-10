@@ -25,6 +25,7 @@ mod gke;
 pub mod helm_chart;
 pub mod job;
 pub mod labels_group;
+pub mod metrics;
 pub mod models;
 pub mod probe;
 pub mod router;

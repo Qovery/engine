@@ -3,12 +3,15 @@ use base64::Engine;
 use std::{collections::BTreeMap, io::Read};
 
 use chrono::Duration;
-use k8s_openapi::api::{
-    admissionregistration::v1::MutatingWebhookConfiguration,
-    apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
-    core::v1::{Pod, PodStatus, Secret, Service},
-};
 use k8s_openapi::ByteString;
+use k8s_openapi::{
+    api::{
+        admissionregistration::v1::MutatingWebhookConfiguration,
+        apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
+        core::v1::{Pod, PodStatus, Secret, Service},
+    },
+    apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
+};
 use kube::core::ObjectList;
 
 use crate::helm::ChartReleaseData;
@@ -37,6 +40,7 @@ pub struct K8sMetadata {
     pub termination_grace_period_seconds: Option<Duration>,
 }
 
+#[derive(Debug, PartialEq, Default)]
 pub struct K8sMetadataWithoutNamespace {
     pub name: String,
     pub labels: Option<BTreeMap<String, String>>,
@@ -530,6 +534,7 @@ impl K8sSecret {
 MUTATING WEBHOOKS CONFIGURATION
 ********************************/
 
+#[derive(Debug, PartialEq, Default)]
 pub struct K8sMutatingWebhookConfiguration {
     pub metadata: K8sMetadataWithoutNamespace,
 }
@@ -578,6 +583,63 @@ impl K8sMutatingWebhookConfiguration {
                 },
                 labels: k8s_mutating_webhook_configuration.metadata.labels.clone(),
                 annotations: k8s_mutating_webhook_configuration.metadata.annotations.clone(),
+            },
+        })
+    }
+}
+
+/********************************
+CRD (CUSTOM RESOURCE DEFINITIONS)
+********************************/
+
+#[derive(Debug, PartialEq)]
+pub struct K8sCrd {
+    pub metadata: K8sMetadataWithoutNamespace,
+}
+
+impl K8sCrd {
+    pub fn from_k8s_crd_objectlist(
+        event_details: EventDetails,
+        k8s_crds: ObjectList<CustomResourceDefinition>,
+    ) -> Vec<K8sCrd> {
+        let mut crds: Vec<K8sCrd> = Vec::with_capacity(k8s_crds.items.len());
+
+        for crd in k8s_crds.items {
+            if let Ok(x) = K8sCrd::from_k8s_crd(event_details.clone(), crd) {
+                crds.push(x);
+            };
+        }
+        crds
+    }
+
+    pub fn from_name(name: &str) -> K8sCrd {
+        K8sCrd {
+            metadata: K8sMetadataWithoutNamespace {
+                name: name.to_string(),
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn from_k8s_crd(
+        event_details: EventDetails,
+        k8s_crd: CustomResourceDefinition,
+    ) -> Result<K8sCrd, Box<EngineError>> {
+        Ok(K8sCrd {
+            metadata: K8sMetadataWithoutNamespace {
+                name: match k8s_crd.metadata.name.clone() {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_crd_error(
+                            event_details,
+                            CommandError::new_from_safe_message(
+                                "can't read kubernetes crd, name is missing".to_string(),
+                            ),
+                        )))
+                    }
+                },
+                labels: k8s_crd.metadata.labels.clone(),
+                annotations: k8s_crd.metadata.annotations.clone(),
             },
         })
     }

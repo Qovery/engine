@@ -383,6 +383,7 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
+                    None,
                     kubeconfig,
                     temp_dir,
                     None,
@@ -410,6 +411,7 @@ pub fn get_environment_test_kubernetes(
                         ),
                         ..Default::default()
                     },
+                    None,
                     None,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                     temp_dir,
@@ -440,6 +442,7 @@ pub fn get_environment_test_kubernetes(
                         ),
                         ..Default::default()
                     },
+                    None,
                     None,
                     secrets.GCP_TEST_KUBECONFIG_b64,
                     temp_dir,
