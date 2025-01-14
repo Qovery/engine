@@ -24,6 +24,10 @@ charts:
     comment: |
       !!! On version upgrade, do not forget to update CRDs !!!
       https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
+  - name: prometheus-operator-crds
+    repo_name: prometheus-community
+    version: 17.0.2
+    comment: "!!! On version upgrade, do not forget to update kube-prometheus-stack !!!"
   - name: kube-state-metrics
     repo_name: prometheus-community
     version: 5.27.0
