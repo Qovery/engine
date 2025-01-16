@@ -513,8 +513,8 @@ pub fn init() -> Instant {
     let _ = match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
-            .compact()
             .with_max_level(tracing::Level::INFO)
+            .with_current_span(true)
             .try_init(),
         None => {
             if env::var_os("RUST_LOG").is_none() {

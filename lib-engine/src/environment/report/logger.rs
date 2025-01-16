@@ -125,7 +125,7 @@ impl EnvLogger {
         }
 
         self.logger
-            .log(EngineEvent::Error(err.clone(), Some(EventMessage::from(err))));
+            .log(EngineEvent::Error(err.clone(), Some(EventMessage::new_from_engine_error(err))));
     }
 
     pub fn send_core_configuration_for_job(&self, safe_message: String, json: String) {
