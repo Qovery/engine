@@ -222,7 +222,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
         }
 
         // Default node pool limits
-        if let Some(default_node_pool_limits) = self
+        if let Some(Some(default_node_pool_limits)) = self
             .karpenter_parameters
             .qovery_node_pools
             .default_override
@@ -550,10 +550,10 @@ mod tests {
                         limits: None,
                     },
                     default_override: Some(KarpenterDefaultNodePoolOverride {
-                        limits: KarpenterNodePoolLimits {
+                        limits: Some(KarpenterNodePoolLimits {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
-                        },
+                        }),
                     }),
                 },
                 verify_fn: verify_custom_node_pools,

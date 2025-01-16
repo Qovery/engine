@@ -235,10 +235,10 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
                 }),
             },
             default_override: Some(KarpenterDefaultNodePoolOverride {
-                limits: KarpenterNodePoolLimits {
+                limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                },
+                }),
             }),
         },
     };
@@ -299,10 +299,10 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
                 }),
             },
             default_override: Some(KarpenterDefaultNodePoolOverride {
-                limits: KarpenterNodePoolLimits {
+                limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                },
+                }),
             }),
         },
     };
