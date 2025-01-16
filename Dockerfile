@@ -52,7 +52,7 @@ RUN apt-get update && \
   containerd.io=$CONTAINERD_VERSION \
   helm=$HELM_VERSION \
   vault=$VAULT_VERSION && \
-  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
@@ -235,7 +235,7 @@ RUN apt-get update && apt-get install -y \
   helm=$HELM_VERSION \
   google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
-  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
@@ -321,7 +321,7 @@ RUN apt-get update && apt-get install -y \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   dumb-init git-lfs && \
-  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
