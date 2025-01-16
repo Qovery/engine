@@ -19,6 +19,7 @@ pub mod loki_chart;
 pub mod metrics_server_chart;
 pub mod nginx_ingress_chart;
 pub mod prometheus_adapter_chart;
+pub mod prometheus_operator_crds;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_cluster_agent_chart;

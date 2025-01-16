@@ -1,5 +1,6 @@
 use base64::engine::general_purpose;
 use base64::Engine;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io::Read};
 
 use chrono::Duration;
@@ -40,7 +41,7 @@ pub struct K8sMetadata {
     pub termination_grace_period_seconds: Option<Duration>,
 }
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct K8sMetadataWithoutNamespace {
     pub name: String,
     pub labels: Option<BTreeMap<String, String>>,
@@ -592,7 +593,7 @@ impl K8sMutatingWebhookConfiguration {
 CRD (CUSTOM RESOURCE DEFINITIONS)
 ********************************/
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct K8sCrd {
     pub metadata: K8sMetadataWithoutNamespace,
 }

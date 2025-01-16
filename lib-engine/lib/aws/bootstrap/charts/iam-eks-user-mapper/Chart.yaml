@@ -1,7 +1,7 @@
 apiVersion: v2
-appVersion: 0.4.0
+appVersion: 0.5.2
 description: A Helm chart for iam-eks-user-mapper, a tool to automatically give AWS
   IAM users access to your Kubernetes cluster.
 name: iam-eks-user-mapper
 type: application
-version: 1.4.2
+version: 1.5.0

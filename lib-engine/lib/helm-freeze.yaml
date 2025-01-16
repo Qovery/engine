@@ -107,7 +107,7 @@ charts:
     comment: |
       https://artifacthub.io/packages/helm/bitnami/redis
   - name: iam-eks-user-mapper
-    version: 1.4.2
+    version: 1.5.0
     repo_name: iam-eks-user-mapper
     dest: aws-bootstrap
   - name: datadog

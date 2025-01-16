@@ -45,6 +45,7 @@ spec:
             - name: "KARPENTER_ROLE_ARN"
               value: "{{ .Values.karpenter.iamKarpenterRoleArn }}"
             {{ end }}
+            {{ if and .Values.aws.accessKeyId .Values.aws.secretAccessKey }}
             - name: "AWS_ACCESS_KEY_ID"
               valueFrom:
                 secretKeyRef:
@@ -55,6 +56,7 @@ spec:
                 secretKeyRef:
                   name: {{ include "iam-eks-user.aws.secretName" . }}
                   key: AWS_SECRET_ACCESS_KEY
+            {{ end }}
             - name: AWS_DEFAULT_REGION
               value: "{{ .Values.aws.defaultRegion }}"
           resources:

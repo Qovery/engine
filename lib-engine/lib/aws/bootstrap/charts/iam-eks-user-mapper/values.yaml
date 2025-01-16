@@ -11,9 +11,10 @@ groupUsersSync:
 aws:
   # if you want to use an existing secret, set the name here
   # it must contain AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  # Otherwise use STS to assume a role with the service account
+  #accessKeyId: ""
+  #secretAccessKey: ""
   existingSecretName: ""
-  accessKeyId: ""
-  secretAccessKey: ""
   defaultRegion: "us-west-1"
 
 sso:

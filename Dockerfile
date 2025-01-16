@@ -1,11 +1,11 @@
 # To find the version do an `apt list -a xxxx` helm inside the CI image
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
-ARG KUBECTL_VERSION="1.30.3"
-ARG HELM_VERSION="3.15.2-1"
+ARG KUBECTL_VERSION="1.30.8"
+ARG HELM_VERSION="3.17.0-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"
-ARG HELM_DIFF_VERSION="v3.9.12"
+ARG HELM_DIFF_VERSION="v3.9.14"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:27.1.1-1~debian.12~bookworm"
@@ -16,7 +16,7 @@ ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 ARG KUBENT_VERSION=0.7.3
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.83.0-2025-01-03T12-53-59"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.83.0-2025-01-28T17-07-03"
 
 
 ###########################################
