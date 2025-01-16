@@ -1,7 +1,6 @@
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
-use crate::events::EventDetails;
 use crate::helm::HelmChart;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::gke::helm_charts::gen_charts::gke_helm_charts;
@@ -137,13 +136,5 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
-    }
-
-    fn missing_metrics_crds(
-        &self,
-        _event_details: EventDetails,
-        _infra_ctx: &InfrastructureContext,
-    ) -> Result<Vec<String>, Box<EngineError>> {
-        todo!()
     }
 }

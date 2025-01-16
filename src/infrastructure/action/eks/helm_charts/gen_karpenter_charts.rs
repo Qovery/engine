@@ -17,7 +17,6 @@ pub struct KarpenterCharts {
 pub fn generate_karpenter_charts(
     chart_prefix_path: Option<&str>,
     chart_config_prerequisites: &EksChartsConfigPrerequisites,
-    enable_metrics_history: bool,
 ) -> Result<KarpenterCharts, CommandError> {
     let karpenter_parameters = chart_config_prerequisites.karpenter_parameters.clone().ok_or_else(|| {
         CommandError::new_from_safe_message(
@@ -44,11 +43,9 @@ pub fn generate_karpenter_charts(
     let karpenter_crd_chart = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // Karpenter with Monitoring
-    let karpenter_with_monitoring_chart = if enable_metrics_history {
-        let karpenter_with_monitoring = karpenter_chart_prepare(true)?;
-        Some(karpenter_with_monitoring)
-    } else {
-        None
+    let karpenter_with_monitoring_chart = match chart_config_prerequisites.prometheus_config {
+        Some(_) => Some(karpenter_chart_prepare(true)?),
+        None => None,
     };
 
     // Karpenter Configuration

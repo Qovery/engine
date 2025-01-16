@@ -110,12 +110,6 @@ pub(super) trait HelmInfraResources {
 
         Ok(())
     }
-
-    fn missing_metrics_crds(
-        &self,
-        event_details: EventDetails,
-        infra_ctx: &InfrastructureContext,
-    ) -> Result<Vec<String>, Box<EngineError>>;
 }
 
 fn charts_names_user_str(charts: &[Box<dyn HelmChart>]) -> String {

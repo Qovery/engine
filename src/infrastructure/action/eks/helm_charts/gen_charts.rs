@@ -5,6 +5,7 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -62,14 +63,12 @@ pub(super) fn eks_helm_charts(
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
-    are_metrics_crd_installed: bool,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let chart_prefix = chart_prefix_path.unwrap_or("./");
     let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
-    let enable_metrics_history = are_metrics_crd_installed && chart_config_prerequisites.ff_metrics_history_enabled;
 
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
@@ -174,12 +173,9 @@ pub(super) fn eks_helm_charts(
     .to_common_helm_chart()?;
 
     // Karpenter CRD
-    let karpenter_charts = if chart_config_prerequisites.is_karpenter_enabled {
-        let karpenter_charts =
-            generate_karpenter_charts(chart_prefix_path, chart_config_prerequisites, enable_metrics_history)?;
-        Some(karpenter_charts)
-    } else {
-        None
+    let karpenter_charts = match chart_config_prerequisites.is_karpenter_enabled {
+        true => Some(generate_karpenter_charts(chart_prefix_path, chart_config_prerequisites)?),
+        false => None,
     };
 
     // Cluster autoscaler
@@ -190,7 +186,7 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites.cluster_name.to_string(),
         chart_config_prerequisites.aws_iam_cluster_autoscaler_role_arn.clone(),
         prometheus_namespace,
-        enable_metrics_history,
+        chart_config_prerequisites.prometheus_config.is_some(),
         chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
@@ -304,19 +300,15 @@ pub(super) fn eks_helm_charts(
         ),
     };
 
-    /* Example to delete an old install
-    let old_prometheus_operator = PrometheusOperatorConfigChart {
-        chart_info: ChartInfo {
-            name: "prometheus-operator".to_string(),
-            namespace: prometheus_namespace,
-            action: HelmAction::Destroy,
-            ..Default::default()
-        },
-    };*/
-
     // K8s Event Logger
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+
+    // Prometheus CRDs
+    let prometheus_operator_crds = match chart_config_prerequisites.prometheus_config {
+        Some(_) => Some(PrometheusOperatorCrdsChart::new(chart_prefix_path).to_common_helm_chart()?),
+        _ => None,
+    };
 
     // Kube prometheus stack
     let kube_prometheus_stack = match &chart_config_prerequisites.prometheus_config {
@@ -349,7 +341,7 @@ pub(super) fn eks_helm_charts(
     };
 
     // Prometheus adapter
-    let prometheus_adapter = match chart_config_prerequisites.ff_metrics_history_enabled {
+    let prometheus_adapter = match chart_config_prerequisites.prometheus_config.is_some() {
         false => None,
         true => Some(
             PrometheusAdapterChart::new(
@@ -389,7 +381,7 @@ pub(super) fn eks_helm_charts(
     .to_common_helm_chart()?;
 
     // Kube state metrics
-    let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
+    let kube_state_metrics = match chart_config_prerequisites.prometheus_config.is_some() {
         false => None,
         true => Some(
             KubeStateMetricsChart::new(
@@ -433,7 +425,7 @@ pub(super) fn eks_helm_charts(
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        chart_config_prerequisites.prometheus_config.is_some(),
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
@@ -481,7 +473,7 @@ pub(super) fn eks_helm_charts(
             ),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        chart_config_prerequisites.prometheus_config.is_some(),
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Aws,
@@ -623,7 +615,7 @@ pub(super) fn eks_helm_charts(
                 // metrics
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: chart_config_prerequisites.ff_metrics_history_enabled.to_string(),
+                    value: chart_config_prerequisites.prometheus_config.is_some().to_string(),
                 },
                 // autoscaler
                 ChartSetValue {
@@ -709,6 +701,10 @@ pub(super) fn eks_helm_charts(
         // Box::new(prometheus_service_monitor_crd.clone()), // to be fixed: can cause an error if crd is already installed
         Box::new(q_priority_class_chart),
     ];
+    // Add prometheus CRDs early to avoid issues with other charts
+    if let Some(chart) = prometheus_operator_crds {
+        level_0.push(Box::new(chart));
+    }
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
     // If IAM settings are set and activated

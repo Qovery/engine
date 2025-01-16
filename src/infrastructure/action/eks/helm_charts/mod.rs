@@ -1,5 +1,3 @@
-use crate::environment::models::kubernetes::K8sCrd;
-use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::helm::HelmChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
@@ -21,8 +19,6 @@ use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::runtime::block_on;
-use crate::services::kube_client::SelectK8sResourceBy;
 use crate::string::terraform_list_format;
 use std::collections::HashMap;
 
@@ -47,7 +43,6 @@ pub struct EksChartsConfigPrerequisites {
     pub cloud_provider: String,
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
-    pub ff_metrics_history_enabled: bool,
     pub ff_grafana_enabled: bool,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
@@ -123,7 +118,6 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             cloud_provider: "aws".to_string(),
             qovery_engine_location: cluster.options.qovery_engine_location.clone(),
             ff_log_history_enabled: cluster.context().is_feature_enabled(&Features::LogsHistory),
-            ff_metrics_history_enabled: cluster.context().is_feature_enabled(&Features::MetricsHistory),
             ff_grafana_enabled: cluster.context().is_feature_enabled(&Features::Grafana),
             managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
             managed_dns_resolvers_terraform_format: terraform_list_format(
@@ -165,46 +159,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             Some(self.context.destination_folder.to_string_lossy().as_ref()),
             &*infra_ctx.context().qovery_api,
             infra_ctx.dns_provider().domain(),
-            self.missing_metrics_crds(self.context.event_details.clone(), infra_ctx)?
-                .is_empty(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
-    }
-
-    fn missing_metrics_crds(
-        &self,
-        event_details: EventDetails,
-        infra_ctx: &InfrastructureContext,
-    ) -> Result<Vec<String>, Box<EngineError>> {
-        let expected_crds = vec![
-            K8sCrd::from_name("alertmanagerconfigs.monitoring.coreos.com"),
-            K8sCrd::from_name("alertmanagerconfigs.monitoring.coreos.com"),
-            K8sCrd::from_name("alertmanagers.monitoring.coreos.com"),
-            K8sCrd::from_name("podmonitors.monitoring.coreos.com"),
-            K8sCrd::from_name("prometheuses.monitoring.coreos.com"),
-            K8sCrd::from_name("prometheusrules.monitoring.coreos.com"),
-            K8sCrd::from_name("prometheusrules.monitoring.coreos.com"),
-            K8sCrd::from_name("servicemonitors.monitoring.coreos.com"),
-            K8sCrd::from_name("thanosrulers.monitoring.coreos.com"),
-        ];
-        let qube_client = infra_ctx.mk_kube_client()?;
-        let crds = block_on(qube_client.get_crds(self.context.event_details.clone(), SelectK8sResourceBy::All))?;
-        let logger = self.cluster.logger();
-
-        let mut missing_crds = vec![];
-        for expected in expected_crds {
-            if !crds.contains(&expected) {
-                missing_crds.push(expected.metadata.name);
-            }
-        }
-
-        if !missing_crds.is_empty() {
-            logger.log(EngineEvent::Info(
-                event_details,
-                EventMessage::new_from_safe(format!("Missing CRDs: {}", missing_crds.join(","))),
-            ));
-        };
-
-        Ok(missing_crds)
     }
 }

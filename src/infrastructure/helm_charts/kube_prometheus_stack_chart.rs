@@ -187,6 +187,11 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 }),
                 values_files,
                 values: vec![
+                    // we should not enable crds because we are using the prometheus-operator-crds chart
+                    ChartSetValue {
+                        key: "crds.enabled".to_string(),
+                        value: false.to_string(),
+                    },
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName".to_string(),
                         value: self.storage_class_name.to_string(),

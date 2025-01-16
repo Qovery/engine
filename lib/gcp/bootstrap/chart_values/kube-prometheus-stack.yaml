@@ -14,6 +14,9 @@ defaultRules:
     nodeExporterRecording: false
     windows: false
 
+crds:
+  enabled: false
+
 alertmanager:
   enabled: false
 
