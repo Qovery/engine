@@ -1,6 +1,6 @@
 use crate::environment::models::kubernetes::K8sObject;
 use crate::errors::{CommandError, EngineError, Tag};
-use crate::events::{EventDetails, EventMessage, InfrastructureStep, Stage};
+use crate::events::{EventDetails, InfrastructureStep, Stage};
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
@@ -22,7 +22,6 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::KubernetesClusterAction;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
-use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
@@ -200,38 +199,6 @@ pub fn create_eks_cluster(
 
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
     clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
-
-    if !infra_ctx.context().is_first_cluster_deployment() {
-        let target_kubernetes_version = match kubernetes.version().next_version() {
-            Some(v) => v.into(),
-            None => kubernetes.version().clone().into(),
-        };
-        logger.info(format!(
-            "Check if cluster has calls to deprecated kubernetes API for version `{}`",
-            target_kubernetes_version
-        ));
-        match infra_ctx
-            .kubernetes_api_deprecation_service()
-            .is_cluster_fully_compatible_with_kubernetes_version(
-                kubernetes.kubeconfig_local_file_path().as_path(),
-                Some(&target_kubernetes_version),
-                &cloud_provider.credentials_environment_variables(),
-                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                    kube_client: kube_client.client(),
-                },
-            ) {
-            Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
-            Err(e) => {
-                // Non blocking error, just more FYI for user, to act on it if needed before upgrading
-                let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found(
-                    event_details.clone(),
-                    &target_kubernetes_version,
-                    e,
-                );
-                logger.warn(EventMessage::from(deprecation_error));
-            }
-        }
-    }
 
     Ok(())
 }

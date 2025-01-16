@@ -11,7 +11,6 @@ use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::models::kubernetes::gcp::Gke;
-use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use crate::utilities::envs_to_string;
 use std::str::FromStr;
 
@@ -22,30 +21,7 @@ pub(super) fn upgrade_gke_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-    let cloud_provider = infra_ctx.cloud_provider();
-    let kube_client = infra_ctx.mk_kube_client()?;
     logger.info("Start preparing GKE cluster upgrade process");
-
-    logger.info("Check if cluster has no calls to deprecated kubernetes API in next version");
-    match infra_ctx
-        .kubernetes_api_deprecation_service()
-        .is_cluster_fully_compatible_with_kubernetes_version(
-            cluster.kubeconfig_local_file_path().as_path(),
-            Some(&kubernetes_upgrade_status.requested_version),
-            &cloud_provider.credentials_environment_variables(),
-            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                kube_client: kube_client.client(),
-            },
-        ) {
-        Ok(_) => logger.info("Cluster is compatible with the next version"),
-        Err(e) => {
-            return Err(Box::new(EngineError::new_k8s_deprecated_api_calls_found(
-                event_details.clone(),
-                &kubernetes_upgrade_status.requested_version,
-                e,
-            )))
-        }
-    }
 
     let temp_dir = cluster.temp_dir();
     logger.info("Upgrading GKE cluster.");
