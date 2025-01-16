@@ -309,11 +309,13 @@ where
                             Err(err) => {
                                 logger.log(EngineEvent::Warning(
                                     event_details.clone(),
-                                    EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
-                                        event_details.clone(),
-                                        err,
-                                        &json,
-                                    )),
+                                    EventMessage::new_from_engine_error(
+                                        EngineError::new_invalid_job_output_cannot_be_serialized(
+                                            event_details.clone(),
+                                            err,
+                                            &json,
+                                        ),
+                                    ),
                                 ));
                             }
                         }

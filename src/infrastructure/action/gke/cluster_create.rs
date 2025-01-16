@@ -21,7 +21,6 @@ pub(super) fn create_gke_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
-
     logger.info("Preparing GKE cluster deployment.");
 
     logger.info("Deploying GKE cluster.");

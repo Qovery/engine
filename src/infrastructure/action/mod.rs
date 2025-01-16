@@ -10,13 +10,13 @@ mod self_managed;
 mod utils;
 
 use crate::errors::{EngineError, ErrorMessageVerbosity};
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage};
+use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
 use crate::infrastructure::action::utils::mk_logger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::{is_kubernetes_upgrade_required, KubernetesUpgradeStatus};
 use crate::logger::Logger;
-use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use tera::Context as TeraContext;
 
 pub trait InfrastructureAction: Send + Sync {
@@ -46,9 +46,6 @@ pub trait InfrastructureAction: Send + Sync {
             Action::Restart => InfrastructureStep::RestartedError,
         };
         let logger = mk_logger(infra_ctx.kubernetes(), step);
-        let kube_client = infra_ctx.mk_kube_client()?;
-        let kubernetes = infra_ctx.kubernetes();
-        let cloud_provider = infra_ctx.cloud_provider();
         if infra_ctx.context().is_dry_run_deploy() {
             logger.warn("👻 Dry run mode is enabled. No changes will be made to the infrastructure");
         }
@@ -59,84 +56,23 @@ pub trait InfrastructureAction: Send + Sync {
             infra_ctx.kubernetes().kind(),
             infra_ctx.kubernetes().name()
         ));
-
         match action {
             Action::Create => {
                 let mut cluster_has_been_upgraded = false;
                 if infra_ctx.context().is_first_cluster_deployment() {
                     self.bootstap_cluster(infra_ctx)?;
                 } else if let Some(upgrade_status) = self.is_upgrade_required(infra_ctx) {
-                    let event_details =
-                        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
-
-                    logger.info("Check if cluster has no calls to deprecated kubernetes API in next version");
-                    match infra_ctx
-                        .kubernetes_api_deprecation_service()
-                        .is_cluster_fully_compatible_with_kubernetes_version(
-                            kubernetes.kubeconfig_local_file_path().as_path(),
-                            Some(&upgrade_status.requested_version),
-                            &cloud_provider.credentials_environment_variables(),
-                            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                kube_client: kube_client.client(),
-                            },
-                        ) {
-                        Ok(_) => logger.info("Cluster is compatible with the next version"),
-                        Err(e) => {
-                            return Err(Box::new(EngineError::new_k8s_deprecated_api_calls_found(
-                                event_details.clone(),
-                                &upgrade_status.requested_version,
-                                e,
-                            )))
-                        }
-                    }
-
                     cluster_has_been_upgraded = true;
                     self.upgrade_cluster(infra_ctx, upgrade_status)?;
                 }
-
-                let cluster = self.create_cluster(infra_ctx, cluster_has_been_upgraded);
-
-                let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
-                if !infra_ctx.context().is_first_cluster_deployment() {
-                    let target_kubernetes_version = match kubernetes.version().next_version() {
-                        Some(v) => v.into(),
-                        None => kubernetes.version().clone().into(),
-                    };
-                    logger.info(format!(
-                        "Check if cluster has calls to deprecated kubernetes API for version `{}`",
-                        target_kubernetes_version
-                    ));
-                    match infra_ctx
-                        .kubernetes_api_deprecation_service()
-                        .is_cluster_fully_compatible_with_kubernetes_version(
-                            kubernetes.kubeconfig_local_file_path().as_path(),
-                            Some(&target_kubernetes_version),
-                            &cloud_provider.credentials_environment_variables(),
-                            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                kube_client: kube_client.client(),
-                            },
-                        ) {
-                        Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
-                        Err(e) => {
-                            // Non blocking error, just more FYI for user, to act on it if needed before upgrading
-                            let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found(
-                                event_details.clone(),
-                                &target_kubernetes_version,
-                                e,
-                            );
-                            logger.warn(EventMessage::from(deprecation_error));
-                        }
-                    }
-                }
-
-                cluster
+                self.create_cluster(infra_ctx, cluster_has_been_upgraded)
             }
             Action::Pause => self.pause_cluster(infra_ctx),
             Action::Delete => self.delete_cluster(infra_ctx),
             Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
                 infra_ctx
                     .kubernetes()
-                    .get_event_details(Stage::Infrastructure(InfrastructureStep::RestartedError)),
+                    .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
             ))),
         }
     }
@@ -154,7 +90,7 @@ pub trait InfrastructureAction: Send + Sync {
 
         let event_details = infra_ctx
             .kubernetes()
-            .get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+            .get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
         match is_kubernetes_upgrade_required(
             infra_ctx.kubernetes().kubeconfig_local_file_path(),
@@ -212,7 +148,7 @@ impl InfraLogger for InfraLoggerImpl {
     fn diff(&self, from: InfrastructureDiffType, message: String) {
         let ev = EventDetails::clone_changing_stage(
             self.event_details.clone(),
-            Stage::Infrastructure(InfrastructureStep::InfrastructureDiff(from)),
+            Infrastructure(InfrastructureStep::InfrastructureDiff(from)),
         );
         self.logger.log(EngineEvent::Info(ev, EventMessage::from(message)));
     }

@@ -196,8 +196,8 @@ pub fn create_eks_cluster(
         alb_already_deployed,
         has_been_upgraded,
     );
-
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
+
     clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
 
     Ok(())

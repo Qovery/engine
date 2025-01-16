@@ -68,7 +68,6 @@ pub enum Tag {
     CannotReadFile,
     CannotRestartService,
     CannotRetrieveClusterConfigFile,
-    CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
     CannotUninstallHelmChart,
     CannotWriteToFile,
     ClientServiceFailedToDeployBeforeStart,
@@ -497,9 +496,6 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotGetRegistryCredentials => Tag::CannotGetRegistryCredentials,
             errors::Tag::CannotCreateAwsServiceLinkedRoleForSpotInstance => Tag::ServiceInstantiationError,
             errors::Tag::K8sGetCrdError => Tag::K8sGetCrdError,
-            errors::Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected => {
-                Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected
-            }
         }
     }
 }

@@ -112,7 +112,7 @@ pub(super) fn delete_kube_apps(
         &mut |_| {},
     ) {
         // this error is not blocking
-        logger.warn(EventMessage::from(to_engine_error(&event_details, e)));
+        logger.warn(EventMessage::new_from_engine_error(to_engine_error(&event_details, e)));
     }
 
     // required to avoid namespace stuck on deletion

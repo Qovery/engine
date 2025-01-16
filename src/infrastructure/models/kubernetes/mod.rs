@@ -597,7 +597,10 @@ where
                     error,
                 );
 
-                logger.log(EngineEvent::Warning(event_details.clone(), EventMessage::from(engine_error)));
+                logger.log(EngineEvent::Warning(
+                    event_details.clone(),
+                    EventMessage::new_from_engine_error(engine_error),
+                ));
             }
         }
     }
