@@ -4,7 +4,7 @@ use crate::helpers::utilities::{
 use ::function_name::named;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 
-use crate::helpers::common::ClusterDomain;
+use crate::helpers::common::{ClusterDomain, NodeManager};
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
@@ -37,6 +37,7 @@ fn create_and_destroy_kapsule_cluster(
             vpc_network_mode,
             CpuArchitecture::AMD64,
             None,
+            NodeManager::Default,
         )
     })
 }

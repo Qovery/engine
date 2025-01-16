@@ -5,7 +5,7 @@ use rand::Rng;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
     get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
@@ -108,6 +108,7 @@ pub fn scw_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::Default,
     )
 }
 
@@ -126,6 +127,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         _cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -151,6 +153,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             engine_location,
             StorageClass(ScwStorageType::SbvSsd.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(

@@ -1,4 +1,4 @@
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
 use base64::engine::general_purpose;
 use base64::Engine;
@@ -705,6 +705,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
         test_kube.kubeconfig_local_file_path().to_str().map(|s| s.to_string()),
+        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
     )
 }
 

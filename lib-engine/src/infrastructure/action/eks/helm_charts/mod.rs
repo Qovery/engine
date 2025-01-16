@@ -31,6 +31,7 @@ pub mod aws_iam_eks_user_mapper_chart;
 pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
 mod gen_charts;
+pub mod gen_karpenter_charts;
 pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;

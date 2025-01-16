@@ -30,7 +30,7 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{get_environment_test_kubernetes, TargetCluster};
 use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
@@ -151,6 +151,7 @@ pub fn gcp_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::AutoPilot,
     )
 }
 
@@ -169,6 +170,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use Google Artifact registry
         let container_registry = Box::new(gcp_container_registry(context));
@@ -197,6 +199,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             engine_location,
             StorageClass(GcpStorageType::Balanced.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(

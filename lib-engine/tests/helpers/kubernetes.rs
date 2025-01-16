@@ -1,4 +1,4 @@
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::utilities::{init, FuncTestsSecrets};
 
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS};
@@ -64,6 +64,7 @@ pub fn cluster_test(
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     cpu_archi: CpuArchitecture,
     environment_to_deploy: Option<&EnvironmentRequest>,
+    node_manager: NodeManager,
 ) -> String {
     init();
 
@@ -106,6 +107,7 @@ pub fn cluster_test(
             cpu_archi,
             EngineLocation::ClientSide,
             None, // <- no kubeconfig provided, new cluster
+            node_manager.clone(),
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -121,6 +123,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             None, // <- no kubeconfig provided, new cluster
+            node_manager.clone(),
         ),
         Kind::Gcp => Gke::docker_cr_engine(
             &context,
@@ -136,6 +139,7 @@ pub fn cluster_test(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             None, // <- no kubeconfig provided, new cluster
+            node_manager.clone(),
         ),
         Kind::OnPremise => todo!(),
     };
@@ -196,6 +200,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     None, // <- no kubeconfig provided, new cluster
+                    node_manager,
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -211,6 +216,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     None, // <- no kubeconfig provided, new cluster
+                    node_manager,
                 ),
                 Kind::Gcp => Gke::docker_cr_engine(
                     &context,
@@ -226,6 +232,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                     None, // <- no kubeconfig provided, new cluster
+                    node_manager,
                 ),
                 Kind::OnPremise => todo!(),
             };
@@ -257,7 +264,8 @@ pub fn cluster_test(
                     max_nodes,
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
-                    None, // <- no kubeconfig provided, new cluster
+                    None,                 // <- no kubeconfig provided, new cluster
+                    NodeManager::Default, // no karpenter parameters here, as this section is dedicated to test node autoscaling
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -273,6 +281,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     None, // <- no kubeconfig provided, new cluster
+                    NodeManager::Default,
                 ),
                 Kind::Gcp => Gke::docker_cr_engine(
                     &context,
@@ -288,6 +297,7 @@ pub fn cluster_test(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                     None, // <- no kubeconfig provided, new cluster
+                    NodeManager::AutoPilot,
                 ),
                 Kind::OnPremise => todo!(),
             };
@@ -342,6 +352,7 @@ pub fn get_environment_test_kubernetes(
     engine_location: EngineLocation,
     default_kubernetes_storage_class: StorageClass,
     kubeconfig: Option<String>,
+    node_manager: NodeManager,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
@@ -358,6 +369,11 @@ pub fn get_environment_test_kubernetes(
             let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
+            }
+            match node_manager {
+                NodeManager::Karpenter { config } => options.karpenter_parameters = Some(config),
+                NodeManager::Default => {}
+                NodeManager::AutoPilot => {}
             }
             Box::new(
                 EKS::new(

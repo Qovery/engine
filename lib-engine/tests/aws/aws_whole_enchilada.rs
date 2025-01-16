@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::common::ClusterDomain;
+use crate::helpers::common::{ClusterDomain, NodeManager};
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
@@ -59,6 +59,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -105,6 +106,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             None,
             CpuArchitecture::AMD64,
             None,
+            NodeManager::Default,
         )
     })
 }
@@ -152,6 +154,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -199,6 +202,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
