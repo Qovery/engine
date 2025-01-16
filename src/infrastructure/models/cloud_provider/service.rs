@@ -108,6 +108,7 @@ pub enum ServiceType {
     Container,
     Job,
     HelmChart,
+    Terraform,
 }
 
 impl ServiceType {
@@ -125,6 +126,7 @@ impl Display for ServiceType {
             ServiceType::Container => f.write_str("Container"),
             ServiceType::Job => f.write_str("Job"),
             ServiceType::HelmChart => f.write_str("HelmChart"),
+            ServiceType::Terraform => f.write_str("TerraformService"),
         }
     }
 }

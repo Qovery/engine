@@ -29,6 +29,9 @@ use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSo
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::terraform_service::{
+    TerraformBackend, TerraformBackendType, TerraformFilesSource, TerraformProvider, TerraformService,
+};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
@@ -3374,6 +3377,117 @@ fn test_restart_statefulset() {
 
         let result = environment.restart_environment(&environment, &infra_ctx);
         assert!(result.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn build_and_deploy_terraform_service_on_aws_eks() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        let service_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.terraform_services = vec![TerraformService {
+            long_id: service_id,
+            name: "terraform service test #####".to_string(),
+            kube_name: "terraform-service-test".to_string(),
+            action: Action::Create,
+
+            tf_files_source: TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
+                git_credentials: None,
+                commit_id: "cdf13c170a1e58fde0f1309249c57410fa30fda9".to_string(),
+                root_module_path: "/simple_terraform".to_string(),
+            },
+            provider: TerraformProvider::Terraform,
+            provider_version: "1.9.7".to_string(),
+            backend: TerraformBackend {
+                backend_type: TerraformBackendType::Kubernetes,
+                block: format!(
+                    // TODO TF not used for the moment
+                    r#"
+terraform {{
+  backend "kubernetes" {{
+    secret_suffix    = "{long_id}"
+  }}
+}}"#,
+                    long_id = service_id
+                ),
+                configs: vec![],
+            },
+            environment_vars_with_infos: Default::default(),
+            advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
+            shared_image_feature_enabled: false,
+        }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());

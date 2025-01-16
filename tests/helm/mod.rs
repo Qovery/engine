@@ -155,6 +155,7 @@ fn test_environment(kube: &dyn Kubernetes, domain: &str) -> Environment {
         ],
         vec![Box::new(test_job(kube))],
         vec![], // TODO (helm): add helm charts test
+        vec![],
     )
 }
 

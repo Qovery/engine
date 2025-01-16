@@ -323,6 +323,12 @@ impl EnvironmentTask {
                 .iter_mut()
                 .map(|app| app.as_service_mut())
                 .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
+                .chain(
+                    environment
+                        .terraform_services
+                        .iter_mut()
+                        .map(|terraform_service| terraform_service.as_service_mut()),
+                )
                 .collect();
             Self::build_and_push_services(
                 environment.long_id,

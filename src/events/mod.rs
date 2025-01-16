@@ -554,6 +554,8 @@ pub enum Transmitter {
     Router(TransmitterId, TransmitterName),
     /// Job: job engine part.
     Job(TransmitterId, TransmitterName),
+    /// TerraformService: TerraformService engine part.
+    TerraformService(TransmitterId, TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -576,6 +578,7 @@ impl Display for Transmitter {
                 Transmitter::Container(id, name) => format!("container({id}, {name})"),
                 Transmitter::Job(id, name) => format!("job({id}, {name})"),
                 Transmitter::Helm(id, name) => format!("helm_chart({id}, {name})"),
+                Transmitter::TerraformService(id, name) => format!("terraform_service({id}, {name})"),
             }
         )
     }
