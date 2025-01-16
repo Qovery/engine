@@ -262,7 +262,7 @@ impl KarpenterNodePoolRequirementKey {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterDefaultNodePoolOverride {
-    pub limits: KarpenterNodePoolLimits,
+    pub limits: Option<KarpenterNodePoolLimits>,
 }
 
 #[serde_with::serde_as]
@@ -521,7 +521,7 @@ mod tests {
     }
 
     #[test]
-    fn should_deserialize_correctly_when_default_override_is_present() {
+    fn should_deserialize_correctly_when_default_override_is_present_with_limits() {
         // given
         let karpenter_parameters_json = r#"
         {
@@ -587,11 +587,75 @@ mod tests {
         assert_eq!(
             default_node_pool_override,
             KarpenterDefaultNodePoolOverride {
-                limits: KarpenterNodePoolLimits {
+                limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                }
+                })
             }
         )
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_default_override_is_present_without_limits() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "stable_override": {
+            "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "24h",
+                  "schedule": "0 0 * * *"
+                }
+              ]
+            },
+            "default_override": {
+              "limits": null
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("should be Ok");
+        let default_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .default_override
+            .expect("default_override should be present");
+        assert_eq!(default_node_pool_override, KarpenterDefaultNodePoolOverride { limits: None })
     }
 }
