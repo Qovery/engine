@@ -1,5 +1,5 @@
 use crate::helpers;
-use crate::helpers::common::ClusterDomain;
+use crate::helpers::common::{ClusterDomain, NodeManager};
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use ::function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
@@ -52,6 +52,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_europe_west9() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::AutoPilot,
         )
     })
 }
@@ -95,6 +96,7 @@ fn create_and_destroy_kapsule_cluster_with_static_ip_in_europe_west12() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::AutoPilot,
         )
     })
 }

@@ -1,7 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
     get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
@@ -90,6 +90,7 @@ pub fn aws_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
     )
 }
 
@@ -108,6 +109,7 @@ impl Cluster<AWS, Options> for AWS {
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
@@ -132,6 +134,7 @@ impl Cluster<AWS, Options> for AWS {
             engine_location,
             StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(

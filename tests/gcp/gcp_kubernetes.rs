@@ -1,4 +1,4 @@
-use crate::helpers::common::ClusterDomain;
+use crate::helpers::common::{ClusterDomain, NodeManager};
 use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
@@ -38,6 +38,7 @@ fn create_and_destroy_gke_cluster(
             vpc_network_mode,
             CpuArchitecture::AMD64,
             None,
+            NodeManager::AutoPilot,
         )
     })
 }

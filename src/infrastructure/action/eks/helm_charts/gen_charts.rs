@@ -1,6 +1,6 @@
 use crate::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartError,
-    HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
+    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
+    PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
 };
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -31,9 +31,7 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 };
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
-use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
-use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
-use crate::infrastructure::action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
+use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
 use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -176,39 +174,13 @@ pub(super) fn eks_helm_charts(
     .to_common_helm_chart()?;
 
     // Karpenter CRD
-    let karpenter_crd = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
-
-    // Karpenter
-    let karpenter_chart_prepare = |metrics_enabled: bool| -> Result<CommonChart, HelmChartError> {
-        KarpenterChart::new(
-            chart_prefix_path,
-            chart_config_prerequisites.cluster_name.to_string(),
-            chart_config_prerequisites.karpenter_controller_aws_role_arn.clone(),
-            chart_config_prerequisites.is_karpenter_enabled,
-            metrics_enabled,
-            chart_config_prerequisites.kubernetes_version_upgrade_requested,
-        )
-        .to_common_helm_chart()
+    let karpenter_charts = if chart_config_prerequisites.is_karpenter_enabled {
+        let karpenter_charts =
+            generate_karpenter_charts(chart_prefix_path, chart_config_prerequisites, enable_metrics_history)?;
+        Some(karpenter_charts)
+    } else {
+        None
     };
-    let karpenter = karpenter_chart_prepare(false)?;
-    let karpenter_with_monitoring = karpenter_chart_prepare(true)?;
-
-    // Karpenter Configuration
-    let karpenter_configuration = KarpenterConfigurationChart::new(
-        chart_prefix_path,
-        chart_config_prerequisites.cluster_name.to_string(),
-        chart_config_prerequisites.is_karpenter_enabled,
-        chart_config_prerequisites.cluster_security_group_id.clone(),
-        &chart_config_prerequisites.cluster_id,
-        chart_config_prerequisites.cluster_long_id,
-        &chart_config_prerequisites.organization_id,
-        chart_config_prerequisites.organization_long_id,
-        chart_config_prerequisites.region.to_cloud_provider_format(),
-        chart_config_prerequisites.karpenter_parameters.clone(),
-        chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
-        chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
-    )
-    .to_common_helm_chart()?;
 
     // Cluster autoscaler
     let cluster_autoscaler = ClusterAutoscalerChart::new(
@@ -806,15 +778,15 @@ pub(super) fn eks_helm_charts(
     }
 
     // karpenter
-    if chart_config_prerequisites.is_karpenter_enabled {
-        level_0.push(Box::new(karpenter_crd));
+    if let Some(karpenter_charts) = karpenter_charts {
+        level_0.push(Box::new(karpenter_charts.karpenter_crd_chart));
 
         level_1.push(Box::new(coredns_config.clone()));
-        level_1.push(Box::new(karpenter));
+        level_1.push(Box::new(karpenter_charts.karpenter_chart));
 
-        level_2.push(Box::new(karpenter_configuration));
+        level_2.push(Box::new(karpenter_charts.karpenter_configuration_chart));
 
-        if chart_config_prerequisites.ff_metrics_history_enabled {
+        if let Some(karpenter_with_monitoring) = karpenter_charts.karpenter_with_monitoring_chart {
             level_6.push(Box::new(karpenter_with_monitoring))
         }
     } else {
