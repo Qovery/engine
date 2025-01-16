@@ -119,6 +119,7 @@ enum ServiceType {
   APPLICATION = 1;
   JOB = 2;
   HELM = 3;
+  TERRAFORM = 4;
 }
 
 message GitTokenRequest {

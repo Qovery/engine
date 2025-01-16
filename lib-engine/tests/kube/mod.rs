@@ -73,6 +73,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };

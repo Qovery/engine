@@ -267,6 +267,7 @@ pub enum Transmitter {
     Router { id: TransmitterId, name: TransmitterName },
     Job { id: TransmitterId, name: TransmitterName },
     Helm { id: TransmitterId, name: TransmitterName },
+    Terraform { id: TransmitterId, name: TransmitterName },
 }
 
 impl From<events::Transmitter> for Transmitter {
@@ -286,6 +287,7 @@ impl From<events::Transmitter> for Transmitter {
             events::Transmitter::Container(id, name) => Transmitter::Container { id, name },
             events::Transmitter::Job(id, name) => Transmitter::Job { id, name },
             events::Transmitter::Helm(id, name) => Transmitter::Helm { id, name },
+            events::Transmitter::TerraformService(id, name) => Transmitter::Terraform { id, name },
         }
     }
 }

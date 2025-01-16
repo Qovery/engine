@@ -85,6 +85,7 @@ impl QoveryApi for GrpcCoreServiceApi {
                         ServiceType::Container => super::engine::ServiceType::UnknownSrv as i32,
                         ServiceType::Job => super::engine::ServiceType::Job as i32,
                         ServiceType::HelmChart => super::engine::ServiceType::Helm as i32,
+                        ServiceType::Terraform => super::engine::ServiceType::Terraform as i32,
                     },
                     service_id: service_id.to_string(),
                 })
