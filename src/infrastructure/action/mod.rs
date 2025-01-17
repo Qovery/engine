@@ -10,6 +10,7 @@ mod self_managed;
 mod utils;
 
 use crate::errors::{EngineError, ErrorMessageVerbosity};
+use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage};
 use crate::infrastructure::action::utils::mk_logger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -65,6 +66,7 @@ pub trait InfrastructureAction: Send + Sync {
                 if infra_ctx.context().is_first_cluster_deployment() {
                     self.bootstap_cluster(infra_ctx)?;
                 } else if let Some(upgrade_status) = self.is_upgrade_required(infra_ctx) {
+                    let kube_client = infra_ctx.mk_kube_client()?;
                     let event_details =
                         kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
 
@@ -97,6 +99,7 @@ pub trait InfrastructureAction: Send + Sync {
 
                 let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
                 if !infra_ctx.context().is_first_cluster_deployment() {
+                    let kube_client = infra_ctx.mk_kube_client()?;
                     let target_kubernetes_version = match kubernetes.version().next_version() {
                         Some(v) => v.into(),
                         None => kubernetes.version().clone().into(),
@@ -135,7 +138,7 @@ pub trait InfrastructureAction: Send + Sync {
             Action::Restart => Err(Box::new(EngineError::new_cannot_restart_kubernetes_cluster(
                 infra_ctx
                     .kubernetes()
-                    .get_event_details(Stage::Infrastructure(InfrastructureStep::RestartedError)),
+                    .get_event_details(Infrastructure(InfrastructureStep::RestartedError)),
             ))),
         }
     }
@@ -153,7 +156,7 @@ pub trait InfrastructureAction: Send + Sync {
 
         let event_details = infra_ctx
             .kubernetes()
-            .get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+            .get_event_details(Infrastructure(InfrastructureStep::Upgrade));
         let logger = mk_logger(infra_ctx.kubernetes(), InfrastructureStep::Upgrade);
         match is_kubernetes_upgrade_required(
             infra_ctx.kubernetes().kubeconfig_local_file_path(),
@@ -211,7 +214,7 @@ impl InfraLogger for InfraLoggerImpl {
     fn diff(&self, from: InfrastructureDiffType, message: String) {
         let ev = EventDetails::clone_changing_stage(
             self.event_details.clone(),
-            Stage::Infrastructure(InfrastructureStep::InfrastructureDiff(from)),
+            Infrastructure(InfrastructureStep::InfrastructureDiff(from)),
         );
         self.logger.log(EngineEvent::Info(ev, EventMessage::from(message)));
     }
