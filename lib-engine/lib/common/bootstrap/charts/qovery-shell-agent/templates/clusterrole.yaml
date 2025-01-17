@@ -20,7 +20,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - jobs
       - pods/exec
       - pods/portforward
       - pods/proxy
@@ -30,4 +29,15 @@ rules:
       - list
       - watch
       - create
+  - apiGroups:
+      - "batch"
+    resources:
+        - "jobs"
+        - "jobs/status"
+    verbs:
+        - "create"
+        - "delete"
+        - "get"
+        - "list"
+        - "watch"
 {{- end }}
