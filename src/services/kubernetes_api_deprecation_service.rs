@@ -41,27 +41,6 @@ pub struct QoveryMetadata {
     pub qovery_service_type: Option<String>,
 }
 
-impl fmt::Display for QoveryMetadata {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let mut fields = Vec::new();
-
-        if let Some(qovery_service_id) = &self.qovery_service_id {
-            fields.push(format!("qovery_service_id: {}", qovery_service_id));
-        }
-        if let Some(qovery_environment_id) = &self.qovery_environment_id {
-            fields.push(format!("qovery_environment_id: {}", qovery_environment_id));
-        }
-        if let Some(qovery_project_id) = &self.qovery_project_id {
-            fields.push(format!("qovery_project_id: {}", qovery_project_id));
-        }
-        if let Some(qovery_service_type) = &self.qovery_service_type {
-            fields.push(format!("qovery_service_type: {}", qovery_service_type));
-        }
-
-        write!(f, "{}", fields.join(", "))
-    }
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub struct Deprecation {
     pub name: Option<String>,
@@ -240,34 +219,93 @@ impl TryFrom<CmdDeprecation> for Deprecation {
 
 impl fmt::Display for Deprecation {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // This function is not the prettiest one, it handles the display of the deprecation including padding and so
         let mut fields = Vec::new();
+        let max_field_length = "Qovery Project ID".len();
+        let padding_value = "";
 
         if let Some(qovery_metadata) = &self.qovery_metadata {
-            fields.push(format!("{}", qovery_metadata));
-        }
-        if let Some(name) = &self.name {
-            fields.push(format!("name: {}", name));
-        }
-        if let Some(namespace) = &self.namespace {
-            fields.push(format!("namespace: {}", namespace));
-        }
-        if let Some(kind) = &self.kind {
-            fields.push(format!("kind: {}", kind));
-        }
-        if let Some(api_version) = &self.api_version {
-            fields.push(format!("api_version: {}", api_version));
-        }
-        if let Some(rule_set) = &self.rule_set {
-            fields.push(format!("rule_set: {}", rule_set));
-        }
-        if let Some(replace_with) = &self.replace_with {
-            fields.push(format!("replace_with: {}", replace_with));
-        }
-        if let Some(since) = &self.since {
-            fields.push(format!("since: {}", since));
+            if let Some(qovery_service_id) = &qovery_metadata.qovery_service_id {
+                let field_name = "Qovery ID";
+                fields.push(format!(
+                    "║\t • {field_name}: {padding_value:<padding$}{qovery_service_id}",
+                    padding = max_field_length - field_name.len()
+                ));
+            }
+            if let Some(qovery_environment_id) = &qovery_metadata.qovery_environment_id {
+                let field_name = "Qovery Env. ID";
+                fields.push(format!(
+                    "║\t • {field_name}: {padding_value:<padding$}{qovery_environment_id}",
+                    padding = max_field_length - field_name.len()
+                ));
+            }
+            if let Some(qovery_project_id) = &qovery_metadata.qovery_project_id {
+                let field_name = "Qovery Project ID";
+                fields.push(format!(
+                    "║\t • {field_name}: {padding_value:<padding$}{qovery_project_id}",
+                    padding = max_field_length - field_name.len()
+                ));
+            }
+            if let Some(qovery_service_type) = &qovery_metadata.qovery_service_type {
+                let field_name = "Qovery Type";
+                fields.push(format!(
+                    "║\t • {field_name}: {padding_value:<padding$}{qovery_service_type}",
+                    padding = max_field_length - field_name.len()
+                ));
+            }
         }
 
-        write!(f, "{}", fields.join(", "))
+        if let Some(name) = &self.name {
+            let field_name = "Name";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{name}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(namespace) = &self.namespace {
+            let field_name = "Namespace";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{namespace}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(kind) = &self.kind {
+            let field_name = "Kind";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{kind}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(api_version) = &self.api_version {
+            let field_name = "Current";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{api_version}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(rule_set) = &self.rule_set {
+            let field_name = "Rule set";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{rule_set}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(replace_with) = &self.replace_with {
+            let field_name = "Replace with";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{replace_with}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+        if let Some(since) = &self.since {
+            let field_name = "Removal";
+            fields.push(format!(
+                "║\t • {field_name}: {padding_value:<padding$}{since}",
+                padding = max_field_length - field_name.len()
+            ));
+        }
+
+        write!(f, "{}", fields.join("\n"))
     }
 }
 
@@ -283,13 +321,60 @@ impl Deref for Deprecations {
 
 impl fmt::Display for Deprecations {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let formatted = self
-            .0
-            .iter()
-            .map(|d| format!("\t - {}", d))
-            .collect::<Vec<_>>()
-            .join(",\n");
-        write!(f, "{}", formatted)
+        const HEADER_LINE: &str = "╔════════════════════════════════════════════════════════════════════════╗";
+        const SECTION_SEPARATOR: &str = "╟════════════════════════════════════════════════════════════════════════╗";
+        const RESOURCE_SEPARATOR: &str = "╟────────────────────────────────────────────────────────────────────────";
+        const FOOTER_LINE: &str = "╚════════════════════════════════════════════════════════════════════════╝";
+
+        let mut output = Vec::new();
+
+        fn format_section<'a>(
+            output: &mut Vec<String>,
+            deprecations: impl Iterator<Item = &'a Deprecation>,
+            section_title: &str,
+            empty_message: &str,
+        ) {
+            output.push(format!("║ {section_title}"));
+            output.push(RESOURCE_SEPARATOR.to_string());
+
+            let mut has_resources = false;
+            for (idx, deprecation) in deprecations.enumerate() {
+                if idx > 0 {
+                    output.push(RESOURCE_SEPARATOR.to_string());
+                }
+                output.push(format!("║ {}. Resource", idx + 1));
+                output.push(deprecation.to_string());
+                has_resources = true;
+            }
+
+            if !has_resources {
+                output.push(format!("║ {empty_message}"));
+            }
+        }
+
+        output.push(HEADER_LINE.to_string());
+
+        let user_deployed = self.0.iter().filter(|d| d.qovery_metadata.is_some());
+        format_section(
+            &mut output,
+            user_deployed,
+            "User deployed deprecated resources:",
+            "No user deployed deprecated resources found.",
+        );
+
+        output.push(SECTION_SEPARATOR.to_string());
+
+        let other_resources = self.0.iter().filter(|d| d.qovery_metadata.is_none());
+        format_section(
+            &mut output,
+            other_resources,
+            "Other deprecated resources:",
+            "No other deployed deprecated resources found.",
+        );
+
+        output.push(FOOTER_LINE.to_string());
+
+        write!(f, "{}", output.join("\n"))
     }
 }
 
@@ -634,5 +719,78 @@ mod tests {
             },
             result.expect_err("Should have error")
         );
+    }
+
+    #[test]
+    fn test_deprecation_display() {
+        let deprecations = Deprecations(vec![
+            Deprecation {
+                name: Some("name".to_string()),
+                namespace: Some("namespace".to_string()),
+                kind: Some("kind".to_string()),
+                api_version: Some("1.29".to_string()),
+                rule_set: Some("rule_set".to_string()),
+                replace_with: Some("replace_with".to_string()),
+                since: Some(VersionsNumber::from_str("1.28").unwrap()),
+                qovery_metadata: Some(QoveryMetadata {
+                    qovery_service_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_environment_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_project_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_service_type: Some("service-type".to_string()),
+                }),
+            },
+            Deprecation {
+                name: Some("name".to_string()),
+                namespace: Some("namespace".to_string()),
+                kind: Some("kind".to_string()),
+                api_version: Some("1.29".to_string()),
+                rule_set: Some("rule_set".to_string()),
+                replace_with: Some("replace_with".to_string()),
+                since: Some(VersionsNumber::from_str("1.28").unwrap()),
+                qovery_metadata: Some(QoveryMetadata {
+                    qovery_service_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_environment_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_project_id: Some(
+                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
+                    ),
+                    qovery_service_type: Some("service-type".to_string()),
+                }),
+            },
+            Deprecation {
+                name: Some("name".to_string()),
+                namespace: Some("namespace".to_string()),
+                kind: Some("kind".to_string()),
+                api_version: Some("1.29".to_string()),
+                rule_set: Some("rule_set".to_string()),
+                replace_with: Some("replace_with".to_string()),
+                since: Some(VersionsNumber::from_str("1.28").unwrap()),
+                qovery_metadata: None,
+            },
+            Deprecation {
+                name: Some("name".to_string()),
+                namespace: Some("namespace".to_string()),
+                kind: Some("kind".to_string()),
+                api_version: Some("1.29".to_string()),
+                rule_set: Some("rule_set".to_string()),
+                replace_with: Some("replace_with".to_string()),
+                since: Some(VersionsNumber::from_str("1.28").unwrap()),
+                qovery_metadata: None,
+            },
+        ]);
+
+        let result = deprecations.to_string();
+
+        debug!("{}", result);
+        println!("{}", result);
     }
 }

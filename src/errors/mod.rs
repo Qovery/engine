@@ -5137,7 +5137,7 @@ impl EngineError {
     ///
     /// * `event_details`: Error linked event details.
     /// * `e`: Kubernetes deprecation API service error.
-    pub(crate) fn new_k8s_deprecated_api_calls_found(
+    pub(crate) fn new_k8s_deprecated_api_calls_found_error(
         event_details: EventDetails,
         k8s_target_version: &VersionsNumber,
         deprecation_error: KubernetesDeprecationServiceError,
@@ -5171,9 +5171,7 @@ impl EngineError {
             }
             KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { deprecations } => {
                 hint_message = Some("Some services on this cluster use deprecated kubernetes APIs which will be deleted in next kubernetes version. You should update your services to use the new API version.".to_string());
-                for d in deprecations.iter() {
-                    message_safe.push_str(&format!("\n- {}", d));
-                }
+                message_safe.push_str(&format!("\n- {}", deprecations));
             }
         }
 

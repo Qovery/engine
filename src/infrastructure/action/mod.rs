@@ -11,7 +11,7 @@ mod utils;
 
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage};
+use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
 use crate::infrastructure::action::utils::mk_logger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
@@ -67,8 +67,7 @@ pub trait InfrastructureAction: Send + Sync {
                     self.bootstap_cluster(infra_ctx)?;
                 } else if let Some(upgrade_status) = self.is_upgrade_required(infra_ctx) {
                     let kube_client = infra_ctx.mk_kube_client()?;
-                    let event_details =
-                        kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+                    let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
                     logger.info("Check if cluster has no calls to deprecated kubernetes API in next version");
                     match infra_ctx
@@ -83,7 +82,7 @@ pub trait InfrastructureAction: Send + Sync {
                         ) {
                         Ok(_) => logger.info("Cluster is compatible with the next version"),
                         Err(e) => {
-                            return Err(Box::new(EngineError::new_k8s_deprecated_api_calls_found(
+                            return Err(Box::new(EngineError::new_k8s_deprecated_api_calls_found_error(
                                 event_details.clone(),
                                 &upgrade_status.requested_version,
                                 e,
@@ -97,8 +96,8 @@ pub trait InfrastructureAction: Send + Sync {
 
                 let cluster = self.create_cluster(infra_ctx, cluster_has_been_upgraded);
 
-                let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
                 if !infra_ctx.context().is_first_cluster_deployment() {
+                    let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
                     let kube_client = infra_ctx.mk_kube_client()?;
                     let target_kubernetes_version = match kubernetes.version().next_version() {
                         Some(v) => v.into(),
@@ -121,7 +120,7 @@ pub trait InfrastructureAction: Send + Sync {
                         Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
                         Err(e) => {
                             // Non blocking error, just more FYI for user, to act on it if needed before upgrading
-                            let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found(
+                            let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found_error(
                                 event_details.clone(),
                                 &target_kubernetes_version,
                                 e,
