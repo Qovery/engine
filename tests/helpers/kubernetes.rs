@@ -429,7 +429,7 @@ pub fn get_environment_test_kubernetes(
                     },
                     None,
                     None,
-                    secrets.SCALEWAY_TEST_KUBECONFIG_b64,
+                    kubeconfig,
                     temp_dir,
                 )
                 .expect("Cannot instantiate SCW Kapsule"),
@@ -460,7 +460,7 @@ pub fn get_environment_test_kubernetes(
                     },
                     None,
                     None,
-                    secrets.GCP_TEST_KUBECONFIG_b64,
+                    kubeconfig,
                     temp_dir,
                 )
                 .expect("Cannot instantiate GKE"),

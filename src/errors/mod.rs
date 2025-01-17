@@ -1,7 +1,6 @@
-pub mod io;
-
 extern crate derivative;
 extern crate url;
+pub mod io;
 
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
@@ -20,6 +19,7 @@ use crate::events::{EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::io::InputError;
 use crate::infrastructure::models::kubernetes::KubernetesError;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
+use crate::services::kubernetes_api_deprecation_service::KubernetesDeprecationServiceError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
 use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
 use aws_sdk_ec2::error::SdkError as Ec2SdkError;
@@ -662,6 +662,16 @@ impl From<RouterError> for CommandError {
     }
 }
 
+impl From<KubernetesDeprecationServiceError> for CommandError {
+    fn from(error: KubernetesDeprecationServiceError) -> Self {
+        CommandError::new(
+            format!("Kubernetes API deprecation error: {}", error),
+            Some(error.to_string()),
+            None,
+        )
+    }
+}
+
 impl From<InputError> for CommandError {
     fn from(input_error: InputError) -> Self {
         match input_error {
@@ -1117,6 +1127,8 @@ pub enum Tag {
     CannotGetRegistryCredentials,
     /// CannotCreateAwsServiceLinkedRoleForSpotInstance: represents an error while trying to create an AWS Service Linked Role
     CannotCreateAwsServiceLinkedRoleForSpotInstance,
+    /// CannotUpgradeClusterDeprecatedKubernetesApiCallDetected: represents an error while trying to upgrade a cluster having deprecated Kubernetes API calls
+    CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
 }
 
 impl Tag {
@@ -1169,7 +1181,7 @@ impl EngineError {
     /// Returns proper error message.
     pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
         match &self.underlying_error {
-            Some(msg) => msg.message(message_verbosity),
+            Some(msg) => format!("{}: {}", self.user_log_message, msg.message(message_verbosity)),
             None => self.user_log_message.to_string(),
         }
     }
@@ -5118,7 +5130,64 @@ impl EngineError {
             None,
         )
     }
+
+    /// Creates new error when some API deprecations found.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `e`: Kubernetes deprecation API service error.
+    pub(crate) fn new_k8s_deprecated_api_calls_found(
+        event_details: EventDetails,
+        k8s_target_version: &VersionsNumber,
+        deprecation_error: KubernetesDeprecationServiceError,
+    ) -> EngineError {
+        let mut message_safe = format!("Some API deprecations found for kubernetes version `{}`: ", k8s_target_version);
+        let mut hint_message = None;
+
+        match &deprecation_error {
+            KubernetesDeprecationServiceError::ClientError { .. } => {
+                message_safe.push_str("a client error was triggered")
+            }
+            KubernetesDeprecationServiceError::ApiVersionNumberParsingError { invalid_version } => {
+                message_safe.push_str(
+                    format!(
+                        "an error occurred while getting kubernetes api version, invalid version: `{}`",
+                        invalid_version
+                    )
+                    .as_str(),
+                );
+            }
+            KubernetesDeprecationServiceError::QoveryIdentifierParsingError {
+                qovery_identifier_error,
+            } => {
+                message_safe.push_str(
+                    format!(
+                        "an error occurred while getting qovery identifier, invalid qovery id: `{}`",
+                        qovery_identifier_error
+                    )
+                    .as_str(),
+                );
+            }
+            KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { deprecations } => {
+                hint_message = Some("Some services on this cluster use deprecated kubernetes APIs which will be deleted in next kubernetes version. You should update your services to use the new API version.".to_string());
+                for d in deprecations.iter() {
+                    message_safe.push_str(&format!("\n- {}", d));
+                }
+            }
+        }
+
+        EngineError::new(
+            event_details,
+            Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
+            message_safe,
+            Some(CommandError::from(deprecation_error)),
+            None,
+            hint_message,
+        )
+    }
 }
+
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.
