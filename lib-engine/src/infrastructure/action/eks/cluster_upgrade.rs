@@ -28,6 +28,7 @@ pub fn upgrade_eks_cluster(
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
     logger.info("Start preparing EKS cluster upgrade process");
+
     let temp_dir = kubernetes.temp_dir();
     let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, infra_ctx.cloud_provider()).ok();
 

@@ -17,7 +17,7 @@ pub fn upgrade_kapsule_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
-    logger.info("Preparing cluster upgrade process.");
+    logger.info("Start preparing Kapsule cluster upgrade process");
 
     let temp_dir = cluster.temp_dir();
     // generate terraform files and copy them into temp dir
