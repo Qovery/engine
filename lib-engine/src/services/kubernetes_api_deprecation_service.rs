@@ -323,7 +323,7 @@ impl fmt::Display for Deprecations {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const HEADER_LINE: &str = "╔════════════════════════════════════════════════════════════════════════╗";
         const SECTION_SEPARATOR: &str = "╟════════════════════════════════════════════════════════════════════════╗";
-        const RESOURCE_SEPARATOR: &str = "╟────────────────────────────────────────────────────────────────────────";
+        const RESOURCE_SEPARATOR: &str = "╟───────────────────────────────────────────────────────";
         const FOOTER_LINE: &str = "╚════════════════════════════════════════════════════════════════════════╝";
 
         let mut output = Vec::new();

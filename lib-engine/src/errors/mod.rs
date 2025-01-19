@@ -5136,13 +5136,14 @@ impl EngineError {
     /// Arguments:
     ///
     /// * `event_details`: Error linked event details.
-    /// * `e`: Kubernetes deprecation API service error.
+    /// * `k8s_target_version`: Target kubernetes version.
+    /// * `deprecation_error`: Kubernetes deprecation API service error.
     pub(crate) fn new_k8s_deprecated_api_calls_found_error(
         event_details: EventDetails,
         k8s_target_version: &VersionsNumber,
         deprecation_error: KubernetesDeprecationServiceError,
     ) -> EngineError {
-        let mut message_safe = format!("Some API deprecations found for kubernetes version `{}`: ", k8s_target_version);
+        let mut message_safe = format!("Some API deprecations found for kubernetes version: `{}` ", k8s_target_version);
         let mut hint_message = None;
 
         match &deprecation_error {
@@ -5169,9 +5170,8 @@ impl EngineError {
                     .as_str(),
                 );
             }
-            KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { deprecations } => {
+            KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { .. } => {
                 hint_message = Some("Some services on this cluster use deprecated kubernetes APIs which will be deleted in next kubernetes version. You should update your services to use the new API version.".to_string());
-                message_safe.push_str(&format!("\n- {}", deprecations));
             }
         }
 
