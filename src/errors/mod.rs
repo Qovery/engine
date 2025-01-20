@@ -664,10 +664,8 @@ impl From<RouterError> for CommandError {
 
 impl From<KubernetesDeprecationServiceError> for CommandError {
     fn from(error: KubernetesDeprecationServiceError) -> Self {
-        CommandError::new(
-            format!("Kubernetes API deprecation error: {}", error),
-            Some(error.to_string()),
-            None,
+        CommandError::new_from_safe_message(
+            error.to_string(), // error message is safe
         )
     }
 }
