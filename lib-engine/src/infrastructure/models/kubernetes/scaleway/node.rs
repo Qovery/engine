@@ -28,7 +28,6 @@ pub enum ScwInstancesType {
     GP1_L,
     GP1_M,
     GP1_S,
-    GP1_VIZ,
     GP1_XL,
     GP1_XS,
     GPU_3070_S,
@@ -106,7 +105,6 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
-            ScwInstancesType::GP1_VIZ => "gp1-viz",
             ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
@@ -186,7 +184,6 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
-                | ScwInstancesType::GP1_VIZ
                 | ScwInstancesType::GP1_XL
                 | ScwInstancesType::GP1_XS
                 | ScwInstancesType::GPU_3070_S
@@ -267,7 +264,6 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::GP1_L
                 | ScwInstancesType::GP1_M
                 | ScwInstancesType::GP1_S
-                | ScwInstancesType::GP1_VIZ
                 | ScwInstancesType::GP1_XL
                 | ScwInstancesType::GP1_XS
                 | ScwInstancesType::GPU_3070_S
@@ -344,7 +340,6 @@ impl ScwInstancesType {
             ScwInstancesType::GP1_L => "gp1-l",
             ScwInstancesType::GP1_M => "gp1-m",
             ScwInstancesType::GP1_S => "gp1-s",
-            ScwInstancesType::GP1_VIZ => "gp1-viz",
             ScwInstancesType::GP1_XL => "gp1-xl",
             ScwInstancesType::GP1_XS => "gp1-xs",
             ScwInstancesType::GPU_3070_S => "gpu-3070-s",
@@ -424,7 +419,6 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::GP1_L => write!(f, "gp1-l"),
             ScwInstancesType::GP1_M => write!(f, "gp1-m"),
             ScwInstancesType::GP1_S => write!(f, "gp1-s"),
-            ScwInstancesType::GP1_VIZ => write!(f, "gp1-viz"),
             ScwInstancesType::GP1_XL => write!(f, "gp1-xl"),
             ScwInstancesType::GP1_XS => write!(f, "gp1-xs"),
             ScwInstancesType::GPU_3070_S => write!(f, "gpu-3070-s"),
@@ -506,7 +500,6 @@ impl FromStr for ScwInstancesType {
             "gp1-l" => Ok(ScwInstancesType::GP1_L),
             "gp1-m" => Ok(ScwInstancesType::GP1_M),
             "gp1-s" => Ok(ScwInstancesType::GP1_S),
-            "gp1-viz" => Ok(ScwInstancesType::GP1_VIZ),
             "gp1-xl" => Ok(ScwInstancesType::GP1_XL),
             "gp1-xs" => Ok(ScwInstancesType::GP1_XS),
             "gpu-3070-s" => Ok(ScwInstancesType::GPU_3070_S),
@@ -643,7 +636,6 @@ mod tests {
                     ScwInstancesType::GP1_L => "gp1-l",
                     ScwInstancesType::GP1_M => "gp1-m",
                     ScwInstancesType::GP1_S => "gp1-s",
-                    ScwInstancesType::GP1_VIZ => "gp1-viz",
                     ScwInstancesType::GP1_XL => "gp1-xl",
                     ScwInstancesType::GP1_XS => "gp1-xs",
                     ScwInstancesType::GPU_3070_S => "gpu-3070-s",
