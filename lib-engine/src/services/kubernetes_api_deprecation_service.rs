@@ -298,7 +298,7 @@ impl fmt::Display for Deprecation {
             ));
         }
         if let Some(since) = &self.since {
-            let field_name = "Removal";
+            let field_name = "Since";
             fields.push(format!(
                 "║\t • {field_name}: {padding_value:<padding$}{since}",
                 padding = max_field_length - field_name.len()
@@ -323,7 +323,7 @@ impl fmt::Display for Deprecations {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const HEADER_LINE: &str = "╔════════════════════════════════════════════════════════════════════════╗";
         const SECTION_SEPARATOR: &str = "╟════════════════════════════════════════════════════════════════════════╗";
-        const RESOURCE_SEPARATOR: &str = "╟───────────────────────────────────────────────────────";
+        const RESOURCE_SEPARATOR: &str = "╟────────────────────────────────────────────";
         const FOOTER_LINE: &str = "╚════════════════════════════════════════════════════════════════════════╝";
 
         let mut output = Vec::new();
@@ -722,75 +722,78 @@ mod tests {
     }
 
     #[test]
-    fn test_deprecation_display() {
-        let deprecations = Deprecations(vec![
-            Deprecation {
-                name: Some("name".to_string()),
-                namespace: Some("namespace".to_string()),
-                kind: Some("kind".to_string()),
-                api_version: Some("1.29".to_string()),
-                rule_set: Some("rule_set".to_string()),
-                replace_with: Some("replace_with".to_string()),
-                since: Some(VersionsNumber::from_str("1.28").unwrap()),
-                qovery_metadata: Some(QoveryMetadata {
-                    qovery_service_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_environment_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_project_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_service_type: Some("service-type".to_string()),
+    fn test_deprecation_from_cmd_deprecation() {
+        // setup:
+        struct TestCase {
+            cmd_deprecation: kubent::Deprecation,
+            expected: Result<Deprecation, KubernetesDeprecationServiceError>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                cmd_deprecation: kubent::Deprecation {
+                    name: Some("name".to_string()),
+                    namespace: Some("namespace".to_string()),
+                    kind: Some("kind".to_string()),
+                    api_version: Some("1.29".to_string()),
+                    rule_set: Some("rule_set".to_string()),
+                    replace_with: Some("replace_with".to_string()),
+                    since: Some("".to_string()), // semver is a bit broken, needs to be improved,
+                                                 // but empty string will fail for sure
+                },
+                expected: Err(KubernetesDeprecationServiceError::ApiVersionNumberParsingError {
+                    invalid_version: "".to_string(),
                 }),
             },
-            Deprecation {
-                name: Some("name".to_string()),
-                namespace: Some("namespace".to_string()),
-                kind: Some("kind".to_string()),
-                api_version: Some("1.29".to_string()),
-                rule_set: Some("rule_set".to_string()),
-                replace_with: Some("replace_with".to_string()),
-                since: Some(VersionsNumber::from_str("1.28").unwrap()),
-                qovery_metadata: Some(QoveryMetadata {
-                    qovery_service_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_environment_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_project_id: Some(
-                        QoveryIdentifier::from_str("2016c9e9-166b-4447-8c1c-d5fd9c9d5d5f").unwrap(),
-                    ),
-                    qovery_service_type: Some("service-type".to_string()),
+            TestCase {
+                cmd_deprecation: kubent::Deprecation {
+                    name: Some("name".to_string()),
+                    namespace: Some("namespace".to_string()),
+                    kind: Some("kind".to_string()),
+                    api_version: Some("1.29".to_string()),
+                    rule_set: Some("rule_set".to_string()),
+                    replace_with: Some("replace_with".to_string()),
+                    since: Some("1.28".to_string()),
+                },
+                expected: Ok(Deprecation {
+                    name: Some("name".to_string()),
+                    namespace: Some("namespace".to_string()),
+                    kind: Some("kind".to_string()),
+                    api_version: Some("1.29".to_string()),
+                    rule_set: Some("rule_set".to_string()),
+                    replace_with: Some("replace_with".to_string()),
+                    since: Some(VersionsNumberBuilder::new().major(1).minor(28).build()),
+                    qovery_metadata: None,
                 }),
             },
-            Deprecation {
-                name: Some("name".to_string()),
-                namespace: Some("namespace".to_string()),
-                kind: Some("kind".to_string()),
-                api_version: Some("1.29".to_string()),
-                rule_set: Some("rule_set".to_string()),
-                replace_with: Some("replace_with".to_string()),
-                since: Some(VersionsNumber::from_str("1.28").unwrap()),
-                qovery_metadata: None,
+            TestCase {
+                cmd_deprecation: kubent::Deprecation {
+                    name: None,
+                    namespace: None,
+                    kind: None,
+                    api_version: None,
+                    rule_set: None,
+                    replace_with: None,
+                    since: None,
+                },
+                expected: Ok(Deprecation {
+                    name: None,
+                    namespace: None,
+                    kind: None,
+                    api_version: None,
+                    rule_set: None,
+                    replace_with: None,
+                    since: None,
+                    qovery_metadata: None,
+                }),
             },
-            Deprecation {
-                name: Some("name".to_string()),
-                namespace: Some("namespace".to_string()),
-                kind: Some("kind".to_string()),
-                api_version: Some("1.29".to_string()),
-                rule_set: Some("rule_set".to_string()),
-                replace_with: Some("replace_with".to_string()),
-                since: Some(VersionsNumber::from_str("1.28").unwrap()),
-                qovery_metadata: None,
-            },
-        ]);
+        ];
 
-        let result = deprecations.to_string();
-
-        debug!("{}", result);
-        println!("{}", result);
+        for test_case in test_cases {
+            // execute:
+            let result = Deprecation::try_from(test_case.cmd_deprecation);
+            // verify:
+            assert_eq!(test_case.expected, result);
+        }
     }
 }
