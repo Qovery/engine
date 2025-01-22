@@ -127,7 +127,7 @@ charts:
   - name: vpa
     dest_folder_override: vertical-pod-autoscaler
     repo_name: fairwinds
-    version: 2.2.1
+    version: 4.7.1
   - name: k8s-event-logger
     repo_name: deliveryhero
     version: 1.1.6

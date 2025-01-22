@@ -27,6 +27,19 @@ subjects:
   - kind: ServiceAccount
     name: {{ include "vpa.serviceAccountName" . }}-recommender
     namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vpa-status-actor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vpa-status-actor
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "vpa.serviceAccountName" . }}-recommender
+    namespace: {{ .Release.Namespace }}
 {{- end }}
 
 {{- if .Values.updater.enabled }}

@@ -9,6 +9,7 @@ use crate::infrastructure::helm_charts::{
 use crate::errors::CommandError;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use semver::Version;
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
 
@@ -146,6 +147,7 @@ impl ToCommonHelmChart for VpaChart {
                     },
                 ],
                 skip_if_already_installed: self.skip_if_already_installed,
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(4, 6, 0)), // CRDs needs to reinstalled https://artifacthub.io/packages/helm/fairwinds-stable/vpa#breaking-upgrading-to-4-0-0
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(VpaChartInstallationChecker::new())),

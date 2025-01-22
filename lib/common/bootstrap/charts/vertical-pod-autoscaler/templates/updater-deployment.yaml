@@ -2,12 +2,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  {{- if .Values.updater.annotations }}
+  annotations:
+  {{- .Values.updater.annotations | toYaml | nindent 4 }}
+  {{- end }}
   name: {{ include "vpa.fullname" . }}-updater
   labels:
     app.kubernetes.io/component: updater
     {{- include "vpa.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.updater.replicaCount }}
+  revisionHistoryLimit: {{ .Values.updater.revisionHistoryLimit }}
   selector:
     matchLabels:
       app.kubernetes.io/component: updater

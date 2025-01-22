@@ -13,9 +13,25 @@ fullnameOverride: ""
 # podLabels -- Labels to add to all pods
 podLabels: {}
 rbac:
-  # rbac.create -- If true, then rbac resources (clusterroles and clusterrolebindings) will be created for the selected components.
+  # rbac.create -- If true, then rbac resources (ClusterRoles and ClusterRoleBindings) will be created for the selected components.
   # Temporary rbac resources will still be created, to ensure a functioning installation process
   create: true
+  # rbac.extraRules -- Extra rbac rules for ClusterRoles
+  extraRules:
+    # rbac.extraRules.vpaActor -- Extra rbac rules for the vpa-actor ClusterRole
+    vpaActor: []
+    # -- Extra rbac rules for the vpa-status-actor ClusterRole
+    vpaStatusActor: []
+    # rbac.extraRules.vpaCheckpointActor -- Extra rbac rules for the vpa-checkpoint-actor ClusterRole
+    vpaCheckpointActor: []
+    # rbac.extraRules.vpaEvictioner -- Extra rbac rules for the vpa-evictioner ClusterRole
+    vpaEvictioner: []
+    # rbac.extraRules.vpaMetricsReader -- Extra rbac rules for the vpa-metrics-reader ClusterRole
+    vpaMetricsReader: []
+    # rbac.extraRules.vpaTargetReader -- Extra rbac rules for the vpa-target-reader ClusterRole
+    vpaTargetReader: []
+    # rbac.extraRules.vpaStatusReader -- Extra rbac rules for the vpa-status-reader ClusterRole
+    vpaStatusReader: []
 
 serviceAccount:
   # serviceAccount.create -- Specifies whether a service account should be created for each component
@@ -30,12 +46,18 @@ serviceAccount:
 recommender:
   # recommender.enabled -- If true, the vpa recommender component will be installed.
   enabled: true
+  # -- Specify a secret to get environment variables from
+  envFromSecret: ""
+  # recommender.annotations -- Annotations to add to the recommender deployment
+  annotations: {}
   # recommender.extraArgs -- A set of key-value flags to be passed to the recommender
   extraArgs:
     v: "4"
     pod-recommendation-min-cpu-millicores: 15
     pod-recommendation-min-memory-mb: 100
   replicaCount: 1
+  # recommender.revisionHistoryLimit -- The number of old replicasets to retain, default is 10, 0 will garbage-collect old replicasets
+  revisionHistoryLimit: 10
   # recommender.podDisruptionBudget -- This is the setting for the pod disruption budget
   podDisruptionBudget: {}
     # maxUnavailable: 1
@@ -54,8 +76,15 @@ recommender:
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
   # recommender.securityContext -- The security context for the containers inside the recommender pod
-  securityContext: {}
+  securityContext:
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
   # recommender.livenessProbe -- The liveness probe definition inside the recommender pod
   livenessProbe:
     failureThreshold: 6
@@ -78,9 +107,9 @@ recommender:
     timeoutSeconds: 3
   # recommender.resources -- The resources block for the recommender pod
   resources:
-    limits:
-      cpu: 200m
-      memory: 1000Mi
+    limits: {}
+      # cpu: 200m
+      # memory: 1000Mi
     requests:
       cpu: 50m
       memory: 500Mi
@@ -96,9 +125,13 @@ recommender:
 updater:
   # updater.enabled -- If true, the updater component will be deployed
   enabled: true
+  # updater.annotations -- Annotations to add to the updater deployment
+  annotations: {}
   # updater.extraArgs -- A key-value map of flags to pass to the updater
   extraArgs: {}
   replicaCount: 1
+  # updater.revisionHistoryLimit -- The number of old replicasets to retain, default is 10, 0 will garbage-collect old replicasets
+  revisionHistoryLimit: 10
   # updater.podDisruptionBudget -- This is the setting for the pod disruption budget
   podDisruptionBudget: {}
     # maxUnavailable: 1
@@ -117,8 +150,15 @@ updater:
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
   # updater.securityContext -- The security context for the containers inside the updater pod
-  securityContext: {}
+  securityContext:
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
   # updater.livenessProbe -- The liveness probe definition inside the updater pod
   livenessProbe:
     failureThreshold: 6
@@ -141,9 +181,9 @@ updater:
     timeoutSeconds: 3
   # updater.resources -- The resources block for the updater pod
   resources:
-    limits:
-      cpu: 200m
-      memory: 1000Mi
+    limits: {}
+      # cpu: 200m
+      # memory: 1000Mi
     requests:
       cpu: 50m
       memory: 500Mi
@@ -159,12 +199,16 @@ updater:
 admissionController:
   # admissionController.enabled -- If true, will install the admission-controller component of vpa
   enabled: true
+  # admissionController.annotations -- Annotations to add to the admission controller deployment
+  annotations: {}
   # admissionController.extraArgs -- A key-value map of flags to pass to the admissionController
   extraArgs: {}
   # admissionController.generateCertificate -- If true and admissionController is enabled, a pre-install hook will run to create the certificate for the webhook
   generateCertificate: true
   # admissionController.secretName -- Name for the TLS secret created for the webhook. Default {{ .Release.Name }}-tls-secret
   secretName: "{{ include \"vpa.fullname\" . }}-tls-secret"
+  # admissionController.registerWebhook -- If true, will allow the vpa admission controller to register itself as a mutating webhook
+  registerWebhook: false
   certGen:
     image:
       # admissionController.certGen.image.repository -- An image that contains certgen for creating certificates. Only used if admissionController.generateCertificate is true
@@ -177,8 +221,19 @@ admissionController:
     env: {}
     # admissionController.certGen.resources -- The resources block for the certgen pod
     resources: {}
-    # admissionController.certGen.securityContext -- The securityContext block for the certgen pod
-    securityContext: {}
+    # admissionController.certGen.podSecurityContext -- The securityContext block for the certgen pod(s)
+    podSecurityContext:
+      runAsNonRoot: true
+      runAsUser: 65534
+      seccompProfile:
+        type: RuntimeDefault
+    # admissionController.certGen.securityContext -- The securityContext block for the certgen container(s)
+    securityContext:
+      readOnlyRootFilesystem: true
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
     nodeSelector: {}
     tolerations: []
     affinity: {}
@@ -193,9 +248,11 @@ admissionController:
     # admissionController.mutatingWebhookConfiguration.objectSelector -- The objectSelector can filter object on e.g. labels
     objectSelector: {}
     # admissionController.mutatingWebhookConfiguration.timeout -- Sets the amount of time the API server will wait on a response from the webhook service.
-    timeoutSeconds: 30
+    timeoutSeconds: 5
 
   replicaCount: 1
+  # admissionController.revisionHistoryLimit -- The number of old replicasets to retain, default is 10, 0 will garbage-collect old replicasets
+  revisionHistoryLimit: 10
   # admissionController.podDisruptionBudget -- This is the setting for the pod disruption budget
   podDisruptionBudget: {}
     # maxUnavailable: 1
@@ -214,8 +271,15 @@ admissionController:
   podSecurityContext:
     runAsNonRoot: true
     runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
   # admissionController.securityContext -- The security context for the containers inside the admission controller pod
-  securityContext: {}
+  securityContext:
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
   # admissionController.livenessProbe -- The liveness probe definition inside the admission controller pod
   livenessProbe:
     failureThreshold: 6
@@ -238,9 +302,9 @@ admissionController:
     timeoutSeconds: 3
   # admissionController.resources -- The resources block for the admission controller pod
   resources:
-    limits:
-      cpu: 200m
-      memory: 500Mi
+    limits: {}
+      # cpu: 200m
+      # memory: 500Mi
     requests:
       cpu: 50m
       memory: 200Mi
@@ -255,6 +319,12 @@ admissionController:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  # admissionController.useHostNetwork -- Whether to use host network, this is required on EKS with custom CNI
+  useHostNetwork: false
+  # admissionController.httpPort -- Port of the admission controller for the mutating webhooks
+  httpPort: 8000
+  # admissionController.metricsPort -- Port of the admission controller where metrics can be received from
+  metricsPort: 8944
 
 tests:
   # tests.securityContext -- The security context for the containers run as helm hook tests
