@@ -1,15 +1,80 @@
+rbac:
+  extraRules:
+    vpaActor:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
+    vpaCheckpointActor:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
+    vpaEvictioner:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
+    vpaMetricsReader:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
+    vpaTargetReader:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
+    vpaStatusReader:
+      - apiGroups:
+          - batch
+        resources:
+          - '*'
+        verbs:
+          - get
+          - list
+          - watch
 recommender:
   enabled: true
+  annotations:
+    foo: bar
+    "foo.io/deploy-repo": "https://gitlab.com/foo/myrepo"
   podLabels:
     app: test
     foo: bar
 updater:
   enabled: true
+  annotations:
+    foo: bar
+    "foo.io/deploy-repo": "https://gitlab.com/foo/myrepo"
   podLabels:
     app: test
     foo: bar
 admissionController:
   enabled: true
+  annotations:
+    foo: bar
+    "foo.io/deploy-repo": "https://gitlab.com/foo/myrepo"
   extraArgs:
     v: "4"
   generateCertificate: true

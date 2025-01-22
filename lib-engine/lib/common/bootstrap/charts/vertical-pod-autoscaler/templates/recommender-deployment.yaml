@@ -2,12 +2,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  {{- if .Values.recommender.annotations }}
+  annotations:
+  {{- .Values.recommender.annotations | toYaml | nindent 4 }}
+  {{- end }}
   name: {{ include "vpa.fullname" . }}-recommender
   labels:
     app.kubernetes.io/component: recommender
     {{- include "vpa.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.recommender.replicaCount }}
+  revisionHistoryLimit: {{ .Values.recommender.revisionHistoryLimit }}
   selector:
     matchLabels:
       app.kubernetes.io/component: recommender
@@ -59,6 +64,19 @@ spec:
             - name: metrics
               containerPort: 8942
               protocol: TCP
+          {{- $extraArgs := .Values.recommender.extraArgs | default dict }}
+          {{- $insightsRecommenderArgs := index $extraArgs "use-insights-recommender" | default dict }}
+          {{- if or .Values.recommender.envFromSecret $insightsRecommenderArgs }}
+          envFrom:
+          {{- if and (not .Values.recommender.envFromSecret) $insightsRecommenderArgs }}
+          - secretRef:
+              name: {{ .Release.Name }}-token
+          {{- end }}
+          {{- if .Values.recommender.envFromSecret }}
+          - secretRef:
+              name: {{ .Values.recommender.envFromSecret }}
+          {{- end }}
+          {{- end }}
           resources:
             {{- toYaml .Values.recommender.resources | nindent 12 }}
       {{- with .Values.recommender.nodeSelector }}

@@ -36,7 +36,11 @@ spec:
             - --log-level=debug
           resources:
             {{- toYaml .Values.admissionController.certGen.resources | nindent 12 }}
-      {{- with .Values.admissionController.certGen.securityContext }}
+          {{- with .Values.admissionController.certGen.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.admissionController.certGen.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
