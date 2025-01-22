@@ -236,7 +236,7 @@ impl ToCommonHelmChart for CertManagerChart {
                             target_ref: VpaTargetRef::new(
                                 VpaTargetRefApiVersion::AppsV1,
                                 VpaTargetRefKind::Deployment,
-                                "qovery-cert-manager-webhook-qovery-webhook".to_string(),
+                                "qovery-cert-manager-webhook".to_string(),
                             ),
                             container_policy: VpaContainerPolicy::new(
                                 "*".to_string(),
