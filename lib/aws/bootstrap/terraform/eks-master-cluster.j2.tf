@@ -80,7 +80,7 @@ resource "aws_eks_cluster" "eks_cluster" {
       {% endif %}
     ])
     public_access_cidrs = var.public_access_cidrs
-    endpoint_private_access =  {{ endpoint_private_access }}
+    endpoint_private_access = true
     endpoint_public_access = true
   }
 
