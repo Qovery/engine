@@ -34,11 +34,9 @@ pub fn eks_tera_context(
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
     let mut context = TeraContext::new();
 
-    let (public_access_cidrs, endpoint_private_access) =
-        generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
+    let public_access_cidrs = generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
 
     context.insert("public_access_cidrs", &public_access_cidrs);
-    context.insert("endpoint_private_access", &endpoint_private_access);
 
     context.insert("user_provided_network", &false);
     if let Some(user_network_cfg) = &options.user_provided_network {
@@ -516,16 +514,12 @@ pub fn eks_tera_context(
 fn generate_public_access_cidrs(
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
-) -> (Vec<String>, bool) {
-    let mut endpoint_private_access = false;
-
-    let cidrs = match (
+) -> Vec<String> {
+    match (
         advanced_settings.qovery_static_ip_mode.unwrap_or(false),
         qovery_allowed_public_access_cidrs,
     ) {
         (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
-            endpoint_private_access = true;
-
             match &advanced_settings.k8s_api_allowed_public_access_cidrs {
                 Some(k8s_api_allowed_public_access_cidrs) => [
                     qovery_allowed_public_access_cidrs.clone(),
@@ -536,9 +530,7 @@ fn generate_public_access_cidrs(
             }
         }
         _ => vec!["0.0.0.0/0".to_string()],
-    };
-
-    (cidrs, endpoint_private_access)
+    }
 }
 
 /// divide by 2 the total number of subnet to get the exact same number as private and public
@@ -572,11 +564,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = None;
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -588,11 +578,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = None;
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -604,11 +592,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -620,11 +606,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec![]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -636,11 +620,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-        assert!(endpoint_private_access);
     }
 
     #[test]
@@ -652,8 +634,7 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(
             cidrs,
@@ -663,6 +644,5 @@ mod tests {
                 "1.1.1.4/32".to_string()
             ]
         );
-        assert!(endpoint_private_access);
     }
 }
