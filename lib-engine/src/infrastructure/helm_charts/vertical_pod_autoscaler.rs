@@ -67,7 +67,7 @@ impl VpaChart {
             },
             admission_controller_resources: match admission_controller_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(500),
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
                     limit_memory: KubernetesMemoryResourceUnit::MebiByte(500),
