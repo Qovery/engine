@@ -233,7 +233,7 @@ pub struct BuildPlatform {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub options: Options,
+    pub options: CloudProviderOptions,
 }
 
 impl BuildPlatform {
@@ -258,7 +258,7 @@ pub struct CloudProvider {
     pub long_id: Uuid,
     pub name: String,
     pub zones: Vec<String>,
-    pub options: Options,
+    pub options: CloudProviderOptions,
     pub terraform_state_credentials: TerraformStateCredentials,
 }
 
@@ -278,39 +278,57 @@ impl CloudProvider {
         };
 
         match self.kind {
-            cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
-                context,
-                self.long_id,
-                self.name.as_str(),
-                self.options.access_key_id.as_ref()?.as_str(),
-                self.options.secret_access_key.as_ref()?.as_str(),
-                region,
-                self.zones.clone(),
-                cluster_kind,
-                terraform_state_credentials,
-            ))),
-            cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
-                context,
-                self.long_id,
-                self.name.as_str(),
-                self.options.scaleway_access_key.as_ref()?.as_str(),
-                self.options.scaleway_secret_key.as_ref()?.as_str(),
-                self.options.scaleway_project_id.as_ref()?.as_str(),
-                region,
-                terraform_state_credentials,
-            ))),
+            cloud_provider::Kind::Aws => {
+                let CloudProviderOptions::Aws {
+                    access_key_id,
+                    secret_access_key,
+                } = &self.options
+                else {
+                    return None;
+                };
+                Some(Box::new(AWS::new(
+                    context,
+                    self.long_id,
+                    self.name.as_str(),
+                    access_key_id,
+                    secret_access_key,
+                    region,
+                    self.zones.clone(),
+                    cluster_kind,
+                    terraform_state_credentials,
+                )))
+            }
+            cloud_provider::Kind::Scw => {
+                let CloudProviderOptions::Scaleway {
+                    scaleway_access_key,
+                    scaleway_secret_key,
+                    scaleway_project_id,
+                } = &self.options
+                else {
+                    return None;
+                };
+                Some(Box::new(Scaleway::new(
+                    context,
+                    self.long_id,
+                    self.name.as_str(),
+                    scaleway_access_key,
+                    scaleway_secret_key,
+                    scaleway_project_id,
+                    region,
+                    terraform_state_credentials,
+                )))
+            }
             cloud_provider::Kind::Gcp => {
-                let credentials = match &self.options.gcp_credentials {
-                    Some(creds) => match JsonCredentials::try_from(creds.clone()) {
-                        Ok(c) => c,
-                        Err(_e) => return None,
-                    },
-                    None => return None,
+                let CloudProviderOptions::Gcp { gcp_credentials } = &self.options else {
+                    return None;
                 };
-                let region = match GcpRegion::from_str(region) {
-                    Ok(r) => r,
-                    Err(_e) => return None,
+                let Ok(credentials) = JsonCredentials::try_from(gcp_credentials.clone()) else {
+                    return None;
                 };
+                let Ok(region) = GcpRegion::from_str(region) else {
+                    return None;
+                };
+
                 Some(Box::new(Google::new(
                     context,
                     self.long_id,
@@ -696,29 +714,27 @@ impl DnsProvider {
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
-pub struct Options {
-    // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
-    login: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub password: Option<String>,
-    access_key_id: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub secret_access_key: Option<String>,
-    spaces_access_id: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub spaces_secret_key: Option<String>,
-    scaleway_project_id: Option<String>,
-    scaleway_access_key: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub scaleway_secret_key: Option<String>,
-    #[derivative(Debug = "ignore")]
-    #[serde(alias = "json_credentials")]
-    #[serde(deserialize_with = "gcp_credentials_from_str")] // Allow to deserialize string field to its struct counterpart
-    #[serde(default)]
-    pub gcp_credentials: Option<JsonCredentialsIo>,
-    #[derivative(Debug = "ignore")]
-    pub token: Option<String>,
-    region: Option<String>,
+#[serde(untagged)]
+pub enum CloudProviderOptions {
+    Aws {
+        access_key_id: String,
+        #[derivative(Debug = "ignore")]
+        secret_access_key: String,
+    },
+    Scaleway {
+        scaleway_access_key: String,
+        #[derivative(Debug = "ignore")]
+        scaleway_secret_key: String,
+        scaleway_project_id: String,
+    },
+    Gcp {
+        #[derivative(Debug = "ignore")]
+        #[serde(alias = "json_credentials")]
+        #[serde(deserialize_with = "gcp_credentials_from")]
+        // Allow to deserialize string field to its struct counterpart
+        gcp_credentials: JsonCredentialsIo,
+    },
+    OnPremise {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
@@ -786,6 +802,19 @@ where
             Err(e) => Err(de::Error::custom(e.to_string())),
         },
         None => Ok(None),
+    }
+}
+
+fn gcp_credentials_from<'de, D>(
+    deserializer: D,
+) -> Result<crate::environment::models::gcp::io::JsonCredentials, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let gcp_credentials = String::deserialize(deserializer)?;
+    match crate::environment::models::gcp::io::JsonCredentials::try_new_from_json_str(&gcp_credentials) {
+        Ok(credentials) => Ok(credentials),
+        Err(e) => Err(de::Error::custom(e.to_string())),
     }
 }
 

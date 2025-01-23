@@ -16,7 +16,7 @@ use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{to_engine_error, ContainerRegistry, RegistryTags};
 use crate::io_models::context::Context;
-use crate::io_models::engine_request::EnvironmentEngineRequest;
+use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRequest};
 use crate::io_models::Action;
 use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
@@ -422,20 +422,21 @@ impl EnvironmentTask {
         });
         secrets.extend(service_secrets);
 
-        let cloud_provider_secrets = request
-            .cloud_provider
-            .options
-            .gcp_credentials
-            .as_ref()
-            .map(|x| &x.private_key)
-            .into_iter()
-            .chain(request.cloud_provider.options.secret_access_key.iter())
-            .chain(request.cloud_provider.options.password.iter())
-            .chain(request.cloud_provider.options.scaleway_secret_key.iter())
-            .chain(request.cloud_provider.options.spaces_secret_key.iter())
-            .cloned();
+        match &request.cloud_provider.options {
+            CloudProviderOptions::Aws { secret_access_key, .. } => {
+                secrets.push(secret_access_key.to_string());
+            }
+            CloudProviderOptions::Scaleway {
+                scaleway_secret_key, ..
+            } => {
+                secrets.push(scaleway_secret_key.to_string());
+            }
+            CloudProviderOptions::Gcp { gcp_credentials } => {
+                secrets.push(gcp_credentials.private_key.to_string());
+            }
+            CloudProviderOptions::OnPremise { .. } => {}
+        };
 
-        secrets.extend(cloud_provider_secrets);
         secrets
     }
 
