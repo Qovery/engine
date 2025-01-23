@@ -95,8 +95,16 @@ impl<'m> KubentCmd {
             &target_version_value,
         ];
 
+        let mut envs_with_soft_memory_limit = envs.to_vec();
+        if !envs.iter().any(|(k, _v)| k == &"GOMEMLIMIT") {
+            // Set a soft memory limit of 128MiB for kubent since it can eventually OOM
+            // This is not a hard limit, it's just a hint to the Go runtime trying to keep
+            // memory under the limit by triggering GC more often.
+            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "128MiB"));
+        }
+
         let mut stdout_output: Vec<String> = Vec::new();
-        let mut cmd = QoveryCommand::new("kubent", args, envs);
+        let mut cmd = QoveryCommand::new("kubent", args, envs_with_soft_memory_limit.as_slice());
         let stdout_output_formatter = &mut |line| {
             stdout_output.push(line);
         };
