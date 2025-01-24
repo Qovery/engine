@@ -45,6 +45,37 @@ pub trait CloudProvider: Send + Sync {
     /// environment variables to inject to generate Terraform files from templates
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials>;
+    fn downcast_ref(&self) -> CloudProviderKind;
+}
+
+pub enum CloudProviderKind<'a> {
+    Aws(&'a aws::AWS),
+    Gcp(&'a gcp::Google),
+    Scw(&'a scaleway::Scaleway),
+    SelfManaged(&'a self_managed::SelfManaged),
+}
+
+impl CloudProviderKind<'_> {
+    fn as_aws_unchecked(&self) -> &aws::AWS {
+        match self {
+            CloudProviderKind::Aws(aws) => aws,
+            _ => panic!("CloudProviderKind is not Aws"),
+        }
+    }
+
+    fn as_gcp_unchecked(&self) -> &gcp::Google {
+        match self {
+            CloudProviderKind::Gcp(gcp) => gcp,
+            _ => panic!("CloudProviderKind is not Gcp"),
+        }
+    }
+
+    fn as_scw_unchecked(&self) -> &scaleway::Scaleway {
+        match self {
+            CloudProviderKind::Scw(scw) => scw,
+            _ => panic!("CloudProviderKind is not Scw"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]
