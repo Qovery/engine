@@ -1,7 +1,9 @@
 use uuid::Uuid;
 
 use crate::constants::{SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY};
-use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::infrastructure::models::cloud_provider::{
+    CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,
+};
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub mod database_instance_type;
@@ -79,5 +81,9 @@ impl CloudProvider for Scaleway {
 
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
         Some(&self.terraform_state_credentials)
+    }
+
+    fn downcast_ref(&self) -> CloudProviderKind {
+        CloudProviderKind::Scw(self)
     }
 }

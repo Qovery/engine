@@ -8,7 +8,9 @@ use rusoto_credential::StaticProvider;
 use uuid::Uuid;
 
 use crate::constants::{AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN};
-use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::infrastructure::models::cloud_provider::{
+    CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,
+};
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub mod database_instance_type;
@@ -198,5 +200,9 @@ impl CloudProvider for AWS {
 
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
         Some(&self.terraform_state_credentials)
+    }
+
+    fn downcast_ref(&self) -> CloudProviderKind {
+        CloudProviderKind::Aws(self)
     }
 }

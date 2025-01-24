@@ -5,7 +5,9 @@ use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
-use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::infrastructure::models::cloud_provider::{
+    CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,
+};
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use uuid::Uuid;
 
@@ -89,5 +91,9 @@ impl CloudProvider for Google {
 
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
         Some(&self.terraform_state_credentials)
+    }
+
+    fn downcast_ref(&self) -> CloudProviderKind {
+        CloudProviderKind::Gcp(self)
     }
 }

@@ -1,6 +1,8 @@
 use uuid::Uuid;
 
-use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::infrastructure::models::cloud_provider::{
+    CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,
+};
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub struct SelfManaged {
@@ -52,5 +54,9 @@ impl CloudProvider for SelfManaged {
 
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
         None
+    }
+
+    fn downcast_ref(&self) -> CloudProviderKind {
+        CloudProviderKind::SelfManaged(self)
     }
 }
