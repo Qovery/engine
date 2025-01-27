@@ -113,6 +113,7 @@ primary:
       service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
       {% if aws_load_balancer_type == "external" %}
       service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
       {% endif %}
       {%- for annotations in additional_annotations %}
       {{ annotations.key }}: |-
