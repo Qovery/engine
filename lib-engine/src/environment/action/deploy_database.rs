@@ -644,7 +644,11 @@ where
                     &self.fqdn_id,
                     &self.version,
                     &event_details,
-                    target.cloud_provider.aws_sdk_client(),
+                    target
+                        .cloud_provider
+                        .downcast_ref()
+                        .as_aws()
+                        .map(|x| x.aws_sdk_client()),
                 )? {
                     // if db has never been deployed. No need to go further
                     info!("Managed database not found on cloud provider. Assuming it does not exist");

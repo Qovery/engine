@@ -44,10 +44,12 @@ pub fn delete_eks_cluster(
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
 
     logger.info("Preparing cluster deletion.");
-    let aws_conn = cloud_provider
-        .aws_sdk_client()
-        .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
 
+    let aws_conn = cloud_provider
+        .downcast_ref()
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+        .aws_sdk_client();
     let node_groups = node_groups_when_karpenter_is_enabled(
         kubernetes,
         infra_ctx,

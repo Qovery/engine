@@ -207,11 +207,21 @@ impl Kapsule {
 
         advanced_settings.validate(event_details.clone())?;
 
+        let creds = cloud_provider.downcast_ref();
+        let creds = creds
+            .as_scw()
+            .ok_or_else(|| {
+                Box::new(EngineError::new_bad_cast(
+                    event_details.clone(),
+                    "Cloudprovider is not Scaleway",
+                ))
+            })?
+            .credentials();
         let object_storage = ScalewayOS::new(
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id(),
-            cloud_provider.secret_access_key(),
+            creds.access_key.to_string(),
+            creds.secret_key.to_string(),
             zone,
         );
 

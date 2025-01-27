@@ -1305,6 +1305,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new bad cast error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
+    /// * `underlying_error`: raw error message such as command input / output.
+    /// * `link`: Link documenting the given error.
+    /// * `hint_message`: hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
+    pub fn new_bad_cast(event_details: EventDetails, user_log_message: &str) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderInformationError,
+            user_log_message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
     /// Creates new from an engine error. Only change the use log message and hint
     ///
     /// Arguments:

@@ -51,20 +51,6 @@ impl CloudProvider for Google {
         self.long_id
     }
 
-    /// GKE access key is empty, credentials are in secret_access_key
-    fn access_key_id(&self) -> String {
-        "".to_string() // TODO(benjaminch): GKE integration to be checked but shouldn't be needed
-    }
-
-    fn secret_access_key(&self) -> String {
-        // credentials JSON string to be returned as secret access key
-        self.json_credentials_raw_json.to_string()
-    }
-
-    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
-        None
-    }
-
     fn zones(&self) -> Vec<String> {
         self.region
             .zones()

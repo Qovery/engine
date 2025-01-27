@@ -19,7 +19,6 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::kube_client::QubeClient;
-use aws_types::SdkConfig;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -35,10 +34,6 @@ pub trait CloudProvider: Send + Sync {
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;
     fn long_id(&self) -> Uuid;
-    fn access_key_id(&self) -> String;
-    fn secret_access_key(&self) -> String;
-    // TODO(benjaminch): Remove client from here
-    fn aws_sdk_client(&self) -> Option<SdkConfig>;
     fn zones(&self) -> Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
@@ -55,25 +50,25 @@ pub enum CloudProviderKind<'a> {
     SelfManaged(&'a self_managed::SelfManaged),
 }
 
-impl CloudProviderKind<'_> {
-    fn as_aws_unchecked(&self) -> &aws::AWS {
+impl<'a> CloudProviderKind<'a> {
+    pub fn as_aws(&'a self) -> Option<&'a aws::AWS> {
         match self {
-            CloudProviderKind::Aws(aws) => aws,
-            _ => panic!("CloudProviderKind is not Aws"),
+            CloudProviderKind::Aws(aws) => Some(aws),
+            _ => None,
         }
     }
 
-    fn as_gcp_unchecked(&self) -> &gcp::Google {
+    pub fn as_gcp(&'a self) -> Option<&'a gcp::Google> {
         match self {
-            CloudProviderKind::Gcp(gcp) => gcp,
-            _ => panic!("CloudProviderKind is not Gcp"),
+            CloudProviderKind::Gcp(gcp) => Some(gcp),
+            _ => None,
         }
     }
 
-    fn as_scw_unchecked(&self) -> &scaleway::Scaleway {
+    pub fn as_scw(&'a self) -> Option<&'a scaleway::Scaleway> {
         match self {
-            CloudProviderKind::Scw(scw) => scw,
-            _ => panic!("CloudProviderKind is not Scw"),
+            CloudProviderKind::Scw(scw) => Some(scw),
+            _ => None,
         }
     }
 }

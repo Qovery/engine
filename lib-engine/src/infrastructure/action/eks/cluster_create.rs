@@ -45,8 +45,11 @@ pub fn create_eks_cluster(
 
     // aws connection
     let aws_conn = cloud_provider
-        .aws_sdk_client()
-        .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
+        .downcast_ref()
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "cloud provider is not aws")))?
+        .aws_sdk_client();
+
     let terraform_apply = || {
         // don't create node groups if karpenter is enabled
         let nodes_groups = node_groups_when_karpenter_is_enabled(
