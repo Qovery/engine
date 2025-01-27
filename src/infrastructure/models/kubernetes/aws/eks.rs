@@ -201,6 +201,10 @@ impl Kubernetes for EKS {
                         "ip".to_string(),
                     ),
                     (
+                        "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled".to_string(),
+                        "true".to_string(),
+                    ),
+                    (
                         "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
                         format!(
                             "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",

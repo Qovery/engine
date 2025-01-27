@@ -416,6 +416,10 @@ defaultBackend:
                                 value: "ip".to_string(),
                             });
                             chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-cross-zone-load-balancing-enabled".to_string(),
+                                value: "true".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
                                 key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-target-group-attributes".to_string(),
                                 value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
                             });
