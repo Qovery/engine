@@ -3,6 +3,7 @@ use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
+use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
@@ -16,12 +17,10 @@ use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverr
 use crate::io_models::models::CpuArchitecture;
 use crate::io_models::models::NodeGroups;
 use crate::logger::Logger;
+use crate::utilities::to_short_id;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-
-use crate::infrastructure::action::InfrastructureAction;
-use crate::utilities::to_short_id;
 use uuid::Uuid;
 
 /// EKS kubernetes provider allowing to deploy an EKS cluster.
@@ -71,11 +70,17 @@ impl EKS {
         let aws_zones = aws::aws_zones(zones, &region, &event_details)?;
         advanced_settings.validate(event_details.clone())?;
 
+        let creds = cloud_provider
+            .downcast_ref()
+            .as_aws()
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+            .credentials();
+        // TODO(sts): support session token
         let s3 = S3::new(
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id(),
-            cloud_provider.secret_access_key(),
+            creds.get_aws_access_key_id().to_string(),
+            creds.get_aws_secret_access_key().to_string(),
             region.clone(),
         );
 

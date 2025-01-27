@@ -28,18 +28,6 @@ impl CloudProvider for SelfManaged {
         self.long_id
     }
 
-    fn access_key_id(&self) -> String {
-        "".to_string()
-    }
-
-    fn secret_access_key(&self) -> String {
-        "".to_string()
-    }
-
-    fn aws_sdk_client(&self) -> Option<aws_types::SdkConfig> {
-        None
-    }
-
     fn zones(&self) -> Vec<String> {
         Vec::new()
     }

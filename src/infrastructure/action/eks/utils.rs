@@ -9,7 +9,6 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::KubernetesClusterAction;
 use chrono::Duration as ChronoDuration;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
-use rusoto_credential::StaticProvider;
 use rusoto_eks::EksClient;
 use std::str::FromStr;
 
@@ -30,9 +29,11 @@ pub fn get_rusoto_eks_client(
         }
     };
 
-    let credentials =
-        StaticProvider::new(cloud_provider.access_key_id(), cloud_provider.secret_access_key(), None, None);
-
+    let credentials = cloud_provider
+        .downcast_ref()
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+        .credentials();
     let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
     Ok(EksClient::new_with_client(client, region))
 }

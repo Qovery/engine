@@ -8,11 +8,15 @@ use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub mod database_instance_type;
 
+pub struct ScalewayCredentials {
+    pub access_key: String,
+    pub secret_key: String,
+    pub project_id: String,
+}
+
 pub struct Scaleway {
     long_id: Uuid,
-    access_key: String,
-    secret_key: String,
-    project_id: String,
+    credentials: ScalewayCredentials,
     terraform_state_credentials: TerraformStateCredentials,
 }
 
@@ -26,11 +30,17 @@ impl Scaleway {
     ) -> Scaleway {
         Scaleway {
             long_id,
-            access_key: access_key.to_string(),
-            secret_key: secret_key.to_string(),
-            project_id: project_id.to_string(),
+            credentials: ScalewayCredentials {
+                access_key: access_key.to_string(),
+                secret_key: secret_key.to_string(),
+                project_id: project_id.to_string(),
+            },
             terraform_state_credentials,
         }
+    }
+
+    pub fn credentials(&self) -> &ScalewayCredentials {
+        &self.credentials
     }
 }
 
@@ -47,35 +57,23 @@ impl CloudProvider for Scaleway {
         self.long_id
     }
 
-    fn access_key_id(&self) -> String {
-        self.access_key.to_string()
-    }
-
-    fn secret_access_key(&self) -> String {
-        self.secret_key.to_string()
-    }
-
-    fn aws_sdk_client(&self) -> Option<aws_config::SdkConfig> {
-        None
-    }
-
     fn zones(&self) -> Vec<String> {
         todo!()
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
-            (SCW_ACCESS_KEY, self.access_key.as_str()),
-            (SCW_SECRET_KEY, self.secret_key.as_str()),
-            (SCW_DEFAULT_PROJECT_ID, self.project_id.as_str()),
+            (SCW_ACCESS_KEY, self.credentials.access_key.as_str()),
+            (SCW_SECRET_KEY, self.credentials.secret_key.as_str()),
+            (SCW_DEFAULT_PROJECT_ID, self.credentials.project_id.as_str()),
         ]
     }
 
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
-            ("scaleway_access_key", self.access_key.as_str()),
-            ("scaleway_secret_key", self.secret_key.as_str()),
-            ("scaleway_project_id", self.project_id.as_str()),
+            ("scaleway_access_key", self.credentials.access_key.as_str()),
+            ("scaleway_secret_key", self.credentials.secret_key.as_str()),
+            ("scaleway_project_id", self.credentials.project_id.as_str()),
         ]
     }
 

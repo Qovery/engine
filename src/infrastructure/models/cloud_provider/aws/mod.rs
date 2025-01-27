@@ -45,20 +45,20 @@ impl AwsCredentials {
         }
     }
 
-    fn access_key_id(&self) -> &str {
+    pub fn access_key_id(&self) -> &str {
         match self {
             AwsCredentials::Static { access_key_id, .. } => access_key_id,
             AwsCredentials::STS { access_key_id, .. } => access_key_id,
         }
     }
 
-    fn secret_access_key(&self) -> &str {
+    pub fn secret_access_key(&self) -> &str {
         match self {
             AwsCredentials::Static { secret_access_key, .. } => secret_access_key,
             AwsCredentials::STS { secret_access_key, .. } => secret_access_key,
         }
     }
-    fn session_token(&self) -> Option<&str> {
+    pub fn session_token(&self) -> Option<&str> {
         match self {
             AwsCredentials::Static { .. } => None,
             AwsCredentials::STS { session_token, .. } => Some(session_token),
@@ -103,8 +103,26 @@ impl AWS {
         )
     }
 
+    pub fn aws_credentials(&self) -> &AwsCredentials {
+        &self.credentials
+    }
+
     pub fn client(&self) -> Client {
         Client::new_with(self.credentials(), HttpClient::new().unwrap())
+    }
+
+    pub fn aws_sdk_client(&self) -> SdkConfig {
+        SdkConfig::builder()
+            .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
+                self.credentials.access_key_id(),
+                self.credentials.secret_access_key(),
+                self.credentials.session_token().map(str::to_string),
+                None,
+                "qovery-engine",
+            )))
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new(Cow::from(self.region.clone())))
+            .build()
     }
 }
 
@@ -119,30 +137,6 @@ impl CloudProvider for AWS {
 
     fn long_id(&self) -> Uuid {
         self.long_id
-    }
-
-    fn access_key_id(&self) -> String {
-        self.credentials.access_key_id().to_string()
-    }
-
-    fn secret_access_key(&self) -> String {
-        self.credentials.secret_access_key().to_string()
-    }
-
-    fn aws_sdk_client(&self) -> Option<SdkConfig> {
-        Some(
-            SdkConfig::builder()
-                .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
-                    self.credentials.access_key_id(),
-                    self.credentials.secret_access_key(),
-                    self.credentials.session_token().map(str::to_string),
-                    None,
-                    "qovery-engine",
-                )))
-                .behavior_version(BehaviorVersion::latest())
-                .region(Region::new(Cow::from(self.region.clone())))
-                .build(),
-        )
     }
 
     fn zones(&self) -> Vec<String> {

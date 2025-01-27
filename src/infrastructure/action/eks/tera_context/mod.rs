@@ -33,6 +33,10 @@ pub fn eks_tera_context(
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
+    let cloud_provider = cloud_provider.downcast_ref();
+    let cloud_provider = cloud_provider
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?;
     let mut context = TeraContext::new();
 
     let public_access_cidrs = generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
@@ -274,8 +278,9 @@ pub fn eks_tera_context(
     context.insert("enable_cluster_autoscaler", &true);
 
     // AWS
-    context.insert("aws_access_key", &cloud_provider.access_key_id());
-    context.insert("aws_secret_key", &cloud_provider.secret_access_key());
+    context.insert("aws_access_key", cloud_provider.aws_credentials().access_key_id());
+    context.insert("aws_secret_key", cloud_provider.aws_credentials().secret_access_key());
+    context.insert("aws_session_token", &cloud_provider.aws_credentials().session_token());
 
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
