@@ -51,14 +51,6 @@ impl CloudProvider for Google {
         self.long_id
     }
 
-    fn zones(&self) -> Vec<String> {
-        self.region
-            .zones()
-            .iter()
-            .map(|z| z.to_cloud_provider_format().to_string())
-            .collect()
-    }
-
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         vec![
             (GCP_CREDENTIALS, self.json_credentials_raw_json.as_str()),

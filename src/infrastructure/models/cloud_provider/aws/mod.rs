@@ -139,10 +139,6 @@ impl CloudProvider for AWS {
         self.long_id
     }
 
-    fn zones(&self) -> Vec<String> {
-        self.zones.clone()
-    }
-
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         match &self.credentials {
             AwsCredentials::Static {

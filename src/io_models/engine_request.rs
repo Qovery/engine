@@ -155,10 +155,12 @@ impl<T> EngineRequest<T> {
                 )
             })?;
 
-        let kubernetes = match self
-            .kubernetes
-            .to_engine_kubernetes(context, cloud_provider.as_ref(), logger.clone())
-        {
+        let kubernetes = match self.kubernetes.to_engine_kubernetes(
+            context,
+            cloud_provider.as_ref(),
+            &self.cloud_provider.zones,
+            logger.clone(),
+        ) {
             Ok(x) => x,
             Err(e) => {
                 error!("{:?}", e);
@@ -376,6 +378,7 @@ impl KubernetesDto {
         &self,
         context: &Context,
         cloud_provider: &dyn cloud_provider::CloudProvider,
+        zones: &[String],
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn Kubernetes + 'a>, Box<EngineError>> {
         let event_details = event_details(cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
@@ -424,7 +427,7 @@ impl KubernetesDto {
                 KubernetesVersion::from_str(&self.version)
                     .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                cloud_provider.zones().clone(),
+                zones.to_vec(),
                 cloud_provider,
                 serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),

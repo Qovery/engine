@@ -34,7 +34,6 @@ pub trait CloudProvider: Send + Sync {
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;
     fn long_id(&self) -> Uuid;
-    fn zones(&self) -> Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates
