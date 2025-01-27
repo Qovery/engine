@@ -28,10 +28,6 @@ impl CloudProvider for SelfManaged {
         self.long_id
     }
 
-    fn zones(&self) -> Vec<String> {
-        Vec::new()
-    }
-
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
         Vec::new()
     }
