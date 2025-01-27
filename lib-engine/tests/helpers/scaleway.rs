@@ -171,13 +171,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind, _localisation: &str) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
         Box::new(Scaleway::new(
-            context.clone(),
             *context.cluster_long_id(),
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY
                 .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
@@ -189,10 +183,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .SCALEWAY_DEFAULT_PROJECT_ID
                 .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
-                .as_str(),
-            secrets
-                .SCALEWAY_DEFAULT_REGION
-                .expect("SCALEWAY_DEFAULT_REGION is not set in secrets")
                 .as_str(),
             TerraformStateCredentials {
                 access_key_id: secrets

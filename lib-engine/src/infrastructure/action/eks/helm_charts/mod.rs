@@ -109,12 +109,11 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
     }
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
-        let cloud_provider = infra_ctx.cloud_provider();
         let dns_provider = infra_ctx.dns_provider();
         let cluster = self.cluster;
         EksChartsConfigPrerequisites {
-            organization_id: cloud_provider.organization_id().to_string(),
-            organization_long_id: cloud_provider.organization_long_id(),
+            organization_id: infra_ctx.context().organization_short_id().to_string(),
+            organization_long_id: *infra_ctx.context().organization_long_id(),
             infra_options: cluster.options.clone(),
             cluster_id: cluster.short_id().to_string(),
             cluster_long_id: cluster.long_id,

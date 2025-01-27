@@ -283,7 +283,6 @@ impl Karpenter {
 
         let karpenter_configuration_chart = Self::get_karpenter_configuration_chart(
             kubernetes,
-            cloud_provider,
             terraform_output,
             cluster_long_id,
             event_details,
@@ -306,7 +305,6 @@ impl Karpenter {
 
     fn get_karpenter_configuration_chart(
         kubernetes: &EKS,
-        cloud_provider: &dyn CloudProvider,
         terraform_output: &AwsEksQoveryTerraformOutput,
         cluster_long_id: uuid::Uuid,
         event_details: &EventDetails,
@@ -319,8 +317,6 @@ impl Karpenter {
             ))
         })?;
 
-        let organization_id = cloud_provider.organization_id().to_string();
-        let organization_long_id = cloud_provider.organization_long_id();
         let cluster_id = kubernetes.short_id().to_string();
         let region = AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
             EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
@@ -335,8 +331,8 @@ impl Karpenter {
             terraform_output.cluster_security_group_id.clone(),
             &cluster_id,
             cluster_long_id,
-            &organization_id,
-            organization_long_id,
+            kubernetes.context.organization_short_id(),
+            *kubernetes.context.organization_long_id(),
             region.to_cloud_provider_format(),
             karpenter_parameters,
             options.user_provided_network.as_ref(),

@@ -224,12 +224,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         )
         .expect("Cannot parse GCP_CREDENTIALS");
         Box::new(Google::new(
-            context.clone(),
             *context.cluster_long_id(),
-            secrets
-                .GCP_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("GCP_TEST_ORGANIZATION_ID is not set in secrets"),
             credentials,
             GcpRegion::from_str(localisation).expect("Unknown GCP region"),
             TerraformStateCredentials {

@@ -81,11 +81,8 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     );
 
     // Qovery
-    context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
-    context.insert(
-        "organization_long_id",
-        &infra_ctx.cloud_provider().organization_long_id().to_string(),
-    );
+    context.insert("organization_id", infra_ctx.context().organization_short_id());
+    context.insert("organization_long_id", &infra_ctx.context().organization_long_id());
     context.insert("object_storage_kubeconfig_bucket", &cluster.kubeconfig_bucket_name());
     context.insert("object_storage_logs_bucket", &cluster.logs_bucket_name());
 

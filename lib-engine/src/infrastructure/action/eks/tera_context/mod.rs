@@ -6,6 +6,7 @@ use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::dns_provider::DnsProvider;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::context::Features;
@@ -20,7 +21,7 @@ mod kube_proxy_addon;
 mod vpc_cni_addon;
 
 pub fn eks_tera_context(
-    kubernetes: &dyn Kubernetes,
+    kubernetes: &EKS,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
     zones: &[AwsZone],
@@ -216,8 +217,8 @@ pub fn eks_tera_context(
     let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
 
     // Qovery
-    context.insert("organization_id", cloud_provider.organization_id());
-    context.insert("organization_long_id", &cloud_provider.organization_long_id().to_string());
+    context.insert("organization_id", kubernetes.context.organization_short_id());
+    context.insert("organization_long_id", &kubernetes.context.organization_long_id().to_string());
     context.insert("qovery_api_url", &qovery_api_url);
 
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
