@@ -13,7 +13,7 @@ use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusC
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use crate::infrastructure::models::cloud_provider::aws::AWS;
+use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, AWS};
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::gcp::Google;
 use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
@@ -90,7 +90,7 @@ impl<T> EngineRequest<T> {
             .to_engine_build_platform(context, metrics_registry.clone_dyn());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind)
+            .to_engine_cloud_provider(&self.kubernetes.region, self.kubernetes.kind)
             .ok_or_else(|| {
                 Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
@@ -107,7 +107,7 @@ impl<T> EngineRequest<T> {
             ("ClusterLongId".to_string(), context.cluster_long_id().to_string()),
             ("OrganizationId".to_string(), context.organization_short_id().to_string()),
             ("OrganizationLongId".to_string(), context.organization_long_id().to_string()),
-            ("Region".to_string(), cloud_provider.region()),
+            ("Region".to_string(), self.kubernetes.region.clone()),
         ]);
         let mut tags = self
             .kubernetes
@@ -265,7 +265,6 @@ pub struct CloudProvider {
 impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
-        context: Context,
         region: &str,
         cluster_kind: kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
@@ -282,16 +281,16 @@ impl CloudProvider {
                 let CloudProviderOptions::Aws {
                     access_key_id,
                     secret_access_key,
+                    session_token,
                 } = &self.options
                 else {
                     return None;
                 };
+                let credentials =
+                    AwsCredentials::new(access_key_id.clone(), secret_access_key.clone(), session_token.clone());
                 Some(Box::new(AWS::new(
-                    context,
                     self.long_id,
-                    self.name.as_str(),
-                    access_key_id,
-                    secret_access_key,
+                    credentials,
                     region,
                     self.zones.clone(),
                     cluster_kind,
@@ -308,13 +307,10 @@ impl CloudProvider {
                     return None;
                 };
                 Some(Box::new(Scaleway::new(
-                    context,
                     self.long_id,
-                    self.name.as_str(),
                     scaleway_access_key,
                     scaleway_secret_key,
                     scaleway_project_id,
-                    region,
                     terraform_state_credentials,
                 )))
             }
@@ -330,20 +326,13 @@ impl CloudProvider {
                 };
 
                 Some(Box::new(Google::new(
-                    context,
                     self.long_id,
-                    self.name.as_str(),
                     credentials,
                     region,
                     terraform_state_credentials,
                 )))
             }
-            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(
-                context,
-                self.clone().long_id,
-                self.name.clone(),
-                region.to_string(),
-            ))),
+            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(self.long_id))),
         }
     }
 }
@@ -529,9 +518,9 @@ impl KubernetesDto {
                     self.long_id,
                     self.name.to_string(),
                     self.kind,
+                    self.region.to_string(),
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    cloud_provider,
                     serde_json::from_value::<kubernetes::self_managed::on_premise::SelfManagedOptions>(
                         self.options.clone(),
                     )
@@ -720,6 +709,8 @@ pub enum CloudProviderOptions {
         access_key_id: String,
         #[derivative(Debug = "ignore")]
         secret_access_key: String,
+        #[serde(default)]
+        session_token: Option<String>,
     },
     Scaleway {
         scaleway_access_key: String,

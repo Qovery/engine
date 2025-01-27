@@ -12,7 +12,7 @@ use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::aws::{AwsCredentials, AWS};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
@@ -149,7 +149,7 @@ impl Cluster<AWS, Options> for AWS {
         )
     }
 
-    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<AWS> {
+    fn cloud_provider(_context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
         let aws_region = match localisation {
             "EuWest3" => {
@@ -162,22 +162,14 @@ impl Cluster<AWS, Options> for AWS {
             _ => panic!("Invalid cluster localisation {localisation}"),
         };
 
+        let credentials = AwsCredentials::new(
+            secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set"),
+            secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set"),
+            None, // TODO (sts): Use session token
+        );
         Box::new(AWS::new(
-            context.clone(),
             Uuid::new_v4(),
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_ACCESS_KEY_ID
-                .expect("AWS_ACCESS_KEY_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_SECRET_ACCESS_KEY
-                .expect("AWS_SECRET_ACCESS_KEY is not set")
-                .as_str(),
+            credentials,
             aws_region.to_cloud_provider_format(),
             aws_region.get_zones_to_string(),
             kubernetes_kind,

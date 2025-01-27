@@ -1,12 +1,7 @@
-use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-
-use aws_types::SdkConfig;
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 
 use crate::cmd::docker::Docker;
 use crate::cmd::helm::{to_engine_error, Helm};
@@ -14,17 +9,20 @@ use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::events::{EnvironmentStep, EventDetails};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::dns_provider::DnsProvider;
 use crate::infrastructure::models::kubernetes;
 use crate::infrastructure::models::kubernetes::Kubernetes;
-use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::kube_client::QubeClient;
+use aws_types::SdkConfig;
+use itertools::Itertools;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub mod aws;
 pub mod gcp;
@@ -34,31 +32,19 @@ pub mod self_managed;
 pub mod service;
 
 pub trait CloudProvider: Send + Sync {
-    fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn kubernetes_kind(&self) -> kubernetes::Kind;
-    fn id(&self) -> &str;
-    fn organization_id(&self) -> &str;
-    fn organization_long_id(&self) -> uuid::Uuid;
-    fn name(&self) -> &str;
-    fn name_with_id(&self) -> String {
-        format!("{} ({})", self.name(), self.id())
-    }
+    fn long_id(&self) -> Uuid;
     fn access_key_id(&self) -> String;
     fn secret_access_key(&self) -> String;
-    fn region(&self) -> String;
     // TODO(benjaminch): Remove client from here
     fn aws_sdk_client(&self) -> Option<SdkConfig>;
-    fn is_valid(&self) -> Result<(), Box<EngineError>>;
     fn zones(&self) -> Vec<String>;
     /// environment variables containing credentials
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)>;
     /// environment variables to inject to generate Terraform files from templates
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials>;
-    fn as_any(&self) -> &dyn Any;
-    fn get_event_details(&self, stage: Stage) -> EventDetails;
-    fn to_transmitter(&self) -> Transmitter;
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Hash, PartialEq, Eq)]

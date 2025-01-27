@@ -119,8 +119,8 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
         KapsuleChartsConfigPrerequisites::new(
-            infra_ctx.cloud_provider().organization_id().to_string(),
-            infra_ctx.cloud_provider().organization_long_id(),
+            infra_ctx.context().organization_short_id().to_string(),
+            *infra_ctx.context().organization_long_id(),
             self.cluster.short_id().to_string(),
             self.cluster.long_id,
             self.cluster.zone,
