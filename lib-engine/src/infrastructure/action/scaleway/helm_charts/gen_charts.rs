@@ -371,6 +371,21 @@ pub fn kapsule_helm_charts(
             .as_ref()
             .map(|v| v.to_model().map_err(CommandError::from))
             .transpose()?,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_custom_http_errors
+            .clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_enabled,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_image_repository
+            .clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_image_tag
+            .clone(),
     )
     .to_common_helm_chart()?;
 

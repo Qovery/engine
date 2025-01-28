@@ -240,6 +240,16 @@ pub struct ClusterAdvancedSettings {
     pub nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
+
+    #[serde(alias = "nginx.controller.custom_http_errors")]
+    pub nginx_controller_custom_http_errors: Option<String>,
+    #[serde(alias = "nginx.default_backend.enabled")]
+    pub nginx_default_backend_enabled: Option<bool>,
+    #[serde(alias = "nginx.default_backend.image_repository")]
+    pub nginx_default_backend_image_repository: Option<String>,
+    #[serde(alias = "nginx.default_backend.image_tag")]
+    pub nginx_default_backend_image_tag: Option<String>,
+
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
     #[serde(alias = "gcp.vpc.enable_flow_logs")]
@@ -309,6 +319,10 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
+            nginx_controller_custom_http_errors: None,
+            nginx_default_backend_enabled: None,
+            nginx_default_backend_image_repository: None,
+            nginx_default_backend_image_tag: None,
         }
     }
 }

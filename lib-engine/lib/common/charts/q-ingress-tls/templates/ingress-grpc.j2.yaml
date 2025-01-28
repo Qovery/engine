@@ -62,6 +62,9 @@ metadata:
     {%- if advanced_settings.network_ingress_nginx_limit_connections %}
     nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
     {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_custom_http_errors %}
+    nginx.ingress.kubernetes.io/custom-http-errors: "{{ advanced_settings.network_ingress_nginx_custom_http_errors }}"
+    {%- endif %}
     # GRPC SPECIFIC
     # https://kubernetes.github.io/ingress-nginx/examples/grpc/
     nginx.ingress.kubernetes.io/backend-protocol: "GRPC"

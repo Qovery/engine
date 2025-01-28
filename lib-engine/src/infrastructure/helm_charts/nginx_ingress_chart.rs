@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::fmt::Display;
 use std::sync::Arc;
 use strum_macros::EnumIter;
@@ -123,6 +124,10 @@ pub struct NginxIngressChart {
     http_snippet: Option<NginxHttpSnippet>,
     server_snippet: Option<NginxServerSnippet>,
     limit_request_status_code: Option<NginxLimitRequestStatusCode>,
+    nginx_controller_custom_http_errors: Option<String>,
+    nginx_default_backend_enabled: Option<bool>,
+    nginx_default_backend_image_repository: Option<String>,
+    nginx_default_backend_image_tag: Option<String>,
 }
 
 impl NginxIngressChart {
@@ -152,6 +157,10 @@ impl NginxIngressChart {
         http_snippet: Option<NginxHttpSnippet>,
         server_snippet: Option<NginxServerSnippet>,
         limit_request_status_code: Option<NginxLimitRequestStatusCode>,
+        nginx_controller_custom_http_errors: Option<String>,
+        nginx_default_backend_enabled: Option<bool>,
+        nginx_default_backend_image_repository: Option<String>,
+        nginx_default_backend_image_tag: Option<String>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -204,6 +213,10 @@ impl NginxIngressChart {
             http_snippet,
             server_snippet,
             limit_request_status_code,
+            nginx_controller_custom_http_errors,
+            nginx_default_backend_enabled,
+            nginx_default_backend_image_repository,
+            nginx_default_backend_image_tag,
         }
     }
 
@@ -369,6 +382,45 @@ defaultBackend:
                 });
             }
             LogFormatEscaping::Default => {}
+        }
+
+        if let Some(nginx_default_backend_enabled) = self.nginx_default_backend_enabled {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.enabled".to_string(),
+                value: nginx_default_backend_enabled.to_string(),
+            });
+
+            if self.nginx_default_backend_image_repository.is_none() && nginx_default_backend_enabled {
+                // the default image will be used and this image support only amd arch
+                chart_set_values.push(ChartSetValue {
+                    key: "defaultBackend.nodeSelector.kubernetes\\.io/arch".to_string(),
+                    value: "amd64".to_string(),
+                });
+            }
+        }
+
+        if let Some(nginx_controller_custom_http_errors) = &self.nginx_controller_custom_http_errors {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.config.custom-http-errors".to_string(),
+                value: nginx_controller_custom_http_errors
+                    .split(",")
+                    .map(|s| s.trim())
+                    .join("\\,"),
+            });
+        }
+
+        if let Some(nginx_default_backend_image_repository) = &self.nginx_default_backend_image_repository {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.image.repository".to_string(),
+                value: nginx_default_backend_image_repository.clone(),
+            });
+        }
+
+        if let Some(nginx_default_backend_image_tag) = &self.nginx_default_backend_image_tag {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.image.tag".to_string(),
+                value: nginx_default_backend_image_tag.clone(),
+            });
         }
 
         // custom cloud provider configuration
@@ -586,6 +638,10 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
+            None,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -633,6 +689,10 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
@@ -685,6 +745,10 @@ mod tests {
                 true,
                 log_format_escaping.clone(),
                 false,
+                None,
+                None,
+                None,
+                None,
                 None,
                 None,
                 None,
@@ -741,6 +805,10 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
             None,
