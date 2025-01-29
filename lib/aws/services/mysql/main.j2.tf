@@ -66,6 +66,7 @@ resource "aws_db_instance" "mysql_instance" {
   {%- else %}
   allocated_storage = var.disk_size
   storage_type = var.storage_type
+  iops = var.disk_iops
   username = var.username
   engine_version = var.mysql_version
   engine = "mysql"

@@ -49,6 +49,8 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: Option<String>,
     pub database_disk_type: String,
+    #[serde(default)] // => None if not present in input
+    pub database_disk_iops: Option<u32>,
     pub encrypt_disk: bool,
     #[serde(default)] // => false if not present in input
     pub activate_high_availability: bool,
@@ -78,6 +80,10 @@ impl Database {
             port: self.port,
             disk_size_in_gib: self.disk_size_in_gib,
             database_disk_type: self.database_disk_type.clone(),
+            database_disk_iops: self
+                .database_disk_iops
+                .map(DiskIOPS::Provisioned)
+                .unwrap_or(DiskIOPS::Default),
             encrypt_disk: self.encrypt_disk,
             activate_high_availability: self.activate_high_availability,
             activate_backups: self.activate_backups,
@@ -801,6 +807,21 @@ impl DatabaseKind {
     }
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub enum DiskIOPS {
+    Default,
+    Provisioned(u32),
+}
+
+impl DiskIOPS {
+    pub fn value(&self) -> u32 {
+        match self {
+            DiskIOPS::Default => 0,
+            DiskIOPS::Provisioned(iops) => *iops,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub struct DatabaseOptions {
     pub login: String,
@@ -810,6 +831,7 @@ pub struct DatabaseOptions {
     pub mode: DatabaseMode,
     pub disk_size_in_gib: u32,
     pub database_disk_type: String,
+    pub database_disk_iops: DiskIOPS,
     pub encrypt_disk: bool,
     pub activate_high_availability: bool,
     pub activate_backups: bool,

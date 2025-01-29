@@ -31,7 +31,7 @@ use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, K
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
-use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
+use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions, DiskIOPS};
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
@@ -535,6 +535,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
             mode: DatabaseMode::MANAGED,
             disk_size_in_gib: 12,
             database_disk_type: "my_managed_db_disk_type".to_string(),
+            database_disk_iops: DiskIOPS::Default,
             encrypt_disk: true,
             activate_high_availability: true,
             activate_backups: true,
@@ -575,6 +576,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             mode: DatabaseMode::CONTAINER,
             disk_size_in_gib: 12,
             database_disk_type: "my_container_db_disk_type".to_string(),
+            database_disk_iops: DiskIOPS::Default,
             encrypt_disk: true,
             activate_high_availability: true,
             activate_backups: true,
