@@ -337,6 +337,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class()
             }
             .to_string(),
+            database_disk_iops: None,
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,

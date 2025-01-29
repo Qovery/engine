@@ -274,6 +274,7 @@ pub fn environment_2_app_2_routers_1_psql(
             disk_size_in_gib: 10,
             database_instance_type: database_instance_type.map(|i| i.to_cloud_provider_format()),
             database_disk_type: database_disk_type.to_string(),
+            database_disk_iops: None,
             encrypt_disk: true,
             activate_high_availability: false,
             activate_backups: false,
