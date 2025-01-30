@@ -575,6 +575,16 @@ impl BuildPlatform for LocalDocker {
             }
         }
 
+        // if the extra files are provided, write them to the file before building
+        for extra_file_to_inject in &build.git_repository.extra_files_to_inject {
+            let extra_file_absolute_path = repository_root_path.join(extra_file_to_inject.path.clone());
+            fs::write(&extra_file_absolute_path, &extra_file_to_inject.content).map_err(|err| BuildError::IoError {
+                application: app_id.clone(),
+                action_description: "writing extra".to_string(),
+                raw_error: err,
+            })?;
+        }
+
         // If the dockerfile does not exist, abort
         if !dockerfile_absolute_path.is_file() {
             return Err(BuildError::InvalidConfig {

@@ -570,6 +570,7 @@ impl Application {
                 dockerfile_path,
                 dockerfile_content: None,
                 root_path,
+                extra_files_to_inject: vec![],
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self

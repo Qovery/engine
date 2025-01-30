@@ -158,6 +158,11 @@ pub struct SshKey {
     pub public_key: Option<String>,
 }
 
+pub struct GitRepositoryExtraFile {
+    pub path: PathBuf,
+    pub content: String,
+}
+
 pub struct GitRepository {
     pub url: Url,
     pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials> + Send + Sync>>,
@@ -166,6 +171,7 @@ pub struct GitRepository {
     pub dockerfile_path: Option<PathBuf>,
     pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
+    pub extra_files_to_inject: Vec<GitRepositoryExtraFile>,
 }
 impl GitRepository {
     fn credentials(&self) -> Option<anyhow::Result<Credentials>> {

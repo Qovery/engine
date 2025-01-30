@@ -5,15 +5,19 @@ use crate::environment::models::types::{CloudProvider, VersionsNumber};
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::{Build, Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
+use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::EnvironmentVariable;
+use crate::io_models::models::{EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::terraform_service::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
+use serde_derive::Serialize;
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::path::PathBuf;
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -36,15 +40,22 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) _provider: TerraformProvider,
     pub(crate) _provider_version: VersionsNumber,
     pub(crate) _backend: TerraformBackend,
+    pub(crate) timeout: Duration,
+    pub(crate) cpu_request: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit: KubernetesCpuResourceUnit,
+    pub(crate) ram_request: KubernetesMemoryResourceUnit,
+    pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) environment_variables: HashMap<String, VariableInfo>,
     pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
-    pub(crate) _annotations_group: AnnotationsGroupTeraContext,
-    pub(crate) _labels_group: LabelsGroupTeraContext,
+    pub(crate) annotations_group: AnnotationsGroupTeraContext,
+    pub(crate) labels_group: LabelsGroupTeraContext,
+    pub(crate) workspace_directory: PathBuf,
+    pub(crate) lib_root_directory: String,
 }
 
 impl<T: CloudProvider> TerraformService<T> {
     pub fn new(
-        _context: &Context,
+        context: &Context,
         long_id: Uuid,
         name: String,
         kube_name: String,
@@ -54,6 +65,7 @@ impl<T: CloudProvider> TerraformService<T> {
         _provider: TerraformProvider,
         _provider_version: VersionsNumber,
         _backend: TerraformBackend,
+        timeout: Duration,
         environment_variables: HashMap<String, VariableInfo>,
         advanced_settings: TerraformServiceAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -62,6 +74,14 @@ impl<T: CloudProvider> TerraformService<T> {
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
+
+        let workspace_directory = crate::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("terraform_services/{long_id}"),
+        )
+        .map_err(|_| TerraformServiceError::InvalidConfig("Can't create workspace directory".to_string()))?;
+
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),
@@ -75,10 +95,17 @@ impl<T: CloudProvider> TerraformService<T> {
             _provider,
             _provider_version,
             _backend,
+            timeout,
+            cpu_request: KubernetesCpuResourceUnit::MilliCpu(500),
+            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(500),
+            ram_request: KubernetesMemoryResourceUnit::MebiByte(256),
+            ram_limit: KubernetesMemoryResourceUnit::MebiByte(256),
             environment_variables,
             advanced_settings,
-            _annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
-            _labels_group: LabelsGroupTeraContext::new(labels_groups),
+            annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
+            labels_group: LabelsGroupTeraContext::new(labels_groups),
+            workspace_directory,
+            lib_root_directory: context.lib_root_dir().to_string(),
         })
     }
 
@@ -105,6 +132,60 @@ impl<T: CloudProvider> TerraformService<T> {
 
     pub fn kube_label_selector(&self) -> String {
         format!("qovery.com/service-id={}", self.long_id)
+    }
+
+    pub fn workspace_directory(&self) -> &str {
+        self.workspace_directory.to_str().unwrap_or("")
+    }
+
+    pub fn helm_release_name(&self) -> String {
+        format!("tf-service-{}", self.long_id)
+    }
+
+    pub fn startup_timeout(&self) -> Duration {
+        Duration::from_secs(5 * 60)
+    }
+
+    pub fn helm_chart_dir(&self) -> String {
+        format!("{}/common/charts/q-terraform-service", self.lib_root_directory)
+    }
+
+    pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> TerraformServiceTeraContext {
+        let environment = target.environment;
+        let (image_full, image_tag) = match &self.terraform_files_source {
+            TerraformFilesSource::Git { .. } => {
+                (self.build.image.full_image_name_with_tag(), self.build.image.tag.clone())
+            }
+        };
+
+        TerraformServiceTeraContext {
+            organization_long_id: environment.organization_long_id,
+            project_long_id: environment.project_long_id,
+            environment_short_id: to_short_id(&environment.long_id),
+            environment_long_id: environment.long_id,
+            namespace: environment.namespace().to_string(),
+            service: ServiceTeraContext {
+                short_id: to_short_id(&self.long_id),
+                long_id: self.long_id,
+                name: self.kube_name().to_string(),
+                image_full,
+                image_tag,
+                version: self.service_version(),
+                job_max_duration_in_sec: self.timeout.as_secs(),
+                advanced_settings: self.advanced_settings.clone(),
+                // command_args: self.command_args.clone(),
+                // entrypoint: self.entrypoint.clone(),
+                cpu_request_in_milli: self.cpu_request.to_string(), //  TODO TF check if it is provided as advanced setting or not
+                cpu_limit_in_milli: self.cpu_limit.to_string(),     // TODO TF
+                ram_request_in_mib: self.ram_request.to_string(),   // TODO TF
+                ram_limit_in_mib: self.ram_limit.to_string(),       // TODO TF
+                                                                    // max_nb_restart: self.max_nb_restart,
+                                                                    // max_duration_in_sec: self.max_duration.as_secs(),
+            },
+            annotations_group: self.annotations_group.clone(),
+            labels_group: self.labels_group.clone(),
+            environment_variables: self.get_environment_variables(),
+        }
     }
 }
 
@@ -228,4 +309,33 @@ pub enum TerraformBackendType {
 pub struct TerraformBackendConfig {
     pub key: String,
     pub value: String,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub(crate) struct ServiceTeraContext {
+    pub(crate) short_id: String,
+    pub(crate) long_id: Uuid,
+    pub(crate) name: String,
+    pub(crate) image_full: String,
+    pub(crate) image_tag: String,
+    pub(crate) version: String,
+    pub(crate) job_max_duration_in_sec: u64,
+    pub(crate) cpu_request_in_milli: String,
+    pub(crate) cpu_limit_in_milli: String,
+    pub(crate) ram_request_in_mib: String,
+    pub(crate) ram_limit_in_mib: String,
+    pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub(crate) struct TerraformServiceTeraContext {
+    pub(crate) organization_long_id: Uuid,
+    pub(crate) project_long_id: Uuid,
+    pub(crate) environment_short_id: String,
+    pub(crate) environment_long_id: Uuid,
+    pub(crate) namespace: String,
+    pub(crate) service: ServiceTeraContext,
+    pub(crate) annotations_group: AnnotationsGroupTeraContext,
+    pub(crate) labels_group: LabelsGroupTeraContext,
+    pub(crate) environment_variables: Vec<EnvironmentVariable>,
 }

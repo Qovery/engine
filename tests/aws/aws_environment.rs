@@ -3425,11 +3425,12 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
         let annotations_group_id = Uuid::new_v4();
         let labels_group_id = Uuid::new_v4();
         let service_id = Uuid::new_v4();
+        let kube_name = "terraform-service-test";
         environment.applications = vec![];
         environment.terraform_services = vec![TerraformService {
             long_id: service_id,
             name: "terraform service test #####".to_string(),
-            kube_name: "terraform-service-test".to_string(),
+            kube_name: kube_name.to_string(),
             action: Action::Create,
 
             tf_files_source: TerraformFilesSource::Git {
@@ -3447,13 +3448,16 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
                     r#"
 terraform {{
   backend "kubernetes" {{
+    namespace        = "{namespace}"
     secret_suffix    = "{long_id}"
   }}
 }}"#,
-                    long_id = service_id
+                    long_id = service_id,
+                    namespace = kube_name, // TODO TF
                 ),
                 configs: vec![],
             },
+            timeout_sec: 60,
             environment_vars_with_infos: Default::default(),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },

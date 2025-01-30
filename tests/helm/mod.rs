@@ -249,6 +249,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
                 dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
+                extra_files_to_inject: vec![],
             },
             image: Image {
                 service_id: "my_application_id".to_string(),

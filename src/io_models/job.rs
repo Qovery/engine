@@ -261,6 +261,7 @@ impl Job {
                 dockerfile_path,
                 dockerfile_content: dockerfile_content.clone(),
                 root_path,
+                extra_files_to_inject: vec![],
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self

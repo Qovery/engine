@@ -2,7 +2,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::environment::models::types::{OnPremise, VersionsNumber, AWS, GCP, SCW};
-use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
+use crate::infrastructure::models::build_platform::{Build, GitRepository, GitRepositoryExtraFile, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::container_registry::{ContainerRegistry, ContainerRegistryInfo};
@@ -32,6 +32,12 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct TerraformServiceAdvancedSettings {
+    // Deployment
+    #[serde(alias = "deployment.termination_grace_period_seconds")]
+    pub deployment_termination_grace_period_seconds: u32,
+    #[serde(alias = "deployment.affinity.node.required")]
+    pub deployment_affinity_node_required: BTreeMap<String, String>,
+
     // Build
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
@@ -41,15 +47,27 @@ pub struct TerraformServiceAdvancedSettings {
     pub build_ram_max_in_gib: u32,
     #[serde(default, alias = "build.ephemeral_storage_in_gib")]
     pub build_ephemeral_storage_in_gib: Option<u32>,
+
+    #[serde(alias = "security.service_account_name")]
+    pub security_service_account_name: String,
+    #[serde(alias = "security.read_only_root_filesystem")]
+    pub security_read_only_root_filesystem: bool,
+    #[serde(alias = "security.automount_service_account_token")]
+    pub security_automount_service_account_token: bool,
 }
 
 impl Default for TerraformServiceAdvancedSettings {
     fn default() -> Self {
         TerraformServiceAdvancedSettings {
+            deployment_termination_grace_period_seconds: 60,
+            deployment_affinity_node_required: BTreeMap::new(),
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
+            security_service_account_name: "".to_string(),
+            security_read_only_root_filesystem: false,
+            security_automount_service_account_token: false,
         }
     }
 }
@@ -102,6 +120,7 @@ pub struct TerraformService {
     pub provider: TerraformProvider,
     pub provider_version: String,
     pub backend: TerraformBackend,
+    pub timeout_sec: u64,
 
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
@@ -161,7 +180,7 @@ impl TerraformService {
             default_container_registry.registry_info(),
             cluster.cpu_architectures(),
             &QoveryIdentifier::new(*cluster.long_id()),
-        );
+        )?;
 
         let tf_files_source_domain =
             self.get_terraform_files_source_domain(&ssh_keys, context.qovery_api.clone(), self.long_id);
@@ -184,6 +203,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -202,6 +222,7 @@ impl TerraformService {
                     provider,
                     provider_version,
                     backend,
+                    Duration::from_secs(self.timeout_sec),
                     environment_variables_with_info,
                     self.advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
@@ -220,6 +241,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -237,6 +259,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -308,7 +331,7 @@ impl TerraformService {
         registry_url: &ContainerRegistryInfo,
         architectures: Vec<CpuArchitecture>,
         cluster_id: &QoveryIdentifier,
-    ) -> Build {
+    ) -> Result<Build, TerraformServiceError> {
         let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
         let (git_url, git_credentials, commit_id, dockerfile_path, dockerfile_content, root_module_path) =
             match &self.tf_files_source {
@@ -321,28 +344,16 @@ impl TerraformService {
                     git_url,
                     git_credentials,
                     commit_id,
-                    &qovery_dockerfile, // TODO PF
-                    // TO PF remove from here, use a mirror of  hashicorp/terraform, customize version, path, parameter of terraform init,
-                    // remove terraform plan from the image
-                    r#"FROM hashicorp/terraform:latest
-
-WORKDIR /app
-COPY . .
-
-RUN terraform init  # to add backend-config param
-RUN terraform plan # to be removed
-
-ENTRYPOINT ["terraform"]
-CMD ["plan", "-out=plan"]
-
-                    "#
-                    .to_string(), //dockerfile_content,
+                    &qovery_dockerfile,
+                    self.get_docker_file(),
                     root_module_path,
                 ),
             };
 
         // Convert our root module path to a relative path to be able to append them correctly
-        let (root_module_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
+        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
+        let (_, backend_file_path) =
+            normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
 
         let mut disable_build_cache = false;
         let mut build = Build {
@@ -358,7 +369,13 @@ CMD ["plan", "-out=plan"]
                 commit_id: commit_id.clone(),
                 dockerfile_path,
                 dockerfile_content: Some(dockerfile_content),
-                root_path: root_module_path,
+                root_path: root_path.clone(),
+                extra_files_to_inject: vec![GitRepositoryExtraFile {
+                    path: backend_file_path.ok_or(TerraformServiceError::InvalidConfig(
+                        "Backend path path is not defined".to_string(),
+                    ))?,
+                    content: self.backend.block.clone(),
+                }],
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: self
@@ -389,8 +406,27 @@ CMD ["plan", "-out=plan"]
             registries: vec![], // TODO TF
         };
 
+        // TODO TF: the image tag must be changed:
+        // if the Terraform provider changed,
+        // if the Terraform provider Version changed,
+        // if the files added into the Docker imaged changed (backend, entrypoint.sh)
         build.compute_image_tag();
-        build
+
+        Ok(build)
+    }
+
+    fn get_docker_file(&self) -> String {
+        // TODO TF remove from here, use a mirror of  hashicorp/terraform, customize version, path, parameter of terraform init,
+        format!(
+            r#"FROM hashicorp/terraform:{}
+
+WORKDIR /app
+COPY . .
+
+RUN ls # TODO TF to be removed
+                    "#,
+            self.provider_version
+        )
     }
 
     fn to_image(
@@ -408,7 +444,7 @@ CMD ["plan", "-out=plan"]
                 true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(git_url)),
                 false => cr_info.get_image_name(&self.long_id.to_string()),
             },
-            tag: "".to_string(), // It needs to be compute after creation
+            tag: "".to_string(), // It needs to be computed after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
             registry_url: cr_info.endpoint.clone(),
