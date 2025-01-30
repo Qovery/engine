@@ -13,6 +13,7 @@ pub mod logger;
 pub mod obfuscation_service;
 mod recap_reporter;
 pub mod router;
+pub mod terraform_service;
 mod utils;
 
 const MAX_ELAPSED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(20);

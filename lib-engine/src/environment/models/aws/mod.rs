@@ -10,6 +10,7 @@ mod database;
 mod database_utils;
 mod job;
 mod router;
+mod terraform_service;
 
 pub struct AwsAppExtraSettings {}
 pub struct AwsDbExtraSettings {}
