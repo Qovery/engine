@@ -32,6 +32,7 @@ pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;
 
+#[derive(Clone)]
 pub struct EksChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,

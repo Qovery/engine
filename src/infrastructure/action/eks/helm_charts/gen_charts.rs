@@ -108,6 +108,7 @@ pub(super) fn eks_helm_charts(
         aws_iam_eks_user_mapper = Some(
             AwsIamEksUserMapperChart::new(
                 chart_prefix_path,
+                chart_config_prerequisites.region.clone(),
                 "iam-eks-user-mapper".to_string(),
                 chart_config_prerequisites.aws_iam_eks_user_mapper_role_arn.clone(),
                 match &chart_config_prerequisites

@@ -1,5 +1,6 @@
 use url::Url;
 
+#[derive(Clone)]
 pub struct LetsEncryptConfig {
     email_report: String,
     acme_url: Url,

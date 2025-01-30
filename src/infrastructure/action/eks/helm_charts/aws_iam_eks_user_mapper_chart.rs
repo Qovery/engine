@@ -1,9 +1,11 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::runtime::block_on;
 use chrono::Duration;
@@ -40,6 +42,7 @@ pub enum KarpenterConfig {
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    aws_region: AwsRegion,
     aws_service_account_name: String,
     aws_iam_eks_user_mapper_role_arn: String,
     aws_iam_group_config: GroupConfig,
@@ -52,6 +55,7 @@ pub struct AwsIamEksUserMapperChart {
 impl AwsIamEksUserMapperChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
+        aws_region: AwsRegion,
         aws_service_account_name: String,
         aws_iam_eks_user_mapper_role_arn: String,
         aws_iam_group_config: GroupConfig,
@@ -61,6 +65,7 @@ impl AwsIamEksUserMapperChart {
         chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
         AwsIamEksUserMapperChart {
+            aws_region,
             aws_service_account_name,
             aws_iam_eks_user_mapper_role_arn,
             aws_iam_group_config,
@@ -106,6 +111,10 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                         // we use string templating (r"...") to escape dot in annotation's key
                         key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                         value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "aws.defaultRegion".to_string(),
+                        value: self.aws_region.to_cloud_provider_format().to_string(),
                     },
                     ChartSetValue {
                         key: "refreshIntervalSeconds".to_string(),
@@ -298,6 +307,7 @@ mod tests {
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
     };
+    use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use chrono::Duration;
     use std::env;
@@ -308,6 +318,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -350,6 +361,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -393,6 +405,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
