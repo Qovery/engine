@@ -267,17 +267,7 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
             requirements: vec![
                 KarpenterNodePoolRequirement {
                     key: KarpenterNodePoolRequirementKey::InstanceFamily,
-                    values: vec![
-                        "c6g".to_string(),
-                        "c6gd".to_string(),
-                        "c6gn".to_string(),
-                        "c7g".to_string(),
-                    ],
-                    operator: Some(KarpenterRequirementOperator::In),
-                },
-                KarpenterNodePoolRequirement {
-                    key: KarpenterNodePoolRequirementKey::InstanceSize,
-                    values: vec!["large".to_string()],
+                    values: vec!["c6g".to_string(), "c7g".to_string(), "t4g".to_string()],
                     operator: Some(KarpenterRequirementOperator::In),
                 },
                 KarpenterNodePoolRequirement {
