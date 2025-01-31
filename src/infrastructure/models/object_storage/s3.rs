@@ -19,6 +19,7 @@ use rusoto_s3::{
 };
 
 use crate::environment::models::ToCloudProviderFormat;
+use crate::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::infrastructure::models::object_storage::{
     Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, Kind, ObjectStorage,
@@ -28,24 +29,27 @@ use crate::runtime::block_on;
 pub struct S3 {
     id: String,
     name: String,
-    access_key_id: String,
-    secret_access_key: String,
+    credentials: AwsCredentials,
     region: AwsRegion,
 }
 
 impl S3 {
-    pub fn new(id: String, name: String, access_key_id: String, secret_access_key: String, region: AwsRegion) -> Self {
+    pub fn new(id: String, name: String, credentials: AwsCredentials, region: AwsRegion) -> Self {
         S3 {
             id,
             name,
-            access_key_id,
-            secret_access_key,
+            credentials,
             region,
         }
     }
 
     fn get_credentials(&self) -> StaticProvider {
-        StaticProvider::new(self.access_key_id.clone(), self.secret_access_key.clone(), None, None)
+        StaticProvider::new(
+            self.credentials.access_key_id().to_string(),
+            self.credentials.secret_access_key().to_string(),
+            self.credentials.session_token().map(|x| x.to_string()),
+            None,
+        )
     }
 
     fn get_s3_client(&self) -> S3Client {

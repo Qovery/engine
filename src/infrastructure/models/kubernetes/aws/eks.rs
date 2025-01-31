@@ -74,15 +74,9 @@ impl EKS {
             .downcast_ref()
             .as_aws()
             .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
-            .credentials();
-        // TODO(sts): support session token
-        let s3 = S3::new(
-            "s3-temp-id".to_string(),
-            "default-s3".to_string(),
-            creds.get_aws_access_key_id().to_string(),
-            creds.get_aws_secret_access_key().to_string(),
-            region.clone(),
-        );
+            .aws_credentials()
+            .clone();
+        let s3 = S3::new("s3-temp-id".to_string(), "default-s3".to_string(), creds, region.clone());
 
         let cluster = EKS {
             context,
