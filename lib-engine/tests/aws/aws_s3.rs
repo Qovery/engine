@@ -3,6 +3,7 @@ use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSec
 use function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use qovery_engine::infrastructure::models::object_storage::s3::S3;
 use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use retry::delay::Fixed;
@@ -31,8 +32,12 @@ fn test_delete_hard_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -88,8 +93,12 @@ fn test_delete_empty_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -139,8 +148,12 @@ fn test_create_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -191,8 +204,12 @@ fn test_get_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -238,8 +255,12 @@ fn test_recreate_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -307,8 +328,12 @@ fn test_put_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
@@ -367,8 +392,12 @@ fn test_get_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::Static {
+            access_key_id: aws_access_key,
+            secret_access_key: aws_secret_key,
+        };
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
