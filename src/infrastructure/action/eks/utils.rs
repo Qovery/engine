@@ -4,6 +4,7 @@ use crate::events::EventDetails;
 use crate::infrastructure::action::eks::{
     AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION,
 };
+use crate::infrastructure::models::cloud_provider::aws::new_rusoto_creds;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::KubernetesClusterAction;
@@ -29,11 +30,14 @@ pub fn get_rusoto_eks_client(
         }
     };
 
-    let credentials = cloud_provider
-        .downcast_ref()
-        .as_aws()
-        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
-        .credentials();
+    let credentials = new_rusoto_creds(
+        cloud_provider
+            .downcast_ref()
+            .as_aws()
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+            .aws_credentials(),
+    );
+
     let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
     Ok(EksClient::new_with_client(client, region))
 }

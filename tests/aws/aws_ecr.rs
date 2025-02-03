@@ -1,6 +1,7 @@
 use crate::helpers::aws::AWS_QUICK_RESOURCE_TTL_IN_SECONDS;
 use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, logger, FuncTestsSecrets};
 use function_name::named;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::runtime::block_on;
@@ -25,12 +26,17 @@ fn create_ecr_repository_with_tags() {
         let context = context_for_resource(generate_id(), generate_id());
         let secrets = FuncTestsSecrets::new();
         let registry_name = format!("test-{}", Uuid::new_v4());
+
+        let credentials = AwsCredentials::new(
+            secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
+            secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
+            None,
+        );
         let container_registry = ECR::new(
             context,
             Uuid::new_v4(),
             registry_name.as_str(),
-            &secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
-            &secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
+            credentials,
             &secrets.AWS_DEFAULT_REGION.expect("Unable to get default region"),
             logger(),
             hashmap! {"ttl".to_string() => AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string()},

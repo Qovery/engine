@@ -94,21 +94,12 @@ impl AWS {
         }
     }
 
-    pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(
-            self.credentials.access_key_id().to_string(),
-            self.credentials.secret_access_key().to_string(),
-            self.credentials.session_token().map(str::to_string),
-            None,
-        )
-    }
-
     pub fn aws_credentials(&self) -> &AwsCredentials {
         &self.credentials
     }
 
     pub fn client(&self) -> Client {
-        Client::new_with(self.credentials(), HttpClient::new().unwrap())
+        Client::new_with(new_rusoto_creds(&self.credentials), HttpClient::new().unwrap())
     }
 
     pub fn aws_sdk_client(&self) -> SdkConfig {
@@ -124,6 +115,15 @@ impl AWS {
             .region(Region::new(Cow::from(self.region.clone())))
             .build()
     }
+}
+
+pub fn new_rusoto_creds(creds: &AwsCredentials) -> StaticProvider {
+    StaticProvider::new(
+        creds.access_key_id().to_string(),
+        creds.secret_access_key().to_string(),
+        creds.session_token().map(str::to_string),
+        None,
+    )
 }
 
 impl CloudProvider for AWS {
