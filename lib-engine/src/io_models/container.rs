@@ -7,6 +7,7 @@ use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::infrastructure::models::container_registry::ecr::ECR;
@@ -23,7 +24,6 @@ use crate::io_models::variable_utils::{default_environment_vars_with_info, Varia
 use crate::io_models::{Action, MountedFile};
 use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
-use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -65,6 +65,8 @@ pub enum Registry {
         region: String,
         access_key_id: String,
         secret_access_key: String,
+        #[serde(default)]
+        session_token: Option<String>,
     },
 
     // AWS public ecr
@@ -156,13 +158,18 @@ impl Registry {
                 url
             }
             Registry::PrivateEcr {
+                long_id: _,
                 url: _,
                 region,
                 access_key_id,
                 secret_access_key,
-                ..
+                session_token,
             } => {
-                let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
+                let creds = new_rusoto_creds(&AwsCredentials::new(
+                    access_key_id.to_string(),
+                    secret_access_key.to_string(),
+                    session_token.clone(),
+                ));
                 let region = Region::from_str(region).unwrap_or_default();
                 let ecr_client =
                     EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);

@@ -8,7 +8,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use rusoto_core::credential::StaticProvider;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_s3::{
     CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
@@ -19,7 +18,7 @@ use rusoto_s3::{
 };
 
 use crate::environment::models::ToCloudProviderFormat;
-use crate::infrastructure::models::cloud_provider::aws::AwsCredentials;
+use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::infrastructure::models::object_storage::{
     Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, Kind, ObjectStorage,
@@ -43,15 +42,6 @@ impl S3 {
         }
     }
 
-    fn get_credentials(&self) -> StaticProvider {
-        StaticProvider::new(
-            self.credentials.access_key_id().to_string(),
-            self.credentials.secret_access_key().to_string(),
-            self.credentials.session_token().map(|x| x.to_string()),
-            None,
-        )
-    }
-
     fn get_s3_client(&self) -> S3Client {
         let region = RusotoRegion::from_str(self.region.to_cloud_provider_format()).unwrap_or_else(|_| {
             panic!(
@@ -60,7 +50,7 @@ impl S3 {
             )
         });
         let client = Client::new_with(
-            self.get_credentials(),
+            new_rusoto_creds(&self.credentials),
             HttpClient::new().expect("unable to create new Http client"),
         );
 

@@ -7,7 +7,6 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
-use rusoto_credential::StaticProvider;
 use rusoto_ecr::{
     BatchDeleteImageRequest, CreateRepositoryRequest, DeleteRepositoryError, DeleteRepositoryRequest,
     DescribeImagesRequest, DescribeRepositoriesError, DescribeRepositoriesRequest, Ecr, EcrClient,
@@ -16,8 +15,10 @@ use rusoto_ecr::{
 };
 use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 
+use super::RegistryTags;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::models::build_platform::Image;
+use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
     take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
@@ -32,14 +33,11 @@ use serde_json::json;
 use url::Url;
 use uuid::Uuid;
 
-use super::RegistryTags;
-
 pub struct ECR {
     context: Context,
     long_id: Uuid,
     name: String,
-    access_key_id: String,
-    secret_access_key: String,
+    credentials: AwsCredentials,
     region: Region,
     registry_info: Option<ContainerRegistryInfo>, // TODO(benjamin): code smell, should not come with an Option
     logger: Box<dyn Logger>,
@@ -51,8 +49,7 @@ impl ECR {
         context: Context,
         long_id: Uuid,
         name: &str,
-        access_key_id: &str,
-        secret_access_key: &str,
+        credentials: AwsCredentials,
         region: &str,
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
@@ -61,8 +58,7 @@ impl ECR {
             context,
             long_id,
             name: name.to_string(),
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
+            credentials,
             region: Region::from_str(region).unwrap(),
             registry_info: None,
             logger,
@@ -115,12 +111,8 @@ impl ECR {
         ));
     }
 
-    pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(self.access_key_id.to_string(), self.secret_access_key.to_string(), None, None)
-    }
-
     pub fn client(&self) -> Client {
-        Client::new_with(self.credentials(), HttpClient::new().unwrap())
+        Client::new_with(new_rusoto_creds(&self.credentials), HttpClient::new().unwrap())
     }
 
     pub fn ecr_client(&self) -> EcrClient {

@@ -580,16 +580,19 @@ impl ContainerRegistry {
         tags: HashMap<String, String>,
     ) -> Result<Box<dyn container_registry::ContainerRegistry>, anyhow::Error> {
         match self.clone() {
-            ContainerRegistry::Ecr { long_id, name, options } => Ok(Box::new(ECR::new(
-                context,
-                long_id,
-                name.as_str(),
-                &options.access_key_id,
-                &options.secret_access_key,
-                &options.region,
-                logger,
-                tags,
-            )?)),
+            ContainerRegistry::Ecr { long_id, name, options } => {
+                let credentials =
+                    AwsCredentials::new(options.access_key_id, options.secret_access_key, options.session_token);
+                Ok(Box::new(ECR::new(
+                    context,
+                    long_id,
+                    name.as_str(),
+                    credentials,
+                    &options.region,
+                    logger,
+                    tags,
+                )?))
+            }
             ContainerRegistry::ScalewayCr { long_id, name, options } => Ok(Box::new(ScalewayCR::new(
                 context,
                 long_id,
@@ -736,6 +739,9 @@ pub struct EcrOptions {
     access_key_id: String,
     #[derivative(Debug = "ignore")]
     secret_access_key: String,
+    #[derivative(Debug = "ignore")]
+    #[serde(default)]
+    session_token: Option<String>,
     region: String,
 }
 

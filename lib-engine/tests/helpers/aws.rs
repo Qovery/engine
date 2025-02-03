@@ -47,12 +47,16 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         std::process::exit(1)
     }
 
+    let credentials = AwsCredentials::new(
+        secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
+        secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
+        None,
+    );
     ECR::new(
         context.clone(),
         Uuid::new_v4(),
         "ea59qe62xaw3wjai",
-        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
-        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
+        credentials,
         secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
         logger,
         hashmap! {},

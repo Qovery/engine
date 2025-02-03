@@ -46,13 +46,10 @@ impl ScalewayOS {
             endpoint: self.get_endpoint_url_for_region(),
         };
 
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
+        let creds = StaticProvider::new(self.access_key.clone(), self.secret_token.clone(), None, None);
+        let client = Client::new_with(creds, HttpClient::new().unwrap());
 
         S3Client::new_with_client(client, region)
-    }
-
-    fn get_credentials(&self) -> StaticProvider {
-        StaticProvider::new(self.access_key.clone(), self.secret_token.clone(), None, None)
     }
 
     fn get_endpoint_url_for_region(&self) -> String {
