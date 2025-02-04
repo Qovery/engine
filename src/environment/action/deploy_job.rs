@@ -645,7 +645,7 @@ fn is_job_terminated() -> impl Condition<K8sJob> {
     }
 }
 
-fn get_active_job_pod_by_selector(
+pub fn get_active_job_pod_by_selector(
     kube_pod_api: Api<Pod>,
     job_pod_selector: &str,
     event_details: &EventDetails,
@@ -748,7 +748,7 @@ fn get_active_job_pod_by_selector(
     }
 }
 
-fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
+pub fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
     if let Some(pod) = job_pod {
         if let Some(pod_status) = &pod.status {
             info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
@@ -767,7 +767,7 @@ fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_
     false
 }
 
-fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
+pub fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
     move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
 }
 

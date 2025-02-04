@@ -18,6 +18,10 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::terraform_service::{
+    TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType, TerraformFilesSource,
+    TerraformProvider, TerraformService,
+};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use std::str::FromStr;
@@ -708,6 +712,153 @@ fn gcp_gke_deploy_container_with_router() {
                 service_long_id: environment.containers[0].long_id,
             }],
         }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[named]
+#[test]
+#[ignore = "Need to provider the correct storage class"]
+fn gcp_gke_deploy_terraform_service() {
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .GCP_TEST_ORGANIZATION_LONG_ID
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID  should be set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID  should be set"),
+        );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.terraform_services = vec![TerraformService {
+            long_id: service_id,
+            name: "terraform service test #####".to_string(),
+            kube_name: format!("my-little-terraform-service-{}", suffix),
+            action: Action::Create,
+
+            tf_files_source: TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
+                git_credentials: None,
+                commit_id: "cdf13c170a1e58fde0f1309249c57410fa30fda9".to_string(),
+                root_module_path: "/simple_terraform".to_string(),
+            },
+            provider: TerraformProvider::Terraform,
+            provider_version: "1.9.7".to_string(),
+            terraform_action: TerraformAction {
+                command: TerraformActionCommand::PlanOnly,
+                plan_execution_id: None,
+            },
+            backend: TerraformBackend {
+                backend_type: TerraformBackendType::Kubernetes,
+                block: format!(
+                    // TODO TF  check if it is useful to receive this from Core for predefined Backend type
+                    r#"
+terraform {{
+  backend "kubernetes" {{
+    namespace        = "{namespace}"
+    secret_suffix    = "{long_id}"
+  }}
+}}"#,
+                    long_id = service_id,
+                    namespace = environment.kube_name, // TODO TF
+                ),
+                configs: vec![],
+            },
+            timeout_sec: 60,
+            environment_vars_with_infos: Default::default(),
+            advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
+            shared_image_feature_enabled: false,
+        }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
+
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "false".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: true,
+            }]
+        }};
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;

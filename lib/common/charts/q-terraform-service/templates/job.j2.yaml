@@ -42,6 +42,8 @@ spec:
            {{ value }}
         {%- endfor %}
     spec:
+      securityContext:
+        fsGroup: 1000
       affinity:
         {%- if service.advanced_settings.deployment_affinity_node_required %}
         nodeAffinity:
@@ -60,11 +62,9 @@ spec:
       {%- if service.advanced_settings.security_service_account_name != "" %}
       automountServiceAccountToken: true
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
-      {# {%- elif service.with_rbac %} #}
-      #automountServiceAccountToken: true
-      #serviceAccountName: {#{ service.name }#}
       {%- else %}
-      automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ service.name }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
       #  {%- if registry %}
@@ -74,11 +74,11 @@ spec:
       volumes:
         - name: output
           emptyDir: {}
-    {#     {%- for mounted_file in mounted_files %} #}
-   #     - name: {#{ mounted_file.id }#}-{#{ service.short_id }#}
+        - name: persistent-volume
+          persistentVolumeClaim:
+            claimName: {{ service.name }}-pvc
    #       secret:
    #         secretName: {#{ mounted_file.id }#}-{#{ service.short_id }#}
-    {#     {%- endfor %} #}
       containers:
    #     - name: qovery-wait-container-output
    #       image: "debian:stable-slim"
@@ -90,25 +90,15 @@ spec:
               # Also, if we have 2 types of job (one with output, one without), should be mutualized too
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
-  {#       {%- if service.entrypoint %} #}
-   #       command:
-   #         - |-
-   #           {#{ service.entrypoint } #}
-  {#       {%- endif %}   #}
-   #       args:
-  {#         {%- for arg in service.command_args %} #}
-   #         - |-
-   #           {#{ arg }#}
-  {#         {%- endfor %}  #}
-   #       volumeMounts:
-   #         - name: output
-   #           mountPath: /qovery-output
-  {#         {%- for mounted_file in mounted_files %} #}
-   #         - mountPath: "{#{ mounted_file.mount_path }#}"
-   #           subPath: content
-   #           name: {#{ mounted_file.id }#}-{#{ service.short_id }#}
-   #           readOnly: true
-  {#         {%- endfor %} #}
+          args:
+            {%- for arg in service.command_args %}
+            - |-
+              {{ arg }}
+            {%- endfor %}
+          volumeMounts:
+            - name: persistent-volume
+              mountPath: /persistent-volume # TODO TF move it to {#{}#}
+              readOnly: false
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"
@@ -118,7 +108,9 @@ spec:
                   key: {{ ev.key }}
             {%- endfor %}
           securityContext:
-            readOnlyRootFilesystem: {#{ service.advanced_settings.security_read_only_root_filesystem }#}
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
               cpu: {{ service.cpu_limit_in_milli }}
