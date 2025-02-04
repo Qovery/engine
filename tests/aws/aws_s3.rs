@@ -32,10 +32,7 @@ fn test_delete_hard_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
@@ -93,10 +90,7 @@ fn test_delete_empty_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
@@ -148,10 +142,7 @@ fn test_create_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
@@ -204,10 +195,7 @@ fn test_get_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
@@ -255,10 +243,7 @@ fn test_recreate_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
@@ -328,10 +313,7 @@ fn test_put_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
@@ -392,10 +374,7 @@ fn test_get_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
-        let credentials = AwsCredentials::Static {
-            access_key_id: aws_access_key,
-            secret_access_key: aws_secret_key,
-        };
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
         let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 

@@ -50,7 +50,7 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     let credentials = AwsCredentials::new(
         secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
         secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
-        None,
+        secrets.AWS_SESSION_TOKEN,
     );
     ECR::new(
         context.clone(),
@@ -169,7 +169,7 @@ impl Cluster<AWS, Options> for AWS {
         let credentials = AwsCredentials::new(
             secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set"),
             secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set"),
-            None, // TODO (sts): Use session token
+            secrets.AWS_SESSION_TOKEN,
         );
         Box::new(AWS::new(
             Uuid::new_v4(),
