@@ -325,7 +325,7 @@ pub fn cluster_test(
             )
             .unwrap();
 
-        env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Delete;
+        env.action = Action::Delete;
         if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
             panic!("{ret:?}")
         }
