@@ -2,6 +2,7 @@ use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::types::{CloudProvider, VersionsNumber};
+use crate::environment::models::utils;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::{Build, Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
@@ -40,6 +41,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) _provider: TerraformProvider,
     pub(crate) _provider_version: VersionsNumber,
     pub(crate) _backend: TerraformBackend,
+    pub(crate) terraform_action: TerraformAction,
     pub(crate) timeout: Duration,
     pub(crate) cpu_request: KubernetesCpuResourceUnit,
     pub(crate) cpu_limit: KubernetesCpuResourceUnit,
@@ -65,6 +67,7 @@ impl<T: CloudProvider> TerraformService<T> {
         _provider: TerraformProvider,
         _provider_version: VersionsNumber,
         _backend: TerraformBackend,
+        terraform_action: TerraformAction,
         timeout: Duration,
         environment_variables: HashMap<String, VariableInfo>,
         advanced_settings: TerraformServiceAdvancedSettings,
@@ -95,11 +98,12 @@ impl<T: CloudProvider> TerraformService<T> {
             _provider,
             _provider_version,
             _backend,
+            terraform_action,
             timeout,
-            cpu_request: KubernetesCpuResourceUnit::MilliCpu(500),
-            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(500),
-            ram_request: KubernetesMemoryResourceUnit::MebiByte(256),
-            ram_limit: KubernetesMemoryResourceUnit::MebiByte(256),
+            cpu_request: KubernetesCpuResourceUnit::MilliCpu(500), // TODO TF set in service parameter or advanced settings
+            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(500), // TODO TF set in service parameter or advanced settings
+            ram_request: KubernetesMemoryResourceUnit::MebiByte(256), // TODO TF set in service parameter or advanced settings
+            ram_limit: KubernetesMemoryResourceUnit::MebiByte(256), // TODO TF set in service parameter or advanced settings
             environment_variables,
             advanced_settings,
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
@@ -158,6 +162,13 @@ impl<T: CloudProvider> TerraformService<T> {
             }
         };
 
+        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+            &self.advanced_settings.deployment_affinity_node_required,
+            &target.kubernetes.cpu_architectures(),
+        );
+        let mut advanced_settings = self.advanced_settings.clone();
+        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+
         TerraformServiceTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
@@ -172,15 +183,24 @@ impl<T: CloudProvider> TerraformService<T> {
                 image_tag,
                 version: self.service_version(),
                 job_max_duration_in_sec: self.timeout.as_secs(),
-                advanced_settings: self.advanced_settings.clone(),
-                // command_args: self.command_args.clone(),
+                advanced_settings,
+                entrypoint: "entrypoint.sh".to_string(),
+                command_args: match &self.terraform_action {
+                    TerraformAction::TerraformPlanOnly => vec!["plan_only".to_string()],
+                    TerraformAction::TerraformPlanAndApply => vec!["apply".to_string()],
+                    TerraformAction::TerraformApplyFromPlan(execution_id) => {
+                        vec!["apply_from_plan".to_string(), execution_id.to_owned()]
+                    }
+                },
                 // entrypoint: self.entrypoint.clone(),
-                cpu_request_in_milli: self.cpu_request.to_string(), //  TODO TF check if it is provided as advanced setting or not
+                cpu_request_in_milli: self.cpu_request.to_string(), // TODO TF check if it is provided as advanced setting or not
                 cpu_limit_in_milli: self.cpu_limit.to_string(),     // TODO TF
                 ram_request_in_mib: self.ram_request.to_string(),   // TODO TF
                 ram_limit_in_mib: self.ram_limit.to_string(),       // TODO TF
-                                                                    // max_nb_restart: self.max_nb_restart,
-                                                                    // max_duration_in_sec: self.max_duration.as_secs(),
+                // max_nb_restart: self.max_nb_restart,
+                // max_duration_in_sec: self.max_duration.as_secs(),
+                persistence_size_in_gib: "1".to_string(),    // TODO TF
+                persistence_storage_type: "gp2".to_string(), // TODO TF
             },
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
@@ -257,6 +277,7 @@ impl<T: CloudProvider> Service for TerraformService<T> {
 pub trait TerraformServiceTrait: Service + DeploymentAction + Send {
     fn advanced_settings(&self) -> &TerraformServiceAdvancedSettings;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+    fn job_max_duration(&self) -> &Duration;
 }
 
 impl<T: CloudProvider> TerraformServiceTrait for TerraformService<T>
@@ -268,6 +289,10 @@ where
     }
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+
+    fn job_max_duration(&self) -> &Duration {
+        &self.timeout
     }
 }
 
@@ -284,6 +309,12 @@ pub enum TerraformFilesSource {
 pub enum TerraformProvider {
     Terraform,
     // OpenTofu
+}
+
+pub enum TerraformAction {
+    TerraformPlanOnly,
+    TerraformPlanAndApply,
+    TerraformApplyFromPlan(String),
 }
 
 #[allow(dead_code)]
@@ -325,6 +356,10 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
     pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
+    pub(crate) entrypoint: String,
+    pub(crate) command_args: Vec<String>,
+    pub(crate) persistence_size_in_gib: String,
+    pub(crate) persistence_storage_type: String,
 }
 
 #[derive(Serialize, Debug, Clone)]

@@ -30,7 +30,8 @@ use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::terraform_service::{
-    TerraformBackend, TerraformBackendType, TerraformFilesSource, TerraformProvider, TerraformService,
+    TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType, TerraformFilesSource,
+    TerraformProvider, TerraformService,
 };
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
@@ -3441,10 +3442,14 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             },
             provider: TerraformProvider::Terraform,
             provider_version: "1.9.7".to_string(),
+            terraform_action: TerraformAction {
+                command: TerraformActionCommand::PlanOnly,
+                plan_execution_id: None,
+            },
             backend: TerraformBackend {
                 backend_type: TerraformBackendType::Kubernetes,
                 block: format!(
-                    // TODO TF not used for the moment
+                    // TODO TF  check if it is useful to receive this from Core for predefined Backend type
                     r#"
 terraform {{
   backend "kubernetes" {{
@@ -3453,11 +3458,11 @@ terraform {{
   }}
 }}"#,
                     long_id = service_id,
-                    namespace = kube_name, // TODO TF
+                    namespace = environment.kube_name, // TODO TF
                 ),
                 configs: vec![],
             },
-            timeout_sec: 60,
+            timeout_sec: 300,
             environment_vars_with_infos: Default::default(),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },

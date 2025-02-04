@@ -110,6 +110,19 @@ pub struct TerraformBackendConfig {
     value: String,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub enum TerraformActionCommand {
+    PlanOnly,
+    PlanAndApply,
+    ApplyFromPlan,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct TerraformAction {
+    pub command: TerraformActionCommand,
+    pub plan_execution_id: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct TerraformService {
     pub long_id: Uuid,
@@ -120,6 +133,7 @@ pub struct TerraformService {
     pub provider: TerraformProvider,
     pub provider_version: String,
     pub backend: TerraformBackend,
+    pub terraform_action: TerraformAction,
     pub timeout_sec: u64,
 
     /// Key is a String, Value is a base64 encoded String
@@ -191,6 +205,8 @@ impl TerraformService {
         })?;
         let backend = self.get_terraform_backend();
 
+        let terraform_action = self.get_terraform_action()?;
+
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged => Box::new(models::terraform_service::TerraformService::<AWS>::new(
                 context,
@@ -203,6 +219,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
@@ -222,6 +239,7 @@ impl TerraformService {
                     provider,
                     provider_version,
                     backend,
+                    terraform_action,
                     Duration::from_secs(self.timeout_sec),
                     environment_variables_with_info,
                     self.advanced_settings,
@@ -241,6 +259,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
@@ -259,6 +278,7 @@ impl TerraformService {
                 provider,
                 provider_version,
                 backend,
+                terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
                 self.advanced_settings,
@@ -301,6 +321,25 @@ impl TerraformService {
         match self.provider {
             TerraformProvider::Terraform => models::terraform_service::TerraformProvider::Terraform,
         }
+    }
+
+    fn get_terraform_action(&self) -> Result<models::terraform_service::TerraformAction, TerraformServiceError> {
+        let action = match self.terraform_action.command {
+            TerraformActionCommand::PlanOnly => models::terraform_service::TerraformAction::TerraformPlanOnly,
+            TerraformActionCommand::PlanAndApply => models::terraform_service::TerraformAction::TerraformPlanAndApply,
+            TerraformActionCommand::ApplyFromPlan => {
+                let plan_execution_id =
+                    self.terraform_action
+                        .plan_execution_id
+                        .clone()
+                        .ok_or(TerraformServiceError::InvalidConfig(
+                            "terraform_action plan_execution_id path is not defined".to_string(),
+                        ))?;
+                models::terraform_service::TerraformAction::TerraformApplyFromPlan(plan_execution_id)
+            }
+        };
+
+        Ok(action)
     }
 
     fn get_terraform_backend(&self) -> models::terraform_service::TerraformBackend {
@@ -354,6 +393,8 @@ impl TerraformService {
         let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
         let (_, backend_file_path) =
             normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
+        let (_, entry_point_file_path) =
+            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
 
         let mut disable_build_cache = false;
         let mut build = Build {
@@ -370,12 +411,20 @@ impl TerraformService {
                 dockerfile_path,
                 dockerfile_content: Some(dockerfile_content),
                 root_path: root_path.clone(),
-                extra_files_to_inject: vec![GitRepositoryExtraFile {
-                    path: backend_file_path.ok_or(TerraformServiceError::InvalidConfig(
-                        "Backend path path is not defined".to_string(),
-                    ))?,
-                    content: self.backend.block.clone(),
-                }],
+                extra_files_to_inject: vec![
+                    GitRepositoryExtraFile {
+                        path: backend_file_path.ok_or(TerraformServiceError::InvalidConfig(
+                            "Backend path path is not defined".to_string(),
+                        ))?,
+                        content: self.backend.block.clone(),
+                    },
+                    GitRepositoryExtraFile {
+                        path: entry_point_file_path.ok_or(TerraformServiceError::InvalidConfig(
+                            "entrypoint.Sh path path is not defined".to_string(),
+                        ))?,
+                        content: self.get_entry_point_sh(),
+                    },
+                ],
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: self
@@ -408,7 +457,7 @@ impl TerraformService {
 
         // TODO TF: the image tag must be changed:
         // if the Terraform provider changed,
-        // if the Terraform provider Version changed,
+        // if the Terraform provider Version changed, (more generally if the injected DockerFile Changed,
         // if the files added into the Docker imaged changed (backend, entrypoint.sh)
         build.compute_image_tag();
 
@@ -419,14 +468,74 @@ impl TerraformService {
         // TODO TF remove from here, use a mirror of  hashicorp/terraform, customize version, path, parameter of terraform init,
         format!(
             r#"FROM hashicorp/terraform:{}
+RUN <<EOF
+set -e
+apk update
+apk add dumb-init rsync
+adduser -D -u 1000 app
+mkdir /data
+chown -R app:app /data
+EOF
 
-WORKDIR /app
+WORKDIR /data
 COPY . .
+RUN ls
+RUN cat backend_qovery.tf
 
-RUN ls # TODO TF to be removed
+RUN chmod +x entrypoint.sh
+USER app
+
+ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
                     "#,
             self.provider_version
         )
+    }
+
+    fn get_entry_point_sh(&self) -> String {
+        // TODO TF remove from here
+        r#"# entrypoint.sh
+#!/bin/bash
+set -x
+
+echo "Starting entrypoint.sh"
+
+mkdir -p /persistent-volume/terraform-work
+mkdir -p /persistent-volume/terraform-plan-output
+
+rsync -av --delete \
+          --exclude='.terraform' \
+          --exclude='.terraform.lock.hcl' \
+          /data/ /persistent-volume/terraform-work
+
+cd /persistent-volume/terraform-work
+
+CMD=$1; shift
+set -e
+
+case "$CMD" in
+    "apply")
+        terraform init # TODO TF add backend config
+        terraform validate -no-tests
+        terraform apply -input=false -auto-approve
+        ;;
+    "plan_only")
+        terraform init # TODO TF add backend config
+        terraform validate -no-tests
+        terraform plan -input=false # -out=/persistent-volume/terraform-plan-output/tf.plan  # TODO TF add execution in path and  -var-file
+        ;;
+     "apply_from_plan")
+        terraform init # TODO TF add backend config
+        terraform validate -no-tests
+        terraform apply -input=false /persistent-volume/terraform-plan-output/tf.plan  # TODO TF add execution in path and  -var-file
+        ;;
+    *)
+        echo "Command not handled by entrypoint.sh: '\$CMD'"
+        exit 1
+        ;;
+esac
+sleep 30 # TODO TF remoce
+            "#
+        .to_string()
     }
 
     fn to_image(
