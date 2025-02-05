@@ -52,6 +52,10 @@ resource "aws_eks_cluster" "eks_cluster" {
       support_type = "STANDARD"
   }
 
+  access_config {
+    authentication_mode = "API_AND_CONFIG_MAP"
+  }
+
 {% if aws_eks_encrypt_secrets_kms_key_arn -%}
   encryption_config {
       provider {
