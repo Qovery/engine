@@ -4,44 +4,44 @@
 # If we are using an user, we need to attach the AmazonEKSClusterAdminPolicy to it
 #########################################################################################
 
-locals {
-  is_role = can(regex("assumed-role", data.aws_caller_identity.current.arn))
-  role_name = split("/", data.aws_caller_identity.current.arn)[length(split("/", data.aws_caller_identity.current.arn)) - 2]
-  account_id = data.aws_caller_identity.current.account_id
-
-  principal_arn = local.is_role ? "arn:aws:iam::${local.account_id}:role/${local.role_name}" : data.aws_caller_identity.current.arn
-  admin_policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-}
-
-
-// TODO(sts): Remove once all clusters have been updated/migrated
-import {
-  to = aws_eks_access_entry.qovery_eks_access
-  id = "${aws_eks_cluster.eks_cluster.name}:${local.principal_arn}"
-}
-
-import {
-  to = aws_eks_access_policy_association.qovery_eks_access
-  id = "${aws_eks_cluster.eks_cluster.name}#${local.principal_arn}#${local.admin_policy_arn}"
-}
-
-
-resource "aws_eks_access_entry" "qovery_eks_access" {
-  cluster_name      = aws_eks_cluster.eks_cluster.name
-  principal_arn     = local.principal_arn
-  type              = "STANDARD"
-  tags              = local.tags_eks
-}
-
-resource "aws_eks_access_policy_association" "qovery_eks_access" {
-  cluster_name      = aws_eks_cluster.eks_cluster.name
-  principal_arn     = local.principal_arn
-  policy_arn        = local.admin_policy_arn
-
-  access_scope {
-    type       = "cluster"
-  }
-}
+#locals {
+#  is_role = can(regex("assumed-role", data.aws_caller_identity.current.arn))
+#  role_name = split("/", data.aws_caller_identity.current.arn)[length(split("/", data.aws_caller_identity.current.arn)) - 2]
+#  account_id = data.aws_caller_identity.current.account_id
+#
+#  principal_arn = local.is_role ? "arn:aws:iam::${local.account_id}:role/${local.role_name}" : data.aws_caller_identity.current.arn
+#  admin_policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+#}
+#
+#
+#// TODO(sts): Remove once all clusters have been updated/migrated
+#import {
+#  to = aws_eks_access_entry.qovery_eks_access
+#  id = "${aws_eks_cluster.eks_cluster.name}:${local.principal_arn}"
+#}
+#
+#import {
+#  to = aws_eks_access_policy_association.qovery_eks_access
+#  id = "${aws_eks_cluster.eks_cluster.name}#${local.principal_arn}#${local.admin_policy_arn}"
+#}
+#
+#
+#resource "aws_eks_access_entry" "qovery_eks_access" {
+#  cluster_name      = aws_eks_cluster.eks_cluster.name
+#  principal_arn     = local.principal_arn
+#  type              = "STANDARD"
+#  tags              = local.tags_eks
+#}
+#
+#resource "aws_eks_access_policy_association" "qovery_eks_access" {
+#  cluster_name      = aws_eks_cluster.eks_cluster.name
+#  principal_arn     = local.principal_arn
+#  policy_arn        = local.admin_policy_arn
+#
+#  access_scope {
+#    type       = "cluster"
+#  }
+#}
 
 
 #######
