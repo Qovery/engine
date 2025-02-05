@@ -54,6 +54,7 @@ resource "aws_eks_cluster" "eks_cluster" {
 
   access_config {
     authentication_mode = "API_AND_CONFIG_MAP"
+    bootstrap_cluster_creator_admin_permissions = false
   }
 
 {% if aws_eks_encrypt_secrets_kms_key_arn -%}
@@ -95,6 +96,14 @@ resource "aws_eks_cluster" "eks_cluster" {
     create = "60m"
     update = "90m"
     delete = "30m"
+  }
+
+  // To avoid unnecessary updates to the access_config block for old clusters.
+  // Otherwise it forces the re-creation of the cluster.
+  lifecycle {
+    ignore_changes = [
+      access_config.bootstrap_cluster_creator_admin_permissions,
+    ]
   }
 
   depends_on = [
