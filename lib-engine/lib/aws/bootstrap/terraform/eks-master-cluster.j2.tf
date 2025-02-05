@@ -98,6 +98,16 @@ resource "aws_eks_cluster" "eks_cluster" {
     delete = "30m"
   }
 
+
+  // To avoid unnecessary updates to the access_config block for old clusters.
+  // Otherwise it forces the re-creation of the cluster.
+  lifecycle {
+    ignore_changes = [
+      access_config[0].bootstrap_cluster_creator_admin_permissions,
+    ]
+  }
+
+
   depends_on = [
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSClusterPolicy,
     aws_iam_role_policy_attachment.eks_cluster_AmazonEKSServicePolicy,
