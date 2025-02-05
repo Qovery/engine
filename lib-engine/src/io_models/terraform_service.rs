@@ -11,7 +11,7 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::CpuArchitecture;
+use crate::io_models::models::{CpuArchitecture, KubernetesMemoryResourceUnit};
 use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
 use crate::io_models::{
     fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
@@ -124,11 +124,23 @@ pub struct TerraformAction {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct PersistentStorage {
+    pub storage_class: String,
+    pub size_in_gib: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct TerraformService {
     pub long_id: Uuid,
     pub name: String,
     pub kube_name: String,
     pub action: Action,
+    pub cpu_request_in_milli: u32,
+    pub cpu_limit_in_milli: u32,
+    pub ram_request_in_mib: u32,
+    pub ram_limit_in_mib: u32,
+    pub persistent_storage: PersistentStorage,
+
     pub tf_files_source: TerraformFilesSource,
     pub provider: TerraformProvider,
     pub provider_version: String,
@@ -207,6 +219,11 @@ impl TerraformService {
 
         let terraform_action = self.get_terraform_action()?;
 
+        let persistent_storage = models::terraform_service::PersistentStorage {
+            storage_class: self.persistent_storage.storage_class,
+            size_in_gib: KubernetesMemoryResourceUnit::GibiByte(self.persistent_storage.size_in_gib),
+        };
+
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged => Box::new(models::terraform_service::TerraformService::<AWS>::new(
                 context,
@@ -214,6 +231,11 @@ impl TerraformService {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                persistent_storage,
                 build,
                 tf_files_source_domain,
                 provider,
@@ -234,6 +256,11 @@ impl TerraformService {
                     self.name,
                     self.kube_name,
                     self.action.to_service_action(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    persistent_storage,
                     build,
                     tf_files_source_domain,
                     provider,
@@ -254,6 +281,11 @@ impl TerraformService {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                persistent_storage,
                 build,
                 tf_files_source_domain,
                 provider,
@@ -273,6 +305,11 @@ impl TerraformService {
                 self.name,
                 self.kube_name,
                 self.action.to_service_action(),
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                persistent_storage,
                 build,
                 tf_files_source_domain,
                 provider,
@@ -325,7 +362,18 @@ impl TerraformService {
 
     fn get_terraform_action(&self) -> Result<models::terraform_service::TerraformAction, TerraformServiceError> {
         let action = match self.terraform_action.command {
-            TerraformActionCommand::PlanOnly => models::terraform_service::TerraformAction::TerraformPlanOnly,
+            TerraformActionCommand::PlanOnly => {
+                let plan_execution_id =
+                    self.terraform_action
+                        .plan_execution_id
+                        .clone()
+                        .ok_or(TerraformServiceError::InvalidConfig(
+                            "terraform_action plan_execution_id path is not defined".to_string(),
+                        ))?;
+                models::terraform_service::TerraformAction::TerraformPlanOnly {
+                    execution_id: plan_execution_id,
+                }
+            }
             TerraformActionCommand::PlanAndApply => models::terraform_service::TerraformAction::TerraformPlanAndApply,
             TerraformActionCommand::ApplyFromPlan => {
                 let plan_execution_id =
@@ -335,7 +383,9 @@ impl TerraformService {
                         .ok_or(TerraformServiceError::InvalidConfig(
                             "terraform_action plan_execution_id path is not defined".to_string(),
                         ))?;
-                models::terraform_service::TerraformAction::TerraformApplyFromPlan(plan_execution_id)
+                models::terraform_service::TerraformAction::TerraformApplyFromPlan {
+                    execution_id: plan_execution_id,
+                }
             }
         };
 
@@ -505,11 +555,14 @@ mkdir -p /persistent-volume/terraform-plan-output
 rsync -av --delete \
           --exclude='.terraform' \
           --exclude='.terraform.lock.hcl' \
+          --exclude='.-tf.plan' \
           /data/ /persistent-volume/terraform-work
 
 cd /persistent-volume/terraform-work
 
-CMD=$1; shift
+CMD=$1
+PLAN_NAME=$2
+shift 2
 set -e
 
 case "$CMD" in
@@ -519,21 +572,22 @@ case "$CMD" in
         terraform apply -input=false -auto-approve
         ;;
     "plan_only")
+        rm -rf /persistent-volume/terraform-plan-output/*
         terraform init # TODO TF add backend config
         terraform validate -no-tests
-        terraform plan -input=false # -out=/persistent-volume/terraform-plan-output/tf.plan  # TODO TF add execution in path and  -var-file
+        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
         ;;
      "apply_from_plan")
         terraform init # TODO TF add backend config
         terraform validate -no-tests
-        terraform apply -input=false /persistent-volume/terraform-plan-output/tf.plan  # TODO TF add execution in path and  -var-file
+        terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
         ;;
     *)
         echo "Command not handled by entrypoint.sh: '\$CMD'"
         exit 1
         ;;
 esac
-sleep 30 # TODO TF remoce
+sleep 30 # TODO TF remove
             "#
         .to_string()
     }

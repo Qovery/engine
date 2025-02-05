@@ -604,14 +604,14 @@ where
     (pre_run, task, post_run)
 }
 
-enum JobStatus {
+pub enum JobStatus {
     NotRunning,
     Running,
     Success,
     Failure { reason: String, message: String },
 }
 
-fn job_status(job: &Option<&K8sJob>) -> JobStatus {
+pub fn job_status(job: &Option<&K8sJob>) -> JobStatus {
     if let Some(pod) = job {
         if let Some(status) = &pod.status {
             if status.succeeded.is_some() {
@@ -636,7 +636,7 @@ fn job_status(job: &Option<&K8sJob>) -> JobStatus {
     JobStatus::NotRunning
 }
 
-fn is_job_terminated() -> impl Condition<K8sJob> {
+pub fn is_job_terminated() -> impl Condition<K8sJob> {
     |job: Option<&K8sJob>| match job_status(&job) {
         JobStatus::NotRunning => false,
         JobStatus::Running => false,
