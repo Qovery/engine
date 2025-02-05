@@ -7,5 +7,5 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ service.persistence_size_in_gib}}Gi
+      storage: {{ service.persistence_size_in_gib}}
   storageClassName: {{ service.persistence_storage_type }}

@@ -47,6 +47,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) cpu_limit: KubernetesCpuResourceUnit,
     pub(crate) ram_request: KubernetesMemoryResourceUnit,
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
+    pub(crate) persistent_storage: PersistentStorage,
     pub(crate) environment_variables: HashMap<String, VariableInfo>,
     pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
@@ -62,6 +63,11 @@ impl<T: CloudProvider> TerraformService<T> {
         name: String,
         kube_name: String,
         action: Action,
+        cpu_request_in_milli: u32,
+        cpu_limit_in_milli: u32,
+        ram_request_in_mib: u32,
+        ram_limit_in_mib: u32,
+        persistent_storage: PersistentStorage,
         build: Build,
         terraform_files_source: TerraformFilesSource,
         _provider: TerraformProvider,
@@ -100,10 +106,11 @@ impl<T: CloudProvider> TerraformService<T> {
             _backend,
             terraform_action,
             timeout,
-            cpu_request: KubernetesCpuResourceUnit::MilliCpu(500), // TODO TF set in service parameter or advanced settings
-            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(500), // TODO TF set in service parameter or advanced settings
-            ram_request: KubernetesMemoryResourceUnit::MebiByte(256), // TODO TF set in service parameter or advanced settings
-            ram_limit: KubernetesMemoryResourceUnit::MebiByte(256), // TODO TF set in service parameter or advanced settings
+            cpu_request: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
+            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
+            ram_request: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
+            ram_limit: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
+            persistent_storage,
             environment_variables,
             advanced_settings,
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
@@ -186,21 +193,23 @@ impl<T: CloudProvider> TerraformService<T> {
                 advanced_settings,
                 entrypoint: "entrypoint.sh".to_string(),
                 command_args: match &self.terraform_action {
-                    TerraformAction::TerraformPlanOnly => vec!["plan_only".to_string()],
+                    TerraformAction::TerraformPlanOnly { execution_id } => {
+                        vec!["plan_only".to_string(), execution_id.to_owned()]
+                    }
                     TerraformAction::TerraformPlanAndApply => vec!["apply".to_string()],
-                    TerraformAction::TerraformApplyFromPlan(execution_id) => {
+                    TerraformAction::TerraformApplyFromPlan { execution_id } => {
                         vec!["apply_from_plan".to_string(), execution_id.to_owned()]
                     }
                 },
                 // entrypoint: self.entrypoint.clone(),
-                cpu_request_in_milli: self.cpu_request.to_string(), // TODO TF check if it is provided as advanced setting or not
-                cpu_limit_in_milli: self.cpu_limit.to_string(),     // TODO TF
-                ram_request_in_mib: self.ram_request.to_string(),   // TODO TF
-                ram_limit_in_mib: self.ram_limit.to_string(),       // TODO TF
+                cpu_request_in_milli: self.cpu_request.to_string(),
+                cpu_limit_in_milli: self.cpu_limit.to_string(),
+                ram_request_in_mib: self.ram_request.to_string(),
+                ram_limit_in_mib: self.ram_limit.to_string(),
                 // max_nb_restart: self.max_nb_restart,
                 // max_duration_in_sec: self.max_duration.as_secs(),
-                persistence_size_in_gib: "1".to_string(),    // TODO TF
-                persistence_storage_type: "gp2".to_string(), // TODO TF
+                persistence_size_in_gib: self.persistent_storage.size_in_gib.to_string(),
+                persistence_storage_type: self.persistent_storage.storage_class.clone(),
             },
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
@@ -312,9 +321,9 @@ pub enum TerraformProvider {
 }
 
 pub enum TerraformAction {
-    TerraformPlanOnly,
+    TerraformPlanOnly { execution_id: String },
     TerraformPlanAndApply,
-    TerraformApplyFromPlan(String),
+    TerraformApplyFromPlan { execution_id: String },
 }
 
 #[allow(dead_code)]
@@ -340,6 +349,11 @@ pub enum TerraformBackendType {
 pub struct TerraformBackendConfig {
     pub key: String,
     pub value: String,
+}
+
+pub struct PersistentStorage {
+    pub storage_class: String,
+    pub size_in_gib: KubernetesMemoryResourceUnit,
 }
 
 #[derive(Serialize, Debug, Clone)]

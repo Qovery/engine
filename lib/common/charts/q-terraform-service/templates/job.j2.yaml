@@ -80,14 +80,12 @@ spec:
    #       secret:
    #         secretName: {#{ mounted_file.id }#}-{#{ service.short_id }#}
       containers:
-   #     - name: qovery-wait-container-output
-   #       image: "debian:stable-slim"
-   #       command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
-   #       volumeMounts:
-   #         - name: output
-   #           mountPath: /qovery-output
-              #TODO (mzo): mutualize the container job part with cron job
-              # Also, if we have 2 types of job (one with output, one without), should be mutualized too
+        - name: qovery-wait-container-output
+          image: "debian:stable-slim"
+          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
           args:
