@@ -102,7 +102,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   // Otherwise it forces the re-creation of the cluster.
   lifecycle {
     ignore_changes = [
-      access_config.bootstrap_cluster_creator_admin_permissions,
+      access_config[0].bootstrap_cluster_creator_admin_permissions,
     ]
   }
 
