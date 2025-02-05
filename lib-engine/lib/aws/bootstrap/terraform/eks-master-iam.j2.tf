@@ -1,35 +1,3 @@
-#########################################################################################
-# If the current session is assumed-role, we need to create an access entry for the role
-# and associate the AmazonEKSClusterAdminPolicy to the role. Else we can't connect to the cluster
-# If we are using an user, we need to attach the AmazonEKSClusterAdminPolicy to it
-#########################################################################################
-
-locals {
-  is_role = can(regex("assumed-role", data.aws_caller_identity.current.arn))
-  role_name = split("/", data.aws_caller_identity.current.arn)[length(split("/", data.aws_caller_identity.current.arn)) - 2]
-  account_id = data.aws_caller_identity.current.account_id
-
-  principal_arn = local.is_role ? "arn:aws:iam::${local.account_id}:role/${local.role_name}" : data.aws_caller_identity.current.arn
-}
-
-resource "aws_eks_access_entry" "qovery_eks_access" {
-  cluster_name      = aws_eks_cluster.eks_cluster.name
-  principal_arn     = local.principal_arn
-  type              = "STANDARD"
-  tags              = local.tags_eks
-}
-
-resource "aws_eks_access_policy_association" "qovery_eks_access" {
-  cluster_name      = aws_eks_cluster.eks_cluster.name
-  principal_arn     = local.principal_arn
-  policy_arn        = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
-
-  access_scope {
-    type       = "cluster"
-  }
-}
-
-
 #######
 # IAM #
 #######
