@@ -1,12 +1,12 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
-use crate::environment::models::types::{CloudProvider, VersionsNumber};
+use crate::environment::models::types::CloudProvider;
 use crate::environment::models::utils;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::{Build, Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
-use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -18,6 +18,7 @@ use serde_derive::Serialize;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -38,9 +39,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) action: Action,
     pub(crate) build: Build,
     pub(crate) terraform_files_source: TerraformFilesSource,
-    pub(crate) _provider: TerraformProvider,
-    pub(crate) _provider_version: VersionsNumber,
-    pub(crate) _backend: TerraformBackend,
+    pub(crate) backend: TerraformBackend,
     pub(crate) terraform_action: TerraformAction,
     pub(crate) timeout: Duration,
     pub(crate) cpu_request: KubernetesCpuResourceUnit,
@@ -70,9 +69,7 @@ impl<T: CloudProvider> TerraformService<T> {
         persistent_storage: PersistentStorage,
         build: Build,
         terraform_files_source: TerraformFilesSource,
-        _provider: TerraformProvider,
-        _provider_version: VersionsNumber,
-        _backend: TerraformBackend,
+        backend: TerraformBackend,
         terraform_action: TerraformAction,
         timeout: Duration,
         environment_variables: HashMap<String, VariableInfo>,
@@ -101,9 +98,7 @@ impl<T: CloudProvider> TerraformService<T> {
             action,
             build,
             terraform_files_source,
-            _provider,
-            _provider_version,
-            _backend,
+            backend,
             terraform_action,
             timeout,
             cpu_request: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
@@ -169,12 +164,28 @@ impl<T: CloudProvider> TerraformService<T> {
             }
         };
 
-        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+        let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
         );
+
+        if target.cloud_provider.kind() == Kind::Aws && !target.kubernetes.is_karpenter_enabled() {
+            // For AWS cluster, when Karpenter is not enabled, then force the pod to always run on the same zone.
+            // There is a bug where the node auto-scaler is not starting a node in the same zone of the Persistent Volume.
+            deployment_affinity_node_required
+                .entry("topology.kubernetes.io/zone".to_string())
+                .or_insert_with(|| format!("{}a", target.kubernetes.region()));
+        }
+
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+
+        let backend_config = self
+            .backend
+            .configs
+            .iter()
+            .map(|config| config.0.clone())
+            .collect::<Vec<_>>();
 
         TerraformServiceTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -200,8 +211,8 @@ impl<T: CloudProvider> TerraformService<T> {
                     TerraformAction::TerraformApplyFromPlan { execution_id } => {
                         vec!["apply_from_plan".to_string(), execution_id.to_owned()]
                     }
+                    TerraformAction::TerraformDestroy => vec!["destroy".to_string()],
                 },
-                // entrypoint: self.entrypoint.clone(),
                 cpu_request_in_milli: self.cpu_request.to_string(),
                 cpu_limit_in_milli: self.cpu_limit.to_string(),
                 ram_request_in_mib: self.ram_request.to_string(),
@@ -214,6 +225,10 @@ impl<T: CloudProvider> TerraformService<T> {
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
             environment_variables: self.get_environment_variables(),
+            backend_config: BackendConfigTeraContext {
+                secret_name: self.backend.kube_secret_name.to_owned(),
+                configs: backend_config,
+            },
         }
     }
 }
@@ -324,31 +339,25 @@ pub enum TerraformAction {
     TerraformPlanOnly { execution_id: String },
     TerraformPlanAndApply,
     TerraformApplyFromPlan { execution_id: String },
+    TerraformDestroy,
 }
 
-#[allow(dead_code)]
-pub struct TerraformBackendBlock(String);
+pub struct TerraformBackendConfig(String);
+impl FromStr for TerraformBackendConfig {
+    type Err = String;
 
-impl From<&String> for TerraformBackendBlock {
-    fn from(value: &String) -> Self {
-        TerraformBackendBlock(value.to_string())
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !s.contains("=") {
+            return Err(format!("Invalid backend_config. The expected format is <key>=<value>: {s}"));
+        }
+
+        Ok(TerraformBackendConfig(s.to_owned()))
     }
 }
 
 pub struct TerraformBackend {
-    pub backend_type: TerraformBackendType,
-    pub block: TerraformBackendBlock,
     pub configs: Vec<TerraformBackendConfig>,
-}
-
-pub enum TerraformBackendType {
-    DefinedInTerraformFile,
-    Kubernetes,
-}
-
-pub struct TerraformBackendConfig {
-    pub key: String,
-    pub value: String,
+    pub kube_secret_name: String,
 }
 
 pub struct PersistentStorage {
@@ -377,6 +386,12 @@ pub(crate) struct ServiceTeraContext {
 }
 
 #[derive(Serialize, Debug, Clone)]
+pub(crate) struct BackendConfigTeraContext {
+    pub(crate) secret_name: String,
+    pub(crate) configs: Vec<String>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub(crate) struct TerraformServiceTeraContext {
     pub(crate) organization_long_id: Uuid,
     pub(crate) project_long_id: Uuid,
@@ -387,4 +402,5 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) backend_config: BackendConfigTeraContext,
 }

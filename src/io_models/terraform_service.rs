@@ -1,7 +1,7 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
-use crate::environment::models::types::{OnPremise, VersionsNumber, AWS, GCP, SCW};
+use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, GitRepositoryExtraFile, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -93,8 +93,7 @@ pub enum TerraformProvider {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TerraformBackend {
     pub backend_type: TerraformBackendType,
-    pub block: String,
-    pub configs: Vec<TerraformBackendConfig>,
+    pub configs: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -104,10 +103,13 @@ pub enum TerraformBackendType {
     Kubernetes,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash, Default)]
-pub struct TerraformBackendConfig {
-    key: String,
-    value: String,
+impl TerraformBackendType {
+    fn to_backend_block_name(&self) -> &'static str {
+        match self {
+            TerraformBackendType::DefinedInTerraformFile => "invalid",
+            TerraformBackendType::Kubernetes => "kubernetes",
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -115,6 +117,7 @@ pub enum TerraformActionCommand {
     PlanOnly,
     PlanAndApply,
     ApplyFromPlan,
+    Destroy,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -170,6 +173,7 @@ impl TerraformService {
         cloud_provider: &dyn CloudProvider,
         default_container_registry: &dyn ContainerRegistry,
         cluster: &dyn Kubernetes,
+        environment_kube_name: &str,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
     ) -> Result<Box<dyn TerraformServiceTrait>, TerraformServiceError> {
@@ -211,11 +215,7 @@ impl TerraformService {
         let tf_files_source_domain =
             self.get_terraform_files_source_domain(&ssh_keys, context.qovery_api.clone(), self.long_id);
 
-        let provider = self.get_terraform_provider();
-        let provider_version = VersionsNumber::from_str(self.provider_version.as_str()).map_err(|_| {
-            TerraformServiceError::InvalidConfig(format!("Bad version number: {}", self.provider_version))
-        })?;
-        let backend = self.get_terraform_backend();
+        let backend = self.get_terraform_backend(environment_kube_name)?;
 
         let terraform_action = self.get_terraform_action()?;
 
@@ -238,8 +238,6 @@ impl TerraformService {
                 persistent_storage,
                 build,
                 tf_files_source_domain,
-                provider,
-                provider_version,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -263,8 +261,6 @@ impl TerraformService {
                     persistent_storage,
                     build,
                     tf_files_source_domain,
-                    provider,
-                    provider_version,
                     backend,
                     terraform_action,
                     Duration::from_secs(self.timeout_sec),
@@ -288,8 +284,6 @@ impl TerraformService {
                 persistent_storage,
                 build,
                 tf_files_source_domain,
-                provider,
-                provider_version,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -312,8 +306,6 @@ impl TerraformService {
                 persistent_storage,
                 build,
                 tf_files_source_domain,
-                provider,
-                provider_version,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -354,12 +346,6 @@ impl TerraformService {
         }
     }
 
-    fn get_terraform_provider(&self) -> models::terraform_service::TerraformProvider {
-        match self.provider {
-            TerraformProvider::Terraform => models::terraform_service::TerraformProvider::Terraform,
-        }
-    }
-
     fn get_terraform_action(&self) -> Result<models::terraform_service::TerraformAction, TerraformServiceError> {
         let action = match self.terraform_action.command {
             TerraformActionCommand::PlanOnly => {
@@ -375,6 +361,7 @@ impl TerraformService {
                 }
             }
             TerraformActionCommand::PlanAndApply => models::terraform_service::TerraformAction::TerraformPlanAndApply,
+            TerraformActionCommand::Destroy => models::terraform_service::TerraformAction::TerraformDestroy,
             TerraformActionCommand::ApplyFromPlan => {
                 let plan_execution_id =
                     self.terraform_action
@@ -392,25 +379,42 @@ impl TerraformService {
         Ok(action)
     }
 
-    fn get_terraform_backend(&self) -> models::terraform_service::TerraformBackend {
-        let backend = &self.backend;
-        models::terraform_service::TerraformBackend {
-            backend_type: match backend.backend_type {
-                TerraformBackendType::DefinedInTerraformFile => {
-                    models::terraform_service::TerraformBackendType::DefinedInTerraformFile
-                }
-                TerraformBackendType::Kubernetes => models::terraform_service::TerraformBackendType::Kubernetes,
-            },
-            block: models::terraform_service::TerraformBackendBlock::from(&backend.block),
-            configs: backend
+    fn get_terraform_backend(
+        &self,
+        environment_kube_name: &str,
+    ) -> Result<models::terraform_service::TerraformBackend, TerraformServiceError> {
+        let configs = match self.backend.backend_type {
+            TerraformBackendType::DefinedInTerraformFile => self
+                .backend
                 .configs
                 .iter()
-                .map(|config| models::terraform_service::TerraformBackendConfig {
-                    key: config.key.clone(),
-                    value: config.value.clone(),
+                .map(|config| {
+                    models::terraform_service::TerraformBackendConfig::from_str(config)
+                        .map_err(TerraformServiceError::InvalidConfig)
                 })
-                .collect(),
-        }
+                .collect::<Result<Vec<_>, _>>()?,
+            TerraformBackendType::Kubernetes => vec![
+                models::terraform_service::TerraformBackendConfig::from_str(&format!(
+                    "namespace=\"{}\"",
+                    environment_kube_name
+                ))
+                .map_err(TerraformServiceError::InvalidConfig)?,
+                models::terraform_service::TerraformBackendConfig::from_str(&format!(
+                    "secret_suffix=\"{}\"",
+                    self.long_id
+                ))
+                .map_err(TerraformServiceError::InvalidConfig)?,
+                models::terraform_service::TerraformBackendConfig::from_str(
+                    &format!("labels={{\"qovery.com/service-id\": \"{}\", \"qovery.com/service-type\": \"terraform-service\", \"qovery.com/environment-id\": \"{}\" }}", self.long_id, environment_kube_name),
+                )
+                .map_err(TerraformServiceError::InvalidConfig)?,
+            ],
+        };
+
+        Ok(models::terraform_service::TerraformBackend {
+            configs,
+            kube_secret_name: "backend-config".to_string(),
+        })
     }
 
     fn get_build(
@@ -441,12 +445,10 @@ impl TerraformService {
 
         // Convert our root module path to a relative path to be able to append them correctly
         let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
-        let (_, backend_file_path) =
-            normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
-        let (_, entry_point_file_path) =
-            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
-
         let mut disable_build_cache = false;
+
+        let extra_files_to_inject = self.build_extra_files(root_module_path)?;
+
         let mut build = Build {
             git_repository: GitRepository {
                 url: git_url.clone(),
@@ -461,20 +463,7 @@ impl TerraformService {
                 dockerfile_path,
                 dockerfile_content: Some(dockerfile_content),
                 root_path: root_path.clone(),
-                extra_files_to_inject: vec![
-                    GitRepositoryExtraFile {
-                        path: backend_file_path.ok_or(TerraformServiceError::InvalidConfig(
-                            "Backend path path is not defined".to_string(),
-                        ))?,
-                        content: self.backend.block.clone(),
-                    },
-                    GitRepositoryExtraFile {
-                        path: entry_point_file_path.ok_or(TerraformServiceError::InvalidConfig(
-                            "entrypoint.Sh path path is not defined".to_string(),
-                        ))?,
-                        content: self.get_entry_point_sh(),
-                    },
-                ],
+                extra_files_to_inject,
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: self
@@ -505,10 +494,6 @@ impl TerraformService {
             registries: vec![], // TODO TF
         };
 
-        // TODO TF: the image tag must be changed:
-        // if the Terraform provider changed,
-        // if the Terraform provider Version changed, (more generally if the injected DockerFile Changed,
-        // if the files added into the Docker imaged changed (backend, entrypoint.sh)
         build.compute_image_tag();
 
         Ok(build)
@@ -567,29 +552,68 @@ set -e
 
 case "$CMD" in
     "apply")
-        terraform init # TODO TF add backend config
+        terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
         terraform apply -input=false -auto-approve
         ;;
     "plan_only")
         rm -rf /persistent-volume/terraform-plan-output/*
-        terraform init # TODO TF add backend config
+        terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
         terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
         ;;
-     "apply_from_plan")
-        terraform init # TODO TF add backend config
+    "apply_from_plan")
+        terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
         terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
+        ;;
+    "destroy")
+        terraform destroy -auto-approve -input=false
         ;;
     *)
         echo "Command not handled by entrypoint.sh: '\$CMD'"
         exit 1
         ;;
 esac
-sleep 30 # TODO TF remove
             "#
         .to_string()
+    }
+
+    fn get_backend_block(&self) -> Option<String> {
+        match self.backend.backend_type {
+            TerraformBackendType::DefinedInTerraformFile => None,
+            TerraformBackendType::Kubernetes => Some(format!(
+                r#"
+terraform {{
+  backend "{}" {{
+  }}
+}}"#,
+                self.backend.backend_type.to_backend_block_name()
+            )),
+        }
+    }
+
+    fn build_extra_files(&self, root_module_path: &str) -> Result<Vec<GitRepositoryExtraFile>, TerraformServiceError> {
+        let (_, backend_file_path) =
+            normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
+        let (_, entry_point_file_path) =
+            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
+
+        let mut extra_files = vec![GitRepositoryExtraFile {
+            path: entry_point_file_path
+                .ok_or_else(|| TerraformServiceError::InvalidConfig("entrypoint.sh path is not defined".to_string()))?,
+            content: self.get_entry_point_sh(),
+        }];
+
+        if let Some(backend_block) = self.get_backend_block() {
+            extra_files.push(GitRepositoryExtraFile {
+                path: backend_file_path
+                    .ok_or_else(|| TerraformServiceError::InvalidConfig("Backend path is not defined".to_string()))?,
+                content: backend_block.to_string(),
+            });
+        }
+
+        Ok(extra_files)
     }
 
     fn to_image(

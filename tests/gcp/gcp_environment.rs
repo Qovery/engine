@@ -733,7 +733,6 @@ fn gcp_gke_deploy_terraform_service() {
     fn build_terraform_service(
         service_id: Uuid,
         service_kube_name: &str,
-        environment_kube_name: String,
         annotations_group_id: Uuid,
         labels_group_id: Uuid,
         terraform_action: TerraformAction,
@@ -762,18 +761,6 @@ fn gcp_gke_deploy_terraform_service() {
             terraform_action,
             backend: TerraformBackend {
                 backend_type: TerraformBackendType::Kubernetes,
-                block: format!(
-                    // TODO TF  check if it is useful to receive this from Core for predefined Backend type
-                    r#"
-terraform {{
-  backend "kubernetes" {{
-    namespace        = "{namespace}"
-    secret_suffix    = "{long_id}"
-  }}
-}}"#,
-                    long_id = service_id,
-                    namespace = environment_kube_name, // TODO TF
-                ),
                 configs: vec![],
             },
             timeout_sec: 300,
@@ -829,7 +816,6 @@ terraform {{
         environment.terraform_services = vec![build_terraform_service(
             service_id,
             &kube_name,
-            environment.kube_name.clone(),
             annotations_group_id,
             labels_group_id,
             TerraformAction {
@@ -886,16 +872,12 @@ terraform {{
             }]
         }};
 
-        let mut environment_for_delete = environment.clone();
-        environment_for_delete.action = Action::Delete;
-
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
         environment.terraform_services = vec![build_terraform_service(
             service_id,
             &kube_name,
-            environment.kube_name.clone(),
             annotations_group_id,
             labels_group_id,
             TerraformAction {
@@ -906,6 +888,19 @@ terraform {{
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+        environment_for_delete.terraform_services = vec![build_terraform_service(
+            service_id,
+            &kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::Destroy,
+                plan_execution_id: None,
+            },
+        )];
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());
