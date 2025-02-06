@@ -38,7 +38,9 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) kube_name: String,
     pub(crate) action: Action,
     pub(crate) build: Build,
+    pub(crate) root_module_path: PathBuf,
     pub(crate) terraform_files_source: TerraformFilesSource,
+    pub(crate) terraform_var_file_paths: Vec<String>,
     pub(crate) backend: TerraformBackend,
     pub(crate) terraform_action: TerraformAction,
     pub(crate) timeout: Duration,
@@ -68,7 +70,9 @@ impl<T: CloudProvider> TerraformService<T> {
         ram_limit_in_mib: u32,
         persistent_storage: PersistentStorage,
         build: Build,
+        root_module_path: PathBuf,
         terraform_files_source: TerraformFilesSource,
+        terraform_var_file_paths: Vec<String>,
         backend: TerraformBackend,
         terraform_action: TerraformAction,
         timeout: Duration,
@@ -78,7 +82,7 @@ impl<T: CloudProvider> TerraformService<T> {
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
     ) -> Result<Self, TerraformServiceError> {
-        let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.to_string()));
+        let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
 
         let workspace_directory = crate::fs::workspace_directory(
@@ -97,7 +101,9 @@ impl<T: CloudProvider> TerraformService<T> {
             kube_name,
             action,
             build,
+            root_module_path,
             terraform_files_source,
+            terraform_var_file_paths,
             backend,
             terraform_action,
             timeout,
@@ -131,9 +137,6 @@ impl<T: CloudProvider> TerraformService<T> {
         match &self.terraform_files_source {
             TerraformFilesSource::Git { commit_id, .. } => commit_id.to_string(),
         }
-    }
-    pub fn service_type(&self) -> ServiceType {
-        ServiceType::Terraform
     }
 
     pub fn kube_label_selector(&self) -> String {
@@ -177,8 +180,8 @@ impl<T: CloudProvider> TerraformService<T> {
                 .or_insert_with(|| format!("{}a", target.kubernetes.region()));
         }
 
-        let mut advanced_settings = self.advanced_settings.clone();
-        advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
+        let mut adv_settings = self.advanced_settings.clone();
+        adv_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let backend_config = self
             .backend
@@ -186,6 +189,8 @@ impl<T: CloudProvider> TerraformService<T> {
             .iter()
             .map(|config| config.0.clone())
             .collect::<Vec<_>>();
+
+        let command_args = self.get_command_args();
 
         TerraformServiceTeraContext {
             organization_long_id: environment.organization_long_id,
@@ -196,23 +201,14 @@ impl<T: CloudProvider> TerraformService<T> {
             service: ServiceTeraContext {
                 short_id: to_short_id(&self.long_id),
                 long_id: self.long_id,
-                name: self.kube_name().to_string(),
+                name: self.kube_name.clone(),
                 image_full,
                 image_tag,
                 version: self.service_version(),
                 job_max_duration_in_sec: self.timeout.as_secs(),
-                advanced_settings,
+                advanced_settings: adv_settings,
                 entrypoint: "entrypoint.sh".to_string(),
-                command_args: match &self.terraform_action {
-                    TerraformAction::TerraformPlanOnly { execution_id } => {
-                        vec!["plan_only".to_string(), execution_id.to_owned()]
-                    }
-                    TerraformAction::TerraformPlanAndApply => vec!["apply".to_string()],
-                    TerraformAction::TerraformApplyFromPlan { execution_id } => {
-                        vec!["apply_from_plan".to_string(), execution_id.to_owned()]
-                    }
-                    TerraformAction::TerraformDestroy => vec!["destroy".to_string()],
-                },
+                command_args,
                 cpu_request_in_milli: self.cpu_request.to_string(),
                 cpu_limit_in_milli: self.cpu_limit.to_string(),
                 ram_request_in_mib: self.ram_request.to_string(),
@@ -231,11 +227,42 @@ impl<T: CloudProvider> TerraformService<T> {
             },
         }
     }
+
+    fn get_command_args(&self) -> Vec<String> {
+        let base_path = self.root_module_path.to_str().unwrap_or_default().to_string();
+
+        let var_file_args: Vec<String> = self
+            .terraform_var_file_paths
+            .iter()
+            .map(|path| format!("-var-file={}", path))
+            .collect();
+
+        match &self.terraform_action {
+            TerraformAction::TerraformPlanOnly { execution_id } => {
+                let mut args = vec![base_path, "plan_only".to_string(), execution_id.clone()];
+                args.extend(var_file_args);
+                args
+            }
+            TerraformAction::TerraformPlanAndApply => {
+                vec![base_path, "apply".to_string()]
+            }
+            TerraformAction::TerraformApplyFromPlan { execution_id } => {
+                let mut args = vec![base_path, "apply_from_plan".to_string(), execution_id.clone()];
+                args.extend(var_file_args);
+                args
+            }
+            TerraformAction::TerraformDestroy => {
+                let mut args = vec![base_path, "destroy".to_string(), String::new()];
+                args.extend(var_file_args);
+                args
+            }
+        }
+    }
 }
 
 impl<T: CloudProvider> Service for TerraformService<T> {
     fn service_type(&self) -> ServiceType {
-        self.service_type()
+        ServiceType::Terraform
     }
 
     fn id(&self) -> &str {
@@ -311,6 +338,7 @@ where
     fn advanced_settings(&self) -> &TerraformServiceAdvancedSettings {
         &self.advanced_settings
     }
+
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
     }
@@ -347,10 +375,9 @@ impl FromStr for TerraformBackendConfig {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.contains("=") {
-            return Err(format!("Invalid backend_config. The expected format is <key>=<value>: {s}"));
+        if !s.contains('=') {
+            return Err(format!("Invalid backend_config. Expected <key>=<value>: {s}"));
         }
-
         Ok(TerraformBackendConfig(s.to_owned()))
     }
 }

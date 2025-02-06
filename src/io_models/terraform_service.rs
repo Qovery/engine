@@ -23,6 +23,7 @@ use base64::Engine;
 use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -143,8 +144,8 @@ pub struct TerraformService {
     pub ram_request_in_mib: u32,
     pub ram_limit_in_mib: u32,
     pub persistent_storage: PersistentStorage,
-
     pub tf_files_source: TerraformFilesSource,
+    pub tf_var_file_paths: Vec<String>,
     pub provider: TerraformProvider,
     pub provider_version: String,
     pub backend: TerraformBackend,
@@ -204,7 +205,7 @@ impl TerraformService {
             .cloned()
             .collect_vec();
 
-        let build = self.get_build(
+        let build = self.build_for_terraform_service(
             &ssh_keys,
             context.qovery_api.clone(),
             default_container_registry.registry_info(),
@@ -224,6 +225,10 @@ impl TerraformService {
             size_in_gib: KubernetesMemoryResourceUnit::GibiByte(self.persistent_storage.size_in_gib),
         };
 
+        let root_module_path = match self.tf_files_source {
+            TerraformFilesSource::Git { root_module_path, .. } => PathBuf::from(root_module_path),
+        };
+
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged => Box::new(models::terraform_service::TerraformService::<AWS>::new(
                 context,
@@ -237,7 +242,9 @@ impl TerraformService {
                 self.ram_limit_in_mib,
                 persistent_storage,
                 build,
+                root_module_path,
                 tf_files_source_domain,
+                self.tf_var_file_paths,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -260,7 +267,9 @@ impl TerraformService {
                     self.ram_limit_in_mib,
                     persistent_storage,
                     build,
+                    root_module_path,
                     tf_files_source_domain,
+                    self.tf_var_file_paths,
                     backend,
                     terraform_action,
                     Duration::from_secs(self.timeout_sec),
@@ -283,7 +292,9 @@ impl TerraformService {
                 self.ram_limit_in_mib,
                 persistent_storage,
                 build,
+                root_module_path,
                 tf_files_source_domain,
+                self.tf_var_file_paths,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -305,7 +316,9 @@ impl TerraformService {
                 self.ram_limit_in_mib,
                 persistent_storage,
                 build,
+                root_module_path,
                 tf_files_source_domain,
+                self.tf_var_file_paths,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -347,31 +360,23 @@ impl TerraformService {
     }
 
     fn get_terraform_action(&self) -> Result<models::terraform_service::TerraformAction, TerraformServiceError> {
+        let plan_execution_id =
+            self.terraform_action
+                .plan_execution_id
+                .clone()
+                .ok_or(TerraformServiceError::InvalidConfig(
+                    "terraform_action plan_execution_id path is not defined".to_string(),
+                ));
+
         let action = match self.terraform_action.command {
-            TerraformActionCommand::PlanOnly => {
-                let plan_execution_id =
-                    self.terraform_action
-                        .plan_execution_id
-                        .clone()
-                        .ok_or(TerraformServiceError::InvalidConfig(
-                            "terraform_action plan_execution_id path is not defined".to_string(),
-                        ))?;
-                models::terraform_service::TerraformAction::TerraformPlanOnly {
-                    execution_id: plan_execution_id,
-                }
-            }
+            TerraformActionCommand::PlanOnly => models::terraform_service::TerraformAction::TerraformPlanOnly {
+                execution_id: plan_execution_id?,
+            },
             TerraformActionCommand::PlanAndApply => models::terraform_service::TerraformAction::TerraformPlanAndApply,
             TerraformActionCommand::Destroy => models::terraform_service::TerraformAction::TerraformDestroy,
             TerraformActionCommand::ApplyFromPlan => {
-                let plan_execution_id =
-                    self.terraform_action
-                        .plan_execution_id
-                        .clone()
-                        .ok_or(TerraformServiceError::InvalidConfig(
-                            "terraform_action plan_execution_id path is not defined".to_string(),
-                        ))?;
                 models::terraform_service::TerraformAction::TerraformApplyFromPlan {
-                    execution_id: plan_execution_id,
+                    execution_id: plan_execution_id?,
                 }
             }
         };
@@ -417,7 +422,7 @@ impl TerraformService {
         })
     }
 
-    fn get_build(
+    fn build_for_terraform_service(
         &self,
         ssh_keys: &[SshKey],
         qovery_api: Arc<dyn QoveryApi>,
@@ -444,8 +449,28 @@ impl TerraformService {
             };
 
         // Convert our root module path to a relative path to be able to append them correctly
-        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
+        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path("/", dockerfile_path);
         let mut disable_build_cache = false;
+
+        let build_env_vars = self
+            .environment_vars_with_infos
+            .iter()
+            .filter_map(|(k, variable_infos)| {
+                // Remove special vars
+                let v = String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(variable_infos.value.as_bytes())
+                        .unwrap_or_default(),
+                )
+                .unwrap_or_default();
+                if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
+                    disable_build_cache = true;
+                    return None;
+                }
+
+                Some((k.clone(), v))
+            })
+            .collect::<BTreeMap<_, _>>();
 
         let extra_files_to_inject = self.build_extra_files(root_module_path)?;
 
@@ -456,7 +481,7 @@ impl TerraformService {
                     None
                 } else {
                     let id = self.long_id;
-                    Some(Box::new(move || fetch_git_token(&*qovery_api, ServiceType::Job, &id)))
+                    Some(Box::new(move || fetch_git_token(&*qovery_api, ServiceType::Terraform, &id)))
                 },
                 ssh_keys: ssh_keys.to_vec(),
                 commit_id: commit_id.clone(),
@@ -466,32 +491,14 @@ impl TerraformService {
                 extra_files_to_inject,
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
-            environment_variables: self
-                .environment_vars_with_infos
-                .iter()
-                .filter_map(|(k, variable_infos)| {
-                    // Remove special vars
-                    let v = String::from_utf8(
-                        general_purpose::STANDARD
-                            .decode(variable_infos.value.as_bytes())
-                            .unwrap_or_default(),
-                    )
-                    .unwrap_or_default();
-                    if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
-                        disable_build_cache = true;
-                        return None;
-                    }
-
-                    Some((k.clone(), v))
-                })
-                .collect::<BTreeMap<_, _>>(),
+            environment_variables: build_env_vars,
             disable_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
             ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
-            registries: vec![], // TODO TF
+            registries: vec![],
         };
 
         build.compute_image_tag();
@@ -515,7 +522,6 @@ EOF
 WORKDIR /data
 COPY . .
 RUN ls
-RUN cat backend_qovery.tf
 
 RUN chmod +x entrypoint.sh
 USER app
@@ -534,41 +540,45 @@ set -x
 
 echo "Starting entrypoint.sh"
 
+ROOT_MODULE_PATH=$1
+CMD=$2
+PLAN_NAME=$3
+shift 3
+set -e
+
 mkdir -p /persistent-volume/terraform-work
 mkdir -p /persistent-volume/terraform-plan-output
 
 rsync -av --delete \
+          --exclude='entrypoint.sh' \
+          --exclude='Dockerfile.qovery' \
           --exclude='.terraform' \
           --exclude='.terraform.lock.hcl' \
           --exclude='.-tf.plan' \
           /data/ /persistent-volume/terraform-work
 
-cd /persistent-volume/terraform-work
+cd /persistent-volume/terraform-work/$ROOT_MODULE_PATH
 
-CMD=$1
-PLAN_NAME=$2
-shift 2
-set -e
 
 case "$CMD" in
     "apply")
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
-        terraform apply -input=false -auto-approve
+        terraform apply -input=false -auto-approve "$@" # TODO TF add -var
         ;;
     "plan_only")
         rm -rf /persistent-volume/terraform-plan-output/*
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
-        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
+        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@" # TODO TF add -var
         ;;
     "apply_from_plan")
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
-        terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan  # TODO TF add -var-file
+        terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
         ;;
     "destroy")
-        terraform destroy -auto-approve -input=false
+        terraform destroy -auto-approve -input=false "$@"
         ;;
     *)
         echo "Command not handled by entrypoint.sh: '\$CMD'"
@@ -596,8 +606,7 @@ terraform {{
     fn build_extra_files(&self, root_module_path: &str) -> Result<Vec<GitRepositoryExtraFile>, TerraformServiceError> {
         let (_, backend_file_path) =
             normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
-        let (_, entry_point_file_path) =
-            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
+        let (_, entry_point_file_path) = normalize_root_and_dockerfile_path("/", &Some("entrypoint.sh".to_string()));
 
         let mut extra_files = vec![GitRepositoryExtraFile {
             path: entry_point_file_path
