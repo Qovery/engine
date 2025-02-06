@@ -753,9 +753,10 @@ fn gcp_gke_deploy_terraform_service() {
             tf_files_source: TerraformFilesSource::Git {
                 git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
                 git_credentials: None,
-                commit_id: "cdf13c170a1e58fde0f1309249c57410fa30fda9".to_string(),
+                commit_id: "7128d771454d67e23d00e33ce32ebe00932c9e54".to_string(),
                 root_module_path: "/simple_terraform".to_string(),
             },
+            tf_var_file_paths: vec!["tfvars/echo.tfvars".to_string()],
             provider: TerraformProvider::Terraform,
             provider_version: "1.9.7".to_string(),
             terraform_action,
