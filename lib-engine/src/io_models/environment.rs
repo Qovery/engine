@@ -361,6 +361,7 @@ impl EnvironmentRequest {
                     cloud_provider,
                     container_registry,
                     cluster,
+                    &self.kube_name,
                     &self.annotations_groups,
                     &self.labels_groups,
                 )

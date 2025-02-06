@@ -6,7 +6,7 @@ metadata:
   labels:
     envId: {{ environment_short_id }}
     qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: terraform_service
+    qovery.com/service-type: terraform-service
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
     {%- for key, value in labels_group.common %}
@@ -28,7 +28,7 @@ spec:
       labels:
         envId: {{ environment_short_id }}
         qovery.com/service-id: {{ service.long_id }}
-        qovery.com/service-type: terraform_service
+        qovery.com/service-type: terraform-service
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
         {%- for key, value in labels_group.common %}
@@ -74,6 +74,9 @@ spec:
       volumes:
         - name: output
           emptyDir: {}
+        - name: backend-config-volume
+          secret:
+            secretName: {{ backend_config.secret_name }}
         - name: persistent-volume
           persistentVolumeClaim:
             claimName: {{ service.name }}-pvc
@@ -97,6 +100,9 @@ spec:
             - name: persistent-volume
               mountPath: /persistent-volume # TODO TF move it to {#{}#}
               readOnly: false
+            - name: backend-config-volume
+              mountPath: /backend-config
+              readOnly: true
           env:
             {%- for ev in environment_variables %}
             - name: "{{ ev.key }}"

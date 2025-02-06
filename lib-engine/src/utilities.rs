@@ -7,6 +7,7 @@ use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
+use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
 use reqwest::header::{HeaderMap, HeaderValue};
 use uuid::Uuid;
 
@@ -28,6 +29,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     root_path: P,
     dockerfile_path: &Option<T>,
     dockerfile_content: &Option<String>,
+    docker_extra_files_to_inject: &[GitRepositoryExtraFile],
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
 ) -> String {
@@ -46,6 +48,13 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
         // we redeploy an app with a env var changed with Buildpacks.
         dockerfile_path.hash(&mut hasher);
         environment_variables.hash(&mut hasher);
+    }
+
+    if !docker_extra_files_to_inject.is_empty() {
+        docker_extra_files_to_inject.iter().for_each(|extra_file| {
+            extra_file.content.hash(&mut hasher);
+            extra_file.path.hash(&mut hasher);
+        });
     }
 
     let mut tag = format!("{}-{}", hasher.finish(), commit_id);
@@ -127,10 +136,12 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests_utilities {
+    use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
     use base64::engine::general_purpose;
     use base64::Engine;
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
 
     #[test]
     fn test_get_image_tag() {
@@ -138,6 +149,7 @@ mod tests_utilities {
             "/".to_string(),
             &Some("Dockerfile".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -146,6 +158,7 @@ mod tests_utilities {
             "/".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -156,6 +169,7 @@ mod tests_utilities {
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -166,6 +180,7 @@ mod tests_utilities {
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -176,6 +191,7 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -187,6 +203,7 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &None,
+            &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
@@ -197,10 +214,37 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
         );
         assert_ne!(image_tag_4, image_tag_5);
+
+        let image_tag_6 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("/path"),
+                content: "toto".to_string(),
+            }],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+        );
+        assert_ne!(image_tag_5, image_tag_6);
+
+        let image_tag_7 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("/path"),
+                content: "tata".to_string(),
+            }],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+        );
+        assert_ne!(image_tag_6, image_tag_7);
     }
 
     #[test]

@@ -133,6 +133,7 @@ impl Build {
             &self.git_repository.root_path,
             &self.git_repository.dockerfile_path,
             &self.git_repository.dockerfile_content,
+            &self.git_repository.extra_files_to_inject,
             &self.environment_variables,
             &self.git_repository.commit_id,
         );
