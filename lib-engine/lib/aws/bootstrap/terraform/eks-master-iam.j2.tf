@@ -13,19 +13,6 @@ locals {
   admin_policy_arn = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
 }
 
-
-// TODO(sts): Remove once all clusters have been updated/migrated
-import {
-  to = aws_eks_access_entry.qovery_eks_access
-  id = "${aws_eks_cluster.eks_cluster.name}:${local.principal_arn}"
-}
-
-import {
-  to = aws_eks_access_policy_association.qovery_eks_access
-  id = "${aws_eks_cluster.eks_cluster.name}#${local.principal_arn}#${local.admin_policy_arn}"
-}
-
-
 resource "aws_eks_access_entry" "qovery_eks_access" {
   cluster_name      = aws_eks_cluster.eks_cluster.name
   principal_arn     = local.principal_arn
