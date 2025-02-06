@@ -458,6 +458,9 @@ pub enum EnvironmentStep {
 
     /// DatabaseOutput: contains the environment variables to upsert
     DatabaseOutput,
+
+    /// TerraformServiceOutput: contains the environment variables to upsert
+    TerraformServiceOutput,
 }
 
 impl EnvironmentStep {
@@ -513,6 +516,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::DatabaseOutput => "database-output",
                 EnvironmentStep::Recap => "recap",
                 EnvironmentStep::GlobalError => "global-error",
+                EnvironmentStep::TerraformServiceOutput => "terraform-service-output",
             },
         )
     }
@@ -692,7 +696,8 @@ impl EventDetails {
                 | EnvironmentStep::RestartedError
                 | EnvironmentStep::JobOutput
                 | EnvironmentStep::Recap
-                | EnvironmentStep::DatabaseOutput => return,
+                | EnvironmentStep::DatabaseOutput
+                | EnvironmentStep::TerraformServiceOutput => return,
             },
         };
     }

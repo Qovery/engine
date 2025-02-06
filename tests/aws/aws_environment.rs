@@ -3413,7 +3413,7 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             tf_files_source: TerraformFilesSource::Git {
                 git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
                 git_credentials: None,
-                commit_id: "7128d771454d67e23d00e33ce32ebe00932c9e54".to_string(),
+                commit_id: "68504de2a4089a3e7e96c3140204ed3fe5367a4b".to_string(),
                 root_module_path: "/simple_terraform".to_string(),
             },
             tf_var_file_paths: vec!["tfvars/echo.tfvars".to_string()],

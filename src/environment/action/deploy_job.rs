@@ -774,7 +774,7 @@ pub fn is_job_pod_container_terminated(job_container_name: &str) -> impl Conditi
 // Used to validate the job json output format with serde
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
-struct JobOutputVariable {
+pub struct JobOutputVariable {
     pub value: String,
     pub sensitive: bool,
     pub description: String,
@@ -790,7 +790,7 @@ impl Default for JobOutputVariable {
     }
 }
 
-fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
+pub fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
     let serde_hash_map: HashMap<&str, Value> = serde_json::from_str(json)?;
     let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
 

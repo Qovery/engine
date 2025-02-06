@@ -97,8 +97,10 @@ spec:
               {{ arg }}
             {%- endfor %}
           volumeMounts:
+            - name: output
+              mountPath: /qovery-output
             - name: persistent-volume
-              mountPath: /persistent-volume # TODO TF move it to {#{}#}
+              mountPath: /persistent-volume
               readOnly: false
             - name: backend-config-volume
               mountPath: /backend-config
