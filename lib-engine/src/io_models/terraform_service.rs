@@ -565,6 +565,7 @@ case "$CMD" in
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
         terraform apply -input=false -auto-approve "$@" # TODO TF add -var
+        terraform output -json > /qovery-output/qovery-output.json
         ;;
     "plan_only")
         rm -rf /persistent-volume/terraform-plan-output/*
@@ -576,6 +577,7 @@ case "$CMD" in
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
         terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
+        terraform output -json > /qovery-output/qovery-output.json
         ;;
     "destroy")
         terraform destroy -auto-approve -input=false "$@"

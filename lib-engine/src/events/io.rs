@@ -209,6 +209,7 @@ pub enum EnvironmentStep {
     Restart,
     Restarted,
     RestartedError,
+    TerraformServiceOutput,
 }
 
 impl From<events::EnvironmentStep> for EnvironmentStep {
@@ -243,6 +244,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
             events::EnvironmentStep::DatabaseOutput => EnvironmentStep::DatabaseOutput,
             events::EnvironmentStep::Recap => EnvironmentStep::Recap,
             events::EnvironmentStep::GlobalError => EnvironmentStep::GlobalError,
+            events::EnvironmentStep::TerraformServiceOutput => EnvironmentStep::TerraformServiceOutput,
         }
     }
 }

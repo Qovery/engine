@@ -1,13 +1,14 @@
+use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job_status;
 use crate::environment::action::DeploymentAction;
-use crate::environment::models::terraform_service::{TerraformService, TerraformServiceTrait};
+use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
 use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
-use crate::errors::{CommandError, EngineError};
-use crate::events::{EnvironmentStep, EventDetails, Stage};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
@@ -18,7 +19,7 @@ use k8s_openapi::api::core::v1::Secret;
 use kube::api::{AttachParams, DeleteParams, ListParams};
 use kube::runtime::wait::await_condition;
 use kube::Api;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 impl<T: CloudProvider> DeploymentAction for TerraformService<T>
@@ -158,6 +159,14 @@ where
             }
         });
 
+        // read json output
+        match self.terraform_action {
+            TerraformAction::TerraformPlanOnly { execution_id: _ } | TerraformAction::TerraformDestroy => {}
+            TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
+                retrieve_terraform_output(target, logger, event_details, &pod_name)?;
+            }
+        }
+
         info!("Write file in shared volume to let the waiting container terminate");
         // Write file in shared volume to let the waiting container terminate
         block_on(kube_pod_api.clone().exec(
@@ -249,5 +258,61 @@ fn delete_backend_config_secret(
         })?;
     }
 
+    Ok(())
+}
+
+fn retrieve_terraform_output(
+    target: &DeploymentTarget,
+    logger: &EnvProgressLogger,
+    event_details: &EventDetails,
+    pod_name: &str,
+) -> Result<(), Box<EngineError>> {
+    info!("Get JSON output from shared volume");
+    let result_json_output = kubectl_get_job_pod_output(
+        target.kubernetes.kubeconfig_local_file_path(),
+        target.cloud_provider.credentials_environment_variables(),
+        target.environment.namespace(),
+        pod_name,
+    );
+    match result_json_output {
+        Ok(json) => {
+            let result_serde_json: Result<
+                HashMap<String, crate::environment::action::deploy_job::JobOutputVariable>,
+                serde_json::Error,
+            > = crate::environment::action::deploy_job::serialize_job_output(&json);
+            match result_serde_json {
+                Ok(deserialized_json_hashmap) => {
+                    let deserialized_json_hashmap_with_uppercase_keys: HashMap<
+                        String,
+                        crate::environment::action::deploy_job::JobOutputVariable,
+                    > = deserialized_json_hashmap
+                        .iter()
+                        .map(|(key, value)| (key.to_uppercase(), value.clone()))
+                        .collect();
+                    logger.core_configuration_for_terraform_service(
+                        "TerraformService output succeeded. Environment variables will be synchronized.".to_string(),
+                        serde_json::to_string(&deserialized_json_hashmap_with_uppercase_keys)
+                            .unwrap_or_else(|_| "{}".to_string()),
+                    )
+                }
+                Err(err) => {
+                    logger.log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
+                            event_details.clone(),
+                            err,
+                            &json,
+                        )),
+                    ));
+                }
+            }
+        }
+        Err(err) => {
+            info!(
+                "Cannot get JSON output: {}",
+                err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+            );
+        }
+    };
     Ok(())
 }
