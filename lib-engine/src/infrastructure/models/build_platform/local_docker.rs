@@ -200,6 +200,7 @@ impl LocalDocker {
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, abort),
+            build.git_repository.docker_target_build_stage.as_ref(),
         );
 
         if let Err(err) = exit_status {

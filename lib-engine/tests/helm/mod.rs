@@ -250,6 +250,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
                 extra_files_to_inject: vec![],
+                docker_target_build_stage: None,
             },
             image: Image {
                 service_id: "my_application_id".to_string(),

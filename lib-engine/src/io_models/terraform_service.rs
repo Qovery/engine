@@ -489,6 +489,7 @@ impl TerraformService {
                 dockerfile_content: Some(dockerfile_content),
                 root_path: root_path.clone(),
                 extra_files_to_inject,
+                docker_target_build_stage: None,
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,

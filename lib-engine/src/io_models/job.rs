@@ -146,6 +146,7 @@ pub enum JobSource {
         root_path: String,
         dockerfile_path: Option<String>,
         dockerfile_content: Option<String>,
+        docker_target_build_stage: Option<String>,
     },
 }
 
@@ -206,33 +207,52 @@ impl Job {
         cluster_id: &QoveryIdentifier,
     ) -> Option<Build> {
         let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
-        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, dockerfile_content, root_path) =
-            match &self.source {
-                JobSource::Docker {
-                    git_url,
-                    git_credentials,
-                    branch,
-                    commit_id,
-                    root_path,
-                    dockerfile_path,
-                    dockerfile_content,
-                } => {
-                    if dockerfile_content.is_some() {
-                        (
-                            git_url,
-                            git_credentials,
-                            branch,
-                            commit_id,
-                            &qovery_dockerfile,
-                            dockerfile_content,
-                            root_path,
-                        )
-                    } else {
-                        (git_url, git_credentials, branch, commit_id, dockerfile_path, &None, root_path)
-                    }
+        let (
+            git_url,
+            git_credentials,
+            _branch,
+            commit_id,
+            dockerfile_path,
+            dockerfile_content,
+            root_path,
+            docker_target_build_stage,
+        ) = match &self.source {
+            JobSource::Docker {
+                git_url,
+                git_credentials,
+                branch,
+                commit_id,
+                root_path,
+                dockerfile_path,
+                dockerfile_content,
+                docker_target_build_stage,
+            } => {
+                if dockerfile_content.is_some() {
+                    (
+                        git_url,
+                        git_credentials,
+                        branch,
+                        commit_id,
+                        &qovery_dockerfile,
+                        dockerfile_content,
+                        root_path,
+                        docker_target_build_stage,
+                    )
+                } else {
+                    (
+                        git_url,
+                        git_credentials,
+                        branch,
+                        commit_id,
+                        dockerfile_path,
+                        &None,
+                        root_path,
+                        docker_target_build_stage,
+                    )
                 }
-                _ => return None,
-            };
+            }
+            _ => return None,
+        };
 
         // Retrieve ssh keys from env variables
 
@@ -262,6 +282,7 @@ impl Job {
                 dockerfile_content: dockerfile_content.clone(),
                 root_path,
                 extra_files_to_inject: vec![],
+                docker_target_build_stage: docker_target_build_stage.clone(),
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self
