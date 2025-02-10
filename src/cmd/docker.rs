@@ -631,6 +631,7 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
+        target_build_stage: Option<&String>,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -661,6 +662,7 @@ impl Docker {
             stdout_output,
             stderr_output,
             should_abort,
+            target_build_stage,
         )
     }
 
@@ -677,6 +679,7 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
+        target_build_stage: Option<&String>,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -705,6 +708,11 @@ impl Docker {
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        if let Some(target_build_stage) = target_build_stage {
+            args_string.push("--target".to_owned());
+            args_string.push(target_build_stage.to_string());
+        }
 
         if push_after_build {
             args_string.push("--cache-to".to_string());
@@ -1035,6 +1043,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
 
         assert!(ret.is_ok());
@@ -1051,6 +1060,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
 
         assert!(ret.is_ok());
@@ -1085,6 +1095,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
         assert!(ret.is_ok());
 
@@ -1216,6 +1227,59 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
+        );
+
+        assert!(ret.is_ok());
+    }
+
+    #[test]
+    fn test_buildkit_build_with_target() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+        let image_cache = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["cache".to_string()],
+        );
+
+        // It should work
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &image_cache,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            Some(&"build".to_string()),
+        );
+
+        assert!(ret.is_ok());
+
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &image_cache,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            Some(&"build".to_string()),
         );
 
         assert!(ret.is_ok());

@@ -350,6 +350,8 @@ pub struct Application {
     pub should_delete_shared_registry: bool,
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
+    #[serde(default)]
+    pub docker_target_build_stage: Option<String>,
 }
 
 fn default_root_path_value() -> String {
@@ -571,6 +573,7 @@ impl Application {
                 dockerfile_content: None,
                 root_path,
                 extra_files_to_inject: vec![],
+                docker_target_build_stage: self.docker_target_build_stage.clone(),
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self

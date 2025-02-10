@@ -292,6 +292,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 labels_group_ids: btreeset! {},
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             };
             environment.applications = vec![app];
         }

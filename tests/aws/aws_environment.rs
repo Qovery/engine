@@ -2640,6 +2640,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
                     .trim()
                     .to_string(),
                 ),
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -3023,6 +3024,7 @@ fn build_and_deploy_job_on_aws_eks() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -3605,6 +3607,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,

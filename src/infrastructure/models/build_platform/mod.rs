@@ -173,6 +173,7 @@ pub struct GitRepository {
     pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
     pub extra_files_to_inject: Vec<GitRepositoryExtraFile>,
+    pub docker_target_build_stage: Option<String>,
 }
 impl GitRepository {
     fn credentials(&self) -> Option<anyhow::Result<Credentials>> {
