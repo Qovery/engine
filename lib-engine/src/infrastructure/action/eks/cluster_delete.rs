@@ -159,13 +159,17 @@ pub fn delete_eks_cluster(
     // remove S3 logs buckets from tf state
     // Because deleting them inside terraform often lead to a timeout
     // so we delegate the responsibility to delete them to the user
-    let resources_to_be_removed_from_tf_state: &[&str] = &[
+    let mut resources_to_be_removed_from_tf_state = vec![
         "aws_s3_bucket.loki_bucket",
         "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
         "aws_s3_bucket.vpc_flow_logs",
         "aws_s3_bucket_lifecycle_configuration.vpc_flow_logs_lifecycle",
     ];
-    tf_resources.delete(resources_to_be_removed_from_tf_state, &logger)?;
+    if kubernetes.advanced_settings.object_storage_enable_logging {
+        resources_to_be_removed_from_tf_state.extend(vec!["aws_s3_bucket.loki_bucket_logs", "loki_lifecycle_logs"]);
+    }
+
+    tf_resources.delete(resources_to_be_removed_from_tf_state.as_slice(), &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");
 

@@ -220,6 +220,11 @@ pub fn eks_tera_context(
     let documentdb_cidr_subnet = options.documentdb_cidr_subnet.clone();
     let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
 
+    context.insert(
+        "object_storage_enable_logging",
+        &kubernetes.advanced_settings().object_storage_enable_logging,
+    );
+
     // Qovery
     context.insert("organization_id", kubernetes.context.organization_short_id());
     context.insert("organization_long_id", &kubernetes.context.organization_long_id().to_string());

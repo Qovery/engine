@@ -262,6 +262,9 @@ pub struct ClusterAdvancedSettings {
     pub k8s_api_allowed_public_access_cidrs: Option<Vec<String>>,
     #[serde(alias = "storageclass.fast_ssd")]
     pub k8s_storage_class_fast_ssd: StorageClass,
+
+    #[serde(alias = "object_storage.enable_logging")]
+    pub object_storage_enable_logging: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -323,6 +326,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_default_backend_enabled: None,
             nginx_default_backend_image_repository: None,
             nginx_default_backend_image_tag: None,
+            object_storage_enable_logging: false,
         }
     }
 }

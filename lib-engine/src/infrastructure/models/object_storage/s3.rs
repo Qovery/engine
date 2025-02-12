@@ -10,11 +10,11 @@ use std::time::Duration;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
-    DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketTaggingRequest, GetBucketVersioningRequest,
-    GetObjectRequest, GetObjectTaggingRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier,
-    PutBucketTaggingRequest, PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging,
-    S3 as RusotoS3,
+    BucketLoggingStatus, CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest,
+    DeleteObjectRequest, DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketLoggingRequest,
+    GetBucketTaggingRequest, GetBucketVersioningRequest, GetObjectRequest, GetObjectTaggingRequest, HeadBucketRequest,
+    ListObjectsRequest, LoggingEnabled, ObjectIdentifier, PutBucketLoggingRequest, PutBucketTaggingRequest,
+    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3 as RusotoS3,
 };
 
 use crate::environment::models::ToCloudProviderFormat;
@@ -168,6 +168,7 @@ impl ObjectStorage for S3 {
         bucket_name: &str,
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
     ) -> Result<Bucket, ObjectStorageError> {
         S3::is_bucket_name_valid(bucket_name)?;
 
@@ -217,10 +218,43 @@ impl ObjectStorage for S3 {
 
         if bucket_versioning_activated {
             // Not blocking if fails for the time being
-            let _ = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+            match block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
+                expected_bucket_owner: None,
                 ..Default::default()
-            }));
+            })) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(ObjectStorageError::CannotActivateBucketVersioning {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    });
+                }
+            }
+        }
+
+        if bucket_logging_activated {
+            // Not blocking if fails for the time being
+            match block_on(s3_client.put_bucket_logging(PutBucketLoggingRequest {
+                bucket: bucket_name.to_string(),
+                bucket_logging_status: BucketLoggingStatus {
+                    logging_enabled: Some(LoggingEnabled {
+                        target_bucket: bucket_name.to_string(),
+                        target_grants: None,
+                        target_prefix: "logs/".to_string(),
+                    }),
+                },
+                expected_bucket_owner: None,
+                ..Default::default()
+            })) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(ObjectStorageError::CannotActivateBucketLogging {
+                        bucket_name: bucket_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    });
+                }
+            }
         }
 
         self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
@@ -229,7 +263,10 @@ impl ObjectStorage for S3 {
     fn update_bucket(
         &self,
         _bucket_name: &str,
+        _bucket_ttl: Option<Duration>,
         _bucket_versioning_activated: bool,
+        _bucket_logging_activated: bool,
+        _bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageError> {
         // TODO(benjaminch): to be implemented
         todo!("update_bucket for S3 is not implemented")
@@ -274,6 +311,19 @@ impl ObjectStorage for S3 {
             }
         }
 
+        // Get logging
+        let mut logging_activated = false;
+        if let Ok(logging) = block_on(self.get_s3_client().get_bucket_logging(GetBucketLoggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(logging_enabled) = logging.logging_enabled {
+                if logging_enabled.target_bucket == bucket_name {
+                    logging_activated = true;
+                }
+            }
+        }
+
         // Get labels
         let mut labels: Option<HashMap<String, String>> = None;
         if let Ok(tagging) = block_on(self.get_s3_client().get_bucket_tagging(GetBucketTaggingRequest {
@@ -287,7 +337,7 @@ impl ObjectStorage for S3 {
             name: bucket_name.to_string(),
             ttl,
             versioning_activated,
-
+            logging_activated,
             location: BucketRegion::AwsRegion(self.region.clone()),
             labels,
         })

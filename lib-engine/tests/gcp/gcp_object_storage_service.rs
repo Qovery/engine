@@ -2,6 +2,7 @@ use crate::helpers::gcp::{try_parse_json_credentials_from_str, GCP_REGION, GCP_R
 use crate::helpers::gcp::{GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER, GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER};
 use crate::helpers::utilities::FuncTestsSecrets;
 use function_name::named;
+use itertools::izip;
 use qovery_engine::infrastructure::models::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
@@ -21,6 +22,7 @@ struct BucketParams {
     bucket_ttl: Option<Duration>,
     bucket_labels: Option<HashMap<String, String>>,
     bucket_versioning: bool,
+    bucket_logging: bool,
 }
 
 impl BucketParams {
@@ -52,6 +54,8 @@ impl BucketParams {
             (None, None) => true,
             _ => false,
         }
+        && self.bucket_versioning == bucket.versioning_activated
+        && self.bucket_logging == bucket.logging_activated
         // -> Add new fields here
     }
 }
@@ -87,6 +91,7 @@ fn test_bucket_exists() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -95,7 +100,7 @@ fn test_bucket_exists() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
     let not_existing_bucket_name = format!("{}-not-existing", existing_bucket_name);
@@ -136,6 +141,7 @@ fn test_get_bucket() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -144,7 +150,7 @@ fn test_get_bucket() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
     let not_existing_bucket_name = format!("{}-not-existing", existing_bucket_name);
@@ -195,6 +201,7 @@ fn test_create_bucket_success() {
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
                 bucket_versioning: false,
+                bucket_logging: false,
             },
             description: "case 1 - create a simple bucket",
         },
@@ -209,6 +216,7 @@ fn test_create_bucket_success() {
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
                 bucket_versioning: false,
+                bucket_logging: false,
             },
             description: "case 2 - create a simple bucket with TTL < 1 day",
         },
@@ -223,12 +231,13 @@ fn test_create_bucket_success() {
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
                 bucket_versioning: false,
+                bucket_logging: false,
             },
             description: "case 3 - create a simple bucket without TTL",
         },
         TestCase {
             input: BucketParams {
-                project_id: google_project_id,
+                project_id: google_project_id.to_string(),
                 bucket_name: format!("test-bucket-4-{}", Uuid::new_v4()),
                 bucket_location: GcpStorageRegion::EuropeWest9,
                 bucket_ttl: None,
@@ -237,8 +246,24 @@ fn test_create_bucket_success() {
                     ("test_name".to_string(), function_name!().to_string()),
                 ])),
                 bucket_versioning: true,
+                bucket_logging: false,
             },
             description: "case 4 - create a simple bucket with versioning",
+        },
+        TestCase {
+            input: BucketParams {
+                project_id: google_project_id,
+                bucket_name: format!("test-bucket-5-{}", Uuid::new_v4()),
+                bucket_location: GcpStorageRegion::EuropeWest9,
+                bucket_ttl: Some(Duration::from_secs(60 * 60)), // 1 hour
+                bucket_labels: Some(HashMap::from([
+                    ("bucket_name".to_string(), "bucket_5".to_string()),
+                    ("test_name".to_string(), function_name!().to_string()),
+                ])),
+                bucket_versioning: false,
+                bucket_logging: true,
+            },
+            description: "case 5 - create a simple bucket with logging",
         },
     ];
 
@@ -251,6 +276,7 @@ fn test_create_bucket_success() {
                 tc.input.bucket_location.clone(),
                 tc.input.bucket_ttl,
                 tc.input.bucket_versioning,
+                tc.input.bucket_logging,
                 tc.input.bucket_labels.clone(),
             )
             .unwrap_or_else(|_| panic!("Cannot create bucket for test `{}`", tc.description));
@@ -258,7 +284,7 @@ fn test_create_bucket_success() {
         let _created_bucket_guard = scopeguard::guard(&created_bucket, |bucket| {
             // make sure to delete the bucket after test
             service
-                .delete_bucket(bucket.name.as_str(), true)
+                .delete_bucket(bucket.name.as_str(), true, true)
                 .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &created_bucket.name));
         });
 
@@ -267,6 +293,28 @@ fn test_create_bucket_success() {
             &created_bucket,
             Some(HashSet::from_iter(["ttl", "creation_date"].iter().cloned())) // exclude TTL and creation date as added automatically by the service
         ));
+
+        if tc.input.bucket_logging {
+            // make sure bucket has logging activated
+            let created_bucket = service
+                .get_bucket(tc.input.bucket_name.as_str())
+                .unwrap_or_else(|_| panic!("Cannot get test bucket `{}`", &tc.input.bucket_name));
+            assert!(created_bucket.logging_activated);
+
+            let logs_bucket = Bucket::generate_logging_bucket_name_for_bucket(created_bucket.name.as_str());
+            let logs_bucket = service
+                .get_bucket(logs_bucket.as_str())
+                .unwrap_or_else(|_| panic!("Cannot get test logging bucket `{}`", &logs_bucket));
+            let mut expected_log_bucket = tc.input;
+            // log bucket should be the same as the original bucket but name and logging option
+            expected_log_bucket.bucket_name =
+                Bucket::generate_logging_bucket_name_for_bucket(created_bucket.name.as_str());
+            expected_log_bucket.bucket_logging = false;
+            assert!(expected_log_bucket.matches(
+                &logs_bucket,
+                Some(HashSet::from_iter(["ttl", "creation_date"].iter().cloned())) // exclude TTL and creation date as added automatically by the service
+            ));
+        }
     }
 }
 
@@ -290,16 +338,18 @@ fn test_update_bucket() {
     )
     .expect("Cannot initialize google object storage service");
 
+    let project_id = secrets
+        .GCP_PROJECT_NAME
+        .expect("GCP_PROJECT_NAME should be defined in secrets");
+
     // create a bucket for the test
     let existing_bucket = service
         .create_bucket(
-            secrets
-                .GCP_PROJECT_NAME
-                .expect("GCP_PROJECT_NAME should be defined in secrets")
-                .as_str(),
+            project_id.as_str(),
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
+            false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
@@ -308,17 +358,49 @@ fn test_update_bucket() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket.name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
     // Bucket versioning
-    for versioning in [true, false].iter() {
+    for (versioning, logging) in izip!([true, false].iter(), [true, false].iter()) {
         // execute:
-        match service.update_bucket(existing_bucket.name.as_str(), *versioning) {
+        match service.update_bucket(
+            project_id.as_str(),
+            existing_bucket.name.as_str(),
+            GcpStorageRegion::from(GCP_REGION),
+            Some(*GCP_RESOURCE_TTL),
+            *versioning,
+            *logging,
+            None,
+        ) {
             // verify:
             Ok(updated_bucket_result) => assert_eq!(versioning, &updated_bucket_result.versioning_activated),
             Err(e) => panic!("Cannot update bucket versioning: {}", e),
+        }
+    }
+
+    // Bucket logging
+    for (versioning, logging) in izip!([true, false].iter(), [true, false].iter()) {
+        // execute:
+        match service.update_bucket(
+            project_id.as_str(),
+            existing_bucket.name.as_str(),
+            GcpStorageRegion::from(GCP_REGION),
+            Some(*GCP_RESOURCE_TTL),
+            *versioning,
+            *logging,
+            None,
+        ) {
+            // verify:
+            Ok(updated_bucket_result) => {
+                assert_eq!(logging, &updated_bucket_result.logging_activated);
+                if *logging {
+                    let logs_bucket = Bucket::generate_logging_bucket_name_for_bucket(existing_bucket.name.as_str());
+                    assert!(service.bucket_exists(logs_bucket.as_str()));
+                }
+            }
+            Err(e) => panic!("Cannot update bucket logging: {}", e),
         }
     }
 }
@@ -336,6 +418,9 @@ fn test_delete_bucket_using_run_job() {
             .expect("GCP_CREDENTIALS is not set in secrets"),
     )
     .expect("Cannot parse GCP_CREDENTIALS");
+    let project_id = secrets
+        .GCP_PROJECT_NAME
+        .expect("GCP_PROJECT_NAME should be defined in secrets");
     let service = ObjectStorageService::new(
         credentials,
         Some(GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER.clone()),
@@ -343,48 +428,59 @@ fn test_delete_bucket_using_run_job() {
     )
     .expect("Cannot initialize google object storage service");
 
-    // create a bucket for the test
-    let existing_bucket_name = service
-        .create_bucket(
-            secrets
-                .GCP_PROJECT_NAME
-                .expect("GCP_PROJECT_NAME should be defined in secrets")
-                .as_str(),
-            format!("test-bucket-{}", Uuid::new_v4()).as_str(),
+    for logging in [true, false].iter() {
+        // create a bucket for the test
+        let existing_bucket_name = service
+            .create_bucket(
+                project_id.as_str(),
+                format!("test-bucket-{}", Uuid::new_v4()).as_str(),
+                GcpStorageRegion::from(GCP_REGION),
+                Some(*GCP_RESOURCE_TTL),
+                false,
+                *logging,
+                Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            )
+            .expect("Cannot create bucket")
+            .name;
+        // stick a guard on the bucket to delete bucket after test
+        let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
+            // make sure to delete the bucket after test
+            service
+                .delete_bucket(bucket_name.as_str(), true, true)
+                .unwrap_or_else(|_| error!("Cannot delete test bucket `{}` after test", bucket_name));
+        });
+
+        // execute:
+        let delete_result = service.delete_bucket_non_blocking(
+            existing_bucket_name.as_str(),
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
-            false,
-            Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
-        )
-        .expect("Cannot create bucket")
-        .name;
-    // stick a guard on the bucket to delete bucket after test
-    let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
-        // make sure to delete the bucket after test
-        service
-            .delete_bucket(bucket_name.as_str(), true)
-            .unwrap_or_else(|_| error!("Cannot delete test bucket `{}` after test", bucket_name));
-    });
+            true,
+        );
 
-    // execute:
-    let delete_result = service.delete_bucket_non_blocking(
-        existing_bucket_name.as_str(),
-        GcpStorageRegion::from(GCP_REGION),
-        Some(*GCP_RESOURCE_TTL),
-    );
+        // verify:
+        assert!(delete_result.is_ok());
+        // deletion job should be executed immediately, but there is a delay in the bucket deletion while job is being created and executed
+        // so we need to wait a bit before checking if the bucket is deleted
+        let bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
+            if service.bucket_exists(existing_bucket_name.as_str()) {
+                OperationResult::Retry("Bucket still exists")
+            } else {
+                OperationResult::Ok(())
+            }
+        });
+        assert!(bucket_exists_result.is_ok());
 
-    // verify:
-    assert!(delete_result.is_ok());
-    // deletion job should be executed immediately, but there is a delay in the bucket deletion while job is being created and executed
-    // so we need to wait a bit before checking if the bucket is deleted
-    let bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
-        if service.bucket_exists(existing_bucket_name.as_str()) {
-            OperationResult::Retry("Bucket still exists")
-        } else {
-            OperationResult::Ok(())
-        }
-    });
-    assert!(bucket_exists_result.is_ok());
+        let logs_bucket = format!("{}-logs", existing_bucket_name);
+        let logging_bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
+            if service.bucket_exists(logs_bucket.as_str()) {
+                OperationResult::Retry("Logging bucket still exists")
+            } else {
+                OperationResult::Ok(())
+            }
+        });
+        assert!(logging_bucket_exists_result.is_ok());
+    }
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -418,6 +514,7 @@ fn test_delete_bucket_with_objects() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -434,7 +531,7 @@ fn test_delete_bucket_with_objects() {
         .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket_name));
 
     // execute:
-    let delete_result = service.delete_bucket(existing_bucket_name.as_str(), true);
+    let delete_result = service.delete_bucket(existing_bucket_name.as_str(), true, true);
 
     // verify:
     assert!(delete_result.is_ok());
@@ -472,6 +569,7 @@ fn test_empty_bucket_with_objects() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -480,7 +578,7 @@ fn test_empty_bucket_with_objects() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -537,6 +635,7 @@ fn test_list_bucket() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -545,7 +644,7 @@ fn test_list_bucket() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -590,6 +689,7 @@ fn test_list_bucket_from_prefix() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -598,7 +698,7 @@ fn test_list_bucket_from_prefix() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -642,6 +742,7 @@ fn test_put_object() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -650,7 +751,7 @@ fn test_put_object() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -702,6 +803,7 @@ fn test_get_object() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -710,7 +812,7 @@ fn test_get_object() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -765,6 +867,7 @@ fn test_list_objects_keys_only() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -773,7 +876,7 @@ fn test_list_objects_keys_only() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -842,6 +945,7 @@ fn test_list_objects_keys_only_with_prefix() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -850,7 +954,7 @@ fn test_list_objects_keys_only_with_prefix() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -936,6 +1040,7 @@ fn test_list_objects() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -944,7 +1049,7 @@ fn test_list_objects() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -1013,6 +1118,7 @@ fn test_list_objects_with_prefix() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -1021,7 +1127,7 @@ fn test_list_objects_with_prefix() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 
@@ -1107,6 +1213,7 @@ fn test_delete_object() {
             GcpStorageRegion::from(GCP_REGION),
             Some(*GCP_RESOURCE_TTL),
             false,
+            false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
         )
         .expect("Cannot create bucket")
@@ -1115,7 +1222,7 @@ fn test_delete_object() {
     let _existing_bucket_name_guard = scopeguard::guard(&existing_bucket_name, |bucket_name| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket_name.as_str(), true)
+            .delete_bucket(bucket_name.as_str(), true, true)
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
     });
 

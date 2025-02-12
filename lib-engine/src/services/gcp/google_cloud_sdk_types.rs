@@ -62,6 +62,10 @@ impl TryFrom<GcpBucket> for Bucket {
                 None => false,
                 Some(v) => v.enabled,
             },
+            logging_activated: match gcp_bucket.logging {
+                None => false,
+                Some(l) => !l.log_bucket.is_empty(),
+            },
             location: BucketRegion::GcpRegion(gcp_storage_region.clone()),
             labels: gcp_bucket.labels,
         })
