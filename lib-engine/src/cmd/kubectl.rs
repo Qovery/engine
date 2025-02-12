@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
-    Configmap, Item, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
+    Configmap, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
     KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer,
     Secrets, PDB, PVC, SVC,
 };
@@ -371,10 +371,11 @@ pub fn kubectl_delete_objects_in_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<Item>>(
+    let result = kubectl_exec_raw_output(
         vec!["delete", object, "--all-namespaces", "--all"],
         kubernetes_config,
         envs,
+        false,
     );
 
     match result {
