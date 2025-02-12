@@ -72,6 +72,21 @@ pub(super) fn delete_kube_apps(
             .collect::<Vec<String>>()
     });
 
+    // Delete cert-manager objects first
+    // required to avoid namespace stuck on deletion
+    if let Err(e) = uninstall_cert_manager(
+        cluster.kubeconfig_local_file_path(),
+        infra_ctx.cloud_provider().credentials_environment_variables(),
+        event_details.clone(),
+        cluster.logger(),
+    ) {
+        // this error is not blocking, logging a warning and move on
+        logger.warn(EventMessage::new(
+            "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+        ));
+    }
+
     match all_namespaces {
         Ok(namespaces) => {
             let namespaces_as_str = namespaces.iter().map(std::ops::Deref::deref).collect();
@@ -113,20 +128,6 @@ pub(super) fn delete_kube_apps(
     ) {
         // this error is not blocking
         logger.warn(EventMessage::from(to_engine_error(&event_details, e)));
-    }
-
-    // required to avoid namespace stuck on deletion
-    if let Err(e) = uninstall_cert_manager(
-        cluster.kubeconfig_local_file_path(),
-        infra_ctx.cloud_provider().credentials_environment_variables(),
-        event_details.clone(),
-        cluster.logger(),
-    ) {
-        // this error is not blocking, logging a warning and move on
-        logger.warn(EventMessage::new(
-            "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
-            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-        ));
     }
 
     logger.info("Deleting Qovery managed elements");
