@@ -43,6 +43,7 @@ fn test_delete_hard_strategy_bucket() {
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
                 false,
+                false,
             )
             .unwrap_or_else(|_| {
                 panic!("error while creating S3 bucket in `{}`", aws_region.to_cloud_provider_format())
@@ -101,6 +102,7 @@ fn test_delete_empty_strategy_bucket() {
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
                 false,
+                false,
             )
             .unwrap_or_else(|_| {
                 panic!("error while creating S3 bucket in `{}`", aws_region.to_cloud_provider_format())
@@ -153,6 +155,7 @@ fn test_create_bucket() {
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
             false,
+            true,
         );
 
         // validate:
@@ -206,6 +209,7 @@ fn test_get_bucket() {
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
                 false,
+                false,
             )
             .expect("Cannot create bucket");
 
@@ -254,6 +258,7 @@ fn test_recreate_bucket() {
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
             false,
+            false,
         );
         assert!(create_result.is_ok());
         assert!(aws_os.bucket_exists(bucket_name.as_str()));
@@ -273,6 +278,7 @@ fn test_recreate_bucket() {
         let recreate_result = aws_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+            false,
             false,
         );
         assert!(recreate_result.is_ok());
@@ -326,6 +332,7 @@ fn test_put_file() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .expect("error while creating object-storage bucket");
@@ -385,6 +392,7 @@ fn test_get_file() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .expect("error while creating object-storage bucket");

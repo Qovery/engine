@@ -35,6 +35,7 @@ pub fn create_kapsule_cluster(
         cluster.logs_bucket_name().as_str(),
         cluster.advanced_settings().resource_ttl(),
         false,
+        cluster.advanced_settings().object_storage_enable_logging,
     ) {
         let error = EngineError::new_object_storage_error(event_details, e);
         logger.error(error.clone(), None::<&str>);

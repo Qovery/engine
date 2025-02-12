@@ -49,9 +49,16 @@ pub trait ObjectStorage {
         bucket_name: &str,
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
     ) -> Result<Bucket, ObjectStorageError>;
-    fn update_bucket(&self, bucket_name: &str, bucket_versioning_activated: bool)
-        -> Result<Bucket, ObjectStorageError>;
+    fn update_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
+        bucket_labels: Option<HashMap<String, String>>,
+    ) -> Result<Bucket, ObjectStorageError>;
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError>;
     fn delete_bucket(
         &self,
@@ -84,6 +91,7 @@ pub struct Bucket {
     pub name: String,
     pub ttl: Option<Duration>,
     pub versioning_activated: bool,
+    pub logging_activated: bool,
     pub location: BucketRegion,
     pub labels: Option<HashMap<String, String>>,
 }
@@ -93,6 +101,7 @@ impl Bucket {
         name: String,
         ttl: Option<Duration>,
         versioning_activated: bool,
+        logging_activated: bool,
         location: BucketRegion,
         labels: Option<HashMap<String, String>>,
     ) -> Self {
@@ -100,9 +109,14 @@ impl Bucket {
             name,
             ttl,
             versioning_activated,
+            logging_activated,
             location,
             labels,
         }
+    }
+
+    pub fn generate_logging_bucket_name_for_bucket(bucket_name: &str) -> String {
+        format!("{}-log", bucket_name)
     }
 }
 

@@ -315,6 +315,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotActivateBucketLogging {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot activate bucket logging for: `{bucket_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::CannotUploadFile {
                 bucket_name,
                 object_name: file_name,
@@ -1055,6 +1063,8 @@ pub enum Tag {
     ObjectStorageCannotGetBucket,
     /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
+    /// ObjectStorageCannotActivateBucketLogging: represents an error while trying to activate bucket logging for bucket.
+    ObjectStorageCannotActivateBucketLogging,
     /// ObjectStorageQuotaExceeded: represents an error, quotas has been exceeded.
     ObjectStorageQuotaExceeded,
     /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
@@ -4614,6 +4624,14 @@ impl EngineError {
                 event_details,
                 Tag::ObjectStorageCannotActivateBucketVersioning,
                 format!("Error while trying to activate versioning for object storage bucket `{bucket_name}`.",),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
+            ObjectStorageError::CannotActivateBucketLogging { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotActivateBucketLogging,
+                format!("Error while trying to activate logging for object storage bucket `{bucket_name}`.",),
                 Some(object_storage_error.into()),
                 None,
                 None,

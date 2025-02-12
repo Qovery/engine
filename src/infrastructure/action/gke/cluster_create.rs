@@ -76,22 +76,36 @@ fn create_object_storage(
 ) -> Result<(), Box<EngineError>> {
     logger.info("Create Qovery managed object storage buckets.");
     for bucket_name in &[&cluster.logs_bucket_name()] {
-        let existing_bucket = cluster
-            .object_storage
-            .create_bucket(bucket_name, cluster.advanced_settings.resource_ttl(), true)
-            .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
-
-        logger.info(format!("Object storage bucket {} already exists", &bucket_name));
-        // Update set versioning to true if not activated on the bucket (bucket created before this option was enabled)
-        // This can be removed at some point in the future, just here to handle legacy GCP buckets
-        // TODO(ENG-1736): remove this update once all existing buckets have versioning activated
-        if existing_bucket.versioning_activated {
-            continue;
-        }
-
-        if let Err(err) = cluster.object_storage.update_bucket(bucket_name, true) {
-            let error = EngineError::new_object_storage_error(event_details.clone(), err);
-            return Err(Box::new(error));
+        match cluster.object_storage.bucket_exists(bucket_name) {
+            true => {
+                // bucket already exists, just update it
+                logger.info(format!("Object storage bucket {} already exists", &bucket_name));
+                let existing_bucket = cluster
+                    .object_storage
+                    .get_bucket(bucket_name)
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+                cluster
+                    .object_storage
+                    .update_bucket(
+                        bucket_name,
+                        cluster.advanced_settings.resource_ttl(),
+                        true,
+                        cluster.advanced_settings.object_storage_enable_logging,
+                        existing_bucket.labels.clone(),
+                    )
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+            }
+            false => {
+                cluster
+                    .object_storage
+                    .create_bucket(
+                        bucket_name,
+                        cluster.advanced_settings.resource_ttl(),
+                        true,
+                        cluster.advanced_settings.object_storage_enable_logging,
+                    )
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+            }
         }
     }
     Ok(())

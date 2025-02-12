@@ -42,6 +42,7 @@ fn test_delete_bucket_hard_delete_strategy() {
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
             false,
+            false,
         );
         assert!(create_result.is_ok());
         info!("Bucket {} created.", bucket_name);
@@ -85,6 +86,7 @@ fn test_delete_bucket_empty_strategy() {
         let create_result = scaleway_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+            false,
             false,
         );
         assert!(create_result.is_ok());
@@ -130,6 +132,7 @@ fn test_create_bucket() {
         let result = scaleway_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+            false,
             false,
         );
 
@@ -177,6 +180,7 @@ fn test_get_bucket() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+                false,
                 false,
             )
             .expect("Cannot create bucket");
@@ -228,6 +232,7 @@ fn test_recreate_bucket() {
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
             false,
+            false,
         );
         assert!(create_result.is_ok());
         info!("Bucket {} created.", bucket_name);
@@ -242,6 +247,7 @@ fn test_recreate_bucket() {
         let recreate_result = scaleway_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+            false,
             false,
         );
         assert!(recreate_result.is_ok());
@@ -287,6 +293,7 @@ fn test_file_handling() {
         let create_result = scaleway_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+            false,
             false,
         );
         assert!(create_result.is_ok());
@@ -347,6 +354,7 @@ fn test_ensure_file_is_absent() {
         let create_result = scaleway_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(SCW_BUCKET_TTL_IN_SECONDS)),
+            false,
             false,
         );
         assert!(create_result.is_ok());

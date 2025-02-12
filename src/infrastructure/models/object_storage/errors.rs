@@ -49,6 +49,11 @@ pub enum ObjectStorageError {
         bucket_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot activate bucket logging on bucket `{bucket_name:?}`: {raw_error_message:?}.")]
+    CannotActivateBucketLogging {
+        bucket_name: String,
+        raw_error_message: String,
+    },
     #[error("Cannot get object object `{object_name:?}` error in `{bucket_name:?}`: {raw_error_message:?}.")]
     CannotGetObjectFile {
         bucket_name: String,

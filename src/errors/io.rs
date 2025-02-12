@@ -182,6 +182,7 @@ pub enum Tag {
     NotImplementedError,
     NumberOfRequestedMaxNodesIsBelowThanCurrentUsage,
     ObjectStorageCannotActivateBucketVersioning,
+    ObjectStorageCannotActivateBucketLogging,
     ObjectStorageCannotCreateBucket,
     ObjectStorageCannotDeleteBucket,
     ObjectStorageCannotDeleteFileIntoBucket,
@@ -386,6 +387,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::ObjectStorageCannotActivateBucketVersioning => {
                 Tag::ObjectStorageCannotActivateBucketVersioning
             }
+            errors::Tag::ObjectStorageCannotActivateBucketLogging => Tag::ObjectStorageCannotActivateBucketLogging,
             errors::Tag::BuilderError => Tag::BuilderError,
             errors::Tag::ContainerRegistryCannotCreateRegistry => Tag::ContainerRegistryCannotCreateRegistry,
             errors::Tag::UnsupportedClusterKind => Tag::UnsupportedClusterKind,
