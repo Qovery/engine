@@ -2,7 +2,7 @@ use crate::cmd::docker::Docker;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::events::{EventDetails, Transmitter};
 use crate::utilities::to_short_id;
-use rand::distributions::Alphanumeric;
+use rand::distr::Alphanumeric;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
