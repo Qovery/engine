@@ -295,13 +295,13 @@ pub fn clean_environments(
 
 pub fn random_valid_registry_name() -> String {
     let mut rand_string: String = String::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for x in 1..35 {
         if x % 4 == 0 {
             rand_string.push('-');
         } else {
-            let char: char = rng.gen_range(b'a'..=b'z') as char;
+            let char: char = rng.random_range(b'a'..=b'z') as char;
             rand_string.push(char);
         }
     }
