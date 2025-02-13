@@ -7,6 +7,7 @@ use qovery_engine::infrastructure::models::container_registry::ContainerRegistry
 use qovery_engine::runtime::block_on;
 use rusoto_ecr::Ecr;
 use rusoto_ecr::{DescribeRepositoriesRequest, ListTagsForResourceRequest, Tag};
+use std::str::FromStr;
 use std::time::Duration;
 use tracing::{span, Level};
 use uuid::Uuid;
@@ -32,12 +33,14 @@ fn create_ecr_repository_with_tags() {
             secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
             None,
         );
+        let region =
+            rusoto_core::Region::from_str(&secrets.AWS_DEFAULT_REGION.expect("Unable to get default region")).unwrap();
         let container_registry = ECR::new(
             context,
             Uuid::new_v4(),
             registry_name.as_str(),
             credentials,
-            &secrets.AWS_DEFAULT_REGION.expect("Unable to get default region"),
+            region,
             logger(),
             hashmap! {"ttl".to_string() => AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string()},
         )

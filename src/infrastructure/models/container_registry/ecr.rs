@@ -3,7 +3,6 @@
 use base64::engine::general_purpose;
 use base64::Engine;
 use std::collections::HashMap;
-use std::str::FromStr;
 use std::time::Duration;
 
 use rusoto_core::{Client, HttpClient, Region, RusotoError};
@@ -50,7 +49,7 @@ impl ECR {
         long_id: Uuid,
         name: &str,
         credentials: AwsCredentials,
-        region: &str,
+        region: Region,
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
     ) -> Result<Self, ContainerRegistryError> {
@@ -59,7 +58,7 @@ impl ECR {
             long_id,
             name: name.to_string(),
             credentials,
-            region: Region::from_str(region).unwrap(),
+            region,
             registry_info: None,
             logger,
             tags,

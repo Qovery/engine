@@ -45,6 +45,7 @@ use anyhow::{anyhow, Context as OtherContext};
 use derivative::Derivative;
 use governor::{Quota, RateLimiter};
 use nonzero_ext::nonzero;
+use rusoto_signature::Region;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -588,7 +589,8 @@ impl ContainerRegistry {
                     long_id,
                     name.as_str(),
                     credentials,
-                    &options.region,
+                    Region::from_str(&options.region)
+                        .with_context(|| format!("invalid rusoto region {}", &options.region))?,
                     logger,
                     tags,
                 )?))
