@@ -52,12 +52,15 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
         secrets.AWS_SESSION_TOKEN,
     );
+
+    let region =
+        rusoto_core::Region::from_str(&secrets.AWS_DEFAULT_REGION.expect("Unable to get default region")).unwrap();
     ECR::new(
         context.clone(),
         Uuid::new_v4(),
         "ea59qe62xaw3wjai",
         credentials,
-        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
+        region,
         logger,
         hashmap! {},
     )
