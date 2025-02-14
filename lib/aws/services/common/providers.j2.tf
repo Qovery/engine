@@ -20,6 +20,9 @@ provider "aws" {
   region     = "{{ region }}"
   access_key = "{{ aws_access_key }}"
   secret_key = "{{ aws_secret_key }}"
+{% if aws_session_token -%}
+  token = "{{ aws_session_token }}"
+{% endif -%}
 }
 
 data "aws_eks_cluster" "eks_cluster" {
