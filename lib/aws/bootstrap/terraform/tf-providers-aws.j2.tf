@@ -34,5 +34,5 @@ provider "aws" {
   secret_key = "{{ aws_secret_key }}"
 {% if aws_session_token -%}
   token = "{{ aws_session_token }}"
-{%- endif -%}
+{% endif -%}
 }
