@@ -97,10 +97,10 @@ impl<'m> KubentCmd {
 
         let mut envs_with_soft_memory_limit = envs.to_vec();
         if !envs.iter().any(|(k, _v)| k == &"GOMEMLIMIT") {
-            // Set a soft memory limit of 128MiB for kubent since it can eventually OOM
+            // Set a soft memory limit of 64MiB for kubent since it can eventually OOM
             // This is not a hard limit, it's just a hint to the Go runtime trying to keep
             // memory under the limit by triggering GC more often.
-            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "128MiB"));
+            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "64MiB"));
         }
 
         let mut stdout_output: Vec<String> = Vec::new();
@@ -111,7 +111,7 @@ impl<'m> KubentCmd {
         match cmd.exec_with_abort(
             stdout_output_formatter,
             &mut |line| warn!("kubent stderr: {}", line),
-            &CommandKiller::from_timeout(Duration::from_secs(2 * 60)),
+            &CommandKiller::from_timeout(Duration::from_secs(10 * 60)),
         ) {
             Ok(_) => Ok(KubentCmdOutput {
                 stdout: match stdout_output.is_empty() {
