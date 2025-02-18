@@ -4635,7 +4635,7 @@ dependencies = [
 [[package]]
 name = "scaleway_api_rs"
 version = "0.1.2"
-source = "git+https://github.com/Qovery/scaleway-api-rs?branch=engine#2d361ceb66d51d2aeccd03b161d20a33417de3bc"
+source = "git+https://github.com/Qovery/scaleway-api-rs?branch=engine#6d52095fe4665e65369fca05bc0ab5ea22e5c7a8"
 dependencies = [
  "reqwest 0.12.12",
  "serde",
@@ -6249,7 +6249,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
