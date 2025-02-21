@@ -1,8 +1,8 @@
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use serde_json::Value;
 use std::collections::HashMap;
-use tera::{try_get_value, Error};
+use tera::{Error, try_get_value};
 
 // TODO(benjaminch): this should be an external crate
 /// This file to declare custom functions / filters and stuff for tera

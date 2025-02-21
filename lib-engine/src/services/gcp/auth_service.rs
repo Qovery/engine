@@ -1,6 +1,6 @@
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
-use crate::environment::models::gcp::io::JsonCredentials as IOJsonCredentials;
 use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials as IOJsonCredentials;
 use std::fs::File;
 use std::io::Write;
 use tempfile::tempdir;

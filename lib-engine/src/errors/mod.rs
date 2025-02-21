@@ -7,8 +7,8 @@ use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::helm::HelmChartError;
 use crate::infrastructure::models::build_platform::BuildError;
-use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 
 use crate::cmd::{command, terraform};
@@ -31,8 +31,8 @@ use aws_sdk_elasticache::operation::describe_cache_clusters::DescribeCacheCluste
 use aws_sdk_rds::error::SdkError as RdsSdkError;
 use aws_sdk_rds::operation::describe_db_instances::DescribeDBInstancesError;
 use derivative::Derivative;
-use kube::error::Error as KubeError;
 use kube::Resource;
+use kube::error::Error as KubeError;
 use serde::de::DeserializeOwned;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Error;
@@ -397,15 +397,17 @@ impl From<ContainerRegistryError> for CommandError {
     fn from(container_registry_error: ContainerRegistryError) -> Self {
         // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
         match container_registry_error {
-            ContainerRegistryError::CannotInstantiateClient { raw_error_message} => {
-                CommandError::new("Container registry error, cannot instantiate client".to_string(), Some(raw_error_message), None)
-            }
+            ContainerRegistryError::CannotInstantiateClient { raw_error_message } => CommandError::new(
+                "Container registry error, cannot instantiate client".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
             ContainerRegistryError::InvalidCredentials => {
                 CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
             }
-            ContainerRegistryError::InvalidRegistryUrl { registry_url} => {
-                CommandError::new_from_safe_message(format!("Container registry error, invalid registry URL: `{registry_url}`"))
-            }
+            ContainerRegistryError::InvalidRegistryUrl { registry_url } => CommandError::new_from_safe_message(
+                format!("Container registry error, invalid registry URL: `{registry_url}`"),
+            ),
             ContainerRegistryError::CannotGetCredentials => {
                 CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
             }
@@ -655,13 +657,18 @@ impl From<RouterError> for CommandError {
                 None,
             ),
 
-            RouterError::BasicAuthEnvVarBase64DecodeError {env_var_name, env_var_value} => CommandError::new(
-                format!("Router error: Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`"),
+            RouterError::BasicAuthEnvVarBase64DecodeError {
+                env_var_name,
+                env_var_value,
+            } => CommandError::new(
+                format!(
+                    "Router error: Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`"
+                ),
                 Some(router_error.to_string()),
                 None,
             ),
 
-            RouterError::BasicAuthEnvVarNotFound {env_var_name } => CommandError::new(
+            RouterError::BasicAuthEnvVarNotFound { env_var_name } => CommandError::new(
                 format!("Router error: basic auth env var `{env_var_name}` not found"),
                 Some(router_error.to_string()),
                 None,
@@ -1390,7 +1397,9 @@ impl EngineError {
             Tag::InvalidEnginePayload,
             match &input_error {
                 InputError::InvalidInputFieldValue { field_name, message } => {
-                    format!("Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`")
+                    format!(
+                        "Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`"
+                    )
                 }
             },
             Some(CommandError::from(input_error)),
@@ -3976,7 +3985,9 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `safe_error`: Raw error message.
     pub fn new_nodegroup_delete_any_nodegroup_error(event_details: EventDetails, raw_error: String) -> EngineError {
-        let message = format!("Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider interface and manually fix issues.\n{raw_error}");
+        let message = format!(
+            "Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider interface and manually fix issues.\n{raw_error}"
+        );
         EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
     }
 

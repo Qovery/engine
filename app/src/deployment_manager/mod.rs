@@ -6,10 +6,10 @@ mod upstream_gtw_context;
 use crate::deployment_manager::deployment_context::DeploymentContext;
 use crate::deployment_manager::task_context::TaskContext;
 use crate::deployment_manager::upstream_gtw_context::UpstreamGatewayContext;
-use crate::grpc::engine::engine_message_rx;
-use crate::grpc::engine::DeploymentRequest;
-use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::GrpcEngineClient;
+use crate::grpc::engine::DeploymentRequest;
+use crate::grpc::engine::engine_message_rx;
+use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::metrics::METRICS_NB_RUNNING_TASKS;
 use crate::models::TaskSelector;
 use futures_util::StreamExt;
@@ -18,11 +18,11 @@ use qovery_engine::events::EngineEvent;
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tonic::Code;
-use tracing::{error, field, Instrument, Level};
+use tracing::{Instrument, Level, error, field};
 
 //
 //
@@ -481,12 +481,12 @@ mod test {
     use crate::deployment_manager::DeploymentManager;
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
-        engine_message_rx, ClusterCredentialsUpdate, DeploymentInfo, DeploymentRequest, EngineMessageRx,
-        EngineMessageTx, GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse,
+        ClusterCredentialsUpdate, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx, GitTokenRequest,
+        GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse, engine_message_rx,
     };
     use crate::grpc::test::new_engine_client_test;
     use crate::models::TaskSelector;
-    use futures_util::{pin_mut, stream, Stream, StreamExt};
+    use futures_util::{Stream, StreamExt, pin_mut, stream};
     use qovery_engine::engine_task::Task;
 
     use qovery_engine::events::EngineEvent;

@@ -1,15 +1,15 @@
+use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::HelmDeployment;
-use crate::environment::action::DeploymentAction;
 use crate::environment::models::router::Router;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::router::reporter::RouterDeploymentReporter;
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::models::CustomDomain;
 
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};

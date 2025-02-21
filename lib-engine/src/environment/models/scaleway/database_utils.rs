@@ -129,26 +129,26 @@ mod tests {
         // v14
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(14).build()).is_ok());
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(14).minor(9).build()).is_ok());
-        assert!(is_allowed_managed_postgres_version(
-            &VersionsNumberBuilder::new().major(14).minor(10).patch(5).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(14).minor(10).patch(5).build())
+                .is_ok()
+        );
 
         // v15
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(15).build()).is_ok());
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(15).minor(10).build()).is_ok());
-        assert!(is_allowed_managed_postgres_version(
-            &VersionsNumberBuilder::new().major(15).minor(11).patch(6).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(15).minor(11).patch(6).build())
+                .is_ok()
+        );
 
         // v16
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).build()).is_ok());
         assert!(is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).minor(11).build()).is_ok());
-        assert!(is_allowed_managed_postgres_version(
-            &VersionsNumberBuilder::new().major(16).minor(12).patch(7).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_managed_postgres_version(&VersionsNumberBuilder::new().major(16).minor(12).patch(7).build())
+                .is_ok()
+        );
     }
 
     #[test]

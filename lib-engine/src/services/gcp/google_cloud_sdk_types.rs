@@ -1,6 +1,6 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::gcp::{CredentialsError, JsonCredentials};
-use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
@@ -10,8 +10,8 @@ use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_googleapis::devtools::artifact_registry::v1::{
     DockerImage as GcpDockerImage, Package as GcpPackage, Repository as GcpRepository,
 };
-use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use google_cloud_storage::http::buckets::Bucket as GcpBucket;
+use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use regex::Regex;
 use std::str::FromStr;
 use std::time::Duration;
@@ -39,10 +39,7 @@ impl TryFrom<GcpBucket> for Bucket {
     type Error = String;
 
     fn try_from(gcp_bucket: GcpBucket) -> Result<Self, Self::Error> {
-        let gcp_storage_region = match GcpStorageRegion::from_str(gcp_bucket.location.as_str()) {
-            Ok(r) => r,
-            Err(e) => return Err(e),
-        };
+        let gcp_storage_region = GcpStorageRegion::from_str(gcp_bucket.location.as_str())?;
 
         Ok(Bucket {
             name: gcp_bucket.name,
@@ -96,7 +93,7 @@ pub fn from_gcp_repository(
                     return Err(format!(
                         "Cannot extract repository name and parent from fully qualified name: `{}`",
                         gcp_repository.name.as_str()
-                    ))
+                    ));
                 }
             }
         }
@@ -140,7 +137,7 @@ impl TryFrom<GcpDockerImage> for DockerImage {
                         return Err(format!(
                             "Cannot extract docker image name and repository from fully qualified name: `{}`",
                             gcp_docker_image.name.as_str()
-                        ))
+                        ));
                     }
                 }
             }
@@ -181,7 +178,7 @@ impl TryFrom<GcpPackage> for DockerImage {
                         return Err(format!(
                             "Cannot extract docker image name and repository from fully qualified name: `{}`",
                             gcp_package.name.as_str()
-                        ))
+                        ));
                     }
                 }
             }

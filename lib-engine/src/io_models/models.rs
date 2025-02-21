@@ -321,7 +321,7 @@ impl FromStr for KubernetesMemoryResourceUnit {
             _ => {
                 return Err(format!(
                     "Unsupported memory unit found: '{unit}' (only Mi,Gi,M,G are supported)"
-                ))
+                ));
             }
         };
 

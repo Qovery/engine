@@ -4,7 +4,7 @@ use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_infra_config;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
 };
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
@@ -13,8 +13,8 @@ use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::{span, warn, Level};
+use tracing::{Level, span, warn};
 use url::Url;
 use uuid::Uuid;
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.

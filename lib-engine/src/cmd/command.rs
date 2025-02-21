@@ -421,7 +421,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::{
-        does_binary_exist, run_version_command_for, CommandError, CommandKiller, ExecutableCommand, QoveryCommand,
+        CommandError, CommandKiller, ExecutableCommand, QoveryCommand, does_binary_exist, run_version_command_for,
     };
     use crate::environment::models::abort::{AbortStatus, AtomicAbortStatus};
     use std::sync::atomic::Ordering;

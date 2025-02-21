@@ -1,9 +1,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::environment::models::types::CloudProvider;
-use crate::environment::models::types::AWS;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::types::AWS;
+use crate::environment::models::types::CloudProvider;
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::io_models::database::DiskIOPS;
 

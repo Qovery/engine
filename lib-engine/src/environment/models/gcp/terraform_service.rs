@@ -1,5 +1,5 @@
 use crate::environment::models::terraform_service::TerraformService;
-use crate::environment::models::types::{ToTeraContext, GCP};
+use crate::environment::models::types::{GCP, ToTeraContext};
 use crate::errors::EngineError;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use tera::Context as TeraContext;

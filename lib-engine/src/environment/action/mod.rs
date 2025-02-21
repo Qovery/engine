@@ -1,6 +1,6 @@
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::Action;
 
 mod check_dns;
 mod deploy_application;

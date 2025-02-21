@@ -178,7 +178,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }
@@ -237,7 +237,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }
@@ -285,7 +285,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }

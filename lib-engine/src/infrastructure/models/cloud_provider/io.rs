@@ -7,8 +7,8 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use reqwest::StatusCode;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -382,8 +382,8 @@ mod tests {
     use uuid::Uuid;
 
     use crate::infrastructure::models::cloud_provider::io::{
-        validate_aws_cloudwatch_eks_logs_retention_days, ClusterAdvancedSettings, InputError, LogFormatEscaping,
-        RegistryMirroringMode,
+        ClusterAdvancedSettings, InputError, LogFormatEscaping, RegistryMirroringMode,
+        validate_aws_cloudwatch_eks_logs_retention_days,
     };
     use crate::{
         events::{EventDetails, Stage, Transmitter},

@@ -7,8 +7,8 @@ use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
 

@@ -2,8 +2,8 @@ use crate::environment::report::application::renderer::render_app_deployment_rep
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::{Action, ServiceType};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, ServiceType};
 use std::collections::HashSet;
 
 use crate::environment::models::application::ApplicationService;
@@ -12,11 +12,11 @@ use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 use std::sync::Arc;
 
-use crate::environment::report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
+use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use std::time::Instant;
 use uuid::Uuid;

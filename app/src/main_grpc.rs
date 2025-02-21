@@ -11,8 +11,8 @@ use std::net::TcpStream;
 use chrono::Utc;
 use clap::Parser;
 use std::convert::TryFrom;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use std::{env, fs, io, process, thread};
 
@@ -22,23 +22,23 @@ use futures_util::future::select;
 use futures_util::pin_mut;
 use k8s_openapi::api::apps::v1::Deployment;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
-use kube::api::{DeleteParams, ListParams};
 use kube::Api;
+use kube::api::{DeleteParams, ListParams};
 use qovery_engine::cmd::docker;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use tokio::signal::unix::SignalKind;
 use tracing::{error, warn};
 use tracing_subscriber::fmt::time::UtcTime;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, fmt, prelude::*};
 use url::Url;
 use uuid::Uuid;
 
 use crate::constants::ASCII_BANNER;
 use crate::deployment_manager::DeploymentManager;
+use crate::grpc::GrpcEngineClient;
 use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
-use crate::grpc::GrpcEngineClient;
 use crate::models::TaskSelector;
 use crate::utils::check_libs_directory;
 use qovery_engine::cmd::docker::Docker;
@@ -50,8 +50,8 @@ use qovery_engine::events::{
 };
 use qovery_engine::git_initialize_opts;
 use qovery_engine::infrastructure::task::InfrastructureTask;
-use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
@@ -261,7 +261,9 @@ pub fn main() -> io::Result<()> {
             pin_mut!(ctrl_c);
             pin_mut!(sigterm);
             let _ = select(ctrl_c, sigterm).await;
-            warn!("STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down");
+            warn!(
+                "STOPPING received ctrl+c/sigterm signal. We are going to wait for the current deployment to finish before shutting down"
+            );
             should_shutdown.store(true, Ordering::Relaxed);
         }
     };
@@ -487,7 +489,9 @@ async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) 
     let max_allowed_lifetime = chrono::Duration::hours(6);
 
     loop {
-        info!("Running dead builder reaper for namespace: {builder_namespace} with max allowed lifetime of {max_allowed_lifetime}");
+        info!(
+            "Running dead builder reaper for namespace: {builder_namespace} with max allowed lifetime of {max_allowed_lifetime}"
+        );
         if let Err(err) = run_reaper(&deployments_api, max_allowed_lifetime, &builder_prefix).await {
             error!("Error while reaping dead builders: {}", err);
         }
@@ -506,7 +510,7 @@ pub fn clean_configuration_directories() {
 
 #[cfg(test)]
 mod test {
-    use std::fs::{create_dir_all, File};
+    use std::fs::{File, create_dir_all};
     use std::io::Write;
     use std::path::Path;
     use uuid::Uuid;

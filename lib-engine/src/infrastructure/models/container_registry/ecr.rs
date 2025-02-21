@@ -1,7 +1,7 @@
 #![allow(clippy::field_reassign_with_default)]
 
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -17,17 +17,17 @@ use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use super::RegistryTags;
 use crate::events::{EngineEvent, EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::models::build_platform::Image;
-use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
+use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
-    RepositoryInfo,
+    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
 use crate::logger::Logger;
 use crate::runtime::block_on_with_timeout;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use serde_json::json;
 use url::Url;
 use uuid::Uuid;

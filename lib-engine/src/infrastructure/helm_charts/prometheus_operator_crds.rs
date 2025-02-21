@@ -101,7 +101,7 @@ mod tests {
 
     use crate::{
         environment::models::kubernetes::K8sCrd,
-        infrastructure::helm_charts::{get_helm_path_kubernetes_provider_sub_folder_name, HelmChartType},
+        infrastructure::helm_charts::{HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name},
     };
 
     use super::*;

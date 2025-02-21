@@ -18,7 +18,7 @@ use rusoto_s3::{
     DeleteObjectRequest, DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketLoggingRequest,
     GetBucketTaggingRequest, GetBucketVersioningRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest,
     LoggingEnabled, ObjectIdentifier, PutBucketLoggingRequest, PutBucketTaggingRequest, PutBucketVersioningRequest,
-    PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
+    PutObjectRequest, S3, S3Client, StreamingBody, Tag, Tagging,
 };
 
 // doc: https://www.scaleway.com/en/docs/object-storage-feature/
@@ -380,7 +380,7 @@ impl ObjectStorage for ScalewayOS {
                             bucket_name: bucket_name.to_string(),
                             object_name: object_key.to_string(),
                             raw_error_message: "Cannot get response body".to_string(),
-                        })
+                        });
                     }
                 };
                 let mut body = Vec::new();

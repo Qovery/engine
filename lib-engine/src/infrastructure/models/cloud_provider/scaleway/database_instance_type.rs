@@ -1,6 +1,6 @@
 use crate::environment::models::database::{DatabaseError, DatabaseInstanceType};
-use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;

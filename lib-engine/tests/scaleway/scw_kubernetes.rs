@@ -5,7 +5,7 @@ use ::function_name::named;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 
 use crate::helpers::common::{ClusterDomain, NodeManager};
-use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};

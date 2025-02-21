@@ -8,14 +8,14 @@ use crate::environment::models::database_utils::{
 use crate::environment::models::scaleway::database_utils::{
     is_allowed_managed_mysql_version, is_allowed_managed_postgres_version,
 };
-use crate::environment::models::types::{ToTeraContext, SCW};
+use crate::environment::models::types::{SCW, ToTeraContext};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
-    ServiceVersionCheckResult,
+    Service, ServiceVersionCheckResult, check_service_version, default_tera_context, get_tfstate_name,
+    get_tfstate_suffix,
 };
-use crate::infrastructure::models::cloud_provider::{service, DeploymentTarget};
+use crate::infrastructure::models::cloud_provider::{DeploymentTarget, service};
 use crate::io_models::database::DatabaseOptions;
 use tera::Context as TeraContext;
 

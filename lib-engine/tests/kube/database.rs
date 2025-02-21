@@ -1,24 +1,24 @@
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::StorageSize::Resize;
 use crate::helpers::utilities::{engine_run_test, init};
-use crate::kube::{kube_test_env, TestEnvOption};
+use crate::kube::{TestEnvOption, kube_test_env};
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::environment::action::update_pvcs;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::database::{
-    get_database_with_invalid_storage_size, Container, Database, PostgresSQL,
+    Container, Database, PostgresSQL, get_database_with_invalid_storage_size,
 };
-use qovery_engine::environment::models::types::{VersionsNumber, AWS};
-use qovery_engine::infrastructure::models::cloud_provider::service::{DatabaseType, ServiceType};
+use qovery_engine::environment::models::types::{AWS, VersionsNumber};
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
+use qovery_engine::infrastructure::models::cloud_provider::service::{DatabaseType, ServiceType};
+use qovery_engine::io_models::Action;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::{DatabaseOptions, DiskIOPS};
-use qovery_engine::io_models::Action;
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::runtime::block_on;
 use std::str::FromStr;
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[test]

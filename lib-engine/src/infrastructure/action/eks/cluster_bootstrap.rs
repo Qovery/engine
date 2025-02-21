@@ -1,12 +1,12 @@
 use crate::errors::EngineError;
 use crate::events::{InfrastructureStep, Stage};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
-use crate::infrastructure::action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
-use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};

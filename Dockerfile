@@ -16,7 +16,7 @@ ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 ARG KUBENT_VERSION=0.7.3
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.83.0-2025-01-28T17-07-03"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.85.0-2025-02-21T13-18-14"
 
 
 ###########################################

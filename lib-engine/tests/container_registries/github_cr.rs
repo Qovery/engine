@@ -1,11 +1,11 @@
-use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, init};
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::ContainerImage;
 use qovery_engine::infrastructure::models::build_platform::Image;
-use qovery_engine::infrastructure::models::container_registry::github_cr::GithubCr;
 use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
-use tracing::{span, Level};
+use qovery_engine::infrastructure::models::container_registry::github_cr::GithubCr;
+use tracing::{Level, span};
 use url::Url;
 use uuid::Uuid;
 

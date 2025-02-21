@@ -6,21 +6,21 @@ use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
-use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
-use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{to_environment_variable, Port, Storage};
+use crate::io_models::application::{Port, Storage, to_environment_variable};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
 use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
@@ -107,13 +107,13 @@ impl Registry {
         let _ = new_url.set_password(None);
 
         match self {
-            Registry::DockerHub { ref mut url, .. } => *url = new_url,
-            Registry::DoCr { ref mut url, .. } => *url = new_url,
-            Registry::ScalewayCr { ref mut url, .. } => *url = new_url,
-            Registry::PrivateEcr { ref mut url, .. } => *url = new_url,
-            Registry::PublicEcr { ref mut url, .. } => *url = new_url,
-            Registry::GenericCr { ref mut url, .. } => *url = new_url,
-            Registry::GcpArtifactRegistry { ref mut url, .. } => *url = new_url,
+            Registry::DockerHub { url, .. } => *url = new_url,
+            Registry::DoCr { url, .. } => *url = new_url,
+            Registry::ScalewayCr { url, .. } => *url = new_url,
+            Registry::PrivateEcr { url, .. } => *url = new_url,
+            Registry::PublicEcr { url, .. } => *url = new_url,
+            Registry::GenericCr { url, .. } => *url = new_url,
+            Registry::GcpArtifactRegistry { url, .. } => *url = new_url,
         }
     }
 

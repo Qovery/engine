@@ -1,15 +1,15 @@
 use crate::helpers::aws::AWS_QUICK_RESOURCE_TTL_IN_SECONDS;
-use crate::helpers::utilities::{context_for_resource, engine_run_test, generate_id, init, logger, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, init, logger};
 use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
-use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
+use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::runtime::block_on;
 use rusoto_ecr::Ecr;
 use rusoto_ecr::{DescribeRepositoriesRequest, ListTagsForResourceRequest, Tag};
 use std::str::FromStr;
 use std::time::Duration;
-use tracing::{span, Level};
+use tracing::{Level, span};
 use uuid::Uuid;
 
 #[cfg(feature = "test-aws-minimal")]

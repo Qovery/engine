@@ -2,7 +2,7 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::database::StorageSize::NormalSize;
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, generate_id, get_svc_name, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, generate_id, get_svc_name, logger, metrics_registry,
 };
 use chrono::Utc;
 use qovery_engine::environment::models::aws::AwsStorageType;

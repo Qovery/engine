@@ -10,7 +10,7 @@ use k8s_openapi::api::autoscaling::v1::{Scale, ScaleSpec};
 use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Pod;
 use kube::api::{ListParams, Patch, PatchParams};
-use kube::runtime::wait::{await_condition, Condition};
+use kube::runtime::wait::{Condition, await_condition};
 use kube::{Api, Client};
 use serde_json::Value;
 use std::time::Duration;
@@ -61,7 +61,7 @@ fn has_not_daemonset_node_selector(selector_key: String) -> impl Condition<Daemo
             .and_then(|d| d.spec.as_ref())
             .and_then(|spec| spec.template.spec.as_ref())
             .and_then(|pod_spec| pod_spec.node_selector.as_ref())
-            .map_or(true, |node_selector| node_selector.get(&selector_key).is_none())
+            .is_none_or(|node_selector| node_selector.get(&selector_key).is_none())
     }
 }
 
@@ -528,22 +528,22 @@ impl DeploymentAction for PauseServiceAction {
 #[cfg(test)]
 mod tests {
     use crate::environment::action::pause_service::{
-        has_cron_job_suspended_value, has_daemonset_node_selector, has_deployment_ready_replicas,
-        has_not_daemonset_node_selector, has_statefulset_ready_replicas, pause_service, unpause_service_if_needed,
-        K8sResourceType, PAUSE_SELECTOR_KEY, PAUSE_SELECTOR_VALUE,
+        K8sResourceType, PAUSE_SELECTOR_KEY, PAUSE_SELECTOR_VALUE, has_cron_job_suspended_value,
+        has_daemonset_node_selector, has_deployment_ready_replicas, has_not_daemonset_node_selector,
+        has_statefulset_ready_replicas, pause_service, unpause_service_if_needed,
     };
     use crate::environment::action::test_utils::{
-        get_simple_cron_job, get_simple_daemon_set, get_simple_daemonset_with_node_selector, get_simple_deployment,
-        get_simple_hpa, get_simple_statefulset, NamespaceForTest,
+        NamespaceForTest, get_simple_cron_job, get_simple_daemon_set, get_simple_daemonset_with_node_selector,
+        get_simple_deployment, get_simple_hpa, get_simple_statefulset,
     };
     use function_name::named;
     use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
     use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
     use k8s_openapi::api::batch::v1::CronJob;
+    use kube::Api;
     use kube::api::PostParams;
     use kube::runtime::conditions::Condition;
     use kube::runtime::wait::await_condition;
-    use kube::Api;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[tokio::test(flavor = "multi_thread")]

@@ -16,13 +16,13 @@ use std::{io, process};
 use dirs::home_dir;
 use dotenv::dotenv;
 use tracing::error;
-use tracing_subscriber::{fmt::time::UtcTime, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::time::UtcTime, prelude::*};
 use url::Url;
 use uuid::Uuid;
 
 use qovery_engine::cmd::docker::Docker;
-use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
 use qovery_engine::engine_task::Task;
+use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};

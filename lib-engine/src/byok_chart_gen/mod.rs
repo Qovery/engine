@@ -145,7 +145,7 @@ mod tests {
     use regex::Regex;
     use tera::{Context, Tera};
 
-    use super::{values_dot_yaml::ValuesFile, ChartMeta, QoverySelfManagedChart, SupportedCharts};
+    use super::{ChartMeta, QoverySelfManagedChart, SupportedCharts, values_dot_yaml::ValuesFile};
 
     pub fn copy_recursively(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<()> {
         fs::create_dir_all(&destination)?;
@@ -221,11 +221,13 @@ mod tests {
                         // replace "set-by-engine-code" by "set-by-customer"
                         .replace("set-by-engine-code", "set-by-customer");
                     // replace jinja vars by "set-by-customer"
+                    #[allow(clippy::regex_creation_in_loops)]
                     let replace_jinja_vars = Regex::new(r"\{\{.*\}\}").unwrap();
                     let no_jinja_vars = replace_jinja_vars
                         .replace_all(replace_values.as_str(), "set-by-customer")
                         .to_string();
                     // remove empty lines
+                    #[allow(clippy::regex_creation_in_loops)]
                     let remove_empty_lines = Regex::new(r"\n\s*\n").unwrap();
                     remove_empty_lines.replace_all(no_jinja_vars.as_str(), "\n").to_string()
                 }
@@ -238,12 +240,14 @@ mod tests {
                 &string_to_replace,
             );
             // update Qovery config to use YAML pointers
+            #[allow(clippy::regex_creation_in_loops)]
             let update_qovery_config = Regex::new(r"'(\&|\*)(.+)'").unwrap();
             values_file_content = update_qovery_config
                 .replace_all(values_file_content.as_str(), "$1$2")
                 .to_string();
             // update yaml variables that serde will fail because of missing references
             // ex: Nginx ingress has a variable where no reference is available in the override file (only available when the self-managed chart is generated). So serde will fail on validating the content
+            #[allow(clippy::regex_creation_in_loops)]
             let update_qovery_config = Regex::new(r"(external-dns.alpha.kubernetes.io/hostname:).+").unwrap();
             values_file_content = update_qovery_config
                 .replace_all(values_file_content.as_str(), "$1 *domainWildcard")
@@ -290,10 +294,10 @@ mod tests {
         use walkdir::WalkDir;
 
         use crate::byok_chart_gen::{
+            ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
             chart_dot_yaml::{ChartDotYamlApiVersion, ChartDotYamlType},
             io::ChartDotYaml,
             values_dot_yaml::ValuesFile,
-            ChartCategory, ChartMeta, ChartSourcePath, SupportedCharts, ValuesSourcePath,
         };
 
         use super::QoverySelfManagedChart;

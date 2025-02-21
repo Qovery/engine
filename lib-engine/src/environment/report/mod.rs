@@ -1,7 +1,7 @@
 use crate::environment::report::logger::{EnvLogger, EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use std::sync::mpsc::RecvTimeoutError;
-use std::sync::{mpsc, Arc, Barrier};
+use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -212,12 +212,12 @@ pub fn execute_long_deployment<Log, TaskRet>(
 
 #[cfg(test)]
 mod test {
-    use crate::environment::report::{execute_long_deployment, DeploymentReporter, DeploymentTask};
+    use crate::environment::report::{DeploymentReporter, DeploymentTask, execute_long_deployment};
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
     use std::time::Duration;
     use uuid::Uuid;

@@ -138,7 +138,7 @@ impl DeploymentAction for HelmDeployment {
 #[cfg(test)]
 mod tests {
     use crate::cmd::helm::Helm;
-    use crate::environment::action::deploy_helm::{default_helm_timeout, HelmDeployment};
+    use crate::environment::action::deploy_helm::{HelmDeployment, default_helm_timeout};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::helm::ChartInfo;
     use crate::io_models::QoveryIdentifier;

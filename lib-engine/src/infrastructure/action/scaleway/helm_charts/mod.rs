@@ -11,8 +11,8 @@ use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusC
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
-use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, KapsuleOptions};
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, KapsuleOptions};
 use crate::io_models::context::Features;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};

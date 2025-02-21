@@ -14,21 +14,21 @@ use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
 use crate::infrastructure::action::{InfraLogger, InfrastructureAction};
-use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+use crate::infrastructure::models::cloud_provider::service::Action;
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::models::NodeGroupsWithDesiredState;
 use crate::io_models::models::{CpuArchitecture, CpuLimits, InstanceEc2, NodeGroups};
-use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 use k8s_openapi::api::core::v1::{Namespace, Secret, Service};
 use kube::api::{ListParams, ObjectMeta, Patch, PatchParams, PostParams};
 use kube::core::ObjectList;
 use kube::{Api, Error};
-use retry::delay::{Fibonacci, Fixed};
 use retry::OperationResult;
+use retry::delay::{Fibonacci, Fixed};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::any::Any;
@@ -37,7 +37,7 @@ use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::mpsc::TryRecvError;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 use strum_macros::EnumIter;
@@ -1440,15 +1440,15 @@ mod tests {
     use crate::infrastructure::action::InfraLogger;
     use crate::infrastructure::models::kubernetes;
     use crate::infrastructure::models::kubernetes::{
-        check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade, convert_k8s_cpu_value_to_f32,
-        filter_svc_loadbalancers, validate_k8s_required_cpu_and_burstable, KubernetesNodesType,
+        KubernetesNodesType, check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade,
+        convert_k8s_cpu_value_to_f32, filter_svc_loadbalancers, validate_k8s_required_cpu_and_burstable,
     };
     use crate::infrastructure::models::kubernetes::{
-        kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists, kube_does_secret_exists,
-        kube_list_services, KubernetesVersion as K8sVersion,
+        KubernetesVersion as K8sVersion, kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists,
+        kube_does_secret_exists, kube_list_services,
     };
-    use crate::io_models::models::CpuLimits;
     use crate::io_models::QoveryIdentifier;
+    use crate::io_models::models::CpuLimits;
     use crate::logger::StdIoLogger;
     use crate::runtime::block_on;
     use crate::utilities::create_kube_client;
@@ -1527,12 +1527,14 @@ mod tests {
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_create_namespace() {
         let kube_client = block_on(create_kube_client(kubeconfig_path(), &[])).unwrap();
-        assert!(block_on(kube_create_namespace_if_not_exists(
-            &kube_client,
-            "qovery-test-ns",
-            BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())]),
-        ))
-        .is_ok());
+        assert!(
+            block_on(kube_create_namespace_if_not_exists(
+                &kube_client,
+                "qovery-test-ns",
+                BTreeMap::from([("qovery.io/namespace-type".to_string(), "development".to_string())]),
+            ))
+            .is_ok()
+        );
     }
 
     #[test]

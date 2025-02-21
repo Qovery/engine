@@ -3,8 +3,8 @@ use std::str;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use crate::environment::models::aws::AwsAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
@@ -32,10 +32,10 @@ use crate::io_models::models::{
     CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
 };
 use crate::io_models::probe::Probe;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    MountedFile, QoveryIdentifier,
+    Action, MountedFile, QoveryIdentifier, fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url,
+    ssh_keys_from_env_vars,
 };
 use crate::utilities::to_short_id;
 

@@ -1,10 +1,10 @@
 use crate::deployment_manager::engine_message_stream::{
     EngineLogStreamContext, EngineMessageStream, EngineMsgStreamContext,
 };
-use crate::grpc::engine::{engine_message_tx, DeploymentInfo, EngineMessageRx, EngineMessageTx};
 use crate::grpc::GrpcEngineClient;
+use crate::grpc::engine::{DeploymentInfo, EngineMessageRx, EngineMessageTx, engine_message_tx};
 use crate::logger::composite_logger::CompositeLogger;
-use futures_util::{stream, StreamExt};
+use futures_util::{StreamExt, stream};
 use qovery_engine::events::{EngineEvent, EngineMsg, EnvironmentStep, EventDetails, EventMessage, Stage};
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::{Logger, StdIoLogger, UnboundedSenderLogger};
@@ -12,7 +12,7 @@ use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::sync::{mpsc, watch, Mutex};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio::time::Instant;
 use tokio_stream::Stream;
 use tonic::Streaming;

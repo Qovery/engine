@@ -509,7 +509,7 @@ defaultBackend:
                             return Err(HelmChartError::RenderingError {
                                 chart_name: NginxIngressChart::chart_name(),
                                 msg: "scw-loadbalancer-type is required but information is missing".to_string(),
-                            })
+                            });
                         }
                     },
                 });
@@ -580,11 +580,11 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 mod tests {
     use crate::environment::models::domain::Domain;
     use crate::helm::HelmChartNamespaces;
-    use crate::infrastructure::helm_charts::nginx_ingress_chart::LogFormatEscaping;
-    use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::infrastructure::helm_charts::HelmChartResourcesConstraintType;
     use crate::infrastructure::helm_charts::HelmChartType;
     use crate::infrastructure::helm_charts::ToCommonHelmChart;
+    use crate::infrastructure::helm_charts::nginx_ingress_chart::LogFormatEscaping;
+    use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::infrastructure::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
@@ -760,12 +760,14 @@ mod tests {
             // verify:
             match &log_format_escaping {
                 LogFormatEscaping::Default => {
-                    assert!(!common_chart
-                        .chart_info
-                        .values
-                        .iter()
-                        .any(|x| x.key == "controller.config.log-format-escaping-none"
-                            || x.key == "controller.config.log-format-escaping-json"));
+                    assert!(
+                        !common_chart
+                            .chart_info
+                            .values
+                            .iter()
+                            .any(|x| x.key == "controller.config.log-format-escaping-none"
+                                || x.key == "controller.config.log-format-escaping-json")
+                    );
                 }
                 _ => {
                     assert!(common_chart.chart_info.values.iter().any(|x| x.key
@@ -829,6 +831,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

@@ -15,7 +15,7 @@ use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffT
 use crate::infrastructure::action::utils::mk_logger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
-use crate::infrastructure::models::kubernetes::{is_kubernetes_upgrade_required, KubernetesUpgradeStatus};
+use crate::infrastructure::models::kubernetes::{KubernetesUpgradeStatus, is_kubernetes_upgrade_required};
 use crate::logger::Logger;
 use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use tera::Context as TeraContext;
@@ -86,7 +86,7 @@ pub trait InfrastructureAction: Send + Sync {
                                 event_details.clone(),
                                 &upgrade_status.requested_version,
                                 e,
-                            )))
+                            )));
                         }
                     }
 

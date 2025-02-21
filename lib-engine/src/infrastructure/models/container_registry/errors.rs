@@ -34,14 +34,18 @@ pub enum ContainerRegistryError {
         registry_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot delete image `{image_name:?}` error from repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}.")]
+    #[error(
+        "Cannot delete image `{image_name:?}` error from repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}."
+    )]
     CannotDeleteImage {
         registry_name: String,
         repository_name: String,
         image_name: String,
         raw_error_message: String,
     },
-    #[error("Image `{image_name:?}` doesn't exist in repository `{repository_name:?}` in registry `{registry_name:?}` error.")]
+    #[error(
+        "Image `{image_name:?}` doesn't exist in repository `{repository_name:?}` in registry `{registry_name:?}` error."
+    )]
     ImageDoesntExistInRegistry {
         registry_name: String,
         repository_name: String,
@@ -75,15 +79,15 @@ pub enum ContainerRegistryError {
         repository_name: String,
         raw_error_message: String,
     },
-    #[error(
-        "Cannot delete repository `{repository_name:?}` from registry `{registry_name:?}`: {raw_error_message:?}."
-    )]
+    #[error("Cannot delete repository `{repository_name:?}` from registry `{registry_name:?}`: {raw_error_message:?}.")]
     CannotDeleteRepository {
         registry_name: String,
         repository_name: String,
         raw_error_message: String,
     },
-    #[error("Cannot set lifecycle policy for repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}.")]
+    #[error(
+        "Cannot set lifecycle policy for repository `{repository_name:?}` in registry `{registry_name:?}`: {raw_error_message:?}."
+    )]
     CannotSetRepositoryLifecyclePolicy {
         registry_name: String,
         repository_name: String,
@@ -99,7 +103,9 @@ pub enum ContainerRegistryError {
         raw_error_message: String,
     },
 
-    #[error("Repository name `{repository_name:?}` in registry `{registry_name:?}  is invalid, following rules are broken: {broken_rules:?}")]
+    #[error(
+        "Repository name `{repository_name:?}` in registry `{registry_name:?}  is invalid, following rules are broken: {broken_rules:?}"
+    )]
     RepositoryNameNotValid {
         registry_name: String,
         repository_name: String,

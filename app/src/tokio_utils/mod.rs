@@ -2,13 +2,13 @@ use once_cell::sync::Lazy;
 use prometheus::{self, Encoder, IntCounter, TextEncoder};
 use std::future::Future;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::runtime::{Builder, Runtime};
 use tokio::task::JoinHandle;
+use warp::Filter;
 use warp::http::StatusCode;
 use warp::reply::{WithHeader, WithStatus};
-use warp::Filter;
 
 static MAX_THREADS: usize = 2;
 static TOKIO_RUNTIME: Lazy<Runtime> = Lazy::new(|| {

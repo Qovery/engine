@@ -3,26 +3,26 @@ use super::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
+use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::nodegroup::{
-    delete_eks_nodegroups, should_update_desired_nodes, NodeGroupsDeletionType,
+    NodeGroupsDeletionType, delete_eks_nodegroups, should_update_desired_nodes,
 };
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
+use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
-use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::dns_provider::DnsProvider;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
-use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::models::{KubernetesClusterAction, NodeGroups};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;

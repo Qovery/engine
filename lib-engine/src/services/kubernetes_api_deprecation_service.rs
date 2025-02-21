@@ -575,8 +575,8 @@ mod tests {
         });
 
         let invalid_api_version = ""; // TODO(benjaminch): find a better invalid version,
-                                      // VersionsNumber parsing is a bit too permissive and clunky and needs to be improved /
-                                      // swapped with an external lib.
+        // VersionsNumber parsing is a bit too permissive and clunky and needs to be improved /
+        // swapped with an external lib.
         let deprecations = vec![kubent::Deprecation {
             name: Some("name".to_string()),
             namespace: Some("namespace".to_string()),

@@ -5,17 +5,17 @@ use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::SshKey;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::kubernetes;
 use crate::io_models::application::{GitCredentials, Port};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
-use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
+use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -431,17 +431,21 @@ mod tests {
         assert_eq!(helm_chart.name, "name");
         assert_eq!(helm_chart.environment_vars_with_infos.len(), 0);
         assert_eq!(helm_chart.ports.len(), 2);
-        assert!(helm_chart
-            .ports
-            .iter()
-            .map(|port| (port.namespace.clone(), port.service_name.clone()))
-            .any(|(namespace, service_name)| namespace.is_none() && service_name.is_none()));
-        assert!(helm_chart
-            .ports
-            .iter()
-            .map(|port| (port.namespace.clone(), port.service_name.clone()))
-            .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
-                && service_name == Some("service_1".to_string())));
+        assert!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace.is_none() && service_name.is_none())
+        );
+        assert!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
+                    && service_name == Some("service_1".to_string()))
+        );
     }
 }
 
