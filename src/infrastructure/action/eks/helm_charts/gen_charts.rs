@@ -1,6 +1,6 @@
 use crate::helm::{
-    get_engine_helm_action_from_location, ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces,
-    PriorityClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
+    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass,
+    UpdateStrategy, VpaContainerPolicy, get_engine_helm_action_from_location,
 };
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
@@ -22,10 +22,11 @@ use crate::errors::CommandError;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::aws::AwsStorageType;
 use crate::environment::models::domain::Domain;
-use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::action::eks::helm_charts::aws_alb_controller_chart::AwsLoadBalancerControllerChart;
 use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
     AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
@@ -33,7 +34,6 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
-use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -334,7 +334,7 @@ pub(super) fn eks_helm_charts(
                 .to_common_helm_chart()?,
             ),
             PrometheusConfiguration::GcpCloudStorage(_) | PrometheusConfiguration::ScalewayObjectStorage(_) => {
-                return Err(CommandError::new("Prometheus config is not AWS S3".to_string(), None, None))
+                return Err(CommandError::new("Prometheus config is not AWS S3".to_string(), None, None));
             }
             PrometheusConfiguration::Custom => None,
         },

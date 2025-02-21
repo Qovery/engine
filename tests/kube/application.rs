@@ -1,18 +1,18 @@
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::StorageSize::Resize;
 use crate::helpers::utilities::{engine_run_test, init};
-use crate::kube::{kube_test_env, TestEnvOption};
-use base64::engine::general_purpose;
+use crate::kube::{TestEnvOption, kube_test_env};
 use base64::Engine;
+use base64::engine::general_purpose;
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::environment::action::update_pvcs;
 use qovery_engine::environment::models::abort::AbortStatus;
-use qovery_engine::environment::models::application::{get_application_with_invalid_storage_size, Application};
+use qovery_engine::environment::models::application::{Application, get_application_with_invalid_storage_size};
 use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsStorageType};
 use qovery_engine::environment::models::types::AWS;
-use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
+use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
@@ -22,7 +22,7 @@ use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::runtime::block_on;
 use std::collections::{BTreeMap, BTreeSet};
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[test]
@@ -120,9 +120,11 @@ fn should_increase_app_storage_size() {
                     assert_eq!(invalid_storage.service_id, test_app.long_id().clone());
                     assert_eq!(invalid_storage.invalid_pvcs.len(), 1);
                     assert_eq!(invalid_storage.invalid_pvcs[0].required_disk_size_in_gib, Resize.size());
-                    assert!(invalid_storage.invalid_pvcs[0]
-                        .pvc_name
-                        .starts_with(&resized_env.applications[0].storage[0].id));
+                    assert!(
+                        invalid_storage.invalid_pvcs[0]
+                            .pvc_name
+                            .starts_with(&resized_env.applications[0].storage[0].id)
+                    );
                     invalid_storage
                 }
                 None => panic!("No invalid storage returned"),

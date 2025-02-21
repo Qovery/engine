@@ -1,10 +1,10 @@
 use crate::helpers::aws::AWS_KUBERNETES_VERSION;
-use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure, NodeManager};
+use crate::helpers::common::{Cluster, ClusterDomain, Infrastructure, NodeManager, compute_test_cluster_endpoint};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use crate::helpers::utilities::{
-    context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id, generate_password,
-    get_pvc, get_svc, get_svc_name, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id,
+    generate_password, get_pvc, get_svc, get_svc_name, init, logger, metrics_registry,
 };
 use chrono::Utc;
 use core::default::Default;
@@ -13,9 +13,9 @@ use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::environment::models::environment::Environment;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
-use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::engine_location::EngineLocation;
 
@@ -40,8 +40,8 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::types::VersionsNumber;
 use qovery_engine::errors::EngineError;
@@ -50,7 +50,7 @@ use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::Arc;
-use tracing::{span, Level};
+use tracing::{Level, span};
 use uuid::Uuid;
 
 impl Infrastructure for EnvironmentRequest {

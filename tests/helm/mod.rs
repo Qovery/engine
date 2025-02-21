@@ -1,7 +1,7 @@
 use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
-use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
-use base64::engine::general_purpose;
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_cluster, logger, metrics_registry};
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::application::Application;
@@ -13,15 +13,15 @@ use qovery_engine::environment::models::job::{ImageSource, Job};
 use qovery_engine::environment::models::probe::{Probe, ProbeType};
 use qovery_engine::environment::models::registry_image_source::RegistryImageSource;
 use qovery_engine::environment::models::router::{Router, RouterAdvancedSettings};
-use qovery_engine::environment::models::types::{VersionsNumber, AWS as AWSType};
+use qovery_engine::environment::models::types::{AWS as AWSType, VersionsNumber};
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::fs::workspace_directory;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::{
-    regions::{AwsRegion, AwsZone},
     AWS,
+    regions::{AwsRegion, AwsZone},
 };
 use qovery_engine::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::infrastructure::models::cloud_provider::service::{Action, Service};

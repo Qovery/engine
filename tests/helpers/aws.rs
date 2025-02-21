@@ -4,15 +4,15 @@ extern crate serde_derive;
 use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
-    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+    KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
 };
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::environment::models::aws::AwsStorageType;
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::infrastructure::models::cloud_provider::aws::{AwsCredentials, AWS};
+use qovery_engine::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
@@ -43,7 +43,9 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         || secrets.AWS_SECRET_ACCESS_KEY.is_none()
         || secrets.AWS_DEFAULT_REGION.is_none()
     {
-        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION envrionment variables are set");
+        error!(
+            "Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION envrionment variables are set"
+        );
         std::process::exit(1)
     }
 

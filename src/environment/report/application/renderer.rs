@@ -1,7 +1,8 @@
 use crate::environment::report::application::reporter::AppDeploymentReport;
 use crate::environment::report::utils::{
-    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_replicasets_render_context,
-    to_services_render_context, PodsRenderContext, PvcRenderContext, ReplicaSetRenderContext, ServiceRenderContext,
+    PodsRenderContext, PvcRenderContext, ReplicaSetRenderContext, ServiceRenderContext, get_tera_instance,
+    to_pods_render_context_by_version, to_pvc_render_context, to_replicasets_render_context,
+    to_services_render_context,
 };
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::utilities::to_short_id;
@@ -106,11 +107,11 @@ pub(crate) fn render_app_deployment_report(
 #[cfg(test)]
 mod test {
     use crate::environment::report::application::renderer::{
-        AppDeploymentRenderContext, PodsRenderContext, ServiceRenderContext, REPORT_TEMPLATE,
+        AppDeploymentRenderContext, PodsRenderContext, REPORT_TEMPLATE, ServiceRenderContext,
     };
     use crate::environment::report::utils::{
-        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext,
-        QContainerState, QContainerStateTerminated, ReplicaSetRenderContext,
+        DeploymentState, EventRenderContext, PodRenderContext, PvcRenderContext, QContainerState,
+        QContainerStateTerminated, ReplicaSetRenderContext, exit_code_to_msg, fmt_event_type,
     };
     use crate::infrastructure::models::cloud_provider::service::ServiceType;
     use crate::utilities::to_short_id;

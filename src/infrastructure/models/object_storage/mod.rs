@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
 
-use crate::environment::models::scaleway::ScwZone;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;

@@ -1,5 +1,5 @@
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
 use crate::infrastructure::models::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
@@ -7,26 +7,26 @@ use crate::services::gcp::cloud_job_service::CloudJobService;
 use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_storage::client::{Client, ClientConfig};
+use google_cloud_storage::http::buckets::Lifecycle;
 use google_cloud_storage::http::buckets::delete::DeleteBucketRequest;
 use google_cloud_storage::http::buckets::get::GetBucketRequest;
 use google_cloud_storage::http::buckets::get_iam_policy::GetIamPolicyRequest;
 use google_cloud_storage::http::buckets::insert::{BucketCreationConfig, InsertBucketParam, InsertBucketRequest};
-use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, Condition};
 use google_cloud_storage::http::buckets::lifecycle::Rule;
+use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, Condition};
 use google_cloud_storage::http::buckets::list::ListBucketsRequest;
 use google_cloud_storage::http::buckets::patch::{BucketPatchConfig, PatchBucketRequest};
 use google_cloud_storage::http::buckets::set_iam_policy::SetIamPolicyRequest;
-use google_cloud_storage::http::buckets::Lifecycle;
 use google_cloud_storage::http::buckets::{Binding, Bucket as GcpBucket, Logging, Versioning};
+use google_cloud_storage::http::objects::Object as GcpObject;
 use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
 use google_cloud_storage::http::objects::download::Range;
 use google_cloud_storage::http::objects::get::GetObjectRequest;
 use google_cloud_storage::http::objects::list::ListObjectsRequest;
 use google_cloud_storage::http::objects::upload::{UploadObjectRequest, UploadType};
-use google_cloud_storage::http::objects::Object as GcpObject;
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, RateLimiter};
+use governor::{RateLimiter, clock};
 
 use chrono::{DateTime, Utc};
 use reqwest::Body;
@@ -374,7 +374,7 @@ impl ObjectStorageService {
                 return Err(ObjectStorageServiceError::CannotCreateBucket {
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: e.to_string(),
-                })
+                });
             }
         };
 
@@ -585,7 +585,7 @@ impl ObjectStorageService {
                 Err(e) => {
                     return Err(ObjectStorageServiceError::CannotListBuckets {
                         raw_error_message: e.to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -680,7 +680,7 @@ impl ObjectStorageService {
                     return Err(ObjectStorageServiceError::CannotListObjects {
                         bucket_name: bucket_name.to_string(),
                         raw_error_message: e.to_string(),
-                    })
+                    });
                 }
             }
         }
@@ -723,7 +723,7 @@ impl ObjectStorageService {
                     return Err(ObjectStorageServiceError::CannotListObjects {
                         bucket_name: bucket_name.to_string(),
                         raw_error_message: e.to_string(),
-                    })
+                    });
                 }
             }
         }

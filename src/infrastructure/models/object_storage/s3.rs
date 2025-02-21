@@ -14,11 +14,11 @@ use rusoto_s3::{
     DeleteObjectRequest, DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketLoggingRequest,
     GetBucketTaggingRequest, GetBucketVersioningRequest, GetObjectRequest, GetObjectTaggingRequest, HeadBucketRequest,
     ListObjectsRequest, LoggingEnabled, ObjectIdentifier, PutBucketLoggingRequest, PutBucketTaggingRequest,
-    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3 as RusotoS3,
+    PutBucketVersioningRequest, PutObjectRequest, S3 as RusotoS3, S3Client, StreamingBody, Tag, Tagging,
 };
 
 use crate::environment::models::ToCloudProviderFormat;
-use crate::infrastructure::models::cloud_provider::aws::{new_rusoto_creds, AwsCredentials};
+use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::infrastructure::models::object_storage::{
     Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, Kind, ObjectStorage,
@@ -393,7 +393,7 @@ impl ObjectStorage for S3 {
                             bucket_name: bucket_name.to_string(),
                             object_name: object_key.to_string(),
                             raw_error_message: "Cannot get response body".to_string(),
-                        })
+                        });
                     }
                 };
                 let mut body = Vec::new();

@@ -132,11 +132,7 @@ impl Kubernetes for SelfManaged {
             .collect();
         info!("BUILDER_CPU_ARCHITECTURES: {:?}", archs);
 
-        if archs.is_empty() {
-            vec![AMD64]
-        } else {
-            archs
-        }
+        if archs.is_empty() { vec![AMD64] } else { archs }
     }
 
     fn temp_dir(&self) -> &Path {

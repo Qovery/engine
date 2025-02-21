@@ -1,9 +1,9 @@
 use crate::helpers::aws::AWS_RESOURCE_TTL_IN_SECONDS;
-use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id, init};
 use function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
-use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::object_storage::s3::S3;
 use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use retry::delay::Fixed;
@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use tracing::{info, span, Level};
+use tracing::{Level, info, span};
 
 #[cfg(feature = "test-quarantine")]
 #[named]
@@ -171,9 +171,11 @@ fn test_create_bucket() {
         );
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -220,9 +222,11 @@ fn test_get_bucket() {
         assert_eq!(created_bucket, retrieved_bucket);
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -267,13 +271,15 @@ fn test_recreate_bucket() {
         assert!(delete_result.is_ok());
 
         // retry to check if bucket exists, there is a lag / cache after bucket deletion
-        assert!(!retry::retry(Fixed::from_millis(1000).take(20), || {
-            match aws_os.bucket_exists(bucket_name.as_str()) {
-                false => Ok(false),
-                true => Err(()),
-            }
-        })
-        .expect("Bucket still exists"));
+        assert!(
+            !retry::retry(Fixed::from_millis(1000).take(20), || {
+                match aws_os.bucket_exists(bucket_name.as_str()) {
+                    false => Ok(false),
+                    true => Err(()),
+                }
+            })
+            .expect("Bucket still exists")
+        );
 
         let recreate_result = aws_os.create_bucket(
             bucket_name.as_str(),
@@ -283,18 +289,22 @@ fn test_recreate_bucket() {
         );
         assert!(recreate_result.is_ok());
         // retry to check if bucket exists, there is a lag / cache after bucket deletion
-        assert!(retry::retry(Fixed::from_millis(1000).take(20), || {
-            match aws_os.bucket_exists(bucket_name.as_str()) {
-                true => Ok(true),
-                false => Err(()),
-            }
-        })
-        .expect("Bucket doesn't exist"));
+        assert!(
+            retry::retry(Fixed::from_millis(1000).take(20), || {
+                match aws_os.bucket_exists(bucket_name.as_str()) {
+                    true => Ok(true),
+                    false => Err(()),
+                }
+            })
+            .expect("Bucket doesn't exist")
+        );
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -354,9 +364,11 @@ fn test_put_file() {
         assert_eq!(object.unwrap().tags, vec![tag_0, tag_1]);
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -417,9 +429,11 @@ fn test_get_file() {
         assert!(result.is_ok());
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })

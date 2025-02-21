@@ -1,10 +1,10 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, GitRepositoryExtraFile, Image, SshKey};
-use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
 use crate::io_models::annotations_group::AnnotationsGroup;
@@ -12,14 +12,14 @@ use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{CpuArchitecture, KubernetesMemoryResourceUnit};
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    QoveryIdentifier,
+    Action, QoveryIdentifier, fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url,
+    ssh_keys_from_env_vars,
 };
 use crate::utilities::to_short_id;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};

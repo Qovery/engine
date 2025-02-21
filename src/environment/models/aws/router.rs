@@ -1,5 +1,5 @@
 use crate::environment::models::router::Router;
-use crate::environment::models::types::{ToTeraContext, AWS};
+use crate::environment::models::types::{AWS, ToTeraContext};
 use crate::errors::EngineError;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use tera::Context as TeraContext;

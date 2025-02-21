@@ -10,12 +10,12 @@ use crate::environment::models::database::{
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::service::{
-    check_service_version, default_tera_context, get_tfstate_name, get_tfstate_suffix, Service,
-    ServiceVersionCheckResult,
+    Service, ServiceVersionCheckResult, check_service_version, default_tera_context, get_tfstate_name,
+    get_tfstate_suffix,
 };
-use crate::infrastructure::models::cloud_provider::{service, DeploymentTarget};
+use crate::infrastructure::models::cloud_provider::{DeploymentTarget, service};
 
-use crate::environment::models::types::{ToTeraContext, AWS};
+use crate::environment::models::types::{AWS, ToTeraContext};
 use crate::io_models::database::DatabaseOptions;
 use crate::unit_conversion::cpu_string_to_float;
 use chrono::{DateTime, TimeZone, Utc};

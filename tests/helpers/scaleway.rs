@@ -8,27 +8,27 @@ use uuid::Uuid;
 use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
-    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+    KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
 };
-use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker, generate_id};
 use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::environment::models::scaleway::{ScwStorageType, ScwZone};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::Build;
-use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
@@ -49,7 +49,9 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         || secrets.SCALEWAY_SECRET_KEY.is_none()
         || secrets.SCALEWAY_DEFAULT_PROJECT_ID.is_none()
     {
-        error!("Please check your Vault connectivity (token/address) or SCALEWAY_ACCESS_KEY/SCALEWAY_SECRET_KEY/SCALEWAY_DEFAULT_PROJECT_ID envrionment variables are set");
+        error!(
+            "Please check your Vault connectivity (token/address) or SCALEWAY_ACCESS_KEY/SCALEWAY_SECRET_KEY/SCALEWAY_DEFAULT_PROJECT_ID envrionment variables are set"
+        );
         std::process::exit(1)
     }
     let random_id = generate_id();

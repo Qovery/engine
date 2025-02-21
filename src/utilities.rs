@@ -138,8 +138,8 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 mod tests_utilities {
     use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
-    use base64::engine::general_purpose;
     use base64::Engine;
+    use base64::engine::general_purpose;
     use std::collections::BTreeMap;
     use std::path::PathBuf;
 

@@ -1,23 +1,23 @@
+use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::pause_service::PauseServiceAction;
-use crate::environment::action::DeploymentAction;
-use crate::environment::models::container::{get_container_with_invalid_storage_size, Container, ContainerService};
+use crate::environment::models::container::{Container, ContainerService, get_container_with_invalid_storage_size};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::application::reporter::ApplicationDeploymentReporter;
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
-use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
+use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::utils::{
-    delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary, update_pvcs,
-    KubeObjectKind,
+    KubeObjectKind, delete_cached_image, delete_nlb_or_alb_service, get_last_deployed_image, mirror_image_if_necessary,
+    update_pvcs,
 };
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use std::path::PathBuf;

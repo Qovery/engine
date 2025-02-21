@@ -9,12 +9,12 @@ use crate::environment::models::helm_chart::{HelmChart, HelmChartSource, HelmVal
 use crate::environment::models::types::CloudProvider;
 use crate::environment::report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartError};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::variable_utils::VariableInfo;
 use anyhow::anyhow;
 use git2::{Cred, CredentialType};
@@ -334,7 +334,10 @@ fn replace_qovery_env_variable<'a>(
         // Built-in variable are not allowed because they contains ID in them
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
         if needle[PREFIX.len()..].starts_with("QOVERY_") {
-            return Err(anyhow!("You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}", line));
+            return Err(anyhow!(
+                "You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}",
+                line
+            ));
         }
 
         let variable_name =

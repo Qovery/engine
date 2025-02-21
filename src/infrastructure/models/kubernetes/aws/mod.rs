@@ -400,9 +400,10 @@ mod tests {
             // then
             assert!(result.is_err());
             let err = result.expect_err("result should be an Err");
-            assert!(err
-                .to_string()
-                .contains("invalid type: map, expected expect duration string"));
+            assert!(
+                err.to_string()
+                    .contains("invalid type: map, expected expect duration string")
+            );
         });
     }
 

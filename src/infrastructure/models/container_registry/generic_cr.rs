@@ -1,11 +1,11 @@
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
-    RepositoryInfo,
+    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char,
 };
 
 use crate::io_models::context::Context;

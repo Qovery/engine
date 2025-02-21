@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::cmd::docker::Docker;
-use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::helm::{Helm, to_engine_error};
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
 use crate::environment::report::logger::EnvLogger;

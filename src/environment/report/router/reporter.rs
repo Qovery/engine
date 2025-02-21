@@ -1,9 +1,9 @@
 use crate::environment::models::router::RouterService;
-use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::DeploymentReporter;
+use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::utilities::to_short_id;
 use std::sync::Arc;

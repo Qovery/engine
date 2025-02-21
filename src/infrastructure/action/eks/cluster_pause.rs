@@ -1,14 +1,14 @@
 use crate::errors::EngineError;
 use crate::events::{InfrastructureStep, Stage};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
 use crate::infrastructure::action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::models::{KubernetesClusterAction, NodeGroupsFormat};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;

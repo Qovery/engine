@@ -1,4 +1,4 @@
-use crate::helpers::gcp::{try_parse_json_credentials_from_str, GCP_REGION, GCP_RESOURCE_TTL};
+use crate::helpers::gcp::{GCP_REGION, GCP_RESOURCE_TTL, try_parse_json_credentials_from_str};
 use crate::helpers::gcp::{GCP_STORAGE_API_BUCKET_WRITE_RATE_LIMITER, GCP_STORAGE_API_OBJECT_WRITE_RATE_LIMITER};
 use crate::helpers::utilities::FuncTestsSecrets;
 use function_name::named;
@@ -6,8 +6,8 @@ use itertools::izip;
 use qovery_engine::infrastructure::models::object_storage::{Bucket, BucketObject, BucketRegion};
 use qovery_engine::services::gcp::object_storage_regions::GcpStorageRegion;
 use qovery_engine::services::gcp::object_storage_service::ObjectStorageService;
-use retry::delay::Fibonacci;
 use retry::OperationResult;
+use retry::delay::Fibonacci;
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -598,10 +598,12 @@ fn test_empty_bucket_with_objects() {
         .unwrap_or_else(|_| panic!("Cannot empty to bucket `{}`", &existing_bucket_name));
 
     // verify:
-    assert!(service
-        .list_objects_keys_only(existing_bucket_name.as_str(), None)
-        .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name))
-        .is_empty());
+    assert!(
+        service
+            .list_objects_keys_only(existing_bucket_name.as_str(), None)
+            .unwrap_or_else(|_| panic!("Cannot list objects keys from bucket `{}`", &existing_bucket_name))
+            .is_empty()
+    );
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -1003,10 +1005,12 @@ fn test_list_objects_keys_only_with_prefix() {
             .count(),
         objects_keys.len()
     );
-    assert!(object_to_be_created
-        .iter()
-        .filter(|o| o.key.starts_with(prefix))
-        .all(|o| objects_keys.contains(&o.key)));
+    assert!(
+        object_to_be_created
+            .iter()
+            .filter(|o| o.key.starts_with(prefix))
+            .all(|o| objects_keys.contains(&o.key))
+    );
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -1176,10 +1180,12 @@ fn test_list_objects_with_prefix() {
             .count(),
         objects.len()
     );
-    assert!(object_to_be_created
-        .iter()
-        .filter(|o| o.key.starts_with(prefix))
-        .all(|o| objects.contains(o)));
+    assert!(
+        object_to_be_created
+            .iter()
+            .filter(|o| o.key.starts_with(prefix))
+            .all(|o| objects.contains(o))
+    );
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -1242,7 +1248,9 @@ fn test_delete_object() {
         .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", &object_key, &existing_bucket_name));
 
     // verify:
-    assert!(service
-        .get_object(existing_bucket_name.as_str(), object_key.as_str())
-        .is_err());
+    assert!(
+        service
+            .get_object(existing_bucket_name.as_str(), object_key.as_str())
+            .is_err()
+    );
 }

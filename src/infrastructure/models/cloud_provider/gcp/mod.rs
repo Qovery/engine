@@ -1,9 +1,9 @@
 pub mod locations;
 
 use crate::constants::{GCP_CREDENTIALS, GCP_PROJECT, GCP_REGION};
-use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::{
     CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,

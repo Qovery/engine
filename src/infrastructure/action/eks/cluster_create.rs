@@ -1,24 +1,24 @@
 use crate::environment::models::kubernetes::K8sObject;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EventDetails, InfrastructureStep, Stage};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
 use crate::infrastructure::action::eks::helm_charts::EksHelmsDeployment;
-use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
+use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::nodegroup::{
-    delete_eks_nodegroups, node_group_is_running, should_update_desired_nodes, NodeGroupsDeletionType,
+    NodeGroupsDeletionType, delete_eks_nodegroups, node_group_is_running, should_update_desired_nodes,
 };
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
+use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
-use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::models::KubernetesClusterAction;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;

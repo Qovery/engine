@@ -32,8 +32,8 @@ use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
 use url::Url;
@@ -163,7 +163,7 @@ pub(super) fn gke_helm_charts(
                     "Prometheus config is not Google Cloud Object Storage".to_string(),
                     None,
                     None,
-                ))
+                ));
             }
             PrometheusConfiguration::Custom => None,
         },

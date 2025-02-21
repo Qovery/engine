@@ -1,7 +1,7 @@
 use crate::environment::report::database::reporter::DatabaseDeploymentReport;
 use crate::environment::report::utils::{
-    get_tera_instance, to_pods_render_context_by_version, to_pvc_render_context, to_services_render_context,
-    PodsRenderContext, PvcRenderContext, ServiceRenderContext,
+    PodsRenderContext, PvcRenderContext, ServiceRenderContext, get_tera_instance, to_pods_render_context_by_version,
+    to_pvc_render_context, to_services_render_context,
 };
 use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::utilities::to_short_id;
@@ -117,11 +117,11 @@ pub(crate) fn render_database_deployment_report(
 #[cfg(test)]
 mod test {
     use crate::environment::report::database::renderer::{
-        DatabaseDeploymentRenderContext, CONTAINER_REPORT_TEMPLATE, MANAGED_REPORT_TEMPLATE,
+        CONTAINER_REPORT_TEMPLATE, DatabaseDeploymentRenderContext, MANAGED_REPORT_TEMPLATE,
     };
     use crate::environment::report::utils::{
-        exit_code_to_msg, get_tera_instance, DeploymentState, EventRenderContext, PodRenderContext, PodsRenderContext,
-        PvcRenderContext, QContainerState, QContainerStateTerminated, ServiceRenderContext,
+        DeploymentState, EventRenderContext, PodRenderContext, PodsRenderContext, PvcRenderContext, QContainerState,
+        QContainerStateTerminated, ServiceRenderContext, exit_code_to_msg, get_tera_instance,
     };
     use crate::infrastructure::models::cloud_provider::service::DatabaseType;
     use crate::utilities::to_short_id;

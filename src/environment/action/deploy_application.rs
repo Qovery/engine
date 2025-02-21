@@ -1,8 +1,8 @@
+use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::pause_service::PauseServiceAction;
-use crate::environment::action::DeploymentAction;
 use crate::environment::models::application::{
-    get_application_with_invalid_storage_size, Application, ApplicationService,
+    Application, ApplicationService, get_application_with_invalid_storage_size,
 };
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::application::reporter::ApplicationDeploymentReporter;
@@ -12,7 +12,7 @@ use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
-use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
+use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 

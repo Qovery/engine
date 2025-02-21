@@ -14,8 +14,8 @@ use crate::utilities::calculate_hash;
 use k8s_openapi::api::core::v1::Pod;
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -207,7 +207,7 @@ impl HelmChart for CoreDNSConfigChart {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
-                    )))
+                    )));
                 }
                 Some(p) => p,
             },
@@ -235,13 +235,13 @@ impl HelmChart for CoreDNSConfigChart {
             None => {
                 return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                     "Missing payload, can't check coredns update".to_string(),
-                )))
+                )));
             }
             Some(x) => match x.data().get("checksum") {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "Missing configmap checksum, can't check coredns diff".to_string(),
-                    )))
+                    )));
                 }
                 Some(c) => c.clone(),
             },
@@ -358,8 +358,8 @@ mod tests {
     use crate::helm::{CommonChart, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType,
+        HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use std::env;
@@ -460,6 +460,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

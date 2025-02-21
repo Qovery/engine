@@ -256,17 +256,19 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
         ) {
             Ok(iam_user_mapper_role_result) => {
                 if iam_user_mapper_role_result.items.is_empty() {
-                    return Err(CommandError::new_from_safe_message(
-                        format!("Required role binding `eks-configmap-modifier-role` created by `{}` chart not found, chart is not installed properly.", AwsIamEksUserMapperChart::chart_name()),
-                    ));
+                    return Err(CommandError::new_from_safe_message(format!(
+                        "Required role binding `eks-configmap-modifier-role` created by `{}` chart not found, chart is not installed properly.",
+                        AwsIamEksUserMapperChart::chart_name()
+                    )));
                 }
 
                 for role_binding in iam_user_mapper_role_result.items {
                     // Check if it references the proper role
                     if role_binding.role_ref.name.to_lowercase() != "eks-configmap-modifier-role" {
-                        return Err(CommandError::new_from_safe_message(
-                            format!("Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should references `eks-configmap-modifier-role` role.", AwsIamEksUserMapperChart::chart_name()),
-                        ));
+                        return Err(CommandError::new_from_safe_message(format!(
+                            "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should references `eks-configmap-modifier-role` role.",
+                            AwsIamEksUserMapperChart::chart_name()
+                        )));
                     }
 
                     // Check if contains the subject
@@ -274,9 +276,10 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
                         if !subjects.iter().any(|e| {
                             e.name.to_lowercase() == "iam-eks-user-mapper" && e.kind.to_lowercase() == "serviceaccount"
                         }) {
-                            return Err(CommandError::new_from_safe_message(
-                                format!("Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.", AwsIamEksUserMapperChart::chart_name()),
-                            ));
+                            return Err(CommandError::new_from_safe_message(format!(
+                                "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.",
+                                AwsIamEksUserMapperChart::chart_name()
+                            )));
                         }
                     }
                 }
@@ -304,8 +307,8 @@ mod tests {
         AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
     };
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
@@ -437,7 +440,11 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 
     #[test]

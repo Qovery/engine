@@ -3,14 +3,14 @@
 use std::io::{Error, ErrorKind};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use std::{fs, thread};
 
 use git2::{Cred, CredentialType, ErrorClass};
-use retry::delay::Fibonacci;
 use retry::OperationResult;
+use retry::delay::Fibonacci;
 use time::Instant;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::dockerfile_utils::extract_dockerfile_args;
-use crate::infrastructure::models::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
+use crate::infrastructure::models::build_platform::{Build, BuildError, BuildPlatform, Kind, to_build_error};
 
 use crate::cmd::git;
 use crate::environment::models::abort::Abort;
@@ -507,14 +507,14 @@ impl BuildPlatform for LocalDocker {
                         application: app_id,
                         action_description: "git lfs checkout".to_string(),
                         raw_error,
-                    })
+                    });
                 }
                 Err(GitLfsError::ExitStatusError { .. }) => {
                     return Err(BuildError::IoError {
                         application: app_id,
                         action_description: "git lfs checkout".to_string(),
                         raw_error: Error::new(ErrorKind::Other, "git lfs checkout failed"),
-                    })
+                    });
                 }
             }
         }

@@ -1,20 +1,20 @@
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::helm::{Helm, to_engine_error};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::helm::ChartInfo;
-use crate::infrastructure::action::kubectl_utils::{delete_completed_jobs, delete_crashlooping_pods};
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::kubectl_utils::{delete_completed_jobs, delete_crashlooping_pods};
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::gcp::GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES;
-use crate::infrastructure::models::kubernetes::{uninstall_cert_manager, Kubernetes};
+use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manager};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::api::DeleteParams;
 use kube::Api;
+use kube::api::DeleteParams;
 use std::collections::HashSet;
 use std::time::Duration;
 

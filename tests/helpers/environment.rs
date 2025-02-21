@@ -1,6 +1,6 @@
 use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;

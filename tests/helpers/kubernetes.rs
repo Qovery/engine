@@ -1,5 +1,5 @@
 use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
-use crate::helpers::utilities::{init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, init};
 
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS};
 use crate::helpers::gcp::{GCP_KUBERNETES_VERSION, GCP_RESOURCE_TTL};
@@ -10,8 +10,8 @@ use core::result::Result::Err;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::fs::workspace_directory;
-use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
@@ -32,7 +32,7 @@ use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::infrastructure::models::cloud_provider;
 use qovery_engine::infrastructure::models::cloud_provider::service::Action;
 use std::str::FromStr;
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 pub const KUBERNETES_MIN_NODES: i32 = 3;
 pub const KUBERNETES_MAX_NODES: i32 = 10;

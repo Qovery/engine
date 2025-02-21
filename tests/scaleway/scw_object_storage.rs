@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id, init};
 use function_name::named;
 use std::time::Duration;
 
@@ -8,7 +8,7 @@ use qovery_engine::infrastructure::models::object_storage::scaleway_object_stora
 use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
 use tempfile::NamedTempFile;
 use tracing::log::info;
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 // SCW zone has been switched from Paris2 to Warsaw due to a lot of slowness on SCW Object storage end
 // making tests very flacky
@@ -143,9 +143,11 @@ fn test_create_bucket() {
         info!("Bucket {} exists.", bucket_name);
 
         // clean-up:
-        assert!(scaleway_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            scaleway_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
         info!("Bucket {} deleted.", bucket_name);
 
         test_name.to_string()
@@ -194,9 +196,11 @@ fn test_get_bucket() {
         assert_eq!(created_bucket, retrieved_bucket);
 
         // clean-up:
-        assert!(scaleway_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            scaleway_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -256,9 +260,11 @@ fn test_recreate_bucket() {
         info!("Bucket {} exists again.", bucket_name);
 
         // clean-up:
-        assert!(scaleway_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete,)
-            .is_ok());
+        assert!(
+            scaleway_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete,)
+                .is_ok()
+        );
         info!("Bucket {} deleted.", bucket_name);
 
         test_name.to_string()
@@ -317,9 +323,11 @@ fn test_file_handling() {
         info!("File {} get from bucket {}.", object_key, bucket_name);
 
         // clean-up:
-        assert!(scaleway_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            scaleway_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
         info!("Bucket {} deleted.", bucket_name);
 
         test_name.to_string()
@@ -375,9 +383,11 @@ fn test_ensure_file_is_absent() {
         info!("File {} not in bucket {} anymore.", object_key, bucket_name);
 
         // clean-up:
-        assert!(scaleway_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            scaleway_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
         info!("Bucket {} deleted.", bucket_name);
 
         test_name.to_string()

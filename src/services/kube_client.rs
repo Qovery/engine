@@ -7,9 +7,9 @@ use k8s_openapi::api::{
     core::v1::{Pod, Secret},
 };
 use kube::{
+    Api, CustomResource,
     api::{ListParams, Patch, PatchParams},
     core::{ListMeta, ObjectList},
-    Api, CustomResource,
 };
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;

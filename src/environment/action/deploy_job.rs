@@ -1,29 +1,29 @@
 use super::utils::delete_cached_image;
 use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
 use crate::cmd::structs::KubernetesPodStatusPhase;
-use crate::environment::action::deploy_helm::HelmDeployment;
-use crate::environment::action::utils::{get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind};
 use crate::environment::action::DeploymentAction;
+use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::utils::{KubeObjectKind, get_last_deployed_image, mirror_image_if_necessary};
 use crate::environment::models::job::{ImageSource, Job, JobService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::job::reporter::JobDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{AttachParams, ListParams, PostParams};
-use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
+use kube::api::{AttachParams, ListParams, PostParams};
+use kube::runtime::wait::{Condition, await_condition};
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -835,7 +835,7 @@ pub fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVaria
 
 #[cfg(test)]
 mod test {
-    use crate::environment::action::deploy_job::{serialize_job_output, JobOutputVariable};
+    use crate::environment::action::deploy_job::{JobOutputVariable, serialize_job_output};
 
     #[test]
     fn should_serialize_json_to_job_output_variable_with_string_value() {

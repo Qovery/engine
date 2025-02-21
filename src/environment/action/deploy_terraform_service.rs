@@ -1,24 +1,24 @@
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
+use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job_status;
-use crate::environment::action::DeploymentAction;
 use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::runtime::block_on;
 use k8s_openapi::api::batch::v1::Job as K8sJob;
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::api::core::v1::Secret;
+use kube::Api;
 use kube::api::{AttachParams, DeleteParams, ListParams};
 use kube::runtime::wait::await_condition;
-use kube::Api;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 

@@ -8,8 +8,8 @@ use crate::infrastructure::models::container_registry::{
 };
 use crate::io_models::context::Context;
 use itertools::Itertools;
-use reqwest::header::{HeaderMap, HeaderValue, ACCEPT, AUTHORIZATION};
 use reqwest::Error;
+use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue};
 use serde_derive::Deserialize;
 use std::time::Duration;
 use url::Url;

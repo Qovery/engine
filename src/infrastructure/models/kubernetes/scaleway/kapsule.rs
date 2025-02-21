@@ -3,17 +3,17 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
-use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
 use crate::infrastructure::models::kubernetes::{
     self, InstanceType, Kind, Kubernetes, KubernetesVersion, ProviderOptions,
 };
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::{CpuArchitecture, NodeGroups};
-use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
 use crate::environment::models::domain::ToTerraformString;

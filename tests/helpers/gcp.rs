@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, Quota, RateLimiter};
+use governor::{Quota, RateLimiter, clock};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
 use time::Time;
@@ -13,27 +13,27 @@ use uuid::Uuid;
 use qovery_engine::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use qovery_engine::environment::models::gcp::{GcpStorageType, JsonCredentials};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
-use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::Google;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::gcp::{Gke, GkeOptions, VpcMode};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 
 use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::{get_environment_test_kubernetes, TargetCluster};
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::helpers::kubernetes::{TargetCluster, get_environment_test_kubernetes};
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 

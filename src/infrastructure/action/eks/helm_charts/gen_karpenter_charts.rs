@@ -1,10 +1,10 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{CommonChart, HelmChartError};
+use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
-use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 
 pub struct KarpenterCharts {

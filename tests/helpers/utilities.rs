@@ -4,8 +4,8 @@ extern crate passwords;
 extern crate scaleway_api_rs;
 extern crate time;
 
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
@@ -35,22 +35,22 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
 };
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
+use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
-use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::local_docker::LocalDocker;
-use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::msg_publisher::StdMsgPublisher;
@@ -339,7 +339,9 @@ impl FuncTestsSecrets {
         let vault_config = match Self::get_vault_config() {
             Ok(vault_config) => vault_config,
             Err(_) => {
-                warn!("Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables");
+                warn!(
+                    "Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables"
+                );
                 return empty_secrets;
             }
         };
@@ -521,7 +523,7 @@ pub fn init() -> Instant {
             .try_init(),
         None => {
             if env::var_os("RUST_LOG").is_none() {
-                env::set_var("RUST_LOG", "INFO")
+                unsafe { env::set_var("RUST_LOG", "INFO") }
             }
             tracing_subscriber::fmt()
                 .with_env_filter(EnvFilter::try_from_env("RUST_LOG").unwrap())

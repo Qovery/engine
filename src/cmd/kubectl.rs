@@ -14,8 +14,8 @@ use uuid::Uuid;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
     Configmap, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
-    KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer,
-    Secrets, PDB, PVC, SVC,
+    KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer, PDB,
+    PVC, SVC, Secrets,
 };
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
@@ -513,10 +513,7 @@ where
     P: AsRef<Path>,
 {
     let crash_looping_pods =
-        match kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone()) {
-            Ok(pods) => pods,
-            Err(e) => return Err(e),
-        };
+        kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone())?;
 
     for crash_looping_pod in crash_looping_pods.iter() {
         kubectl_exec_delete_pod(
@@ -607,10 +604,7 @@ where
     P: AsRef<Path>,
 {
     let pod_to_be_deleted =
-        match kubectl_exec_get_pod_by_name(&kubernetes_config, Some(pod_namespace), pod_name, envs.clone()) {
-            Ok(pod) => pod,
-            Err(e) => return Err(e),
-        };
+        kubectl_exec_get_pod_by_name(&kubernetes_config, Some(pod_namespace), pod_name, envs.clone())?;
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
     let kubernetes_config = kubernetes_config.as_ref();

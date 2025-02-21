@@ -4,8 +4,8 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::environment::models::domain::Domain;
-use crate::infrastructure::models::dns_provider::errors::DnsProviderError;
 use crate::infrastructure::models::dns_provider::Kind;
+use crate::infrastructure::models::dns_provider::errors::DnsProviderError;
 use crate::infrastructure::models::dns_provider::{DnsProvider, DnsProviderConfiguration};
 use crate::io_models::context::Context;
 

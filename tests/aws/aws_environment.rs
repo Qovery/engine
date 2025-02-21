@@ -3,21 +3,21 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
-    check_tcp_port_is_open, check_udp_port_is_open, context_for_resource, engine_run_test, get_pods, get_pvc, init,
-    is_pod_restarted_env, logger, metrics_registry, FuncTestsSecrets, TcpCheckSource,
+    FuncTestsSecrets, TcpCheckSource, check_tcp_port_is_open, check_udp_port_is_open, context_for_resource,
+    engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, metrics_registry,
 };
 use ::function_name::named;
 use bstr::ByteSlice;
 use k8s_openapi::api::batch::v1::CronJob;
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use k8s_openapi::api::core::v1::ConfigMap;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
@@ -44,7 +44,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::{span, Level};
+use tracing::{Level, span};
 use url::Url;
 use uuid::Uuid;
 
@@ -1739,18 +1739,20 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         assert!(preferred.is_ok());
         let deployments = preferred.unwrap().unwrap();
         for deploy in deployments {
-            assert!(deploy
-                .spec
-                .unwrap()
-                .template
-                .spec
-                .unwrap()
-                .affinity
-                .unwrap()
-                .pod_anti_affinity
-                .unwrap()
-                .preferred_during_scheduling_ignored_during_execution
-                .is_some())
+            assert!(
+                deploy
+                    .spec
+                    .unwrap()
+                    .template
+                    .spec
+                    .unwrap()
+                    .affinity
+                    .unwrap()
+                    .pod_anti_affinity
+                    .unwrap()
+                    .preferred_during_scheduling_ignored_during_execution
+                    .is_some()
+            )
         }
 
         // set node affinity and pod antiaffinity to required
@@ -1780,12 +1782,14 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         for deploy in deployments {
             let pod_antiaffinity = deploy.spec.unwrap().template.spec.unwrap().affinity.unwrap();
             // check pod antiaffinity
-            assert!(pod_antiaffinity
-                .pod_anti_affinity
-                .clone()
-                .unwrap()
-                .required_during_scheduling_ignored_during_execution
-                .is_some());
+            assert!(
+                pod_antiaffinity
+                    .pod_anti_affinity
+                    .clone()
+                    .unwrap()
+                    .required_during_scheduling_ignored_during_execution
+                    .is_some()
+            );
             // check node selector
             let node_affinity = pod_antiaffinity
                 .node_affinity

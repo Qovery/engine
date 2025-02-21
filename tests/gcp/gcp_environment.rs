@@ -3,13 +3,13 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::gcp::{clean_environments, gcp_infra_config};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
 };
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use function_name::named;
-use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::application::{Port, Protocol};
@@ -25,9 +25,9 @@ use qovery_engine::io_models::terraform_service::{
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use std::str::FromStr;
+use tracing::Level;
 use tracing::log::warn;
 use tracing::span;
-use tracing::Level;
 use url::Url;
 use uuid::Uuid;
 

@@ -4,8 +4,8 @@ use crate::events::EventDetails;
 use crate::infrastructure::action::eks::{
     AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION,
 };
-use crate::infrastructure::models::cloud_provider::aws::new_rusoto_creds;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::aws::new_rusoto_creds;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::KubernetesClusterAction;
 use chrono::Duration as ChronoDuration;
@@ -80,7 +80,8 @@ pub fn define_cluster_upgrade_timeout(
             cluster_upgrade_timeout = upgrade_time_in_minutes;
             message = Some(format!(
                 "Kubernetes workers timeout will be adjusted to {} minutes, because some pods have a termination period greater than 15 min. Pods:\n{}",
-                cluster_upgrade_timeout.num_minutes(), pod_names.join(", ")
+                cluster_upgrade_timeout.num_minutes(),
+                pod_names.join(", ")
             ));
         }
     };

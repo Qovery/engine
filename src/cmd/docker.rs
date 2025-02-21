@@ -349,8 +349,9 @@ impl Docker {
 
                 if available_architectures != requested_architectures.len() {
                     return Err(DockerError::InvalidConfig {
-                        raw_error_message:
-                        format!("Some requested architectures are not supported by current docker builder. Available architectures are {supported_architectures:?} while requested are {requested_architectures:?}.")
+                        raw_error_message: format!(
+                            "Some requested architectures are not supported by current docker builder. Available architectures are {supported_architectures:?} while requested are {requested_architectures:?}."
+                        ),
                     });
                 }
 
@@ -384,19 +385,28 @@ impl Docker {
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
-                    let mut driver_opt = format!(concat!(
-                    "--driver-opt=",
-                    "\"namespace={}\",",
-                    "\"replicas={}\",",
-                    "\"loadbalance=random\",",
-                    "\"nodeselector=kubernetes.io/arch={}\",",
-                    "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
-                    "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
-                    "\"requests.cpu={}m\",",
-                    "\"limits.cpu={}m\",",
-                    "\"requests.memory={}Gi\",",
-                    "\"limits.memory={}Gi\""
-                    ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
+                    let mut driver_opt = format!(
+                        concat!(
+                            "--driver-opt=",
+                            "\"namespace={}\",",
+                            "\"replicas={}\",",
+                            "\"loadbalance=random\",",
+                            "\"nodeselector=kubernetes.io/arch={}\",",
+                            "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                            "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                            "\"requests.cpu={}m\",",
+                            "\"limits.cpu={}m\",",
+                            "\"requests.memory={}Gi\",",
+                            "\"limits.memory={}Gi\""
+                        ),
+                        namespace,
+                        nb_builder,
+                        arch,
+                        cpu_request_milli,
+                        cpu_limit_milli,
+                        memory_request_gib,
+                        memory_limit_gib
+                    );
                     if *enable_rootless {
                         driver_opt.push_str(",\"rootless=true\"");
                     }
@@ -769,7 +779,9 @@ impl Docker {
 
             if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
                 if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
-                    info!("Docker buildkit build failed with a transient error, but we already retried for too long, aborting ...");
+                    info!(
+                        "Docker buildkit build failed with a transient error, but we already retried for too long, aborting ..."
+                    );
                     break ret;
                 }
 
