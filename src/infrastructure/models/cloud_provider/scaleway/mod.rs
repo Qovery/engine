@@ -8,6 +8,7 @@ use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub mod database_instance_type;
 
+#[derive(Clone)]
 pub struct ScalewayCredentials {
     pub access_key: String,
     pub secret_key: String,

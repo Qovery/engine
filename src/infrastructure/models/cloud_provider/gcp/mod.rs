@@ -13,7 +13,7 @@ use uuid::Uuid;
 
 pub struct Google {
     long_id: Uuid,
-    json_credentials: JsonCredentials,
+    pub json_credentials: JsonCredentials,
     json_credentials_raw_json: String,
     region: GcpRegion,
     terraform_state_credentials: TerraformStateCredentials,

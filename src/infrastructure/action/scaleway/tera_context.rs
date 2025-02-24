@@ -24,9 +24,9 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     let mut context = TeraContext::new();
 
     // Scaleway
-    context.insert("scaleway_project_id", cluster.options.scaleway_project_id.as_str());
-    context.insert("scaleway_access_key", cluster.options.scaleway_access_key.as_str());
-    context.insert("scaleway_secret_key", cluster.options.scaleway_secret_key.as_str());
+    context.insert("scaleway_project_id", cluster.credentials.project_id.as_str());
+    context.insert("scaleway_access_key", cluster.credentials.access_key.as_str());
+    context.insert("scaleway_secret_key", cluster.credentials.secret_key.as_str());
     context.insert("scw_region", &cluster.zone.region().as_str());
     context.insert("scw_zone", &cluster.zone.as_str());
 
@@ -170,7 +170,7 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     } else {
         let mut headers = header::HeaderMap::new();
         headers.insert("Content-Type", "application/json".parse().unwrap());
-        headers.insert("X-Auth-Token", cluster.options.scaleway_secret_key.parse().unwrap());
+        headers.insert("X-Auth-Token", cluster.credentials.secret_key.parse().unwrap());
         let http = reqwest::blocking::Client::new();
         let tag = format!("ClusterLongId={}", cluster.long_id);
         let url = format!(

@@ -19,6 +19,7 @@ use crate::logger::Logger;
 use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::action::InfrastructureAction;
+use crate::infrastructure::models::cloud_provider::scaleway::ScalewayCredentials;
 use crate::infrastructure::models::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
@@ -77,9 +78,6 @@ pub struct KapsuleOptions {
     pub qovery_engine_location: EngineLocation,
 
     // Scaleway
-    pub scaleway_project_id: String,
-    pub scaleway_access_key: String,
-    pub scaleway_secret_key: String,
     #[serde(default)]
     pub scaleway_kubernetes_type: KapsuleClusterType,
 
@@ -99,9 +97,6 @@ impl KapsuleOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         qovery_engine_location: EngineLocation,
-        scaleway_project_id: String,
-        scaleway_access_key: String,
-        scaleway_secret_key: String,
         tls_email_report: String,
         scaleway_kubernetes_type: KapsuleClusterType,
     ) -> KapsuleOptions {
@@ -115,9 +110,6 @@ impl KapsuleOptions {
             grafana_admin_user,
             grafana_admin_password,
             qovery_engine_location,
-            scaleway_project_id,
-            scaleway_access_key,
-            scaleway_secret_key,
             tls_email_report,
             scaleway_kubernetes_type,
         }
@@ -129,6 +121,7 @@ pub struct Kapsule {
     id: String,
     pub long_id: Uuid,
     name: String,
+    pub credentials: ScalewayCredentials,
     pub version: KubernetesVersion,
     pub zone: ScwZone,
     pub object_storage: ScalewayOS,
@@ -216,7 +209,8 @@ impl Kapsule {
                     "Cloudprovider is not Scaleway",
                 ))
             })?
-            .credentials();
+            .credentials()
+            .clone();
         let object_storage = ScalewayOS::new(
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
@@ -228,6 +222,7 @@ impl Kapsule {
         let cluster = Kapsule {
             context,
             id: to_short_id(&long_id),
+            credentials: creds,
             long_id,
             name,
             version,
@@ -258,7 +253,7 @@ impl Kapsule {
     pub fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
         scaleway_api_rs::apis::configuration::Configuration {
             api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                key: self.options.scaleway_secret_key.clone(),
+                key: self.credentials.secret_key.clone(),
                 prefix: None,
             }),
             ..scaleway_api_rs::apis::configuration::Configuration::default()
@@ -273,7 +268,7 @@ impl Kapsule {
             &self.get_configuration(),
             self.region(),
             None,
-            Some(self.options.scaleway_project_id.as_str()),
+            Some(self.credentials.project_id.as_str()),
             None,
             None,
             None,
