@@ -491,6 +491,7 @@ impl KubernetesDto {
                     context.clone(),
                     self.long_id,
                     &self.name,
+                    cloud_provider,
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     GcpRegion::from_str(self.region.as_str()).unwrap_or_else(|_| {

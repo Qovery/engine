@@ -238,15 +238,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             "qovery".to_string(),
             engine_location,
             secrets
-                .SCALEWAY_DEFAULT_PROJECT_ID
-                .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
-            secrets
-                .SCALEWAY_ACCESS_KEY
-                .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-            secrets
-                .SCALEWAY_SECRET_KEY
-                .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-            secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             KapsuleClusterType::Kapsule,

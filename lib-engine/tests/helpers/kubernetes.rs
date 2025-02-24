@@ -442,6 +442,7 @@ pub fn get_environment_test_kubernetes(
                     context.clone(),
                     *context.cluster_long_id(),
                     format!("qovery-{}", context.cluster_short_id()).as_str(),
+                    cloud_provider,
                     kubernetes_version,
                     region,
                     Gke::kubernetes_cluster_options(

@@ -253,14 +253,6 @@ impl Cluster<Google, GkeOptions> for Gke {
         engine_location: EngineLocation,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> GkeOptions {
-        let credentials = try_parse_json_credentials_from_str(
-            secrets
-                .GCP_CREDENTIALS
-                .as_ref()
-                .expect("GCP_CREDENTIALS is not set in secrets"),
-        )
-        .expect("Cannot parse GCP_CREDENTIALS");
-
         GkeOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
             secrets
@@ -278,7 +270,6 @@ impl Cluster<Google, GkeOptions> for Gke {
             "admin".to_string(),
             "qovery".to_string(),
             engine_location,
-            credentials,
             VpcMode::Automatic {
                 custom_cluster_ipv4_cidr_block: None,
                 custom_services_ipv4_cidr_block: None,

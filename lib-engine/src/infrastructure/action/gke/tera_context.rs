@@ -52,23 +52,16 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
 
     // GCP
     // credentials
-    context.insert(
-        "gcp_json_credentials_raw",
-        &cluster.options.gcp_json_credentials.r#type.to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_type",
-        &cluster.options.gcp_json_credentials.r#type.to_string(),
-    );
+    context.insert("gcp_json_credentials_raw", &cluster.credentials.r#type.to_string());
+    context.insert("gcp_json_credentials_type", &cluster.credentials.r#type.to_string());
     context.insert(
         "gcp_json_credentials_private_key_id",
-        &cluster.options.gcp_json_credentials.private_key_id.to_string(),
+        &cluster.credentials.private_key_id.to_string(),
     );
     context.insert(
         "gcp_json_credentials_private_key",
         &cluster
-            .options
-            .gcp_json_credentials
+            .credentials
             .private_key
             .as_str()
             .escape_default() // escape new lines to have \n instead
@@ -76,37 +69,24 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     );
     context.insert(
         "gcp_json_credentials_client_email",
-        &cluster.options.gcp_json_credentials.client_email.to_string(),
+        &cluster.credentials.client_email.to_string(),
     );
-    context.insert(
-        "gcp_json_credentials_client_id",
-        &cluster.options.gcp_json_credentials.client_id.to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_auth_uri",
-        cluster.options.gcp_json_credentials.auth_uri.as_str(),
-    );
-    context.insert(
-        "gcp_json_credentials_token_uri",
-        cluster.options.gcp_json_credentials.token_uri.as_str(),
-    );
+    context.insert("gcp_json_credentials_client_id", &cluster.credentials.client_id.to_string());
+    context.insert("gcp_json_credentials_auth_uri", cluster.credentials.auth_uri.as_str());
+    context.insert("gcp_json_credentials_token_uri", cluster.credentials.token_uri.as_str());
     context.insert(
         "gcp_json_credentials_auth_provider_x509_cert_url",
-        cluster
-            .options
-            .gcp_json_credentials
-            .auth_provider_x509_cert_url
-            .as_str(),
+        cluster.credentials.auth_provider_x509_cert_url.as_str(),
     );
     context.insert(
         "gcp_json_credentials_client_x509_cert_url",
-        cluster.options.gcp_json_credentials.client_x509_cert_url.as_str(),
+        cluster.credentials.client_x509_cert_url.as_str(),
     );
     context.insert(
         "gcp_json_credentials_universe_domain",
-        &cluster.options.gcp_json_credentials.universe_domain.to_string(),
+        &cluster.credentials.universe_domain.to_string(),
     );
-    context.insert("gcp_project_id", cluster.options.gcp_json_credentials.project_id.as_str());
+    context.insert("gcp_project_id", cluster.credentials.project_id.as_str());
     context.insert("gcp_region", &cluster.region.to_cloud_provider_format());
     context.insert(
         "gcp_zones",
@@ -204,9 +184,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             context.insert("vpc_use_existing", &true);
             context.insert(
                 "network_project_id",
-                vpc_project_id
-                    .as_ref()
-                    .unwrap_or(&cluster.options.gcp_json_credentials.project_id), // If no project set, use the current one
+                vpc_project_id.as_ref().unwrap_or(&cluster.credentials.project_id), // If no project set, use the current one
             );
             context.insert("vpc_name", &vpc_name);
             context.insert("subnetwork", subnetwork_name.as_deref().unwrap_or(""));
