@@ -170,9 +170,13 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 );
             }
 
+            let namespace_from_args = extract_namespace_from_helm_args(self.helm_upgrade_arguments());
+
             // uninstall chart
-            let mut chart_info =
-                ChartInfo::new_from_release_name(self.helm_release_name(), target.environment.namespace());
+            let mut chart_info = ChartInfo::new_from_release_name(
+                self.helm_release_name(),
+                &namespace_from_args.unwrap_or_else(|| Cow::Borrowed(target.environment.namespace())), // take the namespace from the list of arguments if it exists
+            );
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
 
             target
@@ -795,6 +799,28 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
     Ok(())
 }
 
+fn extract_namespace_from_helm_args<'a>(args: impl Iterator<Item = Cow<'a, str>>) -> Option<Cow<'a, str>> {
+    let mut ns_iter = args.skip_while(|arg| {
+        !(*arg == "-n" || *arg == "--namespace" || arg.starts_with("-n=") || arg.starts_with("--namespace="))
+    });
+
+    if let Some(arg) = ns_iter.next() {
+        if let Some(value) = arg.strip_prefix("--namespace=") {
+            return Some(Cow::Owned(value.to_string()));
+        }
+
+        if let Some(value) = arg.strip_prefix("-n=") {
+            return Some(Cow::Owned(value.to_string()));
+        }
+
+        if let Some(next_arg) = ns_iter.next() {
+            return Some(next_arg);
+        }
+    }
+
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1071,5 +1097,74 @@ spec:
         let ns: PartialObjectMeta<()> =
             PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
         assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
+    }
+
+    #[test]
+    fn should_return_empty_when_no_namespace_args() {
+        let args = vec![Cow::Borrowed("--atomic")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert!(namespace.is_none());
+    }
+
+    #[test]
+    fn should_extract_namespace_with_short_option_format() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("-n"),
+            Cow::Borrowed("my-namespace"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("my-namespace")));
+    }
+
+    #[test]
+    fn should_ignore_incomplete_namespace_flag() {
+        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("-n")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert!(namespace.is_none());
+    }
+
+    #[test]
+    fn should_extract_namespace_with_equals_syntax() {
+        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("--namespace=production")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("production")));
+    }
+
+    #[test]
+    fn should_extract_namespace_with_long_option_format() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--namespace"),
+            Cow::Borrowed("staging"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("staging")));
+    }
+
+    #[test]
+    fn should_extract_namespace_with_several_namespaces() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--namespace"),
+            Cow::Borrowed("staging"),
+            Cow::Borrowed("-n"),
+            Cow::Borrowed("dev"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        // take the first one, but it should not be allowed to have args with several namespaces
+        assert_eq!(namespace, Some(Cow::Borrowed("staging")));
     }
 }
