@@ -92,6 +92,13 @@ spec:
               mountPath: /qovery-output
               #TODO (mzo): mutualize the container job part with cron job
               # Also, if we have 2 types of job (one with output, one without), should be mutualized too
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
           {%- if service.entrypoint %}
