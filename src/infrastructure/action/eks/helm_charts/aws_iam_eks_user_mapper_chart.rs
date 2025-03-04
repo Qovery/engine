@@ -31,14 +31,6 @@ pub enum SSOConfig {
     Enabled { sso_role_arn: String },
 }
 
-pub enum KarpenterConfig {
-    Disabled,
-    Enabled {
-        aws_account_id: String,
-        cluster_name: String,
-    },
-}
-
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -47,7 +39,6 @@ pub struct AwsIamEksUserMapperChart {
     aws_iam_eks_user_mapper_role_arn: String,
     aws_iam_group_config: GroupConfig,
     aws_iam_sso_config: SSOConfig,
-    aws_iam_enable_karpenter: KarpenterConfig,
     refresh_interval: Duration,
     chart_resources: HelmChartResources,
 }
@@ -60,7 +51,6 @@ impl AwsIamEksUserMapperChart {
         aws_iam_eks_user_mapper_role_arn: String,
         aws_iam_group_config: GroupConfig,
         aws_iam_sso_config: SSOConfig,
-        aws_iam_enable_karpenter: KarpenterConfig,
         refresh_interval: Duration,
         chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
@@ -81,7 +71,6 @@ impl AwsIamEksUserMapperChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsIamEksUserMapperChart::chart_name(),
             ),
-            aws_iam_enable_karpenter,
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
@@ -175,32 +164,10 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
             }
         }
 
-        // Enabling Karpenter
-        match &self.aws_iam_enable_karpenter {
-            KarpenterConfig::Disabled => {
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.enabled".to_string(),
-                    value: "false".to_string(),
-                });
-            }
-            KarpenterConfig::Enabled {
-                aws_account_id,
-                cluster_name,
-            } => {
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.enabled".to_string(),
-                    value: "true".to_string(),
-                });
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.iamKarpenterRoleArn".to_string(),
-                    value: format!(
-                        "arn:aws:iam::{}:role/KarpenterNodeRole-{}",
-                        aws_account_id.clone(),
-                        cluster_name.clone()
-                    ),
-                });
-            }
-        }
+        chart.chart_info.values.push(ChartSetValue {
+            key: "karpenter.enabled".to_string(),
+            value: "false".to_string(),
+        });
 
         // Activating SSO option
         match &self.aws_iam_sso_config {
@@ -304,7 +271,7 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
-        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
+        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
@@ -333,7 +300,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -376,7 +342,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -420,7 +385,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
