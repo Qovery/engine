@@ -276,6 +276,7 @@ pub(super) fn gke_helm_charts(
         chart_config_prerequisites.cluster_long_id.to_string(),
         chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Gke,
+        chart_config_prerequisites.cluster_creation_date,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings

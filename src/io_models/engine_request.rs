@@ -366,6 +366,7 @@ pub struct KubernetesDto {
     pub version: String,
     pub region: String,
     pub options: Value,
+    pub created_at: DateTime<Utc>,
     pub nodes_groups: Vec<NodeGroups>,
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -430,6 +431,7 @@ impl KubernetesDto {
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                 zones.to_vec(),
                 cloud_provider,
+                self.created_at,
                 serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
@@ -459,6 +461,7 @@ impl KubernetesDto {
                     )
                 }),
                 cloud_provider,
+                self.created_at,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<kubernetes::scaleway::kapsule::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
@@ -500,6 +503,7 @@ impl KubernetesDto {
                             self.region.as_str()
                         )
                     }),
+                    self.created_at,
                     options,
                     logger,
                     self.advanced_settings.clone(),

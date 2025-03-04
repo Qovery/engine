@@ -18,6 +18,7 @@ use crate::io_models::models::CpuArchitecture;
 use crate::io_models::models::NodeGroups;
 use crate::logger::Logger;
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -32,6 +33,7 @@ pub struct EKS {
     pub version: KubernetesVersion,
     pub region: AwsRegion,
     pub zones: Vec<AwsZone>,
+    pub created_at: DateTime<Utc>,
     pub s3: S3,
     pub nodes_groups: Vec<NodeGroups>,
     pub template_directory: PathBuf,
@@ -54,6 +56,7 @@ impl EKS {
         region: AwsRegion,
         zones: Vec<String>,
         cloud_provider: &dyn CloudProvider,
+        created_at: DateTime<Utc>,
         options: Options,
         nodes_groups: Vec<NodeGroups>,
         logger: Box<dyn Logger>,
@@ -87,6 +90,7 @@ impl EKS {
             region,
             zones: aws_zones,
             s3,
+            created_at,
             options,
             nodes_groups,
             template_directory,

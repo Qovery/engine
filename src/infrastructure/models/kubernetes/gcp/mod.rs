@@ -27,6 +27,7 @@ use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
 use nonzero_ext::nonzero;
@@ -170,6 +171,7 @@ pub struct Gke {
     pub name: String,
     pub version: KubernetesVersion,
     pub region: GcpRegion,
+    pub created_at: DateTime<Utc>,
     pub template_directory: PathBuf,
     pub object_storage: GoogleOS,
     pub options: GkeOptions,
@@ -190,6 +192,7 @@ impl Gke {
         cloud_provider: &dyn CloudProvider,
         version: KubernetesVersion,
         region: GcpRegion,
+        created_at: DateTime<Utc>,
         options: GkeOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
@@ -260,6 +263,7 @@ impl Gke {
             name: name.to_string(),
             version,
             region,
+            created_at,
             template_directory: PathBuf::from(context.lib_root_dir()).join("gcp/bootstrap"),
             object_storage: google_object_storage,
             options,

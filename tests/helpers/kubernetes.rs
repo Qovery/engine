@@ -4,6 +4,7 @@ use crate::helpers::utilities::{FuncTestsSecrets, init};
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS};
 use crate::helpers::gcp::{GCP_KUBERNETES_VERSION, GCP_RESOURCE_TTL};
 use crate::helpers::scaleway::{SCW_KUBERNETES_VERSION, SCW_RESOURCE_TTL_IN_SECONDS};
+use chrono::Utc;
 use core::option::Option;
 use core::option::Option::{None, Some};
 use core::result::Result::Err;
@@ -384,6 +385,7 @@ pub fn get_environment_test_kubernetes(
                     region.clone(),
                     region.get_zones_to_string(),
                     cloud_provider,
+                    Utc::now(),
                     options,
                     AWS::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     logger,
@@ -417,6 +419,7 @@ pub fn get_environment_test_kubernetes(
                     kubernetes_version,
                     zone,
                     cloud_provider,
+                    Utc::now(),
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
                     Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
                     logger,
@@ -445,6 +448,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     kubernetes_version,
                     region,
+                    Utc::now(),
                     Gke::kubernetes_cluster_options(
                         secrets.clone(),
                         None,

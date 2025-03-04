@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use crate::helm::HelmChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
@@ -38,6 +40,7 @@ pub struct EksChartsConfigPrerequisites {
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
+    pub cluster_creation_date: DateTime<Utc>,
     pub region: AwsRegion,
     pub cluster_name: String,
     pub cpu_architectures: Vec<CpuArchitecture>,
@@ -145,6 +148,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
             customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
             prometheus_config: cluster.prometheus_config.clone(),
+            cluster_creation_date: cluster.created_at,
         }
     }
 

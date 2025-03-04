@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
@@ -22,6 +24,7 @@ pub struct GkeChartsConfigPrerequisites {
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
+    pub cluster_creation_date: DateTime<Utc>,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
     pub managed_dns_helm_format: String,
@@ -43,6 +46,7 @@ impl GkeChartsConfigPrerequisites {
         organization_long_id: uuid::Uuid,
         cluster_id: String,
         cluster_long_id: uuid::Uuid,
+        cluster_creation_date: DateTime<Utc>,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
         managed_dns_helm_format: String,
@@ -61,6 +65,7 @@ impl GkeChartsConfigPrerequisites {
             organization_long_id,
             cluster_id,
             cluster_long_id,
+            cluster_creation_date,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
             managed_dns_helm_format,
@@ -106,6 +111,7 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             *infra_ctx.context().organization_long_id(),
             self.cluster.short_id().to_string(),
             self.cluster.long_id,
+            self.cluster.created_at,
             self.cluster.context.is_feature_enabled(&Features::LogsHistory),
             self.cluster.context.is_feature_enabled(&Features::MetricsHistory),
             infra_ctx.dns_provider().domain().to_helm_format_string(),

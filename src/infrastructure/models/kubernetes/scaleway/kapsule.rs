@@ -23,6 +23,7 @@ use crate::infrastructure::models::cloud_provider::scaleway::ScalewayCredentials
 use crate::infrastructure::models::object_storage::scaleway_object_storage::ScalewayOS;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -124,6 +125,7 @@ pub struct Kapsule {
     pub credentials: ScalewayCredentials,
     pub version: KubernetesVersion,
     pub zone: ScwZone,
+    pub created_at: DateTime<Utc>,
     pub object_storage: ScalewayOS,
     pub nodes_groups: Vec<NodeGroups>,
     pub template_directory: PathBuf,
@@ -144,6 +146,7 @@ impl Kapsule {
         version: KubernetesVersion,
         zone: ScwZone,
         cloud_provider: &dyn CloudProvider,
+        created_at: DateTime<Utc>,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
@@ -227,6 +230,7 @@ impl Kapsule {
             name,
             version,
             zone,
+            created_at,
             object_storage,
             nodes_groups,
             template_directory,
