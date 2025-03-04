@@ -1,3 +1,5 @@
+use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveTime};
 use itertools::Itertools;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -19,6 +21,11 @@ use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResource
 use kube::Client;
 use reqwest::StatusCode;
 use tera::{Context, Tera};
+
+pub const NGINX_ADMISSION_CONTROLLER_STARTING_DATE: NaiveDateTime = NaiveDateTime::new(
+    NaiveDate::from_ymd_opt(2024, 2, 1).expect("Invalid date on NGINX_ADMISSION_CONTROLLER_STARTING_DATE"),
+    NaiveTime::from_hms_opt(0, 0, 0).expect("Invalid time on NGINX_ADMISSION_CONTROLLER_STARTING_DATE"),
+);
 
 #[derive(Clone)]
 pub enum LogFormat {
@@ -128,6 +135,7 @@ pub struct NginxIngressChart {
     nginx_default_backend_enabled: Option<bool>,
     nginx_default_backend_image_repository: Option<String>,
     nginx_default_backend_image_tag: Option<String>,
+    enable_admission_controller: bool,
 }
 
 impl NginxIngressChart {
@@ -144,6 +152,7 @@ impl NginxIngressChart {
         cluster_long_id: String,
         cluster_short_id: String,
         kubernetes_kind: KubernetesKind,
+        created_cluster_date: DateTime<Utc>,
         nginx_hpa_minimum_replicas: Option<u32>,
         nginx_hpa_maximum_replicas: Option<u32>,
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
@@ -217,6 +226,7 @@ impl NginxIngressChart {
             nginx_default_backend_enabled,
             nginx_default_backend_image_repository,
             nginx_default_backend_image_tag,
+            enable_admission_controller: Self::enable_admission_controller(&created_cluster_date),
         }
     }
 
@@ -227,6 +237,15 @@ impl NginxIngressChart {
     // for history reasons where nginx-ingress has changed to ingress-nginx
     pub fn chart_old_name() -> String {
         "nginx-ingress".to_string()
+    }
+
+    pub fn enable_admission_controller(created_cluster_date: &DateTime<Utc>) -> bool {
+        // admission controller should not be enabled for clusters created before this date
+        // to avoid breaking changes during application deployments
+        let start_date_to_enable_admission_controller =
+            DateTime::<Utc>::from_naive_utc_and_offset(NGINX_ADMISSION_CONTROLLER_STARTING_DATE, Utc);
+
+        *created_cluster_date >= start_date_to_enable_admission_controller
     }
 }
 
@@ -304,6 +323,10 @@ defaultBackend:
             ChartSetValue {
                 key: "controller.allowSnippetAnnotations".to_string(),
                 value: true.to_string(),
+            },
+            ChartSetValue {
+                key: "controller.admissionWebhooks.enabled".to_string(),
+                value: self.enable_admission_controller.to_string(),
             },
             // enable metrics for customers who want to manage it by their own
             ChartSetValue {
@@ -591,6 +614,8 @@ mod tests {
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::io_models::models::CustomerHelmChartsOverride;
+    use chrono::TimeZone;
+    use chrono::Utc;
     use std::env;
     use std::sync::Arc;
     use strum::IntoEnumIterator;
@@ -625,6 +650,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -679,6 +705,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -735,6 +762,7 @@ mod tests {
                 "10000000-0000-4000-8000-000000000000".to_string(),
                 "z10000000".to_string(),
                 KubernetesKind::Eks,
+                Utc::now(),
                 None,
                 None,
                 None,
@@ -797,6 +825,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -836,5 +865,15 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    #[test]
+    fn check_nginx_admission_controller_activation() {
+        // should allow admission controller
+        let now = NginxIngressChart::enable_admission_controller(&Utc::now());
+        assert!(now);
+        // should deny admission controller
+        let old_date = NginxIngressChart::enable_admission_controller(&Utc.ymd(2023, 1, 1).and_hms(0, 0, 0));
+        assert!(!old_date);
     }
 }

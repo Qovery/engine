@@ -17,6 +17,7 @@ use crate::io_models::context::Features;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::string::terraform_list_format;
+use chrono::{DateTime, Utc};
 use gen_charts::kapsule_helm_charts;
 use std::collections::HashMap;
 
@@ -26,6 +27,7 @@ pub struct KapsuleChartsConfigPrerequisites {
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
     pub zone: ScwZone,
+    pub cluster_creation_date: DateTime<Utc>,
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
     pub ff_metrics_history_enabled: bool,
@@ -50,6 +52,7 @@ impl KapsuleChartsConfigPrerequisites {
         cluster_id: String,
         cluster_long_id: uuid::Uuid,
         zone: ScwZone,
+        cluster_creation_date: DateTime<Utc>,
         qovery_engine_location: EngineLocation,
         ff_log_history_enabled: bool,
         ff_metrics_history_enabled: bool,
@@ -71,6 +74,7 @@ impl KapsuleChartsConfigPrerequisites {
             cluster_id,
             cluster_long_id,
             zone,
+            cluster_creation_date,
             qovery_engine_location,
             ff_log_history_enabled,
             ff_metrics_history_enabled,
@@ -123,6 +127,7 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
             self.cluster.short_id().to_string(),
             self.cluster.long_id,
             self.cluster.zone,
+            self.cluster.created_at,
             self.cluster.options.qovery_engine_location.clone(),
             self.cluster.context().is_feature_enabled(&Features::LogsHistory),
             self.cluster.context().is_feature_enabled(&Features::MetricsHistory),
