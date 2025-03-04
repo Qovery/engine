@@ -1268,9 +1268,9 @@ fn terraform_apply_internal(
     }
 }
 
-pub fn terraform_apply_with_tf_workers_resources(
+pub fn terraform_apply_with_specific_resources(
     root_dir: &str,
-    tf_workers_resources: Vec<String>,
+    tf_resources: &[impl AsRef<str>],
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     is_dry_run: bool,
@@ -1280,18 +1280,18 @@ pub fn terraform_apply_with_tf_workers_resources(
         "-lock=false".to_string(),
         "-auto-approve".to_string(),
     ];
-    for x in tf_workers_resources {
-        terraform_args_string.push(format!("-target={x}"));
+    for x in tf_resources {
+        terraform_args_string.push(format!("-target={}", x.as_ref()));
     }
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
-        let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
-            Ok(plan) => plan,
-            Err(err) => return OperationResult::Retry(err),
-        };
-
         if is_dry_run {
+            let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
+                Ok(plan) => plan,
+                Err(err) => return OperationResult::Retry(err),
+            };
+
             return OperationResult::Ok(plan);
         }
 
