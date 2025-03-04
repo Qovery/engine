@@ -1,14 +1,16 @@
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
-use kube::api::{DeleteParams, PropagationPolicy};
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::api::{DeleteParams, Patch, PatchParams, PropagationPolicy};
 use kube::core::params::ListParams;
-use kube::{Api, Client};
+use kube::{Api, Client, ResourceExt};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde_yaml::Deserializer;
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, read_dir, read_to_string};
 use std::io::Read;
 use std::path::Path;
-
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -144,6 +146,66 @@ where
         kubernetes_config,
         envs,
     )
+}
+
+pub fn kubectl_update_crd(kube_client: &Client, chart_name: &str, crd_folder: &str) -> Result<(), CommandError> {
+    let crds_api: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+
+    // Read all CRD files in the folder
+    let mut dir = read_dir(crd_folder).map_err(|e| {
+        CommandError::new(
+            format!("Error while trying to read CRD folder `{}`", crd_folder),
+            Some(e.to_string()),
+            None,
+        )
+    })?;
+
+    while let Some(Ok(entry)) = dir.next() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+            let crd_yaml = read_to_string(&path).map_err(|e| {
+                CommandError::new(
+                    format!("Error while trying to read CRD file `{}`", path.display()),
+                    Some(e.to_string()),
+                    None,
+                )
+            })?;
+
+            for crd in Deserializer::from_str(&crd_yaml) {
+                match serde_yaml::from_value::<CustomResourceDefinition>(serde_yaml::Value::deserialize(crd).map_err(
+                    |e| {
+                        CommandError::new(
+                            format!("Error while trying to parse CRD file `{}`", path.display()),
+                            Some(e.to_string()),
+                            None,
+                        )
+                    },
+                )?) {
+                    Ok(crd) => {
+                        let pp = PatchParams::apply(chart_name).force();
+                        let patch = Patch::Apply(&crd);
+
+                        block_on(crds_api.patch(&crd.name_any(), &pp, &patch)).map_err(|e| {
+                            CommandError::new(
+                                format!("Error while trying to update CRD `{}` (`{}`)", crd.name_any(), path.display()),
+                                Some(e.to_string()),
+                                None,
+                            )
+                        })?;
+                    }
+                    Err(e) => {
+                        return Err(CommandError::new(
+                            format!("Error while trying to parse CRD file `{}`", path.display()),
+                            Some(e.to_string()),
+                            None,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn kubectl_exec_delete_crd<P>(
