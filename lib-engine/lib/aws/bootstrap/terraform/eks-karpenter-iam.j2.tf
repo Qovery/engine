@@ -21,6 +21,20 @@ resource "aws_iam_role" "karpenter_node_role" {
   tags = local.tags_eks
 }
 
+{% if enable_karpenter -%}
+resource "aws_eks_access_entry" "qovery_karpenter_access_entry" {
+  cluster_name  = aws_eks_cluster.eks_cluster.name
+  principal_arn = aws_iam_role.karpenter_node_role.arn
+  type          = "EC2_LINUX"
+}
+{% endif -%}
+
+resource "aws_iam_instance_profile" "karpenter_instance_profile" {
+  name = "KarpenterNodeInstanceProfile-${var.kubernetes_cluster_name}"
+  role = aws_iam_role.karpenter_node_role.name
+}
+
+
 resource "aws_iam_role_policy_attachment" "karpenter_eks_worker_policy_node" {
   role       = aws_iam_role.karpenter_node_role.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
