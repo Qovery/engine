@@ -159,7 +159,7 @@ impl Registry {
             }
             Registry::PrivateEcr {
                 long_id: _,
-                url: _,
+                url,
                 region,
                 access_key_id,
                 secret_access_key,
@@ -174,7 +174,7 @@ impl Registry {
                 let ecr_client =
                     EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
                 let credentials = ECR::get_credentials(&ecr_client)?;
-                let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
+                let mut url = url.clone();
                 let _ = url.set_username(&credentials.access_token);
                 let _ = url.set_password(Some(&credentials.password));
                 url
