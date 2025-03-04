@@ -29,7 +29,7 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::action::eks::helm_charts::aws_alb_controller_chart::AwsLoadBalancerControllerChart;
 use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
-    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
+    AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
 };
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
@@ -141,6 +141,13 @@ pub(super) fn eks_helm_charts(
                             .unwrap_or_default(), // TODO(benjaminch): introduce a proper error
                     },
                     false => SSOConfig::Disabled,
+                },
+                match chart_config_prerequisites.is_karpenter_enabled {
+                    true => KarpenterConfig::Enabled {
+                        aws_account_id: chart_config_prerequisites.aws_account_id.clone(),
+                        cluster_name: chart_config_prerequisites.cluster_name.clone(),
+                    },
+                    false => KarpenterConfig::Disabled,
                 },
                 Duration::seconds(30), // TODO(benjaminch): might be a parameter
                 HelmChartResourcesConstraintType::ChartDefault,
