@@ -50,6 +50,8 @@ pub fn create_eks_cluster(
         .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "cloud provider is not aws")))?
         .aws_sdk_client();
 
+    let _ = restore_access_to_eks(kubernetes, infra_ctx, &event_details, &logger);
+
     let terraform_apply = || {
         // don't create node groups if karpenter is enabled
         let nodes_groups = node_groups_when_karpenter_is_enabled(
@@ -254,7 +256,7 @@ fn clean_karpenter_installation(
     let tf_action = TerraformInfraResources::new(
         tera_context.clone(),
         kubernetes.template_directory.join("terraform"),
-        kubernetes.temp_dir().join("terrafor_karpenter_cleanup"),
+        kubernetes.temp_dir().join("terraform_karpenter_cleanup"),
         event_details.clone(),
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         infra_ctx.context().is_dry_run_deploy(),
@@ -338,6 +340,59 @@ fn patch_kube_proxy_for_custom_vpc(
             CommandError::new_from_safe_message(format!("Cannot patch kube proxy for user configured network: {e}")),
         )
     })?;
+
+    Ok(())
+}
+
+fn restore_access_to_eks(
+    kubernetes: &EKS,
+    infra_ctx: &InfrastructureContext,
+    event_details: &EventDetails,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    if kubernetes.context.is_first_cluster_deployment() {
+        return Ok(());
+    }
+
+    // We should be able to connect, if not try to restore access
+    match infra_ctx.mk_kube_client() {
+        Err(e) if e.tag() == &Tag::CannotConnectK8sCluster => (),
+        _ => return Ok(()),
+    };
+
+    logger.info("⚗️ Restoring access to the EKS cluster");
+    let tera_context = eks_tera_context(
+        kubernetes,
+        infra_ctx.cloud_provider(),
+        infra_ctx.dns_provider(),
+        kubernetes.zones.as_slice(),
+        &[],
+        &kubernetes.options,
+        AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
+        false,
+        &kubernetes.advanced_settings,
+        kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
+    )?;
+
+    let tf_action = TerraformInfraResources::new(
+        tera_context,
+        kubernetes.template_directory.join("terraform"),
+        kubernetes.temp_dir.join("terraform_eks_restore_access"),
+        event_details.clone(),
+        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
+        infra_ctx.context().is_dry_run_deploy(),
+    );
+
+    match tf_action.apply_specific_resources(
+        &[
+            "aws_eks_access_entry.qovery_eks_access",
+            "aws_eks_access_policy_association.qovery_eks_access",
+        ],
+        logger,
+    ) {
+        Ok(_) => {}
+        Err(err) => logger.warn(*err),
+    }
 
     Ok(())
 }

@@ -1,5 +1,5 @@
 use crate::cmd::terraform::{
-    terraform_apply, terraform_apply_with_tf_workers_resources, terraform_destroy, terraform_init_validate,
+    terraform_apply, terraform_apply_with_specific_resources, terraform_destroy, terraform_init_validate,
     terraform_output, terraform_plan, terraform_remove_resource_from_tf_state, terraform_state_list,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
@@ -160,9 +160,9 @@ impl TerraformInfraResources {
         .collect_vec();
 
         // TODO: Extract the plan out of this function. so we can log it
-        terraform_apply_with_tf_workers_resources(
+        terraform_apply_with_specific_resources(
             self.destination_folder.to_string_lossy().as_ref(),
-            tf_workers_resources,
+            &tf_workers_resources,
             &envs,
             &TerraformValidators::Default,
             self.is_dry_run,
@@ -188,5 +188,29 @@ impl TerraformInfraResources {
                 logger.warn(format!("Cannot remove resource {} from terraform state: {}", resource, err));
             }
         }
+    }
+
+    pub fn apply_specific_resources(
+        &self,
+        resources: &[&str],
+        logger: &impl InfraLogger,
+    ) -> Result<(), Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
+        self.prepare_terraform_files()?;
+        self.terraform_init(&envs)?;
+
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+        logger.info(format!("Terraform apply with specific resources: {}", resources.join(", ")));
+        terraform_apply_with_specific_resources(
+            self.destination_folder.to_string_lossy().as_ref(),
+            resources,
+            &envs_to_slice(self.envs.as_slice()),
+            &TerraformValidators::Default,
+            self.is_dry_run,
+        )
+        .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+
+        Ok(())
     }
 }
