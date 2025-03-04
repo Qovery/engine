@@ -3393,6 +3393,7 @@ impl EngineError {
             HelmChartError::CommandError(cmd_error) => Some(cmd_error),
             HelmChartError::CreateTemplateError { .. }
             | HelmChartError::RenderingError { .. }
+            | HelmChartError::CannotUpdateCrds { .. }
             | HelmChartError::HelmError(_) => None,
         };
 

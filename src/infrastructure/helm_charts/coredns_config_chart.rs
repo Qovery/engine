@@ -1,7 +1,7 @@
 use crate::cmd::command::CommandKiller;
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
-    kubectl_exec_with_output,
+    kubectl_exec_with_output, kubectl_update_crd,
 };
 use crate::errors::CommandError;
 use crate::helm::{
@@ -100,6 +100,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn pre_exec(
         &self,
+        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         _payload: Option<ChartPayload>,
@@ -119,6 +120,16 @@ impl HelmChart for CoreDNSConfigChart {
                 Some(selector.as_str()),
                 envs.to_vec(),
             )?;
+        }
+
+        // Force install CRDs if needed
+        let chart_info = &self.get_chart_info();
+        if let Some(crds_update) = &chart_info.crds_update {
+            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
+                return Err(HelmChartError::CannotUpdateCrds {
+                    crd_path: crds_update.path.clone(),
+                });
+            }
         }
 
         // calculate current configmap checksum
@@ -202,7 +213,7 @@ impl HelmChart for CoreDNSConfigChart {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        let payload = match self.pre_exec(kubernetes_config, envs, None, cmd_killer) {
+        let payload = match self.pre_exec(kube_client, kubernetes_config, envs, None, cmd_killer) {
             Ok(p) => match p {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(

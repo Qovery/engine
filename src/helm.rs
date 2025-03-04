@@ -3,7 +3,9 @@ use crate::cmd::helm_utils::{
     BackupStatus, CRDSUpdate, apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade,
     update_crds_on_upgrade,
 };
-use crate::cmd::kubectl::{kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events};
+use crate::cmd::kubectl::{
+    kubectl_delete_crash_looping_pods, kubectl_exec_delete_crd, kubectl_exec_get_events, kubectl_update_crd,
+};
 use crate::errors::{CommandError, EngineError};
 use crate::helm::HelmAction::Deploy;
 use crate::io_models::engine_location::EngineLocation;
@@ -35,6 +37,9 @@ pub enum HelmChartError {
 
     #[error("Error while executing command")]
     CommandError(#[from] CommandError),
+
+    #[error("Error while trying to update CRDs for `{crd_path}`")]
+    CannotUpdateCrds { crd_path: String },
 }
 
 impl<E> From<(EventDetails, E)> for Box<EngineError>
@@ -423,6 +428,7 @@ pub trait HelmChart: Send {
 
     fn pre_exec(
         &self,
+        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
@@ -438,6 +444,16 @@ pub trait HelmChart: Send {
             )?;
         }
 
+        // Force install CRDs if needed
+        let chart_info = &self.get_chart_info();
+        if let Some(crds_update) = &chart_info.crds_update {
+            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
+                return Err(HelmChartError::CannotUpdateCrds {
+                    crd_path: crds_update.path.clone(),
+                });
+            }
+        }
+
         Ok(payload)
     }
 
@@ -450,7 +466,7 @@ pub trait HelmChart: Send {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         let payload = self.check_prerequisites()?;
-        let payload = self.pre_exec(kubernetes_config, envs, payload, cmd_killer)?;
+        let payload = self.pre_exec(kube_client, kubernetes_config, envs, payload, cmd_killer)?;
         let payload = match self.exec(kubernetes_config, envs, payload.clone(), cmd_killer) {
             Ok(payload) => payload,
             Err(e) => {
@@ -751,6 +767,7 @@ impl HelmChart for CommonChart {
 
     fn pre_exec(
         &self,
+        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
@@ -764,6 +781,16 @@ impl HelmChart for CommonChart {
                 Some(selector.as_str()),
                 envs.to_vec(),
             )?;
+        }
+
+        // Force install CRDs if needed
+        let chart_info = &self.get_chart_info();
+        if let Some(crds_update) = &chart_info.crds_update {
+            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
+                return Err(HelmChartError::CannotUpdateCrds {
+                    crd_path: crds_update.path.clone(),
+                });
+            }
         }
 
         let helm = Helm::new(Some(kubernetes_config), envs)?;
@@ -838,6 +865,7 @@ impl HelmChart for ServiceChart {
 
     fn pre_exec(
         &self,
+        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
@@ -851,6 +879,16 @@ impl HelmChart for ServiceChart {
                 Some(selector.as_str()),
                 envs.to_vec(),
             )?;
+        }
+
+        // Force install CRDs if needed
+        let chart_info = &self.get_chart_info();
+        if let Some(crds_update) = &chart_info.crds_update {
+            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
+                return Err(HelmChartError::CannotUpdateCrds {
+                    crd_path: crds_update.path.clone(),
+                });
+            }
         }
 
         Ok(payload)

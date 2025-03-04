@@ -3,20 +3,21 @@ use crate::helm::{
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartCRDsPath, HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 
+use super::{HelmChartResources, HelmChartResourcesConstraintType};
+use crate::cmd::helm_utils::CRDSUpdate;
 use crate::errors::CommandError;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
 
-use super::{HelmChartResources, HelmChartResourcesConstraintType};
-
 pub struct VpaChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    helm_chart_crds_path: HelmChartCRDsPath,
     recommender_resources: HelmChartResources,
     updater_resources: HelmChartResources,
     admission_controller_resources: HelmChartResources,
@@ -35,18 +36,21 @@ impl VpaChart {
         namespace: HelmChartNamespaces,
         skip_if_already_installed: bool,
     ) -> VpaChart {
+        let chart_path = HelmChartPath::new(
+            chart_prefix_path,
+            HelmChartDirectoryLocation::CommonFolder,
+            VpaChart::chart_name(),
+        );
+
         VpaChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
-            chart_path: HelmChartPath::new(
-                chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
-                VpaChart::chart_name(),
-            ),
+            chart_path: chart_path.clone(),
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
                 VpaChart::chart_name(),
             ),
+            helm_chart_crds_path: HelmChartCRDsPath::new(chart_path, "crds/"),
             recommender_resources: match recommended_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
@@ -146,6 +150,10 @@ impl ToCommonHelmChart for VpaChart {
                         value: self.admission_controller_resources.limit_memory.to_string(),
                     },
                 ],
+                crds_update: Some(CRDSUpdate {
+                    path: self.helm_chart_crds_path.to_string(),
+                    resources: vec!["vpa-v1-crd.yaml".to_string()],
+                }),
                 skip_if_already_installed: self.skip_if_already_installed,
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(4, 6, 0)), // CRDs needs to reinstalled https://artifacthub.io/packages/helm/fairwinds-stable/vpa#breaking-upgrading-to-4-0-0
                 ..Default::default()

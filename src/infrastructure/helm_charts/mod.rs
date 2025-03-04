@@ -5,6 +5,7 @@ use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 use time::Duration;
 
 pub mod cert_manager_chart;
@@ -118,6 +119,29 @@ impl HelmChartValuesFilePath {
 impl Display for HelmChartValuesFilePath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.path.to_string().as_str())
+    }
+}
+
+#[derive(Clone)]
+pub struct HelmChartCRDsPath {
+    path: PathBuf,
+}
+
+impl HelmChartCRDsPath {
+    pub fn new(helm_chart_path: HelmChartPath, crds_path: &str) -> HelmChartCRDsPath {
+        HelmChartCRDsPath {
+            path: PathBuf::from(format!("{}/{}", helm_chart_path.helm_path(), crds_path)),
+        }
+    }
+
+    pub fn helm_path(&self) -> PathBuf {
+        self.path.clone()
+    }
+}
+
+impl Display for HelmChartCRDsPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.path.display().to_string().as_str())
     }
 }
 
