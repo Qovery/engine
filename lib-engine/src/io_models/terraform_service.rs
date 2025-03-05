@@ -146,6 +146,7 @@ pub struct TerraformService {
     pub persistent_storage: PersistentStorage,
     pub tf_files_source: TerraformFilesSource,
     pub tf_var_file_paths: Vec<String>,
+    pub tf_vars: Vec<(String, String)>,
     pub provider: TerraformProvider,
     pub provider_version: String,
     pub backend: TerraformBackend,
@@ -245,6 +246,7 @@ impl TerraformService {
                 root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
+                self.tf_vars,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -270,6 +272,7 @@ impl TerraformService {
                     root_module_path,
                     tf_files_source_domain,
                     self.tf_var_file_paths,
+                    self.tf_vars,
                     backend,
                     terraform_action,
                     Duration::from_secs(self.timeout_sec),
@@ -295,6 +298,7 @@ impl TerraformService {
                 root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
+                self.tf_vars,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -319,6 +323,7 @@ impl TerraformService {
                 root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
+                self.tf_vars,
                 backend,
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
@@ -560,19 +565,18 @@ rsync -av --delete \
 
 cd /persistent-volume/terraform-work/$ROOT_MODULE_PATH
 
-
 case "$CMD" in
     "apply")
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
-        terraform apply -input=false -auto-approve "$@" # TODO TF add -var
+        terraform apply -input=false -auto-approve "$@"
         terraform output -json > /qovery-output/qovery-output.json
         ;;
     "plan_only")
         rm -rf /persistent-volume/terraform-plan-output/*
         terraform init -backend-config="/backend-config/config"
         terraform validate -no-tests
-        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@" # TODO TF add -var
+        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@"
         ;;
     "apply_from_plan")
         terraform init -backend-config="/backend-config/config"
