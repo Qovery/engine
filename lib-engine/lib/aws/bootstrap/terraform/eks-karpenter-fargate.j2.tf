@@ -90,29 +90,6 @@ resource "aws_eks_fargate_profile" "ebs_csi" {
   }
 }
 
-
-resource "aws_eks_fargate_profile" "user-mapper" {
-  cluster_name           = aws_eks_cluster.eks_cluster.name
-  fargate_profile_name   = "user-mapper-${var.kubernetes_cluster_name}"
-  pod_execution_role_arn = aws_iam_role.karpenter-fargate.arn
-
-{% if user_provided_network %}
-  subnet_ids             = flatten([data.aws_subnet.eks_fargate_zone_a[*].id, data.aws_subnet.eks_fargate_zone_b[*].id, data.aws_subnet.eks_fargate_zone_c[*].id])
-{% elif vpc_qovery_network_mode == "WithNatGateways" %}
-  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id, aws_subnet.eks_fargate_zone_b[*].id, aws_subnet.eks_fargate_zone_c[*].id])
-{% else %}
-  subnet_ids             = flatten([aws_subnet.eks_fargate_zone_a[*].id])
-{% endif %}
-  tags                   = local.tags_eks
-
-  selector {
-    namespace = "kube-system"
-    labels = {
-      "app.kubernetes.io/name" = "iam-eks-user-mapper",
-    }
-  }
-}
-
 resource "aws_eks_fargate_profile" "core-dns" {
   cluster_name           = aws_eks_cluster.eks_cluster.name
   fargate_profile_name   = "core-dns-${var.kubernetes_cluster_name}"
