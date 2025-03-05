@@ -702,14 +702,9 @@ pub(super) fn eks_helm_charts(
     }
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
-    // If IAM settings are set and activated
-    if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
-        level_1.push(Box::new(aws_iam_eks_user_mapper));
-    }
-
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
-    let level_3: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_3: Vec<Box<dyn HelmChart>> = vec![
         // This chart is required in order to install CRDs and declare later charts with VPA
         // It will be installed only if chart doesn't exist already on the cluster in order to avoid
         // disabling VPA on VPA controller at each update
@@ -726,6 +721,11 @@ pub(super) fn eks_helm_charts(
             .to_common_helm_chart()?,
         ),
     ];
+
+    // If IAM settings are set and activated
+    if let Some(aws_iam_eks_user_mapper) = aws_iam_eks_user_mapper {
+        level_3.push(Box::new(aws_iam_eks_user_mapper));
+    }
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
