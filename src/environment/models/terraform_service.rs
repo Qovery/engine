@@ -41,6 +41,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) root_module_path: PathBuf,
     pub(crate) terraform_files_source: TerraformFilesSource,
     pub(crate) terraform_var_file_paths: Vec<String>,
+    pub(crate) terraform_vars: Vec<(String, String)>,
     pub(crate) backend: TerraformBackend,
     pub(crate) terraform_action: TerraformAction,
     pub(crate) timeout: Duration,
@@ -73,6 +74,7 @@ impl<T: CloudProvider> TerraformService<T> {
         root_module_path: PathBuf,
         terraform_files_source: TerraformFilesSource,
         terraform_var_file_paths: Vec<String>,
+        terraform_vars: Vec<(String, String)>,
         backend: TerraformBackend,
         terraform_action: TerraformAction,
         timeout: Duration,
@@ -104,6 +106,7 @@ impl<T: CloudProvider> TerraformService<T> {
             root_module_path,
             terraform_files_source,
             terraform_var_file_paths,
+            terraform_vars,
             backend,
             terraform_action,
             timeout,
@@ -237,10 +240,22 @@ impl<T: CloudProvider> TerraformService<T> {
             .map(|path| format!("-var-file={}", path))
             .collect();
 
+        let var_args: Vec<String> = self
+            .terraform_vars
+            .iter()
+            .flat_map(|(key, value)| {
+                let arg = "-var".to_string();
+                let val = format!("{}={}", key, value);
+
+                vec![arg, val]
+            })
+            .collect();
+
         match &self.terraform_action {
             TerraformAction::TerraformPlanOnly { execution_id } => {
                 let mut args = vec![base_path, "plan_only".to_string(), execution_id.clone()];
                 args.extend(var_file_args);
+                args.extend(var_args);
                 args
             }
             TerraformAction::TerraformPlanAndApply => {
@@ -249,11 +264,13 @@ impl<T: CloudProvider> TerraformService<T> {
             TerraformAction::TerraformApplyFromPlan { execution_id } => {
                 let mut args = vec![base_path, "apply_from_plan".to_string(), execution_id.clone()];
                 args.extend(var_file_args);
+                args.extend(var_args);
                 args
             }
             TerraformAction::TerraformDestroy => {
                 let mut args = vec![base_path, "destroy".to_string(), String::new()];
                 args.extend(var_file_args);
+                args.extend(var_args);
                 args
             }
         }

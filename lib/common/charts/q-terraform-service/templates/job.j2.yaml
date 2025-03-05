@@ -89,6 +89,13 @@ spec:
           volumeMounts:
             - name: output
               mountPath: /qovery-output
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
           args:
