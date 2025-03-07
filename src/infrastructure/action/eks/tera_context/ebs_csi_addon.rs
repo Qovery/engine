@@ -22,7 +22,7 @@ impl AwsEbsCsiAddon {
                 KubernetesVersion::V1_28 { .. } => "v1.27.0-eksbuild.1",
                 KubernetesVersion::V1_29 { .. } => "v1.33.0-eksbuild.1",
                 KubernetesVersion::V1_30 { .. } => "v1.36.0-eksbuild.1",
-                KubernetesVersion::V1_31 { .. } => "v1.37.0-eksbuild.1",
+                KubernetesVersion::V1_31 { .. } => "v1.40.0-eksbuild.1",
             }
             .to_string(),
         }
@@ -136,7 +136,7 @@ mod tests {
                     suffix: None,
                 },
                 expected: AwsEbsCsiAddon {
-                    version: "v1.37.0-eksbuild.1".to_string(),
+                    version: "v1.40.0-eksbuild.1".to_string(),
                 },
             },
         ];
