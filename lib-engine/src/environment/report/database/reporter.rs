@@ -112,7 +112,7 @@ impl DatabaseDeploymentReporter {
             is_managed: db.is_managed_service(),
             type_: db.db_type(),
             version: db.version(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             logger: deployment_target.env_logger(db, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
             action,

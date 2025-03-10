@@ -45,7 +45,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             service_type: ServiceType::Application,
             tag: app.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: app.kube_label_selector(),
             logger: deployment_target.env_logger(app, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
@@ -64,7 +64,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             service_type: ServiceType::Container,
             tag: container.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: container.kube_label_selector(),
             logger: deployment_target.env_logger(container, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
@@ -208,6 +208,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             }
             Err(err) => err,
         };
+        warn!("Deployment failed: {error:?}");
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {

@@ -9,7 +9,7 @@ use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
 use crate::environment::report::logger::EnvLogger;
 use crate::errors::EngineError;
-use crate::events::{EnvironmentStep, EventDetails};
+use crate::events::EnvironmentStep;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::ContainerRegistry;
@@ -19,7 +19,6 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::kube_client::QubeClient;
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -142,7 +141,7 @@ pub struct DeploymentTarget<'a> {
     pub dns_provider: &'a dyn DnsProvider,
     pub environment: &'a Environment,
     pub docker: &'a Docker,
-    pub kube: kube::Client,
+    pub kube: QubeClient,
     pub helm: Helm,
     pub abort: &'a dyn Abort,
     logger: Arc<Box<dyn Logger>>,
@@ -185,7 +184,7 @@ impl<'a> DeploymentTarget<'a> {
             dns_provider: infra_ctx.dns_provider(),
             environment,
             docker: &infra_ctx.context().docker,
-            kube: infra_ctx.mk_kube_client()?.client().clone(),
+            kube: infra_ctx.mk_kube_client()?,
             helm,
             abort,
             logger: Arc::new(infra_ctx.kubernetes().logger().clone_dyn()),
@@ -197,18 +196,6 @@ impl<'a> DeploymentTarget<'a> {
 
     pub fn env_logger(&self, service: &impl Service, step: EnvironmentStep) -> EnvLogger {
         EnvLogger::new(service, step, self.logger.clone())
-    }
-
-    pub fn qube_client(&self, event_details: EventDetails) -> Result<QubeClient, Box<EngineError>> {
-        QubeClient::new(
-            event_details,
-            Some(self.kubernetes.kubeconfig_local_file_path()),
-            self.cloud_provider
-                .credentials_environment_variables()
-                .iter()
-                .map(|(x, y)| (x.to_string(), y.to_string()))
-                .collect_vec(),
-        )
     }
 }
 

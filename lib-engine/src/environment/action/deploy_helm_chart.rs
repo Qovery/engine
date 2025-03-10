@@ -157,7 +157,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
         let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             // delete admission controller config map
-            let config_map_api: Api<ConfigMap> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let config_map_api: Api<ConfigMap> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let admission_controller_config_map = self.admission_controller_config_map_name();
             if let Err(err) =
                 block_on(config_map_api.delete(admission_controller_config_map.as_str(), &DeleteParams::default()))
@@ -732,7 +732,7 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
     target: &DeploymentTarget,
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
-    let kube_client = target.kube.clone();
+    let kube_client = target.kube.client();
     let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, target.environment.namespace());
 
     let config_map_name = this.admission_controller_config_map_name();

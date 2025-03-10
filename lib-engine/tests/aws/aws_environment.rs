@@ -850,11 +850,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2261,11 +2257,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2949,8 +2941,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             infra_ctx
                 .mk_kube_client()
                 .expect("should always contain kube_client")
-                .client()
-                .clone(),
+                .client(),
             &cronjob_namespace,
         );
         let result_list_cronjobs = block_on(k8s_cronjob_api.list(&ListParams::default().labels(&cronjob_label)));
@@ -3677,11 +3668,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -4212,11 +4199,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
-        let kube_client = infra_ctx
-            .mk_kube_client()
-            .expect("kube client is not set")
-            .client()
-            .clone();
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
         let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, &environment.kube_name);
         let short_id = to_short_id(&service_id);
         let config_map_name = format!("{short_id}-admission-controller-config-map");

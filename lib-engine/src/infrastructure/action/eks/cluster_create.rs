@@ -331,10 +331,7 @@ fn patch_kube_proxy_for_custom_vpc(
     // https://github.com/kubernetes/kubernetes/issues/80579
     // https://github.com/kubernetes/cloud-provider-aws/issues/87
     info!("patching kube-proxy configuration to fix k8s in tree load balancer controller bug");
-    block_on(patch_kube_proxy_for_aws_user_network(
-        infra_ctx.mk_kube_client()?.client().clone(),
-    ))
-    .map_err(|e| {
+    block_on(patch_kube_proxy_for_aws_user_network(infra_ctx.mk_kube_client()?.client())).map_err(|e| {
         EngineError::new_k8s_node_not_ready(
             event_details.clone(),
             CommandError::new_from_safe_message(format!("Cannot patch kube proxy for user configured network: {e}")),

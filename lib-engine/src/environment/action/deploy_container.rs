@@ -8,8 +8,8 @@ use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
+use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
-use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
 use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
@@ -20,6 +20,7 @@ use crate::environment::action::utils::{
     update_pvcs,
 };
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use crate::infrastructure::models::kubernetes;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -46,7 +47,7 @@ where
             )?;
 
             let last_image = block_on(get_last_deployed_image(
-                target.kube.clone(),
+                target.kube.client(),
                 &self.kube_label_selector(),
                 if self.is_stateful() {
                     KubeObjectKind::Statefulset
@@ -110,9 +111,9 @@ where
                 chart,
             );
 
-            if target.cloud_provider.kind() == Kind::Aws {
+            if target.kubernetes.kind() == kubernetes::Kind::Eks {
                 delete_nlb_or_alb_service(
-                    target.qube_client(event_details.clone())?,
+                    target.kube.clone(),
                     target.environment.namespace(),
                     format!("qovery.com/service-id={}", self.long_id()).as_str(),
                     target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,
@@ -177,7 +178,7 @@ where
         // We first mirror the image if needed
         let pre_task = |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
             let last_image = block_on(get_last_deployed_image(
-                target.kube.clone(),
+                target.kube.client(),
                 &self.kube_label_selector(),
                 if self.is_stateful() {
                     KubeObjectKind::Statefulset
