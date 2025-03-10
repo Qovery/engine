@@ -83,7 +83,7 @@ impl<T> JobDeploymentReporter<T> {
             max_restarts: job.max_restarts(),
             tag: job.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: job.kube_label_selector(),
             logger: deployment_target.env_logger(job, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),

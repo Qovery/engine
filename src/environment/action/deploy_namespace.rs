@@ -56,7 +56,7 @@ impl DeploymentAction for NamespaceDeployment {
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         block_on(async {
-            let api: Api<Namespace> = Api::all(target.kube.clone());
+            let api: Api<Namespace> = Api::all(target.kube.client());
             if api.get(target.environment.namespace()).await.is_ok() {
                 // do not catch potential error - to confirm
                 let _ = api

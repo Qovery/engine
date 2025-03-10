@@ -64,7 +64,7 @@ pub(super) fn delete_kube_apps(
     logger.info(message);
 
     let kube = infra_ctx.mk_kube_client()?;
-    let ns_api: Api<Namespace> = Api::all(kube.client().clone());
+    let ns_api: Api<Namespace> = Api::all(kube.client());
     let all_namespaces = block_on(ns_api.list_metadata(&Default::default())).map(|ns| {
         ns.items
             .into_iter()

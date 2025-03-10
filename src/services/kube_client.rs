@@ -13,18 +13,19 @@ use kube::{
 };
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
 
 use crate::environment::models::kubernetes::{K8sCrd, K8sDeployment, K8sMutatingWebhookConfiguration};
 use crate::environment::models::kubernetes::{K8sPod, K8sSecret, K8sService, K8sStatefulset};
-use crate::utilities::create_kube_client_in_cluster;
 use crate::{
     errors::{CommandError, EngineError},
     events::EventDetails,
     runtime::block_on,
-    utilities::create_kube_client,
 };
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::config::{InClusterError, KubeConfigOptions, Kubeconfig, KubeconfigError};
 use schemars::JsonSchema;
 
 #[derive(Clone)]
@@ -44,6 +45,20 @@ pub enum SelectK8sResourceBy {
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
+
+impl Deref for QubeClient {
+    type Target = kube::Client;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
+
+impl AsRef<kube::Client> for QubeClient {
+    fn as_ref(&self) -> &kube::Client {
+        &self.client
+    }
+}
 
 impl QubeClient {
     pub fn new(
@@ -605,9 +620,58 @@ impl QubeClient {
         matches!(e, kube::Error::Api(x) if x.code == http_code_number)
     }
 
-    pub fn client(&self) -> &kube::Client {
-        &self.client
+    pub fn client(&self) -> kube::Client {
+        self.client.clone()
     }
+}
+
+async fn create_kube_client<P: AsRef<Path>>(
+    kubeconfig_path: P,
+    envs: &[(String, String)],
+) -> Result<kube::Client, kube::Error> {
+    let to_err = |err: KubeconfigError| -> kube::Error {
+        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
+    };
+
+    // Read kube config
+    let mut kubeconfig = Kubeconfig::read_from(kubeconfig_path).map_err(to_err)?;
+
+    // Inject our env variables if needed
+    for auth in kubeconfig.auth_infos.iter_mut() {
+        if let Some(exec_config) = &mut auth.auth_info.as_mut().and_then(|auth| auth.exec.as_mut()) {
+            let exec_envs = exec_config.env.get_or_insert(vec![]);
+            for (k, v) in envs {
+                let mut hash_map = HashMap::with_capacity(2);
+                hash_map.insert("name".to_string(), k.to_string());
+                hash_map.insert("value".to_string(), v.to_string());
+                exec_envs.push(hash_map);
+            }
+        }
+    }
+
+    // build kube client: the kube config must have already the good context selected
+    let kube_config = kube::Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
+        .await
+        .map_err(to_err)?;
+    let kube_client = kube::Client::try_from(kube_config)?;
+
+    // Try to contact the api to verify we are correctly connected
+    kube_client.apiserver_version().await?;
+    Ok(kube_client)
+}
+
+async fn create_kube_client_in_cluster() -> Result<kube::Client, kube::Error> {
+    let to_err = |err: InClusterError| -> kube::Error {
+        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
+    };
+
+    // build kube client: the kube config must have already the good context selected
+    let kube_config = kube::Config::incluster().map_err(to_err)?;
+    let kube_client = kube::Client::try_from(kube_config)?;
+
+    // Try to contact the api to verify we are correctly connected
+    kube_client.apiserver_version().await?;
+    Ok(kube_client)
 }
 
 #[cfg(test)]

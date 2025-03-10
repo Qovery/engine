@@ -176,7 +176,7 @@ where
         }
 
         let last_image = block_on(get_last_deployed_image(
-            target.kube.clone(),
+            target.kube.client(),
             &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob
@@ -221,7 +221,7 @@ where
 
             // Get kube config file
             let job_pod_selector = format!("job-name={}", job.kube_name());
-            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
             let job_max_nb_restart = job.max_nb_restart();
             let mut job_creation_iterations = 0;
@@ -341,7 +341,7 @@ where
                 })?;
 
                 // wait for job to finish
-                let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+                let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
                 // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
                 info!("Get Jobs");
@@ -385,14 +385,14 @@ where
         // Cronjob will be force triggered
         if job.is_cron_job() && job.is_force_trigger() {
             // check if cronjob is installed
-            let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(job.kube_name())).is_ok();
 
             // create cronjob
             helm.on_create(target)?;
 
             // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
-            let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let cronjob = block_on(k8s_cronjob_api.get(job.kube_name())).map_err(|err| {
                 EngineError::new_job_error(
                     event_details.clone(),
@@ -517,7 +517,7 @@ where
 {
     let pre_run = move |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         let last_image = block_on(get_last_deployed_image(
-            target.kube.clone(),
+            target.kube.client(),
             &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob

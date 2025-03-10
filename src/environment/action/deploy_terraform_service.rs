@@ -132,7 +132,7 @@ where
         });
 
         let job_pod_selector = format!("job-name={}", self.kube_name());
-        let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+        let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
         let mut set_of_pods_already_processed: HashSet<String> = HashSet::new();
 
@@ -182,7 +182,7 @@ where
         })?;
 
         // wait for job to finish
-        let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+        let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
         // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
         info!("Get Jobs");
@@ -227,7 +227,7 @@ fn delete_old_job_if_exist(
     event_details: &EventDetails,
     target: &DeploymentTarget,
 ) -> Result<(), Box<EngineError>> {
-    let kube_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+    let kube_job_api: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
     let field_selector = format!("metadata.name={}", job_name);
     let jobs = block_on(kube_job_api.list(&ListParams::default().fields(&field_selector)))
@@ -246,7 +246,7 @@ fn delete_backend_config_secret(
     event_details: &EventDetails,
     target: &DeploymentTarget,
 ) -> Result<(), Box<EngineError>> {
-    let kube_secret_api: Api<Secret> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+    let kube_secret_api: Api<Secret> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
     let field_selector = format!("metadata.name={}", secret_name);
     let secrets = block_on(kube_secret_api.list(&ListParams::default().fields(&field_selector)))

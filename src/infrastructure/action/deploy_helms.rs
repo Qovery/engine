@@ -96,7 +96,7 @@ pub(super) trait HelmInfraResources {
             let chart_names = charts_names_user_str(&charts_level);
             logger.info(format!("🛳️ Deploying in parallel charts of level {}: {}", ix, chart_names));
             deploy_parallel_charts(
-                infra_ctx.mk_kube_client()?.client(),
+                infra_ctx.mk_kube_client()?.as_ref(),
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
                 &envs,
                 charts_level,

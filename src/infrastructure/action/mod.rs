@@ -77,7 +77,7 @@ pub trait InfrastructureAction: Send + Sync {
                             Some(&upgrade_status.requested_version),
                             &cloud_provider.credentials_environment_variables(),
                             KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                kube_client: kube_client.client(),
+                                kube_client: kube_client.as_ref(),
                             },
                         ) {
                         Ok(_) => logger.info("Cluster is compatible with the next version"),
@@ -114,7 +114,7 @@ pub trait InfrastructureAction: Send + Sync {
                             Some(&target_kubernetes_version),
                             &cloud_provider.credentials_environment_variables(),
                             KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                kube_client: kube_client.client(),
+                                kube_client: kube_client.as_ref(),
                             },
                         ) {
                         Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
