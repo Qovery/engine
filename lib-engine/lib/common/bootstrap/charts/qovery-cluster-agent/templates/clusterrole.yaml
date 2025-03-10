@@ -20,6 +20,7 @@ rules:
       - nodes/stats
       - nodes/proxy
       - configmaps
+      - persistentvolumeclaims
     verbs:
       - get
       - list
