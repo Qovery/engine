@@ -316,8 +316,8 @@ fn mirror_image(
                         warn!("{}", &line);
                         err_logs.push(line);
                     },
-                    // Set timeout at 15min (arbitrary value)
-                    &CommandKiller::from(Duration::from_secs(60 * 15), target.abort),
+                    // Set timeout at 30min (arbitrary value, but some big images >= 8 Go takes more than 15 minutes to be pulled)
+                    &CommandKiller::from(Duration::from_secs(60 * 30), target.abort),
                 ) {
                     Ok(ret) => OperationResult::Ok(ret),
                     Err(err) if err.is_aborted() => OperationResult::Err(err),
