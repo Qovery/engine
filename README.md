@@ -59,6 +59,40 @@ To generate a new Engine image version, you have to use Gitlab and GitHub:
 
 Note: naming image tags is made of the first 7 chars Github commit id + a dash + 7 first chars Gitlab commit id
 
+## Release process
+### Production clusters
+#### Identify version to deploy
+
+- Check engine pipelines https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1 
+- Find the latest version deployed on non-production clusters for at least 48 hours
+
+#### Promote the version to production channel
+
+- Open the pipeline linked to the version to deploy
+- Trigger the job: `2-deploy-qovery-infra-engines-prod`
+
+#### Dry-run deployment 
+
+- Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=true --execution-mode on-the-fly`
+- Analyse terraform & helm diff for unexpected change: https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29.
+- If everything is fine, proceed to the next step
+
+#### Deployment
+- Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=true --execution-mode on-the-fly --disable-dry-run`
+- Monitor deployments on grafana: https://qortal.qovery.com/grafana/d/e9365ed8-1bca-4aea-a010-44a05fe64a68/deployments?orgId=1&refresh=30s
+
+### Non-production clusters
+#### Dry-run deployment
+
+- Pick the latest pipeline https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1
+- Trigger the job: `2-dry-run-deploy-dev-clusters`
+- Analyse terraform & helm diff for unexpected change: https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29.
+- If everything is fine, proceed to the next step
+
+#### Deployment
+- Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=false --execution-mode on-the-fly --disable-dry-run`
+- Monitor deployments on grafana: https://qortal.qovery.com/grafana/d/e9365ed8-1bca-4aea-a010-44a05fe64a68/deployments?orgId=1&refresh=30s
+
 ## Supported connectors
 
 ### Build Platforms
