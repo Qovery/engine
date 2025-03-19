@@ -371,7 +371,7 @@ impl ObjectStorage for S3 {
     }
 
     fn delete_bucket_non_blocking(&self, _bucket_name: &str) -> Result<(), ObjectStorageError> {
-        todo!("delete_bucket for S3 is not implemented")
+        todo!("delete_bucket_non_blocking for S3 is not implemented")
     }
 
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {

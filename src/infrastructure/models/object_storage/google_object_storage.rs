@@ -276,7 +276,7 @@ mod tests {
         let bucket_ttl_test_cases = vec![
             None,
             Some(Duration::from_secs(60 * 60 * 24)),     // 1 day
-            Some(Duration::from_secs(7 * 60 * 60 * 24)), // 7 day
+            Some(Duration::from_secs(7 * 60 * 60 * 24)), // 7 days
         ];
         let bucket_versioning_test_cases = vec![true, false];
         let bucket_logging_test_cases = vec![true, false];

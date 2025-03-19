@@ -9,6 +9,7 @@ edition = "2024"
 [dependencies]
 atomic_enum = "0.3.0"
 bitflags = "2.6.0"
+bytes = "1.10.0"
 chrono = "0.4.39"
 derivative = "2.2.0"
 git2 = "0.19.0"
@@ -79,13 +80,13 @@ duration-str = "0.12.0"
 
 # AWS deps
 tokio = { version = "1.42.0", features = ["full"] }
-rusoto_core = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
-rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", rev="aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_core = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
+rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", rev = "aa70b721f2779747d798cb0f58a086028638f0a4" }
 aws-config = "1.5.12"
 aws-sdk-elasticloadbalancingv2 = "1.60.0"
 aws-sdk-eks = "1.65.0"
@@ -99,7 +100,12 @@ aws-smithy-client = "0.60.3"
 aws-smithy-async = { version = "1.2.3", features = ["rt-tokio"] }
 aws-credential-types = "1.2.1"
 
-# Scaleway Deps
+# Azure deps
+azure_core = "0.21.0"
+azure_storage = "0.21.0"
+azure_storage_blobs = "0.21.0"
+
+# Scaleway deps
 scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "engine" }
 
 # GCP deps
@@ -139,29 +145,35 @@ test-all = [
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
 test-aws-minimal = ["env-logger-check"]
+test-azure-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
 test-gcp-minimal = ["env-logger-check"]
 test-all-minimal = [
     "test-aws-minimal",
+    "test-azure-minimal",
     "test-scw-minimal",
     "test-gcp-minimal",
 ]
 
 # functionnal tests by type
 test-aws-self-hosted = ["env-logger-check", "test-git-container"]
+test-azure-self-hosted = ["env-logger-check", "test-git-container"]
 test-scw-self-hosted = ["env-logger-check", "test-git-container"]
 test-gcp-self-hosted = ["env-logger-check", "test-git-container"]
 test-all-self-hosted = [
     "test-aws-self-hosted",
+    "test-azure-self-hosted",
     "test-scw-self-hosted",
     "test-gcp-self-hosted",
 ]
 
 test-aws-managed-services = ["env-logger-check"]
+test-azure-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
 test-gcp-managed-services = ["env-logger-check"]
 test-all-managed-services = [
     "test-aws-managed-services",
+    "test-azure-managed-services",
     "test-scw-managed-services",
     "test-gcp-managed-services",
 ]
@@ -170,6 +182,7 @@ test-aws-infra = []
 test-aws-infra-karpenter = []
 test-aws-infra-arm = []
 test-aws-infra-nat-gateway = []
+test-azure-infra = []
 test-scw-infra = []
 test-gcp-infra = []
 test-all-infra = [
@@ -177,24 +190,29 @@ test-all-infra = [
     "test-aws-infra-karpenter",
     "test-aws-infra-arm",
     "test-aws-infra-nat-gateway",
+    "test-azure-infra",
     "test-scw-infra",
     "test-gcp-infra",
 ]
 
 test-aws-infra-upgrade = []
+test-azure-infra-upgrade = []
 test-scw-infra-upgrade = []
 test-gcp-infra-upgrade = []
 test-all-infra-upgrade = [
     "test-aws-infra-upgrade",
+    "test-azure-infra-upgrade",
     "test-scw-infra-upgrade",
     "test-gcp-infra-upgrade",
 ]
 
 test-aws-whole-enchilada = []
+test-azure-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
     "test-aws-whole-enchilada",
+    "test-azure-whole-enchilada",
     "test-scw-whole-enchilada",
     "test-gcp-whole-enchilada",
 ]
@@ -205,6 +223,12 @@ test-aws-all = [
     "test-aws-managed-services",
     "test-aws-self-hosted",
     "test-aws-whole-enchilada",
+]
+test-azure-all = [
+    "test-azure-infra",
+    "test-azure-managed-services",
+    "test-azure-self-hosted",
+    "test-azure-whole-enchilada",
 ]
 test-scw-all = [
     "test-scw-infra",
