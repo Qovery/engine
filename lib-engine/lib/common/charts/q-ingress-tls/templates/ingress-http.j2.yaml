@@ -25,7 +25,8 @@ metadata:
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
-    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
     nginx.ingress.kubernetes.io/proxy-buffer-size: "{{ advanced_settings.network_ingress_proxy_buffer_size_kb }}k"
     {%- if advanced_settings.network_ingress_cors_enable == true %}
