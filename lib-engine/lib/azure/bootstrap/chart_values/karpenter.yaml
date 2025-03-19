@@ -1,0 +1,64 @@
+# https://github.com/Azure/karpenter-provider-azure
+replicas: 1 # for better debugging experience
+controller:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  env:
+    - name: DISABLE_LEADER_ELECTION # disable leader election for better debugging / troubleshooting experience
+      value: "true"
+    # disable HTTP/2 to reduce ARM throttling on large-scale tests;
+    # with this in place write (and read) QPS can be increased too
+    #- name: GODEBUG
+    #  value: http2client=0
+    # options
+    - name: CLUSTER_NAME
+      value: set-by-engine-code
+    - name: CLUSTER_ENDPOINT
+      value: set-by-engine-code
+    - name: KUBELET_BOOTSTRAP_TOKEN
+      value: set-by-engine-code
+      # TOKEN_SECRET_NAME=$(kubectl get -n kube-system secrets --field-selector=type=bootstrap.kubernetes.io/token -o jsonpath='{.items[0].metadata.name}')
+      # TOKEN_ID=$(kubectl get -n kube-system secret "$TOKEN_SECRET_NAME" -o jsonpath='{.data.token-id}' | base64 -d)
+      # TOKEN_SECRET=$(kubectl get -n kube-system secret "$TOKEN_SECRET_NAME" -o jsonpath='{.data.token-secret}' | base64 -d)
+      # KUBELET_BOOTSTRAP_TOKEN=$TOKEN_ID.$TOKEN_SECRET
+      # echo $KUBELET_BOOTSTRAP_TOKEN
+    - name: SSH_PUBLIC_KEY
+      value: set-by-engine-code
+    - name: NETWORK_PLUGIN
+      value: azure
+    - name: NETWORK_PLUGIN_MODE
+      value: overlay
+    - name: NETWORK_POLICY
+      value: cilium
+    - name: VNET_SUBNET_ID
+      value: set-by-engine-code
+    - name: VNET_GUID
+      value: set-by-engine-code
+    - name: NODE_IDENTITIES
+      value: set-by-engine-code
+    # Azure client settings
+    - name: ARM_SUBSCRIPTION_ID
+      value: set-by-engine-code
+    - name: LOCATION
+      value: set-by-engine-code
+    - name: KUBELET_IDENTITY_CLIENT_ID
+      value: ""
+    - name: AZURE_NODE_RESOURCE_GROUP
+      value: set-by-engine-code
+    # managed karpenter settings
+    - name: USE_SIG
+      value: "false"
+    - name: SIG_SUBSCRIPTION_ID
+      value: ""
+serviceAccount:
+  name: karpenter-sa
+  annotations:
+    azure.workload.identity/client-id: set-by-engine-code
+podLabels:
+  azure.workload.identity/use: "true"
+logLevel: info
