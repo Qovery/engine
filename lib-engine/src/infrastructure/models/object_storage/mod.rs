@@ -7,15 +7,18 @@ use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
+use crate::services::azure::blob_storage_regions::AzureStorageRegion;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use enum_dispatch::enum_dispatch;
+use strum_macros::EnumIter;
 
+mod azure_object_storage;
 pub mod errors;
 pub mod google_object_storage;
 pub mod s3;
 pub mod scaleway_object_storage;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, EnumIter, PartialEq)]
 pub enum BucketDeleteStrategy {
     HardDelete,
     Empty,
@@ -25,6 +28,7 @@ pub enum BucketDeleteStrategy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BucketRegion {
     AwsRegion(AwsRegion),
+    AzureRegion(AzureStorageRegion),
     ScwRegion(ScwZone),
     GcpRegion(GcpStorageRegion),
 }
@@ -84,6 +88,7 @@ pub enum Kind {
     Spaces,
     ScalewayOs,
     GcpOs,
+    AzureOs,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

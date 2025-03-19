@@ -1,4 +1,5 @@
 pub mod aws;
+pub mod azure;
 pub mod common;
 pub mod database;
 pub mod dns;

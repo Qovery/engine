@@ -522,6 +522,9 @@ aws_self_hosted)
 aws_ec2_self_hosted)
   run_tests test-aws-ec2-self-hosted $commit_id 1
   ;;
+azure_self_hosted)
+  run_tests test-azure-self-hosted $commit_id 20
+  ;;
 scw_self_hosted)
   run_tests test-scw-self-hosted $commit_id 20
   ;;
@@ -537,6 +540,9 @@ aws_minimal_tests)
 aws_ec2_minimal_tests)
   run_tests test-aws-ec2-minimal $commit_id 20
   ;;
+azure_minimal_tests)
+  run_tests test-azure-minimal $commit_id 20
+  ;;
 gcp_minimal_tests)
   run_tests test-gcp-minimal $commit_id 20
   ;;
@@ -548,6 +554,9 @@ aws_managed_services)
   ;;
 aws_ec2_managed_services)
   run_tests test-aws-ec2-managed-services $commit_id 1
+  ;;
+azure_managed_services)
+  run_tests test-azure-managed-services $commit_id 20
   ;;
 scw_managed_services)
   run_tests test-scw-managed-services $commit_id 20
@@ -563,6 +572,9 @@ aws_whole_enchilada)
   ;;
 aws_ec2_whole_enchilada)
   run_tests test-aws-whole-enchilada $commit_id 20
+  ;;
+azure_whole_enchilada)
+  run_tests test-azure-whole-enchilada $commit_id 20
   ;;
 scw_whole_enchilada)
   run_tests test-scw-whole-enchilada $commit_id 20
@@ -587,6 +599,12 @@ aws_infra_upgrade)
   ;;
 aws_ec2_infra)
   run_tests test-aws-ec2-infra $commit_id 20
+  ;;
+azure_infra)
+  run_tests test-azure-infra $commit_id 20
+  ;;
+azure_infra_upgrade)
+  run_tests test-azure-infra-upgrade $commit_id 20
   ;;
 aws_ec2_infra_upgrade)
   run_tests test-aws-ec2-infra-upgrade $commit_id 20
