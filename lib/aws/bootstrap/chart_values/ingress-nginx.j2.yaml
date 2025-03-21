@@ -40,6 +40,9 @@ controller:
     log-format-escaping-json: "false" # set-by-engine-code
     log-format-escaping-none: "false" # set-by-engine-code
     limit-req-status-code: "503" # set-by-engine-code
+  
+  # PDB
+  maxUnavailable: 20%
 
   ingressClassResource:
     # -- Name of the IngressClass
