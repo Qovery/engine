@@ -47,4 +47,11 @@ rules:
     verbs:
       - get
       - list
+  - apiGroups:
+      - karpenter.sh
+    resources:
+      - nodepools
+    verbs:
+      - get
+      - list
 {{- end }}
