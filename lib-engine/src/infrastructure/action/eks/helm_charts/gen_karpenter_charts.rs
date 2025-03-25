@@ -43,7 +43,7 @@ pub fn generate_karpenter_charts(
     let karpenter_crd_chart = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
 
     // Karpenter with Monitoring
-    let karpenter_with_monitoring_chart = match chart_config_prerequisites.prometheus_config {
+    let karpenter_with_monitoring_chart = match chart_config_prerequisites.metrics_parameters {
         Some(_) => Some(karpenter_chart_prepare(true)?),
         None => None,
     };

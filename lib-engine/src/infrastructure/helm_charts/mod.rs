@@ -27,6 +27,7 @@ pub mod qovery_cluster_agent_chart;
 pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
+pub mod thanos;
 pub mod vertical_pod_autoscaler;
 
 pub enum HelmChartTimeout {
@@ -57,6 +58,12 @@ pub struct HelmChartResources {
     pub limit_memory: KubernetesMemoryResourceUnit,
     pub request_cpu: KubernetesCpuResourceUnit,
     pub request_memory: KubernetesMemoryResourceUnit,
+}
+
+pub struct HelmChartAutoscaling {
+    pub min_replicas: u32,
+    pub max_replicas: u32,
+    pub target_cpu_utilization_percentage: u32,
 }
 
 pub enum HelmChartVpaType {

@@ -401,7 +401,6 @@ pub fn get_environment_test_kubernetes(
                         ..Default::default()
                     },
                     None,
-                    None,
                     kubeconfig,
                     temp_dir,
                     None,
@@ -430,7 +429,6 @@ pub fn get_environment_test_kubernetes(
                         ),
                         ..Default::default()
                     },
-                    None,
                     None,
                     kubeconfig,
                     temp_dir,
@@ -463,7 +461,6 @@ pub fn get_environment_test_kubernetes(
                         ),
                         ..Default::default()
                     },
-                    None,
                     None,
                     kubeconfig,
                     temp_dir,

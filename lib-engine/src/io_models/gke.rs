@@ -1,5 +1,6 @@
 use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,7 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl GkeOptions {
@@ -123,6 +125,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
                         .map_err(|_e| "Cannot parse cluster_maintenance_end_time")?,
                 ),
             },
+            value.metrics_parameters,
         ))
     }
 }
@@ -155,6 +158,7 @@ mod tests {
             services_ipv4_cidr_block: None,
             user_provided_network: None,
             vpc_qovery_network_mode: None,
+            metrics_parameters: None,
         };
 
         // execute & validate:

@@ -4,7 +4,6 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
@@ -41,7 +40,6 @@ pub struct EKS {
     pub logger: Box<dyn Logger>,
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    pub prometheus_config: Option<PrometheusConfiguration>,
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
@@ -62,7 +60,6 @@ impl EKS {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-        prometheus_config: Option<PrometheusConfiguration>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
         qovery_allowed_public_access_cidrs: Option<Vec<String>>,
@@ -97,7 +94,6 @@ impl EKS {
             logger,
             advanced_settings,
             customer_helm_charts_override,
-            prometheus_config,
             kubeconfig,
             temp_dir,
             qovery_allowed_public_access_cidrs,

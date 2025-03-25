@@ -241,6 +241,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             KapsuleClusterType::Kapsule,
+            None,
         )
     }
 }

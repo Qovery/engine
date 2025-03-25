@@ -7,6 +7,7 @@ use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::kubernetes::ProviderOptions;
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::{
     CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcCustomRoutingTable,
     VpcQoveryNetworkMode,
@@ -18,7 +19,6 @@ use serde_with::DisplayFromStr;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
-
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +87,8 @@ pub struct Options {
     pub ec2_exposed_port: Option<u16>,
     #[serde(default)]
     pub karpenter_parameters: Option<KarpenterParameters>,
+    #[serde(default)]
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

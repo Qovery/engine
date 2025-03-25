@@ -14,7 +14,31 @@ resource "aws_iam_role" "iam_eks_prometheus" {
       "Action": ["sts:AssumeRoleWithWebIdentity"],
       "Condition": {
         "StringEquals": {
+          "${replace(aws_iam_openid_connect_provider.oidc.url, "https://", "")}:aud": "sts.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "${aws_iam_openid_connect_provider.oidc.arn}"
+      },
+      "Action": ["sts:AssumeRoleWithWebIdentity"],
+      "Condition": {
+        "StringEquals": {
           "${replace(aws_iam_openid_connect_provider.oidc.url, "https://", "")}:sub": "system:serviceaccount:prometheus:kube-prometheus-stack-prometheus"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "${aws_iam_openid_connect_provider.oidc.arn}"
+      },
+      "Action": ["sts:AssumeRoleWithWebIdentity"],
+      "Condition": {
+        "StringLike": {
+          "${replace(aws_iam_openid_connect_provider.oidc.url, "https://", "")}:sub": "system:serviceaccount:prometheus:thanos-*"
         }
       }
     }

@@ -1,10 +1,10 @@
 use crate::helm::{
-    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass,
-    UpdateStrategy, get_engine_helm_action_from_location,
+    ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, PriorityClass,
+    QoveryPriorityClass, UpdateStrategy, get_engine_helm_action_from_location,
 };
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-    KubePrometheusStackChart, PrometheusConfiguration, ScalewayObjectStoragePrometheusChartConfiguration,
+    KubePrometheusStackChart, PrometheusConfiguration,
 };
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
@@ -35,11 +35,11 @@ use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChar
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
 };
-use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::metrics::MetricsConfiguration;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
@@ -61,6 +61,12 @@ pub fn kapsule_helm_charts(
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+
+    // Metrics configuration option to know if we enable prometheus / thanos / service monitors
+    let metrics_configuration = chart_config_prerequisites
+        .metrics_parameters
+        .as_ref()
+        .map(|it| it.config.clone());
 
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
@@ -163,44 +169,23 @@ pub fn kapsule_helm_charts(
     };
 
     // Kube prometheus stack
-    let kube_prometheus_stack = match &chart_config_prerequisites.prometheus_config {
-        Some(c) => match c {
-            PrometheusConfiguration::AwsS3(_) | PrometheusConfiguration::GcpCloudStorage(_) => todo!(),
-            PrometheusConfiguration::ScalewayObjectStorage(_config) => Some(
-                KubePrometheusStackChart::new(
-                    chart_prefix_path,
-                    "scw-sbv-ssd-0".to_string(),
-                    prometheus_internal_url.to_string(),
-                    prometheus_namespace,
-                    PrometheusConfiguration::ScalewayObjectStorage(
-                        ScalewayObjectStoragePrometheusChartConfiguration {},
-                    ),
-                    true,
-                    get_chart_override_fn.clone(),
-                    true,
-                    false,
-                )
-                .to_common_helm_chart()?,
-            ),
-            PrometheusConfiguration::Custom => None,
-        },
-        None => None,
-    };
-
-    // Prometheus adapter
-    let prometheus_adapter = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(
-            PrometheusAdapterChart::new(
+    let kube_prometheus_stack = match metrics_configuration.as_ref() {
+        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(
+            KubePrometheusStackChart::new(
+                HelmAction::Deploy,
                 chart_prefix_path,
-                prometheus_internal_url.clone(),
+                "scw-sbv-ssd-0".to_string(),
+                prometheus_internal_url.to_string(),
                 prometheus_namespace,
+                PrometheusConfiguration::ScalewayObjectStorage,
+                true,
                 get_chart_override_fn.clone(),
                 true,
                 false,
             )
             .to_common_helm_chart()?,
         ),
+        Some(_) | None => None,
     };
 
     // metric-server is built-in Scaleway cluster, no need to manage it
@@ -210,6 +195,7 @@ pub fn kapsule_helm_charts(
         false => None,
         true => Some(
             KubeStateMetricsChart::new(
+                HelmAction::Deploy,
                 chart_prefix_path,
                 HelmChartNamespaces::Prometheus,
                 true,
@@ -586,9 +572,6 @@ pub fn kapsule_helm_charts(
     // observability
     if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
         level_1.push(Box::new(kube_prometheus_stack_chart));
-    }
-    if let Some(prometheus_adapter_chart) = prometheus_adapter {
-        level_2.push(Box::new(prometheus_adapter_chart));
     }
     if let Some(kube_state_metrics_chart) = kube_state_metrics {
         level_2.push(Box::new(kube_state_metrics_chart));

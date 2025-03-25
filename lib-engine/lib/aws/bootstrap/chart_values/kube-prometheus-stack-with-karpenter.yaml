@@ -29,7 +29,3 @@ prometheus:
       - key: "nodepool/stable"
         operator: "Exists"
         effect: "NoSchedule"
-    resources:
-      limits:
-        cpu: 1000m
-        memory: 8Gi

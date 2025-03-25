@@ -9,7 +9,6 @@ use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
@@ -51,8 +50,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
 use uuid::Uuid;
-
-use super::metrics::MetricsIoConfig;
 
 pub type EnvironmentEngineRequest = EngineRequest<EnvironmentRequest>;
 pub type InfrastructureEngineRequest = EngineRequest<Option<()>>;
@@ -372,7 +369,6 @@ pub struct KubernetesDto {
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub kubeconfig: Option<String>,
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
-    pub prometheus_config: Option<MetricsIoConfig>,
 }
 
 impl KubernetesDto {
@@ -438,9 +434,6 @@ impl KubernetesDto {
                 logger,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
-                self.prometheus_config
-                    .as_ref()
-                    .map(PrometheusConfiguration::from_metrics_config),
                 self.kubeconfig.clone(),
                 temp_dir,
                 self.qovery_allowed_public_access_cidrs.clone(),
@@ -468,9 +461,6 @@ impl KubernetesDto {
                 logger,
                 self.advanced_settings.clone(),
                 decoded_helm_charts_override,
-                self.prometheus_config
-                    .as_ref()
-                    .map(PrometheusConfiguration::from_metrics_config),
                 self.kubeconfig.clone(),
                 temp_dir,
             ) {
@@ -508,9 +498,6 @@ impl KubernetesDto {
                     logger,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
-                    self.prometheus_config
-                        .as_ref()
-                        .map(PrometheusConfiguration::from_metrics_config),
                     self.kubeconfig.clone(),
                     temp_dir,
                 ) {
