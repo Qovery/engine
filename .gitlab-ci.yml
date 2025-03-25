@@ -844,7 +844,7 @@ quarantine:
 ###########
 
 create-multi-arch-image:
-  stage: build-final
+  stage: build-and-lint
   retry: 1
   before_script:
     - ci_helper docker_login_public_prod_ecr
@@ -856,6 +856,9 @@ create-multi-arch-image:
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
 
 docker-tag:
   stage: release-tag
