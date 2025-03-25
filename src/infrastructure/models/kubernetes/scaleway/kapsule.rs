@@ -2,7 +2,6 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
@@ -21,6 +20,7 @@ use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::scaleway::ScalewayCredentials;
 use crate::infrastructure::models::object_storage::scaleway_object_storage::ScalewayOS;
+use crate::io_models::metrics::MetricsParameters;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
@@ -84,6 +84,7 @@ pub struct KapsuleOptions {
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl ProviderOptions for KapsuleOptions {}
@@ -100,6 +101,7 @@ impl KapsuleOptions {
         qovery_engine_location: EngineLocation,
         tls_email_report: String,
         scaleway_kubernetes_type: KapsuleClusterType,
+        metrics_parameters: Option<MetricsParameters>,
     ) -> KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
@@ -113,6 +115,7 @@ impl KapsuleOptions {
             qovery_engine_location,
             tls_email_report,
             scaleway_kubernetes_type,
+            metrics_parameters,
         }
     }
 }
@@ -133,7 +136,6 @@ pub struct Kapsule {
     logger: Box<dyn Logger>,
     advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    pub prometheus_config: Option<PrometheusConfiguration>,
     kubeconfig: Option<String>,
     temp_dir: PathBuf,
 }
@@ -152,7 +154,6 @@ impl Kapsule {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-        prometheus_config: Option<PrometheusConfiguration>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Kapsule, Box<EngineError>> {
@@ -238,7 +239,6 @@ impl Kapsule {
             logger,
             advanced_settings,
             customer_helm_charts_override,
-            prometheus_config,
             kubeconfig,
             temp_dir,
         };

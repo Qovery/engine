@@ -124,7 +124,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 ..Default::default()
             },
             None,
-            None,
             fs::read_to_string(kubeconfig_path()).ok(),
             temp_dir,
             None,

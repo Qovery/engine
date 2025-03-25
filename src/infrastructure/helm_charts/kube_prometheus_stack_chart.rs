@@ -1,16 +1,18 @@
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::cmd::helm_utils::CRDSUpdate;
+use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmAction, HelmChartError,
     HelmChartNamespaces, QoveryPriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
     VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::io_models::metrics::MetricsIoConfig;
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
@@ -20,45 +22,26 @@ pub type StorageClassName = String;
 #[derive(Clone)]
 pub struct AwsS3PrometheusChartConfiguration {
     pub region: String,
-    pub bucketname: String,
+    pub bucket_name: String,
     pub endpoint: String,
     pub aws_iam_prometheus_role_arn: String,
 }
 
 #[derive(Clone)]
-pub struct GcpCloudStoragePrometheusChartConfiguration;
-
-#[derive(Clone)]
-pub struct ScalewayObjectStoragePrometheusChartConfiguration;
-
-#[derive(Clone)]
 pub enum PrometheusConfiguration {
-    AwsS3(AwsS3PrometheusChartConfiguration),
-    GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration),
-    ScalewayObjectStorage(ScalewayObjectStoragePrometheusChartConfiguration),
-    Custom,
-}
-
-impl PrometheusConfiguration {
-    pub fn from_metrics_config(metrics_config: &MetricsIoConfig) -> Self {
-        match metrics_config {
-            MetricsIoConfig::AwsS3(aws_s3_prometheus_config) => {
-                PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
-                    region: aws_s3_prometheus_config.region.to_string(),
-                    bucketname: aws_s3_prometheus_config.bucket_name.to_string(),
-                    endpoint: aws_s3_prometheus_config.endpoint.to_string(),
-                    aws_iam_prometheus_role_arn: aws_s3_prometheus_config.aws_iam_prometheus_role_arn.to_string(),
-                })
-            }
-            MetricsIoConfig::GcpCloudStorage(_) => {
-                PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {})
-            }
-            MetricsIoConfig::Custom => PrometheusConfiguration::Custom,
-        }
-    }
+    AwsS3 {
+        region: AwsRegion,
+        bucket_name: String,
+        endpoint: String,
+        aws_iam_prometheus_role_arn: String,
+    },
+    ScalewayObjectStorage,
+    GcpCloudStorage,
+    NotInstalled,
 }
 
 pub struct KubePrometheusStackChart {
+    action: HelmAction,
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -74,6 +57,7 @@ pub struct KubePrometheusStackChart {
 
 impl KubePrometheusStackChart {
     pub fn new(
+        action: HelmAction,
         chart_prefix_path: Option<&str>,
         storage_class_name: StorageClassName,
         prometheus_internal_url: String,
@@ -85,6 +69,7 @@ impl KubePrometheusStackChart {
         karpenter_enabled: bool,
     ) -> Self {
         KubePrometheusStackChart {
+            action,
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -128,23 +113,30 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
 
         // thanos object storage configuration
         let mut object_storage_configs = match self.prometheus_object_bucket_configuration.clone() {
-            PrometheusConfiguration::AwsS3(s3_prometheus_chart_configuration) => {
+            PrometheusConfiguration::AwsS3 {
+                region,
+                bucket_name,
+                // TODO (ENG-1986) To check if we really need this field
+                endpoint: _,
+                aws_iam_prometheus_role_arn,
+            } => {
+                let region_str = region.to_cloud_provider_format();
                 vec![
                     ChartSetValue {
-                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.bucket".to_string(),
-                        value: s3_prometheus_chart_configuration.bucketname.clone(),
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.region".to_string(),
+                        value: region_str.to_string(),
                     },
                     ChartSetValue {
-                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.region".to_string(),
-                        value: s3_prometheus_chart_configuration.region.clone(),
+                        key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.bucket".to_string(),
+                        value: bucket_name,
                     },
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.endpoint".to_string(),
-                        value: format!("s3.{}.amazonaws.com", s3_prometheus_chart_configuration.region.clone()),
+                        value: format!("s3.{region_str}.amazonaws.com"),
                     },
                     ChartSetValue {
                         key: r"prometheus.serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
-                        value: s3_prometheus_chart_configuration.aws_iam_prometheus_role_arn.clone(),
+                        value: aws_iam_prometheus_role_arn,
                     },
                     // Make sure you use a correct signature version. Currently AWS requires signature v4, so it needs signature_version2: false.
                     // If you don’t specify it, you will get an Access Denied error. On the other hand, several S3 compatible APIs use signature_version2: true.
@@ -155,35 +147,40 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     },
                 ]
             }
-            PrometheusConfiguration::GcpCloudStorage(_) => vec![],
-            PrometheusConfiguration::ScalewayObjectStorage(_) => vec![],
-            PrometheusConfiguration::Custom => vec![],
+            PrometheusConfiguration::NotInstalled => vec![],
+            PrometheusConfiguration::ScalewayObjectStorage => vec![],
+            PrometheusConfiguration::GcpCloudStorage => vec![],
         };
 
+        let crds_path = Path::new(&self.chart_path.to_string())
+            .join("charts/crds/crds/")
+            .to_string_lossy()
+            .to_string();
         let mut common_chart = CommonChart {
             chart_info: ChartInfo {
+                action: self.action.clone(),
                 name: KubePrometheusStackChart::chart_name(),
                 path: self.chart_path.to_string(),
                 namespace: self.prometheus_namespace,
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(67, 3,1)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(67, 3, 1)),
                 // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
                 // to upgrade because of the CRD and the number of elements it has to deploy
                 timeout_in_seconds: 480,
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
-                crds_update: Some(CRDSUpdate{
-                    path:"https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.79.0/example/prometheus-operator-crd".to_string(),
+                crds_update: Some(CRDSUpdate {
+                    path: crds_path,
                     resources: vec![
-                        "monitoring.coreos.com_alertmanagerconfigs.yaml".to_string(),
-                        "monitoring.coreos.com_alertmanagers.yaml".to_string(),
-                        "monitoring.coreos.com_podmonitors.yaml".to_string(),
-                        "monitoring.coreos.com_probes.yaml".to_string(),
-                        "monitoring.coreos.com_prometheusagents.yaml".to_string(),
-                        "monitoring.coreos.com_prometheuses.yaml".to_string(),
-                        "monitoring.coreos.com_prometheusrules.yaml".to_string(),
-                        "monitoring.coreos.com_scrapeconfigs.yaml".to_string(),
-                        "monitoring.coreos.com_servicemonitors.yaml".to_string(),
-                        "monitoring.coreos.com_thanosrulers.yaml".to_string(),
-                    ]
+                        "crd-alertmanagerconfigs.yaml".to_string(),
+                        "crd-alertmanagers.yaml".to_string(),
+                        "crd-podmonitors.yaml".to_string(),
+                        "crd-probes.yaml".to_string(),
+                        "crd-prometheusagents.yaml".to_string(),
+                        "crd-prometheuses.yaml".to_string(),
+                        "crd-prometheusrules.yaml".to_string(),
+                        "crd-scrapeconfigs.yaml".to_string(),
+                        "crd-servicemonitors.yaml".to_string(),
+                        "crd-thanosrulers.yaml".to_string(),
+                    ],
                 }),
                 values_files,
                 values: vec![
@@ -193,7 +190,12 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                         value: false.to_string(),
                     },
                     ChartSetValue {
-                        key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName".to_string(),
+                        key: "prometheus.prometheusSpec.replicas".to_string(),
+                        value: "2".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName"
+                            .to_string(),
                         value: self.storage_class_name.to_string(),
                     },
                     ChartSetValue {
@@ -208,6 +210,10 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                         key: "prometheus-node-exporter.priorityClassName".to_string(),
                         value: QoveryPriorityClass::HighPriority.to_string(),
                     },
+                    ChartSetValue {
+                        key: "prometheus.thanosService.enabled".to_string(),
+                        value: "true".to_string(),
+                    },
                 ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
@@ -220,62 +226,62 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 true => Some(CommonChartVpa::new(
                     self.chart_prefix_path.clone().unwrap_or(".".to_string()),
                     vec![
-                    VpaConfig {
-                        target_ref: VpaTargetRef::new(
-                            VpaTargetRefApiVersion::AppsV1,
-                            VpaTargetRefKind::Deployment,
-                            "kube-prometheus-stack-operator".to_string(),
-                        ),
-                        container_policy: VpaContainerPolicy::new(
-                            "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(384)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(4)),
-                        ),
-                    },
-                    VpaConfig {
-                        target_ref: VpaTargetRef::new(
-                            VpaTargetRefApiVersion::AppsV1,
-                            VpaTargetRefKind::Deployment,
-                            "kube-state-metrics".to_string(),
-                        ),
-                        container_policy: VpaContainerPolicy::new(
-                            "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(50)),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(200)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(64)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
-                        ),
-                    },
-                    VpaConfig {
-                        target_ref: VpaTargetRef::new(
-                            VpaTargetRefApiVersion::AppsV1,
-                            VpaTargetRefKind::DaemonSet,
-                            "kube-prometheus-stack-prometheus-node-exporter".to_string(),
-                        ),
-                        container_policy: VpaContainerPolicy::new(
-                            "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(150)),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(500)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(16)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
-                        ),
-                    },
-                    VpaConfig {
-                        target_ref: VpaTargetRef::new(
-                            VpaTargetRefApiVersion::AppsV1,
-                            VpaTargetRefKind::StatefulSet,
-                            "prometheus-kube-prometheus-stack-prometheus".to_string(),
-                        ),
-                        container_policy: VpaContainerPolicy::new(
-                            "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(100)),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(8)),
-                        ),
-                    },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "kube-prometheus-stack-operator".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(384)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(4)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::Deployment,
+                                "kube-state-metrics".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(64)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::DaemonSet,
+                                "kube-prometheus-stack-prometheus-node-exporter".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(150)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(16)),
+                                Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                            ),
+                        },
+                        VpaConfig {
+                            target_ref: VpaTargetRef::new(
+                                VpaTargetRefApiVersion::AppsV1,
+                                VpaTargetRefKind::StatefulSet,
+                                "prometheus-kube-prometheus-stack-prometheus".to_string(),
+                            ),
+                            container_policy: VpaContainerPolicy::new(
+                                "*".to_string(),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                                Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                                Some(KubernetesMemoryResourceUnit::GibiByte(8)),
+                            ),
+                        },
                     ],
                 )),
                 false => None,
@@ -319,15 +325,13 @@ mod tests {
     use std::env;
     use std::sync::Arc;
 
-    use crate::helm::HelmChartNamespaces;
-    use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-        AwsS3PrometheusChartConfiguration, GcpCloudStoragePrometheusChartConfiguration, PrometheusConfiguration,
-        ScalewayObjectStoragePrometheusChartConfiguration, StorageClassName,
-    };
+    use crate::helm::{HelmAction, HelmChartNamespaces};
+    use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{PrometheusConfiguration, StorageClassName};
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind;
     use crate::io_models::models::CustomerHelmChartsOverride;
 
@@ -346,16 +350,17 @@ mod tests {
     fn kube_prometheus_stack_chart_directory_exists_test() {
         // setup:
         let chart = KubePrometheusStackChart::new(
+            HelmAction::Deploy,
             None,
             StorageClassName::new(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
-            PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
-                region: "whatever".to_string(),
-                bucketname: "whatever".to_string(),
+            PrometheusConfiguration::AwsS3 {
+                region: AwsRegion::EuWest3,
+                bucket_name: "whatever".to_string(),
                 endpoint: "whatever".to_string(),
                 aws_iam_prometheus_role_arn: "whatever".to_string(),
-            }),
+            },
             true,
             get_prometheus_chart_override(),
             false,
@@ -384,16 +389,17 @@ mod tests {
     fn kube_prometheus_stack_chart_values_file_exists_test() {
         // setup:
         let chart = KubePrometheusStackChart::new(
+            HelmAction::Deploy,
             None,
             StorageClassName::new(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
-            PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
-                region: "whatever".to_string(),
-                bucketname: "whatever".to_string(),
+            PrometheusConfiguration::AwsS3 {
+                region: AwsRegion::EuWest3,
+                bucket_name: "whatever".to_string(),
                 endpoint: "whatever".to_string(),
                 aws_iam_prometheus_role_arn: "whatever".to_string(),
-            }),
+            },
             true,
             get_prometheus_chart_override(),
             false,
@@ -430,29 +436,29 @@ mod tests {
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        // TODO (ENG-1986) When adding Thanos to other cloud providers, add them here as well
         // execute:
-        for provider_kind in [Kind::Eks, Kind::Gke, Kind::ScwKapsule] {
+        {
+            let provider_kind = Kind::Eks;
             // setup:
             let chart = KubePrometheusStackChart::new(
+                HelmAction::Deploy,
                 None,
                 "whatever".to_string(),
                 "whatever".to_string(),
                 HelmChartNamespaces::Prometheus,
                 match provider_kind {
-                    Kind::Eks => PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
-                        region: "whatever".to_string(),
-                        bucketname: "whatever".to_string(),
+                    Kind::Eks => PrometheusConfiguration::AwsS3 {
+                        region: AwsRegion::EuWest3,
+                        bucket_name: "whatever".to_string(),
                         endpoint: "whatever".to_string(),
                         aws_iam_prometheus_role_arn: "whatever".to_string(),
-                    }),
-                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage(
-                        ScalewayObjectStoragePrometheusChartConfiguration {},
-                    ),
-                    Kind::Gke => {
-                        PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {})
-                    }
+                    },
+                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage,
+                    Kind::Gke => PrometheusConfiguration::GcpCloudStorage,
                     Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
-                        PrometheusConfiguration::Custom
+                        // TODO (ENG-1986) Not handled yet
+                        PrometheusConfiguration::NotInstalled
                     }
                 },
                 true,

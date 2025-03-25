@@ -280,6 +280,7 @@ impl Cluster<Google, GkeOptions> for Gke {
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             Time::from_hms(5, 0, 0).expect("Cannot instantiate time"),
             Some(Time::from_hms(7, 0, 0).expect("Cannot instantiate time")),
+            None,
         )
     }
 }

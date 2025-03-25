@@ -1,7 +1,6 @@
 use chrono::{DateTime, Utc};
 
 use crate::helm::HelmChart;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::{KarpenterParameters, Options};
@@ -21,6 +20,7 @@ use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::metrics::MetricsParameters;
 use crate::string::terraform_list_format;
 use std::collections::HashMap;
 
@@ -30,6 +30,7 @@ pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
 mod gen_charts;
 pub mod gen_karpenter_charts;
+pub mod gen_metrics_charts;
 pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;
@@ -66,7 +67,9 @@ pub struct EksChartsConfigPrerequisites {
     pub aws_iam_loki_role_arn: String,
     pub aws_s3_loki_bucket_name: String,
     pub loki_storage_config_aws_s3: String,
-    pub prometheus_config: Option<PrometheusConfiguration>,
+    pub metrics_parameters: Option<MetricsParameters>,
+    pub aws_iam_eks_prometheus_role_arn: String,
+    pub aws_s3_prometheus_bucket_name: String,
     pub karpenter_controller_aws_role_arn: String,
     pub cluster_security_group_id: String,
     pub aws_iam_alb_controller_arn: String,
@@ -147,7 +150,9 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             kubernetes_version_upgrade_requested: self.kubernetes_version_upgrade_requested,
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
             customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
-            prometheus_config: cluster.prometheus_config.clone(),
+            metrics_parameters: cluster.options.metrics_parameters.clone(),
+            aws_iam_eks_prometheus_role_arn: self.terraform_output.aws_iam_eks_prometheus_role_arn.clone(),
+            aws_s3_prometheus_bucket_name: self.terraform_output.aws_s3_prometheus_bucket_name.clone(),
             cluster_creation_date: cluster.created_at,
         }
     }

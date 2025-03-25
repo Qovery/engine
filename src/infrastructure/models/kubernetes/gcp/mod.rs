@@ -3,7 +3,6 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
@@ -26,6 +25,7 @@ use crate::services::gcp::object_storage_service::ObjectStorageService;
 use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::io_models::metrics::MetricsParameters;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
 use governor::{Quota, RateLimiter};
@@ -124,6 +124,7 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl GkeOptions {
@@ -142,6 +143,7 @@ impl GkeOptions {
         tls_email_report: String,
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
+        metrics_parameters: Option<MetricsParameters>,
     ) -> Self {
         GkeOptions {
             qovery_api_url,
@@ -158,6 +160,7 @@ impl GkeOptions {
             tls_email_report,
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,
+            metrics_parameters,
         }
     }
 }
@@ -178,7 +181,6 @@ pub struct Gke {
     pub logger: Box<dyn Logger>,
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-    pub prometheus_config: Option<PrometheusConfiguration>,
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
     pub credentials: JsonCredentials,
@@ -197,7 +199,6 @@ impl Gke {
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
-        prometheus_config: Option<PrometheusConfiguration>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
     ) -> Result<Self, Box<EngineError>> {
@@ -270,7 +271,6 @@ impl Gke {
             logger,
             advanced_settings,
             customer_helm_charts_override,
-            prometheus_config,
             kubeconfig,
             temp_dir,
             credentials: creds,

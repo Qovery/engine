@@ -34,6 +34,8 @@ kubeEtcd:
 kubelet:
   serviceMonitor:
     resource: true
+    # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
+    resourcePath: "/metrics/resource"
 
 kubeScheduler:
   enabled: false
@@ -64,11 +66,10 @@ prometheus:
              endpoint: "set-by-engine-code"
              region: "set-by-engine-code"
              signature_version2: "set-by-engine-code" 
-
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     retention: 90d
-    retentionSize: "40GB"
+    retentionSize: "7GB" # prometheus db
     walCompression: true
     externalUrl: set-by-engine-code
     storageSpec:
@@ -78,11 +79,14 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: "50Gi"
+              storage: "8Gi"
     resources:
       limits:
-        cpu: 1000m
-        memory: 8Gi
+        cpu: "3"
+        memory: "1Gi"
+      requests:
+        cpu: "1"
+    replicas: "set-by-engine-code"
 
 prometheusOperator:
   resources:

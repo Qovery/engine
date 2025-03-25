@@ -1,21 +1,22 @@
 use serde::{Deserialize, Serialize};
 
-use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum MetricsIoConfig {
-    AwsS3(AwsS3PrometheusConfig),
-    GcpCloudStorage(GcpCloudStoragePrometheusConfig),
-    Custom,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub struct MetricsParameters {
+    pub config: MetricsConfiguration,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GcpCloudStoragePrometheusConfig {}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct AwsS3PrometheusConfig {
-    pub bucket_name: String,
-    pub region: AwsRegion,
-    pub endpoint: String,
-    pub aws_iam_prometheus_role_arn: String,
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub enum MetricsConfiguration {
+    MetricsInstalledByQovery {
+        // INFO (ENG-1986) ATM this field should be filled only for dedicated Qovery internal clusters
+        install_prometheus_adapter: bool,
+    },
+    AwsS3 {
+        region: String,
+        bucket_name: String,
+        aws_iam_prometheus_role_arn: String,
+        endpoint: String,
+    },
 }

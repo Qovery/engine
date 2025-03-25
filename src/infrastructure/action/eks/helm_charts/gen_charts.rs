@@ -5,7 +5,6 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
-use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -34,21 +33,17 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
+use crate::infrastructure::action::eks::helm_charts::gen_metrics_charts::generate_metrics_charts;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::grafana_chart::{
     CloudWatchConfig, GrafanaAdminUser, GrafanaChart, GrafanaDatasources,
 };
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-    AwsS3PrometheusChartConfiguration, KubePrometheusStackChart, PrometheusConfiguration,
-};
-use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
 };
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
-use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
@@ -180,7 +175,7 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites.cluster_name.to_string(),
         chart_config_prerequisites.aws_iam_cluster_autoscaler_role_arn.clone(),
         prometheus_namespace,
-        chart_config_prerequisites.prometheus_config.is_some(),
+        chart_config_prerequisites.metrics_parameters.is_some(),
         chart_config_prerequisites.is_karpenter_enabled,
     )
     .to_common_helm_chart()?;
@@ -298,57 +293,13 @@ pub(super) fn eks_helm_charts(
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
-    // Prometheus CRDs
-    let prometheus_operator_crds = match chart_config_prerequisites.prometheus_config {
-        Some(_) => Some(PrometheusOperatorCrdsChart::new(chart_prefix_path).to_common_helm_chart()?),
-        _ => None,
-    };
-
-    // Kube prometheus stack
-    let kube_prometheus_stack = match &chart_config_prerequisites.prometheus_config {
-        Some(c) => match c {
-            PrometheusConfiguration::AwsS3(config) => Some(
-                KubePrometheusStackChart::new(
-                    chart_prefix_path,
-                    AwsStorageType::GP2.to_k8s_storage_class(),
-                    prometheus_internal_url.to_string(),
-                    prometheus_namespace,
-                    PrometheusConfiguration::AwsS3(AwsS3PrometheusChartConfiguration {
-                        region: chart_config_prerequisites.region.to_cloud_provider_format().to_string(),
-                        bucketname: config.bucketname.clone(),
-                        aws_iam_prometheus_role_arn: config.aws_iam_prometheus_role_arn.clone(),
-                        endpoint: config.endpoint.clone(),
-                    }),
-                    true,
-                    get_chart_override_fn.clone(),
-                    true,
-                    chart_config_prerequisites.is_karpenter_enabled,
-                )
-                .to_common_helm_chart()?,
-            ),
-            PrometheusConfiguration::GcpCloudStorage(_) | PrometheusConfiguration::ScalewayObjectStorage(_) => {
-                return Err(CommandError::new("Prometheus config is not AWS S3".to_string(), None, None));
-            }
-            PrometheusConfiguration::Custom => None,
-        },
-        None => None,
-    };
-
-    // Prometheus adapter
-    let prometheus_adapter = match chart_config_prerequisites.prometheus_config.is_some() {
-        false => None,
-        true => Some(
-            PrometheusAdapterChart::new(
-                chart_prefix_path,
-                prometheus_internal_url.clone(),
-                prometheus_namespace,
-                get_chart_override_fn.clone(),
-                true,
-                chart_config_prerequisites.is_karpenter_enabled,
-            )
-            .to_common_helm_chart()?,
-        ),
-    };
+    let metrics_charts = generate_metrics_charts(
+        chart_prefix_path,
+        chart_config_prerequisites,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+    )?;
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
@@ -373,20 +324,6 @@ pub(super) fn eks_helm_charts(
         true,
     )
     .to_common_helm_chart()?;
-
-    // Kube state metrics
-    let kube_state_metrics = match chart_config_prerequisites.prometheus_config.is_some() {
-        false => None,
-        true => Some(
-            KubeStateMetricsChart::new(
-                chart_prefix_path,
-                HelmChartNamespaces::Prometheus,
-                true,
-                get_chart_override_fn.clone(),
-            )
-            .to_common_helm_chart()?,
-        ),
-    };
 
     // Grafana chart
     let grafana = match chart_config_prerequisites.ff_grafana_enabled {
@@ -419,7 +356,7 @@ pub(super) fn eks_helm_charts(
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        chart_config_prerequisites.prometheus_config.is_some(),
+        chart_config_prerequisites.metrics_parameters.is_some(),
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
@@ -467,7 +404,7 @@ pub(super) fn eks_helm_charts(
             ),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.prometheus_config.is_some(),
+        chart_config_prerequisites.metrics_parameters.is_some(),
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Aws,
@@ -610,7 +547,7 @@ pub(super) fn eks_helm_charts(
                 // metrics
                 ChartSetValue {
                     key: "metrics.enabled".to_string(),
-                    value: chart_config_prerequisites.prometheus_config.is_some().to_string(),
+                    value: chart_config_prerequisites.metrics_parameters.is_some().to_string(),
                 },
                 // autoscaler
                 ChartSetValue {
@@ -697,7 +634,7 @@ pub(super) fn eks_helm_charts(
         Box::new(q_priority_class_chart),
     ];
     // Add prometheus CRDs early to avoid issues with other charts
-    if let Some(chart) = prometheus_operator_crds {
+    if let Some(chart) = metrics_charts.prometheus_operator_crds_chart {
         level_0.push(Box::new(chart));
     }
 
@@ -764,14 +701,17 @@ pub(super) fn eks_helm_charts(
     ];
 
     // observability
-    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
+    if let Some(kube_prometheus_stack_chart) = metrics_charts.kube_prometheus_stack_chart {
         level_4.push(Box::new(kube_prometheus_stack_chart));
     }
-    if let Some(prometheus_adapter_chart) = prometheus_adapter {
-        level_5.push(Box::new(prometheus_adapter_chart));
+    if let Some(thanos_chart) = metrics_charts.thanos_chart {
+        level_5.push(Box::new(thanos_chart));
     }
-    if let Some(kube_state_metrics_chart) = kube_state_metrics {
+    if let Some(kube_state_metrics_chart) = metrics_charts.kube_state_metrics_chart {
         level_5.push(Box::new(kube_state_metrics_chart));
+    }
+    if let Some(prometheus_adapter_chart) = metrics_charts.prometheus_adapter_chart {
+        level_5.push(Box::new(prometheus_adapter_chart));
     }
     if let Some(promtail_chart) = promtail {
         level_4.push(Box::new(promtail_chart));

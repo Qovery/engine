@@ -3,21 +3,20 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::environment::models::gcp::GcpStorageType;
 use crate::errors::CommandError;
-use crate::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
+use crate::helm::{HelmAction, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-    GcpCloudStoragePrometheusChartConfiguration, KubePrometheusStackChart, PrometheusConfiguration,
+    KubePrometheusStackChart, PrometheusConfiguration,
 };
 use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
-use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
@@ -33,6 +32,7 @@ use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::metrics::MetricsConfiguration;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
@@ -141,56 +141,37 @@ pub(super) fn gke_helm_charts(
         )),
     };
 
-    // Kube prometheus stack
-    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match &chart_config_prerequisites.prometheus_config {
-        Some(c) => match c {
-            PrometheusConfiguration::GcpCloudStorage(_config) => Some(Box::new(
-                KubePrometheusStackChart::new(
-                    chart_prefix_path,
-                    GcpStorageType::Balanced.to_k8s_storage_class(),
-                    prometheus_internal_url.to_string(),
-                    prometheus_namespace,
-                    PrometheusConfiguration::GcpCloudStorage(GcpCloudStoragePrometheusChartConfiguration {}),
-                    true,
-                    get_chart_override_fn.clone(),
-                    true,
-                    false,
-                )
-                .to_common_helm_chart()?,
-            )),
-            PrometheusConfiguration::AwsS3(_) | PrometheusConfiguration::ScalewayObjectStorage(_) => {
-                return Err(CommandError::new(
-                    "Prometheus config is not Google Cloud Object Storage".to_string(),
-                    None,
-                    None,
-                ));
-            }
-            PrometheusConfiguration::Custom => None,
-        },
-        None => None,
-    };
+    // Metrics configuration option to know if we enable prometheus / thanos / service monitors
+    let metrics_configuration = chart_config_prerequisites
+        .metrics_parameters
+        .as_ref()
+        .map(|it| it.config.clone());
 
-    // Prometheus adapter
-    let prometheus_adapter: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(Box::new(
-            PrometheusAdapterChart::new(
+    // Kube prometheus stack
+    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match metrics_configuration.as_ref() {
+        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(Box::new(
+            KubePrometheusStackChart::new(
+                HelmAction::Deploy,
                 chart_prefix_path,
-                prometheus_internal_url.clone(),
+                GcpStorageType::Balanced.to_k8s_storage_class(),
+                prometheus_internal_url.to_string(),
                 prometheus_namespace,
-                get_chart_override_fn.clone(),
+                PrometheusConfiguration::GcpCloudStorage,
                 true,
+                get_chart_override_fn.clone(),
+                false,
                 false,
             )
             .to_common_helm_chart()?,
         )),
+        Some(_) | None => None,
     };
 
     // Kube state metrics
-    let kube_state_metrics: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(Box::new(
+    let kube_state_metrics: Option<Box<dyn HelmChart>> = match metrics_configuration.as_ref() {
+        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(Box::new(
             KubeStateMetricsChart::new(
+                HelmAction::Deploy,
                 chart_prefix_path,
                 HelmChartNamespaces::Qovery,
                 true,
@@ -198,6 +179,7 @@ pub(super) fn gke_helm_charts(
             )
             .to_common_helm_chart()?,
         )),
+        Some(_) | None => None,
     };
 
     // Cert Manager chart
@@ -399,7 +381,7 @@ pub(super) fn gke_helm_charts(
         promtail,
         kube_prometheus_stack,
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, prometheus_adapter, kube_state_metrics];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, kube_state_metrics];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];

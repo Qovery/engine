@@ -7,7 +7,6 @@ use crate::helm::HelmChart;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::gke::helm_charts::gen_charts::gke_helm_charts;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
@@ -15,6 +14,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::gcp::{Gke, GkeOptions};
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
 pub mod gen_charts;
@@ -33,7 +33,7 @@ pub struct GkeChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     pub loki_logging_service_account_email: String,
     pub logs_bucket_name: String,
-    pub prometheus_config: Option<PrometheusConfiguration>,
+    pub metrics_parameters: Option<MetricsParameters>,
     // qovery options form json input
     pub infra_options: GkeOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -55,7 +55,7 @@ impl GkeChartsConfigPrerequisites {
         dns_provider_config: DnsProviderConfiguration,
         loki_logging_service_account_email: String,
         logs_bucket_name: String,
-        prometheus_config: Option<PrometheusConfiguration>,
+        metrics_parameters: Option<MetricsParameters>,
         infra_options: GkeOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -74,7 +74,7 @@ impl GkeChartsConfigPrerequisites {
             dns_provider_config,
             loki_logging_service_account_email,
             logs_bucket_name,
-            prometheus_config,
+            metrics_parameters,
             infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
