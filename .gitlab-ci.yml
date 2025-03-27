@@ -118,7 +118,7 @@ release-image:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
       when: always
       allow_failure: false
 
@@ -153,7 +153,7 @@ release-image-slim:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
       when: always
       allow_failure: false
 
@@ -1014,7 +1014,7 @@ create-multi-arch-image:
   tags:
     - vm-1cpu-1gmem-0g
   rules:
-    - if: '$CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
       when: always
 
 docker-tag:
@@ -1091,7 +1091,7 @@ gitlab-release:
   extends: .deploy-qovery-infra-engines
   rules:
     - if: $CI_COMMIT_TAG
-      when: on_success
+      when: manual
   variables:
     CHANNEL: staging
   environment:
@@ -1138,7 +1138,7 @@ gitlab-release:
     - bm-7cpu-16gmem-0g
   rules:
     - if: $CI_COMMIT_TAG
-      when: always
+      when: manual
 
 4-deploy-qovery-env-engines:
   stage: deploy-prod

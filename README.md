@@ -93,6 +93,36 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 - Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=false --execution-mode on-the-fly --disable-dry-run`
 - Monitor deployments on grafana: https://qortal.qovery.com/grafana/d/e9365ed8-1bca-4aea-a010-44a05fe64a68/deployments?orgId=1&refresh=30s
 
+## Hot fix process
+
+1. Create a branch containing the prefix `hot-fix` in its name, i.e:
+  - `hot-fix-staging` for staging: useful if we don't want some commits already merged in `main`
+  - `hot-fix-prod` for prod: the branch should be based on last prod tag / commit
+  ```sh
+  git co -b hot-fix-staging
+  git add .
+  git commit
+  git push origin HEAD:hot-fix-staging
+  ```
+
+2. Once the target branch has been pushed, a new pipeline should be created with the follwing jobs:
+  - release-image
+  - release-image-slim
+  - create-multi-arch-image
+
+3. Push a tag on the HEAD of the target branch
+   ```sh
+   git tag vX.Y.X
+   git push origin vX.Y.X
+   ```
+
+4. Once the tag has been pushed, a new pipeline should be created with the jobs we use for regular release:
+  - docker-tag
+  - gitlab-release
+  - ...
+
+5. Trigger the necessary jobs to deploy either the staging or the production infra engines
+
 ## Supported connectors
 
 ### Build Platforms
