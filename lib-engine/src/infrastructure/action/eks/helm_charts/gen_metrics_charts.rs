@@ -80,9 +80,12 @@ fn generate_charts_installed_by_qovery(
     let aws_iam_prometheus_role_arn = chart_config_prerequisites.aws_iam_eks_prometheus_role_arn.to_string();
     let endpoint = format!("s3.{}.amazonaws.com", region.to_cloud_provider_format());
 
+    // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
-    let prometheus_operator_crds_chart =
-        Some(PrometheusOperatorCrdsChart::new(chart_prefix_path).to_common_helm_chart()?);
+    let prometheus_operator_crds_chart = match helm_action {
+        HelmAction::Deploy => Some(PrometheusOperatorCrdsChart::new(chart_prefix_path).to_common_helm_chart()?),
+        HelmAction::Destroy => None,
+    };
 
     // Kube Prometheus Stack
     let kube_prometheus_stack_chart = Some(
