@@ -127,6 +127,7 @@ fn generate_charts_installed_by_qovery(
             None,
             None,
             None,
+            chart_config_prerequisites.is_karpenter_enabled,
         )
         .to_common_helm_chart()?,
     );
