@@ -28,6 +28,7 @@ pub struct ThanosChart {
     compactor_resources: HelmChartResources,
     store_gateway_resources: HelmChartResources,
     store_gateway_autoscaling: HelmChartAutoscaling,
+    additional_char_path: Option<HelmChartValuesFilePath>,
 }
 
 #[derive(Display)]
@@ -55,6 +56,7 @@ impl ThanosChart {
         query_frontend_resources: Option<HelmChartResources>,
         compactor_resources: Option<HelmChartResources>,
         store_gateway_resources: Option<HelmChartResources>,
+        karpenter_enabled: bool,
     ) -> Self {
         Self {
             action,
@@ -131,6 +133,14 @@ impl ThanosChart {
                 max_replicas: 5,
                 target_cpu_utilization_percentage: 70,
             },
+            additional_char_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    "thanos-with-karpenter".to_string(),
+                )),
+                false => None,
+            },
         }
     }
 
@@ -141,12 +151,17 @@ impl ThanosChart {
 
 impl ToCommonHelmChart for ThanosChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_char_path) = &self.additional_char_path {
+            values_files.push(additional_char_path.to_string());
+        }
+
         let mut chart_info = ChartInfo {
             action: self.action.clone(),
             name: ThanosChart::chart_name(),
             path: self.chart_path.to_string(),
             namespace: self.thanos_namespace,
-            values_files: vec![self.chart_values_path.to_string()],
+            values_files,
             values: vec![
                 // query
                 ChartSetValue {
@@ -400,6 +415,7 @@ mod tests {
             None,
             None,
             None,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -439,6 +455,7 @@ mod tests {
             None,
             None,
             None,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -489,6 +506,7 @@ mod tests {
             None,
             None,
             None,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
