@@ -1,7 +1,5 @@
-use std::path::Path;
 use std::sync::Arc;
 
-use crate::cmd::helm_utils::CRDSUpdate;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -152,10 +150,6 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
             PrometheusConfiguration::GcpCloudStorage => vec![],
         };
 
-        let crds_path = Path::new(&self.chart_path.to_string())
-            .join("charts/crds/crds/")
-            .to_string_lossy()
-            .to_string();
         let mut common_chart = CommonChart {
             chart_info: ChartInfo {
                 action: self.action.clone(),
@@ -167,21 +161,6 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 // to upgrade because of the CRD and the number of elements it has to deploy
                 timeout_in_seconds: 480,
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
-                crds_update: Some(CRDSUpdate {
-                    path: crds_path,
-                    resources: vec![
-                        "crd-alertmanagerconfigs.yaml".to_string(),
-                        "crd-alertmanagers.yaml".to_string(),
-                        "crd-podmonitors.yaml".to_string(),
-                        "crd-probes.yaml".to_string(),
-                        "crd-prometheusagents.yaml".to_string(),
-                        "crd-prometheuses.yaml".to_string(),
-                        "crd-prometheusrules.yaml".to_string(),
-                        "crd-scrapeconfigs.yaml".to_string(),
-                        "crd-servicemonitors.yaml".to_string(),
-                        "crd-thanosrulers.yaml".to_string(),
-                    ],
-                }),
                 values_files,
                 values: vec![
                     // we should not enable crds because we are using the prometheus-operator-crds chart
