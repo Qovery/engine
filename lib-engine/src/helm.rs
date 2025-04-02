@@ -446,12 +446,19 @@ pub trait HelmChart: Send {
 
         // Force install CRDs if needed
         let chart_info = &self.get_chart_info();
-        if let Some(crds_update) = &chart_info.crds_update {
-            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
-                return Err(HelmChartError::CannotUpdateCrds {
-                    crd_path: crds_update.path.clone(),
-                });
+        match chart_info.action {
+            Deploy => {
+                if let Some(crds_update) = &chart_info.crds_update {
+                    if let Err(_e) =
+                        kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
+                    {
+                        return Err(HelmChartError::CannotUpdateCrds {
+                            crd_path: crds_update.path.clone(),
+                        });
+                    }
+                }
             }
+            HelmAction::Destroy => {}
         }
 
         Ok(payload)
@@ -785,12 +792,19 @@ impl HelmChart for CommonChart {
 
         // Force install CRDs if needed
         let chart_info = &self.get_chart_info();
-        if let Some(crds_update) = &chart_info.crds_update {
-            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
-                return Err(HelmChartError::CannotUpdateCrds {
-                    crd_path: crds_update.path.clone(),
-                });
+        match chart_info.action {
+            Deploy => {
+                if let Some(crds_update) = &chart_info.crds_update {
+                    if let Err(_e) =
+                        kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
+                    {
+                        return Err(HelmChartError::CannotUpdateCrds {
+                            crd_path: crds_update.path.clone(),
+                        });
+                    }
+                }
             }
+            HelmAction::Destroy => {}
         }
 
         let helm = Helm::new(Some(kubernetes_config), envs)?;
@@ -801,12 +815,10 @@ impl HelmChart for CommonChart {
             None => self.get_vpa_chart_info(None),
         };
         warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
-        match vpa_chart.action {
-            Deploy => {
-                warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
-                helm.upgrade(&vpa_chart, &[], cmd_killer)?;
-            }
-            HelmAction::Destroy => {}
+        // Deploy VPA only if both VPA and parent are in Deploy mode
+        if let (Deploy, Deploy) = (&chart_info.action, &vpa_chart.action) {
+            warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
+            helm.upgrade(&vpa_chart, &[], cmd_killer)?;
         }
 
         Ok(payload)
@@ -838,12 +850,11 @@ impl HelmChart for CommonChart {
             None => self.get_vpa_chart_info(None),
         };
         warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
-        match vpa_chart.action {
-            HelmAction::Destroy => {
-                warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
-                helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
-            }
-            Deploy => {}
+        let chart_info = &self.get_chart_info();
+        // Destroy VPA only if both VPA and parent are in Destroy mode
+        if let (HelmAction::Destroy, HelmAction::Destroy) = (&chart_info.action, &vpa_chart.action) {
+            warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
+            helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
         }
 
         chart_payload_res
@@ -883,12 +894,19 @@ impl HelmChart for ServiceChart {
 
         // Force install CRDs if needed
         let chart_info = &self.get_chart_info();
-        if let Some(crds_update) = &chart_info.crds_update {
-            if let Err(_e) = kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str()) {
-                return Err(HelmChartError::CannotUpdateCrds {
-                    crd_path: crds_update.path.clone(),
-                });
+        match chart_info.action {
+            Deploy => {
+                if let Some(crds_update) = &chart_info.crds_update {
+                    if let Err(_e) =
+                        kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
+                    {
+                        return Err(HelmChartError::CannotUpdateCrds {
+                            crd_path: crds_update.path.clone(),
+                        });
+                    }
+                }
             }
+            HelmAction::Destroy => {}
         }
 
         Ok(payload)
