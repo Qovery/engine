@@ -56,6 +56,9 @@ prometheus:
   thanosServiceMonitor:
     enabled: true
   prometheusSpec:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus
     thanos:
       objectStorageConfig:
          secret:
@@ -89,6 +92,16 @@ prometheus:
     replicas: "set-by-engine-code"
 
 prometheusOperator:
+  prometheusConfigReloader:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus-config-reloader
+  thanosImage:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-thanos
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-operator
   resources:
     limits:
       cpu: "1"
@@ -102,6 +115,9 @@ prometheusOperator:
     enabled: false
 
 prometheus-node-exporter:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-node-exporter
   priorityClassName: set-by-engine-code
   resources:
     limits:
