@@ -18,6 +18,7 @@ use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
 pub mod gen_charts;
+mod gen_metrics_charts;
 
 pub struct GkeChartsConfigPrerequisites {
     pub organization_id: String,
@@ -38,6 +39,9 @@ pub struct GkeChartsConfigPrerequisites {
     pub infra_options: GkeOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+
+    pub thanos_service_account_email: String,
+    pub prometheus_bucket_name: String,
 }
 
 impl GkeChartsConfigPrerequisites {
@@ -59,6 +63,8 @@ impl GkeChartsConfigPrerequisites {
         infra_options: GkeOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        thanos_service_account_email: String,
+        prometheus_bucket_name: String,
     ) -> Self {
         Self {
             organization_id,
@@ -78,6 +84,8 @@ impl GkeChartsConfigPrerequisites {
             infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
+            thanos_service_account_email,
+            prometheus_bucket_name,
         }
     }
 }
@@ -123,10 +131,12 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             infra_ctx.dns_provider().provider_configuration(),
             self.terraform_output.loki_logging_service_account_email.clone(),
             self.cluster.logs_bucket_name(),
-            None,
+            self.cluster.options.metrics_parameters.clone(),
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.cluster.customer_helm_charts_override.clone(),
+            self.terraform_output.thanos_service_account_email.clone(),
+            self.cluster.prometheus_bucket_name(),
         )
     }
 

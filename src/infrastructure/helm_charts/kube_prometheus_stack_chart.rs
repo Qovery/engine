@@ -34,7 +34,10 @@ pub enum PrometheusConfiguration {
         aws_iam_prometheus_role_arn: String,
     },
     ScalewayObjectStorage,
-    GcpCloudStorage,
+    GcpCloudStorage {
+        thanos_service_account_email: String,
+        bucket_name: String,
+    },
     NotInstalled,
 }
 
@@ -147,7 +150,19 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
             }
             PrometheusConfiguration::NotInstalled => vec![],
             PrometheusConfiguration::ScalewayObjectStorage => vec![],
-            PrometheusConfiguration::GcpCloudStorage => vec![],
+            PrometheusConfiguration::GcpCloudStorage {
+                thanos_service_account_email,
+                bucket_name,
+            } => vec![
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.bucket".to_string(),
+                    value: bucket_name,
+                },
+                ChartSetValue {
+                    key: r"prometheus.serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                    value: thanos_service_account_email.clone(),
+                },
+            ],
         };
 
         let mut common_chart = CommonChart {
@@ -434,7 +449,10 @@ mod tests {
                         aws_iam_prometheus_role_arn: "whatever".to_string(),
                     },
                     Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage,
-                    Kind::Gke => PrometheusConfiguration::GcpCloudStorage,
+                    Kind::Gke => PrometheusConfiguration::GcpCloudStorage {
+                        thanos_service_account_email: "whatever".to_string(),
+                        bucket_name: "whatever".to_string(),
+                    },
                     Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
                         // TODO (ENG-1986) Not handled yet
                         PrometheusConfiguration::NotInstalled
