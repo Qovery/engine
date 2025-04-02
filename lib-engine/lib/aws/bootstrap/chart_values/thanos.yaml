@@ -4,6 +4,13 @@
 # Use the one deployed by Prometheus Operator
 objstoreConfig: set-by-engine-code
 
+image:
+  registry: public.ecr.aws/r3m4q3r9
+  repository: pub-mirror-bitnami-thanos
+global:
+  security:
+    allowInsecureImages: true # to be able to use mirrored image
+
 # Querier/Query: implements Prometheus’s v1 API to aggregate data from the underlying components.
 query:
   enabled: true
