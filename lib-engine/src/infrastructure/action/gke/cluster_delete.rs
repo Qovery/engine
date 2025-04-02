@@ -68,5 +68,18 @@ fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(),
         ));
     }
 
+    if let Err(e) = cluster
+        .object_storage
+        .delete_bucket_non_blocking(&cluster.prometheus_bucket_name())
+    {
+        logger.warn(EventMessage::new(
+            format!(
+                "Cannot delete cluster logs object storage `{}`",
+                &cluster.prometheus_bucket_name()
+            ),
+            Some(e.to_string()),
+        ));
+    }
+
     Ok(())
 }

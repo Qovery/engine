@@ -9,16 +9,18 @@ use super::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
 
 pub struct PrometheusOperatorCrdsChart {
     chart_path: HelmChartPath,
+    prometheus_namespace: HelmChartNamespaces,
 }
 
 impl PrometheusOperatorCrdsChart {
-    pub fn new(chart_prefix_path: Option<&str>) -> Self {
+    pub fn new(chart_prefix_path: Option<&str>, prometheus_namespace: HelmChartNamespaces) -> Self {
         Self {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CommonFolder,
                 PrometheusOperatorCrdsChart::chart_name(),
             ),
+            prometheus_namespace,
         }
     }
 
@@ -59,7 +61,7 @@ impl ToCommonHelmChart for PrometheusOperatorCrdsChart {
         let chart_info: ChartInfo = ChartInfo {
             name: PrometheusOperatorCrdsChart::chart_name(),
             path: self.chart_path.to_string(),
-            namespace: HelmChartNamespaces::Prometheus,
+            namespace: self.prometheus_namespace,
             values: PrometheusOperatorCrdsChart::qovery_annotations(),
             ..Default::default()
         };
@@ -111,7 +113,7 @@ mod tests {
     #[test]
     fn test_prometheus_operator_supported_crds_list() {
         let mut resource_names = Vec::new();
-        let chart = PrometheusOperatorCrdsChart::new(None);
+        let chart = PrometheusOperatorCrdsChart::new(None, HelmChartNamespaces::Prometheus);
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let crds_path_string = format!(
             "{}/lib/{}/bootstrap/charts/{}",

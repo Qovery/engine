@@ -73,7 +73,7 @@ impl ThanosChart {
             prometheus_configuration,
             storage_class_name,
             prometheus_namespace,
-            thanos_namespace: HelmChartNamespaces::Prometheus,
+            thanos_namespace: prometheus_namespace,
             retention: match retention {
                 Some(retention) => retention,
                 None => MetricsRetention {
@@ -371,7 +371,28 @@ impl ToCommonHelmChart for ThanosChart {
                 })
             }
             PrometheusConfiguration::ScalewayObjectStorage => {}
-            PrometheusConfiguration::GcpCloudStorage => {}
+            PrometheusConfiguration::GcpCloudStorage {
+                thanos_service_account_email,
+                bucket_name,
+            } => {
+                chart_info.values.push(ChartSetValue {
+                    key: r"storegateway.serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                    value: thanos_service_account_email.clone(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: r"compactor.serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                    value: thanos_service_account_email.clone(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: r"bucketweb.serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                    value: thanos_service_account_email.clone(),
+                });
+                // INFO (ENG-1986) Pass the whole objstoreConfig as a string, as it is expected to be the content of a generated secret
+                chart_info.values_string.push(ChartSetValue {
+                    key: "objstoreConfig".to_string(),
+                    value: format!("type: GCS\nconfig:\n  bucket: {bucket_name}"),
+                })
+            }
             PrometheusConfiguration::NotInstalled => {}
         }
 

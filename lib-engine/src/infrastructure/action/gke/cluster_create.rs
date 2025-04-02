@@ -75,7 +75,8 @@ fn create_object_storage(
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     logger.info("Create Qovery managed object storage buckets.");
-    for bucket_name in &[&cluster.logs_bucket_name()] {
+
+    for bucket_name in &[&cluster.logs_bucket_name(), &cluster.prometheus_bucket_name()] {
         match cluster.object_storage.bucket_exists(bucket_name) {
             true => {
                 // bucket already exists, just update it

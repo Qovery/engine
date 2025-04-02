@@ -42,6 +42,9 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         &cluster.advanced_settings().pleco_resources_ttl,
     );
 
+    // thanos
+    context.insert("thanos_gcs_bucket_name", &cluster.prometheus_bucket_name());
+
     // Kubernetes
     context.insert("test_cluster", &cluster.context.is_test_cluster());
     context.insert("kubernetes_cluster_long_id", &cluster.long_id);

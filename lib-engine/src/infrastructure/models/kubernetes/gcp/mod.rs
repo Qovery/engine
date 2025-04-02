@@ -295,6 +295,10 @@ impl Gke {
         format!("qovery-logs-{}", self.id)
     }
 
+    pub fn prometheus_bucket_name(&self) -> String {
+        format!("qovery-prometheus-{}", self.id)
+    }
+
     pub fn configure_gcloud_for_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
