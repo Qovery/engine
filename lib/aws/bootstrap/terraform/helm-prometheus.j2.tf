@@ -117,6 +117,11 @@ resource "aws_s3_bucket_versioning" "prometheus_bucket_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
+  lifecycle {
+    ignore_changes = [
+        versioning_configuration[0].mfa_delete
+    ]
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "prometheus_bucket_ownership" {
@@ -180,5 +185,22 @@ resource "aws_s3_bucket_lifecycle_configuration" "prometheus_lifecycle" {
   {% endif %}
   }
 
+  # This rule removes old versions of objects, cleans up delete markers, and aborts incomplete multipart uploads
+  rule {
+    id = "CleanThanosMetricsVersions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = 3
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
 }
 
