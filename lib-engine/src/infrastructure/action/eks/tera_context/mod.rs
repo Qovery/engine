@@ -479,6 +479,10 @@ pub fn eks_tera_context(
         "aws_iam_user_mapper_sso_role_arn",
         &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
     );
+    context.insert(
+        "loki_log_retention_in_week",
+        &kubernetes.advanced_settings().loki_log_retention_in_week,
+    );
 
     // EKS Addons
     // CNI

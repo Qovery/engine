@@ -157,3 +157,10 @@ variable "resource_expiration_in_seconds" {
   type = number
 }
 {% endif %}
+
+# Loki log and access logs retention
+variable "loki_log_retention_in_week" {
+  description = "Log retention in week"
+  default = {{ loki_log_retention_in_week }}
+  type = number
+}

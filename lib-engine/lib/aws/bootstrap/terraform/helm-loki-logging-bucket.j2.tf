@@ -1,7 +1,7 @@
 {%- if object_storage_enable_logging %}
 
 resource "aws_iam_role" "iam_eks_loki_logs" {
-  name        = "qovery-logs-${var.kubernetes_cluster_id}-log"
+  name        = "qovery-logs-${var.kubernetes_cluster_id}-access-logs"
   tags        = local.tags_eks
 
   assume_role_policy = <<POLICY
@@ -51,25 +51,16 @@ resource "aws_iam_role_policy_attachment" "s3_loki_attachment_logs" {
   policy_arn = aws_iam_policy.loki_s3_policy_logs.arn
 }
 
-resource "aws_kms_key" "s3_logs_kms_encryption_logs" {
-  description             = "s3 logs encryption"
-  enable_key_rotation     = true
-  tags = merge(
-    local.tags_eks,
-    {
-      "Name" = "Encryption logs"
-    }
-  )
-}
-
-resource "aws_s3_bucket_server_side_encryption_configuration" "lok_bucket_enryption_logs" {
+// S3 bucket to store indexes and logs
+resource "aws_s3_bucket_versioning" "loki_bucket_versioning_logs" {
   bucket = aws_s3_bucket.loki_bucket_logs.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      kms_master_key_id = aws_kms_key.s3_logs_kms_encryption_logs.arn
-      sse_algorithm = "aws:kms"
-    }
+  versioning_configuration {
+    status = "Enabled"
+  }
+  lifecycle {
+    ignore_changes = [
+        versioning_configuration[0].mfa_delete
+    ]
   }
 }
 
@@ -82,7 +73,7 @@ resource "aws_s3_bucket_ownership_controls" "loki_bucket_ownership_logs" {
 
 resource "aws_s3_bucket_acl" "loki_bucket_acl_logs" {
   bucket = aws_s3_bucket.loki_bucket_logs.id
-  acl    = "private"
+  acl    = "log-delivery-write"
 
   depends_on = [
     aws_s3_bucket_ownership_controls.loki_bucket_ownership_logs,
@@ -134,11 +125,52 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle_logs" {
   {% endif %}
   }
 
+  # This rule removes non-current versions after 3 days, deletes objects after loki_log_retention_in_week*7 days, and aborts incomplete multipart uploads after 1 day
+  rule {
+    id = "CleanLokiAuditLogVersions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = 3
+    }
+
+    expiration {
+      days = var.loki_log_retention_in_week * 7
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
 }
 
 resource "aws_s3_bucket_logging" "loki_bucket_logging" {
   bucket = aws_s3_bucket.loki_bucket.id
   target_bucket = aws_s3_bucket.loki_bucket_logs.id
   target_prefix = "logs/"
+}
+
+resource "aws_s3_bucket_policy" "loki_bucket_logs_bucket_policy" {
+  bucket = aws_s3_bucket.loki_bucket_logs.id
+  policy = <<POLICY
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+            },
+            "Action": "s3:PutObject",
+            "Resource": "arn:aws:s3:::${aws_s3_bucket.loki_bucket_logs.id}/*",
+            "Condition": {
+                "StringEquals": {
+                    "aws:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+                }
+            }
+        }
+    ]
+}
+POLICY
 }
 {%- endif %}
