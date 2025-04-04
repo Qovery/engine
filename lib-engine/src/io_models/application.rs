@@ -134,6 +134,8 @@ pub struct ApplicationAdvancedSettings {
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.force_ssl_redirect")]
+    pub network_ingress_force_ssl_redirect: bool,
     #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.enable_sticky_session")]
@@ -218,6 +220,7 @@ impl Default for ApplicationAdvancedSettings {
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
             network_ingress_proxy_body_size_mb: 100,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
@@ -269,6 +272,7 @@ impl ApplicationAdvancedSettings {
             deployment_lifecycle_post_start_exec_command: self.deployment_lifecycle_post_start_exec_command.clone(),
             deployment_lifecycle_pre_stop_exec_command: self.deployment_lifecycle_pre_stop_exec_command.clone(),
             network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
+            network_ingress_force_ssl_redirect: self.network_ingress_force_ssl_redirect,
             network_ingress_cors_enable: self.network_ingress_cors_enable,
             network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,
             network_ingress_cors_allow_origin: self.network_ingress_cors_allow_origin.clone(),
