@@ -370,7 +370,20 @@ impl ToCommonHelmChart for ThanosChart {
                     )
                 })
             }
-            PrometheusConfiguration::ScalewayObjectStorage => {}
+            PrometheusConfiguration::ScalewayObjectStorage {
+                bucket_name,
+                region,
+                endpoint,
+                access_key,
+                secret_key,
+            } => {
+                chart_info.values_string.push(ChartSetValue {
+                    key: "objstoreConfig".to_string(),
+                    value: format!(
+                        "type: S3\nconfig:\n  bucket: {bucket_name}\n  endpoint: {endpoint}\n  region: {region}\n  signature_version2: false\n  access_key: {access_key}\n  secret_key: {secret_key}"
+                    )
+                })
+            }
             PrometheusConfiguration::GcpCloudStorage {
                 thanos_service_account_email,
                 bucket_name,
