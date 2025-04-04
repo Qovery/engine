@@ -24,8 +24,7 @@ impl PrometheusOperatorCrdsChart {
         }
     }
 
-    // list of supported CRD by the chart. If the list change, we'll have to make sure the chart is updated
-    // and nay be a migration is needed
+    // list of supported CRDs by the chart. If the list change, we'll have to make sure the chart is updated and a migration may be needed
     pub fn list_of_crds() -> Vec<String> {
         [
             "alertmanagerconfigs.monitoring.coreos.com",
@@ -88,7 +87,7 @@ impl Default for PrometheusOperatorCrdsChartChecker {
 
 impl ChartInstallationChecker for PrometheusOperatorCrdsChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // todo(mzottola): Implement checker: ensure CRD are present with the correct label
+        // TODO (ENG-1986): Implement checker: ensure CRD are present with the correct label
         Ok(())
     }
 
@@ -109,7 +108,7 @@ mod tests {
     use super::*;
 
     // ensure all crds are supported by Qovery to avoid any unexpected issue
-    // if we detect a new CRD or a missing one we previously supported, we'll have to update the chart and may be do a migration
+    // if we detect a new CRD or a missing one we previously supported, we'll have to update the chart and maybe do a migration
     #[test]
     fn test_prometheus_operator_supported_crds_list() {
         let mut resource_names = Vec::new();
@@ -120,13 +119,13 @@ mod tests {
             current_directory
                 .to_str()
                 .expect("Impossible to convert current directory to string"),
-            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), HelmChartType::Shared,),
+            get_helm_path_kubernetes_provider_sub_folder_name(chart.chart_path.helm_path(), HelmChartType::Shared),
             PrometheusOperatorCrdsChart::chart_name(),
         );
         let crds_path = Path::new(&crds_path_string);
 
         if !&crds_path.is_dir() {
-            panic!("The path doesn't exists: {}", crds_path.to_string_lossy());
+            panic!("The path doesn't exist: {}", crds_path.to_string_lossy());
         }
 
         // render files to avoid remaining go template syntax, leading to serde yaml parsing errors
@@ -189,7 +188,7 @@ mod tests {
         let set2: HashSet<String> = resource_names.iter().cloned().collect();
         let diff: Vec<String> = set1.symmetric_difference(&set2).cloned().collect();
 
-        // show the diff betweel our known CRDs base and the one in the current chart to avoid any unexpected issue
+        // show the diff between our known CRDs base and the one in the current chart to avoid any unexpected issue
         assert!(
             diff.is_empty(),
             "The following CRDs are not supported by Qovery or not present anymore in the list of CRDs: {:?}",

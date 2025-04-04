@@ -211,7 +211,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
                 values_files,
                 values: vec![
-                    // we should not enable crds because we are using the prometheus-operator-crds chart
+                    // we should not enable CRDs because we are using the prometheus-operator-crds chart
                     ChartSetValue {
                         key: "crds.enabled".to_string(),
                         value: false.to_string(),
@@ -349,18 +349,23 @@ impl ChartInstallationChecker for KubePrometheusStackChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use std::env;
-    use std::sync::Arc;
-
     use crate::helm::{HelmAction, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{PrometheusConfiguration, StorageClassName};
+    use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
     use crate::infrastructure::helm_charts::{
-        HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
-        get_helm_values_set_in_code_but_absent_in_values_file,
+        HelmChartDirectoryLocation, HelmChartPath, HelmChartType, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind;
     use crate::io_models::models::CustomerHelmChartsOverride;
+    use anyhow::{Context, anyhow};
+    use std::collections::HashMap;
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+    use std::path::{Path, PathBuf};
+    use std::sync::Arc;
+    use std::{env, fs};
 
     use super::KubePrometheusStackChart;
 
@@ -372,27 +377,197 @@ mod tests {
             })
         })
     }
-    /// Makes sure chart directory containing all YAML files exists.
-    #[test]
-    fn kube_prometheus_stack_chart_directory_exists_test() {
-        // setup:
-        let chart = KubePrometheusStackChart::new(
+
+    fn create_kube_prometheus_stack_chart(provider_kind: Kind) -> KubePrometheusStackChart {
+        KubePrometheusStackChart::new(
             HelmAction::Deploy,
             None,
             StorageClassName::new(),
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
-            PrometheusConfiguration::AwsS3 {
-                region: AwsRegion::EuWest3,
-                bucket_name: "whatever".to_string(),
-                endpoint: "whatever".to_string(),
-                aws_iam_prometheus_role_arn: "whatever".to_string(),
+            match provider_kind {
+                Kind::Eks => PrometheusConfiguration::AwsS3 {
+                    region: AwsRegion::EuWest3,
+                    bucket_name: "whatever".to_string(),
+                    endpoint: "whatever".to_string(),
+                    aws_iam_prometheus_role_arn: "whatever".to_string(),
+                },
+                Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage {
+                    bucket_name: "whatever".to_string(),
+                    region: "whatever".to_string(),
+                    endpoint: "whatever".to_string(),
+                    access_key: "whatever".to_string(),
+                    secret_key: "whatever".to_string(),
+                },
+                Kind::Gke => PrometheusConfiguration::GcpCloudStorage {
+                    thanos_service_account_email: "whatever".to_string(),
+                    bucket_name: "whatever".to_string(),
+                },
+                Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
+                    // TODO (ENG-1986) Not handled yet
+                    PrometheusConfiguration::NotInstalled
+                }
             },
             true,
             get_prometheus_chart_override(),
             false,
             false,
+        )
+    }
+
+    fn find_prometheus_operator_version(file_path: &str) -> Result<String, anyhow::Error> {
+        let file = File::open(file_path)?;
+        let reader = BufReader::new(file);
+
+        // Only check up to max_lines
+        for (i, line) in reader.lines().enumerate() {
+            let line = line?;
+            if line.contains("operator.prometheus.io/version:") {
+                let extracted_version = line
+                    .split(':')
+                    .nth(1)
+                    .map(|s| s.trim().to_string())
+                    .with_context(|| format!("Should contain the version for file {file_path}"))?;
+                return Ok(extracted_version);
+            }
+
+            // Early return to avoid reading tons of lines (the version should be present in the first lines)
+            if i > 20 {
+                break;
+            }
+        }
+
+        Err(anyhow!("Cannot find prometheus version for file path {file_path}"))
+    }
+
+    #[test]
+    fn should_contain_exactly_the_same_crds_than_in_prometheus_operator_crds_chart() -> Result<(), anyhow::Error> {
+        // given
+        let current_directory = env::current_dir().expect("Cannot get current directory");
+
+        // Chart kube prometheus stack crds
+        let kube_prometheus_stack_chart = create_kube_prometheus_stack_chart(Kind::Eks);
+        let prometheus_stack_chart_folder_crds = format!(
+            "{}/lib/{}/bootstrap/charts/{}/charts/crds/crds",
+            current_directory
+                .to_str()
+                .expect("Cannot convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                kube_prometheus_stack_chart.chart_path.helm_path(),
+                HelmChartType::Shared
+            ),
+            KubePrometheusStackChart::chart_name(),
         );
+        let prometheus_stack_chart_folder_crds_path = Path::new(&prometheus_stack_chart_folder_crds);
+        let prometheus_stack_chart_crds_files = match fs::read_dir(prometheus_stack_chart_folder_crds_path) {
+            Ok(files) => files
+                .map(|it| it.expect("Cannot get crd path for prometheus stack chart").path())
+                .collect::<Vec<PathBuf>>(),
+            Err(err) => {
+                panic!(
+                    "error while trying to read prometheus stack chart CRDs folder {}: {}",
+                    prometheus_stack_chart_folder_crds_path.to_string_lossy(),
+                    err
+                )
+            }
+        };
+
+        // Chart prometheus operator crds
+        let prometheus_operator_chart_helm_path = HelmChartPath::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            PrometheusOperatorCrdsChart::chart_name(),
+        )
+        .helm_path()
+        .clone();
+        let prometheus_operator_chart_folder_crds = format!(
+            "{}/lib/{}/bootstrap/charts/{}/charts/crds/templates",
+            current_directory
+                .to_str()
+                .expect("Cannot convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                &prometheus_operator_chart_helm_path,
+                HelmChartType::Shared
+            ),
+            PrometheusOperatorCrdsChart::chart_name(),
+        );
+        let prometheus_operator_chart_folder_crds_path = Path::new(&prometheus_operator_chart_folder_crds);
+        let prometheus_operator_chart_crds_files = match fs::read_dir(prometheus_operator_chart_folder_crds_path) {
+            Ok(files) => files
+                .map(|it| it.expect("Cannot get crd path for prometheus stack chart").path())
+                .collect::<Vec<PathBuf>>(),
+            Err(err) => {
+                panic!(
+                    "error while trying to read prometheus operator crds chart CRDs folder {}: {}",
+                    prometheus_operator_chart_folder_crds_path.to_string_lossy(),
+                    err
+                )
+            }
+        };
+
+        // then
+
+        // Should contain the same number of CRDs
+        assert_eq!(
+            prometheus_stack_chart_crds_files.len(),
+            prometheus_operator_chart_crds_files.len()
+        );
+
+        // Get all CRDs prometheus operator version by CRD file
+        let prometheus_stack_chart_crds_version_by_file = prometheus_stack_chart_crds_files
+            .iter()
+            .filter_map(|it| {
+                let file_name = it
+                    .file_name()
+                    .expect("File name should exist")
+                    .to_string_lossy()
+                    .to_string();
+                match find_prometheus_operator_version(&it.display().to_string()) {
+                    Ok(version) => Some((file_name, version)),
+                    Err(_) => None,
+                }
+            })
+            .collect::<HashMap<String, String>>();
+
+        let prometheus_operator_crds_version_by_file = prometheus_operator_chart_crds_files
+            .iter()
+            .filter_map(|it| {
+                let file_name = it
+                    .file_name()
+                    .expect("File name should exist")
+                    .to_string_lossy()
+                    .to_string();
+                match find_prometheus_operator_version(&it.display().to_string()) {
+                    Ok(version) => Some((file_name, version)),
+                    Err(_) => None,
+                }
+            })
+            .collect::<HashMap<String, String>>();
+
+        // All CRDs from prometheus operator crds chart should be present in kube prometheus stack chart
+        prometheus_operator_crds_version_by_file.iter().for_each(|(file_path, version)| {
+            match prometheus_stack_chart_crds_version_by_file.get(file_path) {
+                None => panic!("The CRD {file_path} should be present in prometheus stack chart"),
+                Some(prometheus_stack_chart_version) => assert!(prometheus_stack_chart_version == version, "The prometheus-stack-chart CRD '{file_path}' has version {prometheus_stack_chart_version} whereas prometheus-operator-crds-chart CRD has version {version}")
+            }
+        });
+
+        // All CRDs from kube prometheus stack chart should be present in prometheus operator crds chart
+        prometheus_stack_chart_crds_version_by_file.iter().for_each(|(file_path, version)| {
+            match prometheus_operator_crds_version_by_file.get(file_path) {
+                None => panic!("The CRD {file_path} should be present in prometheus stack chart"),
+                Some(prometheus_operator_chart_version) => assert!(prometheus_operator_chart_version == version, "The prometheus-operator-crds-chart CRD '{file_path}' has version {prometheus_operator_chart_version} whereas prometheus-stack-chart CRD has version {version}")
+            }
+        });
+
+        Ok(())
+    }
+
+    /// Makes sure chart directory containing all YAML files exists.
+    #[test]
+    fn kube_prometheus_stack_chart_directory_exists_test() {
+        // setup:
+        let chart = create_kube_prometheus_stack_chart(Kind::Eks);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -415,26 +590,9 @@ mod tests {
     #[test]
     fn kube_prometheus_stack_chart_values_file_exists_test() {
         // setup:
-        let chart = KubePrometheusStackChart::new(
-            HelmAction::Deploy,
-            None,
-            StorageClassName::new(),
-            "whatever".to_string(),
-            HelmChartNamespaces::Prometheus,
-            PrometheusConfiguration::AwsS3 {
-                region: AwsRegion::EuWest3,
-                bucket_name: "whatever".to_string(),
-                endpoint: "whatever".to_string(),
-                aws_iam_prometheus_role_arn: "whatever".to_string(),
-            },
-            true,
-            get_prometheus_chart_override(),
-            false,
-            false,
-        );
-
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         for provider_kind in [Kind::Eks, Kind::Gke, Kind::ScwKapsule] {
+            let chart = create_kube_prometheus_stack_chart(provider_kind);
             let chart_values_path = format!(
                 "{}/lib/{}/bootstrap/chart_values/{}.yaml",
                 current_directory
@@ -468,40 +626,7 @@ mod tests {
         {
             let provider_kind = Kind::Eks;
             // setup:
-            let chart = KubePrometheusStackChart::new(
-                HelmAction::Deploy,
-                None,
-                "whatever".to_string(),
-                "whatever".to_string(),
-                HelmChartNamespaces::Prometheus,
-                match provider_kind {
-                    Kind::Eks => PrometheusConfiguration::AwsS3 {
-                        region: AwsRegion::EuWest3,
-                        bucket_name: "whatever".to_string(),
-                        endpoint: "whatever".to_string(),
-                        aws_iam_prometheus_role_arn: "whatever".to_string(),
-                    },
-                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage {
-                        bucket_name: "whatever".to_string(),
-                        region: "whatever".to_string(),
-                        endpoint: "whatever".to_string(),
-                        access_key: "whatever".to_string(),
-                        secret_key: "whatever".to_string(),
-                    },
-                    Kind::Gke => PrometheusConfiguration::GcpCloudStorage {
-                        thanos_service_account_email: "whatever".to_string(),
-                        bucket_name: "whatever".to_string(),
-                    },
-                    Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
-                        // TODO (ENG-1986) Not handled yet
-                        PrometheusConfiguration::NotInstalled
-                    }
-                },
-                true,
-                get_prometheus_chart_override(),
-                false,
-                false,
-            );
+            let chart = create_kube_prometheus_stack_chart(provider_kind);
             let common_chart = chart.to_common_helm_chart().unwrap();
 
             let missing_fields = get_helm_values_set_in_code_but_absent_in_values_file(
