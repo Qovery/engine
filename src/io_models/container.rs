@@ -244,6 +244,8 @@ pub struct ContainerAdvancedSettings {
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.force_ssl_redirect")]
+    pub network_ingress_force_ssl_redirect: bool,
     #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.enable_sticky_session")]
@@ -324,6 +326,7 @@ impl Default for ContainerAdvancedSettings {
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 100,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
