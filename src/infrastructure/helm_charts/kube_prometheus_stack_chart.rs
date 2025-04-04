@@ -33,7 +33,13 @@ pub enum PrometheusConfiguration {
         endpoint: String,
         aws_iam_prometheus_role_arn: String,
     },
-    ScalewayObjectStorage,
+    ScalewayObjectStorage {
+        bucket_name: String,
+        region: String,
+        endpoint: String,
+        access_key: String,
+        secret_key: String,
+    },
     GcpCloudStorage {
         thanos_service_account_email: String,
         bucket_name: String,
@@ -149,7 +155,34 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 ]
             }
             PrometheusConfiguration::NotInstalled => vec![],
-            PrometheusConfiguration::ScalewayObjectStorage => vec![],
+            PrometheusConfiguration::ScalewayObjectStorage {
+                bucket_name,
+                region,
+                endpoint,
+                access_key,
+                secret_key,
+            } => vec![
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.bucket".to_string(),
+                    value: bucket_name,
+                },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.region".to_string(),
+                    value: region,
+                },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.endpoint".to_string(),
+                    value: endpoint,
+                },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.access_key".to_string(),
+                    value: access_key,
+                },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.secret_key".to_string(),
+                    value: secret_key,
+                },
+            ],
             PrometheusConfiguration::GcpCloudStorage {
                 thanos_service_account_email,
                 bucket_name,
@@ -448,7 +481,13 @@ mod tests {
                         endpoint: "whatever".to_string(),
                         aws_iam_prometheus_role_arn: "whatever".to_string(),
                     },
-                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage,
+                    Kind::ScwKapsule => PrometheusConfiguration::ScalewayObjectStorage {
+                        bucket_name: "whatever".to_string(),
+                        region: "whatever".to_string(),
+                        endpoint: "whatever".to_string(),
+                        access_key: "whatever".to_string(),
+                        secret_key: "whatever".to_string(),
+                    },
                     Kind::Gke => PrometheusConfiguration::GcpCloudStorage {
                         thanos_service_account_email: "whatever".to_string(),
                         bucket_name: "whatever".to_string(),

@@ -42,6 +42,18 @@ pub fn create_kapsule_cluster(
         return Err(Box::new(error));
     }
 
+    // Prometheus bucket
+    if let Err(e) = cluster.object_storage.create_bucket(
+        cluster.prometheus_bucket_name().as_str(),
+        cluster.advanced_settings().resource_ttl(),
+        false,
+        cluster.advanced_settings().object_storage_enable_logging,
+    ) {
+        let error = EngineError::new_object_storage_error(event_details, e);
+        logger.error(error.clone(), None::<&str>);
+        return Err(Box::new(error));
+    }
+
     // terraform deployment dedicated to cloud resources
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_action = TerraformInfraResources::new(

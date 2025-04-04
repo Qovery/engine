@@ -53,7 +53,7 @@ impl ScalewayOS {
         S3Client::new_with_client(client, region)
     }
 
-    fn get_endpoint_url_for_region(&self) -> String {
+    pub fn get_endpoint_url_for_region(&self) -> String {
         format!("https://s3.{}.scw.cloud", self.zone.region())
     }
 

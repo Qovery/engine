@@ -1,4 +1,5 @@
 mod gen_charts;
+mod gen_metrics_charts;
 
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::scaleway::ScwZone;
@@ -43,6 +44,11 @@ pub struct KapsuleChartsConfigPrerequisites {
     pub loki_storage_config_scaleway_s3: String,
     pub metrics_parameters: Option<MetricsParameters>,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+
+    pub prometheus_storage_config_scaleway_s3: String,
+    pub endpoint: String,
+    pub access_key: String,
+    pub secret_key: String,
 }
 
 impl KapsuleChartsConfigPrerequisites {
@@ -67,6 +73,10 @@ impl KapsuleChartsConfigPrerequisites {
         loki_storage_config_scaleway_s3: String,
         metrics_parameters: Option<MetricsParameters>,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        prometheus_storage_config_scaleway_s3: String,
+        endpoint: String,
+        access_key: String,
+        secret_key: String,
     ) -> Self {
         KapsuleChartsConfigPrerequisites {
             organization_id,
@@ -89,6 +99,10 @@ impl KapsuleChartsConfigPrerequisites {
             loki_storage_config_scaleway_s3,
             metrics_parameters,
             customer_helm_charts_override,
+            prometheus_storage_config_scaleway_s3,
+            endpoint,
+            access_key,
+            secret_key,
         }
     }
 }
@@ -152,6 +166,10 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
             self.terraform_output.loki_storage_config_scaleway_s3.clone(),
             self.cluster.options.metrics_parameters.clone(),
             self.cluster.customer_helm_charts_override.clone(),
+            self.cluster.prometheus_bucket_name(),
+            self.cluster.object_storage.get_endpoint_url_for_region(),
+            self.cluster.credentials.access_key.clone(),
+            self.cluster.credentials.secret_key.clone(),
         )
     }
 

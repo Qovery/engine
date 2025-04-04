@@ -1,11 +1,8 @@
 use crate::helm::{
-    ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, PriorityClass,
-    QoveryPriorityClass, UpdateStrategy, get_engine_helm_action_from_location,
+    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass,
+    UpdateStrategy, get_engine_helm_action_from_location,
 };
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-    KubePrometheusStackChart, PrometheusConfiguration,
-};
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
@@ -31,7 +28,6 @@ use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerCo
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
-use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
 };
@@ -39,7 +35,8 @@ use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::Qover
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
-use crate::io_models::metrics::MetricsConfiguration;
+// use crate::io_models::metrics::MetricsConfiguration;
+use crate::infrastructure::action::scaleway::helm_charts::gen_metrics_charts::generate_metrics_charts;
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
@@ -62,11 +59,29 @@ pub fn kapsule_helm_charts(
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
-    // Metrics configuration option to know if we enable prometheus / thanos / service monitors
-    let metrics_configuration = chart_config_prerequisites
-        .metrics_parameters
-        .as_ref()
-        .map(|it| it.config.clone());
+    let metrics_charts = generate_metrics_charts(
+        chart_prefix_path,
+        chart_config_prerequisites,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+    )?;
+
+    let prometheus_operator_crds_chart = metrics_charts
+        .prometheus_operator_crds_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let kube_prometheus_stack_chart = metrics_charts
+        .kube_prometheus_stack_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let thanos_chart = metrics_charts
+        .thanos_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let kube_state_metrics_chart = metrics_charts
+        .kube_state_metrics_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
@@ -163,43 +178,6 @@ pub fn kapsule_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
                 false,
-            )
-            .to_common_helm_chart()?,
-        ),
-    };
-
-    // Kube prometheus stack
-    let kube_prometheus_stack = match metrics_configuration.as_ref() {
-        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(
-            KubePrometheusStackChart::new(
-                HelmAction::Deploy,
-                chart_prefix_path,
-                "scw-sbv-ssd-0".to_string(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace,
-                PrometheusConfiguration::ScalewayObjectStorage,
-                true,
-                get_chart_override_fn.clone(),
-                true,
-                false,
-            )
-            .to_common_helm_chart()?,
-        ),
-        Some(_) | None => None,
-    };
-
-    // metric-server is built-in Scaleway cluster, no need to manage it
-
-    // Kube state metrics
-    let kube_state_metrics = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(
-            KubeStateMetricsChart::new(
-                HelmAction::Deploy,
-                chart_prefix_path,
-                HelmChartNamespaces::Prometheus,
-                true,
-                get_chart_override_fn.clone(),
             )
             .to_common_helm_chart()?,
         ),
@@ -522,7 +500,7 @@ pub fn kapsule_helm_charts(
     };
 
     // chart deployment order matters!!!
-    let level_0: Vec<Box<dyn HelmChart>> = vec![
+    let mut level_0: Vec<Box<dyn HelmChart>> = vec![
         // This chart is required in order to install CRDs and declare later charts with VPA
         // It will be installed only if chart doesn't exist already on the cluster in order to avoid
         // disabling VPA on VPA controller at each update
@@ -540,12 +518,20 @@ pub fn kapsule_helm_charts(
         ),
     ];
 
+    if let Some(prometheus_operator_crds_chart) = prometheus_operator_crds_chart {
+        level_0.push(prometheus_operator_crds_chart)
+    }
+
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(vpa),
         Box::new(q_priority_class_chart),
     ];
+
+    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack_chart {
+        level_1.push(kube_prometheus_stack_chart)
+    }
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -570,12 +556,13 @@ pub fn kapsule_helm_charts(
     ];
 
     // observability
-    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack {
-        level_1.push(Box::new(kube_prometheus_stack_chart));
+    if let Some(thanos_chart) = thanos_chart {
+        level_2.push(thanos_chart)
     }
-    if let Some(kube_state_metrics_chart) = kube_state_metrics {
-        level_2.push(Box::new(kube_state_metrics_chart));
+    if let Some(kube_state_metrics_chart) = kube_state_metrics_chart {
+        level_2.push(kube_state_metrics_chart);
     }
+
     if let Some(promtail_chart) = promtail {
         level_1.push(Box::new(promtail_chart));
     }

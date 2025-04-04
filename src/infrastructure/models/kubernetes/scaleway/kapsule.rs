@@ -317,6 +317,10 @@ impl Kapsule {
     pub fn logs_bucket_name(&self) -> String {
         format!("qovery-logs-{}", self.id)
     }
+
+    pub fn prometheus_bucket_name(&self) -> String {
+        format!("qovery-prometheus-{}", self.id)
+    }
 }
 
 impl Kubernetes for Kapsule {
