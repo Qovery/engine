@@ -668,7 +668,7 @@ pub(super) fn eks_helm_charts(
 
     let mut level_5: Vec<Box<dyn HelmChart>> = vec![];
 
-    let mut level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let mut level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
 
@@ -731,10 +731,6 @@ pub(super) fn eks_helm_charts(
         level_1.push(Box::new(karpenter_charts.karpenter_chart));
 
         level_2.push(Box::new(karpenter_charts.karpenter_configuration_chart));
-
-        if let Some(karpenter_with_monitoring) = karpenter_charts.karpenter_with_monitoring_chart {
-            level_6.push(Box::new(karpenter_with_monitoring))
-        }
     } else {
         level_5.push(Box::new(coredns_config));
     }

@@ -10,7 +10,6 @@ use crate::infrastructure::helm_charts::ToCommonHelmChart;
 pub struct KarpenterCharts {
     pub karpenter_chart: CommonChart,
     pub karpenter_crd_chart: CommonChart,
-    pub karpenter_with_monitoring_chart: Option<CommonChart>,
     pub karpenter_configuration_chart: CommonChart,
 }
 
@@ -37,16 +36,10 @@ pub fn generate_karpenter_charts(
     };
 
     // Karpenter
-    let karpenter_chart = karpenter_chart_prepare(false)?;
+    let karpenter_chart = karpenter_chart_prepare(chart_config_prerequisites.metrics_parameters.is_some())?;
 
     // Karpenter CRD
     let karpenter_crd_chart = KarpenterCrdChart::new(chart_prefix_path).to_common_helm_chart()?;
-
-    // Karpenter with Monitoring
-    let karpenter_with_monitoring_chart = match chart_config_prerequisites.metrics_parameters {
-        Some(_) => Some(karpenter_chart_prepare(true)?),
-        None => None,
-    };
 
     // Karpenter Configuration
     let karpenter_configuration_chart = KarpenterConfigurationChart::new(
@@ -68,7 +61,6 @@ pub fn generate_karpenter_charts(
     Ok(KarpenterCharts {
         karpenter_chart,
         karpenter_crd_chart,
-        karpenter_with_monitoring_chart,
         karpenter_configuration_chart,
     })
 }
