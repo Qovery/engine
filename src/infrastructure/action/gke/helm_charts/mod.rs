@@ -18,7 +18,6 @@ use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
 pub mod gen_charts;
-mod gen_metrics_charts;
 
 pub struct GkeChartsConfigPrerequisites {
     pub organization_id: String,

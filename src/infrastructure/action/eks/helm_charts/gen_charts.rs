@@ -33,7 +33,7 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
-use crate::infrastructure::action::eks::helm_charts::gen_metrics_charts::generate_metrics_charts;
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -294,8 +294,8 @@ pub(super) fn eks_helm_charts(
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
     let metrics_charts = generate_metrics_charts(
+        CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
         chart_prefix_path,
-        chart_config_prerequisites,
         &prometheus_internal_url,
         prometheus_namespace,
         get_chart_override_fn.clone(),
