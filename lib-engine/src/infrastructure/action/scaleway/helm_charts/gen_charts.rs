@@ -36,7 +36,7 @@ use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryCluste
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
 // use crate::io_models::metrics::MetricsConfiguration;
-use crate::infrastructure::action::scaleway::helm_charts::gen_metrics_charts::generate_metrics_charts;
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
@@ -60,8 +60,8 @@ pub fn kapsule_helm_charts(
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
     let metrics_charts = generate_metrics_charts(
+        CloudProviderMetricsConfig::Kapsule(chart_config_prerequisites),
         chart_prefix_path,
-        chart_config_prerequisites,
         &prometheus_internal_url,
         prometheus_namespace,
         get_chart_override_fn.clone(),

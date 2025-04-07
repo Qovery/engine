@@ -15,7 +15,7 @@ mod cluster_create;
 mod cluster_delete;
 mod cluster_pause;
 mod cluster_upgrade;
-mod helm_charts;
+pub(crate) mod helm_charts;
 mod nodegroup;
 mod tera_context;
 

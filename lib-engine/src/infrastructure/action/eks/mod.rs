@@ -4,7 +4,7 @@ mod cluster_delete;
 mod cluster_pause;
 mod cluster_upgrade;
 mod custom_vpc;
-mod helm_charts;
+pub(crate) mod helm_charts;
 mod karpenter;
 mod nodegroup;
 mod sdk;

@@ -1,5 +1,4 @@
 mod gen_charts;
-mod gen_metrics_charts;
 
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::scaleway::ScwZone;
