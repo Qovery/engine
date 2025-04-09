@@ -518,20 +518,12 @@ pub fn kapsule_helm_charts(
         ),
     ];
 
-    if let Some(prometheus_operator_crds_chart) = prometheus_operator_crds_chart {
-        level_0.push(prometheus_operator_crds_chart)
-    }
-
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![
         Box::new(q_storage_class),
         Box::new(coredns_config),
         Box::new(vpa),
         Box::new(q_priority_class_chart),
     ];
-
-    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack_chart {
-        level_1.push(kube_prometheus_stack_chart)
-    }
 
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
@@ -556,15 +548,20 @@ pub fn kapsule_helm_charts(
     ];
 
     // observability
-    if let Some(thanos_chart) = thanos_chart {
-        level_2.push(thanos_chart)
+    if let Some(prometheus_operator_crds_chart) = prometheus_operator_crds_chart {
+        level_0.push(prometheus_operator_crds_chart)
     }
     if let Some(kube_state_metrics_chart) = kube_state_metrics_chart {
-        level_2.push(kube_state_metrics_chart);
+        level_0.push(kube_state_metrics_chart);
     }
-
+    if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack_chart {
+        level_1.push(kube_prometheus_stack_chart)
+    }
     if let Some(promtail_chart) = promtail {
         level_1.push(Box::new(promtail_chart));
+    }
+    if let Some(thanos_chart) = thanos_chart {
+        level_2.push(thanos_chart)
     }
     if let Some(loki_chart) = loki {
         level_2.push(Box::new(loki_chart));

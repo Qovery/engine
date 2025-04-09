@@ -14,6 +14,22 @@ defaultRules:
     nodeExporterRecording: false
     windows: false
 
+kube-state-metrics:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-kube-state-metrics
+  prometheus:
+    monitor:
+      enabled: true
+      honorLabels: true
+  resources:
+    limits:
+      cpu: 75m
+      memory: 384Mi
+    requests:
+      cpu: 75m
+      memory: 384Mi
+
 crds:
   enabled: false
 
@@ -44,7 +60,7 @@ kubeProxy:
   enabled: false
 
 kubeStateMetrics:
-  enabled: false
+  enabled: true
 
 prometheus:
   enabled: true

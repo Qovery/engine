@@ -355,14 +355,14 @@ pub(super) fn gke_helm_charts(
     // Helm chart deployment order
 
     // Add prometheus CRDs early to avoid issues with other charts
-    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart];
+    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart, kube_state_metrics_chart];
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, kube_state_metrics_chart];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
