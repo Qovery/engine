@@ -701,14 +701,14 @@ pub(super) fn eks_helm_charts(
     ];
 
     // observability
+    if let Some(kube_state_metrics_chart) = metrics_charts.kube_state_metrics_chart {
+        level_3.push(Box::new(kube_state_metrics_chart));
+    }
     if let Some(kube_prometheus_stack_chart) = metrics_charts.kube_prometheus_stack_chart {
         level_4.push(Box::new(kube_prometheus_stack_chart));
     }
     if let Some(thanos_chart) = metrics_charts.thanos_chart {
         level_5.push(Box::new(thanos_chart));
-    }
-    if let Some(kube_state_metrics_chart) = metrics_charts.kube_state_metrics_chart {
-        level_5.push(Box::new(kube_state_metrics_chart));
     }
     if let Some(prometheus_adapter_chart) = metrics_charts.prometheus_adapter_chart {
         level_5.push(Box::new(prometheus_adapter_chart));

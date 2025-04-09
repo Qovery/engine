@@ -180,7 +180,8 @@ fn generate_charts_installed_by_qovery(
 
     // Kube State Metrics
     let kube_state_metrics_chart = KubeStateMetricsChart::new(
-        helm_action,
+        HelmAction::Destroy, //uninstall all kube_state_metrics_chart, as it is now enabled in the kube-prometheus-stack chart.
+        // (TODO QOV-595 it can be removed once the chart has been removed from all the clusters)
         chart_prefix_path,
         HelmChartNamespaces::Prometheus,
         true,
