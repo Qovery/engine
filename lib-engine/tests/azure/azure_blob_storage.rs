@@ -2,7 +2,7 @@ use crate::helpers::utilities::FuncTestsSecrets;
 use function_name::named;
 use qovery_engine::infrastructure::models::object_storage::{Bucket, BucketRegion};
 use qovery_engine::services::azure::blob_storage_regions::AzureStorageRegion;
-use qovery_engine::services::azure::blob_storage_service::BlobStorageService;
+use qovery_engine::services::azure::blob_storage_service::{BlobStorageService, StorageAccount};
 use std::cmp::max;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -10,7 +10,6 @@ use uuid::Uuid;
 
 // TODO(benjaminch): to be refactored with GCP one
 struct BucketParams {
-    _account: String,
     bucket_name: String,
     bucket_location: AzureStorageRegion,
     bucket_ttl: Option<Duration>,
@@ -57,14 +56,16 @@ fn test_create_bucket_success() {
     // setup:
     let secrets = FuncTestsSecrets::new();
 
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     struct TestCase<'a> {
         input: BucketParams,
@@ -74,10 +75,9 @@ fn test_create_bucket_success() {
     let test_cases = vec![
         TestCase {
             input: BucketParams {
-                _account: account.to_string(),
                 bucket_name: format!("test-bucket-1-{}", Uuid::new_v4()),
                 bucket_location: AzureStorageRegion::Public {
-                    account: account.to_string(),
+                    account: storage_account.account_name.to_string(),
                 },
                 bucket_ttl: Some(Duration::from_secs(7 * 60 * 60 * 24)), // 1 week
                 bucket_labels: Some(HashMap::from([
@@ -89,10 +89,9 @@ fn test_create_bucket_success() {
         },
         TestCase {
             input: BucketParams {
-                _account: account.to_string(),
                 bucket_name: format!("test-bucket-2-{}", Uuid::new_v4()),
                 bucket_location: AzureStorageRegion::Public {
-                    account: account.to_string(),
+                    account: storage_account.account_name.to_string(),
                 },
                 bucket_ttl: Some(Duration::from_secs(60 * 60)), // 1 hour
                 bucket_labels: Some(HashMap::from([
@@ -104,10 +103,9 @@ fn test_create_bucket_success() {
         },
         TestCase {
             input: BucketParams {
-                _account: account.to_string(),
                 bucket_name: format!("test-bucket-3-{}", Uuid::new_v4()),
                 bucket_location: AzureStorageRegion::Public {
-                    account: account.to_string(),
+                    account: storage_account.account_name.to_string(),
                 },
                 bucket_ttl: None,
                 bucket_labels: Some(HashMap::from([
@@ -123,6 +121,7 @@ fn test_create_bucket_success() {
         // execute:
         let created_bucket = service
             .create_bucket(
+                &storage_account,
                 tc.input.bucket_name.as_str(),
                 &tc.input.bucket_location,
                 tc.input.bucket_ttl,
@@ -133,13 +132,13 @@ fn test_create_bucket_success() {
         let _created_bucket_guard = scopeguard::guard(&created_bucket, |bucket| {
             // make sure to delete the bucket after test
             service
-                .delete_bucket(bucket.name.as_str())
+                .delete_bucket(&storage_account, bucket.name.as_str())
                 .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &created_bucket.name));
         });
 
         // verify:
         let retrieved_bucket = service
-            .get_bucket(tc.input.bucket_name.as_str(), &tc.input.bucket_location)
+            .get_bucket(&storage_account, tc.input.bucket_name.as_str(), &tc.input.bucket_location)
             .expect("Cannot retrieve created bucket");
 
         assert!(
@@ -159,24 +158,27 @@ fn test_create_bucket_success() {
 fn test_bucket_exists() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &AzureStorageRegion::Public {
-                account: account.to_string(),
+                account: storage_account.account_name.to_string(),
             },
             Some(Duration::from_secs(60 * 60)), // 1 hour
             Some(HashMap::from([
@@ -189,15 +191,15 @@ fn test_bucket_exists() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
     let non_existing_bucket_name = format!("{}-ne", existing_bucket.name);
 
     // execute & verify:
-    assert!(service.bucket_exists(existing_bucket.name.as_str(), &bucket_location));
-    assert!(!service.bucket_exists(non_existing_bucket_name.as_str(), &bucket_location));
+    assert!(service.bucket_exists(&storage_account, existing_bucket.name.as_str(), &bucket_location));
+    assert!(!service.bucket_exists(&storage_account, non_existing_bucket_name.as_str(), &bucket_location));
 }
 
 #[cfg(feature = "test-azure-minimal")]
@@ -206,24 +208,27 @@ fn test_bucket_exists() {
 fn test_get_bucket() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &AzureStorageRegion::Public {
-                account: account.to_string(),
+                account: storage_account.account_name.to_string(),
             },
             Some(Duration::from_secs(60 * 60)), // 1 hour
             Some(HashMap::from([
@@ -236,7 +241,7 @@ fn test_get_bucket() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -244,11 +249,12 @@ fn test_get_bucket() {
 
     // execute & verify:
     let retrieved_bucket = service
-        .get_bucket(existing_bucket.name.as_str(), &bucket_location)
+        .get_bucket(&storage_account, existing_bucket.name.as_str(), &bucket_location)
         .unwrap_or_else(|_| panic!("Cannot retrieve bucket `{}`", existing_bucket.name));
     assert_eq!(existing_bucket, retrieved_bucket);
 
-    let retrieved_non_existing_bucket = service.get_bucket(non_existing_bucket_name.as_str(), &bucket_location);
+    let retrieved_non_existing_bucket =
+        service.get_bucket(&storage_account, non_existing_bucket_name.as_str(), &bucket_location);
     assert!(retrieved_non_existing_bucket.is_err());
 }
 
@@ -258,24 +264,27 @@ fn test_get_bucket() {
 fn test_delete_bucket() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &AzureStorageRegion::Public {
-                account: account.to_string(),
+                account: storage_account.account_name.to_string(),
             },
             Some(Duration::from_secs(60 * 60)), // 1 hour
             Some(HashMap::from([
@@ -286,11 +295,11 @@ fn test_delete_bucket() {
         .unwrap_or_else(|_| panic!("Cannot create bucket for test"));
 
     // execute:
-    let result = service.delete_bucket(existing_bucket.name.as_str());
+    let result = service.delete_bucket(&storage_account, existing_bucket.name.as_str());
 
     // verify:
     assert!(result.is_ok());
-    assert!(!service.bucket_exists(existing_bucket.name.as_str(), &bucket_location));
+    assert!(!service.bucket_exists(&storage_account, existing_bucket.name.as_str(), &bucket_location));
 }
 
 #[cfg(feature = "test-azure-minimal")]
@@ -300,17 +309,19 @@ fn test_delete_bucket() {
 fn test_update_bucket() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let initial_bucket = Bucket::new(
@@ -326,6 +337,7 @@ fn test_update_bucket() {
     );
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             initial_bucket.name.as_str(),
             match initial_bucket.location {
                 BucketRegion::AzureRegion(ref azure_location) => azure_location,
@@ -343,7 +355,7 @@ fn test_update_bucket() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket_binding, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -351,12 +363,15 @@ fn test_update_bucket() {
     // updating bucket
     let updated_bucket = service
         .update_bucket(
+            &storage_account,
             existing_bucket.name.as_str(),
             match existing_bucket.location {
                 BucketRegion::AzureRegion(ref azure_location) => azure_location,
                 _ => panic!("Invalid bucket location"),
             },
             Some(Duration::from_secs(12 * 60 * 60)), // half day
+            false,
+            false,
             Some(HashMap::from([
                 ("bucket_name".to_string(), "bucket_1".to_string()),
                 ("test_name".to_string(), function_name!().to_string()),
@@ -366,9 +381,9 @@ fn test_update_bucket() {
         .unwrap_or_else(|_| panic!("Cannot update bucket `{}` for test", &existing_bucket.name));
 
     // verify:
-    assert!(!service.bucket_exists(existing_bucket.name.as_str(), &bucket_location));
+    assert!(!service.bucket_exists(&storage_account, existing_bucket.name.as_str(), &bucket_location));
     let retrieved_bucket = service
-        .get_bucket(updated_bucket.name.as_str(), &bucket_location)
+        .get_bucket(&storage_account, updated_bucket.name.as_str(), &bucket_location)
         .expect("Cannot retrieve updated bucket");
     assert_eq!(updated_bucket, retrieved_bucket);
 }
@@ -379,21 +394,24 @@ fn test_update_bucket() {
 fn test_list_buckets() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -408,13 +426,13 @@ fn test_list_buckets() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
     // execute:
     let buckets = service
-        .list_buckets(&bucket_location, None, None)
+        .list_buckets(&storage_account, &bucket_location, None, None)
         .expect("Cannot list buckets");
 
     // verify:
@@ -427,22 +445,25 @@ fn test_list_buckets() {
 fn test_list_buckets_from_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let bucket_prefix = &Uuid::new_v4().to_string()[..6];
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("{}-test-bucket-{}", bucket_prefix, Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -457,13 +478,13 @@ fn test_list_buckets_from_prefix() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
     // execute:
     let buckets = service
-        .list_buckets(&bucket_location, Some(bucket_prefix), None)
+        .list_buckets(&storage_account, &bucket_location, Some(bucket_prefix), None)
         .expect("Cannot list buckets");
 
     // verify:
@@ -476,17 +497,19 @@ fn test_list_buckets_from_prefix() {
 fn test_list_buckets_from_metadata() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let bucket_metadata = HashMap::from([
@@ -496,6 +519,7 @@ fn test_list_buckets_from_metadata() {
     let bucket_prefix = &Uuid::new_v4().to_string()[..6];
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("{}-test-bucket-{}", bucket_prefix, Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -507,13 +531,13 @@ fn test_list_buckets_from_metadata() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
     // execute:
     let buckets = service
-        .list_buckets(&bucket_location, Some(bucket_prefix), Some(bucket_metadata))
+        .list_buckets(&storage_account, &bucket_location, Some(bucket_prefix), Some(bucket_metadata))
         .expect("Cannot list buckets");
 
     // verify:
@@ -526,17 +550,19 @@ fn test_list_buckets_from_metadata() {
 fn test_list_buckets_from_metadata_and_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let bucket_metadata = HashMap::from([
@@ -545,6 +571,7 @@ fn test_list_buckets_from_metadata_and_prefix() {
     ]);
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -556,13 +583,13 @@ fn test_list_buckets_from_metadata_and_prefix() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
     // execute:
     let buckets = service
-        .list_buckets(&bucket_location, None, Some(bucket_metadata))
+        .list_buckets(&storage_account, &bucket_location, None, Some(bucket_metadata))
         .expect("Cannot list buckets");
 
     // verify:
@@ -575,21 +602,24 @@ fn test_list_buckets_from_metadata_and_prefix() {
 fn test_get_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -604,7 +634,7 @@ fn test_get_object() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -617,6 +647,7 @@ fn test_get_object() {
     ]);
     let _uploaded_object = service
         .put_object(
+            &storage_account,
             existing_bucket.name.as_str(),
             object_key.as_str(),
             object_content.clone().into_bytes(),
@@ -626,7 +657,7 @@ fn test_get_object() {
 
     // execute:
     let retrieved_object = service
-        .get_object(existing_bucket.name.as_str(), object_key.as_str())
+        .get_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
         .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
 
     // verify:
@@ -653,21 +684,24 @@ fn test_get_object() {
 fn test_put_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -682,7 +716,7 @@ fn test_put_object() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -695,6 +729,7 @@ fn test_put_object() {
     ]);
     let _uploaded_object = service
         .put_object(
+            &storage_account,
             existing_bucket.name.as_str(),
             object_key.as_str(),
             object_content.clone().into_bytes(),
@@ -704,7 +739,7 @@ fn test_put_object() {
 
     // verify:
     let retrieved_object = service
-        .get_object(existing_bucket.name.as_str(), object_key.as_str())
+        .get_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
         .unwrap_or_else(|_| panic!("Cannot get object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
 
     assert_eq!(object_key, retrieved_object.key);
@@ -728,21 +763,24 @@ fn test_put_object() {
 fn test_list_objects() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -757,7 +795,7 @@ fn test_list_objects() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -770,6 +808,7 @@ fn test_list_objects() {
         ]);
         let _uploaded_object = service
             .put_object(
+                &storage_account,
                 existing_bucket.name.as_str(),
                 object_key.as_str(),
                 object_content.clone().into_bytes(),
@@ -780,7 +819,7 @@ fn test_list_objects() {
 
     // execute:
     let objects = service
-        .list_objects(existing_bucket.name.as_str(), None, None)
+        .list_objects(&storage_account, existing_bucket.name.as_str(), None, None)
         .expect("Cannot list objects");
 
     // verify:
@@ -796,21 +835,24 @@ fn test_list_objects() {
 fn test_list_objects_from_prefix() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -825,7 +867,7 @@ fn test_list_objects_from_prefix() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -839,6 +881,7 @@ fn test_list_objects_from_prefix() {
         ]);
         let _uploaded_object = service
             .put_object(
+                &storage_account,
                 existing_bucket.name.as_str(),
                 object_key.as_str(),
                 object_content.clone().into_bytes(),
@@ -849,7 +892,7 @@ fn test_list_objects_from_prefix() {
 
     // execute:
     let objects = service
-        .list_objects(existing_bucket.name.as_str(), Some(object_key_prefix), None)
+        .list_objects(&storage_account, existing_bucket.name.as_str(), Some(object_key_prefix), None)
         .expect("Cannot list objects");
 
     // verify:
@@ -865,21 +908,24 @@ fn test_list_objects_from_prefix() {
 fn test_list_objects_from_metadata() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -894,7 +940,7 @@ fn test_list_objects_from_metadata() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -908,6 +954,7 @@ fn test_list_objects_from_metadata() {
 
         let _uploaded_object = service
             .put_object(
+                &storage_account,
                 existing_bucket.name.as_str(),
                 object_key.as_str(),
                 object_content.clone().into_bytes(),
@@ -918,7 +965,7 @@ fn test_list_objects_from_metadata() {
 
     // execute:
     let objects = service
-        .list_objects(existing_bucket.name.as_str(), None, Some(object_tags))
+        .list_objects(&storage_account, existing_bucket.name.as_str(), None, Some(object_tags))
         .expect("Cannot list objects");
 
     // verify:
@@ -934,21 +981,24 @@ fn test_list_objects_from_metadata() {
 fn test_list_objects_from_prefix_and_metadata() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -963,7 +1013,7 @@ fn test_list_objects_from_prefix_and_metadata() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -978,6 +1028,7 @@ fn test_list_objects_from_prefix_and_metadata() {
 
         let _uploaded_object = service
             .put_object(
+                &storage_account,
                 existing_bucket.name.as_str(),
                 object_key.as_str(),
                 object_content.clone().into_bytes(),
@@ -988,7 +1039,12 @@ fn test_list_objects_from_prefix_and_metadata() {
 
     // execute:
     let objects = service
-        .list_objects(existing_bucket.name.as_str(), Some(object_key_prefix), Some(object_tags))
+        .list_objects(
+            &storage_account,
+            existing_bucket.name.as_str(),
+            Some(object_key_prefix),
+            Some(object_tags),
+        )
         .expect("Cannot list objects");
 
     // verify:
@@ -1004,21 +1060,24 @@ fn test_list_objects_from_prefix_and_metadata() {
 fn test_delete_object() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -1033,7 +1092,7 @@ fn test_delete_object() {
     let _created_bucket_guard = scopeguard::guard(&existing_bucket, |bucket| {
         // make sure to delete the bucket after test
         service
-            .delete_bucket(bucket.name.as_str())
+            .delete_bucket(&storage_account, bucket.name.as_str())
             .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", &existing_bucket.name));
     });
 
@@ -1046,6 +1105,7 @@ fn test_delete_object() {
     ]);
     let _uploaded_object = service
         .put_object(
+            &storage_account,
             existing_bucket.name.as_str(),
             object_key.as_str(),
             object_content.clone().into_bytes(),
@@ -1055,13 +1115,13 @@ fn test_delete_object() {
 
     // execute:
     service
-        .delete_object(existing_bucket.name.as_str(), object_key.as_str())
+        .delete_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
         .unwrap_or_else(|_| panic!("Cannot delete object `{}` from bucket `{}`", &object_key, &existing_bucket.name));
 
     // verify:
     assert!(
         service
-            .get_object(existing_bucket.name.as_str(), object_key.as_str())
+            .get_object(&storage_account, existing_bucket.name.as_str(), object_key.as_str())
             .is_err()
     );
 }
@@ -1072,21 +1132,24 @@ fn test_delete_object() {
 fn test_delete_bucket_having_objects() {
     // setup:
     let secrets = FuncTestsSecrets::new();
-    let account = secrets
-        .AZURE_STORAGE_ACCOUNT
-        .expect("AZURE_STORAGE_ACCOUNT should be set");
-    let access_key = secrets
-        .AZURE_STORAGE_ACCESS_KEY
-        .expect("AZURE_STORAGE_ACCESS_KEY should be set");
+    let storage_account = StorageAccount {
+        access_key: secrets
+            .AZURE_STORAGE_ACCESS_KEY
+            .expect("AZURE_STORAGE_ACCESS_KEY should be set"),
+        account_name: secrets
+            .AZURE_STORAGE_ACCOUNT
+            .expect("AZURE_STORAGE_ACCOUNT should be set"),
+    };
     let bucket_location = AzureStorageRegion::Public {
-        account: account.to_string(),
+        account: storage_account.account_name.to_string(),
     };
 
-    let service = BlobStorageService::new(account.as_str(), access_key.as_str());
+    let service = BlobStorageService::new();
 
     // creating a bucket
     let existing_bucket = service
         .create_bucket(
+            &storage_account,
             format!("test-bucket-{}", Uuid::new_v4()).as_str(),
             &bucket_location,
             Some(Duration::from_secs(60 * 60)), // 1 hour
@@ -1106,6 +1169,7 @@ fn test_delete_bucket_having_objects() {
     ]);
     let _uploaded_object = service
         .put_object(
+            &storage_account,
             existing_bucket.name.as_str(),
             object_key.as_str(),
             object_content.clone().into_bytes(),
@@ -1114,9 +1178,9 @@ fn test_delete_bucket_having_objects() {
         .unwrap_or_else(|_| panic!("Cannot put object `{}` to bucket `{}`", &object_key, &existing_bucket.name));
 
     // execute:
-    let result = service.delete_bucket(existing_bucket.name.as_str());
+    let result = service.delete_bucket(&storage_account, existing_bucket.name.as_str());
 
     // verify:
     assert!(result.is_ok());
-    assert!(!service.bucket_exists(existing_bucket.name.as_str(), &bucket_location));
+    assert!(!service.bucket_exists(&storage_account, existing_bucket.name.as_str(), &bucket_location));
 }

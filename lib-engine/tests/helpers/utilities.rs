@@ -27,6 +27,12 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
 
+use crate::helpers::azure::AZURE_SELF_HOSTED_DATABASE_DISK_TYPE;
+use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
+use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
+use crate::helpers::scaleway::{
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+};
 use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
@@ -54,12 +60,6 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::msg_publisher::StdMsgPublisher;
-
-use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
-use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
-use crate::helpers::scaleway::{
-    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-};
 
 pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
     #[derive(Deserialize)]
@@ -185,6 +185,11 @@ pub struct FuncTestsSecrets {
     pub AWS_TEST_CLUSTER_REGION: Option<String>,
     pub AZURE_STORAGE_ACCOUNT: Option<String>,
     pub AZURE_STORAGE_ACCESS_KEY: Option<String>,
+    pub AZURE_TENANT_ID: Option<String>,
+    pub AZURE_CLIENT_ID: Option<String>,
+    pub AZURE_CLIENT_SECRET: Option<String>,
+    pub AZURE_SUBSCRIPTION_ID: Option<String>,
+    pub AZURE_TEST_KUBECONFIG_b64: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
@@ -292,6 +297,11 @@ impl FuncTestsSecrets {
             AWS_TEST_CLUSTER_REGION: None,
             AZURE_STORAGE_ACCOUNT: None,
             AZURE_STORAGE_ACCESS_KEY: None,
+            AZURE_CLIENT_ID: None,
+            AZURE_CLIENT_SECRET: None,
+            AZURE_SUBSCRIPTION_ID: None,
+            AZURE_TENANT_ID: None,
+            AZURE_TEST_KUBECONFIG_b64: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
@@ -402,6 +412,19 @@ impl FuncTestsSecrets {
             AWS_TEST_CLUSTER_LONG_ID: Self::select_secret("AWS_TEST_CLUSTER_LONG_ID", secrets.AWS_TEST_CLUSTER_LONG_ID),
             AZURE_STORAGE_ACCOUNT: Self::select_secret("AZURE_STORAGE_ACCOUNT", secrets.AZURE_STORAGE_ACCOUNT),
             AZURE_STORAGE_ACCESS_KEY: Self::select_secret("AZURE_STORAGE_ACCESS_KEY", secrets.AZURE_STORAGE_ACCESS_KEY),
+            AZURE_CLIENT_ID: Self::select_secret("AZURE_CLIENT_ID", secrets.AZURE_CLIENT_ID),
+            AZURE_CLIENT_SECRET: Self::select_secret("AZURE_CLIENT_SECRET", secrets.AZURE_CLIENT_SECRET),
+            AZURE_TENANT_ID: Self::select_secret("AZURE_TENANT_ID", secrets.AZURE_TENANT_ID),
+            AZURE_SUBSCRIPTION_ID: Self::select_secret("AZURE_SUBSCRIPTION_ID", secrets.AZURE_SUBSCRIPTION_ID),
+            AZURE_TEST_KUBECONFIG_b64: Self::select_secret(
+                "AZURE_TEST_KUBECONFIG",
+                String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().unwrap())
+                        .unwrap(),
+                )
+                .ok(),
+            ),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
             CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
@@ -657,6 +680,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind) -> KubernetesCredentials 
                     .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
             ),
         ],
+        Kind::Azure => vec![],
         Kind::Gcp => vec![],
         Kind::OnPremise => vec![],
     }
@@ -896,6 +920,10 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
             DatabaseMode::MANAGED => AwsStorageType::GP2.to_cloud_provider_format().to_string(),
             DatabaseMode::CONTAINER => AwsStorageType::GP2.to_k8s_storage_class(),
         },
+        Kind::Azure => match database_mode {
+            DatabaseMode::MANAGED => todo!(),
+            DatabaseMode::CONTAINER => AZURE_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
+        },
         Kind::Scw => match database_mode {
             DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -925,7 +953,8 @@ pub fn db_instance_type(
             DatabaseMode::MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
             DatabaseMode::CONTAINER => None,
         },
-        Kind::Gcp => None, // TODO: once managed DB is implemented
+        Kind::Azure => None, // TODO: once managed DB is implemented
+        Kind::Gcp => None,   // TODO: once managed DB is implemented
         Kind::OnPremise => todo!(),
     }
 }

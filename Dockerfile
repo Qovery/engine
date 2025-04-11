@@ -16,7 +16,7 @@ ARG SKOPEO_VERSION=1.9.3+ds1-1+b9
 ARG KUBENT_VERSION=0.7.3
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.85.0-2025-02-21T13-18-14"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.85.0-2025-04-11T08-00-41"
 
 
 ###########################################
@@ -234,6 +234,7 @@ RUN apt-get update && apt-get install -y \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
+  azure-cli \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \

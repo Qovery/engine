@@ -38,6 +38,7 @@ fn default_nginx_controller_log_format_escaping() -> LogFormatEscaping {
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Aws,
+    Azure,
     Do,
     Scw,
     Gcp,
@@ -48,6 +49,7 @@ impl From<KindModel> for Kind {
     fn from(kind: KindModel) -> Self {
         match kind {
             KindModel::Aws => Kind::Aws,
+            KindModel::Azure => Kind::Azure,
             KindModel::Scw => Kind::Scw,
             KindModel::Gcp => Kind::Gcp,
             KindModel::OnPremise => Kind::SelfManaged,

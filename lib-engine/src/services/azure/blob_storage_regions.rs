@@ -21,7 +21,7 @@ impl From<CloudLocation> for AzureStorageRegion {
     }
 }
 
-// This wrapper to allow to implement From<AzureStorageRegion> for CloudLocation without being
+// This wrapper to allow to implement From<AzureRegion> for CloudLocation without being
 // yelled at by the orphan rule
 pub struct CloudLocationWrapper(CloudLocation);
 

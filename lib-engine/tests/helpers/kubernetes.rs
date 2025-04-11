@@ -28,10 +28,14 @@ use qovery_engine::io_models::models::{CpuArchitecture, StorageClass, VpcQoveryN
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
+use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS};
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::infrastructure::models::cloud_provider;
+use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
+use qovery_engine::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use qovery_engine::infrastructure::models::cloud_provider::service::Action;
+use qovery_engine::infrastructure::models::kubernetes::azure::aks::AKS;
 use std::str::FromStr;
 use tracing::{Level, span};
 
@@ -77,6 +81,12 @@ pub fn cluster_test(
             ClusterTestType::WithUpgrade => AWS_KUBERNETES_VERSION.previous_version().expect("No previous version"),
             _ => AWS_KUBERNETES_VERSION,
         },
+        KubernetesKind::Aks | KubernetesKind::AksSelfManaged => match test_type {
+            ClusterTestType::WithUpgrade => AZURE_KUBERNETES_VERSION
+                .previous_version()
+                .expect("No previous version"),
+            _ => AWS_KUBERNETES_VERSION,
+        },
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => match test_type {
             ClusterTestType::WithUpgrade => SCW_KUBERNETES_VERSION.previous_version().expect("No previous version"),
             _ => SCW_KUBERNETES_VERSION,
@@ -95,6 +105,22 @@ pub fn cluster_test(
 
     let mut engine = match provider_kind {
         Kind::Aws => AWS::docker_cr_engine(
+            &context,
+            logger.clone(),
+            metrics_registry.clone(),
+            region,
+            kubernetes_kind,
+            kubernetes_boot_version.clone(),
+            cluster_domain,
+            vpc_network_mode.clone(),
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
+            cpu_archi,
+            EngineLocation::ClientSide,
+            None, // <- no kubeconfig provided, new cluster
+            node_manager.clone(),
+        ),
+        Kind::Azure => Azure::docker_cr_engine(
             &context,
             logger.clone(),
             metrics_registry.clone(),
@@ -203,6 +229,22 @@ pub fn cluster_test(
                     None, // <- no kubeconfig provided, new cluster
                     node_manager,
                 ),
+                Kind::Azure => Azure::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    region,
+                    KubernetesKind::Aks,
+                    upgrade_to_version,
+                    cluster_domain,
+                    vpc_network_mode,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    None, // <- no kubeconfig provided, new cluster
+                    node_manager,
+                ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -267,6 +309,22 @@ pub fn cluster_test(
                     EngineLocation::ClientSide,
                     None,                 // <- no kubeconfig provided, new cluster
                     NodeManager::Default, // no karpenter parameters here, as this section is dedicated to test node autoscaling
+                ),
+                Kind::Azure => Azure::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    region,
+                    KubernetesKind::Aks,
+                    kubernetes_boot_version,
+                    cluster_domain,
+                    vpc_network_mode,
+                    min_nodes,
+                    max_nodes,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    None,                 // <- no kubeconfig provided, new cluster
+                    NodeManager::Default, // TODO(benjaminch): To set Karpenter
                 ),
                 Kind::Scw => Scaleway::docker_cr_engine(
                     &context,
@@ -408,6 +466,34 @@ pub fn get_environment_test_kubernetes(
                 .unwrap(),
             )
         }
+        KubernetesKind::Aks => {
+            let region = AzureLocation::from_str(localisation).expect("Azure region not supported");
+            Box::new(
+                AKS::new(
+                    context.clone(),
+                    *context.cluster_long_id(),
+                    format!("qovery-{}", context.cluster_short_id()).as_str(),
+                    kubernetes_version,
+                    region,
+                    cloud_provider,
+                    Utc::now(),
+                    Azure::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
+                    logger,
+                    ClusterAdvancedSettings {
+                        pleco_resources_ttl: AZURE_RESOURCE_TTL_IN_SECONDS as i32,
+                        k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
+                            default_kubernetes_storage_class,
+                        ),
+                        ..Default::default()
+                    },
+                    None,
+                    kubeconfig,
+                    temp_dir,
+                    None,
+                )
+                .expect("Cannot instantiate AKS"),
+            )
+        }
         KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
             Box::new(
@@ -468,6 +554,7 @@ pub fn get_environment_test_kubernetes(
                 .expect("Cannot instantiate GKE"),
             )
         }
+        KubernetesKind::AksSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration

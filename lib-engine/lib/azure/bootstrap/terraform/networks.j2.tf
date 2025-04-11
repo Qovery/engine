@@ -4,6 +4,8 @@ resource "azurerm_virtual_network" "vnet" {
   location            = local.location
   resource_group_name = azurerm_resource_group.main.name
   address_space       = [local.vnet_cidr]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_subnet" "node_cidr_zone_1" {
@@ -42,6 +44,8 @@ resource "azurerm_public_ip" "nat_zone_1" {
   allocation_method   = "Static"
   sku                 = "Standard"
   zones               = ["1"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway" "zone_1" {
@@ -50,6 +54,8 @@ resource "azurerm_nat_gateway" "zone_1" {
   resource_group_name = azurerm_resource_group.main.name
   sku_name            = "Standard"
   zones               = ["1"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway_public_ip_association" "zone_1" {
@@ -70,6 +76,8 @@ resource "azurerm_public_ip" "nat_zone_2" {
   allocation_method   = "Static"
   sku                 = "Standard"
   zones               = ["2"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway" "zone_2" {
@@ -78,6 +86,8 @@ resource "azurerm_nat_gateway" "zone_2" {
   resource_group_name = azurerm_resource_group.main.name
   sku_name            = "Standard"
   zones               = ["2"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway_public_ip_association" "zone_2" {
@@ -98,6 +108,8 @@ resource "azurerm_public_ip" "nat_zone_3" {
   allocation_method   = "Static"
   sku                 = "Standard"
   zones               = ["3"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway" "zone_3" {
@@ -106,6 +118,8 @@ resource "azurerm_nat_gateway" "zone_3" {
   resource_group_name = azurerm_resource_group.main.name
   sku_name            = "Standard"
   zones               = ["3"]
+
+  tags = local.tags_network
 }
 
 resource "azurerm_nat_gateway_public_ip_association" "zone_3" {
@@ -116,4 +130,13 @@ resource "azurerm_nat_gateway_public_ip_association" "zone_3" {
 resource "azurerm_subnet_nat_gateway_association" "zone_3" {
   subnet_id      = azurerm_subnet.node_cidr_zone_3.id
   nat_gateway_id = azurerm_nat_gateway.zone_3.id
+}
+
+locals {
+  tags_network = merge(
+    local.tags_common,
+    {
+      "service" = "aks"
+    }
+  )
 }

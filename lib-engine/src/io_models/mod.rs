@@ -16,6 +16,7 @@ use uuid::Uuid;
 
 pub mod annotations_group;
 pub mod application;
+mod azure;
 pub mod container;
 pub mod context;
 pub mod database;

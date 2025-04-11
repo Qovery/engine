@@ -127,6 +127,7 @@ impl Router {
                 annotations_groups,
                 labels_groups,
             )?)),
+            CPKind::Azure => todo!(),
             CPKind::OnPremise => {
                 let router = Box::new(models::router::Router::<OnPremise>::new(
                     context,

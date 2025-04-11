@@ -502,6 +502,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
             )?),
+            Kind::Azure => todo!(),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,

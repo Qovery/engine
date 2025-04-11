@@ -10,6 +10,7 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 
+pub mod azure_container_registry;
 pub mod ecr;
 pub mod errors;
 pub mod generic_cr;
@@ -139,6 +140,7 @@ impl ContainerRegistryInfo {
 #[derive(Clone, Copy, Debug)]
 pub enum Kind {
     Ecr,
+    AzureContainerRegistry,
     ScalewayCr,
     GcpArtifactRegistry,
     GenericCr,

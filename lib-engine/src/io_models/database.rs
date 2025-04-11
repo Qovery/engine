@@ -130,6 +130,7 @@ impl Database {
                     Ok(t) => Some(Box::new(t)),
                     Err(e) => return Err(e),
                 },
+                Kind::Azure => todo!(),
                 Kind::Scw => match ScwDatabaseInstanceType::from_str(database_instance_type_raw_str) {
                     Ok(t) => Some(Box::new(t)),
                     Err(e) => return Err(e),
@@ -349,7 +350,30 @@ impl Database {
                     labels_groups,
                 )?))
             }
-
+            (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context,

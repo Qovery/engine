@@ -1,6 +1,8 @@
 use super::blob_storage_regions::AzureStorageRegion;
+use crate::infrastructure::models::container_registry::Repository;
 use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
 use azure_storage_blobs::container::Container;
+use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -38,4 +40,35 @@ impl Bucket {
             },
         })
     }
+}
+
+pub fn from_azure_container_registry(
+    azure_container_registry: azure_mgmt_containerregistry::models::Registry,
+) -> Result<Repository, String> {
+    Ok(Repository {
+        registry_id: azure_container_registry.resource.id.unwrap_or_default(),
+        name: azure_container_registry.resource.name.unwrap_or_default(),
+        uri: azure_container_registry.properties.unwrap_or_default().login_server,
+        ttl: None,    // TODO(benjaminch): TTL to be added
+        labels: None, // TODO(benjaminch): labels to be added
+    })
+}
+
+// Output of the Azure CLI Docker Image Tag
+// {
+//   "changeableAttributes": {
+//     "deleteEnabled": true,
+//     "listEnabled": true,
+//     "readEnabled": true,
+//     "writeEnabled": true
+//   },
+//   "createdTime": "2025-04-09T15:25:17.3560664Z",
+//   "digest": "sha256:92c7f9c92844bbbb5d0a101b22f7c2a7949e40f8ea90c8b3bc396879d95e899a",
+//   "lastUpdateTime": "2025-04-09T15:25:17.3560664Z",
+//   "name": "v1",
+//   "signed": false
+// }
+#[derive(Deserialize, Debug)]
+pub struct DockerImageTag {
+    pub name: String,
 }

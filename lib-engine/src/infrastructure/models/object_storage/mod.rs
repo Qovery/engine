@@ -1,8 +1,3 @@
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::Path;
-use std::time::Duration;
-
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
@@ -10,9 +5,13 @@ use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::services::azure::blob_storage_regions::AzureStorageRegion;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use enum_dispatch::enum_dispatch;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::Path;
+use std::time::Duration;
 use strum_macros::EnumIter;
 
-mod azure_object_storage;
+pub mod azure_object_storage;
 pub mod errors;
 pub mod google_object_storage;
 pub mod s3;

@@ -303,6 +303,7 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
                 KubernetesKind::Eks | Kind::EksSelfManaged => "aws",
                 KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
                 KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
+                KubernetesKind::Aks | Kind::AksSelfManaged => "azure",
                 Kind::OnPremiseSelfManaged => "on-premise",
             },
             true => "undefined-cloud-provider", // There is something weird

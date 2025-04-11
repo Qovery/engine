@@ -44,6 +44,7 @@ pub enum PrometheusConfiguration {
         thanos_service_account_email: String,
         bucket_name: String,
     },
+    AzureBlobContainer,
     NotInstalled,
 }
 
@@ -154,6 +155,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     },
                 ]
             }
+            PrometheusConfiguration::AzureBlobContainer => vec![],
             PrometheusConfiguration::NotInstalled => vec![],
             PrometheusConfiguration::ScalewayObjectStorage {
                 bucket_name,
@@ -403,7 +405,12 @@ mod tests {
                     thanos_service_account_email: "whatever".to_string(),
                     bucket_name: "whatever".to_string(),
                 },
-                Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged => {
+                Kind::Aks => PrometheusConfiguration::AzureBlobContainer,
+                Kind::AksSelfManaged
+                | Kind::EksSelfManaged
+                | Kind::GkeSelfManaged
+                | Kind::ScwSelfManaged
+                | Kind::OnPremiseSelfManaged => {
                     // TODO (ENG-1986) Not handled yet
                     PrometheusConfiguration::NotInstalled
                 }

@@ -362,6 +362,7 @@ impl HelmChart {
                     self.ports,
                 )?)
             }
+            kubernetes::Kind::Aks | kubernetes::Kind::AksSelfManaged => todo!(),
             kubernetes::Kind::OnPremiseSelfManaged => Box::new(models::helm_chart::HelmChart::<OnPremise>::new(
                 context,
                 self.long_id,

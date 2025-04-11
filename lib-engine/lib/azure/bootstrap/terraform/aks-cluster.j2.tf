@@ -50,6 +50,8 @@ resource "azurerm_kubernetes_cluster" "primary" {
     }
   }
 
+  tags = local.tags_aks
+
   depends_on = [
     azurerm_subnet_nat_gateway_association.zone_1,
     azurerm_subnet_nat_gateway_association.zone_2,
@@ -69,9 +71,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_2" {
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
 
-  tags = {
-    Environment = "Production"
-  }
+  tags = local.tags_aks
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_3" {
@@ -86,11 +86,8 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_3" {
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
 
-  tags = {
-    Environment = "Production"
-  }
+  tags = local.tags_aks
 }
-
 
 
 # Update the AKS cluster to enable NAP using the azapi provider
@@ -120,3 +117,13 @@ resource "azurerm_role_assignment" "sp_contributor" { # for nginx ingress
   role_definition_name = "Contributor"
 }
 
+resource "time_static" "on_cluster_create" {}
+
+locals {
+  tags_aks = merge(
+    local.tags_common,
+    {
+      "service" = "aks"
+    }
+  )
+}

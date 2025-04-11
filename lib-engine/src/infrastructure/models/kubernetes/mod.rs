@@ -1,4 +1,5 @@
 pub mod aws;
+pub mod azure;
 pub mod gcp;
 pub mod scaleway;
 pub mod self_managed;
@@ -502,8 +503,10 @@ pub enum Kind {
     Eks,
     ScwKapsule,
     Gke,
+    Aks,
     EksSelfManaged,
     GkeSelfManaged,
+    AksSelfManaged,
     ScwSelfManaged,
     OnPremiseSelfManaged,
 }
@@ -514,6 +517,7 @@ impl Kind {
             Kind::Eks | Kind::EksSelfManaged => CloudProviderKind::Aws,
             Kind::ScwKapsule | Kind::ScwSelfManaged => CloudProviderKind::Scw,
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
+            Kind::Aks | Kind::AksSelfManaged => CloudProviderKind::Azure,
             Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
         }
     }
@@ -521,7 +525,11 @@ impl Kind {
     pub fn is_self_managed(&self) -> bool {
         matches!(
             self,
-            Kind::EksSelfManaged | Kind::GkeSelfManaged | Kind::ScwSelfManaged | Kind::OnPremiseSelfManaged
+            Kind::EksSelfManaged
+                | Kind::GkeSelfManaged
+                | Kind::AksSelfManaged
+                | Kind::ScwSelfManaged
+                | Kind::OnPremiseSelfManaged
         )
     }
 }
@@ -532,8 +540,10 @@ impl Display for Kind {
             Kind::Eks => "EKS",
             Kind::ScwKapsule => "ScwKapsule",
             Kind::Gke => "GKE",
+            Kind::Aks => "AKS",
             Kind::EksSelfManaged => "EKS Self Managed",
             Kind::GkeSelfManaged => "GKE Self Managed",
+            Kind::AksSelfManaged => "AKS Self Managed",
             Kind::ScwSelfManaged => "Scw Self Managed",
             Kind::OnPremiseSelfManaged => "On Premise Self Managed",
         })
