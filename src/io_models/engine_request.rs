@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
 
+use crate::environment::models::azure::Credentials;
 use crate::environment::models::domain::Domain;
 use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
@@ -13,6 +14,8 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
+use crate::infrastructure::models::cloud_provider::azure::Azure;
+use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use crate::infrastructure::models::cloud_provider::gcp::Google;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
@@ -27,6 +30,7 @@ use crate::infrastructure::models::dns_provider::cloudflare::Cloudflare;
 use crate::infrastructure::models::dns_provider::io::Kind;
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDns;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::azure::AksOptions;
 use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion, event_details};
@@ -183,8 +187,10 @@ impl<T> EngineRequest<T> {
             kubernetes::Kind::Eks => false,
             kubernetes::Kind::ScwKapsule => false,
             kubernetes::Kind::Gke => false,
+            kubernetes::Kind::Aks => false,
             kubernetes::Kind::EksSelfManaged => true,
             kubernetes::Kind::GkeSelfManaged => true,
+            kubernetes::Kind::AksSelfManaged => true,
             kubernetes::Kind::ScwSelfManaged => true,
             kubernetes::Kind::OnPremiseSelfManaged => true,
         }
@@ -294,6 +300,30 @@ impl CloudProvider {
                     region,
                     self.zones.clone(),
                     cluster_kind,
+                    terraform_state_credentials,
+                )))
+            }
+            cloud_provider::Kind::Azure => {
+                let CloudProviderOptions::Azure {
+                    client_id,
+                    client_secret,
+                    tenant_id,
+                    subscription_id,
+                    resource_group_name,
+                } = &self.options
+                else {
+                    return None;
+                };
+                Some(Box::new(Azure::new(
+                    self.long_id,
+                    AzureLocation::NorthEurope, // TODO(benjaminch): check how to pass properly location / region
+                    Credentials {
+                        client_id: client_id.to_string(),
+                        client_secret: client_secret.to_string(),
+                        tenant_id: tenant_id.to_string(),
+                        subscription_id: subscription_id.to_string(),
+                        resource_group_name: resource_group_name.to_string(),
+                    },
                     terraform_state_credentials,
                 )))
             }
@@ -505,9 +535,44 @@ impl KubernetesDto {
                     Err(e) => Err(e),
                 }
             }
+            kubernetes::Kind::Aks => {
+                let options = serde_json::from_value::<io_models::azure::AksOptions>(self.options.clone()).map_err(
+                    |e: serde_json::Error| {
+                        Box::new(EngineError::new_invalid_engine_payload(
+                            event_details.clone(),
+                            &e.to_string(),
+                            None,
+                        ))
+                    },
+                )?;
+                let options = AksOptions::try_from(options).map_err(|e: String| {
+                    Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
+                })?;
+                match kubernetes::azure::aks::AKS::new(
+                    context.clone(),
+                    self.long_id,
+                    &self.name,
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    AzureLocation::NorthEurope, // TODO(benjaminch): To be implemented
+                    cloud_provider,
+                    self.created_at,
+                    options,
+                    logger,
+                    self.advanced_settings.clone(),
+                    decoded_helm_charts_override,
+                    self.kubeconfig.clone(),
+                    temp_dir,
+                    self.qovery_allowed_public_access_cidrs.clone(),
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
             kubernetes::Kind::OnPremiseSelfManaged
             | kubernetes::Kind::EksSelfManaged
             | kubernetes::Kind::GkeSelfManaged
+            | kubernetes::Kind::AksSelfManaged
             | kubernetes::Kind::ScwSelfManaged => {
                 match kubernetes::self_managed::on_premise::SelfManaged::new(
                     context.clone(),
@@ -711,6 +776,14 @@ pub enum CloudProviderOptions {
         secret_access_key: String,
         #[serde(default)]
         session_token: Option<String>,
+    },
+    Azure {
+        client_id: String,
+        #[derivative(Debug = "ignore")]
+        client_secret: String,
+        tenant_id: String,
+        subscription_id: String,
+        resource_group_name: String, // TODO(benjaminch): check if this is the proper place to set this
     },
     Scaleway {
         scaleway_access_key: String,

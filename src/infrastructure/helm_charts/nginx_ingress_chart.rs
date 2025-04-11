@@ -538,6 +538,7 @@ defaultBackend:
                 });
             }
             Kind::Gcp => {}
+            Kind::Azure => {}
             Kind::OnPremise => {}
         }
         // external dns

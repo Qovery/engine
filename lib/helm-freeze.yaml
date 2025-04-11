@@ -177,5 +177,7 @@ destinations:
     path: common/bootstrap/charts
   - name: aws-bootstrap
     path: aws/bootstrap/charts
+  - name: azure-bootstrap
+    path: azure/bootstrap/charts
   - name: services
     path: common/services

@@ -104,6 +104,8 @@ aws-credential-types = "1.2.1"
 azure_core = "0.21.0"
 azure_storage = "0.21.0"
 azure_storage_blobs = "0.21.0"
+azure_mgmt_containerregistry = "0.21.0"
+azure_identity = "0.21.0"
 
 # Scaleway deps
 scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "engine" }

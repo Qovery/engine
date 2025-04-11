@@ -1,0 +1,38 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: coredns-custom   # Name must be `coredns-custom`
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+        }
+        {{ if .Values.declare_node_hosts }}
+        hosts /etc/coredns/NodeHosts {
+          ttl 60
+          reload 15s
+          fallthrough
+        }
+        {{ end }}
+        prometheus :9153
+        forward . /etc/resolv.conf
+        cache 30
+        loop
+        reload
+        loadbalance
+    }
+    {{- range .Values.managed_dns }}
+    {{ . }}:53 {
+      errors
+      cache 30
+      forward . {{ join " " $.Values.managed_dns_resolvers }}
+    }
+    {{ end }}

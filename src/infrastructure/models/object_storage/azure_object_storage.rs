@@ -1,5 +1,6 @@
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
-use crate::infrastructure::models::object_storage::{Bucket, BucketDeleteStrategy, BucketObject, Kind, ObjectStorage};
+use crate::infrastructure::models::object_storage::{Bucket, BucketDeleteStrategy, BucketObject};
+use crate::services;
 use crate::services::azure::blob_storage_regions::AzureStorageRegion;
 use crate::services::azure::blob_storage_service::BlobStorageService;
 use chrono::{DateTime, Utc};
@@ -9,62 +10,72 @@ use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
 
-pub struct AzureOS {
-    id: String,
-    _long_id: Uuid,
-    name: String,
-    region: AzureStorageRegion,
-    service: Arc<BlobStorageService>,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StorageAccount {
+    pub access_key: String,
+    pub account_name: String,
 }
 
-impl AzureOS {
-    pub fn _new(
-        id: &str,
-        long_id: Uuid,
-        name: &str,
-        region: AzureStorageRegion,
-        service: Arc<BlobStorageService>,
-    ) -> Self {
-        Self {
-            id: id.to_string(),
-            _long_id: long_id,
-            name: name.to_string(),
-            region,
-            service,
+impl StorageAccount {
+    pub fn to_storage_account_service_model(&self) -> services::azure::blob_storage_service::StorageAccount {
+        services::azure::blob_storage_service::StorageAccount {
+            access_key: self.access_key.to_string(),
+            account_name: self.account_name.to_string(),
         }
     }
 }
 
-impl ObjectStorage for AzureOS {
-    fn kind(&self) -> Kind {
-        Kind::AzureOs
+pub struct AzureOS {
+    id: String,
+    _long_id: Uuid,
+    name: String,
+
+    service: Arc<BlobStorageService>,
+}
+
+impl AzureOS {
+    pub fn new(id: &str, long_id: Uuid, name: &str, service: Arc<BlobStorageService>) -> Self {
+        Self {
+            id: id.to_string(),
+            _long_id: long_id,
+            name: name.to_string(),
+
+            service,
+        }
     }
 
-    fn id(&self) -> &str {
+    pub fn id(&self) -> &str {
         &self.id
     }
 
-    fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.name
     }
 
-    fn is_valid(&self) -> Result<(), ObjectStorageError> {
+    pub fn is_valid(&self) -> Result<(), ObjectStorageError> {
         // TODO check valid credentials
         Ok(())
     }
 
-    fn bucket_exists(&self, bucket_name: &str) -> bool {
-        self.service.bucket_exists(bucket_name, &self.region)
+    pub fn bucket_exists(&self, storage_account: &StorageAccount, bucket_name: &str) -> bool {
+        self.service.bucket_exists(
+            &storage_account.to_storage_account_service_model(),
+            bucket_name,
+            &AzureStorageRegion::Public {
+                account: storage_account.account_name.to_string(),
+            },
+        )
     }
 
-    fn create_bucket(
+    pub fn create_bucket(
         &self,
+        storage_account: &StorageAccount,
         bucket_name: &str,
         bucket_ttl: Option<Duration>,
         _bucket_versioning_activated: bool, // TODO(benjaminch): Add bucket versioning option
         _bucket_logging_activated: bool,    // TODO(benjaminch): Add bucket logging option
     ) -> Result<Bucket, ObjectStorageError> {
-        if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
+        if let Ok(existing_bucket) = self.get_bucket(storage_account, bucket_name) {
             return Ok(existing_bucket);
         }
 
@@ -72,8 +83,11 @@ impl ObjectStorage for AzureOS {
         // TODO(benjaminch): Add bucket versioning option
         // TODO(benjaminch): Add bucket logging option
         match self.service.create_bucket(
+            &storage_account.to_storage_account_service_model(),
             bucket_name,
-            &self.region,
+            &AzureStorageRegion::Public {
+                account: storage_account.account_name.to_string(),
+            },
             bucket_ttl,
             Some(HashMap::from([
                 ("creation_date".to_string(), creation_date.timestamp().to_string()),
@@ -91,37 +105,54 @@ impl ObjectStorage for AzureOS {
         }
     }
 
-    fn update_bucket(
+    pub fn update_bucket(
         &self,
-        _bucket_name: &str,
-        _bucket_ttl: Option<Duration>,
-        _bucket_versioning_activated: bool,
-        _bucket_logging_activated: bool,
-        _bucket_labels: Option<HashMap<String, String>>,
+        storage_account: &StorageAccount,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
+        bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageError> {
-        todo!("update_bucket for Azure is not implemented")
-        // if let Err(err) = self.get_bucket(bucket_name) {
-        //     return Err(ObjectStorageError::CannotUpdateBucket {
-        //         bucket_name: bucket_name.to_string(),
-        //         raw_error_message: err.to_string(),
-        //     });
-        // }
+        if let Err(err) = self.get_bucket(storage_account, bucket_name) {
+            return Err(ObjectStorageError::CannotUpdateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: err.to_string(),
+            });
+        }
 
-        // // Update the bucket
-        // match self
-        //     .service
-        //     .update_bucket(bucket_name, self.region.clone(), bucket_ttl, bucket_labels)
-        // {
-        //     Ok(o) => Ok(o),
-        //     Err(e) => Err(ObjectStorageError::CannotUpdateBucket {
-        //         bucket_name: bucket_name.to_string(),
-        //         raw_error_message: e.to_string(),
-        //     }),
-        // }
+        // Update the bucket
+        match self.service.update_bucket(
+            &storage_account.to_storage_account_service_model(),
+            bucket_name,
+            &AzureStorageRegion::Public {
+                account: storage_account.account_name.to_string(),
+            },
+            bucket_ttl,
+            bucket_versioning_activated,
+            bucket_logging_activated,
+            bucket_labels,
+        ) {
+            Ok(o) => Ok(o),
+            Err(e) => Err(ObjectStorageError::CannotUpdateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
     }
 
-    fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError> {
-        match self.service.get_bucket(bucket_name, &self.region) {
+    pub fn get_bucket(
+        &self,
+        storage_account: &StorageAccount,
+        bucket_name: &str,
+    ) -> Result<Bucket, ObjectStorageError> {
+        match self.service.get_bucket(
+            &storage_account.to_storage_account_service_model(),
+            bucket_name,
+            &AzureStorageRegion::Public {
+                account: storage_account.account_name.to_string(),
+            },
+        ) {
             Ok(o) => Ok(o),
             Err(e) => Err(ObjectStorageError::CannotGetBucket {
                 bucket_name: bucket_name.to_string(),
@@ -130,21 +161,38 @@ impl ObjectStorage for AzureOS {
         }
     }
 
-    fn delete_bucket(&self, bucket_name: &str, _strategy: BucketDeleteStrategy) -> Result<(), ObjectStorageError> {
+    pub fn delete_bucket(
+        &self,
+        storage_account: &StorageAccount,
+        bucket_name: &str,
+        _strategy: BucketDeleteStrategy,
+    ) -> Result<(), ObjectStorageError> {
         self.service
-            .delete_bucket(bucket_name)
+            .delete_bucket(&storage_account.to_storage_account_service_model(), bucket_name)
             .map_err(|e| ObjectStorageError::CannotDeleteBucket {
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: e.to_string(),
             })
     }
 
-    fn delete_bucket_non_blocking(&self, _bucket_name: &str) -> Result<(), ObjectStorageError> {
+    pub fn delete_bucket_non_blocking(
+        &self,
+        _storage_account: &StorageAccount,
+        _bucket_name: &str,
+    ) -> Result<(), ObjectStorageError> {
         todo!("delete_bucket_non_blocking for Azure is not implemented")
     }
 
-    fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
-        match self.service.get_object(bucket_name, object_key) {
+    pub fn get_object(
+        &self,
+        storage_account: &StorageAccount,
+        bucket_name: &str,
+        object_key: &str,
+    ) -> Result<BucketObject, ObjectStorageError> {
+        match self
+            .service
+            .get_object(&storage_account.to_storage_account_service_model(), bucket_name, object_key)
+        {
             Err(e) => Err(ObjectStorageError::CannotGetObjectFile {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
@@ -154,8 +202,9 @@ impl ObjectStorage for AzureOS {
         }
     }
 
-    fn put_object(
+    pub fn put_object(
         &self,
+        storage_account: &StorageAccount,
         bucket_name: &str,
         object_key: &str,
         file_path: &Path,
@@ -168,6 +217,7 @@ impl ObjectStorage for AzureOS {
         })?;
 
         match self.service.put_object(
+            &storage_account.to_storage_account_service_model(),
             bucket_name,
             object_key,
             file_content,
@@ -192,14 +242,19 @@ impl ObjectStorage for AzureOS {
         }
     }
 
-    fn delete_object(&self, bucket_name: &str, object_key: &str) -> Result<(), ObjectStorageError> {
+    pub fn delete_object(
+        &self,
+        storage_account: &StorageAccount,
+        bucket_name: &str,
+        object_key: &str,
+    ) -> Result<(), ObjectStorageError> {
         // TODO(benjaminch): not optimal since fine grained statuses are not returned, should know if get is error because file doesn't exist or if anything else
-        if self.get_object(bucket_name, object_key).is_err() {
+        if self.get_object(storage_account, bucket_name, object_key).is_err() {
             return Ok(());
         }
 
         self.service
-            .delete_object(bucket_name, object_key)
+            .delete_object(&storage_account.to_storage_account_service_model(), bucket_name, object_key)
             .map_err(|e| ObjectStorageError::CannotDeleteFile {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
@@ -210,11 +265,9 @@ impl ObjectStorage for AzureOS {
 
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::models::object_storage::azure_object_storage::AzureOS;
+    use crate::infrastructure::models::object_storage::azure_object_storage::{AzureOS, StorageAccount};
     use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
-    use crate::infrastructure::models::object_storage::{
-        Bucket, BucketDeleteStrategy, BucketObject, BucketRegion, ObjectStorage,
-    };
+    use crate::infrastructure::models::object_storage::{Bucket, BucketDeleteStrategy, BucketObject, BucketRegion};
     use crate::services::azure::blob_storage_regions::AzureStorageRegion;
     use crate::services::azure::blob_storage_service::{BlobStorageService, BlobStorageServiceError};
     use chrono::Utc;
@@ -231,34 +284,31 @@ mod tests {
         // setup:
         let existing_bucket_name = "this-bucket-exists";
         let not_existing_bucket_name = "this-bucket-doesnt-exist";
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.bucket_exists(existing_bucket_name, _)).then_return(true);
-        faux::when!(service_mock.bucket_exists(not_existing_bucket_name, _)).then_return(false);
+        faux::when!(service_mock.bucket_exists(_, existing_bucket_name, _)).then_return(true);
+        faux::when!(service_mock.bucket_exists(_, not_existing_bucket_name, _)).then_return(false);
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location,
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute & verify:
-        assert!(blob_storage.bucket_exists(existing_bucket_name));
-        assert!(!blob_storage.bucket_exists(not_existing_bucket_name));
+        assert!(blob_storage.bucket_exists(&storage_account, existing_bucket_name));
+        assert!(!blob_storage.bucket_exists(&storage_account, not_existing_bucket_name));
     }
 
     #[test]
     fn create_bucket_success_test() {
         // setup:
-        let account = "account_123";
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
+        };
         let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+            account: storage_account.account_name.to_string(),
         };
         let bucket_name_test_cases = vec!["abc", "abcabc", "ABC_abc"];
         let bucket_ttl_test_cases = vec![
@@ -291,27 +341,21 @@ mod tests {
             };
 
             let mut service_mock = BlobStorageService::faux();
-
-            faux::when!(service_mock.create_bucket(bucket_name, _, bucket_ttl, _))
+            faux::when!(service_mock.create_bucket(_, bucket_name, _, bucket_ttl, _))
                 .then_return(Ok(expected_bucket.clone()));
-            faux::when!(service_mock.get_bucket(bucket_name, _)).then_return(Err(
+            faux::when!(service_mock.get_bucket(_, bucket_name, _)).then_return(Err(
                 BlobStorageServiceError::CannotGetBucket {
+                    storage_account_name: storage_account.account_name.to_string(),
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: "Bucket doesn't exist".to_string(),
                 },
             ));
 
-            let blob_storage = AzureOS::_new(
-                "123",
-                uuid::Uuid::new_v4(),
-                "test_123",
-                bucket_location.clone(),
-                std::sync::Arc::new(service_mock),
-            );
+            let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
             // execute:
             let created_bucket = blob_storage
-                .create_bucket(bucket_name, bucket_ttl, bucket_versionning, bucket_logging)
+                .create_bucket(&storage_account, bucket_name, bucket_ttl, bucket_versionning, bucket_logging)
                 .expect("Error creating bucket");
 
             // verify:
@@ -322,9 +366,12 @@ mod tests {
     #[test]
     fn create_bucket_existing_test() {
         // setup:
-        let account = "account_123";
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
+        };
         let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+            account: storage_account.account_name.to_string(),
         };
         let bucket_name_test_cases = vec!["abc", "abcabc", "ABC_abc"];
         let bucket_ttl_test_cases = vec![
@@ -357,27 +404,21 @@ mod tests {
             };
 
             let mut service_mock = BlobStorageService::faux();
-
             // Make create service returns an error if called, making sure success comes from the get
-            faux::when!(service_mock.create_bucket(bucket_name, _, bucket_ttl, _)).then_return(Err(
+            faux::when!(service_mock.create_bucket(_, bucket_name, _, bucket_ttl, _)).then_return(Err(
                 BlobStorageServiceError::CannotCreateBucket {
+                    storage_account_name: storage_account.account_name.to_string(),
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: "Bucket doesn't exist".to_string(),
                 },
             ));
-            faux::when!(service_mock.get_bucket(bucket_name, _)).then_return(Ok(expected_bucket.clone()));
+            faux::when!(service_mock.get_bucket(_, bucket_name, _)).then_return(Ok(expected_bucket.clone()));
 
-            let blob_storage = AzureOS::_new(
-                "123",
-                uuid::Uuid::new_v4(),
-                "test_123",
-                bucket_location.clone(),
-                std::sync::Arc::new(service_mock),
-            );
+            let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
             // execute:
             let created_bucket = blob_storage
-                .create_bucket(bucket_name, bucket_ttl, bucket_versionning, bucket_logging)
+                .create_bucket(&storage_account, bucket_name, bucket_ttl, bucket_versionning, bucket_logging)
                 .expect("Error creating bucket");
 
             // verify:
@@ -388,9 +429,12 @@ mod tests {
     #[test]
     fn get_bucket_success_test() {
         // setup:
-        let account = "account_123";
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
+        };
         let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+            account: storage_account.account_name.to_string(),
         };
         let bucket_name = "test-bucket";
         let bucket_ttl = Some(Duration::from_secs(7 * 24 * 60 * 60)); // 7 days
@@ -410,18 +454,12 @@ mod tests {
         };
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.get_bucket(bucket_name, _)).then_return(Ok(expected_bucket.clone()));
+        faux::when!(service_mock.get_bucket(_, bucket_name, _)).then_return(Ok(expected_bucket.clone()));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let retrieved_bucket = blob_storage.get_bucket(bucket_name);
+        let retrieved_bucket = blob_storage.get_bucket(&storage_account, bucket_name);
 
         // verify:
         assert_eq!(Ok(expected_bucket), retrieved_bucket);
@@ -430,37 +468,35 @@ mod tests {
     #[test]
     fn get_bucket_failure_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let raw_error_message = "get error message";
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.get_bucket(bucket_name, _)).then_return(Err(
+        faux::when!(service_mock.get_bucket(_, bucket_name, _)).then_return(Err(
             BlobStorageServiceError::CannotGetBucket {
+                storage_account_name: storage_account.account_name.to_string(),
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: raw_error_message.to_string(),
             },
         ));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let retrieved_bucket = blob_storage.get_bucket(bucket_name);
+        let retrieved_bucket = blob_storage.get_bucket(&storage_account, bucket_name);
 
         // verify:
         assert_eq!(
             ObjectStorageError::CannotGetBucket {
                 bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Cannot get bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+                raw_error_message: format!(
+                    "Cannot get bucket `{}` from storage account `{}`: \"{}\"",
+                    bucket_name, storage_account.account_name, raw_error_message
+                ),
             },
             retrieved_bucket.unwrap_err()
         );
@@ -477,26 +513,20 @@ mod tests {
     #[test]
     fn delete_bucket_success_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.delete_bucket(bucket_name)).then_return(Ok(()));
+        faux::when!(service_mock.delete_bucket(_, bucket_name)).then_return(Ok(()));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         for delete_strategy in BucketDeleteStrategy::iter() {
             // execute:
-            let delete_result = blob_storage.delete_bucket(bucket_name, delete_strategy);
+            let delete_result = blob_storage.delete_bucket(&storage_account, bucket_name, delete_strategy);
 
             // verify:
             assert_eq!(Ok(()), delete_result);
@@ -506,38 +536,36 @@ mod tests {
     #[test]
     fn delete_bucket_failure_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let raw_error_message = "delete error message";
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.delete_bucket(bucket_name)).then_return(Err(
+        faux::when!(service_mock.delete_bucket(_, bucket_name)).then_return(Err(
             BlobStorageServiceError::CannotDeleteBucket {
+                storage_account_name: storage_account.account_name.to_string(),
                 bucket_name: bucket_name.to_string(),
                 raw_error_message: raw_error_message.to_string(),
             },
         ));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         for delete_strategy in BucketDeleteStrategy::iter() {
             // execute:
-            let delete_result = blob_storage.delete_bucket(bucket_name, delete_strategy);
+            let delete_result = blob_storage.delete_bucket(&storage_account, bucket_name, delete_strategy);
 
             // verify:
             assert_eq!(
                 ObjectStorageError::CannotDeleteBucket {
                     bucket_name: bucket_name.to_string(),
-                    raw_error_message: format!("Cannot delete bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+                    raw_error_message: format!(
+                        "Cannot delete bucket `{}` from storage account `{}`: \"{}\"",
+                        bucket_name, storage_account.account_name, raw_error_message
+                    ),
                 },
                 delete_result.unwrap_err(),
             );
@@ -548,9 +576,9 @@ mod tests {
     fn put_object_success_test() {
         // setup:
         let bucket_name = "test-bucket";
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let object_key = "test-object-key";
         let object_content = "test-object-content";
@@ -571,6 +599,7 @@ mod tests {
         let mut service_mock = BlobStorageService::faux();
         faux::when!(
             service_mock.put_object(
+                _,
                 bucket_name,
                 object_key,
                 _,
@@ -589,17 +618,11 @@ mod tests {
         )
         .then_return(Ok(expected_bucket_object.clone()));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
         let added_object = blob_storage
-            .put_object(bucket_name, object_key, &file_path, Some(object_tags))
+            .put_object(&storage_account, bucket_name, object_key, &file_path, Some(object_tags))
             .expect("Cannot get object from bucket");
 
         // verify:
@@ -610,9 +633,9 @@ mod tests {
     fn put_object_failure_test() {
         // setup:
         let bucket_name = "test-bucket";
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let object_key = "test-object-key";
         let object_content = "test-object-content";
@@ -627,6 +650,7 @@ mod tests {
         let mut service_mock = BlobStorageService::faux();
         faux::when!(
             service_mock.put_object(
+                _,
                 bucket_name,
                 object_key,
                 _,
@@ -644,21 +668,17 @@ mod tests {
             )
         )
         .then_return(Err(BlobStorageServiceError::CannotPutObjectToBucket {
+            storage_account_name: storage_account.account_name.to_string(),
             bucket_name: bucket_name.to_string(),
             object_key: object_key.to_string(),
             raw_error_message: raw_error_message.to_string(),
         }));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let added_object = blob_storage.put_object(bucket_name, object_key, &file_path, Some(object_tags));
+        let added_object =
+            blob_storage.put_object(&storage_account, bucket_name, object_key, &file_path, Some(object_tags));
 
         // verify:
         assert_eq!(
@@ -666,8 +686,8 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot put object `{}` to bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot put object `{}` to bucket `{}` in storage account `{}`: \"{}\"",
+                    object_key, bucket_name, storage_account.account_name, raw_error_message
                 ),
             },
             added_object.unwrap_err()
@@ -677,9 +697,9 @@ mod tests {
     #[test]
     fn delete_object_success_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let object_key = "test-object-key";
@@ -692,19 +712,13 @@ mod tests {
         };
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.delete_object(bucket_name, object_key)).then_return(Ok(()));
-        faux::when!(service_mock.get_object(bucket_name, object_key)).then_return(Ok(expected_bucket_object)); // <- object has to be detected there
+        faux::when!(service_mock.delete_object(_, bucket_name, object_key)).then_return(Ok(()));
+        faux::when!(service_mock.get_object(_, bucket_name, object_key)).then_return(Ok(expected_bucket_object)); // <- object has to be detected there
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let delete_object_result = blob_storage.delete_object(bucket_name, object_key);
+        let delete_object_result = blob_storage.delete_object(&storage_account, bucket_name, object_key);
 
         // verify:
         assert!(delete_object_result.is_ok());
@@ -713,9 +727,9 @@ mod tests {
     #[test]
     fn delete_object_failure_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let object_key = "test-object-key";
@@ -729,25 +743,20 @@ mod tests {
         let raw_error_message = "delete error message";
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.delete_object(bucket_name, object_key)).then_return(Err(
+        faux::when!(service_mock.delete_object(_, bucket_name, object_key)).then_return(Err(
             BlobStorageServiceError::CannotDeleteObject {
+                storage_account_name: storage_account.account_name.to_string(),
                 bucket_name: bucket_name.to_string(),
                 object_key: object_key.to_string(),
                 raw_error_message: raw_error_message.to_string(),
             },
         ));
-        faux::when!(service_mock.get_object(bucket_name, object_key)).then_return(Ok(expected_bucket_object)); // <- object has to be detected there
+        faux::when!(service_mock.get_object(_, bucket_name, object_key)).then_return(Ok(expected_bucket_object)); // <- object has to be detected there
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let delete_object_result = blob_storage.delete_object(bucket_name, object_key);
+        let delete_object_result = blob_storage.delete_object(&storage_account, bucket_name, object_key);
 
         // verify:
         assert_eq!(
@@ -755,8 +764,8 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot delete object `{}` from bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot delete object `{}` from bucket `{}` from storage account `{}`: \"{}\"",
+                    object_key, bucket_name, storage_account.account_name, raw_error_message
                 ),
             },
             delete_object_result.unwrap_err()
@@ -766,9 +775,9 @@ mod tests {
     #[test]
     fn get_object_success_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let object_key = "test-object-key";
@@ -781,19 +790,14 @@ mod tests {
         };
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.get_object(bucket_name, object_key)).then_return(Ok(expected_bucket_object.clone()));
+        faux::when!(service_mock.get_object(_, bucket_name, object_key))
+            .then_return(Ok(expected_bucket_object.clone()));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
         let retrieved_object = blob_storage
-            .get_object(bucket_name, object_key)
+            .get_object(&storage_account, bucket_name, object_key)
             .expect("Cannot get object from bucket");
 
         // verify:
@@ -803,33 +807,28 @@ mod tests {
     #[test]
     fn get_object_failure_test() {
         // setup:
-        let account = "account_123";
-        let bucket_location = AzureStorageRegion::Public {
-            account: account.to_string(),
+        let storage_account = StorageAccount {
+            account_name: "account_123".to_string(),
+            access_key: "access_key_123".to_string(),
         };
         let bucket_name = "test-bucket";
         let object_key = "test-object-key";
         let raw_error_message = "get error message";
 
         let mut service_mock = BlobStorageService::faux();
-        faux::when!(service_mock.get_object(bucket_name, object_key)).then_return(Err(
+        faux::when!(service_mock.get_object(_, bucket_name, object_key)).then_return(Err(
             BlobStorageServiceError::CannotGetObject {
+                storage_account_name: storage_account.account_name.to_string(),
                 bucket_name: bucket_name.to_string(),
                 object_key: object_key.to_string(),
                 raw_error_message: raw_error_message.to_string(),
             },
         ));
 
-        let blob_storage = AzureOS::_new(
-            "123",
-            uuid::Uuid::new_v4(),
-            "test_123",
-            bucket_location.clone(),
-            std::sync::Arc::new(service_mock),
-        );
+        let blob_storage = AzureOS::new("123", uuid::Uuid::new_v4(), "test_123", std::sync::Arc::new(service_mock));
 
         // execute:
-        let retrieved_object = blob_storage.get_object(bucket_name, object_key);
+        let retrieved_object = blob_storage.get_object(&storage_account, bucket_name, object_key);
 
         // verify:
         assert_eq!(
@@ -837,8 +836,8 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot get object `{}` from bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot get object `{}` from bucket `{}` from storage account `{}`: \"{}\"",
+                    object_key, bucket_name, storage_account.account_name, raw_error_message
                 ),
             },
             retrieved_object.unwrap_err()

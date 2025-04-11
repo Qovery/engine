@@ -370,6 +370,7 @@ impl ToCommonHelmChart for ThanosChart {
                     )
                 })
             }
+            PrometheusConfiguration::AzureBlobContainer => {}
             PrometheusConfiguration::ScalewayObjectStorage {
                 bucket_name,
                 region,

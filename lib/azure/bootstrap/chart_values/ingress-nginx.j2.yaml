@@ -1,0 +1,106 @@
+controller:
+  useComponentLabel: true
+  admissionWebhooks:
+    enabled: true # set-by-engine-code
+  allowSnippetAnnotations: true
+  # enable if you want metrics scrapped by prometheus
+  metrics:
+    enabled: true # set-by-engine-code
+    serviceMonitor:
+      enabled: false # set-by-engine-code
+  config:
+    # set global default file size limit to 100m
+    proxy-body-size: 100m
+    # hide Nginx version
+    server-tokens: "false"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-engine-code
+    # passes the incoming X-Forwarded-* headers to upstreams
+    use-forwarded-headers: "false" # set-by-engine-code
+    # append the remote address to the X-Forwarded-For header instead of replacing it
+    compute-full-forwarded-for: "false" # set-by-engine-code
+    # customize http-snippet
+    {%- if nginx_controller_http_snippet %}
+    http-snippet: |
+      {{ nginx_controller_http_snippet | indent(prefix="        ") }}
+    {%- endif %}
+    {%- if nginx_controller_server_snippet %}
+    server-snippet: |
+      {{ nginx_controller_server_snippet | indent(prefix="        ") }}
+    {%- endif %}
+    # customize log-format / set-by-engine-code
+    # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
+    # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
+    {%- if nginx_controller_log_format_upstream %}
+    log-format-upstream: >
+      {{ nginx_controller_log_format_upstream }}
+    {%- endif %}
+    log-format-escaping-json: "false" # set-by-engine-code
+    log-format-escaping-none: "false" # set-by-engine-code
+    limit-req-status-code: "503" # set-by-engine-code
+
+  # PDB
+  maxUnavailable: 20%
+
+  ingressClassResource:
+    # -- Name of the IngressClass
+    name: nginx-qovery
+    # -- Create the IngressClass or not
+    enabled: true
+
+  # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
+  ingressClass: nginx-qovery
+
+  extraArgs:
+    # Kubernetes path of the default Cert-manager TLS certificate (if used)
+    default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
+  updateStrategy:
+    rollingUpdate:
+      # set the minimum acceptable number of unavailable pods during a rolling update
+      maxSurge: 1
+      maxUnavailable: 0
+
+  readinessProbe:
+    initialDelaySeconds: 15
+
+  # enable auoscaling if you want to scale the number of replicas based on CPU usage
+  autoscaling:
+    enabled: false # set-by-engine-code
+    minReplicas: 2 # set-by-engine-code
+    maxReplicas: 25 # set-by-engine-code
+    targetCPUUtilizationPercentage: 50 # set-by-engine-code
+
+  # required if you rely on a load balancer
+  # the controller mirrors the address of this service's endpoints to the load-balancer status of all Ingress objects it satisfies.
+  publishService:
+    enabled: true
+
+  # set a load balancer if you want your Nginx to be publicly accessible
+  service:
+    enabled: true
+    annotations:
+      # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
+      external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+    externalTrafficPolicy: "Local"
+    sessionAffinity: ""
+    healthCheckNodePort: 0
+
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
+
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule

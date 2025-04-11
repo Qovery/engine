@@ -1515,6 +1515,7 @@ pub fn terraform_plan(
 pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {
     // Terraform output must call alone and after init, because we need to retrieve the json output from stdout
     let output = terraform_run(TerraformAction::OUTPUT, root_dir, false, envs, &TerraformValidators::None)?;
+
     serde_json::from_str(&output.raw_std_output.join("\n")).map_err(|e| TerraformError::OutputCannotBeDeserialized {
         raw_message: e.to_string(),
     })

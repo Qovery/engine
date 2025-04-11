@@ -467,6 +467,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
             )?),
+            CPKind::Azure => todo!(),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
                 self.long_id,

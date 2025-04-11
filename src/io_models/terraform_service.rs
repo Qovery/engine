@@ -308,6 +308,7 @@ impl TerraformService {
                 annotations_groups,
                 labels_groups,
             )?),
+            Kind::Aks | Kind::AksSelfManaged => todo!(),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
                 self.long_id,

@@ -424,6 +424,7 @@ impl Application {
                     self.should_delete_shared_registry,
                 )?))
             }
+            CPKind::Azure => todo!(),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
                 self.long_id,

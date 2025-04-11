@@ -1,43 +1,43 @@
 variable "kubernetes_cluster_name" {
   description = "The name of the AKS cluster"
   type        = string
-  default     = "qovery-aks-test"
+  default     = "{{ kubernetes_cluster_name }}"
 }
 
 variable "resource_group_name" {
   description = "The name of the resource group"
   type        = string
-  default     = "rg-qovery-aks-test"
+  default     = "{{ azure_resource_group_name }}"
 }
 
 variable "location" {
   description = "The Azure region where resources will be created"
   type        = string
-  default     = "francecentral"
+  default     = "{{ azure_location }}"
 }
 
 variable "kubernetes_version" {
   description = "The version of Kubernetes to use for the AKS cluster"
   type        = string
-  default     = "1.31.5"
+  default     = "{{ kubernetes_cluster_version }}"
 }
 
 variable "node_pool_machine_type" {
   description = "The VM size for the default node pool"
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2s_v3" # TODO(benjaminch): to be variabilized
 }
 
 variable "min_count" {
   description = "Minimum number of nodes in the default node pool"
   type        = number
-  default     = 1
+  default     = 1 # TODO(benjaminch): to be variabilized
 }
 
 variable "max_count" {
   description = "Maximum number of nodes in the default node pool"
   type        = number
-  default     = 5
+  default     = 5 # TODO(benjaminch): to be variabilized
 }
 
 # variable "subnet_id" {
@@ -107,12 +107,6 @@ variable "enable_network_logging" {
   default     = false
 }
 
-variable "flow_logs_storage_account_id" {
-  description = "Storage account ID for flow logs"
-  type        = string
-  default     = ""
-}
-
 variable "log_analytics_workspace_resource_id" {
   description = "Resource ID of the Log Analytics workspace"
   type        = string
@@ -122,22 +116,26 @@ variable "log_analytics_workspace_resource_id" {
 variable "subscription_id" {
   description = "Azure subscription ID"
   type        = string
+  default     = "{{ azure_subscription_id }}"
 }
 
 variable "tenant_id" {
   description = "Azure tenant ID"
   type        = string
+  default     = "{{ azure_tenant_id }}"
 }
 
 variable "client_id" {
   description = "Azure client ID (service principal)"
   type        = string
+  default     = "{{ azure_client_id }}"
 }
 
 variable "client_secret" {
   description = "Azure client secret (service principal)"
   type        = string
   sensitive   = true
+  default     = "{{ azure_client_secret }}"
 }
 
 variable "vnet_cidr" {
@@ -202,4 +200,16 @@ variable "environment" {
   description = "Environment name for tagging"
   type        = string
   default     = "dev"
+}
+
+variable "main_storage_account_name" {
+  description = "Main storage account name"
+  type        = string
+  default     = "{{ main_storage_account_name }}"
+}
+
+variable "loki_namespace" {
+  description = "Loki kubernetes namespace"
+  type        = string
+  default     = "{{ loki_namespace }}"
 }

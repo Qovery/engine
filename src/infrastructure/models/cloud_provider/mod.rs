@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub mod aws;
+pub mod azure;
 pub mod gcp;
 pub mod io;
 pub mod scaleway;
@@ -44,6 +45,7 @@ pub trait CloudProvider: Send + Sync {
 pub enum CloudProviderKind<'a> {
     Aws(&'a aws::AWS),
     Gcp(&'a gcp::Google),
+    Azure(&'a azure::Azure),
     Scw(&'a scaleway::Scaleway),
     SelfManaged(&'a self_managed::SelfManaged),
 }
@@ -63,6 +65,13 @@ impl<'a> CloudProviderKind<'a> {
         }
     }
 
+    pub fn as_azure(&'a self) -> Option<&'a azure::Azure> {
+        match self {
+            CloudProviderKind::Azure(azure) => Some(azure),
+            _ => None,
+        }
+    }
+
     pub fn as_scw(&'a self) -> Option<&'a scaleway::Scaleway> {
         match self {
             CloudProviderKind::Scw(scw) => Some(scw),
@@ -75,6 +84,7 @@ impl<'a> CloudProviderKind<'a> {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Kind {
     Aws,
+    Azure,
     Scw,
     Gcp,
     OnPremise,
@@ -86,6 +96,7 @@ impl FromStr for Kind {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
             "aws" | "amazon" => Ok(Kind::Aws),
+            "az" | "azure" => Ok(Kind::Azure),
             "scw" | "scaleway" => Ok(Kind::Scw),
             "gcp" | "google" => Ok(Kind::Gcp),
             "on-premise" | "onpremise" => Ok(Kind::OnPremise),
@@ -98,6 +109,7 @@ impl Display for Kind {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Kind::Aws => "AWS",
+            Kind::Azure => "Azure",
             Kind::Scw => "Scaleway",
             Kind::Gcp => "GCP",
             Kind::OnPremise => "OnPremise",

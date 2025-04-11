@@ -440,6 +440,7 @@ impl EnvironmentTask {
             CloudProviderOptions::Gcp { gcp_credentials } => {
                 secrets.push(gcp_credentials.private_key.to_string());
             }
+            CloudProviderOptions::Azure { .. } => {}
             CloudProviderOptions::OnPremise { .. } => {}
         };
 

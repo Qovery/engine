@@ -1,8 +1,0 @@
-# https://github.com/Azure/karpenter-provider-azure
-webhook:
-  # -- Whether to enable the webhooks.
-  enabled: true
-  serviceName: karpenter
-  serviceNamespace: "qovery"
-  # -- The container port to use for the webhook.
-  port: 8443

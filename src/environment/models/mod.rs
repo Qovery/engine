@@ -2,6 +2,7 @@ pub mod abort;
 mod annotations_group;
 pub mod application;
 pub mod aws;
+pub mod azure;
 pub mod container;
 pub mod database;
 pub(crate) mod database_utils;
