@@ -30,6 +30,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     docker_extra_files_to_inject: &[GitRepositoryExtraFile],
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
+    docker_target_build_stage: &Option<String>,
 ) -> String {
     // Image tag == hash(root_path) + commit_id truncate to 127 char
     // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
@@ -46,6 +47,11 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
         // we redeploy an app with a env var changed with Buildpacks.
         dockerfile_path.hash(&mut hasher);
         environment_variables.hash(&mut hasher);
+    }
+
+    // Include docker_target_build_stage in the hash calculation only if it's Some
+    if let Some(build_stage) = docker_target_build_stage {
+        build_stage.hash(&mut hasher);
     }
 
     if !docker_extra_files_to_inject.is_empty() {
@@ -101,6 +107,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         let image_tag_2 = compute_image_tag(
@@ -110,6 +117,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_ne!(image_tag, image_tag_2);
@@ -121,6 +129,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_ne!(image_tag, image_tag_3);
@@ -132,6 +141,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_eq!(image_tag_3, image_tag_3_2);
@@ -143,6 +153,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         let mut env_vars_5 = BTreeMap::new();
@@ -155,6 +166,7 @@ mod tests_utilities {
             &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_eq!(image_tag_4, image_tag_5);
@@ -166,6 +178,7 @@ mod tests_utilities {
             &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
         assert_ne!(image_tag_4, image_tag_5);
 
@@ -179,6 +192,7 @@ mod tests_utilities {
             }],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
         assert_ne!(image_tag_5, image_tag_6);
 
@@ -192,8 +206,32 @@ mod tests_utilities {
             }],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
         assert_ne!(image_tag_6, image_tag_7);
+
+        // Test that the hash changes when the docker_target_build_stage changes
+        let image_tag_8 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &Some("stage1".to_string()),
+        );
+
+        let image_tag_9 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &Some("stage2".to_string()),
+        );
+
+        assert_ne!(image_tag_8, image_tag_9);
     }
 
     #[test]
