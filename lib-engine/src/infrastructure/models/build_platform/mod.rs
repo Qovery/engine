@@ -136,6 +136,7 @@ impl Build {
             &self.git_repository.extra_files_to_inject,
             &self.environment_variables,
             &self.git_repository.commit_id,
+            &self.git_repository.docker_target_build_stage,
         );
     }
 }
