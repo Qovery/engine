@@ -10,7 +10,7 @@ use std::time::Duration;
 use crate::infrastructure::models::build_platform::Build;
 use strum_macros::EnumIter;
 use tera::Context as TeraContext;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 use uuid::Uuid;
 
 use crate::cmd::terraform::TerraformError;
@@ -22,8 +22,8 @@ use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::{EnvironmentVariable, InvalidStatefulsetStorage};
 use crate::kubers_utils::{
-    kube_create_from_resource, kube_delete_all_from_selector, kube_edit_pvc_size, kube_get_resources_by_selector,
-    kube_rollout_restart_statefulset, KubeDeleteMode,
+    KubeDeleteMode, kube_create_from_resource, kube_delete_all_from_selector, kube_edit_pvc_size,
+    kube_get_resources_by_selector, kube_rollout_restart_statefulset,
 };
 
 use crate::environment::models::types::{CloudProvider, VersionsNumber};
@@ -108,6 +108,7 @@ pub enum ServiceType {
     Container,
     Job,
     HelmChart,
+    Terraform,
 }
 
 impl ServiceType {
@@ -125,6 +126,7 @@ impl Display for ServiceType {
             ServiceType::Container => f.write_str("Container"),
             ServiceType::Job => f.write_str("Job"),
             ServiceType::HelmChart => f.write_str("HelmChart"),
+            ServiceType::Terraform => f.write_str("TerraformService"),
         }
     }
 }

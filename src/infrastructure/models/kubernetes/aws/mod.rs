@@ -7,18 +7,18 @@ use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::kubernetes::ProviderOptions;
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::{
     CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcCustomRoutingTable,
     VpcQoveryNetworkMode,
 };
 use duration_str::deserialize_duration;
 use itertools::Itertools;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_with::DisplayFromStr;
 use std::fmt;
 use std::fmt::Formatter;
 use std::time::Duration;
-
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +87,8 @@ pub struct Options {
     pub ec2_exposed_port: Option<u16>,
     #[serde(default)]
     pub karpenter_parameters: Option<KarpenterParameters>,
+    #[serde(default)]
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +97,7 @@ pub struct KarpenterParameters {
     pub max_node_drain_time_in_secs: Option<i32>,
     pub disk_size_in_gib: i32,
     pub default_service_architecture: CpuArchitecture,
-    pub qovery_node_pools: Option<KarpenterNodePool>,
+    pub qovery_node_pools: KarpenterNodePool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,36 +155,9 @@ fn aws_zones(
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterNodePool {
-    pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
-    #[serde(
-        deserialize_with = "default_serializer_for_stable_override",
-        default = "default_karpenter_node_pool_stable_override"
-    )]
+    pub requirements: Vec<KarpenterNodePoolRequirement>,
     pub stable_override: KarpenterStableNodePoolOverride,
     pub default_override: Option<KarpenterDefaultNodePoolOverride>,
-}
-
-// TODO (COR-XXX) Remove default value when every Karpenter cluster will have a stable override
-fn default_serializer_for_stable_override<'a, D>(deserializer: D) -> Result<KarpenterStableNodePoolOverride, D::Error>
-where
-    D: Deserializer<'a>,
-{
-    match KarpenterStableNodePoolOverride::deserialize(deserializer) {
-        Ok(value) => Ok(value),
-        Err(_) => Ok(default_karpenter_node_pool_stable_override()),
-    }
-}
-
-fn default_karpenter_node_pool_stable_override() -> KarpenterStableNodePoolOverride {
-    KarpenterStableNodePoolOverride {
-        budgets: vec![KarpenterNodePoolDisruptionBudget {
-            nodes: "0".to_string(),
-            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
-            duration: Duration::from_secs(24 * 3600), // 24h
-            schedule: "0 0 * * *".to_string(),
-        }],
-        limits: None,
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -289,7 +264,7 @@ impl KarpenterNodePoolRequirementKey {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterDefaultNodePoolOverride {
-    pub limits: KarpenterNodePoolLimits,
+    pub limits: Option<KarpenterNodePoolLimits>,
 }
 
 #[serde_with::serde_as]
@@ -304,62 +279,10 @@ pub struct KarpenterNodePoolLimits {
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::models::kubernetes::aws::{
-        default_karpenter_node_pool_stable_override, KarpenterDefaultNodePoolOverride,
-        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
-        KarpenterParameters, KarpenterStableNodePoolOverride,
+        KarpenterDefaultNodePoolOverride, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
+        KarpenterNodePoolLimits, KarpenterParameters, KarpenterStableNodePoolOverride,
     };
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
-
-    #[test]
-    fn should_deserialize_correctly_when_no_stable_node_pool_override_is_present() {
-        // given
-        let karpenter_parameters_json = r#"
-        {
-          "spot_enabled": true,
-          "disk_size_in_gib": 20,
-          "default_service_architecture": "AMD64",
-          "qovery_node_pools": {
-            "requirements": [
-              {
-                "key": "InstanceFamily",
-                "operator": "In",
-                "values": [
-                  "z1d"
-                ]
-              },
-              {
-                "key": "InstanceSize",
-                "operator": "In",
-                "values": [
-                  "10xlarge",
-                  "xlarge"
-                ]
-              },
-              {
-                "key": "Arch",
-                "operator": "In",
-                "values": [
-                  "AMD64",
-                  "ARM64"
-                ]
-              }
-            ]
-          }
-        }
-        "#;
-
-        // when
-        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
-
-        // then
-        assert!(result.is_ok());
-        let karpenter_parameters = result.expect("result should be Ok");
-        let stable_node_pool_override = karpenter_parameters
-            .qovery_node_pools
-            .expect("qovery_node_pools should be present")
-            .stable_override;
-        assert_eq!(stable_node_pool_override, default_karpenter_node_pool_stable_override());
-    }
 
     #[test]
     fn should_deserialize_correctly_when_stable_node_pool_override_is_present_with_consolidation() {
@@ -422,10 +345,7 @@ mod tests {
         // then
         assert!(result.is_ok());
         let karpenter_parameters = result.expect("result should be Ok");
-        let stable_node_pool_override = karpenter_parameters
-            .qovery_node_pools
-            .expect("qovery_node_pools should be present")
-            .stable_override;
+        let stable_node_pool_override = karpenter_parameters.qovery_node_pools.stable_override;
         assert_eq!(
             stable_node_pool_override,
             KarpenterStableNodePoolOverride {
@@ -482,9 +402,10 @@ mod tests {
             // then
             assert!(result.is_err());
             let err = result.expect_err("result should be an Err");
-            assert!(err
-                .to_string()
-                .contains("invalid type: map, expected expect duration string"));
+            assert!(
+                err.to_string()
+                    .contains("invalid type: map, expected expect duration string")
+            );
         });
     }
 
@@ -581,10 +502,7 @@ mod tests {
         // then
         assert!(result.is_ok());
         let karpenter_parameters = result.expect("should be Ok");
-        let stable_node_pool_override = karpenter_parameters
-            .qovery_node_pools
-            .expect("qovery_node_pools should be present")
-            .stable_override;
+        let stable_node_pool_override = karpenter_parameters.qovery_node_pools.stable_override;
         assert_eq!(
             stable_node_pool_override,
             KarpenterStableNodePoolOverride {
@@ -606,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    fn should_deserialize_correctly_when_default_override_is_present() {
+    fn should_deserialize_correctly_when_default_override_is_present_with_limits() {
         // given
         let karpenter_parameters_json = r#"
         {
@@ -639,6 +557,16 @@ mod tests {
                 ]
               }
             ],
+            "stable_override": {
+            "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "24h",
+                  "schedule": "0 0 * * *"
+                }
+              ]
+            },
             "default_override": {
               "limits": {
                 "max_cpu": "6000m",
@@ -657,17 +585,80 @@ mod tests {
         let karpenter_parameters = result.expect("should be Ok");
         let default_node_pool_override = karpenter_parameters
             .qovery_node_pools
-            .expect("qovery_node_pools should be present")
             .default_override
             .expect("default_override should be present");
         assert_eq!(
             default_node_pool_override,
             KarpenterDefaultNodePoolOverride {
-                limits: KarpenterNodePoolLimits {
+                limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                }
+                })
             }
         )
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_default_override_is_present_without_limits() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": [
+                  "z1d"
+                ]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": [
+                  "10xlarge",
+                  "xlarge"
+                ]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": [
+                  "AMD64",
+                  "ARM64"
+                ]
+              }
+            ],
+            "stable_override": {
+            "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "24h",
+                  "schedule": "0 0 * * *"
+                }
+              ]
+            },
+            "default_override": {
+              "limits": null
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("should be Ok");
+        let default_node_pool_override = karpenter_parameters
+            .qovery_node_pools
+            .default_override
+            .expect("default_override should be present");
+        assert_eq!(default_node_pool_override, KarpenterDefaultNodePoolOverride { limits: None })
     }
 }

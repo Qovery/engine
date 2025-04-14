@@ -4,12 +4,12 @@ use crate::environment::models::gcp::GcpRouterExtraSettings;
 use crate::environment::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::environment::models::scaleway::ScwRouterExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseRouterExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::io_models::Action;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::Action;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -127,6 +127,7 @@ impl Router {
                 annotations_groups,
                 labels_groups,
             )?)),
+            CPKind::Azure => todo!(),
             CPKind::OnPremise => {
                 let router = Box::new(models::router::Router::<OnPremise>::new(
                     context,

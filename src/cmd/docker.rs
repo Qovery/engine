@@ -323,6 +323,7 @@ impl Docker {
         requested_architectures: &[Architecture],
         (cpu_request_milli, cpu_limit_milli): (u32, u32),
         (memory_request_gib, memory_limit_gib): (u32, u32),
+        ephemeral_storage_gib: Option<u32>,
         should_abort: &CommandKiller,
         http_registries: &[&str],
         tls_invalid_registries: &[&str],
@@ -348,8 +349,9 @@ impl Docker {
 
                 if available_architectures != requested_architectures.len() {
                     return Err(DockerError::InvalidConfig {
-                        raw_error_message:
-                        format!("Some requested architectures are not supported by current docker builder. Available architectures are {supported_architectures:?} while requested are {requested_architectures:?}.")
+                        raw_error_message: format!(
+                            "Some requested architectures are not supported by current docker builder. Available architectures are {supported_architectures:?} while requested are {requested_architectures:?}."
+                        ),
                     });
                 }
 
@@ -383,21 +385,33 @@ impl Docker {
                     node_name.truncate(60);
                     let node_name = node_name.trim_matches(|c: char| !c.is_alphanumeric());
                     let platform = format!("linux/{arch}");
-                    let mut driver_opt = format!(concat!(
-                    "--driver-opt=",
-                    "\"namespace={}\",",
-                    "\"replicas={}\",",
-                    "\"loadbalance=random\",",
-                    "\"nodeselector=kubernetes.io/arch={}\",",
-                    "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
-                    "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
-                    "\"requests.cpu={}m\",",
-                    "\"limits.cpu={}m\",",
-                    "\"requests.memory={}Gi\",",
-                    "\"limits.memory={}Gi\""
-                    ), namespace, nb_builder, arch, cpu_request_milli, cpu_limit_milli, memory_request_gib, memory_limit_gib);
+                    let mut driver_opt = format!(
+                        concat!(
+                            "--driver-opt=",
+                            "\"namespace={}\",",
+                            "\"replicas={}\",",
+                            "\"loadbalance=random\",",
+                            "\"nodeselector=kubernetes.io/arch={}\",",
+                            "\"tolerations=key=node.kubernetes.io/not-ready,effect=NoExecute,operator=Exists,tolerationSeconds=10800\",",
+                            "\"labels=qovery.com/no-kill=true,qovery.com/is-builder=true\",",
+                            "\"requests.cpu={}m\",",
+                            "\"limits.cpu={}m\",",
+                            "\"requests.memory={}Gi\",",
+                            "\"limits.memory={}Gi\""
+                        ),
+                        namespace,
+                        nb_builder,
+                        arch,
+                        cpu_request_milli,
+                        cpu_limit_milli,
+                        memory_request_gib,
+                        memory_limit_gib
+                    );
                     if *enable_rootless {
                         driver_opt.push_str(",\"rootless=true\"");
+                    }
+                    if let Some(ephemeral_storage) = ephemeral_storage_gib {
+                        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={}Gi\"", ephemeral_storage));
                     }
 
                     let mut args = vec![
@@ -627,6 +641,7 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
+        target_build_stage: Option<&String>,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -657,6 +672,7 @@ impl Docker {
             stdout_output,
             stderr_output,
             should_abort,
+            target_build_stage,
         )
     }
 
@@ -673,6 +689,7 @@ impl Docker {
         stdout_output: &mut Stdout,
         stderr_output: &mut Stderr,
         should_abort: &CommandKiller,
+        target_build_stage: Option<&String>,
     ) -> Result<(), DockerError>
     where
         Stdout: FnMut(String),
@@ -701,6 +718,11 @@ impl Docker {
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        if let Some(target_build_stage) = target_build_stage {
+            args_string.push("--target".to_owned());
+            args_string.push(target_build_stage.to_string());
+        }
 
         if push_after_build {
             args_string.push("--cache-to".to_string());
@@ -757,7 +779,9 @@ impl Docker {
 
             if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
                 if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
-                    info!("Docker buildkit build failed with a transient error, but we already retried for too long, aborting ...");
+                    info!(
+                        "Docker buildkit build failed with a transient error, but we already retried for too long, aborting ..."
+                    );
                     break ret;
                 }
 
@@ -900,6 +924,7 @@ impl Docker {
                     self.builder_location.supported_architectures(),
                     (0, 0),
                     (0, 0),
+                    None,
                     &CommandKiller::never(),
                     &[http_registries.as_str()],
                     &[],
@@ -1030,6 +1055,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
 
         assert!(ret.is_ok());
@@ -1046,6 +1072,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
 
         assert!(ret.is_ok());
@@ -1080,6 +1107,7 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
         );
         assert!(ret.is_ok());
 
@@ -1179,6 +1207,7 @@ mod tests {
                 CPU_ARCHITECTURE,
                 (0, 1000),
                 (0, 1),
+                Some(1),
                 &CommandKiller::never(),
                 &[],
                 &[],
@@ -1210,6 +1239,59 @@ mod tests {
             &mut |msg| println!("{msg}"),
             &mut |msg| eprintln!("{msg}"),
             &CommandKiller::never(),
+            None,
+        );
+
+        assert!(ret.is_ok());
+    }
+
+    #[test]
+    fn test_buildkit_build_with_target() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+        let image_cache = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["cache".to_string()],
+        );
+
+        // It should work
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &image_cache,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            Some(&"build".to_string()),
+        );
+
+        assert!(ret.is_ok());
+
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile.buildkit"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            &image_cache,
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            Some(&"build".to_string()),
         );
 
         assert!(ret.is_ok());

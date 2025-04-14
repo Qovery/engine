@@ -44,6 +44,8 @@ where
                 tera::ErrorKind::Utf8Conversion { .. } => "utf-8 conversion issue".to_string(),
             };
 
+            eprintln!("{}", error_msg);
+
             return Err(CommandError::new(
                 error_msg,
                 Some(context.clone().into_json().to_string()),

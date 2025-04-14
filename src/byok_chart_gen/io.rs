@@ -5,13 +5,12 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{
-    chart_dot_yaml,
+    QoverySelfManagedChart, SupportedCharts, chart_dot_yaml,
     values_dot_yaml::{
         AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
         LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryServices,
         QoveryShellAgent, ScalewayServices, ServiceEnabled, ServicesEnabler, ValuesFile,
     },
-    QoverySelfManagedChart, SupportedCharts,
 };
 
 #[derive(Error, Debug)]

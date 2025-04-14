@@ -6,24 +6,24 @@ use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
+use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
-use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{to_environment_variable, Port, Storage};
+use crate::io_models::application::{Port, Storage, to_environment_variable};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
 use itertools::Itertools;
 use rusoto_core::{Client, HttpClient, Region};
-use rusoto_credential::StaticProvider;
 use rusoto_ecr::EcrClient;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -65,6 +65,8 @@ pub enum Registry {
         region: String,
         access_key_id: String,
         secret_access_key: String,
+        #[serde(default)]
+        session_token: Option<String>,
     },
 
     // AWS public ecr
@@ -105,13 +107,13 @@ impl Registry {
         let _ = new_url.set_password(None);
 
         match self {
-            Registry::DockerHub { ref mut url, .. } => *url = new_url,
-            Registry::DoCr { ref mut url, .. } => *url = new_url,
-            Registry::ScalewayCr { ref mut url, .. } => *url = new_url,
-            Registry::PrivateEcr { ref mut url, .. } => *url = new_url,
-            Registry::PublicEcr { ref mut url, .. } => *url = new_url,
-            Registry::GenericCr { ref mut url, .. } => *url = new_url,
-            Registry::GcpArtifactRegistry { ref mut url, .. } => *url = new_url,
+            Registry::DockerHub { url, .. } => *url = new_url,
+            Registry::DoCr { url, .. } => *url = new_url,
+            Registry::ScalewayCr { url, .. } => *url = new_url,
+            Registry::PrivateEcr { url, .. } => *url = new_url,
+            Registry::PublicEcr { url, .. } => *url = new_url,
+            Registry::GenericCr { url, .. } => *url = new_url,
+            Registry::GcpArtifactRegistry { url, .. } => *url = new_url,
         }
     }
 
@@ -156,18 +158,23 @@ impl Registry {
                 url
             }
             Registry::PrivateEcr {
-                url: _,
+                long_id: _,
+                url,
                 region,
                 access_key_id,
                 secret_access_key,
-                ..
+                session_token,
             } => {
-                let creds = StaticProvider::new(access_key_id.to_string(), secret_access_key.to_string(), None, None);
+                let creds = new_rusoto_creds(&AwsCredentials::new(
+                    access_key_id.to_string(),
+                    secret_access_key.to_string(),
+                    session_token.clone(),
+                ));
                 let region = Region::from_str(region).unwrap_or_default();
                 let ecr_client =
                     EcrClient::new_with_client(Client::new_with(creds, HttpClient::new().unwrap()), region);
                 let credentials = ECR::get_credentials(&ecr_client)?;
-                let mut url = Url::parse(credentials.endpoint_url.as_str()).unwrap();
+                let mut url = url.clone();
                 let _ = url.set_username(&credentials.access_token);
                 let _ = url.set_password(Some(&credentials.password));
                 url
@@ -237,6 +244,8 @@ pub struct ContainerAdvancedSettings {
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.force_ssl_redirect")]
+    pub network_ingress_force_ssl_redirect: bool,
     #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.enable_sticky_session")]
@@ -281,8 +290,14 @@ pub struct ContainerAdvancedSettings {
     pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_rps")]
+    pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_connections")]
+    pub network_ingress_nginx_limit_connections: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_custom_http_errors")]
+    pub network_ingress_nginx_custom_http_errors: Option<String>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -311,6 +326,7 @@ impl Default for ContainerAdvancedSettings {
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 100,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
@@ -333,9 +349,12 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
+            network_ingress_nginx_custom_http_errors: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
@@ -448,6 +467,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
             )?),
+            CPKind::Azure => todo!(),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
                 self.long_id,

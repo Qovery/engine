@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -12,6 +12,7 @@ use kube::Client;
 use semver::Version;
 
 pub struct KubeStateMetricsChart {
+    action: HelmAction,
     chart_path: HelmChartPath,
     namespace: HelmChartNamespaces,
     chart_values_path: HelmChartValuesFilePath,
@@ -21,12 +22,14 @@ pub struct KubeStateMetricsChart {
 
 impl KubeStateMetricsChart {
     pub fn new(
+        action: HelmAction,
         chart_prefix_path: Option<&str>,
         namespace: HelmChartNamespaces,
         ff_metrics_history_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> KubeStateMetricsChart {
         KubeStateMetricsChart {
+            action,
             namespace,
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -52,6 +55,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         Ok(CommonChart {
             chart_info: ChartInfo {
+                action: self.action.clone(),
                 name: KubeStateMetricsChart::chart_name(),
                 namespace: self.namespace,
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(4, 23, 0)),
@@ -101,11 +105,11 @@ impl ChartInstallationChecker for KubeStateMetricsChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::HelmChartNamespaces;
+    use crate::helm::{HelmAction, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
@@ -125,6 +129,7 @@ mod tests {
     fn kube_state_metrics_chart_directory_exists_test() {
         // setup:
         let chart = KubeStateMetricsChart::new(
+            HelmAction::Deploy,
             None,
             HelmChartNamespaces::Prometheus,
             false,
@@ -153,6 +158,7 @@ mod tests {
     fn kube_state_metrics_chart_values_file_exists_test() {
         // setup:
         let chart = KubeStateMetricsChart::new(
+            HelmAction::Deploy,
             None,
             HelmChartNamespaces::Prometheus,
             false,
@@ -185,6 +191,7 @@ mod tests {
     fn kube_state_metrics_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = KubeStateMetricsChart::new(
+            HelmAction::Deploy,
             None,
             HelmChartNamespaces::Prometheus,
             false,
@@ -206,6 +213,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

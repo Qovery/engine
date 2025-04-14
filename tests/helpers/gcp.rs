@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, Quota, RateLimiter};
+use governor::{Quota, RateLimiter, clock};
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
 use time::Time;
@@ -13,27 +13,27 @@ use uuid::Uuid;
 use qovery_engine::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use qovery_engine::environment::models::gcp::{GcpStorageType, JsonCredentials};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
-use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::Google;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::gcp::{Gke, GkeOptions, VpcMode};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::{get_environment_test_kubernetes, TargetCluster};
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
+use crate::helpers::kubernetes::{TargetCluster, get_environment_test_kubernetes};
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 
 pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
@@ -44,7 +44,7 @@ pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed D
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
-pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_30 {
+pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_31 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -151,6 +151,7 @@ pub fn gcp_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::AutoPilot,
     )
 }
 
@@ -169,6 +170,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use Google Artifact registry
         let container_registry = Box::new(gcp_container_registry(context));
@@ -197,6 +199,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             engine_location,
             StorageClass(GcpStorageType::Balanced.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(
@@ -221,12 +224,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         )
         .expect("Cannot parse GCP_CREDENTIALS");
         Box::new(Google::new(
-            context.clone(),
             *context.cluster_long_id(),
-            secrets
-                .GCP_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("GCP_TEST_ORGANIZATION_ID is not set in secrets"),
             credentials,
             GcpRegion::from_str(localisation).expect("Unknown GCP region"),
             TerraformStateCredentials {
@@ -255,14 +253,6 @@ impl Cluster<Google, GkeOptions> for Gke {
         engine_location: EngineLocation,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> GkeOptions {
-        let credentials = try_parse_json_credentials_from_str(
-            secrets
-                .GCP_CREDENTIALS
-                .as_ref()
-                .expect("GCP_CREDENTIALS is not set in secrets"),
-        )
-        .expect("Cannot parse GCP_CREDENTIALS");
-
         GkeOptions::new(
             secrets.QOVERY_API_URL.expect("QOVERY_API_URL is not set in secrets"),
             secrets
@@ -280,7 +270,6 @@ impl Cluster<Google, GkeOptions> for Gke {
             "admin".to_string(),
             "qovery".to_string(),
             engine_location,
-            credentials,
             VpcMode::Automatic {
                 custom_cluster_ipv4_cidr_block: None,
                 custom_services_ipv4_cidr_block: None,
@@ -291,6 +280,7 @@ impl Cluster<Google, GkeOptions> for Gke {
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             Time::from_hms(5, 0, 0).expect("Cannot instantiate time"),
             Some(Time::from_hms(7, 0, 0).expect("Cannot instantiate time")),
+            None,
         )
     }
 }

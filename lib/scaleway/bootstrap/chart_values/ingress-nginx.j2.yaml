@@ -1,7 +1,7 @@
 controller:
-  admissionWebhooks:
-    enabled: false
   useComponentLabel: true
+  admissionWebhooks:
+    enabled: true # set-by-engine-code
   allowSnippetAnnotations: true
   # enable if you want metrics scrapped by prometheus
   metrics:
@@ -26,6 +26,10 @@ controller:
     http-snippet: |
       {{ nginx_controller_http_snippet | indent(prefix="        ") }}
     {%- endif %}
+    {%- if nginx_controller_server_snippet %}
+    server-snippet: |
+      {{ nginx_controller_server_snippet | indent(prefix="        ") }}
+    {%- endif %}
     # customize log-format / set-by-engine-code
     # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
     # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
@@ -35,6 +39,10 @@ controller:
     {%- endif %}
     log-format-escaping-json: "false" # set-by-engine-code
     log-format-escaping-none: "false" # set-by-engine-code
+    limit-req-status-code: "503" # set-by-engine-code
+    
+  # PDB
+  maxUnavailable: 20%
 
   ingressClassResource:
     # -- Name of the IngressClass

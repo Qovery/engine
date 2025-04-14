@@ -1,17 +1,17 @@
 use crate::environment::models::database::DatabaseService;
 use crate::environment::report::database::renderer::render_database_deployment_report;
 use crate::environment::report::logger::EnvLogger;
-use crate::environment::report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
+use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::{Action, DatabaseType};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, DatabaseType};
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
@@ -112,7 +112,7 @@ impl DatabaseDeploymentReporter {
             is_managed: db.is_managed_service(),
             type_: db.db_type(),
             version: db.version(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             logger: deployment_target.env_logger(db, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
             action,

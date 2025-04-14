@@ -60,3 +60,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the secret
+*/}}
+{{- define "iam-eks-user.aws.secretName" -}}
+{{- default (include "iam-eks-user.fullname" .) .Values.aws.existingSecretName }}
+{{- end }}

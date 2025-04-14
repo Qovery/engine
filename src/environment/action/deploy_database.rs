@@ -1,24 +1,23 @@
 use crate::cmd;
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::constants::AWS_DEFAULT_REGION;
+use crate::environment::action::DeploymentAction;
 use crate::environment::action::check_dns::CheckDnsForDomains;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_terraform::TerraformDeployment;
 use crate::environment::action::pause_service::PauseServiceAction;
-use crate::environment::action::DeploymentAction;
 use crate::environment::models::database::{
-    get_database_with_invalid_storage_size, Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed,
+    Container, Database, DatabaseError, DatabaseService, DatabaseType, Managed, get_database_with_invalid_storage_size,
 };
 use crate::environment::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::environment::report::database::reporter::DatabaseDeploymentReporter;
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
-use crate::infrastructure::models::cloud_provider::service::{get_database_terraform_config, Action, Service};
-use crate::infrastructure::models::cloud_provider::Kind::{self, Aws};
-use crate::infrastructure::models::cloud_provider::{service, DeploymentTarget};
-use crate::kubers_utils::{kube_delete_all_from_selector, KubeDeleteMode};
+use crate::infrastructure::models::cloud_provider::service::{Action, Service, get_database_terraform_config};
+use crate::infrastructure::models::cloud_provider::{DeploymentTarget, service};
+use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
 use crate::services::aws::models::QoveryAwsSdkConfigManagedDatabase;
 use aws_types::SdkConfig;
@@ -27,8 +26,11 @@ use semver::Version;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
+use super::utils::{are_pvcs_bound, delete_nlb_or_alb_service, update_pvcs};
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
+use crate::infrastructure::models::cloud_provider;
+use crate::infrastructure::models::kubernetes::Kind;
 use async_trait::async_trait;
 use aws_sdk_docdb::operation::describe_db_clusters::{DescribeDBClustersError, DescribeDbClustersOutput};
 use aws_sdk_elasticache::operation::describe_cache_clusters::{
@@ -39,8 +41,6 @@ use aws_sdk_rds::operation::describe_db_instances::{DescribeDBInstancesError, De
 use std::path::PathBuf;
 use std::thread;
 use std::time::{Duration, Instant};
-
-use super::utils::{are_pvcs_bound, delete_nlb_or_alb_service, update_pvcs};
 
 const DB_READY_STATE: &str = "available";
 const DB_STOPPED_STATE: &str = "stopped";
@@ -366,7 +366,7 @@ where
     helm.on_create(target)?;
 
     // We don't manage START/PAUSE for managed database elsewhere than for AWS
-    if target.cloud_provider.kind() != Aws {
+    if target.cloud_provider.kind() != cloud_provider::Kind::Aws {
         return Ok(());
     }
 
@@ -580,7 +580,7 @@ where
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // We don't manage PAUSE for managed database elsewhere than for AWS
-                if target.cloud_provider.kind() != Aws {
+                if target.cloud_provider.kind() != cloud_provider::Kind::Aws {
                     return Ok(());
                 }
 
@@ -644,7 +644,11 @@ where
                     &self.fqdn_id,
                     &self.version,
                     &event_details,
-                    target.cloud_provider.aws_sdk_client(),
+                    target
+                        .cloud_provider
+                        .downcast_ref()
+                        .as_aws()
+                        .map(|x| x.aws_sdk_client()),
                 )? {
                     // if db has never been deployed. No need to go further
                     info!("Managed database not found on cloud provider. Assuming it does not exist");
@@ -692,12 +696,12 @@ where
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let command_error = CommandError::new_from_safe_message("Cannot restart Managed Database".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
+        Err(Box::new(EngineError::new_cannot_restart_service(
             self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
             target.environment.namespace(),
             &self.kube_label_selector(),
             command_error,
-        )));
+        )))
     }
 }
 
@@ -754,9 +758,9 @@ where
                 chart,
             );
 
-            if target.cloud_provider.kind() == Kind::Aws {
+            if target.kubernetes.kind() == Kind::Eks {
                 delete_nlb_or_alb_service(
-                    target.qube_client(event_details.clone())?,
+                    target.kube.clone(),
                     target.environment.namespace(),
                     format!("qovery.com/service-id={}", self.long_id()).as_str(),
                     target.kubernetes.advanced_settings().aws_eks_enable_alb_controller,

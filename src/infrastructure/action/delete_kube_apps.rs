@@ -1,20 +1,20 @@
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::helm::{Helm, to_engine_error};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::helm::ChartInfo;
-use crate::infrastructure::action::kubectl_utils::{delete_completed_jobs, delete_crashlooping_pods};
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::kubectl_utils::{delete_completed_jobs, delete_crashlooping_pods};
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::gcp::GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES;
-use crate::infrastructure::models::kubernetes::{uninstall_cert_manager, Kubernetes};
+use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manager};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::api::DeleteParams;
 use kube::Api;
+use kube::api::DeleteParams;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -64,13 +64,28 @@ pub(super) fn delete_kube_apps(
     logger.info(message);
 
     let kube = infra_ctx.mk_kube_client()?;
-    let ns_api: Api<Namespace> = Api::all(kube.client().clone());
+    let ns_api: Api<Namespace> = Api::all(kube.client());
     let all_namespaces = block_on(ns_api.list_metadata(&Default::default())).map(|ns| {
         ns.items
             .into_iter()
             .map(|ns| ns.metadata.name.unwrap_or_default())
             .collect::<Vec<String>>()
     });
+
+    // Delete cert-manager objects first
+    // required to avoid namespace stuck on deletion
+    if let Err(e) = uninstall_cert_manager(
+        cluster.kubeconfig_local_file_path(),
+        infra_ctx.cloud_provider().credentials_environment_variables(),
+        event_details.clone(),
+        cluster.logger(),
+    ) {
+        // this error is not blocking, logging a warning and move on
+        logger.warn(EventMessage::new(
+            "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
+            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+        ));
+    }
 
     match all_namespaces {
         Ok(namespaces) => {
@@ -112,21 +127,7 @@ pub(super) fn delete_kube_apps(
         &mut |_| {},
     ) {
         // this error is not blocking
-        logger.warn(EventMessage::new_from_engine_error(to_engine_error(&event_details, e)));
-    }
-
-    // required to avoid namespace stuck on deletion
-    if let Err(e) = uninstall_cert_manager(
-        cluster.kubeconfig_local_file_path(),
-        infra_ctx.cloud_provider().credentials_environment_variables(),
-        event_details.clone(),
-        cluster.logger(),
-    ) {
-        // this error is not blocking, logging a warning and move on
-        logger.warn(EventMessage::new(
-            "An error occurred while trying to uninstall cert-manager. This is not blocking.".to_string(),
-            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-        ));
+        logger.warn(EventMessage::from(to_engine_error(&event_details, e)));
     }
 
     logger.info("Deleting Qovery managed elements");

@@ -5,34 +5,34 @@ use rand::Rng;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
-    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+    KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
 };
-use crate::helpers::utilities::{build_platform_local_docker, generate_id, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker, generate_id};
 use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
 use qovery_engine::environment::models::scaleway::{ScwStorageType, ScwZone};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::Build;
-use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
+use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
-use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
-pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_30 {
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_31 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -49,7 +49,9 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
         || secrets.SCALEWAY_SECRET_KEY.is_none()
         || secrets.SCALEWAY_DEFAULT_PROJECT_ID.is_none()
     {
-        error!("Please check your Vault connectivity (token/address) or SCALEWAY_ACCESS_KEY/SCALEWAY_SECRET_KEY/SCALEWAY_DEFAULT_PROJECT_ID envrionment variables are set");
+        error!(
+            "Please check your Vault connectivity (token/address) or SCALEWAY_ACCESS_KEY/SCALEWAY_SECRET_KEY/SCALEWAY_DEFAULT_PROJECT_ID envrionment variables are set"
+        );
         std::process::exit(1)
     }
     let random_id = generate_id();
@@ -108,6 +110,7 @@ pub fn scw_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::Default,
     )
 }
 
@@ -126,6 +129,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         _cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -151,6 +155,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             engine_location,
             StorageClass(ScwStorageType::SbvSsd.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(
@@ -168,13 +173,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     fn cloud_provider(context: &Context, _kubernetes_kind: KubernetesKind, _localisation: &str) -> Box<Scaleway> {
         let secrets = FuncTestsSecrets::new();
         Box::new(Scaleway::new(
-            context.clone(),
             *context.cluster_long_id(),
-            secrets
-                .SCALEWAY_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("SCALEWAY_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
             secrets
                 .SCALEWAY_ACCESS_KEY
                 .expect("SCALEWAY_ACCESS_KEY is not set in secrets")
@@ -186,10 +185,6 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             secrets
                 .SCALEWAY_DEFAULT_PROJECT_ID
                 .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets")
-                .as_str(),
-            secrets
-                .SCALEWAY_DEFAULT_REGION
-                .expect("SCALEWAY_DEFAULT_REGION is not set in secrets")
                 .as_str(),
             TerraformStateCredentials {
                 access_key_id: secrets
@@ -243,18 +238,10 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             "qovery".to_string(),
             engine_location,
             secrets
-                .SCALEWAY_DEFAULT_PROJECT_ID
-                .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
-            secrets
-                .SCALEWAY_ACCESS_KEY
-                .expect("SCALEWAY_ACCESS_KEY is not set in secrets"),
-            secrets
-                .SCALEWAY_SECRET_KEY
-                .expect("SCALEWAY_SECRET_KEY is not set in secrets"),
-            secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             KapsuleClusterType::Kapsule,
+            None,
         )
     }
 }
@@ -302,13 +289,13 @@ pub fn clean_environments(
 
 pub fn random_valid_registry_name() -> String {
     let mut rand_string: String = String::new();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for x in 1..35 {
         if x % 4 == 0 {
             rand_string.push('-');
         } else {
-            let char: char = rng.gen_range(b'a'..=b'z') as char;
+            let char: char = rng.random_range(b'a'..=b'z') as char;
             rand_string.push(char);
         }
     }

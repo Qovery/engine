@@ -1,10 +1,11 @@
 use chrono::{DateTime, Utc};
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::Value;
 
+use crate::environment::models::azure::Credentials;
 use crate::environment::models::domain::Domain;
-use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
@@ -12,9 +13,11 @@ use crate::fs::workspace_directory;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use crate::infrastructure::models::cloud_provider::aws::AWS;
-use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use crate::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
+use crate::infrastructure::models::cloud_provider::azure::Azure;
+use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use crate::infrastructure::models::cloud_provider::gcp::Google;
+use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
 use crate::infrastructure::models::cloud_provider::scaleway::Scaleway;
 use crate::infrastructure::models::cloud_provider::self_managed::SelfManaged;
@@ -27,9 +30,10 @@ use crate::infrastructure::models::dns_provider::cloudflare::Cloudflare;
 use crate::infrastructure::models::dns_provider::io::Kind;
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDns;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::azure::AksOptions;
 use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
-use crate::infrastructure::models::kubernetes::{event_details, Kubernetes, KubernetesVersion};
+use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion, event_details};
 use crate::infrastructure::models::{build_platform, cloud_provider, container_registry, dns_provider, kubernetes};
 use crate::io_models;
 use crate::io_models::context::{Context, Features, Metadata};
@@ -40,10 +44,11 @@ use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
-use anyhow::{anyhow, Context as OtherContext};
+use anyhow::{Context as OtherContext, anyhow};
 use derivative::Derivative;
 use governor::{Quota, RateLimiter};
 use nonzero_ext::nonzero;
+use rusoto_signature::Region;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -87,7 +92,7 @@ impl<T> EngineRequest<T> {
             .to_engine_build_platform(context, metrics_registry.clone_dyn());
         let cloud_provider = self
             .cloud_provider
-            .to_engine_cloud_provider(context.clone(), &self.kubernetes.region, self.kubernetes.kind)
+            .to_engine_cloud_provider(&self.kubernetes.region, self.kubernetes.kind)
             .ok_or_else(|| {
                 Box::new(IoEngineError::new_error_on_cloud_provider_information(
                     event_details.clone(),
@@ -104,7 +109,7 @@ impl<T> EngineRequest<T> {
             ("ClusterLongId".to_string(), context.cluster_long_id().to_string()),
             ("OrganizationId".to_string(), context.organization_short_id().to_string()),
             ("OrganizationLongId".to_string(), context.organization_long_id().to_string()),
-            ("Region".to_string(), cloud_provider.region()),
+            ("Region".to_string(), self.kubernetes.region.clone()),
         ]);
         let mut tags = self
             .kubernetes
@@ -152,10 +157,12 @@ impl<T> EngineRequest<T> {
                 )
             })?;
 
-        let kubernetes = match self
-            .kubernetes
-            .to_engine_kubernetes(context, cloud_provider.as_ref(), logger.clone())
-        {
+        let kubernetes = match self.kubernetes.to_engine_kubernetes(
+            context,
+            cloud_provider.as_ref(),
+            &self.cloud_provider.zones,
+            logger.clone(),
+        ) {
             Ok(x) => x,
             Err(e) => {
                 error!("{:?}", e);
@@ -180,8 +187,10 @@ impl<T> EngineRequest<T> {
             kubernetes::Kind::Eks => false,
             kubernetes::Kind::ScwKapsule => false,
             kubernetes::Kind::Gke => false,
+            kubernetes::Kind::Aks => false,
             kubernetes::Kind::EksSelfManaged => true,
             kubernetes::Kind::GkeSelfManaged => true,
+            kubernetes::Kind::AksSelfManaged => true,
             kubernetes::Kind::ScwSelfManaged => true,
             kubernetes::Kind::OnPremiseSelfManaged => true,
         }
@@ -230,7 +239,7 @@ pub struct BuildPlatform {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub options: Options,
+    pub options: CloudProviderOptions,
 }
 
 impl BuildPlatform {
@@ -255,14 +264,13 @@ pub struct CloudProvider {
     pub long_id: Uuid,
     pub name: String,
     pub zones: Vec<String>,
-    pub options: Options,
+    pub options: CloudProviderOptions,
     pub terraform_state_credentials: TerraformStateCredentials,
 }
 
 impl CloudProvider {
     pub fn to_engine_cloud_provider(
         &self,
-        context: Context,
         region: &str,
         cluster_kind: kubernetes::Kind,
     ) -> Option<Box<dyn cloud_provider::CloudProvider>> {
@@ -275,54 +283,86 @@ impl CloudProvider {
         };
 
         match self.kind {
-            cloud_provider::Kind::Aws => Some(Box::new(AWS::new(
-                context,
-                self.long_id,
-                self.name.as_str(),
-                self.options.access_key_id.as_ref()?.as_str(),
-                self.options.secret_access_key.as_ref()?.as_str(),
-                region,
-                self.zones.clone(),
-                cluster_kind,
-                terraform_state_credentials,
-            ))),
-            cloud_provider::Kind::Scw => Some(Box::new(Scaleway::new(
-                context,
-                self.long_id,
-                self.name.as_str(),
-                self.options.scaleway_access_key.as_ref()?.as_str(),
-                self.options.scaleway_secret_key.as_ref()?.as_str(),
-                self.options.scaleway_project_id.as_ref()?.as_str(),
-                region,
-                terraform_state_credentials,
-            ))),
-            cloud_provider::Kind::Gcp => {
-                let credentials = match &self.options.gcp_credentials {
-                    Some(creds) => match JsonCredentials::try_from(creds.clone()) {
-                        Ok(c) => c,
-                        Err(_e) => return None,
-                    },
-                    None => return None,
+            cloud_provider::Kind::Aws => {
+                let CloudProviderOptions::Aws {
+                    access_key_id,
+                    secret_access_key,
+                    session_token,
+                } = &self.options
+                else {
+                    return None;
                 };
-                let region = match GcpRegion::from_str(region) {
-                    Ok(r) => r,
-                    Err(_e) => return None,
-                };
-                Some(Box::new(Google::new(
-                    context,
+                let credentials =
+                    AwsCredentials::new(access_key_id.clone(), secret_access_key.clone(), session_token.clone());
+                Some(Box::new(AWS::new(
                     self.long_id,
-                    self.name.as_str(),
+                    credentials,
+                    region,
+                    self.zones.clone(),
+                    cluster_kind,
+                    terraform_state_credentials,
+                )))
+            }
+            cloud_provider::Kind::Azure => {
+                let CloudProviderOptions::Azure {
+                    client_id,
+                    client_secret,
+                    tenant_id,
+                    subscription_id,
+                    resource_group_name,
+                } = &self.options
+                else {
+                    return None;
+                };
+                Some(Box::new(Azure::new(
+                    self.long_id,
+                    AzureLocation::NorthEurope, // TODO(benjaminch): check how to pass properly location / region
+                    Credentials {
+                        client_id: client_id.to_string(),
+                        client_secret: client_secret.to_string(),
+                        tenant_id: tenant_id.to_string(),
+                        subscription_id: subscription_id.to_string(),
+                        resource_group_name: resource_group_name.to_string(),
+                    },
+                    terraform_state_credentials,
+                )))
+            }
+            cloud_provider::Kind::Scw => {
+                let CloudProviderOptions::Scaleway {
+                    scaleway_access_key,
+                    scaleway_secret_key,
+                    scaleway_project_id,
+                } = &self.options
+                else {
+                    return None;
+                };
+                Some(Box::new(Scaleway::new(
+                    self.long_id,
+                    scaleway_access_key,
+                    scaleway_secret_key,
+                    scaleway_project_id,
+                    terraform_state_credentials,
+                )))
+            }
+            cloud_provider::Kind::Gcp => {
+                let CloudProviderOptions::Gcp { gcp_credentials } = &self.options else {
+                    return None;
+                };
+                let Ok(credentials) = JsonCredentials::try_from(gcp_credentials.clone()) else {
+                    return None;
+                };
+                let Ok(region) = GcpRegion::from_str(region) else {
+                    return None;
+                };
+
+                Some(Box::new(Google::new(
+                    self.long_id,
                     credentials,
                     region,
                     terraform_state_credentials,
                 )))
             }
-            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(
-                context,
-                self.clone().long_id,
-                self.name.clone(),
-                region.to_string(),
-            ))),
+            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(self.long_id))),
         }
     }
 }
@@ -353,6 +393,7 @@ pub struct KubernetesDto {
     pub version: String,
     pub region: String,
     pub options: Value,
+    pub created_at: DateTime<Utc>,
     pub nodes_groups: Vec<NodeGroups>,
     pub advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -365,6 +406,7 @@ impl KubernetesDto {
         &self,
         context: &Context,
         cloud_provider: &dyn cloud_provider::CloudProvider,
+        zones: &[String],
         logger: Box<dyn Logger>,
     ) -> Result<Box<dyn Kubernetes + 'a>, Box<EngineError>> {
         let event_details = event_details(cloud_provider, *context.cluster_long_id(), self.name.to_string(), context);
@@ -413,8 +455,9 @@ impl KubernetesDto {
                 KubernetesVersion::from_str(&self.version)
                     .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                 AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                cloud_provider.zones().clone(),
+                zones.to_vec(),
                 cloud_provider,
+                self.created_at,
                 serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
                 self.nodes_groups.clone(),
@@ -441,6 +484,7 @@ impl KubernetesDto {
                     )
                 }),
                 cloud_provider,
+                self.created_at,
                 self.nodes_groups.clone(),
                 serde_json::from_value::<kubernetes::scaleway::kapsule::KapsuleOptions>(self.options.clone())
                     .expect("What's wronnnnng -- JSON Options payload for Scaleway is not the expected one"),
@@ -470,6 +514,7 @@ impl KubernetesDto {
                     context.clone(),
                     self.long_id,
                     &self.name,
+                    cloud_provider,
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
                     GcpRegion::from_str(self.region.as_str()).unwrap_or_else(|_| {
@@ -478,6 +523,7 @@ impl KubernetesDto {
                             self.region.as_str()
                         )
                     }),
+                    self.created_at,
                     options,
                     logger,
                     self.advanced_settings.clone(),
@@ -489,18 +535,53 @@ impl KubernetesDto {
                     Err(e) => Err(e),
                 }
             }
+            kubernetes::Kind::Aks => {
+                let options = serde_json::from_value::<io_models::azure::AksOptions>(self.options.clone()).map_err(
+                    |e: serde_json::Error| {
+                        Box::new(EngineError::new_invalid_engine_payload(
+                            event_details.clone(),
+                            &e.to_string(),
+                            None,
+                        ))
+                    },
+                )?;
+                let options = AksOptions::try_from(options).map_err(|e: String| {
+                    Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
+                })?;
+                match kubernetes::azure::aks::AKS::new(
+                    context.clone(),
+                    self.long_id,
+                    &self.name,
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    AzureLocation::NorthEurope, // TODO(benjaminch): To be implemented
+                    cloud_provider,
+                    self.created_at,
+                    options,
+                    logger,
+                    self.advanced_settings.clone(),
+                    decoded_helm_charts_override,
+                    self.kubeconfig.clone(),
+                    temp_dir,
+                    self.qovery_allowed_public_access_cidrs.clone(),
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
             kubernetes::Kind::OnPremiseSelfManaged
             | kubernetes::Kind::EksSelfManaged
             | kubernetes::Kind::GkeSelfManaged
+            | kubernetes::Kind::AksSelfManaged
             | kubernetes::Kind::ScwSelfManaged => {
                 match kubernetes::self_managed::on_premise::SelfManaged::new(
                     context.clone(),
                     self.long_id,
                     self.name.to_string(),
                     self.kind,
+                    self.region.to_string(),
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    cloud_provider,
                     serde_json::from_value::<kubernetes::self_managed::on_premise::SelfManagedOptions>(
                         self.options.clone(),
                     )
@@ -557,16 +638,20 @@ impl ContainerRegistry {
         tags: HashMap<String, String>,
     ) -> Result<Box<dyn container_registry::ContainerRegistry>, anyhow::Error> {
         match self.clone() {
-            ContainerRegistry::Ecr { long_id, name, options } => Ok(Box::new(ECR::new(
-                context,
-                long_id,
-                name.as_str(),
-                &options.access_key_id,
-                &options.secret_access_key,
-                &options.region,
-                logger,
-                tags,
-            )?)),
+            ContainerRegistry::Ecr { long_id, name, options } => {
+                let credentials =
+                    AwsCredentials::new(options.access_key_id, options.secret_access_key, options.session_token);
+                Ok(Box::new(ECR::new(
+                    context,
+                    long_id,
+                    name.as_str(),
+                    credentials,
+                    Region::from_str(&options.region)
+                        .with_context(|| format!("invalid rusoto region {}", &options.region))?,
+                    logger,
+                    tags,
+                )?))
+            }
             ContainerRegistry::ScalewayCr { long_id, name, options } => Ok(Box::new(ScalewayCR::new(
                 context,
                 long_id,
@@ -683,29 +768,37 @@ impl DnsProvider {
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 #[derivative(Debug)]
-pub struct Options {
-    // TODO(benjaminch): Refactor this struct properly, each providers might have their own options
-    login: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub password: Option<String>,
-    access_key_id: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub secret_access_key: Option<String>,
-    spaces_access_id: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub spaces_secret_key: Option<String>,
-    scaleway_project_id: Option<String>,
-    scaleway_access_key: Option<String>,
-    #[derivative(Debug = "ignore")]
-    pub scaleway_secret_key: Option<String>,
-    #[derivative(Debug = "ignore")]
-    #[serde(alias = "json_credentials")]
-    #[serde(deserialize_with = "gcp_credentials_from_str")] // Allow to deserialize string field to its struct counterpart
-    #[serde(default)]
-    pub gcp_credentials: Option<JsonCredentialsIo>,
-    #[derivative(Debug = "ignore")]
-    pub token: Option<String>,
-    region: Option<String>,
+#[serde(untagged)]
+pub enum CloudProviderOptions {
+    Aws {
+        access_key_id: String,
+        #[derivative(Debug = "ignore")]
+        secret_access_key: String,
+        #[serde(default)]
+        session_token: Option<String>,
+    },
+    Azure {
+        client_id: String,
+        #[derivative(Debug = "ignore")]
+        client_secret: String,
+        tenant_id: String,
+        subscription_id: String,
+        resource_group_name: String, // TODO(benjaminch): check if this is the proper place to set this
+    },
+    Scaleway {
+        scaleway_access_key: String,
+        #[derivative(Debug = "ignore")]
+        scaleway_secret_key: String,
+        scaleway_project_id: String,
+    },
+    Gcp {
+        #[derivative(Debug = "ignore")]
+        #[serde(alias = "json_credentials")]
+        #[serde(deserialize_with = "gcp_credentials_from")]
+        // Allow to deserialize string field to its struct counterpart
+        gcp_credentials: JsonCredentialsIo,
+    },
+    OnPremise {},
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
@@ -713,6 +806,9 @@ pub struct EcrOptions {
     access_key_id: String,
     #[derivative(Debug = "ignore")]
     secret_access_key: String,
+    #[derivative(Debug = "ignore")]
+    #[serde(default)]
+    session_token: Option<String>,
     region: String,
 }
 
@@ -773,6 +869,19 @@ where
             Err(e) => Err(de::Error::custom(e.to_string())),
         },
         None => Ok(None),
+    }
+}
+
+fn gcp_credentials_from<'de, D>(
+    deserializer: D,
+) -> Result<crate::environment::models::gcp::io::JsonCredentials, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let gcp_credentials = String::deserialize(deserializer)?;
+    match crate::environment::models::gcp::io::JsonCredentials::try_new_from_json_str(&gcp_credentials) {
+        Ok(credentials) => Ok(credentials),
+        Err(e) => Err(de::Error::custom(e.to_string())),
     }
 }
 

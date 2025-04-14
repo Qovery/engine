@@ -25,7 +25,8 @@ metadata:
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
-    ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
     {%- if advanced_settings.network_ingress_sticky_session_enable == true %}
     # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
@@ -53,8 +54,17 @@ metadata:
     {%- if advanced_settings.network_ingress_nginx_limit_rpm %}
     nginx.ingress.kubernetes.io/limit-rpm: "{{ advanced_settings.network_ingress_nginx_limit_rpm }}"
     {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_rps %}
+    nginx.ingress.kubernetes.io/limit-rps: "{{ advanced_settings.network_ingress_nginx_limit_rps }}"
+    {%- endif %}
     {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
     nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_connections %}
+    nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_custom_http_errors %}
+    nginx.ingress.kubernetes.io/custom-http-errors: "{{ advanced_settings.network_ingress_nginx_custom_http_errors }}"
     {%- endif %}
     # GRPC SPECIFIC
     # https://kubernetes.github.io/ingress-nginx/examples/grpc/

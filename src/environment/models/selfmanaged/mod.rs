@@ -4,6 +4,7 @@ use crate::infrastructure::models::cloud_provider::Kind;
 mod database;
 mod job;
 mod router;
+mod terraform_service;
 
 pub struct OnPremiseAppExtraSettings {}
 pub struct OnPremiseDbExtraSettings {}

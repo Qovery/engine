@@ -9,12 +9,12 @@ use crate::environment::models::helm_chart::{HelmChart, HelmChartSource, HelmVal
 use crate::environment::models::types::CloudProvider;
 use crate::environment::report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartError};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::variable_utils::VariableInfo;
 use anyhow::anyhow;
 use git2::{Cred, CredentialType};
@@ -157,7 +157,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
         let task = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
             // delete admission controller config map
-            let config_map_api: Api<ConfigMap> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let config_map_api: Api<ConfigMap> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let admission_controller_config_map = self.admission_controller_config_map_name();
             if let Err(err) =
                 block_on(config_map_api.delete(admission_controller_config_map.as_str(), &DeleteParams::default()))
@@ -170,9 +170,13 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 );
             }
 
+            let namespace_from_args = extract_namespace_from_helm_args(self.helm_upgrade_arguments());
+
             // uninstall chart
-            let mut chart_info =
-                ChartInfo::new_from_release_name(self.helm_release_name(), target.environment.namespace());
+            let mut chart_info = ChartInfo::new_from_release_name(
+                self.helm_release_name(),
+                &namespace_from_args.unwrap_or_else(|| Cow::Borrowed(target.environment.namespace())), // take the namespace from the list of arguments if it exists
+            );
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
 
             target
@@ -291,7 +295,7 @@ fn write_helm_value_with_replacement<'a>(
     // Writes all lines into the files
     for line in lines {
         output_writer.write_all(line.as_bytes())?;
-        output_writer.write_all(&[b'\n'])?;
+        output_writer.write_all(b"\n")?;
     }
 
     output_writer.flush()?;
@@ -334,7 +338,10 @@ fn replace_qovery_env_variable<'a>(
         // Built-in variable are not allowed because they contains ID in them
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
         if needle[PREFIX.len()..].starts_with("QOVERY_") {
-            return Err(anyhow!("You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}", line));
+            return Err(anyhow!(
+                "You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}",
+                line
+            ));
         }
 
         let variable_name =
@@ -725,7 +732,7 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
     target: &DeploymentTarget,
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
-    let kube_client = target.kube.clone();
+    let kube_client = target.kube.client();
     let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, target.environment.namespace());
 
     let config_map_name = this.admission_controller_config_map_name();
@@ -790,6 +797,28 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
         ));
     }
     Ok(())
+}
+
+fn extract_namespace_from_helm_args<'a>(args: impl Iterator<Item = Cow<'a, str>>) -> Option<Cow<'a, str>> {
+    let mut ns_iter = args.skip_while(|arg| {
+        !(*arg == "-n" || *arg == "--namespace" || arg.starts_with("-n=") || arg.starts_with("--namespace="))
+    });
+
+    if let Some(arg) = ns_iter.next() {
+        if let Some(value) = arg.strip_prefix("--namespace=") {
+            return Some(Cow::Owned(value.to_string()));
+        }
+
+        if let Some(value) = arg.strip_prefix("-n=") {
+            return Some(Cow::Owned(value.to_string()));
+        }
+
+        if let Some(next_arg) = ns_iter.next() {
+            return Some(next_arg);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -1068,5 +1097,74 @@ spec:
         let ns: PartialObjectMeta<()> =
             PartialObjectMeta::deserialize(serde_yaml::Deserializer::from_str(resource)).unwrap();
         assert!(is_allowed_namespaced_resource("tesotron", &ns).is_err());
+    }
+
+    #[test]
+    fn should_return_empty_when_no_namespace_args() {
+        let args = vec![Cow::Borrowed("--atomic")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert!(namespace.is_none());
+    }
+
+    #[test]
+    fn should_extract_namespace_with_short_option_format() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("-n"),
+            Cow::Borrowed("my-namespace"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("my-namespace")));
+    }
+
+    #[test]
+    fn should_ignore_incomplete_namespace_flag() {
+        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("-n")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert!(namespace.is_none());
+    }
+
+    #[test]
+    fn should_extract_namespace_with_equals_syntax() {
+        let args = vec![Cow::Borrowed("--atomic"), Cow::Borrowed("--namespace=production")];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("production")));
+    }
+
+    #[test]
+    fn should_extract_namespace_with_long_option_format() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--namespace"),
+            Cow::Borrowed("staging"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        assert_eq!(namespace, Some(Cow::Borrowed("staging")));
+    }
+
+    #[test]
+    fn should_extract_namespace_with_several_namespaces() {
+        let args = vec![
+            Cow::Borrowed("--atomic"),
+            Cow::Borrowed("--namespace"),
+            Cow::Borrowed("staging"),
+            Cow::Borrowed("-n"),
+            Cow::Borrowed("dev"),
+        ];
+
+        let namespace = extract_namespace_from_helm_args(args.into_iter());
+
+        // take the first one, but it should not be allowed to have args with several namespaces
+        assert_eq!(namespace, Some(Cow::Borrowed("staging")));
     }
 }

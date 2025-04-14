@@ -1,7 +1,9 @@
+use chrono::{DateTime, Utc};
+
 use crate::helm::HelmChart;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::kubernetes::aws::{KarpenterParameters, Options};
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::{KarpenterParameters, Options};
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::models::CpuArchitecture;
 
@@ -11,13 +13,14 @@ use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::environment::models::domain::ToHelmString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
-use crate::infrastructure::action::eks::helm_charts::gen_charts::eks_helm_charts;
 use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
+use crate::infrastructure::action::eks::helm_charts::gen_charts::eks_helm_charts;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::metrics::MetricsParameters;
 use crate::string::terraform_list_format;
 use std::collections::HashMap;
 
@@ -26,22 +29,24 @@ pub mod aws_iam_eks_user_mapper_chart;
 pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
 mod gen_charts;
+pub mod gen_karpenter_charts;
 pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;
 
+#[derive(Clone)]
 pub struct EksChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
+    pub cluster_creation_date: DateTime<Utc>,
     pub region: AwsRegion,
     pub cluster_name: String,
     pub cpu_architectures: Vec<CpuArchitecture>,
     pub cloud_provider: String,
     pub qovery_engine_location: EngineLocation,
     pub ff_log_history_enabled: bool,
-    pub ff_metrics_history_enabled: bool,
     pub ff_grafana_enabled: bool,
     pub managed_dns_helm_format: String,
     pub managed_dns_resolvers_terraform_format: String,
@@ -55,13 +60,15 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub is_karpenter_enabled: bool,
     pub karpenter_parameters: Option<KarpenterParameters>,
-    pub aws_account_id: String,
     pub aws_iam_eks_user_mapper_role_arn: String,
     pub aws_iam_cluster_autoscaler_role_arn: String,
     pub aws_iam_cloudwatch_role_arn: String,
     pub aws_iam_loki_role_arn: String,
     pub aws_s3_loki_bucket_name: String,
     pub loki_storage_config_aws_s3: String,
+    pub metrics_parameters: Option<MetricsParameters>,
+    pub aws_iam_eks_prometheus_role_arn: String,
+    pub aws_s3_prometheus_bucket_name: String,
     pub karpenter_controller_aws_role_arn: String,
     pub cluster_security_group_id: String,
     pub aws_iam_alb_controller_arn: String,
@@ -94,7 +101,7 @@ impl<'a> EksHelmsDeployment<'a> {
     }
 }
 
-impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
+impl HelmInfraResources for EksHelmsDeployment<'_> {
     type ChartPrerequisite = EksChartsConfigPrerequisites;
 
     fn charts_context(&self) -> &HelmInfraContext {
@@ -102,12 +109,11 @@ impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
     }
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
-        let cloud_provider = infra_ctx.cloud_provider();
         let dns_provider = infra_ctx.dns_provider();
         let cluster = self.cluster;
         EksChartsConfigPrerequisites {
-            organization_id: cloud_provider.organization_id().to_string(),
-            organization_long_id: cloud_provider.organization_long_id(),
+            organization_id: infra_ctx.context().organization_short_id().to_string(),
+            organization_long_id: *infra_ctx.context().organization_long_id(),
             infra_options: cluster.options.clone(),
             cluster_id: cluster.short_id().to_string(),
             cluster_long_id: cluster.long_id,
@@ -117,7 +123,6 @@ impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
             cloud_provider: "aws".to_string(),
             qovery_engine_location: cluster.options.qovery_engine_location.clone(),
             ff_log_history_enabled: cluster.context().is_feature_enabled(&Features::LogsHistory),
-            ff_metrics_history_enabled: cluster.context().is_feature_enabled(&Features::MetricsHistory),
             ff_grafana_enabled: cluster.context().is_feature_enabled(&Features::Grafana),
             managed_dns_helm_format: dns_provider.domain().to_helm_format_string(),
             managed_dns_resolvers_terraform_format: terraform_list_format(
@@ -132,7 +137,6 @@ impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
             cluster_advanced_settings: cluster.advanced_settings().clone(),
             is_karpenter_enabled: cluster.is_karpenter_enabled(),
             karpenter_parameters: cluster.get_karpenter_parameters(),
-            aws_account_id: self.terraform_output.aws_account_id.clone(),
             aws_iam_eks_user_mapper_role_arn: self.terraform_output.aws_iam_eks_user_mapper_role_arn.clone(),
             aws_iam_cluster_autoscaler_role_arn: self.terraform_output.aws_iam_cluster_autoscaler_role_arn.clone(),
             aws_iam_cloudwatch_role_arn: self.terraform_output.aws_iam_cloudwatch_role_arn.clone(),
@@ -145,6 +149,10 @@ impl<'a> HelmInfraResources for EksHelmsDeployment<'a> {
             kubernetes_version_upgrade_requested: self.kubernetes_version_upgrade_requested,
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
             customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
+            metrics_parameters: cluster.options.metrics_parameters.clone(),
+            aws_iam_eks_prometheus_role_arn: self.terraform_output.aws_iam_eks_prometheus_role_arn.clone(),
+            aws_s3_prometheus_bucket_name: self.terraform_output.aws_s3_prometheus_bucket_name.clone(),
+            cluster_creation_date: cluster.created_at,
         }
     }
 

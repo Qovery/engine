@@ -77,6 +77,11 @@ resource "aws_s3_bucket_versioning" "loki_bucket_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
+  lifecycle {
+    ignore_changes = [
+        versioning_configuration[0].mfa_delete
+    ]
+  }
 }
 
 resource "aws_s3_bucket_ownership_controls" "loki_bucket_ownership" {
@@ -140,5 +145,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
   {% endif %}
   }
 
-}
+  # This rule removes old versions of objects, cleans up delete markers, and aborts incomplete multipart uploads
+  rule {
+    id = "CleanLokiLogVersions"
+    status = "Enabled"
 
+    noncurrent_version_expiration {
+      noncurrent_days = 3
+    }
+
+    expiration {
+      expired_object_delete_marker = true
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 1
+    }
+  }
+}

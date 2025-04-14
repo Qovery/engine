@@ -1,15 +1,15 @@
-use crate::cmd::kubectl::{kubectl_exec_scale_replicas, ScalingKind};
+use crate::cmd::kubectl::{ScalingKind, kubectl_exec_scale_replicas};
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::action::eks::nodegroup::should_update_desired_nodes;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_upgrade;
-use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesUpgradeStatus};
@@ -28,6 +28,7 @@ pub fn upgrade_eks_cluster(
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
 
     logger.info("Start preparing EKS cluster upgrade process");
+
     let temp_dir = kubernetes.temp_dir();
     let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, infra_ctx.cloud_provider()).ok();
 

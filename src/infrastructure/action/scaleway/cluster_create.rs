@@ -5,17 +5,17 @@ use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraRes
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
+use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleHelmsDeployment;
 use crate::infrastructure::action::scaleway::nodegroup::{get_existing_sanitized_node_groups, get_node_group_info};
-use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, ScwNodeGroupErrors};
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, ScwNodeGroupErrors};
 use crate::infrastructure::models::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use std::path::PathBuf;
 
@@ -35,6 +35,19 @@ pub fn create_kapsule_cluster(
         cluster.logs_bucket_name().as_str(),
         cluster.advanced_settings().resource_ttl(),
         false,
+        cluster.advanced_settings().object_storage_enable_logging,
+    ) {
+        let error = EngineError::new_object_storage_error(event_details, e);
+        logger.error(error.clone(), None::<&str>);
+        return Err(Box::new(error));
+    }
+
+    // Prometheus bucket
+    if let Err(e) = cluster.object_storage.create_bucket(
+        cluster.prometheus_bucket_name().as_str(),
+        cluster.advanced_settings().resource_ttl(),
+        false,
+        cluster.advanced_settings().object_storage_enable_logging,
     ) {
         let error = EngineError::new_object_storage_error(event_details, e);
         logger.error(error.clone(), None::<&str>);
@@ -193,9 +206,9 @@ fn sanitize_node_groups(
                             ScwNodeGroupErrors::MissingNodePoolInfo(name) => {
                                 OperationResult::Retry(EngineError::new_missing_api_info_from_cloud_provider_error(
                                     event_details.clone(),
-                                    Some(CommandError::new_from_safe_message(
-                                        format!("Error with Scaleway API while trying to retrieve node pool info. Missing {name} info"),
-                                    )),
+                                    Some(CommandError::new_from_safe_message(format!(
+                                        "Error with Scaleway API while trying to retrieve node pool info. Missing {name} info"
+                                    ))),
                                 ))
                             }
                             ScwNodeGroupErrors::NodeGroupValidationError(c) => {

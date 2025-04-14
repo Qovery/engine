@@ -1,7 +1,8 @@
 use crate::helpers::aws::AWS_RESOURCE_TTL_IN_SECONDS;
-use crate::helpers::utilities::{engine_run_test, generate_id, init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id, init};
 use function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::object_storage::s3::S3;
 use qovery_engine::infrastructure::models::object_storage::{BucketDeleteStrategy, ObjectStorage};
@@ -10,7 +11,7 @@ use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 use tempfile::NamedTempFile;
-use tracing::{info, span, Level};
+use tracing::{Level, info, span};
 
 #[cfg(feature = "test-quarantine")]
 #[named]
@@ -31,8 +32,9 @@ fn test_delete_hard_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -40,6 +42,7 @@ fn test_delete_hard_strategy_bucket() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .unwrap_or_else(|_| {
@@ -88,8 +91,9 @@ fn test_delete_empty_strategy_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -97,6 +101,7 @@ fn test_delete_empty_strategy_bucket() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .unwrap_or_else(|_| {
@@ -139,8 +144,9 @@ fn test_create_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -149,6 +155,7 @@ fn test_create_bucket() {
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
             false,
+            true,
         );
 
         // validate:
@@ -164,9 +171,11 @@ fn test_create_bucket() {
         );
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -191,8 +200,9 @@ fn test_get_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region.clone());
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region.clone());
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -200,6 +210,7 @@ fn test_get_bucket() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .expect("Cannot create bucket");
@@ -211,9 +222,11 @@ fn test_get_bucket() {
         assert_eq!(created_bucket, retrieved_bucket);
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -238,8 +251,9 @@ fn test_recreate_bucket() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
 
@@ -247,6 +261,7 @@ fn test_recreate_bucket() {
         let create_result = aws_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+            false,
             false,
         );
         assert!(create_result.is_ok());
@@ -256,33 +271,40 @@ fn test_recreate_bucket() {
         assert!(delete_result.is_ok());
 
         // retry to check if bucket exists, there is a lag / cache after bucket deletion
-        assert!(!retry::retry(Fixed::from_millis(1000).take(20), || {
-            match aws_os.bucket_exists(bucket_name.as_str()) {
-                false => Ok(false),
-                true => Err(()),
-            }
-        })
-        .expect("Bucket still exists"));
+        assert!(
+            !retry::retry(Fixed::from_millis(1000).take(20), || {
+                match aws_os.bucket_exists(bucket_name.as_str()) {
+                    false => Ok(false),
+                    true => Err(()),
+                }
+            })
+            .expect("Bucket still exists")
+        );
 
         let recreate_result = aws_os.create_bucket(
             bucket_name.as_str(),
             Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
             false,
+            false,
         );
         assert!(recreate_result.is_ok());
         // retry to check if bucket exists, there is a lag / cache after bucket deletion
-        assert!(retry::retry(Fixed::from_millis(1000).take(20), || {
-            match aws_os.bucket_exists(bucket_name.as_str()) {
-                true => Ok(true),
-                false => Err(()),
-            }
-        })
-        .expect("Bucket doesn't exist"));
+        assert!(
+            retry::retry(Fixed::from_millis(1000).take(20), || {
+                match aws_os.bucket_exists(bucket_name.as_str()) {
+                    true => Ok(true),
+                    false => Err(()),
+                }
+            })
+            .expect("Bucket doesn't exist")
+        );
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -307,8 +329,9 @@ fn test_put_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
@@ -319,6 +342,7 @@ fn test_put_file() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .expect("error while creating object-storage bucket");
@@ -340,9 +364,11 @@ fn test_put_file() {
         assert_eq!(object.unwrap().tags, vec![tag_0, tag_1]);
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })
@@ -367,8 +393,9 @@ fn test_get_file() {
         let aws_region_raw = secrets.AWS_DEFAULT_REGION.expect("AWS_DEFAULT_REGION is not set");
         let aws_region = AwsRegion::from_str(aws_region_raw.as_str())
             .unwrap_or_else(|_| panic!("AWS region `{aws_region_raw}` seems not to be valid"));
+        let credentials = AwsCredentials::new(aws_access_key, aws_secret_key, secrets.AWS_SESSION_TOKEN);
 
-        let aws_os = S3::new(id.to_string(), name, aws_access_key, aws_secret_key, aws_region);
+        let aws_os = S3::new(id.to_string(), name, credentials, aws_region);
 
         let bucket_name = format!("qovery-test-bucket-{}", generate_id());
         let object_key = format!("test-object-{}", generate_id());
@@ -377,6 +404,7 @@ fn test_get_file() {
             .create_bucket(
                 bucket_name.as_str(),
                 Some(Duration::from_secs(AWS_RESOURCE_TTL_IN_SECONDS.into())),
+                false,
                 false,
             )
             .expect("error while creating object-storage bucket");
@@ -401,9 +429,11 @@ fn test_get_file() {
         assert!(result.is_ok());
 
         // clean-up:
-        assert!(aws_os
-            .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
-            .is_ok());
+        assert!(
+            aws_os
+                .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
+                .is_ok()
+        );
 
         test_name.to_string()
     })

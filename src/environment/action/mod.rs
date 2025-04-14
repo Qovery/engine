@@ -1,6 +1,6 @@
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::Action;
 
 mod check_dns;
 mod deploy_application;
@@ -13,6 +13,7 @@ mod deploy_job;
 pub mod deploy_namespace;
 mod deploy_router;
 mod deploy_terraform;
+mod deploy_terraform_service;
 mod pause_service;
 mod restart_service;
 #[cfg(test)]

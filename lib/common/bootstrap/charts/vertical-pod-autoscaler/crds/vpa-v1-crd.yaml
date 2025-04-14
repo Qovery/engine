@@ -4,7 +4,213 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     api-approved.kubernetes.io: https://github.com/kubernetes/kubernetes/pull/63797
-    controller-gen.kubebuilder.io/version: v0.4.0
+    controller-gen.kubebuilder.io/version: v0.9.2
+  creationTimestamp: null
+  name: verticalpodautoscalercheckpoints.autoscaling.k8s.io
+spec:
+  group: autoscaling.k8s.io
+  names:
+    kind: VerticalPodAutoscalerCheckpoint
+    listKind: VerticalPodAutoscalerCheckpointList
+    plural: verticalpodautoscalercheckpoints
+    shortNames:
+    - vpacheckpoint
+    singular: verticalpodautoscalercheckpoint
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: VerticalPodAutoscalerCheckpoint is the checkpoint of the internal
+          state of VPA that is used for recovery after recommender's restart.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: 'Specification of the checkpoint. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status.'
+            properties:
+              containerName:
+                description: Name of the checkpointed container.
+                type: string
+              vpaObjectName:
+                description: Name of the VPA object that stored VerticalPodAutoscalerCheckpoint
+                  object.
+                type: string
+            type: object
+          status:
+            description: Data of the checkpoint.
+            properties:
+              cpuHistogram:
+                description: Checkpoint of histogram for consumption of CPU.
+                properties:
+                  bucketWeights:
+                    description: Map from bucket index to bucket weight.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  referenceTimestamp:
+                    description: Reference timestamp for samples collected within
+                      this histogram.
+                    format: date-time
+                    nullable: true
+                    type: string
+                  totalWeight:
+                    description: Sum of samples to be used as denominator for weights
+                      from BucketWeights.
+                    type: number
+                type: object
+              firstSampleStart:
+                description: Timestamp of the fist sample from the histograms.
+                format: date-time
+                nullable: true
+                type: string
+              lastSampleStart:
+                description: Timestamp of the last sample from the histograms.
+                format: date-time
+                nullable: true
+                type: string
+              lastUpdateTime:
+                description: The time when the status was last refreshed.
+                format: date-time
+                nullable: true
+                type: string
+              memoryHistogram:
+                description: Checkpoint of histogram for consumption of memory.
+                properties:
+                  bucketWeights:
+                    description: Map from bucket index to bucket weight.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  referenceTimestamp:
+                    description: Reference timestamp for samples collected within
+                      this histogram.
+                    format: date-time
+                    nullable: true
+                    type: string
+                  totalWeight:
+                    description: Sum of samples to be used as denominator for weights
+                      from BucketWeights.
+                    type: number
+                type: object
+              totalSamplesCount:
+                description: Total number of samples in the histograms.
+                type: integer
+              version:
+                description: Version of the format of the stored data.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+  - name: v1beta2
+    schema:
+      openAPIV3Schema:
+        description: VerticalPodAutoscalerCheckpoint is the checkpoint of the internal
+          state of VPA that is used for recovery after recommender's restart.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: 'Specification of the checkpoint. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status.'
+            properties:
+              containerName:
+                description: Name of the checkpointed container.
+                type: string
+              vpaObjectName:
+                description: Name of the VPA object that stored VerticalPodAutoscalerCheckpoint
+                  object.
+                type: string
+            type: object
+          status:
+            description: Data of the checkpoint.
+            properties:
+              cpuHistogram:
+                description: Checkpoint of histogram for consumption of CPU.
+                properties:
+                  bucketWeights:
+                    description: Map from bucket index to bucket weight.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  referenceTimestamp:
+                    description: Reference timestamp for samples collected within
+                      this histogram.
+                    format: date-time
+                    nullable: true
+                    type: string
+                  totalWeight:
+                    description: Sum of samples to be used as denominator for weights
+                      from BucketWeights.
+                    type: number
+                type: object
+              firstSampleStart:
+                description: Timestamp of the fist sample from the histograms.
+                format: date-time
+                nullable: true
+                type: string
+              lastSampleStart:
+                description: Timestamp of the last sample from the histograms.
+                format: date-time
+                nullable: true
+                type: string
+              lastUpdateTime:
+                description: The time when the status was last refreshed.
+                format: date-time
+                nullable: true
+                type: string
+              memoryHistogram:
+                description: Checkpoint of histogram for consumption of memory.
+                properties:
+                  bucketWeights:
+                    description: Map from bucket index to bucket weight.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  referenceTimestamp:
+                    description: Reference timestamp for samples collected within
+                      this histogram.
+                    format: date-time
+                    nullable: true
+                    type: string
+                  totalWeight:
+                    description: Sum of samples to be used as denominator for weights
+                      from BucketWeights.
+                    type: number
+                type: object
+              totalSamplesCount:
+                description: Total number of samples in the histograms.
+                type: integer
+              version:
+                description: Version of the format of the stored data.
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: false
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    api-approved.kubernetes.io: https://github.com/kubernetes/kubernetes/pull/63797
+    controller-gen.kubebuilder.io/version: v0.9.2
   creationTimestamp: null
   name: verticalpodautoscalers.autoscaling.k8s.io
 spec:
@@ -55,7 +261,7 @@ spec:
             type: object
           spec:
             description: 'Specification of the behavior of the autoscaler. More info:
-              https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status.'
+              https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status.'
             properties:
               recommenders:
                 description: Recommender responsible for generating recommendation
@@ -77,9 +283,11 @@ spec:
               resourcePolicy:
                 description: Controls how the autoscaler computes recommended resources.
                   The resource policy may be used to set constraints on the recommendations
-                  for individual containers. If not specified, the autoscaler computes
-                  recommended resources for all containers in the pod, without additional
-                  constraints.
+                  for individual containers. If any individual containers need to
+                  be excluded from getting the VPA recommendations, then it must be
+                  disabled explicitly by setting mode to "Off" under containerPolicies.
+                  If not specified, the autoscaler computes recommended resources
+                  for all containers in the pod, without additional constraints.
                 properties:
                   containerPolicies:
                     description: Per-container resource policies.
@@ -158,7 +366,7 @@ spec:
                     description: API version of the referent
                     type: string
                   kind:
-                    description: 'Kind of the referent; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"'
+                    description: 'Kind of the referent; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                     type: string
                   name:
                     description: 'Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names'
@@ -167,11 +375,45 @@ spec:
                 - kind
                 - name
                 type: object
+                x-kubernetes-map-type: atomic
               updatePolicy:
                 description: Describes the rules on how changes are applied to the
                   pods. If not specified, all fields in the `PodUpdatePolicy` are
                   set to their default values.
                 properties:
+                  evictionRequirements:
+                    description: EvictionRequirements is a list of EvictionRequirements
+                      that need to evaluate to true in order for a Pod to be evicted.
+                      If more than one EvictionRequirement is specified, all of them
+                      need to be fulfilled to allow eviction.
+                    items:
+                      description: EvictionRequirement defines a single condition
+                        which needs to be true in order to evict a Pod
+                      properties:
+                        changeRequirement:
+                          description: EvictionChangeRequirement refers to the relationship
+                            between the new target recommendation for a Pod and its
+                            current requests, what kind of change is necessary for
+                            the Pod to be evicted
+                          enum:
+                          - TargetHigherThanRequests
+                          - TargetLowerThanRequests
+                          type: string
+                        resources:
+                          description: Resources is a list of one or more resources
+                            that the condition applies to. If more than one resource
+                            is given, the EvictionRequirement is fulfilled if at least
+                            one resource meets `changeRequirement`.
+                          items:
+                            description: ResourceName is the name identifying various
+                              resources in a ResourceList.
+                            type: string
+                          type: array
+                      required:
+                      - changeRequirement
+                      - resources
+                      type: object
+                    type: array
                   minReplicas:
                     description: Minimal number of replicas which need to be alive
                       for Updater to attempt pod eviction (pending other checks like
@@ -306,8 +548,11 @@ spec:
         type: object
     served: true
     storage: true
-    subresources: {}
-  - name: v1beta2
+    subresources:
+      status: {}
+  - deprecated: true
+    deprecationWarning: autoscaling.k8s.io/v1beta2 API is deprecated
+    name: v1beta2
     schema:
       openAPIV3Schema:
         description: VerticalPodAutoscaler is the configuration for a vertical pod
@@ -328,7 +573,7 @@ spec:
             type: object
           spec:
             description: 'Specification of the behavior of the autoscaler. More info:
-              https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status.'
+              https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#spec-and-status.'
             properties:
               resourcePolicy:
                 description: Controls how the autoscaler computes recommended resources.
@@ -397,7 +642,7 @@ spec:
                     description: API version of the referent
                     type: string
                   kind:
-                    description: 'Kind of the referent; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds"'
+                    description: 'Kind of the referent; More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
                     type: string
                   name:
                     description: 'Name of the referent; More info: http://kubernetes.io/docs/user-guide/identifiers#names'
@@ -406,6 +651,7 @@ spec:
                 - kind
                 - name
                 type: object
+                x-kubernetes-map-type: atomic
               updatePolicy:
                 description: Describes the rules on how changes are applied to the
                   pods. If not specified, all fields in the `PodUpdatePolicy` are
@@ -538,221 +784,5 @@ spec:
         type: object
     served: true
     storage: false
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    api-approved.kubernetes.io: https://github.com/kubernetes/kubernetes/pull/63797
-    controller-gen.kubebuilder.io/version: v0.4.0
-  creationTimestamp: null
-  name: verticalpodautoscalercheckpoints.autoscaling.k8s.io
-spec:
-  group: autoscaling.k8s.io
-  names:
-    kind: VerticalPodAutoscalerCheckpoint
-    listKind: VerticalPodAutoscalerCheckpointList
-    plural: verticalpodautoscalercheckpoints
-    shortNames:
-    - vpacheckpoint
-    singular: verticalpodautoscalercheckpoint
-  scope: Namespaced
-  versions:
-  - name: v1
-    schema:
-      openAPIV3Schema:
-        description: VerticalPodAutoscalerCheckpoint is the checkpoint of the internal
-          state of VPA that is used for recovery after recommender's restart.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: 'Specification of the checkpoint. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status.'
-            properties:
-              containerName:
-                description: Name of the checkpointed container.
-                type: string
-              vpaObjectName:
-                description: Name of the VPA object that stored VerticalPodAutoscalerCheckpoint
-                  object.
-                type: string
-            type: object
-          status:
-            description: Data of the checkpoint.
-            properties:
-              cpuHistogram:
-                description: Checkpoint of histogram for consumption of CPU.
-                properties:
-                  bucketWeights:
-                    description: Map from bucket index to bucket weight.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  referenceTimestamp:
-                    description: Reference timestamp for samples collected within
-                      this histogram.
-                    format: date-time
-                    nullable: true
-                    type: string
-                  totalWeight:
-                    description: Sum of samples to be used as denominator for weights
-                      from BucketWeights.
-                    type: number
-                type: object
-              firstSampleStart:
-                description: Timestamp of the fist sample from the histograms.
-                format: date-time
-                nullable: true
-                type: string
-              lastSampleStart:
-                description: Timestamp of the last sample from the histograms.
-                format: date-time
-                nullable: true
-                type: string
-              lastUpdateTime:
-                description: The time when the status was last refreshed.
-                format: date-time
-                nullable: true
-                type: string
-              memoryHistogram:
-                description: Checkpoint of histogram for consumption of memory.
-                properties:
-                  bucketWeights:
-                    description: Map from bucket index to bucket weight.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  referenceTimestamp:
-                    description: Reference timestamp for samples collected within
-                      this histogram.
-                    format: date-time
-                    nullable: true
-                    type: string
-                  totalWeight:
-                    description: Sum of samples to be used as denominator for weights
-                      from BucketWeights.
-                    type: number
-                type: object
-              totalSamplesCount:
-                description: Total number of samples in the histograms.
-                type: integer
-              version:
-                description: Version of the format of the stored data.
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: true
-  - name: v1beta2
-    schema:
-      openAPIV3Schema:
-        description: VerticalPodAutoscalerCheckpoint is the checkpoint of the internal
-          state of VPA that is used for recovery after recommender's restart.
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: 'Specification of the checkpoint. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#spec-and-status.'
-            properties:
-              containerName:
-                description: Name of the checkpointed container.
-                type: string
-              vpaObjectName:
-                description: Name of the VPA object that stored VerticalPodAutoscalerCheckpoint
-                  object.
-                type: string
-            type: object
-          status:
-            description: Data of the checkpoint.
-            properties:
-              cpuHistogram:
-                description: Checkpoint of histogram for consumption of CPU.
-                properties:
-                  bucketWeights:
-                    description: Map from bucket index to bucket weight.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  referenceTimestamp:
-                    description: Reference timestamp for samples collected within
-                      this histogram.
-                    format: date-time
-                    nullable: true
-                    type: string
-                  totalWeight:
-                    description: Sum of samples to be used as denominator for weights
-                      from BucketWeights.
-                    type: number
-                type: object
-              firstSampleStart:
-                description: Timestamp of the fist sample from the histograms.
-                format: date-time
-                nullable: true
-                type: string
-              lastSampleStart:
-                description: Timestamp of the last sample from the histograms.
-                format: date-time
-                nullable: true
-                type: string
-              lastUpdateTime:
-                description: The time when the status was last refreshed.
-                format: date-time
-                nullable: true
-                type: string
-              memoryHistogram:
-                description: Checkpoint of histogram for consumption of memory.
-                properties:
-                  bucketWeights:
-                    description: Map from bucket index to bucket weight.
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  referenceTimestamp:
-                    description: Reference timestamp for samples collected within
-                      this histogram.
-                    format: date-time
-                    nullable: true
-                    type: string
-                  totalWeight:
-                    description: Sum of samples to be used as denominator for weights
-                      from BucketWeights.
-                    type: number
-                type: object
-              totalSamplesCount:
-                description: Total number of samples in the histograms.
-                type: integer
-              version:
-                description: Version of the format of the stored data.
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: false
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
+    subresources:
+      status: {}

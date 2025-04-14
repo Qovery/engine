@@ -1,24 +1,23 @@
 use crate::helpers::gcp::{
-    try_parse_json_credentials_from_str, GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER,
-    GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER, GCP_REGION,
+    GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER,
+    GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER, GCP_REGION, try_parse_json_credentials_from_str,
 };
-use crate::helpers::utilities::{engine_run_test, init, FuncTestsSecrets};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, init};
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::{ContainerImage, Docker};
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::container_registry::{DockerImage, Repository};
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::collections::HashMap;
 use std::{thread, time::Duration};
-use tracing::{error, info, span, Level};
+use tracing::{Level, error, info, span};
 use url::Url;
 use uuid::Uuid;
 
 /// Note those tests might be a bit long because of the write limitations on repositories / images
-
 #[cfg(feature = "test-gcp-minimal")]
 #[test]
 #[named]

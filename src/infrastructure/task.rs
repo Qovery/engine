@@ -1,7 +1,7 @@
 use crate::cmd::docker::Docker;
 use crate::engine_task;
-use crate::engine_task::qovery_api::QoveryApi;
 use crate::engine_task::Task;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus};
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;

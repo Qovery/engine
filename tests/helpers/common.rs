@@ -6,6 +6,7 @@ use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::environment::models::environment::Environment;
 use qovery_engine::errors::EngineError;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
+use qovery_engine::infrastructure::models::kubernetes::aws::KarpenterParameters;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
@@ -30,6 +31,13 @@ pub enum ClusterDomain {
     Custom { domain: String },
 }
 
+#[derive(Clone)]
+pub enum NodeManager {
+    Default,
+    Karpenter { config: KarpenterParameters },
+    AutoPilot,
+}
+
 pub trait Cluster<T, U> {
     fn docker_cr_engine(
         context: &Context,
@@ -45,6 +53,7 @@ pub trait Cluster<T, U> {
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;

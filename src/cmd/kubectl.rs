@@ -1,21 +1,23 @@
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
-use kube::api::{DeleteParams, PropagationPolicy};
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::api::{DeleteParams, Patch, PatchParams, PropagationPolicy};
 use kube::core::params::ListParams;
-use kube::{Api, Client};
+use kube::{Api, Client, ResourceExt};
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
+use serde_yaml::Deserializer;
 use std::fmt::Debug;
-use std::fs::File;
+use std::fs::{File, read_dir, read_to_string};
 use std::io::Read;
 use std::path::Path;
-
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
-    Configmap, Item, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
-    KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer,
-    Secrets, PDB, PVC, SVC,
+    Configmap, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
+    KubernetesList, KubernetesNode, KubernetesPod, KubernetesPodStatusReason, KubernetesVersion, MetricsServer, PDB,
+    PVC, SVC, Secrets,
 };
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
@@ -144,6 +146,66 @@ where
         kubernetes_config,
         envs,
     )
+}
+
+pub fn kubectl_update_crd(kube_client: &Client, chart_name: &str, crd_folder: &str) -> Result<(), CommandError> {
+    let crds_api: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+
+    // Read all CRD files in the folder
+    let mut dir = read_dir(crd_folder).map_err(|e| {
+        CommandError::new(
+            format!("Error while trying to read CRD folder `{}`", crd_folder),
+            Some(e.to_string()),
+            None,
+        )
+    })?;
+
+    while let Some(Ok(entry)) = dir.next() {
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("yaml") {
+            let crd_yaml = read_to_string(&path).map_err(|e| {
+                CommandError::new(
+                    format!("Error while trying to read CRD file `{}`", path.display()),
+                    Some(e.to_string()),
+                    None,
+                )
+            })?;
+
+            for crd in Deserializer::from_str(&crd_yaml) {
+                match serde_yaml::from_value::<CustomResourceDefinition>(serde_yaml::Value::deserialize(crd).map_err(
+                    |e| {
+                        CommandError::new(
+                            format!("Error while trying to parse CRD file `{}`", path.display()),
+                            Some(e.to_string()),
+                            None,
+                        )
+                    },
+                )?) {
+                    Ok(crd) => {
+                        let pp = PatchParams::apply(chart_name).force();
+                        let patch = Patch::Apply(&crd);
+
+                        block_on(crds_api.patch(&crd.name_any(), &pp, &patch)).map_err(|e| {
+                            CommandError::new(
+                                format!("Error while trying to update CRD `{}` (`{}`)", crd.name_any(), path.display()),
+                                Some(e.to_string()),
+                                None,
+                            )
+                        })?;
+                    }
+                    Err(e) => {
+                        return Err(CommandError::new(
+                            format!("Error while trying to parse CRD file `{}`", path.display()),
+                            Some(e.to_string()),
+                            None,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 pub fn kubectl_exec_delete_crd<P>(
@@ -371,10 +433,11 @@ pub fn kubectl_delete_objects_in_all_namespaces<P>(
 where
     P: AsRef<Path>,
 {
-    let result = kubectl_exec::<P, KubernetesList<Item>>(
+    let result = kubectl_exec_raw_output(
         vec!["delete", object, "--all-namespaces", "--all"],
         kubernetes_config,
         envs,
+        false,
     );
 
     match result {
@@ -512,10 +575,7 @@ where
     P: AsRef<Path>,
 {
     let crash_looping_pods =
-        match kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone()) {
-            Ok(pods) => pods,
-            Err(e) => return Err(e),
-        };
+        kubectl_get_crash_looping_pods(&kubernetes_config, namespace, selector, None, envs.clone())?;
 
     for crash_looping_pod in crash_looping_pods.iter() {
         kubectl_exec_delete_pod(
@@ -606,10 +666,7 @@ where
     P: AsRef<Path>,
 {
     let pod_to_be_deleted =
-        match kubectl_exec_get_pod_by_name(&kubernetes_config, Some(pod_namespace), pod_name, envs.clone()) {
-            Ok(pod) => pod,
-            Err(e) => return Err(e),
-        };
+        kubectl_exec_get_pod_by_name(&kubernetes_config, Some(pod_namespace), pod_name, envs.clone())?;
 
     let mut complete_envs = Vec::with_capacity(envs.len() + 1);
     let kubernetes_config = kubernetes_config.as_ref();

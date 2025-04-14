@@ -3,8 +3,8 @@ use std::str;
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ use crate::environment::models::aws::AwsAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
@@ -32,10 +32,10 @@ use crate::io_models::models::{
     CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
 };
 use crate::io_models::probe::Probe;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    MountedFile, QoveryIdentifier,
+    Action, MountedFile, QoveryIdentifier, fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url,
+    ssh_keys_from_env_vars,
 };
 use crate::utilities::to_short_id;
 
@@ -127,10 +127,15 @@ pub struct ApplicationAdvancedSettings {
     pub build_cpu_max_in_milli: u32,
     #[serde(alias = "build.ram_max_in_gib")]
     pub build_ram_max_in_gib: u32,
+    #[serde(default)]
+    #[serde(alias = "build.ephemeral_storage_in_gib")]
+    pub build_ephemeral_storage_in_gib: Option<u32>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.force_ssl_redirect")]
+    pub network_ingress_force_ssl_redirect: bool,
     #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.enable_sticky_session")]
@@ -175,8 +180,14 @@ pub struct ApplicationAdvancedSettings {
     pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_rps")]
+    pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_connections")]
+    pub network_ingress_nginx_limit_connections: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_custom_http_errors")]
+    pub network_ingress_nginx_custom_http_errors: Option<String>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -207,7 +218,9 @@ impl Default for ApplicationAdvancedSettings {
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
+            build_ephemeral_storage_in_gib: None,
             network_ingress_proxy_body_size_mb: 100,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
@@ -232,7 +245,10 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
+            network_ingress_nginx_custom_http_errors: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
@@ -256,6 +272,7 @@ impl ApplicationAdvancedSettings {
             deployment_lifecycle_post_start_exec_command: self.deployment_lifecycle_post_start_exec_command.clone(),
             deployment_lifecycle_pre_stop_exec_command: self.deployment_lifecycle_pre_stop_exec_command.clone(),
             network_ingress_proxy_body_size_mb: self.network_ingress_proxy_body_size_mb,
+            network_ingress_force_ssl_redirect: self.network_ingress_force_ssl_redirect,
             network_ingress_cors_enable: self.network_ingress_cors_enable,
             network_ingress_sticky_session_enable: self.network_ingress_sticky_session_enable,
             network_ingress_cors_allow_origin: self.network_ingress_cors_allow_origin.clone(),
@@ -278,13 +295,16 @@ impl ApplicationAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: self.network_ingress_grpc_send_timeout_seconds,
             network_ingress_grpc_read_timeout_seconds: self.network_ingress_grpc_read_timeout_seconds,
             network_ingress_nginx_limit_rpm: self.network_ingress_nginx_limit_rpm,
+            network_ingress_nginx_limit_rps: self.network_ingress_nginx_limit_rps,
             network_ingress_nginx_limit_burst_multiplier: self.network_ingress_nginx_limit_burst_multiplier,
+            network_ingress_nginx_limit_connections: self.network_ingress_nginx_limit_connections,
             network_ingress_nginx_controller_server_snippet: self
                 .network_ingress_nginx_controller_server_snippet
                 .clone(),
             network_ingress_nginx_controller_configuration_snippet: self
                 .network_ingress_nginx_controller_configuration_snippet
                 .clone(),
+            network_ingress_nginx_custom_http_errors: self.network_ingress_nginx_custom_http_errors.clone(),
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
             hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
         }
@@ -334,6 +354,8 @@ pub struct Application {
     pub should_delete_shared_registry: bool,
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
+    #[serde(default)]
+    pub docker_target_build_stage: Option<String>,
 }
 
 fn default_root_path_value() -> String {
@@ -402,6 +424,7 @@ impl Application {
                     self.should_delete_shared_registry,
                 )?))
             }
+            CPKind::Azure => todo!(),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
                 self.long_id,
@@ -554,6 +577,8 @@ impl Application {
                 dockerfile_path,
                 dockerfile_content: None,
                 root_path,
+                extra_files_to_inject: vec![],
+                docker_target_build_stage: self.docker_target_build_stage.clone(),
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self
@@ -580,6 +605,7 @@ impl Application {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
             registries: self.container_registries.clone(),
         };
 

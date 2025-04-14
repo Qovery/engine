@@ -5,17 +5,17 @@ use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::SshKey;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::kubernetes;
 use crate::io_models::application::{GitCredentials, Port};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
-use crate::io_models::{fetch_git_token, ssh_keys_from_env_vars, Action};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
+use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
@@ -36,6 +36,8 @@ pub struct HelmChartAdvancedSettings {
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
+    #[serde(alias = "network.ingress.force_ssl_redirect")]
+    pub network_ingress_force_ssl_redirect: bool,
     #[serde(alias = "network.ingress.enable_cors")]
     pub network_ingress_cors_enable: bool,
     #[serde(alias = "network.ingress.enable_sticky_session")]
@@ -76,12 +78,18 @@ pub struct HelmChartAdvancedSettings {
     pub network_ingress_basic_auth_env_var: String,
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
     pub network_ingress_nginx_limit_rpm: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_rps")]
+    pub network_ingress_nginx_limit_rps: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    #[serde(alias = "network.ingress.nginx_limit_connections")]
+    pub network_ingress_nginx_limit_connections: Option<u32>,
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
     pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
     #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
     pub network_ingress_nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
+    #[serde(alias = "network.ingress.nginx_custom_http_errors")]
+    pub network_ingress_nginx_custom_http_errors: Option<String>,
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -93,6 +101,7 @@ impl Default for HelmChartAdvancedSettings {
     fn default() -> Self {
         HelmChartAdvancedSettings {
             network_ingress_proxy_body_size_mb: 100,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "*".to_string(),
@@ -113,9 +122,12 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_denylist_source_range: "".to_string(),
             network_ingress_basic_auth_env_var: "".to_string(),
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
+            network_ingress_nginx_custom_http_errors: None,
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
         }
@@ -350,6 +362,7 @@ impl HelmChart {
                     self.ports,
                 )?)
             }
+            kubernetes::Kind::Aks | kubernetes::Kind::AksSelfManaged => todo!(),
             kubernetes::Kind::OnPremiseSelfManaged => Box::new(models::helm_chart::HelmChart::<OnPremise>::new(
                 context,
                 self.long_id,
@@ -422,17 +435,21 @@ mod tests {
         assert_eq!(helm_chart.name, "name");
         assert_eq!(helm_chart.environment_vars_with_infos.len(), 0);
         assert_eq!(helm_chart.ports.len(), 2);
-        assert!(helm_chart
-            .ports
-            .iter()
-            .map(|port| (port.namespace.clone(), port.service_name.clone()))
-            .any(|(namespace, service_name)| namespace.is_none() && service_name.is_none()));
-        assert!(helm_chart
-            .ports
-            .iter()
-            .map(|port| (port.namespace.clone(), port.service_name.clone()))
-            .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
-                && service_name == Some("service_1".to_string())));
+        assert!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace.is_none() && service_name.is_none())
+        );
+        assert!(
+            helm_chart
+                .ports
+                .iter()
+                .map(|port| (port.namespace.clone(), port.service_name.clone()))
+                .any(|(namespace, service_name)| namespace == Some("namespace_1".to_string())
+                    && service_name == Some("service_1".to_string()))
+        );
     }
 }
 

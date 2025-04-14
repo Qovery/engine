@@ -1,6 +1,6 @@
 use crate::helpers;
-use crate::helpers::common::ClusterDomain;
-use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::common::{ClusterDomain, NodeManager};
+use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use ::function_name::named;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
@@ -9,7 +9,7 @@ use qovery_engine::io_models::models::CpuArchitecture;
 use qovery_engine::utilities::to_short_id;
 
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry,
 };
 
 #[cfg(feature = "test-scw-whole-enchilada")]
@@ -51,6 +51,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_waw_1() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -95,6 +96,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -139,6 +141,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -183,6 +186,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             None,
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }

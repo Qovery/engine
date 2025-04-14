@@ -19,11 +19,11 @@ use crate::environment::models::utils;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
+use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use crate::infrastructure::models::cloud_provider::service::{
-    get_service_statefulset_name_and_volumes, Action, Service, ServiceType,
+    Action, Service, ServiceType, get_service_statefulset_name_and_volumes,
 };
-use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};

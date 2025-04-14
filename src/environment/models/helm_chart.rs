@@ -81,7 +81,7 @@ impl<T: CloudProvider> HelmChart<T> {
         // Normalize paths to be relative paths in order to concat them easily
         match &mut chart_source {
             HelmChartSource::Repository { .. } => {}
-            HelmChartSource::Git { ref mut root_path, .. } => {
+            HelmChartSource::Git { root_path, .. } => {
                 if root_path.is_absolute() {
                     *root_path = to_relative_path(root_path)?;
                 }
@@ -90,9 +90,7 @@ impl<T: CloudProvider> HelmChart<T> {
 
         match &mut chart_values {
             HelmValueSource::Raw { .. } => {}
-            HelmValueSource::Git {
-                ref mut values_path, ..
-            } => {
+            HelmValueSource::Git { values_path, .. } => {
                 for path in values_path {
                     *path = to_relative_path(path)?;
                 }

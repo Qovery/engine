@@ -6,14 +6,13 @@ use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
-use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider;
@@ -23,14 +22,18 @@ use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 
+use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::action::InfrastructureAction;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::io_models::metrics::MetricsParameters;
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -110,9 +113,6 @@ pub struct GkeOptions {
     pub grafana_admin_password: String,
     pub qovery_engine_location: EngineLocation,
 
-    // GCP
-    pub gcp_json_credentials: JsonCredentials,
-
     // Network
     // VPC
     pub vpc_mode: VpcMode,
@@ -124,6 +124,7 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl GkeOptions {
@@ -137,12 +138,12 @@ impl GkeOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         qovery_engine_location: EngineLocation,
-        gcp_json_credentials: JsonCredentials,
         vpc_mode: VpcMode,
         vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
         tls_email_report: String,
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
+        metrics_parameters: Option<MetricsParameters>,
     ) -> Self {
         GkeOptions {
             qovery_api_url,
@@ -154,12 +155,12 @@ impl GkeOptions {
             grafana_admin_user,
             grafana_admin_password,
             qovery_engine_location,
-            gcp_json_credentials,
             vpc_mode,
             vpc_qovery_network_mode,
             tls_email_report,
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,
+            metrics_parameters,
         }
     }
 }
@@ -173,6 +174,7 @@ pub struct Gke {
     pub name: String,
     pub version: KubernetesVersion,
     pub region: GcpRegion,
+    pub created_at: DateTime<Utc>,
     pub template_directory: PathBuf,
     pub object_storage: GoogleOS,
     pub options: GkeOptions,
@@ -181,6 +183,7 @@ pub struct Gke {
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
+    pub credentials: JsonCredentials,
 }
 
 impl Gke {
@@ -188,8 +191,10 @@ impl Gke {
         context: Context,
         long_id: Uuid,
         name: &str,
+        cloud_provider: &dyn CloudProvider,
         version: KubernetesVersion,
         region: GcpRegion,
+        created_at: DateTime<Utc>,
         options: GkeOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
@@ -206,9 +211,15 @@ impl Gke {
             Transmitter::Kubernetes(long_id, name.to_string()),
         );
 
+        let creds = cloud_provider
+            .downcast_ref()
+            .as_gcp()
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not GCP")))?
+            .json_credentials
+            .clone();
         let object_storage_service_client = retry::retry(Fixed::from(Duration::from_secs(20)).take(3), || {
             match ObjectStorageService::new(
-                options.gcp_json_credentials.clone(),
+                creds.clone(),
                 // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
                 // Max default quotas are 0.5 RPS
                 // more info here https://cloud.google.com/storage/quotas?hl=fr
@@ -241,7 +252,7 @@ impl Gke {
             &short_id,
             long_id,
             name,
-            &options.gcp_json_credentials.project_id.to_string(),
+            &creds.project_id,
             GcpStorageRegion::from(region.clone()),
             Arc::new(object_storage_service_client),
         );
@@ -253,6 +264,7 @@ impl Gke {
             name: name.to_string(),
             version,
             region,
+            created_at,
             template_directory: PathBuf::from(context.lib_root_dir()).join("gcp/bootstrap"),
             object_storage: google_object_storage,
             options,
@@ -261,6 +273,7 @@ impl Gke {
             customer_helm_charts_override,
             kubeconfig,
             temp_dir,
+            credentials: creds,
         };
 
         if let Some(kubeconfig) = &cluster.kubeconfig {
@@ -282,11 +295,15 @@ impl Gke {
         format!("qovery-logs-{}", self.id)
     }
 
+    pub fn prometheus_bucket_name(&self) -> String {
+        format!("qovery-prometheus-{}", self.id)
+    }
+
     pub fn configure_gcloud_for_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
-        if let Err(e) = GoogleAuthService::activate_service_account(self.options.gcp_json_credentials.clone()) {
+        if let Err(e) = GoogleAuthService::activate_service_account(self.credentials.clone()) {
             error!("Cannot activate service account: {}", e);
             // TODO(ENG-1803): introduce an EngineError for it and handle it properly
         }
@@ -299,7 +316,7 @@ impl Gke {
                 "get-credentials",
                 self.cluster_name().as_str(),
                 format!("--region={}", self.region.to_cloud_provider_format()).as_str(),
-                format!("--project={}", self.options.gcp_json_credentials.project_id).as_str(),
+                format!("--project={}", self.credentials.project_id).as_str(),
             ],
             infra_ctx
                 .cloud_provider()

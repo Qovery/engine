@@ -1,7 +1,6 @@
 kind: Deployment
 apiVersion: apps/v1
 metadata:
-  namespace: kube-system
   name: {{ include "iam-eks-user.fullname" . }}
   labels:
     {{- include "iam-eks-user.labels" . | nindent 4 }}
@@ -46,6 +45,20 @@ spec:
             - name: "KARPENTER_ROLE_ARN"
               value: "{{ .Values.karpenter.iamKarpenterRoleArn }}"
             {{ end }}
+            {{ if and .Values.aws.accessKeyId .Values.aws.secretAccessKey }}
+            - name: "AWS_ACCESS_KEY_ID"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "iam-eks-user.aws.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: "AWS_SECRET_ACCESS_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "iam-eks-user.aws.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+            {{ end }}
+            - name: AWS_DEFAULT_REGION
+              value: "{{ .Values.aws.defaultRegion }}"
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           command:

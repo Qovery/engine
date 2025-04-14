@@ -5,11 +5,11 @@ use crate::infrastructure::action::eks::{
     AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION,
 };
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::aws::new_rusoto_creds;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::models::KubernetesClusterAction;
 use chrono::Duration as ChronoDuration;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
-use rusoto_credential::StaticProvider;
 use rusoto_eks::EksClient;
 use std::str::FromStr;
 
@@ -30,8 +30,13 @@ pub fn get_rusoto_eks_client(
         }
     };
 
-    let credentials =
-        StaticProvider::new(cloud_provider.access_key_id(), cloud_provider.secret_access_key(), None, None);
+    let credentials = new_rusoto_creds(
+        cloud_provider
+            .downcast_ref()
+            .as_aws()
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+            .aws_credentials(),
+    );
 
     let client = Client::new_with(credentials, HttpClient::new().expect("unable to create new Http client"));
     Ok(EksClient::new_with_client(client, region))
@@ -75,7 +80,8 @@ pub fn define_cluster_upgrade_timeout(
             cluster_upgrade_timeout = upgrade_time_in_minutes;
             message = Some(format!(
                 "Kubernetes workers timeout will be adjusted to {} minutes, because some pods have a termination period greater than 15 min. Pods:\n{}",
-                cluster_upgrade_timeout.num_minutes(), pod_names.join(", ")
+                cluster_upgrade_timeout.num_minutes(),
+                pod_names.join(", ")
             ));
         }
     };

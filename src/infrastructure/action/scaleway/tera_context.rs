@@ -5,8 +5,8 @@ use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::io_models::context::Features;
 use crate::string::terraform_list_format;
 use reqwest::header;
@@ -24,9 +24,9 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     let mut context = TeraContext::new();
 
     // Scaleway
-    context.insert("scaleway_project_id", cluster.options.scaleway_project_id.as_str());
-    context.insert("scaleway_access_key", cluster.options.scaleway_access_key.as_str());
-    context.insert("scaleway_secret_key", cluster.options.scaleway_secret_key.as_str());
+    context.insert("scaleway_project_id", cluster.credentials.project_id.as_str());
+    context.insert("scaleway_access_key", cluster.credentials.access_key.as_str());
+    context.insert("scaleway_secret_key", cluster.credentials.secret_key.as_str());
     context.insert("scw_region", &cluster.zone.region().as_str());
     context.insert("scw_zone", &cluster.zone.as_str());
 
@@ -81,11 +81,8 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     );
 
     // Qovery
-    context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
-    context.insert(
-        "organization_long_id",
-        &infra_ctx.cloud_provider().organization_long_id().to_string(),
-    );
+    context.insert("organization_id", infra_ctx.context().organization_short_id());
+    context.insert("organization_long_id", &infra_ctx.context().organization_long_id());
     context.insert("object_storage_kubeconfig_bucket", &cluster.kubeconfig_bucket_name());
     context.insert("object_storage_logs_bucket", &cluster.logs_bucket_name());
 
@@ -173,7 +170,7 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     } else {
         let mut headers = header::HeaderMap::new();
         headers.insert("Content-Type", "application/json".parse().unwrap());
-        headers.insert("X-Auth-Token", cluster.options.scaleway_secret_key.parse().unwrap());
+        headers.insert("X-Auth-Token", cluster.credentials.secret_key.parse().unwrap());
         let http = reqwest::blocking::Client::new();
         let tag = format!("ClusterLongId={}", cluster.long_id);
         let url = format!(
@@ -220,6 +217,13 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         context.insert(
             "nginx_controller_http_snippet",
             &nginx_controller_http_snippet.to_model().get_snippet_value(),
+        );
+    }
+
+    if let Some(nginx_controller_server_snippet) = &cluster.advanced_settings().nginx_controller_server_snippet {
+        context.insert(
+            "nginx_controller_server_snippet",
+            &nginx_controller_server_snippet.to_model().get_snippet_value(),
         );
     }
 

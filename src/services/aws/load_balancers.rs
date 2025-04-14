@@ -1,6 +1,8 @@
+use super::models::QoveryAwsSdkConfigLoadBalancer;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::kubernetes::Kind::Eks;
 use crate::infrastructure::models::kubernetes::{filter_svc_loadbalancers, kube_list_services};
 use crate::runtime::block_on;
 use async_trait::async_trait;
@@ -14,21 +16,21 @@ use aws_sdk_elasticloadbalancingv2::types::{LoadBalancer, TagDescription};
 use aws_types::SdkConfig;
 use k8s_openapi::api::core::v1::Service;
 
-use super::models::QoveryAwsSdkConfigLoadBalancer;
-
 // fix for NLB not properly removed https://discuss.qovery.com/t/why-provision-nlbs-for-container-databases/1114/10?u=pierre_mavro
 pub fn clean_up_deleted_k8s_nlb(
     event_details: EventDetails,
     target: &DeploymentTarget,
 ) -> Result<(), Box<EngineError>> {
-    if target.kubernetes.kind().is_self_managed() {
+    if target.kubernetes.kind() != Eks {
         return Ok(());
     }
 
-    let conn = match target.cloud_provider.aws_sdk_client() {
-        Some(x) => x,
-        None => return Ok(()),
-    };
+    let conn = target
+        .cloud_provider
+        .downcast_ref()
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+        .aws_sdk_client();
     let load_balancers = block_on(conn.list_all_aws_load_balancers()).map_err(|e| {
         EngineError::new_cloud_provider_error_getting_load_balancers(
             event_details.clone(),
@@ -250,10 +252,12 @@ mod tests {
             .build();
 
         // match exact tag key
-        load_balancers_tags.tags = Some(vec![Tag::builder()
-            .set_key(Some("my_exact_key".to_string()))
-            .set_value(None)
-            .build()]);
+        load_balancers_tags.tags = Some(vec![
+            Tag::builder()
+                .set_key(Some("my_exact_key".to_string()))
+                .set_value(None)
+                .build(),
+        ]);
         assert_eq!(
             filter_load_balancers_by_tag(Some("my_exact_key"), None, vec![load_balancers_tags.clone()], true)[0]
                 .resource_arn()
@@ -279,10 +283,12 @@ mod tests {
         );
 
         // match tag values, same as keys tests above
-        load_balancers_tags.tags = Some(vec![Tag::builder()
-            .set_key(None)
-            .set_value(Some("my_exact_key".to_string()))
-            .build()]);
+        load_balancers_tags.tags = Some(vec![
+            Tag::builder()
+                .set_key(None)
+                .set_value(Some("my_exact_key".to_string()))
+                .build(),
+        ]);
         assert_eq!(
             filter_load_balancers_by_tag(None, Some("my_exact_key"), vec![load_balancers_tags.clone()], true)[0]
                 .resource_arn()
@@ -308,10 +314,12 @@ mod tests {
         );
 
         // math key and value
-        load_balancers_tags.tags = Some(vec![Tag::builder()
-            .set_key(Some("my_exact_key".to_string()))
-            .set_value(Some("my_exact_value".to_string()))
-            .build()]);
+        load_balancers_tags.tags = Some(vec![
+            Tag::builder()
+                .set_key(Some("my_exact_key".to_string()))
+                .set_value(Some("my_exact_value".to_string()))
+                .build(),
+        ]);
         assert_eq!(
             filter_load_balancers_by_tag(
                 Some("my_exact_key"),
@@ -353,42 +361,52 @@ mod tests {
             // present on aws and in k8s
             TagDescription::builder()
                 .set_resource_arn(Some("arn-ok-0".to_string()))
-                .set_tags(Some(vec![Tag::builder()
-                    .set_key(Some("kubernetes.io/service-name".to_string()))
-                    .set_value(Some("namespace0/service-name0".to_string()))
-                    .build()]))
+                .set_tags(Some(vec![
+                    Tag::builder()
+                        .set_key(Some("kubernetes.io/service-name".to_string()))
+                        .set_value(Some("namespace0/service-name0".to_string()))
+                        .build(),
+                ]))
                 .build(),
             // present on aws only, matching a k8s service (should be deleted)
             TagDescription::builder()
                 .set_resource_arn(Some("arn-ok-1".to_string()))
-                .set_tags(Some(vec![Tag::builder()
-                    .set_key(Some("kubernetes.io/service-name".to_string()))
-                    .set_value(Some("namespace1/service-name1".to_string()))
-                    .build()]))
+                .set_tags(Some(vec![
+                    Tag::builder()
+                        .set_key(Some("kubernetes.io/service-name".to_string()))
+                        .set_value(Some("namespace1/service-name1".to_string()))
+                        .build(),
+                ]))
                 .build(),
             // present on aws only, not matching a k8s service
             TagDescription::builder()
                 .set_resource_arn(Some("arn-empty".to_string()))
-                .set_tags(Some(vec![Tag::builder()
-                    .set_key(Some("".to_string()))
-                    .set_value(Some("".to_string()))
-                    .build()]))
+                .set_tags(Some(vec![
+                    Tag::builder()
+                        .set_key(Some("".to_string()))
+                        .set_value(Some("".to_string()))
+                        .build(),
+                ]))
                 .build(),
             // present on aws only, not matching a k8s service
             TagDescription::builder()
                 .set_resource_arn(Some("arn-badly-formated-1".to_string()))
-                .set_tags(Some(vec![Tag::builder()
-                    .set_key(Some("kubernetes.io/service-name".to_string()))
-                    .set_value(Some("namespace".to_string()))
-                    .build()]))
+                .set_tags(Some(vec![
+                    Tag::builder()
+                        .set_key(Some("kubernetes.io/service-name".to_string()))
+                        .set_value(Some("namespace".to_string()))
+                        .build(),
+                ]))
                 .build(),
             // present on aws only, not matching a k8s service
             TagDescription::builder()
                 .set_resource_arn(Some("arn-badly-formated-2".to_string()))
-                .set_tags(Some(vec![Tag::builder()
-                    .set_key(Some("kubernetes/service-name".to_string()))
-                    .set_value(Some("namespace-badly-formated-2/xxx".to_string()))
-                    .build()]))
+                .set_tags(Some(vec![
+                    Tag::builder()
+                        .set_key(Some("kubernetes/service-name".to_string()))
+                        .set_value(Some("namespace-badly-formated-2/xxx".to_string()))
+                        .build(),
+                ]))
                 .build(),
         ];
 

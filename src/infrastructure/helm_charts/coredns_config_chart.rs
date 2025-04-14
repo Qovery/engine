@@ -1,9 +1,10 @@
 use crate::cmd::command::CommandKiller;
 use crate::cmd::kubectl::{
     kubectl_delete_crash_looping_pods, kubectl_exec_get_configmap, kubectl_exec_rollout_restart_deployment,
-    kubectl_exec_with_output,
+    kubectl_exec_with_output, kubectl_update_crd,
 };
 use crate::errors::CommandError;
+use crate::helm::HelmAction::Deploy;
 use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartPayload, ChartSetValue, HelmAction, HelmChart, HelmChartError,
     HelmChartNamespaces,
@@ -14,8 +15,8 @@ use crate::utilities::calculate_hash;
 use k8s_openapi::api::core::v1::Pod;
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -100,6 +101,7 @@ impl HelmChart for CoreDNSConfigChart {
 
     fn pre_exec(
         &self,
+        kube_client: &kube::Client,
         kubernetes_config: &Path,
         envs: &[(&str, &str)],
         _payload: Option<ChartPayload>,
@@ -119,6 +121,23 @@ impl HelmChart for CoreDNSConfigChart {
                 Some(selector.as_str()),
                 envs.to_vec(),
             )?;
+        }
+
+        // Force install CRDs if needed
+        let chart_info = &self.get_chart_info();
+        match chart_info.action {
+            Deploy => {
+                if let Some(crds_update) = &chart_info.crds_update {
+                    if let Err(_e) =
+                        kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
+                    {
+                        return Err(HelmChartError::CannotUpdateCrds {
+                            crd_path: crds_update.path.clone(),
+                        });
+                    }
+                }
+            }
+            HelmAction::Destroy => {}
         }
 
         // calculate current configmap checksum
@@ -202,12 +221,12 @@ impl HelmChart for CoreDNSConfigChart {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        let payload = match self.pre_exec(kubernetes_config, envs, None, cmd_killer) {
+        let payload = match self.pre_exec(kube_client, kubernetes_config, envs, None, cmd_killer) {
             Ok(p) => match p {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
-                    )))
+                    )));
                 }
                 Some(p) => p,
             },
@@ -235,13 +254,13 @@ impl HelmChart for CoreDNSConfigChart {
             None => {
                 return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                     "Missing payload, can't check coredns update".to_string(),
-                )))
+                )));
             }
             Some(x) => match x.data().get("checksum") {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "Missing configmap checksum, can't check coredns diff".to_string(),
-                    )))
+                    )));
                 }
                 Some(c) => c.clone(),
             },
@@ -296,7 +315,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
         // This is a verify basic check: make sure CoreDNS pod is running
         let pods: Api<Pod> = Api::all(kube_client.clone());
 
-        let result = retry::retry(Fixed::from_millis(5000).take(12), || {
+        let result = retry::retry(Fixed::from_millis(10000).take(12), || {
             match block_on(pods.list(&ListParams::default().labels("k8s-app=kube-dns"))) {
                 Ok(coredns_pods_result) => {
                     let mut err = Ok(());
@@ -358,8 +377,8 @@ mod tests {
     use crate::helm::{CommonChart, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType,
+        HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use std::env;
@@ -460,6 +479,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

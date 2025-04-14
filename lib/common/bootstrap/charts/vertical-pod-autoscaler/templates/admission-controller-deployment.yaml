@@ -2,12 +2,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  {{- if .Values.admissionController.annotations }}
+  annotations:
+  {{- .Values.admissionController.annotations | toYaml | nindent 4 }}
+  {{- end }}
   name: {{ include "vpa.fullname" . }}-admission-controller
   labels:
     app.kubernetes.io/component: admission-controller
     {{- include "vpa.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.admissionController.replicaCount }}
+  revisionHistoryLimit: {{ .Values.admissionController.revisionHistoryLimit }}
   selector:
     matchLabels:
       app.kubernetes.io/component: admission-controller
@@ -42,7 +47,11 @@ spec:
           image: {{ printf "%s:%s" .Values.admissionController.image.repository (.Values.admissionController.image.tag | default .Chart.AppVersion) }}
           imagePullPolicy: {{ .Values.admissionController.image.pullPolicy }}
           args:
+          {{- if .Values.admissionController.registerWebhook }}
+            - --register-webhook=true
+          {{- else }}
             - --register-webhook=false
+          {{- end }}
             - --webhook-service={{ include "vpa.fullname" . }}-webhook
           {{- if .Values.admissionController.generateCertificate }}
             - --client-ca-file=/etc/tls-certs/ca
@@ -68,10 +77,10 @@ spec:
           {{- end }}
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: {{ .Values.admissionController.httpPort | default 8000 }}
               protocol: TCP
             - name: metrics
-              containerPort: 8944
+              containerPort: {{ .Values.admissionController.metricsPort | default 8944 }}
               protocol: TCP
           env:
             - name: NAMESPACE
@@ -80,6 +89,7 @@ spec:
                   fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.admissionController.resources | nindent 12 }}
+      hostNetwork: {{ .Values.admissionController.useHostNetwork | default false }}
       volumes:
         - name: tls-certs
           secret:

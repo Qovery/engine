@@ -26,6 +26,7 @@ pub(super) trait HelmInfraResources {
         infra_ctx: &InfrastructureContext,
         config: Self::ChartPrerequisite,
     ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, Box<EngineError>>;
+
     fn deploy_charts(
         &self,
         infra_ctx: &InfrastructureContext,
@@ -36,8 +37,10 @@ pub(super) trait HelmInfraResources {
         logger.info("⚓ 📥 chart is going to be updated");
         logger.info("⚓ 📤 chart is going to be uninstalled");
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
+
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
+        let ev_details = &self.charts_context().event_details;
         let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
 
         logger.info("🛳️ Going to deploy Helm charts in this sequence:");
@@ -45,7 +48,6 @@ pub(super) trait HelmInfraResources {
             logger.info(format!("Level {}: {}", ix, charts_names_user_str(charts_lvl)));
         });
 
-        let ev_details = &self.charts_context().event_details;
         let envs = self
             .charts_context()
             .envs
@@ -94,7 +96,7 @@ pub(super) trait HelmInfraResources {
             let chart_names = charts_names_user_str(&charts_level);
             logger.info(format!("🛳️ Deploying in parallel charts of level {}: {}", ix, chart_names));
             deploy_parallel_charts(
-                infra_ctx.mk_kube_client()?.client(),
+                infra_ctx.mk_kube_client()?.as_ref(),
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
                 &envs,
                 charts_level,

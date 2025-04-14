@@ -1,0 +1,193 @@
+# todo(pmavro): use our registry
+#global:
+#  imageRegistry: ""
+# Use the one deployed by Prometheus Operator
+objstoreConfig: set-by-engine-code
+
+image:
+  registry: public.ecr.aws/r3m4q3r9
+  repository: pub-mirror-bitnami-thanos
+global:
+  security:
+    allowInsecureImages: true # to be able to yse mirrored image
+
+# Querier/Query: implements Prometheus’s v1 API to aggregate data from the underlying components.
+query:
+  enabled: true
+  replicaCount: set-by-engine-code
+  resources:
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  dnsDiscovery:
+    enabled: true
+    sidecarsService: "kube-prometheus-stack-thanos-discovery"
+    sidecarsNamespace: "set-by-engine-code"
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - thanos-query
+          topologyKey: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - thanos-query
+            topologyKey: topology.kubernetes.io/zone
+  autoscaling:
+    enabled: true
+    minReplicas: "set-by-engine-code"
+    maxReplicas: "set-by-engine-code"
+    targetCPU: "set-by-engine-code"
+  pdb:
+    create: set-by-engine-code
+    minAvailable: "set-by-engine-code"
+
+queryFrontend:
+  enabled: true
+  replicaCount: set-by-engine-code
+  resources:
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  autoscaling:
+    enabled: true
+    minReplicas: "set-by-engine-code"
+    maxReplicas: "set-by-engine-code"
+    targetCPU: "set-by-engine-code"
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - thanos-query
+          topologyKey: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - thanos-query
+            topologyKey: topology.kubernetes.io/zone
+
+bucketweb:
+  enabled: true
+  replicaCount: 0
+  resources:
+    requests:
+      cpu: 1
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 512Mi
+
+# Compactor: compacts, downsamples and applies retention on the data stored in the cloud storage bucket.
+compactor:
+  enabled: true
+  concurrency: set-by-engine-code
+  retentionResolutionRaw: set-by-engine-code
+  retentionResolution5m: set-by-engine-code
+  retentionResolution1h: set-by-engine-code
+  consistencyDelay: 30m
+  cronJob:
+    enabled: true
+    schedule: "0 */3 * * *"
+    successfulJobsHistoryLimit: "1"
+    failedJobsHistoryLimit: "1"
+  resources:
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  serviceAccount:
+    create: true
+    automountServiceAccountToken: true
+  persistence:
+    enabled: true
+    ephemeral: true
+    defaultEmptyDir: true
+    size: 20Gi
+
+# Store Gateway: implements Prometheus’s v1 API to proxy it to the underlying components.
+storegateway:
+  enabled: true
+  replicaCount: set-by-engine-code
+  useEndpointGroup: true
+  autoscaling:
+    enabled: true
+    minReplicas: "set-by-engine-code"
+    maxReplicas: "set-by-engine-code"
+    targetCPU: "set-by-engine-code"
+  pdb:
+    create: set-by-engine-code
+    minAvailable: "set-by-engine-code"
+  resources:
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  serviceAccount:
+    create: true
+    automountServiceAccountToken: true
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+              - thanos-query
+          topologyKey: kubernetes.io/hostname
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                - thanos-query
+            topologyKey: topology.kubernetes.io/zone
+  persistence:
+    enabled: true
+    storageClass: "set-by-engine-code"
+    accessModes:
+      - ReadWriteOnce
+    size: 8Gi
+
+# Metrics exported to Prometheus
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+  prometheusRule:
+    enabled: true
+    # TODO (ENG-1986): This may be bring too much metrics. To keep before releasing
+    default:
+      create: true

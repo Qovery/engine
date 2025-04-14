@@ -2,6 +2,7 @@ mod database;
 pub mod io;
 mod job;
 mod router;
+mod terraform_service;
 
 use crate::environment::models::types::{CloudProvider, GCP};
 use crate::infrastructure::models::cloud_provider::Kind;

@@ -20,6 +20,7 @@ rules:
       - nodes/stats
       - nodes/proxy
       - configmaps
+      - persistentvolumeclaims
     verbs:
       - get
       - list
@@ -46,4 +47,19 @@ rules:
     verbs:
       - get
       - list
+  - apiGroups:
+      - karpenter.sh
+    resources:
+      - nodepools
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    verbs:
+      - get
+      - list
+      - watch
 {{- end }}

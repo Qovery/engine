@@ -1,13 +1,12 @@
-use crate::environment::models::gcp::io::JsonCredentials;
-use crate::environment::models::gcp::JsonCredentials as GkeJsonCredentials;
 use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use ipnet::IpNet;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use time::macros::format_description;
 use time::Time;
+use time::macros::format_description;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct UserProvidedVPCNetwork {
@@ -39,12 +38,6 @@ pub struct GkeOptions {
     pub grafana_admin_password: String,
     pub qovery_engine_location: EngineLocation,
 
-    // GCP
-    #[serde(alias = "json_credentials")]
-    #[serde(deserialize_with = "gcp_credentials_from_str")]
-    // Allow to deserialize string field to its struct counterpart
-    pub gcp_credentials: JsonCredentials,
-
     // Network
     // VPC
     #[serde(default)]
@@ -63,6 +56,7 @@ pub struct GkeOptions {
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl GkeOptions {
@@ -98,18 +92,6 @@ impl GkeOptions {
     }
 }
 
-/// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
-fn gcp_credentials_from_str<'de, D>(deserializer: D) -> Result<JsonCredentials, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let gcp_credentials: String = String::deserialize(deserializer)?;
-    match JsonCredentials::try_new_from_json_str(&gcp_credentials) {
-        Ok(credentials) => Ok(credentials),
-        Err(e) => Err(de::Error::custom(e.to_string())),
-    }
-}
-
 impl TryFrom<GkeOptions> for GkeOptionsModel {
     type Error = String;
 
@@ -128,8 +110,6 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             value.grafana_admin_user,
             value.grafana_admin_password,
             value.qovery_engine_location,
-            GkeJsonCredentials::try_from(value.gcp_credentials)
-                .map_err(|e| format!("Cannot parse JSON credentials: {e}"))?,
             vpc_mode,
             value.vpc_qovery_network_mode,
             value.tls_email_report,
@@ -145,6 +125,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
                         .map_err(|_e| "Cannot parse cluster_maintenance_end_time")?,
                 ),
             },
+            value.metrics_parameters,
         ))
     }
 }
@@ -155,20 +136,6 @@ mod tests {
     use crate::io_models::engine_location::EngineLocation;
     use ipnet::IpNet;
     use std::str::FromStr;
-
-    const GKE_DEFAULT_GCP_JSON_CREDENTIALS_EXAMPLE: &str = r#"{
-  "type": "service_account",
-  "project_id": "gcp_project_id",
-  "private_key_id": "gcp_json_credentials_private_key_id",
-  "private_key": "gcp_json_credentials_private_key",
-  "client_email": "gcp_json_credentials_client_email",
-  "client_id": "gcp_json_credentials_client_id",
-  "auth_uri": "gcp_json_credentials_auth_uri",
-  "token_uri": "gcp_json_credentials_token_uri",
-  "auth_provider_x509_cert_url": "gcp_json_credentials_auth_provider_x509_cert_url",
-  "client_x509_cert_url": "gcp_json_credentials_client_x509_cert_url",
-  "universe_domain": "gcp_json_credentials_universe_domain"
-}"#;
 
     #[test]
     fn test_gke_options_to_gke_vpc_mode() {
@@ -183,8 +150,6 @@ mod tests {
             grafana_admin_user: "grafana_admin_user".to_string(),
             grafana_admin_password: "grafana_admin_password".to_string(),
             qovery_engine_location: EngineLocation::QoverySide,
-            gcp_credentials: serde_json::from_str(GKE_DEFAULT_GCP_JSON_CREDENTIALS_EXAMPLE)
-                .expect("Cannot deserialize JSON credentials from string"),
             cluster_maintenance_start_time: "06:00".to_string(),
             cluster_maintenance_end_time: None,
             tls_email_report: "".to_string(),
@@ -193,6 +158,7 @@ mod tests {
             services_ipv4_cidr_block: None,
             user_provided_network: None,
             vpc_qovery_network_mode: None,
+            metrics_parameters: None,
         };
 
         // execute & validate:

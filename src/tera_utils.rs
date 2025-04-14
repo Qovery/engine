@@ -1,14 +1,12 @@
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use serde_json::Value;
 use std::collections::HashMap;
-use tera::{try_get_value, Error};
-
-/// This file to declare custom functions / filters and stuff for tera
-/// documentation => https://keats.github.io/tera/docs/#advanced-usage
+use tera::{Error, try_get_value};
 
 // TODO(benjaminch): this should be an external crate
-
+/// This file to declare custom functions / filters and stuff for tera
+/// documentation => https://keats.github.io/tera/docs/#advanced-usage
 pub trait TeraFilter<'a> {
     fn name() -> &'a str;
     fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error>;

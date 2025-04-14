@@ -29,14 +29,10 @@ terraform {
 }
 
 provider "aws" {
+  region     = "{{ aws_region }}"
   access_key = "{{ aws_access_key }}"
   secret_key = "{{ aws_secret_key }}"
-  region     = "{{ aws_region }}"
-}
-
-provider "aws" {
-  alias = "tfstates"
-  access_key = "{{ aws_access_key_tfstates_account }}"
-  secret_key = "{{ aws_secret_key_tfstates_account }}"
-  region = "{{ aws_region_tfstates_account }}"
+{% if aws_session_token -%}
+  token = "{{ aws_session_token }}"
+{% endif -%}
 }

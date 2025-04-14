@@ -2,12 +2,12 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::infrastructure::models::build_platform::{BuildError, GitCmd};
-use git2::build::CheckoutBuilder;
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
+use git2::build::CheckoutBuilder;
 use git2::{
-    opts, AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, RemoteCallbacks,
-    Repository, SubmoduleUpdateOptions,
+    AutotagOption, CertificateCheckStatus, Cred, CredentialType, Error, FetchOptions, Object, RemoteCallbacks,
+    Repository, SubmoduleUpdateOptions, opts,
 };
 use tracing::field::debug;
 use url::Url;
@@ -224,8 +224,8 @@ fn remote_fetch(
 #[cfg(test)]
 mod tests {
     use crate::cmd::git::{checkout, clone_at_commit, fetch};
-    use base64::engine::general_purpose;
     use base64::Engine;
+    use base64::engine::general_purpose;
     use git2::{Cred, CredentialType, Repository};
     use std::path::{Path, PathBuf};
     use url::Url;

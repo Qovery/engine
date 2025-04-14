@@ -1,12 +1,12 @@
-use crate::helpers::common::ClusterDomain;
-use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::common::{ClusterDomain, NodeManager};
+use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
 use ::function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
-use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::utilities::to_short_id;
@@ -38,6 +38,7 @@ fn create_and_destroy_gke_cluster(
             vpc_network_mode,
             CpuArchitecture::AMD64,
             None,
+            NodeManager::AutoPilot,
         )
     })
 }

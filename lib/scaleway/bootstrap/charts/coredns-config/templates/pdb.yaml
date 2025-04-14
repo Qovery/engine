@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: coredns-pdb
+  namespace: kube-system
+  labels:
+    k8s-app: kube-dns
+    kubernetes.io/name: CoreDNS
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-dns
+  maxUnavailable: 1

@@ -1,0 +1,133 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ service.name }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: terraform-service
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    qovery.com/service-version: {{ service.version }}
+    {%- for key, value in annotations_group.job %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: {{ service.job_max_duration_in_sec }}
+  parallelism: 1
+  template:
+    metadata:
+      labels:
+        envId: {{ environment_short_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: terraform-service
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+      annotations:
+        qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.pods %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+    spec:
+      securityContext:
+        fsGroup: 1000
+      affinity:
+        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+                - key: "{{ key }}"
+                  operator: In
+                  values:
+                  - {{ value }}
+        {%- endfor %}
+        {%- endif %}
+      restartPolicy: Never
+      shareProcessNamespace: true
+      {%- if service.advanced_settings.security_service_account_name != "" %}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+      {%- else %}
+      automountServiceAccountToken: true
+      serviceAccountName: {{ service.name }}
+      {%- endif %}
+      terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
+      #  {%- if registry %}
+    #  imagePullSecrets:
+    #    - name: {{ registry.secret_name }}
+    #  {%- endif %}
+      volumes:
+        - name: output
+          emptyDir: {}
+        - name: backend-config-volume
+          secret:
+            secretName: {{ backend_config.secret_name }}
+        - name: persistent-volume
+          persistentVolumeClaim:
+            claimName: {{ service.name }}-pvc
+   #       secret:
+   #         secretName: {#{ mounted_file.id }#}-{#{ service.short_id }#}
+      containers:
+        - name: qovery-wait-container-output
+          image: "debian:stable-slim"
+          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+        - name: {{ service.name }}
+          image: "{{ service.image_full }}"
+          args:
+            {%- for arg in service.command_args %}
+            - |-
+              {{ arg }}
+            {%- endfor %}
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+            - name: persistent-volume
+              mountPath: /persistent-volume
+              readOnly: false
+            - name: backend-config-volume
+              mountPath: /backend-config
+              readOnly: true
+          env:
+            {%- for ev in environment_variables %}
+            - name: "{{ ev.key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ service.name }}
+                  key: {{ ev.key }}
+            {%- endfor %}
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
+          resources:
+            limits:
+              cpu: {{ service.cpu_limit_in_milli }}
+              memory: {{ service.ram_limit_in_mib }}
+            requests:
+              cpu: {{ service.cpu_request_in_milli }}
+              memory: {{ service.ram_request_in_mib }}

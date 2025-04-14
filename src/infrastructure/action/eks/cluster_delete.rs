@@ -3,26 +3,26 @@ use super::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
+use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
+use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
 use crate::infrastructure::action::eks::nodegroup::{
-    delete_eks_nodegroups, should_update_desired_nodes, NodeGroupsDeletionType,
+    NodeGroupsDeletionType, delete_eks_nodegroups, should_update_desired_nodes,
 };
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::eks::{AwsEksQoveryTerraformOutput, AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION};
+use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
-use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::dns_provider::DnsProvider;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
-use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::models::{KubernetesClusterAction, NodeGroups};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -44,10 +44,12 @@ pub fn delete_eks_cluster(
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
 
     logger.info("Preparing cluster deletion.");
-    let aws_conn = cloud_provider
-        .aws_sdk_client()
-        .ok_or_else(|| Box::new(EngineError::new_aws_sdk_cannot_get_client(event_details.clone())))?;
 
+    let aws_conn = cloud_provider
+        .downcast_ref()
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?
+        .aws_sdk_client();
     let node_groups = node_groups_when_karpenter_is_enabled(
         kubernetes,
         infra_ctx,
@@ -111,19 +113,19 @@ pub fn delete_eks_cluster(
 
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
-
-    let tf_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> = tf_resources.create(&logger);
-    match tf_output {
-        Ok(tf_output) => {
-            update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
-        }
+    let tf_output: AwsEksQoveryTerraformOutput = match tf_resources.create(&logger) {
+        Ok(tf_output) => tf_output,
         Err(e) => {
             logger.warn(EventMessage::new(
                 "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
                 Some(e.to_string()),
             ));
+            // We want to refresh the kubeconfig if possible even in case of failure.
+            // To be able to delete namespaces on the cluster
+            tf_resources.output()?
         }
-    }
+    };
+    update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([
@@ -157,13 +159,17 @@ pub fn delete_eks_cluster(
     // remove S3 logs buckets from tf state
     // Because deleting them inside terraform often lead to a timeout
     // so we delegate the responsibility to delete them to the user
-    let resources_to_be_removed_from_tf_state: &[&str] = &[
+    let mut resources_to_be_removed_from_tf_state = vec![
         "aws_s3_bucket.loki_bucket",
         "aws_s3_bucket_lifecycle_configuration.loki_lifecycle",
         "aws_s3_bucket.vpc_flow_logs",
         "aws_s3_bucket_lifecycle_configuration.vpc_flow_logs_lifecycle",
     ];
-    tf_resources.delete(resources_to_be_removed_from_tf_state, &logger)?;
+    if kubernetes.advanced_settings.object_storage_enable_logging {
+        resources_to_be_removed_from_tf_state.extend(vec!["aws_s3_bucket.loki_bucket_logs", "loki_lifecycle_logs"]);
+    }
+
+    tf_resources.delete(resources_to_be_removed_from_tf_state.as_slice(), &logger)?;
 
     logger.info("Kubernetes cluster successfully deleted");
 

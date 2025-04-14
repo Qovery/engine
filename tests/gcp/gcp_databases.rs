@@ -1,17 +1,17 @@
 use crate::helpers;
 use crate::helpers::common::{ClusterDomain, Infrastructure};
-use crate::helpers::database::{database_test_environment, test_db, StorageSize};
+use crate::helpers::database::{StorageSize, database_test_environment, test_db};
 use crate::helpers::gcp::{
-    clean_environments, gcp_infra_config, GCP_MANAGED_DATABASE_DISK_TYPE, GCP_MANAGED_DATABASE_INSTANCE_TYPE,
-    GCP_SELF_HOSTED_DATABASE_DISK_TYPE,
+    GCP_MANAGED_DATABASE_DISK_TYPE, GCP_MANAGED_DATABASE_INSTANCE_TYPE, GCP_SELF_HOSTED_DATABASE_DISK_TYPE,
+    clean_environments, gcp_infra_config,
 };
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init,
+    is_pod_restarted_env, logger, metrics_registry,
 };
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
@@ -25,7 +25,7 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
-use tracing::{span, warn, Level};
+use tracing::{Level, span, warn};
 use uuid::Uuid;
 
 #[cfg(feature = "test-gcp-self-hosted")]
@@ -337,6 +337,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 GCP_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class()
             }
             .to_string(),
+            database_disk_iops: None,
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,

@@ -1,8 +1,8 @@
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::Action;
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::marker::PhantomData;
@@ -10,12 +10,12 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use k8s_openapi::api::core::v1::{Event, Pod};
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 
 use crate::environment::models::job::JobService;
 use crate::environment::report::job::renderer::render_job_deployment_report;
-use crate::environment::report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
+use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use crate::environment::report::utils::to_job_render_context;
 use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
@@ -83,7 +83,7 @@ impl<T> JobDeploymentReporter<T> {
             max_restarts: job.max_restarts(),
             tag: job.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: job.kube_label_selector(),
             logger: deployment_target.env_logger(job, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),

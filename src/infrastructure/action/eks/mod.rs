@@ -4,7 +4,7 @@ mod cluster_delete;
 mod cluster_pause;
 mod cluster_upgrade;
 mod custom_vpc;
-mod helm_charts;
+pub(crate) mod helm_charts;
 mod karpenter;
 mod nodegroup;
 mod sdk;
@@ -13,16 +13,16 @@ mod utils;
 
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
+use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::eks::cluster_bootstrap::bootstrap_eks_cluster;
 use crate::infrastructure::action::eks::cluster_create::create_eks_cluster;
 use crate::infrastructure::action::eks::cluster_delete::delete_eks_cluster;
 use crate::infrastructure::action::eks::cluster_pause::pause_eks_cluster;
 use crate::infrastructure::action::eks::cluster_upgrade::upgrade_eks_cluster;
-use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
-use crate::infrastructure::models::kubernetes::{send_progress_on_long_task, Kubernetes, KubernetesUpgradeStatus};
+use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesUpgradeStatus, send_progress_on_long_task};
 use chrono::Duration as ChronoDuration;
 use serde_derive::{Deserialize, Serialize};
 
@@ -115,6 +115,10 @@ pub struct AwsEksQoveryTerraformOutput {
     pub cluster_security_group_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub aws_iam_alb_controller_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub aws_iam_eks_prometheus_role_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub aws_s3_prometheus_bucket_name: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub kubeconfig: String,
 }

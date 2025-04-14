@@ -1,4 +1,4 @@
-use crate::environment::report::utils::{get_tera_instance, EventRenderContext};
+use crate::environment::report::utils::{EventRenderContext, get_tera_instance};
 use itertools::Itertools;
 use k8s_openapi::api::core::v1::Event;
 use serde_derive::Serialize;

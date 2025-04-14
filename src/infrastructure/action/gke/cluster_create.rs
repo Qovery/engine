@@ -3,14 +3,14 @@ use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep};
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
+use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
 use std::path::PathBuf;
@@ -21,6 +21,7 @@ pub(super) fn create_gke_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
+
     logger.info("Preparing GKE cluster deployment.");
 
     logger.info("Deploying GKE cluster.");
@@ -74,23 +75,38 @@ fn create_object_storage(
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     logger.info("Create Qovery managed object storage buckets.");
-    for bucket_name in &[&cluster.logs_bucket_name()] {
-        let existing_bucket = cluster
-            .object_storage
-            .create_bucket(bucket_name, cluster.advanced_settings.resource_ttl(), true)
-            .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
 
-        logger.info(format!("Object storage bucket {} already exists", &bucket_name));
-        // Update set versioning to true if not activated on the bucket (bucket created before this option was enabled)
-        // This can be removed at some point in the future, just here to handle legacy GCP buckets
-        // TODO(ENG-1736): remove this update once all existing buckets have versioning activated
-        if existing_bucket.versioning_activated {
-            continue;
-        }
-
-        if let Err(err) = cluster.object_storage.update_bucket(bucket_name, true) {
-            let error = EngineError::new_object_storage_error(event_details.clone(), err);
-            return Err(Box::new(error));
+    for bucket_name in &[&cluster.logs_bucket_name(), &cluster.prometheus_bucket_name()] {
+        match cluster.object_storage.bucket_exists(bucket_name) {
+            true => {
+                // bucket already exists, just update it
+                logger.info(format!("Object storage bucket {} already exists", &bucket_name));
+                let existing_bucket = cluster
+                    .object_storage
+                    .get_bucket(bucket_name)
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+                cluster
+                    .object_storage
+                    .update_bucket(
+                        bucket_name,
+                        cluster.advanced_settings.resource_ttl(),
+                        true,
+                        cluster.advanced_settings.object_storage_enable_logging,
+                        existing_bucket.labels.clone(),
+                    )
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+            }
+            false => {
+                cluster
+                    .object_storage
+                    .create_bucket(
+                        bucket_name,
+                        cluster.advanced_settings.resource_ttl(),
+                        true,
+                        cluster.advanced_settings.object_storage_enable_logging,
+                    )
+                    .map_err(|e| Box::new(EngineError::new_object_storage_error(event_details.clone(), e)))?;
+            }
         }
     }
     Ok(())

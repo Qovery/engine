@@ -1,6 +1,6 @@
 use crate::helm::{
-    application_context, chart_path, container_context, container_database_context, job_context, kubeconfig_path,
-    lib_dir, managed_database_context, TestInfo,
+    TestInfo, application_context, chart_path, container_context, container_database_context, job_context,
+    kubeconfig_path, lib_dir, managed_database_context,
 };
 use kube::core::DynamicObject;
 use qovery_engine::cmd::helm::Helm;
@@ -9,7 +9,7 @@ use qovery_engine::helm::CommonChart;
 use qovery_engine::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
 use std::collections::HashMap;
 use std::fs;
-use std::fs::{read_dir, File};
+use std::fs::{File, read_dir};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 

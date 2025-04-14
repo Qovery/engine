@@ -1,14 +1,18 @@
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
+use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io::Read};
 
 use chrono::Duration;
-use k8s_openapi::api::{
-    admissionregistration::v1::MutatingWebhookConfiguration,
-    apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
-    core::v1::{Pod, PodStatus, Secret, Service},
-};
 use k8s_openapi::ByteString;
+use k8s_openapi::{
+    api::{
+        admissionregistration::v1::MutatingWebhookConfiguration,
+        apps::v1::{Deployment, DeploymentStatus, StatefulSet, StatefulSetStatus},
+        core::v1::{Pod, PodStatus, Secret, Service},
+    },
+    apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition,
+};
 use kube::core::ObjectList;
 
 use crate::helm::ChartReleaseData;
@@ -37,6 +41,7 @@ pub struct K8sMetadata {
     pub termination_grace_period_seconds: Option<Duration>,
 }
 
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
 pub struct K8sMetadataWithoutNamespace {
     pub name: String,
     pub labels: Option<BTreeMap<String, String>>,
@@ -124,7 +129,7 @@ impl K8sPod {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes pod, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 namespace: match k8s_pod.metadata.namespace {
@@ -136,7 +141,7 @@ impl K8sPod {
                                 "can't read kubernetes pod, namespace is missing for pod name `{}`",
                                 k8s_pod.metadata.name.unwrap_or("unknown".to_string())
                             )),
-                        )))
+                        )));
                     }
                 },
                 termination_grace_period_seconds: k8s_pod.metadata.deletion_grace_period_seconds.map(Duration::seconds),
@@ -189,7 +194,7 @@ impl K8sService {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes service, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 namespace: match k8s_service.metadata.namespace {
@@ -201,7 +206,7 @@ impl K8sService {
                                 "can't read kubernetes service, namespace is missing for service name `{}`",
                                 k8s_service.metadata.name.unwrap_or("unknown".to_string())
                             )),
-                        )))
+                        )));
                     }
                 },
                 termination_grace_period_seconds: k8s_service
@@ -277,7 +282,7 @@ impl K8sDeployment {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes deployment, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 namespace: match k8s_deployment.metadata.namespace {
@@ -289,7 +294,7 @@ impl K8sDeployment {
                                 "can't read kubernetes deployment, namespace is missing for deployment name `{}`",
                                 k8s_deployment.metadata.name.unwrap_or("unknown".to_string())
                             )),
-                        )))
+                        )));
                     }
                 },
                 termination_grace_period_seconds: k8s_deployment
@@ -366,7 +371,7 @@ impl K8sStatefulset {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes statefulset, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 namespace: match k8s_statefulset.metadata.namespace {
@@ -378,7 +383,7 @@ impl K8sStatefulset {
                                 "can't read kubernetes statefulset, namespace is missing for deployment name `{}`",
                                 k8s_statefulset.metadata.name.unwrap_or("unknown".to_string())
                             )),
-                        )))
+                        )));
                     }
                 },
                 termination_grace_period_seconds: k8s_statefulset
@@ -443,7 +448,7 @@ impl K8sSecret {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes secret, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 namespace: match k8s_secret.metadata.namespace {
@@ -455,7 +460,7 @@ impl K8sSecret {
                                 "can't read kubernetes secret, namespace is missing for deployment name `{}`",
                                 k8s_secret.metadata.name.unwrap_or("unknown".to_string())
                             )),
-                        )))
+                        )));
                     }
                 },
                 termination_grace_period_seconds: None,
@@ -487,7 +492,7 @@ impl K8sSecret {
                                         self.metadata.namespace, self.metadata.name, e
                                     )
                                     .as_str(),
-                                )))
+                                )));
                             }
                         };
                         // gzip uncompress the secret
@@ -505,7 +510,7 @@ impl K8sSecret {
                                 return Err(Box::new(EngineError::new_json_serializing_issue(
                                     event_details,
                                     format!("chart release for secret: {e}").as_str(),
-                                )))
+                                )));
                             }
                         };
                         Ok((chart, decoded_release))
@@ -530,6 +535,7 @@ impl K8sSecret {
 MUTATING WEBHOOKS CONFIGURATION
 ********************************/
 
+#[derive(Debug, PartialEq, Default)]
 pub struct K8sMutatingWebhookConfiguration {
     pub metadata: K8sMetadataWithoutNamespace,
 }
@@ -573,11 +579,68 @@ impl K8sMutatingWebhookConfiguration {
                             CommandError::new_from_safe_message(
                                 "can't read kubernetes mutating webhook configuration, name is missing".to_string(),
                             ),
-                        )))
+                        )));
                     }
                 },
                 labels: k8s_mutating_webhook_configuration.metadata.labels.clone(),
                 annotations: k8s_mutating_webhook_configuration.metadata.annotations.clone(),
+            },
+        })
+    }
+}
+
+/********************************
+CRD (CUSTOM RESOURCE DEFINITIONS)
+********************************/
+
+#[derive(Debug, PartialEq, Default, Serialize, Deserialize)]
+pub struct K8sCrd {
+    pub metadata: K8sMetadataWithoutNamespace,
+}
+
+impl K8sCrd {
+    pub fn from_k8s_crd_objectlist(
+        event_details: EventDetails,
+        k8s_crds: ObjectList<CustomResourceDefinition>,
+    ) -> Vec<K8sCrd> {
+        let mut crds: Vec<K8sCrd> = Vec::with_capacity(k8s_crds.items.len());
+
+        for crd in k8s_crds.items {
+            if let Ok(x) = K8sCrd::from_k8s_crd(event_details.clone(), crd) {
+                crds.push(x);
+            };
+        }
+        crds
+    }
+
+    pub fn from_name(name: &str) -> K8sCrd {
+        K8sCrd {
+            metadata: K8sMetadataWithoutNamespace {
+                name: name.to_string(),
+                ..Default::default()
+            },
+        }
+    }
+
+    pub fn from_k8s_crd(
+        event_details: EventDetails,
+        k8s_crd: CustomResourceDefinition,
+    ) -> Result<K8sCrd, Box<EngineError>> {
+        Ok(K8sCrd {
+            metadata: K8sMetadataWithoutNamespace {
+                name: match k8s_crd.metadata.name.clone() {
+                    Some(x) => x,
+                    None => {
+                        return Err(Box::new(EngineError::new_k8s_get_crd_error(
+                            event_details,
+                            CommandError::new_from_safe_message(
+                                "can't read kubernetes crd, name is missing".to_string(),
+                            ),
+                        )));
+                    }
+                },
+                labels: k8s_crd.metadata.labels.clone(),
+                annotations: k8s_crd.metadata.annotations.clone(),
             },
         })
     }

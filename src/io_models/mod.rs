@@ -4,17 +4,19 @@ use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use uuid::Uuid;
 
 pub mod annotations_group;
 pub mod application;
+mod azure;
 pub mod container;
 pub mod context;
 pub mod database;
@@ -25,9 +27,11 @@ mod gke;
 pub mod helm_chart;
 pub mod job;
 pub mod labels_group;
+pub mod metrics;
 pub mod models;
 pub mod probe;
 pub mod router;
+pub mod terraform_service;
 mod types;
 pub mod variable_utils;
 
@@ -43,6 +47,12 @@ pub enum PodAntiAffinity {
     #[default]
     Preferred,
     Required,
+}
+
+#[derive(thiserror::Error, Clone, Debug, PartialEq)]
+pub enum QoveryIdentifierError {
+    #[error("Error while parsing Qovery identifier: {raw_error_message}")]
+    ParsingError { raw_error_message: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,6 +79,18 @@ impl QoveryIdentifier {
 
     pub fn to_uuid(&self) -> Uuid {
         self.long_id
+    }
+}
+
+impl FromStr for QoveryIdentifier {
+    type Err = QoveryIdentifierError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(QoveryIdentifier::new(Uuid::parse_str(s).map_err(|e| {
+            QoveryIdentifierError::ParsingError {
+                raw_error_message: e.to_string(),
+            }
+        })?))
     }
 }
 

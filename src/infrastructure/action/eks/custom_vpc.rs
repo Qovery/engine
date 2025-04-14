@@ -1,6 +1,6 @@
 use k8s_openapi::api::apps::v1::DaemonSet;
-use kube::api::{Patch, PatchParams};
 use kube::Api;
+use kube::api::{Patch, PatchParams};
 
 pub async fn patch_kube_proxy_for_aws_user_network(kube_client: kube::Client) -> Result<DaemonSet, kube::Error> {
     let daemon_set: Api<DaemonSet> = Api::namespaced(kube_client, "kube-system");

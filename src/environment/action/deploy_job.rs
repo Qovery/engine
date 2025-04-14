@@ -1,28 +1,29 @@
 use super::utils::delete_cached_image;
 use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
 use crate::cmd::structs::KubernetesPodStatusPhase;
-use crate::environment::action::deploy_helm::HelmDeployment;
-use crate::environment::action::utils::{get_last_deployed_image, mirror_image_if_necessary, KubeObjectKind};
 use crate::environment::action::DeploymentAction;
+use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::utils::{KubeObjectKind, get_last_deployed_image, mirror_image_if_necessary};
 use crate::environment::models::job::{ImageSource, Job, JobService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::job::reporter::JobDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{execute_long_deployment, DeploymentTaskImpl};
+use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
-use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
+use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{AttachParams, ListParams, PostParams};
-use kube::runtime::wait::{await_condition, Condition};
 use kube::Api;
+use kube::api::{AttachParams, ListParams, PostParams};
+use kube::runtime::wait::{Condition, await_condition};
 use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -131,12 +132,12 @@ where
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let command_error = CommandError::new_from_safe_message("Cannot restart Job service".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
+        Err(Box::new(EngineError::new_cannot_restart_service(
             self.get_event_details(Stage::Environment(EnvironmentStep::Restart)),
             target.environment.namespace(),
             &self.kube_label_selector(),
             command_error,
-        )));
+        )))
     }
 }
 
@@ -144,6 +145,7 @@ struct TaskContext {
     last_deployed_image: Option<String>,
 }
 
+#[allow(clippy::type_complexity)]
 fn run_job<'a, T: CloudProvider>(
     job: &'a Job<T>,
     target: &'a DeploymentTarget,
@@ -174,7 +176,7 @@ where
         }
 
         let last_image = block_on(get_last_deployed_image(
-            target.kube.clone(),
+            target.kube.client(),
             &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob
@@ -219,7 +221,7 @@ where
 
             // Get kube config file
             let job_pod_selector = format!("job-name={}", job.kube_name());
-            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
             let job_max_nb_restart = job.max_nb_restart();
             let mut job_creation_iterations = 0;
@@ -307,13 +309,11 @@ where
                             Err(err) => {
                                 logger.log(EngineEvent::Warning(
                                     event_details.clone(),
-                                    EventMessage::new_from_engine_error(
-                                        EngineError::new_invalid_job_output_cannot_be_serialized(
-                                            event_details.clone(),
-                                            err,
-                                            &json,
-                                        ),
-                                    ),
+                                    EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
+                                        event_details.clone(),
+                                        err,
+                                        &json,
+                                    )),
                                 ));
                             }
                         }
@@ -341,7 +341,7 @@ where
                 })?;
 
                 // wait for job to finish
-                let jobs: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+                let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
                 // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
                 info!("Get Jobs");
@@ -385,14 +385,14 @@ where
         // Cronjob will be force triggered
         if job.is_cron_job() && job.is_force_trigger() {
             // check if cronjob is installed
-            let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let k8s_cronjob_api: Api<CronJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(job.kube_name())).is_ok();
 
             // create cronjob
             helm.on_create(target)?;
 
             // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
-            let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.clone(), target.environment.namespace());
+            let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
             let cronjob = block_on(k8s_cronjob_api.get(job.kube_name())).map_err(|err| {
                 EngineError::new_job_error(
                     event_details.clone(),
@@ -408,7 +408,8 @@ where
                 .expect("job_template should be editable")
                 .ttl_seconds_after_finished = Some(10);
             // add a suffix in name to avoid conflict with jobs created by cronjob
-            let job_name = format!("{}-force-trigger", job.kube_name(),);
+            // truncate original name to 63 chars minus "-force-trigger" length to avoid k8s name length limit
+            let job_name = format!("{}-force-trigger", job.kube_name().chars().take(63 - 14).join("").as_str(),);
             let job_to_start = K8sJob {
                 metadata: ObjectMeta {
                     name: Some(job_name.to_string()),
@@ -501,6 +502,7 @@ where
     (pre_run, task, post_run)
 }
 
+#[allow(clippy::type_complexity)]
 fn delete_job<'a, T: CloudProvider>(
     job: &'a Job<T>,
     target: &'a DeploymentTarget,
@@ -515,7 +517,7 @@ where
 {
     let pre_run = move |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> {
         let last_image = block_on(get_last_deployed_image(
-            target.kube.clone(),
+            target.kube.client(),
             &job.kube_label_selector(),
             if job.is_cron_job() {
                 KubeObjectKind::CronJob
@@ -602,14 +604,14 @@ where
     (pre_run, task, post_run)
 }
 
-enum JobStatus {
+pub enum JobStatus {
     NotRunning,
     Running,
     Success,
     Failure { reason: String, message: String },
 }
 
-fn job_status(job: &Option<&K8sJob>) -> JobStatus {
+pub fn job_status(job: &Option<&K8sJob>) -> JobStatus {
     if let Some(pod) = job {
         if let Some(status) = &pod.status {
             if status.succeeded.is_some() {
@@ -634,7 +636,7 @@ fn job_status(job: &Option<&K8sJob>) -> JobStatus {
     JobStatus::NotRunning
 }
 
-fn is_job_terminated() -> impl Condition<K8sJob> {
+pub fn is_job_terminated() -> impl Condition<K8sJob> {
     |job: Option<&K8sJob>| match job_status(&job) {
         JobStatus::NotRunning => false,
         JobStatus::Running => false,
@@ -643,7 +645,7 @@ fn is_job_terminated() -> impl Condition<K8sJob> {
     }
 }
 
-fn get_active_job_pod_by_selector(
+pub fn get_active_job_pod_by_selector(
     kube_pod_api: Api<Pod>,
     job_pod_selector: &str,
     event_details: &EventDetails,
@@ -746,7 +748,7 @@ fn get_active_job_pod_by_selector(
     }
 }
 
-fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
+pub fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
     if let Some(pod) = job_pod {
         if let Some(pod_status) = &pod.status {
             info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
@@ -765,14 +767,14 @@ fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_
     false
 }
 
-fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
+pub fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
     move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
 }
 
 // Used to validate the job json output format with serde
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
-struct JobOutputVariable {
+pub struct JobOutputVariable {
     pub value: String,
     pub sensitive: bool,
     pub description: String,
@@ -788,7 +790,7 @@ impl Default for JobOutputVariable {
     }
 }
 
-fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
+pub fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
     let serde_hash_map: HashMap<&str, Value> = serde_json::from_str(json)?;
     let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
 
@@ -833,7 +835,7 @@ fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>
 
 #[cfg(test)]
 mod test {
-    use crate::environment::action::deploy_job::{serialize_job_output, JobOutputVariable};
+    use crate::environment::action::deploy_job::{JobOutputVariable, serialize_job_output};
 
     #[test]
     fn should_serialize_json_to_job_output_variable_with_string_value() {

@@ -1,11 +1,11 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::environment::models::types::Percentage;
-use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::EngineError;
 use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::gcp::{Gke, VpcMode};
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::gcp::{Gke, VpcMode};
 use crate::io_models::context::Features;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use crate::string::terraform_list_format;
@@ -22,11 +22,8 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     let mut context = TeraContext::new();
 
     // Qovery
-    context.insert("organization_id", infra_ctx.cloud_provider().organization_id());
-    context.insert(
-        "organization_long_id",
-        &infra_ctx.cloud_provider().organization_long_id().to_string(),
-    );
+    context.insert("organization_id", infra_ctx.context().organization_short_id());
+    context.insert("organization_long_id", &infra_ctx.context().organization_long_id().to_string());
     context.insert("object_storage_kubeconfig_bucket", &cluster.kubeconfig_bucket_name());
     context.insert("object_storage_logs_bucket", &cluster.logs_bucket_name());
     // Qovery features
@@ -45,6 +42,9 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         &cluster.advanced_settings().pleco_resources_ttl,
     );
 
+    // thanos
+    context.insert("thanos_gcs_bucket_name", &cluster.prometheus_bucket_name());
+
     // Kubernetes
     context.insert("test_cluster", &cluster.context.is_test_cluster());
     context.insert("kubernetes_cluster_long_id", &cluster.long_id);
@@ -55,23 +55,16 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
 
     // GCP
     // credentials
-    context.insert(
-        "gcp_json_credentials_raw",
-        &cluster.options.gcp_json_credentials.r#type.to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_type",
-        &cluster.options.gcp_json_credentials.r#type.to_string(),
-    );
+    context.insert("gcp_json_credentials_raw", &cluster.credentials.r#type.to_string());
+    context.insert("gcp_json_credentials_type", &cluster.credentials.r#type.to_string());
     context.insert(
         "gcp_json_credentials_private_key_id",
-        &cluster.options.gcp_json_credentials.private_key_id.to_string(),
+        &cluster.credentials.private_key_id.to_string(),
     );
     context.insert(
         "gcp_json_credentials_private_key",
         &cluster
-            .options
-            .gcp_json_credentials
+            .credentials
             .private_key
             .as_str()
             .escape_default() // escape new lines to have \n instead
@@ -79,37 +72,24 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     );
     context.insert(
         "gcp_json_credentials_client_email",
-        &cluster.options.gcp_json_credentials.client_email.to_string(),
+        &cluster.credentials.client_email.to_string(),
     );
-    context.insert(
-        "gcp_json_credentials_client_id",
-        &cluster.options.gcp_json_credentials.client_id.to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_auth_uri",
-        cluster.options.gcp_json_credentials.auth_uri.as_str(),
-    );
-    context.insert(
-        "gcp_json_credentials_token_uri",
-        cluster.options.gcp_json_credentials.token_uri.as_str(),
-    );
+    context.insert("gcp_json_credentials_client_id", &cluster.credentials.client_id.to_string());
+    context.insert("gcp_json_credentials_auth_uri", cluster.credentials.auth_uri.as_str());
+    context.insert("gcp_json_credentials_token_uri", cluster.credentials.token_uri.as_str());
     context.insert(
         "gcp_json_credentials_auth_provider_x509_cert_url",
-        cluster
-            .options
-            .gcp_json_credentials
-            .auth_provider_x509_cert_url
-            .as_str(),
+        cluster.credentials.auth_provider_x509_cert_url.as_str(),
     );
     context.insert(
         "gcp_json_credentials_client_x509_cert_url",
-        cluster.options.gcp_json_credentials.client_x509_cert_url.as_str(),
+        cluster.credentials.client_x509_cert_url.as_str(),
     );
     context.insert(
         "gcp_json_credentials_universe_domain",
-        &cluster.options.gcp_json_credentials.universe_domain.to_string(),
+        &cluster.credentials.universe_domain.to_string(),
     );
-    context.insert("gcp_project_id", cluster.options.gcp_json_credentials.project_id.as_str());
+    context.insert("gcp_project_id", cluster.credentials.project_id.as_str());
     context.insert("gcp_region", &cluster.region.to_cloud_provider_format());
     context.insert(
         "gcp_zones",
@@ -207,9 +187,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             context.insert("vpc_use_existing", &true);
             context.insert(
                 "network_project_id",
-                vpc_project_id
-                    .as_ref()
-                    .unwrap_or(&cluster.options.gcp_json_credentials.project_id), // If no project set, use the current one
+                vpc_project_id.as_ref().unwrap_or(&cluster.credentials.project_id), // If no project set, use the current one
             );
             context.insert("vpc_name", &vpc_name);
             context.insert("subnetwork", subnetwork_name.as_deref().unwrap_or(""));
@@ -334,6 +312,13 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         context.insert(
             "nginx_controller_http_snippet",
             &nginx_controller_http_snippet.to_model().get_snippet_value(),
+        );
+    }
+
+    if let Some(nginx_controller_server_snippet) = &cluster.advanced_settings().nginx_controller_server_snippet {
+        context.insert(
+            "nginx_controller_server_snippet",
+            &nginx_controller_server_snippet.to_model().get_snippet_value(),
         );
     }
 

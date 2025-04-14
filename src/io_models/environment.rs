@@ -5,6 +5,7 @@ use crate::environment::models::environment::Environment;
 use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::environment::models::job::{JobError, JobService};
 use crate::environment::models::router::{RouterAdvancedSettings, RouterError};
+use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::container_registry::ContainerRegistry;
 use crate::infrastructure::models::kubernetes::Kubernetes;
@@ -17,6 +18,7 @@ use crate::io_models::helm_chart::HelmChart;
 use crate::io_models::job::Job;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::router::Router;
+use crate::io_models::terraform_service::TerraformService;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::utilities::base64_replace_comma_to_new_line;
 use itertools::Itertools;
@@ -44,6 +46,8 @@ pub struct EnvironmentRequest {
     pub databases: Vec<Database>,
     #[serde(default)]
     pub helms: Vec<HelmChart>,
+    #[serde(default)]
+    pub terraform_services: Vec<TerraformService>,
     #[serde(default = "default_annotations_groups")]
     pub annotations_groups: BTreeMap<Uuid, AnnotationsGroup>,
     #[serde(default = "default_labels_groups")]
@@ -80,6 +84,8 @@ pub enum DomainError {
     JobError(#[from] JobError),
     #[error("Invalid helm chart: {0}")]
     HelmChartError(#[from] HelmChartError),
+    #[error("Invalid terraform service: {0}")]
+    TerraformServiceError(#[from] TerraformServiceError),
 }
 
 impl EnvironmentRequest {
@@ -172,7 +178,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }
@@ -231,7 +237,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }
@@ -279,7 +285,7 @@ impl EnvironmentRequest {
                                             .advanced_settings
                                             .network_ingress_basic_auth_env_var
                                             .to_string(),
-                                    }))
+                                    }));
                                 }
                             }
                         }
@@ -345,6 +351,24 @@ impl EnvironmentRequest {
             .collect();
         let helm_charts = helm_charts?;
 
+        let terraform_services: Result<Vec<Box<dyn TerraformServiceTrait>>, TerraformServiceError> = self
+            .terraform_services
+            .iter()
+            .cloned()
+            .map(|terraform_service| {
+                terraform_service.to_terraform_service_domain(
+                    context,
+                    cloud_provider,
+                    container_registry,
+                    cluster,
+                    &self.kube_name,
+                    &self.annotations_groups,
+                    &self.labels_groups,
+                )
+            })
+            .collect();
+        let terraform_services = terraform_services?;
+
         Ok(Environment::new(
             self.long_id,
             self.name.clone(),
@@ -361,6 +385,7 @@ impl EnvironmentRequest {
             databases,
             jobs,
             helm_charts,
+            terraform_services,
         ))
     }
 }

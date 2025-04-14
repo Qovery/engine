@@ -187,19 +187,6 @@ impl EventMessage {
         }
     }
 
-    /// Creates e new EventMessage from engine error.
-    ///
-    /// Arguments
-    ///
-    /// * `engine_error`: Engine error.
-    pub fn new_from_engine_error(engine_error: EngineError) -> Self {
-        EventMessage {
-            safe_message: engine_error.message(ErrorMessageVerbosity::SafeOnly),
-            full_details: Some(engine_error.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-            env_vars: None,
-        }
-    }
-
     /// Returns message for event message.
     ///
     /// Arguments
@@ -243,6 +230,16 @@ impl From<CommandError> for EventMessage {
 impl<S: Into<String>> From<S> for EventMessage {
     fn from(value: S) -> Self {
         EventMessage::new_from_safe(value.into())
+    }
+}
+
+impl From<EngineError> for EventMessage {
+    fn from(engine_error: EngineError) -> Self {
+        EventMessage {
+            safe_message: engine_error.message(ErrorMessageVerbosity::SafeOnly),
+            full_details: Some(engine_error.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+            env_vars: None,
+        }
     }
 }
 
@@ -461,6 +458,9 @@ pub enum EnvironmentStep {
 
     /// DatabaseOutput: contains the environment variables to upsert
     DatabaseOutput,
+
+    /// TerraformServiceOutput: contains the environment variables to upsert
+    TerraformServiceOutput,
 }
 
 impl EnvironmentStep {
@@ -516,6 +516,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::DatabaseOutput => "database-output",
                 EnvironmentStep::Recap => "recap",
                 EnvironmentStep::GlobalError => "global-error",
+                EnvironmentStep::TerraformServiceOutput => "terraform-service-output",
             },
         )
     }
@@ -557,6 +558,8 @@ pub enum Transmitter {
     Router(TransmitterId, TransmitterName),
     /// Job: job engine part.
     Job(TransmitterId, TransmitterName),
+    /// TerraformService: TerraformService engine part.
+    TerraformService(TransmitterId, TransmitterName),
 }
 
 impl Display for Transmitter {
@@ -579,6 +582,7 @@ impl Display for Transmitter {
                 Transmitter::Container(id, name) => format!("container({id}, {name})"),
                 Transmitter::Job(id, name) => format!("job({id}, {name})"),
                 Transmitter::Helm(id, name) => format!("helm_chart({id}, {name})"),
+                Transmitter::TerraformService(id, name) => format!("terraform_service({id}, {name})"),
             }
         )
     }
@@ -692,7 +696,8 @@ impl EventDetails {
                 | EnvironmentStep::RestartedError
                 | EnvironmentStep::JobOutput
                 | EnvironmentStep::Recap
-                | EnvironmentStep::DatabaseOutput => return,
+                | EnvironmentStep::DatabaseOutput
+                | EnvironmentStep::TerraformServiceOutput => return,
             },
         };
     }

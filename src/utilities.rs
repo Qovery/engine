@@ -1,12 +1,11 @@
 use base64::engine::general_purpose;
 use base64::{DecodeError, Engine};
-use kube::config::{InClusterError, KubeConfigOptions, Kubeconfig, KubeconfigError};
+use std::collections::BTreeMap;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
+use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
 use reqwest::header::{HeaderMap, HeaderValue};
 use uuid::Uuid;
 
@@ -28,8 +27,10 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     root_path: P,
     dockerfile_path: &Option<T>,
     dockerfile_content: &Option<String>,
+    docker_extra_files_to_inject: &[GitRepositoryExtraFile],
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
+    docker_target_build_stage: &Option<String>,
 ) -> String {
     // Image tag == hash(root_path) + commit_id truncate to 127 char
     // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
@@ -48,6 +49,18 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
         environment_variables.hash(&mut hasher);
     }
 
+    // Include docker_target_build_stage in the hash calculation only if it's Some
+    if let Some(build_stage) = docker_target_build_stage {
+        build_stage.hash(&mut hasher);
+    }
+
+    if !docker_extra_files_to_inject.is_empty() {
+        docker_extra_files_to_inject.iter().for_each(|extra_file| {
+            extra_file.content.hash(&mut hasher);
+            extra_file.path.hash(&mut hasher);
+        });
+    }
+
     let mut tag = format!("{}-{}", hasher.finish(), commit_id);
     tag.truncate(127);
 
@@ -56,55 +69,6 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
 
 pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
-}
-
-pub async fn create_kube_client<P: AsRef<Path>>(
-    kubeconfig_path: P,
-    envs: &[(String, String)],
-) -> Result<kube::Client, kube::Error> {
-    let to_err = |err: KubeconfigError| -> kube::Error {
-        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
-    };
-
-    // Read kube config
-    let mut kubeconfig = Kubeconfig::read_from(kubeconfig_path).map_err(to_err)?;
-
-    // Inject our env variables if needed
-    for auth in kubeconfig.auth_infos.iter_mut() {
-        if let Some(exec_config) = &mut auth.auth_info.as_mut().and_then(|auth| auth.exec.as_mut()) {
-            let exec_envs = exec_config.env.get_or_insert(vec![]);
-            for (k, v) in envs {
-                let mut hash_map = HashMap::with_capacity(2);
-                hash_map.insert("name".to_string(), k.to_string());
-                hash_map.insert("value".to_string(), v.to_string());
-                exec_envs.push(hash_map);
-            }
-        }
-    }
-
-    // build kube client: the kube config must have already the good context selected
-    let kube_config = kube::Config::from_custom_kubeconfig(kubeconfig, &KubeConfigOptions::default())
-        .await
-        .map_err(to_err)?;
-    let kube_client = kube::Client::try_from(kube_config)?;
-
-    // Try to contact the api to verify we are correctly connected
-    kube_client.apiserver_version().await?;
-    Ok(kube_client)
-}
-
-pub async fn create_kube_client_in_cluster() -> Result<kube::Client, kube::Error> {
-    let to_err = |err: InClusterError| -> kube::Error {
-        kube::Error::Service(Box::<dyn std::error::Error + Send + Sync>::from(err.to_string()))
-    };
-
-    // build kube client: the kube config must have already the good context selected
-    let kube_config = kube::Config::incluster().map_err(to_err)?;
-    let kube_client = kube::Client::try_from(kube_config)?;
-
-    // Try to contact the api to verify we are correctly connected
-    kube_client.apiserver_version().await?;
-    Ok(kube_client)
 }
 
 pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<String, DecodeError> {
@@ -127,10 +91,12 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests_utilities {
+    use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
-    use base64::engine::general_purpose;
     use base64::Engine;
+    use base64::engine::general_purpose;
     use std::collections::BTreeMap;
+    use std::path::PathBuf;
 
     #[test]
     fn test_get_image_tag() {
@@ -138,16 +104,20 @@ mod tests_utilities {
             "/".to_string(),
             &Some("Dockerfile".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         let image_tag_2 = compute_image_tag(
             "/".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_ne!(image_tag, image_tag_2);
@@ -156,8 +126,10 @@ mod tests_utilities {
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_ne!(image_tag, image_tag_3);
@@ -166,8 +138,10 @@ mod tests_utilities {
             "/xxx".to_string(),
             &Some("Dockerfile.qovery".to_string()),
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_eq!(image_tag_3, image_tag_3_2);
@@ -176,8 +150,10 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &None,
+            &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         let mut env_vars_5 = BTreeMap::new();
@@ -187,8 +163,10 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &None,
+            &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
 
         assert_eq!(image_tag_4, image_tag_5);
@@ -197,10 +175,63 @@ mod tests_utilities {
             "/".to_string(),
             &None as &Option<&str>,
             &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
         );
         assert_ne!(image_tag_4, image_tag_5);
+
+        let image_tag_6 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("/path"),
+                content: "toto".to_string(),
+            }],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
+        );
+        assert_ne!(image_tag_5, image_tag_6);
+
+        let image_tag_7 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("/path"),
+                content: "tata".to_string(),
+            }],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
+        );
+        assert_ne!(image_tag_6, image_tag_7);
+
+        // Test that the hash changes when the docker_target_build_stage changes
+        let image_tag_8 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &Some("stage1".to_string()),
+        );
+
+        let image_tag_9 = compute_image_tag(
+            "/".to_string(),
+            &None as &Option<&str>,
+            &Some("FROM my-custom-dockerfile".to_string()),
+            &[],
+            &env_vars_5,
+            "63d8c437337416a7067d3f358197ac47d003fab9",
+            &Some("stage2".to_string()),
+        );
+
+        assert_ne!(image_tag_8, image_tag_9);
     }
 
     #[test]

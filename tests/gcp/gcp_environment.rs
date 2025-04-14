@@ -3,13 +3,13 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::gcp::{clean_environments, gcp_infra_config};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
 };
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use function_name::named;
-use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::application::{Port, Protocol};
@@ -18,12 +18,16 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::terraform_service::{
+    PersistentStorage, TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType,
+    TerraformFilesSource, TerraformProvider, TerraformService,
+};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use std::str::FromStr;
+use tracing::Level;
 use tracing::log::warn;
 use tracing::span;
-use tracing::Level;
 use url::Url;
 use uuid::Uuid;
 
@@ -714,6 +718,191 @@ fn gcp_gke_deploy_container_with_router() {
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[named]
+#[test]
+fn gcp_gke_deploy_terraform_service() {
+    fn build_terraform_service(
+        service_id: Uuid,
+        service_kube_name: &str,
+        annotations_group_id: Uuid,
+        labels_group_id: Uuid,
+        terraform_action: TerraformAction,
+    ) -> TerraformService {
+        TerraformService {
+            long_id: service_id,
+            name: "terraform service test #####".to_string(),
+            kube_name: service_kube_name.to_string(),
+            action: Action::Create,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
+            persistent_storage: PersistentStorage {
+                storage_class: "gcp-pd-ssd".to_string(),
+                size_in_gib: 1,
+            },
+            tf_files_source: TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
+                git_credentials: None,
+                commit_id: "6692594dd31285e1b881f85cd504d934a579d7c5".to_string(),
+                root_module_path: "/simple_terraform".to_string(),
+            },
+            tf_var_file_paths: vec!["tfvars/echo.tfvars".to_string()],
+            tf_vars: vec![("command_argument".to_string(), "Mr Ripley".to_string())],
+            provider: TerraformProvider::Terraform,
+            provider_version: "1.9.7".to_string(),
+            terraform_action,
+            backend: TerraformBackend {
+                backend_type: TerraformBackendType::Kubernetes,
+                configs: vec![],
+            },
+            timeout_sec: 300,
+            environment_vars_with_infos: Default::default(),
+            advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
+            shared_image_feature_enabled: false,
+        }
+    }
+
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .GCP_TEST_ORGANIZATION_LONG_ID
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID  should be set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID  should be set"),
+        );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        let execution_id = Uuid::new_v4();
+        let kube_name = format!("my-little-terraform-service-{}", suffix);
+        environment.terraform_services = vec![build_terraform_service(
+            service_id,
+            &kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::PlanOnly,
+                plan_execution_id: Some(execution_id.to_string()),
+            },
+        )];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
+
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "false".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Deployments,
+                AnnotationsGroupScope::Services,
+                AnnotationsGroupScope::Ingress,
+                AnnotationsGroupScope::Hpa,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: true,
+            }]
+        }};
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        environment.terraform_services = vec![build_terraform_service(
+            service_id,
+            &kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::ApplyFromPlan,
+                plan_execution_id: Some(execution_id.to_string()),
+            },
+        )];
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+        environment_for_delete.terraform_services = vec![build_terraform_service(
+            service_id,
+            &kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::Destroy,
+                plan_execution_id: None,
+            },
+        )];
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());

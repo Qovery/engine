@@ -1,25 +1,25 @@
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init, is_pod_restarted_env,
-    logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init,
+    is_pod_restarted_env, logger, metrics_registry,
 };
 use ::function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use std::str::FromStr;
-use tracing::{span, warn, Level};
+use tracing::{Level, span, warn};
 use uuid::Uuid;
 
 use crate::helpers;
 use crate::helpers::common::ClusterDomain;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::database::{database_test_environment, test_db, StorageSize};
+use crate::helpers::database::{StorageSize, database_test_environment, test_db};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::scaleway::{
-    clean_environments, scw_infra_config, SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE,
-    SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+    clean_environments, scw_infra_config,
 };
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
@@ -31,13 +31,12 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::utilities::to_short_id;
 
+// to check overload between several databases and apps
 /**
 **
 ** Global database tests
 **
 **/
-
-// to check overload between several databases and apps
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
 #[test]
@@ -384,6 +383,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                 SCW_SELF_HOSTED_DATABASE_DISK_TYPE
             }
             .to_string(),
+            database_disk_iops: None,
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,

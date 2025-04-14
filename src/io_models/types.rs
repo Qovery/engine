@@ -1,6 +1,6 @@
 use crate::environment::models::types::Percentage;
 use serde::de::Visitor;
-use serde::{de, Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de};
 use std::fmt;
 
 impl<'de> Deserialize<'de> for Percentage {
@@ -17,7 +17,7 @@ impl<'de> Deserialize<'de> for Percentage {
 
 struct PercentageVisitor;
 
-impl<'de> Visitor<'de> for PercentageVisitor {
+impl Visitor<'_> for PercentageVisitor {
     type Value = f64;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {

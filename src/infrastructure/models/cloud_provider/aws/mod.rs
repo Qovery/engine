@@ -1,34 +1,74 @@
 use aws_sdk_ec2::config::{BehaviorVersion, SharedCredentialsProvider};
 use aws_types::SdkConfig;
-use std::any::Any;
 use std::borrow::Cow;
 
 use aws_types::region::Region;
 use rusoto_core::{Client, HttpClient};
 use rusoto_credential::StaticProvider;
-use rusoto_sts::{GetCallerIdentityRequest, Sts, StsClient};
 use uuid::Uuid;
 
-use crate::constants::{AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY};
-use crate::errors::EngineError;
-use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
-use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind, TerraformStateCredentials};
+use crate::constants::{AWS_ACCESS_KEY_ID, AWS_DEFAULT_REGION, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN};
+use crate::infrastructure::models::cloud_provider::{
+    CloudProvider, CloudProviderKind, Kind, TerraformStateCredentials,
+};
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
-use crate::io_models::context::Context;
-use crate::io_models::QoveryIdentifier;
-use crate::runtime::block_on;
-use crate::utilities::to_short_id;
 
 pub mod database_instance_type;
 pub mod regions;
 
+#[derive(Debug, Clone)]
+pub enum AwsCredentials {
+    Static {
+        access_key_id: String,
+        secret_access_key: String,
+    },
+    STS {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: String,
+    },
+}
+
+impl AwsCredentials {
+    pub fn new(access_key_id: String, secret_access_key: String, session_token: Option<String>) -> Self {
+        if let Some(session_token) = session_token {
+            AwsCredentials::STS {
+                access_key_id,
+                secret_access_key,
+                session_token,
+            }
+        } else {
+            AwsCredentials::Static {
+                access_key_id,
+                secret_access_key,
+            }
+        }
+    }
+
+    pub fn access_key_id(&self) -> &str {
+        match self {
+            AwsCredentials::Static { access_key_id, .. } => access_key_id,
+            AwsCredentials::STS { access_key_id, .. } => access_key_id,
+        }
+    }
+
+    pub fn secret_access_key(&self) -> &str {
+        match self {
+            AwsCredentials::Static { secret_access_key, .. } => secret_access_key,
+            AwsCredentials::STS { secret_access_key, .. } => secret_access_key,
+        }
+    }
+    pub fn session_token(&self) -> Option<&str> {
+        match self {
+            AwsCredentials::Static { .. } => None,
+            AwsCredentials::STS { session_token, .. } => Some(session_token),
+        }
+    }
+}
+
 pub struct AWS {
-    context: Context,
-    id: String,
     long_id: Uuid,
-    name: String,
-    pub access_key_id: String,
-    pub secret_access_key: String,
+    credentials: AwsCredentials,
     pub region: String,
     pub zones: Vec<String>,
     kubernetes_kind: KubernetesKind,
@@ -37,23 +77,16 @@ pub struct AWS {
 
 impl AWS {
     pub fn new(
-        context: Context,
         long_id: Uuid,
-        name: &str,
-        access_key_id: &str,
-        secret_access_key: &str,
+        credentials: AwsCredentials,
         region: &str,
         zones: Vec<String>,
         kubernetes_kind: KubernetesKind,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
         AWS {
-            context,
-            id: to_short_id(&long_id),
             long_id,
-            name: name.to_string(),
-            access_key_id: access_key_id.to_string(),
-            secret_access_key: secret_access_key.to_string(),
+            credentials,
             region: region.to_string(),
             zones,
             kubernetes_kind,
@@ -61,20 +94,39 @@ impl AWS {
         }
     }
 
-    pub fn credentials(&self) -> StaticProvider {
-        StaticProvider::new(self.access_key_id.to_string(), self.secret_access_key.to_string(), None, None)
+    pub fn aws_credentials(&self) -> &AwsCredentials {
+        &self.credentials
     }
 
     pub fn client(&self) -> Client {
-        Client::new_with(self.credentials(), HttpClient::new().unwrap())
+        Client::new_with(new_rusoto_creds(&self.credentials), HttpClient::new().unwrap())
+    }
+
+    pub fn aws_sdk_client(&self) -> SdkConfig {
+        SdkConfig::builder()
+            .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
+                self.credentials.access_key_id(),
+                self.credentials.secret_access_key(),
+                self.credentials.session_token().map(str::to_string),
+                None,
+                "qovery-engine",
+            )))
+            .behavior_version(BehaviorVersion::latest())
+            .region(Region::new(Cow::from(self.region.clone())))
+            .build()
     }
 }
 
-impl CloudProvider for AWS {
-    fn context(&self) -> &Context {
-        &self.context
-    }
+pub fn new_rusoto_creds(creds: &AwsCredentials) -> StaticProvider {
+    StaticProvider::new(
+        creds.access_key_id().to_string(),
+        creds.secret_access_key().to_string(),
+        creds.session_token().map(str::to_string),
+        None,
+    )
+}
 
+impl CloudProvider for AWS {
     fn kind(&self) -> Kind {
         Kind::Aws
     }
@@ -83,103 +135,64 @@ impl CloudProvider for AWS {
         self.kubernetes_kind
     }
 
-    fn id(&self) -> &str {
-        self.id.as_str()
-    }
-
-    fn organization_id(&self) -> &str {
-        self.context.organization_short_id()
-    }
-
-    fn organization_long_id(&self) -> Uuid {
-        *self.context.organization_long_id()
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
-
-    fn access_key_id(&self) -> String {
-        self.access_key_id.to_string()
-    }
-
-    fn secret_access_key(&self) -> String {
-        self.secret_access_key.to_string()
-    }
-
-    fn region(&self) -> String {
-        self.region.to_string()
-    }
-
-    fn aws_sdk_client(&self) -> Option<SdkConfig> {
-        Some(
-            SdkConfig::builder()
-                .credentials_provider(SharedCredentialsProvider::new(aws_credential_types::Credentials::new(
-                    self.access_key_id(),
-                    self.secret_access_key(),
-                    None,
-                    None,
-                    "qovery-engine",
-                )))
-                .behavior_version(BehaviorVersion::latest())
-                .region(Region::new(Cow::from(self.region.clone())))
-                .build(),
-        )
-    }
-
-    fn is_valid(&self) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Infrastructure(InfrastructureStep::RetrieveClusterConfig));
-        let client = StsClient::new_with_client(self.client(), rusoto_signature::region::Region::default());
-        let s = block_on(client.get_caller_identity(GetCallerIdentityRequest::default()));
-
-        match s {
-            Ok(_x) => Ok(()),
-            Err(_) => Err(Box::new(EngineError::new_client_invalid_cloud_provider_credentials(
-                event_details,
-            ))),
-        }
-    }
-
-    fn zones(&self) -> Vec<String> {
-        self.zones.clone()
+    fn long_id(&self) -> Uuid {
+        self.long_id
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
-        vec![
-            (AWS_DEFAULT_REGION, self.region.as_str()),
-            (AWS_ACCESS_KEY_ID, self.access_key_id.as_str()),
-            (AWS_SECRET_ACCESS_KEY, self.secret_access_key.as_str()),
-        ]
+        match &self.credentials {
+            AwsCredentials::Static {
+                access_key_id,
+                secret_access_key,
+            } => {
+                vec![
+                    (AWS_DEFAULT_REGION, self.region.as_str()),
+                    (AWS_ACCESS_KEY_ID, access_key_id),
+                    (AWS_SECRET_ACCESS_KEY, secret_access_key),
+                ]
+            }
+            AwsCredentials::STS {
+                access_key_id,
+                secret_access_key,
+                session_token,
+            } => {
+                vec![
+                    (AWS_DEFAULT_REGION, self.region.as_str()),
+                    (AWS_ACCESS_KEY_ID, access_key_id),
+                    (AWS_SECRET_ACCESS_KEY, secret_access_key),
+                    (AWS_SESSION_TOKEN, session_token),
+                ]
+            }
+        }
     }
 
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
-        vec![
-            ("aws_access_key", self.access_key_id.as_str()),
-            ("aws_secret_key", self.secret_access_key.as_str()),
-        ]
+        match &self.credentials {
+            AwsCredentials::Static {
+                access_key_id,
+                secret_access_key,
+            } => {
+                vec![("aws_access_key", access_key_id), ("aws_secret_key", secret_access_key)]
+            }
+            AwsCredentials::STS {
+                access_key_id,
+                secret_access_key,
+                session_token,
+            } => {
+                vec![
+                    ("aws_access_key", access_key_id),
+                    ("aws_secret_key", secret_access_key),
+                    ("aws_session_token", session_token),
+                ]
+            }
+        }
     }
 
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials> {
         Some(&self.terraform_state_credentials)
     }
 
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn get_event_details(&self, stage: Stage) -> EventDetails {
-        let context = self.context();
-        EventDetails::new(
-            None,
-            QoveryIdentifier::new(*context.organization_long_id()),
-            QoveryIdentifier::new(*context.cluster_long_id()),
-            context.execution_id().to_string(),
-            stage,
-            self.to_transmitter(),
-        )
-    }
-
-    fn to_transmitter(&self) -> Transmitter {
-        Transmitter::CloudProvider(self.long_id, self.name.to_string())
+    fn downcast_ref(&self) -> CloudProviderKind {
+        CloudProviderKind::Aws(self)
     }
 }

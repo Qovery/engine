@@ -1,5 +1,5 @@
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::runtime::block_on;
@@ -12,7 +12,7 @@ use google_cloud_googleapis::devtools::artifact_registry::v1::{
 };
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
-use governor::{clock, RateLimiter};
+use governor::{RateLimiter, clock};
 use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -217,7 +217,7 @@ impl ArtifactRegistryService {
                 return Err(ArtifactRegistryServiceError::CannotGetRepository {
                     repository_name: repository_name.to_string(),
                     raw_error_message: "Operation returned an empty repository".to_string(),
-                })
+                });
             }
         };
 

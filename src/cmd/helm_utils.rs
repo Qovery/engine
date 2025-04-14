@@ -11,8 +11,8 @@ use crate::fs::{
     truncate_file_from_word,
 };
 use crate::helm::ChartInfo;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use semver::Version;
 use serde_derive::Deserialize;
 use std::fs::OpenOptions;
@@ -221,7 +221,7 @@ where
                                 chart.clone().name,
                                 HelmCommand::UPGRADE,
                                 CommandError::new(e.message_safe(), e.message_raw(), None),
-                            ))
+                            ));
                         }
                     },
                     false => {
@@ -229,7 +229,7 @@ where
                             chart.clone().name,
                             HelmCommand::UPGRADE,
                             CommandError::new(e.message_safe(), e.message_raw(), None),
-                        ))
+                        ));
                     }
                 },
             };
@@ -344,7 +344,7 @@ pub fn get_common_helm_chart_version(chart: &ChartInfo) -> Result<Option<Version
                     Some(e.to_string()),
                     None,
                 ),
-            ))
+            ));
         }
     };
 

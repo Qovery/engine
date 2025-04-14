@@ -1,0 +1,133 @@
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-standard-lrs
+  annotations:
+    {{- if eq "azure-standard-lrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "hdd"
+allowVolumeExpansion: true
+parameters:
+  skuname: Standard_LRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-standard-ssd-zrs
+  annotations:
+    {{- if eq "azure-standard-ssd-zrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: StandardSSD_ZRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-premium-lrs
+  annotations:
+    {{- if eq "azure-premium-lrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: Premium_LRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-premium-v2-lrs
+  annotations:
+    {{- if eq "azure-premium-v2-lrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: PremiumV2_LRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-premium-zrs
+  annotations:
+    {{- if eq "azure-premium-zrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: Premium_ZRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-standard-ssd-lrs
+  annotations:
+    {{- if eq "azure-standard-ssd-lrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: StandardSSD_LRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: azure-ultra-ssd-lrs
+  annotations:
+    {{- if eq "azure-ultra-ssd-lrs" .Values.defaultStorageClassName }}
+    storageclass.kubernetes.io/is-default-class: "true"
+    {{- end }}
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    kubernetes.io/cluster-service: "true"
+    qovery-type: "ssd"
+allowVolumeExpansion: true
+parameters:
+  skuname: UltraSSD_LRS # https://learn.microsoft.com/en-us/azure/virtual-machines/disks-types
+provisioner: disk.csi.azure.com
+reclaimPolicy: Delete
+volumeBindingMode: WaitForFirstConsumer
+---

@@ -480,9 +480,11 @@ mod tests {
         );
 
         // 1 nodegroup, 1 failed => nothing to do, too critical to be deleted. Manual intervention required
-        let ngs = vec![DescribeNodegroupOutput::builder()
-            .nodegroup(nodegroup_create_failed.clone())
-            .build()];
+        let ngs = vec![
+            DescribeNodegroupOutput::builder()
+                .nodegroup(nodegroup_create_failed.clone())
+                .build(),
+        ];
         assert_eq!(
             check_failed_nodegroups_to_remove(ngs).unwrap_err(),
             NodeGroupToRemoveFailure::OneNodeGroupMustBeActiveAtLeast

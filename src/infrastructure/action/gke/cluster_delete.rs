@@ -7,8 +7,8 @@ use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
@@ -64,6 +64,19 @@ fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(),
     {
         logger.warn(EventMessage::new(
             format!("Cannot delete cluster logs object storage `{}`", &cluster.logs_bucket_name()),
+            Some(e.to_string()),
+        ));
+    }
+
+    if let Err(e) = cluster
+        .object_storage
+        .delete_bucket_non_blocking(&cluster.prometheus_bucket_name())
+    {
+        logger.warn(EventMessage::new(
+            format!(
+                "Cannot delete cluster logs object storage `{}`",
+                &cluster.prometheus_bucket_name()
+            ),
             Some(e.to_string()),
         ));
     }

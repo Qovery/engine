@@ -1,13 +1,13 @@
-use crate::environment::action::deploy_namespace::NamespaceDeployment;
 use crate::environment::action::DeploymentAction;
+use crate::environment::action::deploy_namespace::NamespaceDeployment;
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
 use crate::environment::models::router::RouterService;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::logger::Logger;
 use crate::metrics_registry::{StepLabel, StepName, StepStatus};
 use crate::services::aws::load_balancers::clean_up_deleted_k8s_nlb;
@@ -76,6 +76,12 @@ impl<'a> EnvironmentDeployment<'a> {
             .chain(
                 environment
                     .helm_charts
+                    .iter()
+                    .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
+            )
+            .chain(
+                environment
+                    .terraform_services
                     .iter()
                     .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
             )

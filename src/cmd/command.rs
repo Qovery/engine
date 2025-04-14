@@ -45,7 +45,7 @@ pub enum CommandKillerTrigger<'a> {
 
 const LOGGING_INTERVAL: Duration = Duration::from_secs(120);
 
-impl<'a> CommandKillerTrigger<'a> {
+impl CommandKillerTrigger<'_> {
     pub fn should_abort(&self) -> Option<AbortReason> {
         match self {
             CommandKillerTrigger::Timeout(since, timeout) => {
@@ -421,7 +421,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::{
-        does_binary_exist, run_version_command_for, CommandError, CommandKiller, ExecutableCommand, QoveryCommand,
+        CommandError, CommandKiller, ExecutableCommand, QoveryCommand, does_binary_exist, run_version_command_for,
     };
     use crate::environment::models::abort::{AbortStatus, AtomicAbortStatus};
     use std::sync::atomic::Ordering;

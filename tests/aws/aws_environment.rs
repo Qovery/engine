@@ -3,21 +3,21 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
-    check_tcp_port_is_open, check_udp_port_is_open, context_for_resource, engine_run_test, get_pods, get_pvc, init,
-    is_pod_restarted_env, logger, metrics_registry, FuncTestsSecrets, TcpCheckSource,
+    FuncTestsSecrets, TcpCheckSource, check_tcp_port_is_open, check_udp_port_is_open, context_for_resource,
+    engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, metrics_registry,
 };
 use ::function_name::named;
 use bstr::ByteSlice;
 use k8s_openapi::api::batch::v1::CronJob;
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use k8s_openapi::api::core::v1::ConfigMap;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
@@ -29,6 +29,10 @@ use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSo
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
+use qovery_engine::io_models::terraform_service::{
+    PersistentStorage, TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType,
+    TerraformFilesSource, TerraformProvider, TerraformService,
+};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::metrics_registry::{StepLabel, StepName, StepStatus};
@@ -40,7 +44,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::{span, Level};
+use tracing::{Level, span};
 use url::Url;
 use uuid::Uuid;
 
@@ -846,11 +850,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -1735,18 +1735,20 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         assert!(preferred.is_ok());
         let deployments = preferred.unwrap().unwrap();
         for deploy in deployments {
-            assert!(deploy
-                .spec
-                .unwrap()
-                .template
-                .spec
-                .unwrap()
-                .affinity
-                .unwrap()
-                .pod_anti_affinity
-                .unwrap()
-                .preferred_during_scheduling_ignored_during_execution
-                .is_some())
+            assert!(
+                deploy
+                    .spec
+                    .unwrap()
+                    .template
+                    .spec
+                    .unwrap()
+                    .affinity
+                    .unwrap()
+                    .pod_anti_affinity
+                    .unwrap()
+                    .preferred_during_scheduling_ignored_during_execution
+                    .is_some()
+            )
         }
 
         // set node affinity and pod antiaffinity to required
@@ -1776,12 +1778,14 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
         for deploy in deployments {
             let pod_antiaffinity = deploy.spec.unwrap().template.spec.unwrap().affinity.unwrap();
             // check pod antiaffinity
-            assert!(pod_antiaffinity
-                .pod_anti_affinity
-                .clone()
-                .unwrap()
-                .required_during_scheduling_ignored_during_execution
-                .is_some());
+            assert!(
+                pod_antiaffinity
+                    .pod_anti_affinity
+                    .clone()
+                    .unwrap()
+                    .required_during_scheduling_ignored_during_execution
+                    .is_some()
+            );
             // check node selector
             let node_affinity = pod_antiaffinity
                 .node_affinity
@@ -2253,11 +2257,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2636,6 +2636,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
                     .trim()
                     .to_string(),
                 ),
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2940,8 +2941,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             infra_ctx
                 .mk_kube_client()
                 .expect("should always contain kube_client")
-                .client()
-                .clone(),
+                .client(),
             &cronjob_namespace,
         );
         let result_list_cronjobs = block_on(k8s_cronjob_api.list(&ListParams::default().labels(&cronjob_label)));
@@ -3019,6 +3019,7 @@ fn build_and_deploy_job_on_aws_eks() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -3382,6 +3383,163 @@ fn test_restart_statefulset() {
     })
 }
 
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn build_and_deploy_terraform_service_on_aws_eks() {
+    fn build_terraform_service(
+        service_id: Uuid,
+        service_kube_name: &str,
+        annotations_group_id: Uuid,
+        labels_group_id: Uuid,
+        terraform_action: TerraformAction,
+    ) -> TerraformService {
+        TerraformService {
+            long_id: service_id,
+            name: "terraform service test #####".to_string(),
+            kube_name: service_kube_name.to_string(),
+            action: Action::Create,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 256,
+            ram_limit_in_mib: 256,
+            persistent_storage: PersistentStorage {
+                storage_class: "aws-ebs-gp2-0".to_string(),
+                size_in_gib: 1,
+            },
+            tf_files_source: TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/terraform_service_engine_testing.git").expect(""),
+                git_credentials: None,
+                commit_id: "6692594dd31285e1b881f85cd504d934a579d7c5".to_string(),
+                root_module_path: "/simple_terraform".to_string(),
+            },
+            tf_var_file_paths: vec!["tfvars/echo.tfvars".to_string()],
+            tf_vars: vec![("command_argument".to_string(), "Mr Ripley".to_string())],
+            provider: TerraformProvider::Terraform,
+            provider_version: "1.9.7".to_string(),
+            terraform_action,
+            backend: TerraformBackend {
+                backend_type: TerraformBackendType::Kubernetes,
+                configs: vec![],
+            },
+            timeout_sec: 300,
+            environment_vars_with_infos: Default::default(),
+            advanced_settings: Default::default(),
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
+            shared_image_feature_enabled: false,
+        }
+    }
+
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        let service_id = Uuid::new_v4();
+        let kube_name = "terraform-service-test";
+        let execution_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.terraform_services = vec![build_terraform_service(
+            service_id,
+            kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::PlanOnly,
+                plan_execution_id: Some(execution_id.to_string()),
+            },
+        )];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        environment.terraform_services = vec![build_terraform_service(
+            service_id,
+            kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::ApplyFromPlan,
+                plan_execution_id: Some(execution_id.to_string()),
+            },
+        )];
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+        environment_for_delete.terraform_services = vec![build_terraform_service(
+            service_id,
+            kube_name,
+            annotations_group_id,
+            labels_group_id,
+            TerraformAction {
+                command: TerraformActionCommand::Destroy,
+                plan_execution_id: None,
+            },
+        )];
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
@@ -3445,6 +3603,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -3509,11 +3668,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -4044,11 +4199,7 @@ fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_crea
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
-        let kube_client = infra_ctx
-            .mk_kube_client()
-            .expect("kube client is not set")
-            .client()
-            .clone();
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
         let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, &environment.kube_name);
         let short_id = to_short_id(&service_id);
         let config_map_name = format!("{short_id}-admission-controller-config-map");

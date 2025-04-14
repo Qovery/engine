@@ -1,7 +1,7 @@
-use crate::helpers::common::{Cluster, ClusterDomain};
-use crate::helpers::utilities::{context_for_cluster, logger, metrics_registry, FuncTestsSecrets};
-use base64::engine::general_purpose;
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_cluster, logger, metrics_registry};
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::application::Application;
@@ -13,15 +13,15 @@ use qovery_engine::environment::models::job::{ImageSource, Job};
 use qovery_engine::environment::models::probe::{Probe, ProbeType};
 use qovery_engine::environment::models::registry_image_source::RegistryImageSource;
 use qovery_engine::environment::models::router::{Router, RouterAdvancedSettings};
-use qovery_engine::environment::models::types::{VersionsNumber, AWS as AWSType};
+use qovery_engine::environment::models::types::{AWS as AWSType, VersionsNumber};
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage};
 use qovery_engine::fs::workspace_directory;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::{
-    regions::{AwsRegion, AwsZone},
     AWS,
+    regions::{AwsRegion, AwsZone},
 };
 use qovery_engine::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::infrastructure::models::cloud_provider::service::{Action, Service};
@@ -31,7 +31,7 @@ use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, K
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
-use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions};
+use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions, DiskIOPS};
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::job::{JobAdvancedSettings, JobSchedule};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
@@ -105,6 +105,7 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 AwsZone::UsEast2C.to_string(),
             ],
             cloud_provider.as_ref(),
+            Utc::now(),
             AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide, None),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
@@ -154,6 +155,7 @@ fn test_environment(kube: &dyn Kubernetes, domain: &str) -> Environment {
         ],
         vec![Box::new(test_job(kube))],
         vec![], // TODO (helm): add helm charts test
+        vec![],
     )
 }
 
@@ -247,6 +249,8 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
                 dockerfile_content: None,
                 root_path: PathBuf::from("my_root_path"),
+                extra_files_to_inject: vec![],
+                docker_target_build_stage: None,
             },
             image: Image {
                 service_id: "my_application_id".to_string(),
@@ -269,6 +273,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             architectures: test_kube.cpu_architectures(),
             max_cpu_in_milli: 2000,
             max_ram_in_gib: 4,
+            ephemeral_storage_in_gib: None,
             registries: vec![],
         },
         vec![],
@@ -310,7 +315,9 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             build_timeout_max_sec: 2,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
+            build_ephemeral_storage_in_gib: None,
             network_ingress_proxy_body_size_mb: 3,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
@@ -335,7 +342,10 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
+            network_ingress_nginx_custom_http_errors: None,
             hpa_cpu_average_utilization_percent: 31,
             hpa_memory_average_utilization_percent: None,
             deployment_affinity_node_required: BTreeMap::new(),
@@ -416,6 +426,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_ingress_proxy_body_size_mb: 11,
+            network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
             network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
@@ -438,9 +449,12 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_ingress_nginx_limit_rpm: None,
+            network_ingress_nginx_limit_rps: None,
             network_ingress_nginx_limit_burst_multiplier: None,
+            network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_controller_server_snippet: None,
             network_ingress_nginx_controller_configuration_snippet: None,
+            network_ingress_nginx_custom_http_errors: None,
             hpa_cpu_average_utilization_percent: 41,
             hpa_memory_average_utilization_percent: None,
             security_service_account_name: "".to_string(),
@@ -524,6 +538,7 @@ pub fn test_managed_database(test_kube: &dyn Kubernetes) -> Database<AWSType, Ma
             mode: DatabaseMode::MANAGED,
             disk_size_in_gib: 12,
             database_disk_type: "my_managed_db_disk_type".to_string(),
+            database_disk_iops: DiskIOPS::Default,
             encrypt_disk: true,
             activate_high_availability: true,
             activate_backups: true,
@@ -564,6 +579,7 @@ pub fn test_container_database(test_kube: &dyn Kubernetes) -> Database<AWSType, 
             mode: DatabaseMode::CONTAINER,
             disk_size_in_gib: 12,
             database_disk_type: "my_container_db_disk_type".to_string(),
+            database_disk_iops: DiskIOPS::Default,
             encrypt_disk: true,
             activate_high_availability: true,
             activate_backups: true,
@@ -646,6 +662,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
             build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
+            build_ephemeral_storage_in_gib: None,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
@@ -697,6 +714,7 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
         test_kube.kubeconfig_local_file_path().to_str().map(|s| s.to_string()),
+        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
     )
 }
 

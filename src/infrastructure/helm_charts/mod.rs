@@ -5,6 +5,7 @@ use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, Kind};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 use time::Duration;
 
 pub mod cert_manager_chart;
@@ -19,12 +20,14 @@ pub mod loki_chart;
 pub mod metrics_server_chart;
 pub mod nginx_ingress_chart;
 pub mod prometheus_adapter_chart;
+pub mod prometheus_operator_crds;
 pub mod promtail_chart;
 pub mod qovery_cert_manager_webhook_chart;
 pub mod qovery_cluster_agent_chart;
 pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
+pub mod thanos;
 pub mod vertical_pod_autoscaler;
 
 pub enum HelmChartTimeout {
@@ -55,6 +58,12 @@ pub struct HelmChartResources {
     pub limit_memory: KubernetesMemoryResourceUnit,
     pub request_cpu: KubernetesCpuResourceUnit,
     pub request_memory: KubernetesMemoryResourceUnit,
+}
+
+pub struct HelmChartAutoscaling {
+    pub min_replicas: u32,
+    pub max_replicas: u32,
+    pub target_cpu_utilization_percentage: u32,
 }
 
 pub enum HelmChartVpaType {
@@ -117,6 +126,29 @@ impl HelmChartValuesFilePath {
 impl Display for HelmChartValuesFilePath {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.path.to_string().as_str())
+    }
+}
+
+#[derive(Clone)]
+pub struct HelmChartCRDsPath {
+    path: PathBuf,
+}
+
+impl HelmChartCRDsPath {
+    pub fn new(helm_chart_path: HelmChartPath, crds_path: &str) -> HelmChartCRDsPath {
+        HelmChartCRDsPath {
+            path: PathBuf::from(format!("{}/{}", helm_chart_path.helm_path(), crds_path)),
+        }
+    }
+
+    pub fn helm_path(&self) -> PathBuf {
+        self.path.clone()
+    }
+}
+
+impl Display for HelmChartCRDsPath {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.path.display().to_string().as_str())
     }
 }
 
@@ -235,9 +267,10 @@ pub fn get_helm_values_set_in_code_but_absent_in_values_file(
                 }
 
                 if i < fields_len - 1 {
-                    current_value = current_value[f]
-                        .as_mapping()
-                        .expect("Error while trying to get nested field");
+                    current_value = match current_value.get(f) {
+                        Some(v) => v.as_mapping().expect("Error while trying to get nested field"),
+                        None => panic!("Missing key/value '{}' in file '{}'", value.key, chart_values_path),
+                    }
                 }
             }
         }
@@ -270,6 +303,7 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
                 KubernetesKind::Eks | Kind::EksSelfManaged => "aws",
                 KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
                 KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
+                KubernetesKind::Aks | Kind::AksSelfManaged => "azure",
                 Kind::OnPremiseSelfManaged => "on-premise",
             },
             true => "undefined-cloud-provider", // There is something weird

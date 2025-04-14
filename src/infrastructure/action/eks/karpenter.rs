@@ -1,22 +1,22 @@
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::{to_engine_error, Helm};
+use crate::cmd::helm::{Helm, to_engine_error};
 use crate::cmd::kubectl::kubectl_exec_get_pods;
 use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
+use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
-use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
-use crate::infrastructure::models::kubernetes::aws::eks::EKS;
-use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::models::{KubernetesClusterAction, NodeGroups};
 use crate::runtime::block_on;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
@@ -24,8 +24,8 @@ use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
 use jsonptr::Pointer;
 use k8s_openapi::api::core::v1::Node;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::str::FromStr;
 use std::string::ToString;
 use std::time::Duration;
@@ -109,10 +109,9 @@ impl Karpenter {
             &HelmChartNamespaces::KubeSystem.to_string(),
             None,
         ) {
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(*e),
-            ));
+            kubernetes
+                .logger()
+                .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
         }
 
         Ok(())
@@ -208,10 +207,9 @@ impl Karpenter {
             Some(nodes_drain_timeout),
         ) {
             // this error is not blocking because it will be the case if some PDB prevent the nodes to be stopped
-            kubernetes.logger().log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::new_from_engine_error(*e),
-            ));
+            kubernetes
+                .logger()
+                .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
         }
 
         // remove finalizer of the remaining nodes
@@ -223,7 +221,7 @@ impl Karpenter {
             .await?;
 
         let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
-            path: Pointer::new(["metadata", "finalizers"]),
+            path: Pointer::from_static("/metadata/finalizers").to_buf(),
         })];
 
         for node in nodes {
@@ -285,7 +283,6 @@ impl Karpenter {
 
         let karpenter_configuration_chart = Self::get_karpenter_configuration_chart(
             kubernetes,
-            cloud_provider,
             terraform_output,
             cluster_long_id,
             event_details,
@@ -308,7 +305,6 @@ impl Karpenter {
 
     fn get_karpenter_configuration_chart(
         kubernetes: &EKS,
-        cloud_provider: &dyn CloudProvider,
         terraform_output: &AwsEksQoveryTerraformOutput,
         cluster_long_id: uuid::Uuid,
         event_details: &EventDetails,
@@ -321,8 +317,6 @@ impl Karpenter {
             ))
         })?;
 
-        let organization_id = cloud_provider.organization_id().to_string();
-        let organization_long_id = cloud_provider.organization_long_id();
         let cluster_id = kubernetes.short_id().to_string();
         let region = AwsRegion::from_str(kubernetes.region()).map_err(|_e| {
             EngineError::new_unsupported_region(event_details.clone(), kubernetes.region().to_string(), None)
@@ -337,10 +331,10 @@ impl Karpenter {
             terraform_output.cluster_security_group_id.clone(),
             &cluster_id,
             cluster_long_id,
-            &organization_id,
-            organization_long_id,
+            kubernetes.context.organization_short_id(),
+            *kubernetes.context.organization_long_id(),
             region.to_cloud_provider_format(),
-            Some(karpenter_parameters.clone()),
+            karpenter_parameters,
             options.user_provided_network.as_ref(),
             kubernetes.advanced_settings().pleco_resources_ttl,
         )

@@ -4,7 +4,7 @@ use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_infra_config;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
 };
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
@@ -13,8 +13,8 @@ use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
@@ -33,7 +33,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use tracing::{span, warn, Level};
+use tracing::{Level, span, warn};
 use url::Url;
 use uuid::Uuid;
 // Note: All those tests relies on a test cluster running on Scaleway infrastructure.
@@ -696,11 +696,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -1902,11 +1898,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");
@@ -2507,6 +2499,7 @@ fn build_and_deploy_job_on_scw_kapsule() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2626,6 +2619,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
                 git_credentials: None,
                 branch: "main".to_string(),
                 dockerfile_content: None,
+                docker_target_build_stage: None,
             },
             max_nb_restart: 2,
             max_duration_in_sec: 300,
@@ -2690,11 +2684,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         .short()
         .to_string();
         let config_maps = kubectl_get_secret(
-            infra_ctx
-                .mk_kube_client()
-                .expect("kube client is not set")
-                .client()
-                .clone(),
+            infra_ctx.mk_kube_client().expect("kube client is not set").client(),
             format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
         )
         .expect("unable to find secret for selector");

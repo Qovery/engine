@@ -9,6 +9,7 @@ use crate::environment::models::database::DatabaseService;
 use crate::environment::models::helm_chart::HelmChartService;
 use crate::environment::models::job::JobService;
 use crate::environment::models::router::RouterService;
+use crate::environment::models::terraform_service::TerraformServiceTrait;
 use crate::utilities::to_short_id;
 use uuid::Uuid;
 
@@ -31,6 +32,7 @@ pub struct Environment {
     pub databases: Vec<Box<dyn DatabaseService>>,
     pub jobs: Vec<Box<dyn JobService>>,
     pub helm_charts: Vec<Box<dyn HelmChartService>>,
+    pub terraform_services: Vec<Box<dyn TerraformServiceTrait>>,
 }
 
 impl Environment {
@@ -50,6 +52,7 @@ impl Environment {
         databases: Vec<Box<dyn DatabaseService>>,
         jobs: Vec<Box<dyn JobService>>,
         helm_charts: Vec<Box<dyn HelmChartService>>,
+        terraform_services: Vec<Box<dyn TerraformServiceTrait>>,
     ) -> Self {
         let project_id = to_short_id(&project_long_id);
         let env_id = to_short_id(&long_id);
@@ -77,6 +80,7 @@ impl Environment {
             databases,
             jobs,
             helm_charts,
+            terraform_services,
         }
     }
 

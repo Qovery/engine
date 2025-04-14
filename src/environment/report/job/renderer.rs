@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use crate::environment::report::job::reporter::{JobDeploymentReport, JobType};
 use crate::environment::report::utils::{
-    get_tera_instance, to_job_render_context, to_pods_render_context_by_version, JobRenderContext, PodsRenderContext,
+    JobRenderContext, PodsRenderContext, get_tera_instance, to_job_render_context, to_pods_render_context_by_version,
 };
 use crate::utilities::to_short_id;
 
@@ -82,8 +82,8 @@ mod test {
     use uuid::Uuid;
 
     use crate::environment::report::utils::{
-        exit_code_to_msg, fmt_event_type, DeploymentState, EventRenderContext, PodRenderContext, QContainerState,
-        QContainerStateTerminated,
+        DeploymentState, EventRenderContext, PodRenderContext, QContainerState, QContainerStateTerminated,
+        exit_code_to_msg, fmt_event_type,
     };
     use crate::infrastructure::models::cloud_provider::service::Action;
     use crate::utilities::to_short_id;

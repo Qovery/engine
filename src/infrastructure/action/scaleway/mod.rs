@@ -1,21 +1,21 @@
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
+use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::scaleway::cluster_create::create_kapsule_cluster;
 use crate::infrastructure::action::scaleway::cluster_delete::delete_kapsule_cluster;
 use crate::infrastructure::action::scaleway::cluster_pause::pause_kapsule_cluster;
 use crate::infrastructure::action::scaleway::cluster_upgrade::upgrade_kapsule_cluster;
-use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
-use crate::infrastructure::models::kubernetes::{send_progress_on_long_task, KubernetesUpgradeStatus};
+use crate::infrastructure::models::kubernetes::{KubernetesUpgradeStatus, send_progress_on_long_task};
 use serde_derive::{Deserialize, Serialize};
 
 mod cluster_create;
 mod cluster_delete;
 mod cluster_pause;
 mod cluster_upgrade;
-mod helm_charts;
+pub(crate) mod helm_charts;
 mod nodegroup;
 mod tera_context;
 

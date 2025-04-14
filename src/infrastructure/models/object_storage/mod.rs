@@ -1,21 +1,23 @@
+use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::scaleway::ScwZone;
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
+use crate::services::azure::blob_storage_regions::AzureStorageRegion;
+use crate::services::gcp::object_storage_regions::GcpStorageRegion;
+use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
+use strum_macros::EnumIter;
 
-use crate::environment::models::scaleway::ScwZone;
-use crate::environment::models::ToCloudProviderFormat;
-use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
-use crate::services::gcp::object_storage_regions::GcpStorageRegion;
-use enum_dispatch::enum_dispatch;
-
+pub mod azure_object_storage;
 pub mod errors;
 pub mod google_object_storage;
 pub mod s3;
 pub mod scaleway_object_storage;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, EnumIter, PartialEq)]
 pub enum BucketDeleteStrategy {
     HardDelete,
     Empty,
@@ -25,6 +27,7 @@ pub enum BucketDeleteStrategy {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BucketRegion {
     AwsRegion(AwsRegion),
+    AzureRegion(AzureStorageRegion),
     ScwRegion(ScwZone),
     GcpRegion(GcpStorageRegion),
 }
@@ -49,9 +52,16 @@ pub trait ObjectStorage {
         bucket_name: &str,
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
     ) -> Result<Bucket, ObjectStorageError>;
-    fn update_bucket(&self, bucket_name: &str, bucket_versioning_activated: bool)
-        -> Result<Bucket, ObjectStorageError>;
+    fn update_bucket(
+        &self,
+        bucket_name: &str,
+        bucket_ttl: Option<Duration>,
+        bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
+        bucket_labels: Option<HashMap<String, String>>,
+    ) -> Result<Bucket, ObjectStorageError>;
     fn get_bucket(&self, bucket_name: &str) -> Result<Bucket, ObjectStorageError>;
     fn delete_bucket(
         &self,
@@ -77,6 +87,7 @@ pub enum Kind {
     Spaces,
     ScalewayOs,
     GcpOs,
+    AzureOs,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -84,6 +95,7 @@ pub struct Bucket {
     pub name: String,
     pub ttl: Option<Duration>,
     pub versioning_activated: bool,
+    pub logging_activated: bool,
     pub location: BucketRegion,
     pub labels: Option<HashMap<String, String>>,
 }
@@ -93,6 +105,7 @@ impl Bucket {
         name: String,
         ttl: Option<Duration>,
         versioning_activated: bool,
+        logging_activated: bool,
         location: BucketRegion,
         labels: Option<HashMap<String, String>>,
     ) -> Self {
@@ -100,9 +113,14 @@ impl Bucket {
             name,
             ttl,
             versioning_activated,
+            logging_activated,
             location,
             labels,
         }
+    }
+
+    pub fn generate_logging_bucket_name_for_bucket(bucket_name: &str) -> String {
+        format!("{}-log", bucket_name)
     }
 }
 

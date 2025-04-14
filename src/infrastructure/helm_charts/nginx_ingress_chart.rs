@@ -1,3 +1,6 @@
+use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{NaiveDate, NaiveTime};
+use itertools::Itertools;
 use std::fmt::Display;
 use std::sync::Arc;
 use strum_macros::EnumIter;
@@ -16,7 +19,13 @@ use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use reqwest::StatusCode;
 use tera::{Context, Tera};
+
+pub const NGINX_ADMISSION_CONTROLLER_STARTING_DATE: NaiveDateTime = NaiveDateTime::new(
+    NaiveDate::from_ymd_opt(2024, 2, 1).expect("Invalid date on NGINX_ADMISSION_CONTROLLER_STARTING_DATE"),
+    NaiveTime::from_hms_opt(0, 0, 0).expect("Invalid time on NGINX_ADMISSION_CONTROLLER_STARTING_DATE"),
+);
 
 #[derive(Clone)]
 pub enum LogFormat {
@@ -83,6 +92,18 @@ impl NginxServerSnippet {
     }
 }
 
+pub struct NginxLimitRequestStatusCode(StatusCode);
+
+impl NginxLimitRequestStatusCode {
+    pub fn new(status_code: StatusCode) -> Self {
+        NginxLimitRequestStatusCode(status_code)
+    }
+
+    pub fn as_u16(&self) -> u16 {
+        self.0.as_u16()
+    }
+}
+
 pub struct NginxIngressChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -108,6 +129,13 @@ pub struct NginxIngressChart {
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
     http_snippet: Option<NginxHttpSnippet>,
+    server_snippet: Option<NginxServerSnippet>,
+    limit_request_status_code: Option<NginxLimitRequestStatusCode>,
+    nginx_controller_custom_http_errors: Option<String>,
+    nginx_default_backend_enabled: Option<bool>,
+    nginx_default_backend_image_repository: Option<String>,
+    nginx_default_backend_image_tag: Option<String>,
+    enable_admission_controller: bool,
 }
 
 impl NginxIngressChart {
@@ -124,6 +152,7 @@ impl NginxIngressChart {
         cluster_long_id: String,
         cluster_short_id: String,
         kubernetes_kind: KubernetesKind,
+        created_cluster_date: DateTime<Utc>,
         nginx_hpa_minimum_replicas: Option<u32>,
         nginx_hpa_maximum_replicas: Option<u32>,
         nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
@@ -135,6 +164,12 @@ impl NginxIngressChart {
         log_format_escaping: LogFormatEscaping,
         is_alb_enabled: bool,
         http_snippet: Option<NginxHttpSnippet>,
+        server_snippet: Option<NginxServerSnippet>,
+        limit_request_status_code: Option<NginxLimitRequestStatusCode>,
+        nginx_controller_custom_http_errors: Option<String>,
+        nginx_default_backend_enabled: Option<bool>,
+        nginx_default_backend_image_repository: Option<String>,
+        nginx_default_backend_image_tag: Option<String>,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -185,6 +220,13 @@ impl NginxIngressChart {
             log_format_escaping,
             is_alb_enabled,
             http_snippet,
+            server_snippet,
+            limit_request_status_code,
+            nginx_controller_custom_http_errors,
+            nginx_default_backend_enabled,
+            nginx_default_backend_image_repository,
+            nginx_default_backend_image_tag,
+            enable_admission_controller: Self::enable_admission_controller(&created_cluster_date),
         }
     }
 
@@ -195,6 +237,15 @@ impl NginxIngressChart {
     // for history reasons where nginx-ingress has changed to ingress-nginx
     pub fn chart_old_name() -> String {
         "nginx-ingress".to_string()
+    }
+
+    pub fn enable_admission_controller(created_cluster_date: &DateTime<Utc>) -> bool {
+        // admission controller should not be enabled for clusters created before this date
+        // to avoid breaking changes during application deployments
+        let start_date_to_enable_admission_controller =
+            DateTime::<Utc>::from_naive_utc_and_offset(NGINX_ADMISSION_CONTROLLER_STARTING_DATE, Utc);
+
+        *created_cluster_date >= start_date_to_enable_admission_controller
     }
 }
 
@@ -273,6 +324,10 @@ defaultBackend:
                 key: "controller.allowSnippetAnnotations".to_string(),
                 value: true.to_string(),
             },
+            ChartSetValue {
+                key: "controller.admissionWebhooks.enabled".to_string(),
+                value: self.enable_admission_controller.to_string(),
+            },
             // enable metrics for customers who want to manage it by their own
             ChartSetValue {
                 key: "controller.metrics.enabled".to_string(),
@@ -318,9 +373,21 @@ defaultBackend:
                 value: value.to_string(),
             })
         }
+        if let Some(value) = &self.limit_request_status_code {
+            chart_set_values_string.push(ChartSetValue {
+                key: "controller.config.limit-req-status-code".to_string(),
+                value: value.as_u16().to_string(),
+            })
+        }
         if let Some(value) = &self.http_snippet {
             chart_set_values_string.push(ChartSetValue {
                 key: "controller.config.http-snippet".to_string(),
+                value: value.get_snippet_value().to_string(),
+            })
+        }
+        if let Some(value) = &self.server_snippet {
+            chart_set_values_string.push(ChartSetValue {
+                key: "controller.config.server-snippet".to_string(),
                 value: value.get_snippet_value().to_string(),
             })
         }
@@ -338,6 +405,45 @@ defaultBackend:
                 });
             }
             LogFormatEscaping::Default => {}
+        }
+
+        if let Some(nginx_default_backend_enabled) = self.nginx_default_backend_enabled {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.enabled".to_string(),
+                value: nginx_default_backend_enabled.to_string(),
+            });
+
+            if self.nginx_default_backend_image_repository.is_none() && nginx_default_backend_enabled {
+                // the default image will be used and this image support only amd arch
+                chart_set_values.push(ChartSetValue {
+                    key: "defaultBackend.nodeSelector.kubernetes\\.io/arch".to_string(),
+                    value: "amd64".to_string(),
+                });
+            }
+        }
+
+        if let Some(nginx_controller_custom_http_errors) = &self.nginx_controller_custom_http_errors {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.config.custom-http-errors".to_string(),
+                value: nginx_controller_custom_http_errors
+                    .split(",")
+                    .map(|s| s.trim())
+                    .join("\\,"),
+            });
+        }
+
+        if let Some(nginx_default_backend_image_repository) = &self.nginx_default_backend_image_repository {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.image.repository".to_string(),
+                value: nginx_default_backend_image_repository.clone(),
+            });
+        }
+
+        if let Some(nginx_default_backend_image_tag) = &self.nginx_default_backend_image_tag {
+            chart_set_values.push(ChartSetValue {
+                key: "defaultBackend.image.tag".to_string(),
+                value: nginx_default_backend_image_tag.clone(),
+            });
         }
 
         // custom cloud provider configuration
@@ -385,6 +491,10 @@ defaultBackend:
                                 value: "ip".to_string(),
                             });
                             chart_set_values.push(ChartSetValue {
+                                key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-cross-zone-load-balancing-enabled".to_string(),
+                                value: "true".to_string(),
+                            });
+                            chart_set_values.push(ChartSetValue {
                                 key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-target-group-attributes".to_string(),
                                 value: "target_health_state\\.unhealthy\\.connection_termination\\.enabled=false,target_health_state\\.unhealthy\\.draining_interval_seconds=300".to_string(),
                             });
@@ -422,12 +532,13 @@ defaultBackend:
                             return Err(HelmChartError::RenderingError {
                                 chart_name: NginxIngressChart::chart_name(),
                                 msg: "scw-loadbalancer-type is required but information is missing".to_string(),
-                            })
+                            });
                         }
                     },
                 });
             }
             Kind::Gcp => {}
+            Kind::Azure => {}
             Kind::OnPremise => {}
         }
         // external dns
@@ -493,17 +604,19 @@ impl ChartInstallationChecker for NginxIngressChartChecker {
 mod tests {
     use crate::environment::models::domain::Domain;
     use crate::helm::HelmChartNamespaces;
-    use crate::infrastructure::helm_charts::nginx_ingress_chart::LogFormatEscaping;
-    use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::infrastructure::helm_charts::HelmChartResourcesConstraintType;
     use crate::infrastructure::helm_charts::HelmChartType;
     use crate::infrastructure::helm_charts::ToCommonHelmChart;
+    use crate::infrastructure::helm_charts::nginx_ingress_chart::LogFormatEscaping;
+    use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
     use crate::infrastructure::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::io_models::models::CustomerHelmChartsOverride;
+    use chrono::TimeZone;
+    use chrono::Utc;
     use std::env;
     use std::sync::Arc;
     use strum::IntoEnumIterator;
@@ -538,6 +651,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -548,6 +662,12 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
         );
 
@@ -586,6 +706,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -596,6 +717,12 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
         );
 
@@ -636,6 +763,7 @@ mod tests {
                 "10000000-0000-4000-8000-000000000000".to_string(),
                 "z10000000".to_string(),
                 KubernetesKind::Eks,
+                Utc::now(),
                 None,
                 None,
                 None,
@@ -647,6 +775,12 @@ mod tests {
                 log_format_escaping.clone(),
                 false,
                 None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             );
 
             // execute:
@@ -655,12 +789,14 @@ mod tests {
             // verify:
             match &log_format_escaping {
                 LogFormatEscaping::Default => {
-                    assert!(!common_chart
-                        .chart_info
-                        .values
-                        .iter()
-                        .any(|x| x.key == "controller.config.log-format-escaping-none"
-                            || x.key == "controller.config.log-format-escaping-json"));
+                    assert!(
+                        !common_chart
+                            .chart_info
+                            .values
+                            .iter()
+                            .any(|x| x.key == "controller.config.log-format-escaping-none"
+                                || x.key == "controller.config.log-format-escaping-json")
+                    );
                 }
                 _ => {
                     assert!(common_chart.chart_info.values.iter().any(|x| x.key
@@ -690,6 +826,7 @@ mod tests {
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
             KubernetesKind::Eks,
+            Utc::now(),
             Some(1),
             Some(10),
             Some(50),
@@ -700,6 +837,12 @@ mod tests {
             true,
             LogFormatEscaping::Default,
             false,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -718,6 +861,20 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
+    }
+
+    #[test]
+    fn check_nginx_admission_controller_activation() {
+        // should allow admission controller
+        let now = NginxIngressChart::enable_admission_controller(&Utc::now());
+        assert!(now);
+        // should deny admission controller
+        let old_date = NginxIngressChart::enable_admission_controller(&Utc.ymd(2023, 1, 1).and_hms(0, 0, 0));
+        assert!(!old_date);
     }
 }

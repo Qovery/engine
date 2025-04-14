@@ -2,7 +2,7 @@ use crate::helpers::aws::aws_infra_config;
 use crate::helpers::database::StorageSize::NormalSize;
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, generate_id, get_svc_name, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, generate_id, get_svc_name, logger, metrics_registry,
 };
 use chrono::Utc;
 use qovery_engine::environment::models::aws::AwsStorageType;
@@ -27,7 +27,6 @@ mod database;
 mod jobs;
 
 /// This mod holds kubernetes tests for features not specific to any cloud providers.
-
 pub enum TestEnvOption {
     WithDB,
     WithContainer,
@@ -74,6 +73,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };
@@ -101,6 +101,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 ram_limit_in_mib: 512, // MySQL requires at least 512Mo in order to boot
                 disk_size_in_gib: NormalSize.size(),
                 database_disk_type: AwsStorageType::GP2.to_k8s_storage_class(),
+                database_disk_iops: Some(AwsStorageType::GP2.get_disk_iops().value()),
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
@@ -291,6 +292,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 labels_group_ids: btreeset! {},
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             };
             environment.applications = vec![app];
         }

@@ -230,6 +230,14 @@ pub enum KubernetesCpuResourceUnit {
     MilliCpu(u32),
 }
 
+impl From<KubernetesCpuResourceUnit> for u32 {
+    fn from(value: KubernetesCpuResourceUnit) -> u32 {
+        match value {
+            KubernetesCpuResourceUnit::MilliCpu(v) => v,
+        }
+    }
+}
+
 impl FromStr for KubernetesCpuResourceUnit {
     type Err = String;
 
@@ -321,7 +329,7 @@ impl FromStr for KubernetesMemoryResourceUnit {
             _ => {
                 return Err(format!(
                     "Unsupported memory unit found: '{unit}' (only Mi,Gi,M,G are supported)"
-                ))
+                ));
             }
         };
 

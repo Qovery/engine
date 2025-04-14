@@ -14,10 +14,11 @@ use crate::runtime::block_on;
 use rusoto_core::{Client, HttpClient, Region as RusotoRegion};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
-    CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest, DeleteObjectRequest,
-    DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketTaggingRequest, GetBucketVersioningRequest,
-    GetObjectRequest, HeadBucketRequest, ListObjectsRequest, ObjectIdentifier, PutBucketTaggingRequest,
-    PutBucketVersioningRequest, PutObjectRequest, S3Client, StreamingBody, Tag, Tagging, S3,
+    BucketLoggingStatus, CreateBucketConfiguration, CreateBucketRequest, Delete, DeleteBucketRequest,
+    DeleteObjectRequest, DeleteObjectsRequest, GetBucketLifecycleRequest, GetBucketLoggingRequest,
+    GetBucketTaggingRequest, GetBucketVersioningRequest, GetObjectRequest, HeadBucketRequest, ListObjectsRequest,
+    LoggingEnabled, ObjectIdentifier, PutBucketLoggingRequest, PutBucketTaggingRequest, PutBucketVersioningRequest,
+    PutObjectRequest, S3, S3Client, StreamingBody, Tag, Tagging,
 };
 
 // doc: https://www.scaleway.com/en/docs/object-storage-feature/
@@ -46,16 +47,13 @@ impl ScalewayOS {
             endpoint: self.get_endpoint_url_for_region(),
         };
 
-        let client = Client::new_with(self.get_credentials(), HttpClient::new().unwrap());
+        let creds = StaticProvider::new(self.access_key.clone(), self.secret_token.clone(), None, None);
+        let client = Client::new_with(creds, HttpClient::new().unwrap());
 
         S3Client::new_with_client(client, region)
     }
 
-    fn get_credentials(&self) -> StaticProvider {
-        StaticProvider::new(self.access_key.clone(), self.secret_token.clone(), None, None)
-    }
-
-    fn get_endpoint_url_for_region(&self) -> String {
+    pub fn get_endpoint_url_for_region(&self) -> String {
         format!("https://s3.{}.scw.cloud", self.zone.region())
     }
 
@@ -159,6 +157,7 @@ impl ObjectStorage for ScalewayOS {
         bucket_name: &str,
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
+        bucket_logging_activated: bool,
     ) -> Result<Bucket, ObjectStorageError> {
         // TODO(benjamin): switch to `scaleway-api-rs` once object storage will be supported (https://github.com/Qovery/scaleway-api-rs/issues/12).
         ScalewayOS::is_bucket_name_valid(bucket_name)?;
@@ -225,13 +224,32 @@ impl ObjectStorage for ScalewayOS {
             }
         }
 
+        if bucket_logging_activated {
+            if let Err(_e) = block_on(s3_client.put_bucket_logging(PutBucketLoggingRequest {
+                bucket: bucket_name.to_string(),
+                bucket_logging_status: BucketLoggingStatus {
+                    logging_enabled: Some(LoggingEnabled {
+                        target_bucket: bucket_name.to_string(),
+                        target_prefix: "logs/".to_string(),
+                        target_grants: None,
+                    }),
+                },
+                ..Default::default()
+            })) {
+                // Not blocking if it fails
+            }
+        }
+
         self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
     }
 
     fn update_bucket(
         &self,
         _bucket_name: &str,
+        _bucket_ttl: Option<Duration>,
         _bucket_versioning_activated: bool,
+        _bucket_logging_activated: bool,
+        _bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageError> {
         // TODO(benjaminch): to be implemented
         todo!("update_bucket for SCW object storage is not implemented")
@@ -276,6 +294,19 @@ impl ObjectStorage for ScalewayOS {
             }
         }
 
+        // Get logging
+        let mut logging_activated = false;
+        if let Ok(logging) = block_on(self.get_s3_client().get_bucket_logging(GetBucketLoggingRequest {
+            bucket: bucket_name.to_string(),
+            expected_bucket_owner: None,
+        })) {
+            if let Some(logging_enabled) = logging.logging_enabled {
+                if logging_enabled.target_bucket == bucket_name {
+                    logging_activated = true;
+                }
+            }
+        }
+
         // Get labels
         let mut labels: Option<HashMap<String, String>> = None;
         if let Ok(tagging) = block_on(self.get_s3_client().get_bucket_tagging(GetBucketTaggingRequest {
@@ -289,6 +320,7 @@ impl ObjectStorage for ScalewayOS {
             name: bucket_name.to_string(),
             ttl,
             versioning_activated,
+            logging_activated,
             location: BucketRegion::ScwRegion(self.zone),
             labels,
         })
@@ -326,7 +358,7 @@ impl ObjectStorage for ScalewayOS {
     }
 
     fn delete_bucket_non_blocking(&self, _bucket_name: &str) -> Result<(), ObjectStorageError> {
-        todo!("delete_bucket for SCW is not implemented")
+        todo!("delete_bucket_non_blocking for SCW is not implemented")
     }
 
     fn get_object(&self, bucket_name: &str, object_key: &str) -> Result<BucketObject, ObjectStorageError> {
@@ -348,7 +380,7 @@ impl ObjectStorage for ScalewayOS {
                             bucket_name: bucket_name.to_string(),
                             object_name: object_key.to_string(),
                             raw_error_message: "Cannot get response body".to_string(),
-                        })
+                        });
                     }
                 };
                 let mut body = Vec::new();

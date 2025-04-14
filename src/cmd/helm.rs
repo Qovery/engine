@@ -75,6 +75,9 @@ pub enum HelmError {
 
     #[error("Cannot get credentials error.")]
     CannotGetCredentials(String),
+
+    #[error("Unsupported Prometheus object bucket configuration. Qovery Engine does not support it.")]
+    UnsupportedPrometheusObjectBucketConfiguration,
 }
 
 #[derive(Debug, Clone)]
@@ -1693,7 +1696,7 @@ impl Drop for HelmRegistry<'_> {
 #[cfg(test)]
 mod tests {
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
-    use crate::cmd::helm::{helm_exec_with_output, Helm, HelmError};
+    use crate::cmd::helm::{Helm, HelmError, helm_exec_with_output};
     use crate::environment::action::deploy_helm::default_helm_timeout;
     use crate::helm::{ChartInfo, ChartSetValue};
     use crate::io_models::container::Registry::GenericCr;
@@ -1761,7 +1764,7 @@ mod tests {
             &mut |_line| {},
             &CommandKiller::never(),
         );
-        assert!(output.contains("Version:\"v3.15.2\""));
+        assert!(output.contains("Version:\"v3.17.0\""));
     }
 
     #[test]
@@ -1838,10 +1841,12 @@ mod tests {
         drop(writer);
 
         // verify:
-        assert!(helm_diffs_output_dir
-            .path()
-            .join(format!("{}.diff", release_name))
-            .exists());
+        assert!(
+            helm_diffs_output_dir
+                .path()
+                .join(format!("{}.diff", release_name))
+                .exists()
+        );
         assert!(matches!(ret, Ok(())));
     }
 

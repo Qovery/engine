@@ -1,12 +1,12 @@
 use crate::errors::CommandError;
 use crate::io_models::models::InvalidPVCStorage;
+use k8s_openapi::NamespaceResourceScope;
 use k8s_openapi::api::apps::v1::StatefulSet;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use k8s_openapi::NamespaceResourceScope;
 use kube::api::{DeleteParams, ListParams, ObjectList, Patch, PatchParams, PostParams};
 use kube::{Api, Resource};
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
 pub enum KubeDeleteMode {

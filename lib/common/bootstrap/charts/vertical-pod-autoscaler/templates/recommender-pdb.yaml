@@ -9,5 +9,5 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: recommender
-      app.kubernetes.io/name: {{ template "vpa.fullname" . }}
+      app.kubernetes.io/name: {{ template "vpa.name" . }}
 {{- end }}

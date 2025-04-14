@@ -2,8 +2,8 @@ use crate::environment::report::application::renderer::render_app_deployment_rep
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
-use crate::infrastructure::models::cloud_provider::service::{Action, ServiceType};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::service::{Action, ServiceType};
 use std::collections::HashSet;
 
 use crate::environment::models::application::ApplicationService;
@@ -12,11 +12,11 @@ use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use k8s_openapi::api::core::v1::{Event, PersistentVolumeClaim, Pod, Service};
-use kube::api::ListParams;
 use kube::Api;
+use kube::api::ListParams;
 use std::sync::Arc;
 
-use crate::environment::report::recap_reporter::{render_recap_events, RecapReporterDeploymentState};
+use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use std::time::Instant;
 use uuid::Uuid;
@@ -45,7 +45,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             service_type: ServiceType::Application,
             tag: app.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: app.kube_label_selector(),
             logger: deployment_target.env_logger(app, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
@@ -64,7 +64,7 @@ impl<T> ApplicationDeploymentReporter<T> {
             service_type: ServiceType::Container,
             tag: container.version(),
             namespace: deployment_target.environment.namespace().to_string(),
-            kube_client: deployment_target.kube.clone(),
+            kube_client: deployment_target.kube.client(),
             selector: container.kube_label_selector(),
             logger: deployment_target.env_logger(container, action.to_environment_step()),
             metrics_registry: deployment_target.metrics_registry.clone(),
@@ -208,6 +208,7 @@ impl<T: Send + Sync> DeploymentReporter for ApplicationDeploymentReporter<T> {
             }
             Err(err) => err,
         };
+        warn!("Deployment failed: {error:?}");
 
         // Special case for app, as if helm timeout this is most likely an issue coming from the user
         if error.tag().is_cancel() {

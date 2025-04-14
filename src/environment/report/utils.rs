@@ -238,7 +238,7 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
             )
         });
 
-    return JobRenderContext {
+    JobRenderContext {
         name: job_name.to_string(),
         state,
         message,
@@ -246,7 +246,7 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
             .into_iter()
             .flat_map(to_event_context)
             .collect(),
-    };
+    }
 }
 
 pub fn to_pods_render_context_by_state(
@@ -479,8 +479,8 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
 
 pub fn exit_code_to_msg(exit_code: i32) -> Option<&'static str> {
     match exit_code {
-        0 =>   Some("the container exited successfully"),
-        1 =>   Some("the container exited in an user/code error"),
+        0 => Some("the container exited successfully"),
+        1 => Some("the container exited in an user/code error"),
         125 => Some("the docker run command did not execute successfully. Check your entrypoint/command and arguments"),
         126 => Some("a command specified in the image specification could not be invoked. Does the binary exist?"),
         127 => Some("file or directory specified in the image specification was not found"),
@@ -488,9 +488,13 @@ pub fn exit_code_to_msg(exit_code: i32) -> Option<&'static str> {
         134 => Some("the container aborted itself using the abort() function (SIGABRT)"),
         135 => Some("the container was killed due to an invalid memory access (SIGBUS)"),
         137 => Some("the container was immediately terminated by the operating system via SIGKILL signal"),
-        139 => Some("the container attempted to access memory that was not assigned to it and was terminated (SIGSEGV)"),
+        139 => {
+            Some("the container attempted to access memory that was not assigned to it and was terminated (SIGSEGV)")
+        }
         143 => Some("the container received warning that it was about to be terminated, then terminated (SIGTERM)"),
-        255 => Some("the container exited, returning an exit code outside the acceptable range, meaning the cause of the error is not known"),
+        255 => Some(
+            "the container exited, returning an exit code outside the acceptable range, meaning the cause of the error is not known",
+        ),
         _ => None,
     }
 }
@@ -576,8 +580,12 @@ impl QPodExt for Pod {
 
         let to_error_message = |reason: &'a str| -> &'a str {
             match reason {
-                "OOMKilled" => "OOM killed, pod have been killed due to lack of/using too much memory resources. Investigate the leak or increase memory resources.",
-                "CrashLoopBackOff" => "Crash loop, pod is restarting too frequently. It might be due to either the crash of your application at startup (check the Live logs) or a wrong configuration of Liveness/Readiness probes (check the application settings)",
+                "OOMKilled" => {
+                    "OOM killed, pod have been killed due to lack of/using too much memory resources. Investigate the leak or increase memory resources."
+                }
+                "CrashLoopBackOff" => {
+                    "Crash loop, pod is restarting too frequently. It might be due to either the crash of your application at startup (check the Live logs) or a wrong configuration of Liveness/Readiness probes (check the application settings)"
+                }
                 "ErrImagePull" => "Cannot pull the image for your container",
                 "ImagePullBackOff" => "Cannot pull the image for your container",
                 "Error" => "An undefined error occurred. Look into your applications logs and message below",
@@ -589,7 +597,7 @@ impl QPodExt for Pod {
         // if there is something fishy or not, not really friendly...
         match self.status.as_ref() {
             Some(PodStatus {
-                container_statuses: Some(ref statuses),
+                container_statuses: Some(statuses),
                 ..
             }) => {
                 for status in statuses {

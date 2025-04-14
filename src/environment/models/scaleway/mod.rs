@@ -3,9 +3,11 @@ mod database_utils;
 mod job;
 mod router;
 
+mod terraform_service;
+
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::types::SCW;
-use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::object_storage::StorageRegion;

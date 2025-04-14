@@ -1,6 +1,6 @@
 use crate::helpers::utilities::{generate_id, generate_password, get_svc_name};
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
@@ -110,12 +110,14 @@ pub fn working_environment(
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: git_url_override.is_some(),
+            docker_target_build_stage: None,
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };
@@ -273,6 +275,7 @@ pub fn environment_2_app_2_routers_1_psql(
             disk_size_in_gib: 10,
             database_instance_type: database_instance_type.map(|i| i.to_cloud_provider_format()),
             database_disk_type: database_disk_type.to_string(),
+            database_disk_iops: None,
             encrypt_disk: true,
             activate_high_availability: false,
             activate_backups: false,
@@ -349,6 +352,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 labels_group_ids: btreeset! {},
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             },
             Application {
                 long_id: application_id2,
@@ -417,6 +421,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 labels_group_ids: btreeset! {},
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             },
         ],
         containers: vec![],
@@ -452,6 +457,7 @@ pub fn environment_2_app_2_routers_1_psql(
         max_parallel_build: 1,
         max_parallel_deploy: 1,
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -553,6 +559,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            docker_target_build_stage: None,
         }],
         containers: vec![],
         jobs: vec![],
@@ -571,6 +578,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         }],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -667,12 +675,14 @@ pub fn environment_only_http_server(
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            docker_target_build_stage: None,
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };

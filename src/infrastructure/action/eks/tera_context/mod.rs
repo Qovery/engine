@@ -2,12 +2,13 @@ use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, InfrastructureStep, Stage};
+use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::dns_provider::DnsProvider;
-use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::io_models::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
 use crate::string::terraform_list_format;
@@ -20,7 +21,7 @@ mod kube_proxy_addon;
 mod vpc_cni_addon;
 
 pub fn eks_tera_context(
-    kubernetes: &dyn Kubernetes,
+    kubernetes: &EKS,
     cloud_provider: &dyn CloudProvider,
     dns_provider: &dyn DnsProvider,
     zones: &[AwsZone],
@@ -32,13 +33,15 @@ pub fn eks_tera_context(
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<TeraContext, Box<EngineError>> {
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::LoadConfiguration));
+    let cloud_provider = cloud_provider.downcast_ref();
+    let cloud_provider = cloud_provider
+        .as_aws()
+        .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?;
     let mut context = TeraContext::new();
 
-    let (public_access_cidrs, endpoint_private_access) =
-        generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
+    let public_access_cidrs = generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
 
     context.insert("public_access_cidrs", &public_access_cidrs);
-    context.insert("endpoint_private_access", &endpoint_private_access);
 
     context.insert("user_provided_network", &false);
     if let Some(user_network_cfg) = &options.user_provided_network {
@@ -107,6 +110,13 @@ pub fn eks_tera_context(
         context.insert(
             "nginx_controller_http_snippet",
             &nginx_controller_http_snippet.to_model().get_snippet_value(),
+        );
+    }
+
+    if let Some(nginx_controller_server_snippet) = &kubernetes.advanced_settings().nginx_controller_server_snippet {
+        context.insert(
+            "nginx_controller_server_snippet",
+            &nginx_controller_server_snippet.to_model().get_snippet_value(),
         );
     }
 
@@ -210,9 +220,14 @@ pub fn eks_tera_context(
     let documentdb_cidr_subnet = options.documentdb_cidr_subnet.clone();
     let elasticache_cidr_subnet = options.elasticache_cidr_subnet.clone();
 
+    context.insert(
+        "object_storage_enable_logging",
+        &kubernetes.advanced_settings().object_storage_enable_logging,
+    );
+
     // Qovery
-    context.insert("organization_id", cloud_provider.organization_id());
-    context.insert("organization_long_id", &cloud_provider.organization_long_id().to_string());
+    context.insert("organization_id", kubernetes.context.organization_short_id());
+    context.insert("organization_long_id", &kubernetes.context.organization_long_id().to_string());
     context.insert("qovery_api_url", &qovery_api_url);
 
     context.insert("test_cluster", &kubernetes.context().is_test_cluster());
@@ -268,8 +283,9 @@ pub fn eks_tera_context(
     context.insert("enable_cluster_autoscaler", &true);
 
     // AWS
-    context.insert("aws_access_key", &cloud_provider.access_key_id());
-    context.insert("aws_secret_key", &cloud_provider.secret_access_key());
+    context.insert("aws_access_key", cloud_provider.aws_credentials().access_key_id());
+    context.insert("aws_secret_key", cloud_provider.aws_credentials().secret_access_key());
+    context.insert("aws_session_token", &cloud_provider.aws_credentials().session_token());
 
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
@@ -463,6 +479,10 @@ pub fn eks_tera_context(
         "aws_iam_user_mapper_sso_role_arn",
         &kubernetes.advanced_settings().aws_iam_user_mapper_sso_role_arn,
     );
+    context.insert(
+        "loki_log_retention_in_week",
+        &kubernetes.advanced_settings().loki_log_retention_in_week,
+    );
 
     // EKS Addons
     // CNI
@@ -509,16 +529,12 @@ pub fn eks_tera_context(
 fn generate_public_access_cidrs(
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
-) -> (Vec<String>, bool) {
-    let mut endpoint_private_access = false;
-
-    let cidrs = match (
+) -> Vec<String> {
+    match (
         advanced_settings.qovery_static_ip_mode.unwrap_or(false),
         qovery_allowed_public_access_cidrs,
     ) {
         (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
-            endpoint_private_access = true;
-
             match &advanced_settings.k8s_api_allowed_public_access_cidrs {
                 Some(k8s_api_allowed_public_access_cidrs) => [
                     qovery_allowed_public_access_cidrs.clone(),
@@ -529,9 +545,7 @@ fn generate_public_access_cidrs(
             }
         }
         _ => vec!["0.0.0.0/0".to_string()],
-    };
-
-    (cidrs, endpoint_private_access)
+    }
 }
 
 /// divide by 2 the total number of subnet to get the exact same number as private and public
@@ -565,11 +579,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = None;
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -581,11 +593,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = None;
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -597,11 +607,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -613,11 +621,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec![]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-        assert!(!endpoint_private_access);
     }
 
     #[test]
@@ -629,11 +635,9 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(cidrs, vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-        assert!(endpoint_private_access);
     }
 
     #[test]
@@ -645,8 +649,7 @@ mod tests {
         };
         let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
 
-        let (cidrs, endpoint_private_access) =
-            generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
 
         assert_eq!(
             cidrs,
@@ -656,6 +659,5 @@ mod tests {
                 "1.1.1.4/32".to_string()
             ]
         );
-        assert!(endpoint_private_access);
     }
 }

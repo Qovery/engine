@@ -1,18 +1,18 @@
 extern crate serde;
 extern crate serde_derive;
 
-use crate::helpers::common::{Cluster, ClusterDomain};
+use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
-    get_environment_test_kubernetes, TargetCluster, KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES,
+    KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
 };
-use crate::helpers::utilities::{build_platform_local_docker, FuncTestsSecrets};
-use qovery_engine::environment::models::aws::AwsStorageType;
+use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 use qovery_engine::environment::models::ToCloudProviderFormat;
+use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
+use qovery_engine::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
@@ -28,7 +28,7 @@ use tracing::error;
 use uuid::Uuid;
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_30 {
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_31 {
     prefix: None,
     patch: None,
     suffix: None,
@@ -43,17 +43,26 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
         || secrets.AWS_SECRET_ACCESS_KEY.is_none()
         || secrets.AWS_DEFAULT_REGION.is_none()
     {
-        error!("Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION envrionment variables are set");
+        error!(
+            "Please check your Vault connectivity (token/address) or AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/AWS_DEFAULT_REGION envrionment variables are set"
+        );
         std::process::exit(1)
     }
 
+    let credentials = AwsCredentials::new(
+        secrets.AWS_ACCESS_KEY_ID.expect("Unable to get access key"),
+        secrets.AWS_SECRET_ACCESS_KEY.expect("Unable to get secret key"),
+        secrets.AWS_SESSION_TOKEN,
+    );
+
+    let region =
+        rusoto_core::Region::from_str(&secrets.AWS_DEFAULT_REGION.expect("Unable to get default region")).unwrap();
     ECR::new(
         context.clone(),
         Uuid::new_v4(),
         "ea59qe62xaw3wjai",
-        secrets.AWS_ACCESS_KEY_ID.unwrap().as_str(),
-        secrets.AWS_SECRET_ACCESS_KEY.unwrap().as_str(),
-        secrets.AWS_DEFAULT_REGION.unwrap().as_str(),
+        credentials,
+        region,
         logger,
         hashmap! {},
     )
@@ -90,6 +99,7 @@ pub fn aws_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
+        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
     )
 }
 
@@ -108,6 +118,7 @@ impl Cluster<AWS, Options> for AWS {
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
+        node_manager: NodeManager,
     ) -> InfrastructureContext {
         // use ECR
         let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
@@ -132,6 +143,7 @@ impl Cluster<AWS, Options> for AWS {
             engine_location,
             StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
             kubeconfig,
+            node_manager,
         );
 
         InfrastructureContext::new(
@@ -146,7 +158,7 @@ impl Cluster<AWS, Options> for AWS {
         )
     }
 
-    fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<AWS> {
+    fn cloud_provider(_context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<AWS> {
         let secrets = FuncTestsSecrets::new();
         let aws_region = match localisation {
             "EuWest3" => {
@@ -159,22 +171,14 @@ impl Cluster<AWS, Options> for AWS {
             _ => panic!("Invalid cluster localisation {localisation}"),
         };
 
+        let credentials = AwsCredentials::new(
+            secrets.AWS_ACCESS_KEY_ID.expect("AWS_ACCESS_KEY_ID is not set"),
+            secrets.AWS_SECRET_ACCESS_KEY.expect("AWS_SECRET_ACCESS_KEY is not set"),
+            secrets.AWS_SESSION_TOKEN,
+        );
         Box::new(AWS::new(
-            context.clone(),
             Uuid::new_v4(),
-            secrets
-                .AWS_TEST_ORGANIZATION_ID
-                .as_ref()
-                .expect("AWS_TEST_ORGANIZATION_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_ACCESS_KEY_ID
-                .expect("AWS_ACCESS_KEY_ID is not set")
-                .as_str(),
-            secrets
-                .AWS_SECRET_ACCESS_KEY
-                .expect("AWS_SECRET_ACCESS_KEY is not set")
-                .as_str(),
+            credentials,
             aws_region.to_cloud_provider_format(),
             aws_region.get_zones_to_string(),
             kubernetes_kind,
@@ -290,6 +294,7 @@ impl Cluster<AWS, Options> for AWS {
             aws_addon_coredns_version_override: None,
             ec2_exposed_port: Some(9876),
             karpenter_parameters: None,
+            metrics_parameters: None,
         }
     }
 }

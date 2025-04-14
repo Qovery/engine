@@ -1,10 +1,10 @@
 use crate::helpers::aws::AWS_KUBERNETES_VERSION;
-use crate::helpers::common::{compute_test_cluster_endpoint, Cluster, ClusterDomain, Infrastructure};
+use crate::helpers::common::{Cluster, ClusterDomain, Infrastructure, NodeManager, compute_test_cluster_endpoint};
 use crate::helpers::kubernetes::{KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES};
 use crate::helpers::scaleway::SCW_KUBERNETES_VERSION;
 use crate::helpers::utilities::{
-    context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id, generate_password,
-    get_pvc, get_svc, get_svc_name, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, db_disk_type, db_infos, db_instance_type, engine_run_test, generate_id,
+    generate_password, get_pvc, get_svc, get_svc_name, init, logger, metrics_registry,
 };
 use chrono::Utc;
 use core::default::Default;
@@ -13,9 +13,9 @@ use core::option::Option::{None, Some};
 use core::result::Result::{Err, Ok};
 use qovery_engine::cmd::structs::SVCItem;
 use qovery_engine::environment::models::environment::Environment;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
-use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::engine_location::EngineLocation;
 
@@ -38,19 +38,22 @@ use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
+use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_LOCATION};
 use crate::helpers::gcp::GCP_KUBERNETES_VERSION;
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
+use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::types::VersionsNumber;
 use qovery_engine::errors::EngineError;
+use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
 use qovery_engine::infrastructure::models::kubernetes::gcp::Gke;
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 use std::sync::Arc;
-use tracing::{span, Level};
+use tracing::{Level, span};
 use uuid::Uuid;
 
 impl Infrastructure for EnvironmentRequest {
@@ -296,6 +299,7 @@ pub fn environment_3_apps_3_databases(
                 labels_group_ids: BTreeSet::new(),
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -364,6 +368,7 @@ pub fn environment_3_apps_3_databases(
                 labels_group_ids: BTreeSet::new(),
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             },
             Application {
                 long_id: Uuid::new_v4(),
@@ -434,6 +439,7 @@ pub fn environment_3_apps_3_databases(
                 labels_group_ids: BTreeSet::new(),
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
+                docker_target_build_stage: None,
             },
         ],
         containers: vec![],
@@ -460,6 +466,7 @@ pub fn environment_3_apps_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
+                database_disk_iops: None,
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
@@ -488,6 +495,7 @@ pub fn environment_3_apps_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
+                database_disk_iops: None,
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
@@ -516,6 +524,7 @@ pub fn environment_3_apps_3_databases(
                 disk_size_in_gib: 10,
                 database_instance_type: database_instance_type.as_ref().map(|i| i.to_cloud_provider_format()),
                 database_disk_type: database_disk_type.to_string(),
+                database_disk_iops: None,
                 encrypt_disk: true,
                 activate_high_availability: false,
                 activate_backups: false,
@@ -526,6 +535,7 @@ pub fn environment_3_apps_3_databases(
             },
         ],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -578,12 +588,14 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             labels_group_ids: BTreeSet::new(),
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            docker_target_build_stage: None,
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
         helms: vec![],
+        terraform_services: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -636,11 +648,13 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             labels_group_ids: BTreeSet::new(),
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            docker_target_build_stage: None,
         }],
         containers: vec![],
         jobs: vec![],
         routers: vec![],
         databases: vec![],
+        terraform_services: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
@@ -742,6 +756,7 @@ pub fn test_db(
         disk_size_in_gib: disk_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
+        database_disk_iops: None,
         encrypt_disk: true,
         activate_high_availability: false,
         activate_backups: false,
@@ -800,6 +815,7 @@ pub fn test_db(
     let ea_delete = environment_delete.clone();
 
     let kubernetes_version = match kubernetes_kind {
+        KubernetesKind::Aks | KubernetesKind::AksSelfManaged => AZURE_KUBERNETES_VERSION,
         KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
@@ -825,6 +841,23 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
+                ),
+                KubernetesKind::Aks | KubernetesKind::AksSelfManaged => Azure::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Aks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
                 ),
                 KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
@@ -840,6 +873,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
                 ),
                 KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => Gke::docker_cr_engine(
                     &context,
@@ -855,6 +889,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::QoverySide,
                     secrets.GCP_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
                 ),
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
@@ -945,6 +980,23 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
+                ),
+                KubernetesKind::Aks => Azure::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Aks,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    secrets.AZURE_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -960,6 +1012,7 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
                 ),
                 KubernetesKind::Gke => Gke::docker_cr_engine(
                     &context_for_delete,
@@ -975,8 +1028,10 @@ pub fn test_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.GCP_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
                 ),
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
@@ -1068,6 +1123,7 @@ pub fn test_pause_managed_db(
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
+        database_disk_iops: None,
         encrypt_disk: true,
         activate_high_availability: false,
         activate_backups: false,
@@ -1094,6 +1150,7 @@ pub fn test_pause_managed_db(
                 .to_string(),
             AWS_KUBERNETES_VERSION,
         ),
+        Kind::Azure => (AZURE_LOCATION.to_cloud_provider_format().to_string(), AZURE_KUBERNETES_VERSION),
         Kind::Scw => (
             secrets
                 .SCALEWAY_TEST_CLUSTER_REGION
@@ -1125,6 +1182,23 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
+                ),
+                KubernetesKind::Aks => Azure::docker_cr_engine(
+                    &context,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Aks,
+                    kubernetes_version.clone(),
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
@@ -1140,9 +1214,11 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                    NodeManager::Default,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
@@ -1226,6 +1302,23 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
+                ),
+                KubernetesKind::Aks => Azure::docker_cr_engine(
+                    &context_for_delete,
+                    logger.clone(),
+                    metrics_registry.clone(),
+                    localisation.as_str(),
+                    KubernetesKind::Aks,
+                    kubernetes_version,
+                    &cluster_domain,
+                    None,
+                    KUBERNETES_MIN_NODES,
+                    KUBERNETES_MAX_NODES,
+                    CpuArchitecture::AMD64,
+                    EngineLocation::ClientSide,
+                    secrets.AZURE_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -1241,9 +1334,11 @@ pub fn test_pause_managed_db(
                     CpuArchitecture::AMD64,
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64,
+                    NodeManager::Default,
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
+                KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
@@ -1333,6 +1428,7 @@ pub fn test_db_on_upgrade(
         disk_size_in_gib: storage_size,
         database_instance_type: db_instance_type.map(|i| i.to_cloud_provider_format()),
         database_disk_type: db_disk_type,
+        database_disk_iops: None,
         encrypt_disk: true,
         activate_high_availability: false,
         activate_backups: false,
@@ -1384,6 +1480,7 @@ pub fn test_db_on_upgrade(
                 .to_string(),
             AWS_KUBERNETES_VERSION,
         ),
+        Kind::Azure => (AZURE_LOCATION.to_cloud_provider_format().to_string(), AZURE_KUBERNETES_VERSION),
         Kind::Scw => (
             secrets
                 .SCALEWAY_TEST_CLUSTER_REGION
@@ -1413,6 +1510,25 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+            NodeManager::Default,
+        ),
+        Kind::Azure => Azure::docker_cr_engine(
+            &context,
+            logger.clone(),
+            metrics_registry.clone(),
+            localisation.as_str(),
+            KubernetesKind::Aks,
+            kubernetes_version.clone(),
+            &ClusterDomain::Default {
+                cluster_id: context.cluster_short_id().to_string(),
+            },
+            None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
+            EngineLocation::ClientSide,
+            secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+            NodeManager::Default,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1430,6 +1546,7 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+            NodeManager::Default,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),
@@ -1504,6 +1621,25 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             secrets.AWS_TEST_KUBECONFIG_b64,
+            NodeManager::Default,
+        ),
+        Kind::Azure => Azure::docker_cr_engine(
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+            localisation.as_str(),
+            KubernetesKind::Aks,
+            kubernetes_version,
+            &ClusterDomain::Default {
+                cluster_id: context_for_delete.cluster_short_id().to_string(),
+            },
+            None,
+            KUBERNETES_MIN_NODES,
+            KUBERNETES_MAX_NODES,
+            CpuArchitecture::AMD64,
+            EngineLocation::ClientSide,
+            secrets.AZURE_TEST_KUBECONFIG_b64,
+            NodeManager::Default,
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
@@ -1521,6 +1657,7 @@ pub fn test_db_on_upgrade(
             CpuArchitecture::AMD64,
             EngineLocation::ClientSide,
             secrets.SCALEWAY_TEST_KUBECONFIG_b64,
+            NodeManager::Default,
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),

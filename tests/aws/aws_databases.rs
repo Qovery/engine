@@ -1,40 +1,39 @@
 use crate::helpers;
-use crate::helpers::aws::{aws_infra_config, AWS_DATABASE_INSTANCE_TYPE};
+use crate::helpers::aws::{AWS_DATABASE_INSTANCE_TYPE, aws_infra_config};
 use crate::helpers::common::{ClusterDomain, Infrastructure};
 use crate::helpers::database::{
-    test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db, StorageSize,
+    StorageSize, test_db, test_deploy_an_environment_with_db_and_resize_disk, test_pause_managed_db,
 };
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
 };
 use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env};
 use ::function_name::named;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use qovery_engine::io_models::Action;
 use qovery_engine::io_models::application::{Port, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::variable_utils::VariableInfo;
-use qovery_engine::io_models::Action;
 use qovery_engine::utilities::to_short_id;
 use std::thread::sleep;
 use std::time::Duration;
-use tracing::{span, Level};
+use tracing::{Level, span};
 use uuid::Uuid;
 
+// to check overload between several databases and apps
 /**
 **
 ** Global database tests
 **
 **/
-
-// to check overload between several databases and apps
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
@@ -329,6 +328,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             ram_limit_in_mib: 512,
             disk_size_in_gib: 10,
             database_disk_type: AwsStorageType::GP2.to_k8s_storage_class(),
+            database_disk_iops: Some(AwsStorageType::GP2.get_disk_iops().value()),
             encrypt_disk: false,
             activate_high_availability: false,
             activate_backups: false,

@@ -3,8 +3,8 @@ use k8s_openapi::api::autoscaling::v1::HorizontalPodAutoscaler;
 use k8s_openapi::api::batch::v1::CronJob;
 use k8s_openapi::api::core::v1::Namespace;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
-use kube::api::{DeleteParams, PostParams};
 use kube::Api;
+use kube::api::{DeleteParams, PostParams};
 use std::sync::{Arc, Barrier};
 use std::thread;
 

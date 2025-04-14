@@ -4,10 +4,10 @@ use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::infrastructure::models::build_platform::Image;
-use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
-use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
+use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use crate::infrastructure::models::container_registry::RegistryTags;
+use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 
 use crate::environment::models::container::get_mirror_repository_name;
 use crate::environment::models::kubernetes::K8sObject;
@@ -19,16 +19,16 @@ use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use k8s_openapi::api::apps::v1::{Deployment, StatefulSet};
 use k8s_openapi::api::batch::v1::CronJob;
 
-use crate::infrastructure::models::cloud_provider::service::{increase_storage_size, Service};
+use crate::infrastructure::models::cloud_provider::service::{Service, increase_storage_size};
 use crate::io_models::models::InvalidStatefulsetStorage;
 use crate::kubers_utils::kube_get_resources_by_selector;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
-use kube::api::ListParams;
 use kube::Api;
-use retry::delay::{Fibonacci, Fixed};
+use kube::api::ListParams;
 use retry::OperationResult;
-use std::sync::atomic::{AtomicBool, Ordering};
+use retry::delay::{Fibonacci, Fixed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
@@ -73,7 +73,10 @@ pub fn delete_nlb_or_alb_service(
     // wait for the NLB to be deleted before continuing
     if deleted_nlb {
         // error message if timeout waiting for NLB to be deleted
-        let msg = format!("Failed to delete NLB service in namespace '{}' with selector '{}', timed out. Please retry to deploy later or look at AWS Cloudwatch issue.", namespace, service_nlb_annotation_to_delete);
+        let msg = format!(
+            "Failed to delete NLB service in namespace '{}' with selector '{}', timed out. Please retry to deploy later or look at AWS Cloudwatch issue.",
+            namespace, service_nlb_annotation_to_delete
+        );
         let err = EngineError::new_k8s_delete_service_error(
             event_details.clone(),
             CommandError::new_from_safe_message(msg.clone()),
@@ -239,9 +242,8 @@ fn mirror_image(
         ));
 
         let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
-            target.docker.login(&url).map_err(|err| {
+            target.docker.login(&url).inspect_err(|_err| {
                 logger.warning("🔓 Retrying to login to registry due to error...".to_string());
-                err
             })
         });
 
@@ -303,14 +305,19 @@ fn mirror_image(
         let docker_mirror_thread = scope.spawn(|| {
             // making sure to pass the current span to the new thread not to lose any tracing info
             let _span = current_span.enter();
+            let mut err_logs = Vec::new();
             if let Err(err) = retry::retry(Fixed::from_millis(1000).take(3), || {
+                err_logs.clear();
                 match target.docker.mirror(
                     &source_image,
                     dest_image,
                     &mut |line| info!("{}", line),
-                    &mut |line| warn!("{}", line),
-                    // Set timeout at 15min (arbitrary value)
-                    &CommandKiller::from(Duration::from_secs(60 * 15), target.abort),
+                    &mut |line| {
+                        warn!("{}", &line);
+                        err_logs.push(line);
+                    },
+                    // Set timeout at 30min (arbitrary value, but some big images >= 8 Go takes more than 15 minutes to be pulled)
+                    &CommandKiller::from(Duration::from_secs(60 * 30), target.abort),
                 ) {
                     Ok(ret) => OperationResult::Ok(ret),
                     Err(err) if err.is_aborted() => OperationResult::Err(err),
@@ -321,10 +328,15 @@ fn mirror_image(
                     }
                 }
             }) {
-                let msg = format!("❌ Failed to mirror image {}:{} due to {}", source.image, source.tag, err);
+                let msg = format!(
+                    "❌ Failed to mirror image {}:{} due to {}\n{}",
+                    source.image,
+                    source.tag,
+                    err,
+                    err_logs.join("\n")
+                );
                 logger.warning(msg.clone());
                 let user_err = EngineError::new_docker_error(event_details, err.error);
-
                 return Err(Box::new(EngineError::new_engine_error(user_err, msg, None)));
             }
 

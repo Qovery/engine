@@ -2,15 +2,15 @@ use crate::environment::models;
 use crate::environment::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
+use crate::environment::models::types::{AWS, OnPremise, SCW, VersionsNumber};
 use crate::environment::models::types::{CloudProvider as CloudProviderTrait, GCP};
-use crate::environment::models::types::{OnPremise, VersionsNumber, AWS, SCW};
 use crate::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use crate::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
-use crate::infrastructure::models::cloud_provider::{service, CloudProvider, Kind as CPKind, Kind};
+use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind, Kind, service};
+use crate::io_models::Action;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::Action;
 use chrono::{DateTime, Utc};
 use core::result::Result;
 use core::result::Result::{Err, Ok};
@@ -49,6 +49,8 @@ pub struct Database {
     pub disk_size_in_gib: u32,
     pub database_instance_type: Option<String>,
     pub database_disk_type: String,
+    #[serde(default)] // => None if not present in input
+    pub database_disk_iops: Option<u32>,
     pub encrypt_disk: bool,
     #[serde(default)] // => false if not present in input
     pub activate_high_availability: bool,
@@ -78,6 +80,10 @@ impl Database {
             port: self.port,
             disk_size_in_gib: self.disk_size_in_gib,
             database_disk_type: self.database_disk_type.clone(),
+            database_disk_iops: self
+                .database_disk_iops
+                .map(DiskIOPS::Provisioned)
+                .unwrap_or(DiskIOPS::Default),
             encrypt_disk: self.encrypt_disk,
             activate_high_availability: self.activate_high_availability,
             activate_backups: self.activate_backups,
@@ -124,6 +130,7 @@ impl Database {
                     Ok(t) => Some(Box::new(t)),
                     Err(e) => return Err(e),
                 },
+                Kind::Azure => todo!(),
                 Kind::Scw => match ScwDatabaseInstanceType::from_str(database_instance_type_raw_str) {
                     Ok(t) => Some(Box::new(t)),
                     Err(e) => return Err(e),
@@ -343,7 +350,30 @@ impl Database {
                     labels_groups,
                 )?))
             }
-
+            (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
+                todo!()
+            }
+            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
+                todo!()
+            }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context,
@@ -801,6 +831,21 @@ impl DatabaseKind {
     }
 }
 
+#[derive(Clone, Eq, PartialEq)]
+pub enum DiskIOPS {
+    Default,
+    Provisioned(u32),
+}
+
+impl DiskIOPS {
+    pub fn value(&self) -> u32 {
+        match self {
+            DiskIOPS::Default => 0,
+            DiskIOPS::Provisioned(iops) => *iops,
+        }
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub struct DatabaseOptions {
     pub login: String,
@@ -810,6 +855,7 @@ pub struct DatabaseOptions {
     pub mode: DatabaseMode,
     pub disk_size_in_gib: u32,
     pub database_disk_type: String,
+    pub database_disk_iops: DiskIOPS,
     pub encrypt_disk: bool,
     pub activate_high_availability: bool,
     pub activate_backups: bool,

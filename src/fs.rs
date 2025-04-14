@@ -1,15 +1,15 @@
 use std::collections::HashSet;
 use std::fs;
-use std::fs::{create_dir_all, File, OpenOptions};
+use std::fs::{File, OpenOptions, create_dir_all};
 use std::io::{BufRead, BufReader, Error, ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use crate::cmd::structs::SecretItem;
 use crate::errors::CommandError;
-use base64::engine::general_purpose;
 use base64::Engine;
-use flate2::write::GzEncoder;
+use base64::engine::general_purpose;
 use flate2::Compression;
+use flate2::write::GzEncoder;
 use itertools::Itertools;
 use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
@@ -108,7 +108,7 @@ fn archive_workspace_directory(working_root_dir: &str, execution_id: &str) -> Re
 }
 
 pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -> Result<(), Error> {
-    return match root_workspace_directory(working_root_dir, execution_id) {
+    match root_workspace_directory(working_root_dir, execution_id) {
         Ok(workspace_dir) => {
             let workspace_dir = workspace_dir.to_string_lossy();
             match fs::remove_dir_all(match workspace_dir.strip_suffix("/.") {
@@ -123,10 +123,12 @@ pub fn cleanup_workspace_directory(working_root_dir: &str, execution_id: &str) -
             }
         }
         Err(err) => {
-            error!("error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}");
+            error!(
+                "error trying to get workspace directory from working_root_dir: '{working_root_dir}' execution_id: {execution_id}, error: {err}"
+            );
             Err(err)
         }
-    };
+    }
 }
 
 pub fn create_workspace_archive(working_root_dir: &str, execution_id: &str) -> Result<PathBuf, Error> {
@@ -187,7 +189,7 @@ where
                 format!("Unable to create YAML backup file for chart {chart_name}."),
                 Some(e.to_string()),
                 None,
-            ))
+            ));
         }
         Ok(file) => file,
     };

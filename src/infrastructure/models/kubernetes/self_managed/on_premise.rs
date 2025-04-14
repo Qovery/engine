@@ -8,7 +8,6 @@ use crate::cmd::docker;
 use crate::errors::EngineError;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::kubernetes::{self, Kind, Kubernetes, KubernetesVersion};
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
@@ -41,8 +40,8 @@ impl SelfManaged {
         long_id: Uuid,
         name: String,
         kind: Kind,
+        region: String,
         version: KubernetesVersion,
-        cloud_provider: &dyn CloudProvider,
         options: SelfManagedOptions,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
@@ -56,7 +55,7 @@ impl SelfManaged {
             long_id,
             name,
             version,
-            region: cloud_provider.region(),
+            region,
             options,
             logger,
             advanced_settings,
@@ -133,11 +132,7 @@ impl Kubernetes for SelfManaged {
             .collect();
         info!("BUILDER_CPU_ARCHITECTURES: {:?}", archs);
 
-        if archs.is_empty() {
-            vec![AMD64]
-        } else {
-            archs
-        }
+        if archs.is_empty() { vec![AMD64] } else { archs }
     }
 
     fn temp_dir(&self) -> &Path {

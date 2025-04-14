@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use dirs::home_dir;
-use retry::delay::Fixed;
 use retry::OperationResult;
+use retry::delay::Fixed;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::terraform_validators::{TerraformValidationError, TerraformValidators};
@@ -749,8 +749,12 @@ impl TerraformError {
                 "Unknown error while performing Terraform command (`terraform {}`)",
                 terraform_args.join(" "),
             ),
-            TerraformError::MultipleInterruptsReceived { .. } => "Multiple interrupts received, stopping immediately.".to_string(),
-            TerraformError::AccountBlockedByProvider { .. } => "Your account has been blocked by cloud provider.".to_string(),
+            TerraformError::MultipleInterruptsReceived { .. } => {
+                "Multiple interrupts received, stopping immediately.".to_string()
+            }
+            TerraformError::AccountBlockedByProvider { .. } => {
+                "Your account has been blocked by cloud provider.".to_string()
+            }
             TerraformError::InvalidCredentials { .. } => "Invalid credentials.".to_string(),
             TerraformError::NotEnoughPermissions {
                 resource_type_and_name,
@@ -758,13 +762,11 @@ impl TerraformError {
                 action,
                 ..
             } => match (user, action) {
-                (Some(user_value), Some(action_value)) => format!(
-                    "Error, user `{user_value}` cannot perform `{action_value}` on `{resource_type_and_name}`."
-                ),
-                _ => format!(
-                    "Error, cannot perform action due to permission on `{resource_type_and_name}`."
-                ),
-            }
+                (Some(user_value), Some(action_value)) => {
+                    format!("Error, user `{user_value}` cannot perform `{action_value}` on `{resource_type_and_name}`.")
+                }
+                _ => format!("Error, cannot perform action due to permission on `{resource_type_and_name}`."),
+            },
             TerraformError::CannotDeleteLockFile {
                 terraform_provider_lock,
                 ..
@@ -773,9 +775,7 @@ impl TerraformError {
                 format!("Error while trying to get Terraform configuration file `{path}`.",)
             }
             TerraformError::ConfigFileInvalidContent { path, .. } => {
-                format!(
-                    "Error while trying to read Terraform configuration file, content is invalid `{path}`.",
-                )
+                format!("Error while trying to read Terraform configuration file, content is invalid `{path}`.",)
             }
             TerraformError::CannotRemoveEntryOutOfStateList {
                 entry_to_be_removed, ..
@@ -818,13 +818,19 @@ impl TerraformError {
             TerraformError::ServiceNotActivatedOptInRequired { service_type, .. } => {
                 format!("Error, service `{service_type}` requiring an opt-in is not activated.",)
             }
-            TerraformError::AlreadyExistingResource { resource_type, resource_name, .. } => {
-                match resource_name {
-                    Some(name) => format!("Error, resource type `{resource_type}` with name `{name}` already exists."),
-                    None => format!("Error, resource type `{resource_type}` already exists."),
-                }
-            }
-            TerraformError::ResourceDependencyViolation { resource_name, resource_kind, .. } => {
+            TerraformError::AlreadyExistingResource {
+                resource_type,
+                resource_name,
+                ..
+            } => match resource_name {
+                Some(name) => format!("Error, resource type `{resource_type}` with name `{name}` already exists."),
+                None => format!("Error, resource type `{resource_type}` already exists."),
+            },
+            TerraformError::ResourceDependencyViolation {
+                resource_name,
+                resource_kind,
+                ..
+            } => {
                 format!("Error, resource {resource_kind} `{resource_name}` has dependency violation.")
             }
             TerraformError::WaitingTimeoutResource {
@@ -838,44 +844,82 @@ impl TerraformError {
                 resource_name: resource_type,
                 resource_kind,
                 raw_message,
-            } => format!("Error, resource {resource_type}:{resource_kind} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {raw_message}"),
-            TerraformError::InstanceTypeDoesntExist { instance_type, ..} => format!("Error, requested instance type{} doesn't exist in cluster region.", match instance_type {
-                Some(instance_type) => format!(" `{instance_type}`"),
-                None => "".to_string(),
-            }),
-            TerraformError::InstanceVolumeCannotBeDownSized { instance_id, volume_id, .. } => {
-                format!("Error, instance (`{instance_id}`) volume (`{volume_id}`) cannot be smaller than existing size.")
-            },
-            TerraformError::InvalidCIDRBlock {cidr,..} => {
+            } => format!(
+                "Error, resource {resource_type}:{resource_kind} was expected to be in another state. It happens when changes have been done Cloud provider side without Qovery. You need to fix it manually: {raw_message}"
+            ),
+            TerraformError::InstanceTypeDoesntExist { instance_type, .. } => format!(
+                "Error, requested instance type{} doesn't exist in cluster region.",
+                match instance_type {
+                    Some(instance_type) => format!(" `{instance_type}`"),
+                    None => "".to_string(),
+                }
+            ),
+            TerraformError::InstanceVolumeCannotBeDownSized {
+                instance_id, volume_id, ..
+            } => {
+                format!(
+                    "Error, instance (`{instance_id}`) volume (`{volume_id}`) cannot be smaller than existing size."
+                )
+            }
+            TerraformError::InvalidCIDRBlock { cidr, .. } => {
                 format!("Error, the CIDR block `{cidr}` can't be used.")
-            },
-            TerraformError::S3BucketAlreadyOwnedByYou {bucket_name, .. } => {
+            }
+            TerraformError::S3BucketAlreadyOwnedByYou { bucket_name, .. } => {
                 format!("Error, the S3 bucket `{bucket_name}` cannot be created, it already exists.")
             }
             TerraformError::StateLocked { lock_id, .. } => {
                 format!("Error, terraform state is locked (lock_id: {lock_id})")
-            },
-            TerraformError::ClusterVersionUnsupportedUpdate { cluster_actual_version, cluster_target_version, .. } => {
-                format!("Error, cluster version cannot be updated from `{cluster_actual_version}` to `{cluster_target_version}`")
-            },
-            TerraformError::CannotImportResource { resource_type, resource_identifier, .. } => {
-                format!("Error, cannot import Terraform resource `{resource_identifier}` type `{resource_type}`")
-            },
-            TerraformError::ManagedDatabaseError { database_name, database_type, database_error_sub_type, .. } => {
-                match **database_error_sub_type {
-                    DatabaseError::VersionUpgradeNotPossible { ref from, ref to } => {
-                        match database_name {
-                            Some(name) => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}` on `{name}`"),
-                            None => format!("Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}`"),
-                        }
-                    },
-                    DatabaseError::VersionNotSupportedOnTheInstanceType { ref version,ref db_instance_type } => format!("Error, `{database_type}` version `{version}` is not compatible with instance type `{db_instance_type}`"),
-                }
-            },
-            TerraformError::ValidatorError { validator_name, validator_description: validation_description,  raw_message, .. } => {
-                format!("Error, validator `{validator_name}` ({validation_description}) has raised an error: {raw_message}")
             }
-            TerraformError::OutputCannotBeDeserialized { .. } => "Error, cannot deserialize Terraform output. Check the logs for more details.".to_string(),
+            TerraformError::ClusterVersionUnsupportedUpdate {
+                cluster_actual_version,
+                cluster_target_version,
+                ..
+            } => {
+                format!(
+                    "Error, cluster version cannot be updated from `{cluster_actual_version}` to `{cluster_target_version}`"
+                )
+            }
+            TerraformError::CannotImportResource {
+                resource_type,
+                resource_identifier,
+                ..
+            } => {
+                format!("Error, cannot import Terraform resource `{resource_identifier}` type `{resource_type}`")
+            }
+            TerraformError::ManagedDatabaseError {
+                database_name,
+                database_type,
+                database_error_sub_type,
+                ..
+            } => match **database_error_sub_type {
+                DatabaseError::VersionUpgradeNotPossible { ref from, ref to } => match database_name {
+                    Some(name) => format!(
+                        "Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}` on `{name}`"
+                    ),
+                    None => format!(
+                        "Error, cannot perform `{database_type}` database version upgrade from `{from}` to `{to}`"
+                    ),
+                },
+                DatabaseError::VersionNotSupportedOnTheInstanceType {
+                    ref version,
+                    ref db_instance_type,
+                } => format!(
+                    "Error, `{database_type}` version `{version}` is not compatible with instance type `{db_instance_type}`"
+                ),
+            },
+            TerraformError::ValidatorError {
+                validator_name,
+                validator_description: validation_description,
+                raw_message,
+                ..
+            } => {
+                format!(
+                    "Error, validator `{validator_name}` ({validation_description}) has raised an error: {raw_message}"
+                )
+            }
+            TerraformError::OutputCannotBeDeserialized { .. } => {
+                "Error, cannot deserialize Terraform output. Check the logs for more details.".to_string()
+            }
         }
     }
 }
@@ -1224,9 +1268,9 @@ fn terraform_apply_internal(
     }
 }
 
-pub fn terraform_apply_with_tf_workers_resources(
+pub fn terraform_apply_with_specific_resources(
     root_dir: &str,
-    tf_workers_resources: Vec<String>,
+    tf_resources: &[impl AsRef<str>],
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     is_dry_run: bool,
@@ -1236,18 +1280,18 @@ pub fn terraform_apply_with_tf_workers_resources(
         "-lock=false".to_string(),
         "-auto-approve".to_string(),
     ];
-    for x in tf_workers_resources {
-        terraform_args_string.push(format!("-target={x}"));
+    for x in tf_resources {
+        terraform_args_string.push(format!("-target={}", x.as_ref()));
     }
 
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
-        let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
-            Ok(plan) => plan,
-            Err(err) => return OperationResult::Retry(err),
-        };
-
         if is_dry_run {
+            let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
+                Ok(plan) => plan,
+                Err(err) => return OperationResult::Retry(err),
+            };
+
             return OperationResult::Ok(plan);
         }
 
@@ -1471,6 +1515,7 @@ pub fn terraform_plan(
 pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {
     // Terraform output must call alone and after init, because we need to retrieve the json output from stdout
     let output = terraform_run(TerraformAction::OUTPUT, root_dir, false, envs, &TerraformValidators::None)?;
+
     serde_json::from_str(&output.raw_std_output.join("\n")).map_err(|e| TerraformError::OutputCannotBeDeserialized {
         raw_message: e.to_string(),
     })
@@ -1585,14 +1630,14 @@ fn terraform_exec(
 mod tests {
     use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand};
     use crate::cmd::terraform::{
-        manage_common_issues, terraform_exec_from_command, terraform_init, terraform_init_validate, DatabaseError,
-        QuotaExceededError, TerraformError, TerraformOutput,
+        DatabaseError, QuotaExceededError, TerraformError, TerraformOutput, manage_common_issues,
+        terraform_exec_from_command, terraform_init, terraform_init_validate,
     };
     use std::fs;
     use std::process::Child;
 
     use crate::cmd::terraform_validators::{TerraformValidationError, TerraformValidator, TerraformValidators};
-    use tracing::{span, Level};
+    use tracing::{Level, span};
     use tracing_test::traced_test;
 
     // Creating a qovery command mock to fake underlying cli return

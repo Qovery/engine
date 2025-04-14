@@ -24,7 +24,7 @@ pub struct KarpenterConfigurationChart {
     organization_id: String,
     organization_long_id: String,
     region: String,
-    karpenter_parameters: Option<KarpenterParameters>,
+    karpenter_parameters: KarpenterParameters,
     explicit_subnet_ids: Vec<String>,
     pleco_resources_ttl: i32,
 }
@@ -40,7 +40,7 @@ impl KarpenterConfigurationChart {
         organization_id: &str,
         organization_long_id: uuid::Uuid,
         region: &str,
-        karpenter_parameters: Option<KarpenterParameters>,
+        karpenter_parameters: KarpenterParameters,
         user_network_config: Option<&UserNetworkConfig>,
         pleco_resources_ttl: i32,
     ) -> Self {
@@ -87,88 +87,27 @@ impl KarpenterConfigurationChart {
         "karpenter-configuration".to_string()
     }
 
-    fn get_karpenter_node_pools_requirements(
+    fn enrich_karpenter_requirements(
         spot_enabled: bool,
-        qovery_node_pools: Option<KarpenterNodePool>,
+        qovery_node_pools: KarpenterNodePool,
     ) -> Vec<KarpenterNodePoolRequirement> {
-        if let Some(pools) = qovery_node_pools {
-            if let Some(mut requirements) = pools.requirements.filter(|req| !req.is_empty()) {
-                requirements.push(KarpenterNodePoolRequirement {
-                    key: KarpenterNodePoolRequirementKey::CapacityType,
-                    operator: Some(KarpenterRequirementOperator::In),
-                    values: if spot_enabled {
-                        vec!["spot".to_string(), "on-demand".to_string()]
-                    } else {
-                        vec!["on-demand".to_string()]
-                    },
-                });
-                return requirements;
-            }
-        }
-        Self::default_karpenter_node_pools_requirements(spot_enabled)
-    }
+        let mut requirements = qovery_node_pools.requirements;
+        requirements.push(KarpenterNodePoolRequirement {
+            key: KarpenterNodePoolRequirementKey::CapacityType,
+            operator: Some(KarpenterRequirementOperator::In),
+            values: if spot_enabled {
+                vec!["spot".to_string(), "on-demand".to_string()]
+            } else {
+                vec!["on-demand".to_string()]
+            },
+        });
 
-    fn default_karpenter_node_pools_requirements(spot_enabled: bool) -> Vec<KarpenterNodePoolRequirement> {
-        vec![
-            KarpenterNodePoolRequirement {
-                key: KarpenterNodePoolRequirementKey::Arch,
-                operator: Some(KarpenterRequirementOperator::In),
-                values: vec!["amd64".to_string(), "arm64".to_string()],
-            },
-            KarpenterNodePoolRequirement {
-                key: KarpenterNodePoolRequirementKey::Os,
-                operator: Some(KarpenterRequirementOperator::In),
-                values: vec!["linux".to_string()],
-            },
-            KarpenterNodePoolRequirement {
-                key: KarpenterNodePoolRequirementKey::InstanceCategory,
-                operator: Some(KarpenterRequirementOperator::In),
-                values: vec![
-                    "c".to_string(),
-                    "d".to_string(),
-                    "h".to_string(),
-                    "i".to_string(),
-                    "im".to_string(),
-                    "inf".to_string(),
-                    "is".to_string(),
-                    "m".to_string(),
-                    "r".to_string(),
-                    "t".to_string(),
-                    "trn".to_string(),
-                    "x".to_string(),
-                    "z".to_string(),
-                ],
-            },
-            KarpenterNodePoolRequirement {
-                key: KarpenterNodePoolRequirementKey::InstanceGeneration,
-                operator: Some(KarpenterRequirementOperator::Gt),
-                values: vec!["2".to_string()],
-            },
-            KarpenterNodePoolRequirement {
-                key: KarpenterNodePoolRequirementKey::CapacityType,
-                operator: Some(KarpenterRequirementOperator::In),
-                values: match spot_enabled {
-                    false => vec!["on-demand".to_string()],
-                    true => vec!["spot".to_string(), "on-demand".to_string()],
-                },
-            },
-        ]
+        requirements
     }
 }
 
 impl ToCommonHelmChart for KarpenterConfigurationChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
-        let (disk_size_in_gib, spot_enabled, qovery_node_pools) =
-            if let Some(karpenter_parameters) = &self.karpenter_parameters {
-                (
-                    karpenter_parameters.disk_size_in_gib,
-                    karpenter_parameters.spot_enabled,
-                    karpenter_parameters.qovery_node_pools.clone(),
-                )
-            } else {
-                (0, false, None)
-            };
-
         let mut values = vec![
             ChartSetValue {
                 key: "clusterName".to_string(),
@@ -180,7 +119,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
             ChartSetValue {
                 key: "diskSizeInGib".to_string(),
-                value: format!("{}Gi", disk_size_in_gib),
+                value: format!("{}Gi", self.karpenter_parameters.disk_size_in_gib),
             },
             ChartSetValue {
                 key: "tags.ClusterId".to_string(),
@@ -211,8 +150,10 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             });
         }
 
-        let karpenter_node_pools_requirements =
-            Self::get_karpenter_node_pools_requirements(spot_enabled, qovery_node_pools.clone());
+        let karpenter_node_pools_requirements = Self::enrich_karpenter_requirements(
+            self.karpenter_parameters.spot_enabled,
+            self.karpenter_parameters.qovery_node_pools.clone(),
+        );
 
         karpenter_node_pools_requirements
             .iter()
@@ -245,56 +186,57 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 });
             });
 
-        // Inject node pools values
-        if let Some(pools) = qovery_node_pools {
-            // Stable node pool consolidation
-            let stable_pool_override = pools.stable_override;
-            stable_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
-                let prefix = format!("stableNodePool.consolidation.budgets[{index}]");
+        // Stable node pool consolidation
+        let stable_pool_override = self.karpenter_parameters.qovery_node_pools.stable_override.clone();
+        stable_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
+            let prefix = format!("stableNodePool.consolidation.budgets[{index}]");
 
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.nodes"),
-                    value: it.nodes.to_string(),
-                });
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.reasons"),
-                    value: it.reasons.to_helm_format_string().to_string(),
-                });
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.duration"),
-                    value: it.get_karpenter_budget_duration_as_string(),
-                });
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.schedule"),
-                    value: it.schedule.to_string(),
-                });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.nodes"),
+                value: it.nodes.to_string(),
             });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.reasons"),
+                value: it.reasons.to_helm_format_string().to_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.duration"),
+                value: it.get_karpenter_budget_duration_as_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.schedule"),
+                value: it.schedule.to_string(),
+            });
+        });
 
-            // Stable node pool limits
-            if let Some(limits) = stable_pool_override.limits {
-                values.push(ChartSetValue {
-                    key: "stableNodePool.limits.maxCpu".to_string(),
-                    value: limits.max_cpu.to_string(),
-                });
-                values.push(ChartSetValue {
-                    key: "stableNodePool.limits.maxMemory".to_string(),
-                    value: limits.max_memory.to_string(),
-                });
-            }
+        // Stable node pool limits
+        if let Some(limits) = &stable_pool_override.limits {
+            values.push(ChartSetValue {
+                key: "stableNodePool.limits.maxCpu".to_string(),
+                value: limits.max_cpu.to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "stableNodePool.limits.maxMemory".to_string(),
+                value: limits.max_memory.to_string(),
+            });
+        }
 
-            // Default node pool limits
-            if let Some(default_node_pool_limits) =
-                pools.default_override.map(|default_override| default_override.limits)
-            {
-                values.push(ChartSetValue {
-                    key: "defaultNodePool.limits.maxCpu".to_string(),
-                    value: default_node_pool_limits.max_cpu.to_string(),
-                });
-                values.push(ChartSetValue {
-                    key: "defaultNodePool.limits.maxMemory".to_string(),
-                    value: default_node_pool_limits.max_memory.to_string(),
-                });
-            }
+        // Default node pool limits
+        if let Some(Some(default_node_pool_limits)) = self
+            .karpenter_parameters
+            .qovery_node_pools
+            .default_override
+            .clone()
+            .map(|default_override| default_override.limits)
+        {
+            values.push(ChartSetValue {
+                key: "defaultNodePool.limits.maxCpu".to_string(),
+                value: default_node_pool_limits.max_cpu.to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "defaultNodePool.limits.maxMemory".to_string(),
+                value: default_node_pool_limits.max_memory.to_string(),
+            });
         }
 
         let mut values_string: Vec<ChartSetValue> = vec![];
@@ -362,16 +304,16 @@ mod tests {
     use crate::cmd::helm::Helm;
     use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::infrastructure::models::kubernetes::aws::{
         KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
         KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
         KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
         KarpenterStableNodePoolOverride,
     };
-    use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::io_models::models::CpuArchitecture::ARM64;
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
@@ -379,7 +321,17 @@ mod tests {
     #[test]
     fn karpenter_configuration_chart_directory_exists_test() {
         // setup:
-        let chart = create_chart(true, None);
+        let chart = create_chart(
+            true,
+            KarpenterNodePool {
+                requirements: vec![],
+                stable_override: KarpenterStableNodePoolOverride {
+                    budgets: vec![],
+                    limits: None,
+                },
+                default_override: None,
+            },
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -405,7 +357,17 @@ mod tests {
     #[test]
     fn karpenter_configuration_chart_values_file_exists_test() {
         // setup:
-        let chart = create_chart(true, None);
+        let chart = create_chart(
+            true,
+            KarpenterNodePool {
+                requirements: vec![],
+                stable_override: KarpenterStableNodePoolOverride {
+                    budgets: vec![],
+                    limits: None,
+                },
+                default_override: None,
+            },
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -432,7 +394,17 @@ mod tests {
     #[test]
     fn karpenter_configuration_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = create_chart(false, None);
+        let chart = create_chart(
+            false,
+            KarpenterNodePool {
+                requirements: vec![],
+                stable_override: KarpenterStableNodePoolOverride {
+                    budgets: vec![],
+                    limits: None,
+                },
+                default_override: None,
+            },
+        );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:
@@ -449,7 +421,11 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 
     #[test]
@@ -457,19 +433,9 @@ mod tests {
         // Define your test cases
         let test_cases = vec![
             TestCase {
-                with_spot: true,
-                qovery_node_pools: None,
-                verify_fn: verify_default_node_pools,
-            },
-            TestCase {
                 with_spot: false,
-                qovery_node_pools: None,
-                verify_fn: verify_default_node_pools,
-            },
-            TestCase {
-                with_spot: false,
-                qovery_node_pools: Some(KarpenterNodePool {
-                    requirements: Some(vec![
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::InstanceCategory,
                             operator: Some(KarpenterRequirementOperator::In),
@@ -480,7 +446,7 @@ mod tests {
                             operator: Some(KarpenterRequirementOperator::In),
                             values: vec!["AMD64".to_string()],
                         },
-                    ]),
+                    ],
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
@@ -491,13 +457,13 @@ mod tests {
                         limits: None,
                     },
                     default_override: None,
-                }),
+                },
                 verify_fn: verify_custom_node_pools,
             },
             TestCase {
                 with_spot: true,
-                qovery_node_pools: Some(KarpenterNodePool {
-                    requirements: Some(vec![
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::InstanceCategory,
                             operator: Some(KarpenterRequirementOperator::In),
@@ -508,7 +474,7 @@ mod tests {
                             operator: Some(KarpenterRequirementOperator::In),
                             values: vec!["AMD64".to_string()],
                         },
-                    ]),
+                    ],
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
@@ -519,13 +485,13 @@ mod tests {
                         limits: None,
                     },
                     default_override: None,
-                }),
+                },
                 verify_fn: verify_custom_node_pools,
             },
             TestCase {
                 with_spot: false,
-                qovery_node_pools: Some(KarpenterNodePool {
-                    requirements: Some(vec![
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::InstanceCategory,
                             operator: Some(KarpenterRequirementOperator::In),
@@ -541,7 +507,7 @@ mod tests {
                             operator: Some(KarpenterRequirementOperator::In),
                             values: vec!["spot".to_string()],
                         },
-                    ]),
+                    ],
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
@@ -555,13 +521,13 @@ mod tests {
                         }),
                     },
                     default_override: None,
-                }),
+                },
                 verify_fn: verify_custom_node_pools,
             },
             TestCase {
                 with_spot: false,
-                qovery_node_pools: Some(KarpenterNodePool {
-                    requirements: Some(vec![
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![
                         KarpenterNodePoolRequirement {
                             key: KarpenterNodePoolRequirementKey::InstanceCategory,
                             operator: Some(KarpenterRequirementOperator::In),
@@ -577,7 +543,7 @@ mod tests {
                             operator: Some(KarpenterRequirementOperator::In),
                             values: vec!["spot".to_string()],
                         },
-                    ]),
+                    ],
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
@@ -588,12 +554,12 @@ mod tests {
                         limits: None,
                     },
                     default_override: Some(KarpenterDefaultNodePoolOverride {
-                        limits: KarpenterNodePoolLimits {
+                        limits: Some(KarpenterNodePoolLimits {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
-                        },
+                        }),
                     }),
-                }),
+                },
                 verify_fn: verify_custom_node_pools,
             },
         ];
@@ -601,16 +567,8 @@ mod tests {
         // Iterate through each test case
         for test_case in test_cases {
             let with_spot = test_case.with_spot;
-            let has_default_node_pool_limits = test_case
-                .qovery_node_pools
-                .as_ref()
-                .and_then(|it| it.default_override.as_ref())
-                .is_some();
-            let has_stable_node_pool_limits = test_case
-                .qovery_node_pools
-                .as_ref()
-                .and_then(|it| it.stable_override.limits.as_ref())
-                .is_some();
+            let has_default_node_pool_limits = test_case.qovery_node_pools.default_override.is_some();
+            let has_stable_node_pool_limits = test_case.qovery_node_pools.stable_override.limits.is_some();
 
             let yaml = generate_chart_yaml(with_spot, test_case.qovery_node_pools);
 
@@ -621,7 +579,7 @@ mod tests {
     #[derive(Debug)]
     struct TestCase {
         with_spot: bool,
-        qovery_node_pools: Option<KarpenterNodePool>,
+        qovery_node_pools: KarpenterNodePool,
         verify_fn: fn(&str, bool, bool, bool),
     }
 
@@ -682,7 +640,7 @@ mod tests {
         metadata: Metadata,
     }
 
-    fn create_chart(with_spot: bool, qovery_node_pools: Option<KarpenterNodePool>) -> KarpenterConfigurationChart {
+    fn create_chart(with_spot: bool, qovery_node_pools: KarpenterNodePool) -> KarpenterConfigurationChart {
         KarpenterConfigurationChart::new(
             None,
             "whatever".to_string(),
@@ -693,19 +651,19 @@ mod tests {
             "organization_id",
             Uuid::new_v4(),
             "region",
-            Some(KarpenterParameters {
+            KarpenterParameters {
                 spot_enabled: with_spot,
                 max_node_drain_time_in_secs: None,
                 disk_size_in_gib: 50,
                 default_service_architecture: ARM64,
                 qovery_node_pools,
-            }),
+            },
             None,
             0,
         )
     }
 
-    fn generate_chart_yaml(with_spot: bool, qovery_node_pools: Option<KarpenterNodePool>) -> String {
+    fn generate_chart_yaml(with_spot: bool, qovery_node_pools: KarpenterNodePool) -> String {
         // setup:
         let chart = create_chart(with_spot, qovery_node_pools);
 
@@ -728,70 +686,6 @@ mod tests {
         // execute
         helm.get_template(&chart_path, &common_chart.chart_info)
             .expect("Failed to get Helm template")
-    }
-
-    fn verify_default_node_pools(yaml: &str, with_spot: bool, _: bool, _: bool) {
-        let deserializer = serde_yaml::Deserializer::from_str(yaml);
-
-        let node_pools: Vec<_> = deserializer
-            .map(|document| {
-                let value: Value = Value::deserialize(document).expect("Failed to deserialize YAML document");
-                serde_yaml::from_value::<NodePool>(value)
-            })
-            .filter_map(Result::ok)
-            .collect();
-
-        assert_eq!(node_pools.len(), 2, "Expected exactly 2 node pools");
-        assert_eq!(
-            node_pools
-                .iter()
-                .map(|node_pool| node_pool.metadata.name.clone())
-                .collect_vec(),
-            vec!["default".to_string(), "stable".to_string()],
-            "Expected default and stable"
-        );
-        for node_pool in node_pools {
-            assert_eq!(node_pool.kind, "NodePool");
-            let reqs = &node_pool.spec.template.spec.requirements;
-            assert_eq!(reqs.len(), 5, "Expected exactly 5 requirements");
-
-            assert_requirement_exists(reqs, "kubernetes.io/arch", "In", vec!["amd64".to_string(), "arm64".to_string()]);
-            assert_requirement_exists(reqs, "kubernetes.io/os", "In", vec!["linux".to_string()]);
-
-            assert_requirement_exists(
-                reqs,
-                "karpenter.sh/capacity-type",
-                "In",
-                if with_spot {
-                    vec!["spot".to_string(), "on-demand".to_string()]
-                } else {
-                    vec!["on-demand".to_string()]
-                },
-            );
-
-            assert_requirement_exists(
-                reqs,
-                "karpenter.k8s.aws/instance-category",
-                "In",
-                vec![
-                    "c".to_string(),
-                    "d".to_string(),
-                    "h".to_string(),
-                    "i".to_string(),
-                    "im".to_string(),
-                    "inf".to_string(),
-                    "is".to_string(),
-                    "m".to_string(),
-                    "r".to_string(),
-                    "t".to_string(),
-                    "trn".to_string(),
-                    "x".to_string(),
-                    "z".to_string(),
-                ],
-            );
-
-            assert_requirement_exists(reqs, "karpenter.k8s.aws/instance-generation", "Gt", vec!["2".to_string()]);
-        }
     }
 
     fn verify_custom_node_pools(

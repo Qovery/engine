@@ -12,7 +12,7 @@ use crate::infrastructure::models::dns_provider::DnsProvider;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::context::Context;
 use crate::metrics_registry::MetricsRegistry;
-use crate::services::kube_client::QubeClient;
+use crate::services::{kube_client::QubeClient, kubernetes_api_deprecation_service::KubernetesApiDeprecationService};
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum EngineConfigError {
@@ -47,6 +47,7 @@ pub struct InfrastructureContext {
     metrics_registry: Box<dyn MetricsRegistry>,
     is_infra_deployment: bool,
     kube_client: Mutex<Option<QubeClient>>,
+    kubernetes_api_deprecation_service: KubernetesApiDeprecationService,
 }
 
 impl InfrastructureContext {
@@ -70,6 +71,7 @@ impl InfrastructureContext {
             metrics_registry,
             is_infra_deployment,
             kube_client: Mutex::new(None),
+            kubernetes_api_deprecation_service: KubernetesApiDeprecationService::default(),
         }
     }
 
@@ -106,10 +108,6 @@ impl InfrastructureContext {
     }
 
     pub fn is_valid(&self) -> Result<(), Box<EngineConfigError>> {
-        if let Err(e) = self.cloud_provider.is_valid() {
-            return Err(Box::new(EngineConfigError::CloudProviderNotValid(*e)));
-        }
-
         if let Err(e) = self.dns_provider.is_valid() {
             return Err(Box::new(EngineConfigError::DnsProviderNotValid(
                 e.to_engine_error(self.dns_provider.event_details()),
@@ -154,5 +152,9 @@ impl InfrastructureContext {
 
         *self.kube_client.lock().unwrap() = Some(client.clone());
         Ok(client)
+    }
+
+    pub fn kubernetes_api_deprecation_service(&self) -> &KubernetesApiDeprecationService {
+        &self.kubernetes_api_deprecation_service
     }
 }

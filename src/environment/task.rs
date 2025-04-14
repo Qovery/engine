@@ -1,7 +1,7 @@
 use crate::cmd::docker::Docker;
 use crate::engine_task;
-use crate::engine_task::qovery_api::QoveryApi;
 use crate::engine_task::Task;
+use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::action::deploy_environment::EnvironmentDeployment;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::environment::models::environment::Environment;
@@ -14,10 +14,10 @@ use crate::infrastructure::models::build_platform::{BuildError, BuildPlatform};
 use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
-use crate::infrastructure::models::container_registry::{to_engine_error, ContainerRegistry, RegistryTags};
-use crate::io_models::context::Context;
-use crate::io_models::engine_request::EnvironmentEngineRequest;
+use crate::infrastructure::models::container_registry::{ContainerRegistry, RegistryTags, to_engine_error};
 use crate::io_models::Action;
+use crate::io_models::context::Context;
+use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRequest};
 use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
@@ -143,7 +143,7 @@ impl EnvironmentTask {
             .collect::<Vec<_>>();
 
         // If nothing to build, do nothing
-        if services.first().is_none() {
+        if services.is_empty() {
             return Ok(());
         };
 
@@ -323,6 +323,12 @@ impl EnvironmentTask {
                 .iter_mut()
                 .map(|app| app.as_service_mut())
                 .chain(environment.jobs.iter_mut().map(|job| job.as_service_mut()))
+                .chain(
+                    environment
+                        .terraform_services
+                        .iter_mut()
+                        .map(|terraform_service| terraform_service.as_service_mut()),
+                )
                 .collect();
             Self::build_and_push_services(
                 environment.long_id,
@@ -422,20 +428,22 @@ impl EnvironmentTask {
         });
         secrets.extend(service_secrets);
 
-        let cloud_provider_secrets = request
-            .cloud_provider
-            .options
-            .gcp_credentials
-            .as_ref()
-            .map(|x| &x.private_key)
-            .into_iter()
-            .chain(request.cloud_provider.options.secret_access_key.iter())
-            .chain(request.cloud_provider.options.password.iter())
-            .chain(request.cloud_provider.options.scaleway_secret_key.iter())
-            .chain(request.cloud_provider.options.spaces_secret_key.iter())
-            .cloned();
+        match &request.cloud_provider.options {
+            CloudProviderOptions::Aws { secret_access_key, .. } => {
+                secrets.push(secret_access_key.to_string());
+            }
+            CloudProviderOptions::Scaleway {
+                scaleway_secret_key, ..
+            } => {
+                secrets.push(scaleway_secret_key.to_string());
+            }
+            CloudProviderOptions::Gcp { gcp_credentials } => {
+                secrets.push(gcp_credentials.private_key.to_string());
+            }
+            CloudProviderOptions::Azure { .. } => {}
+            CloudProviderOptions::OnPremise { .. } => {}
+        };
 
-        secrets.extend(cloud_provider_secrets);
         secrets
     }
 

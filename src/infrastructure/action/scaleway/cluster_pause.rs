@@ -5,8 +5,8 @@ use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_pause;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::io_models::models::NodeGroupsFormat;
 use crate::utilities::envs_to_string;
 

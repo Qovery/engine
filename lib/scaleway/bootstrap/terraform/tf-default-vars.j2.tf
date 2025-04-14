@@ -53,6 +53,7 @@ variable "scaleway_secret_key" {
   description = "Scaleway secret key"
   default     = "{{ scaleway_secret_key }}"
   type        = string
+  sensitive   = true
 }
 
 # Kubernetes

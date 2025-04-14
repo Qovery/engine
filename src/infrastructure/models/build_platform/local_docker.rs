@@ -3,14 +3,14 @@
 use std::io::{Error, ErrorKind};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use std::{fs, thread};
 
 use git2::{Cred, CredentialType, ErrorClass};
-use retry::delay::Fibonacci;
 use retry::OperationResult;
+use retry::delay::Fibonacci;
 use time::Instant;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::dockerfile_utils::extract_dockerfile_args;
-use crate::infrastructure::models::build_platform::{to_build_error, Build, BuildError, BuildPlatform, Kind};
+use crate::infrastructure::models::build_platform::{Build, BuildError, BuildPlatform, Kind, to_build_error};
 
 use crate::cmd::git;
 use crate::environment::models::abort::Abort;
@@ -153,9 +153,8 @@ impl LocalDocker {
             ));
 
             let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
-                self.context.docker.login(&url).map_err(|err| {
+                self.context.docker.login(&url).inspect_err(|_err| {
                     logger.send_warning("🔓 Retrying to login to registry due to error...".to_string());
-                    err
                 })
             });
 
@@ -201,6 +200,7 @@ impl LocalDocker {
             &mut |line| logger.send_progress(line),
             &mut |line| logger.send_progress(line),
             &CommandKiller::from(build.timeout, abort),
+            build.git_repository.docker_target_build_stage.as_ref(),
         );
 
         if let Err(err) = exit_status {
@@ -266,6 +266,7 @@ impl LocalDocker {
             .rsplit_once('-')
             .unwrap_or((self.context.execution_id(), ""))
             .0;
+
         let builder_handle = loop {
             match self.context.docker.spawn_builder(
                 &format!("{}-{}", exec_id, self.builder_counter.fetch_add(1, Ordering::Relaxed)),
@@ -274,6 +275,7 @@ impl LocalDocker {
                 &arch,
                 (max_cpu, max_cpu),
                 (max_ram, max_ram),
+                build.ephemeral_storage_in_gib,
                 should_abort,
                 http_registries
                     .iter()
@@ -505,14 +507,14 @@ impl BuildPlatform for LocalDocker {
                         application: app_id,
                         action_description: "git lfs checkout".to_string(),
                         raw_error,
-                    })
+                    });
                 }
                 Err(GitLfsError::ExitStatusError { .. }) => {
                     return Err(BuildError::IoError {
                         application: app_id,
                         action_description: "git lfs checkout".to_string(),
                         raw_error: Error::new(ErrorKind::Other, "git lfs checkout failed"),
-                    })
+                    });
                 }
             }
         }
@@ -564,7 +566,7 @@ impl BuildPlatform for LocalDocker {
             })?;
 
             if let Some(dockerfile_directory) = dockerfile_absolute_path.parent() {
-                let docker_ignore_path = dockerfile_directory.join("../../../../../.dockerignore");
+                let docker_ignore_path = dockerfile_directory.join(".dockerignore");
 
                 fs::write(docker_ignore_path, DOCKER_IGNORE).map_err(|err| BuildError::IoError {
                     application: app_id.clone(),
@@ -572,6 +574,16 @@ impl BuildPlatform for LocalDocker {
                     raw_error: err,
                 })?;
             }
+        }
+
+        // if the extra files are provided, write them to the file before building
+        for extra_file_to_inject in &build.git_repository.extra_files_to_inject {
+            let extra_file_absolute_path = repository_root_path.join(extra_file_to_inject.path.clone());
+            fs::write(&extra_file_absolute_path, &extra_file_to_inject.content).map_err(|err| BuildError::IoError {
+                application: app_id.clone(),
+                action_description: "writing extra".to_string(),
+                raw_error: err,
+            })?;
         }
 
         // If the dockerfile does not exist, abort

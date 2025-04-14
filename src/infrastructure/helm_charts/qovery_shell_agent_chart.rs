@@ -4,8 +4,8 @@ use crate::helm::{
     UpdateStrategy,
 };
 use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
@@ -165,7 +165,7 @@ mod tests {
     use crate::helm::UpdateStrategy;
     use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, HelmChartResourcesConstraintType, HelmChartType,
+        HelmChartResourcesConstraintType, HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name,
     };
     use crate::io_models::QoveryIdentifier;
     use std::env;

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ service.name }}-pvc
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: terraform-service
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ service.persistence_size_in_gib}}
+  storageClassName: {{ service.persistence_storage_type }}

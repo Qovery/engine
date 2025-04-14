@@ -37,9 +37,17 @@ pub struct GCSLokiChartConfiguration {
     pub gcp_service_account: Option<String>,
 }
 
+#[derive(Default)]
+pub struct BlobStorageLokiChartConfiguration {
+    pub bucketname: Option<String>,
+    pub azure_loki_storage_service_account: Option<String>,
+    pub azure_loki_msi_client_id: Option<String>,
+}
+
 pub enum LokiObjectBucketConfiguration {
     S3(S3LokiChartConfiguration),
     GCS(GCSLokiChartConfiguration),
+    BlobStorage(BlobStorageLokiChartConfiguration),
 }
 
 pub struct LokiChart {
@@ -122,14 +130,26 @@ impl ToCommonHelmChart for LokiChart {
         // getting both S3 and GCS configuration, default will be used if not set
         let default_gcs_configuration = GCSLokiChartConfiguration::default();
         let default_s3_configuration = S3LokiChartConfiguration::default();
-        let (gcs_configuration, s3_configuration) = match &self.loki_object_bucket_configuration {
-            LokiObjectBucketConfiguration::S3(config) => (&default_gcs_configuration, config),
-            LokiObjectBucketConfiguration::GCS(config) => (config, &default_s3_configuration),
-        };
+        let default_blob_storage_configuration = BlobStorageLokiChartConfiguration::default();
+        let (gcs_configuration, s3_configuration, blob_storage_configuration) =
+            match &self.loki_object_bucket_configuration {
+                LokiObjectBucketConfiguration::S3(config) => {
+                    (&default_gcs_configuration, config, &default_blob_storage_configuration)
+                }
+                LokiObjectBucketConfiguration::GCS(config) => {
+                    (config, &default_s3_configuration, &default_blob_storage_configuration)
+                }
+                LokiObjectBucketConfiguration::BlobStorage(config) => {
+                    (&default_gcs_configuration, &default_s3_configuration, config)
+                }
+            };
 
         let bucket_name = match &self.loki_object_bucket_configuration {
             LokiObjectBucketConfiguration::S3(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
             LokiObjectBucketConfiguration::GCS(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
+            LokiObjectBucketConfiguration::BlobStorage(c) => {
+                c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string()
+            }
         };
 
         let mut values_files = vec![self.chart_values_path.to_string()];
@@ -137,7 +157,7 @@ impl ToCommonHelmChart for LokiChart {
             values_files.push(additional_char_path.to_string());
         }
 
-        Ok(CommonChart {
+        let mut common_chart = CommonChart {
             chart_info: ChartInfo {
                 name: LokiChart::chart_name(),
                 path: self.chart_path.to_string(),
@@ -202,6 +222,7 @@ impl ToCommonHelmChart for LokiChart {
                         value: match &self.loki_object_bucket_configuration {
                             LokiObjectBucketConfiguration::S3(_) => "s3",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
                         }
                         .to_string(),
                     },
@@ -210,6 +231,7 @@ impl ToCommonHelmChart for LokiChart {
                         value: match &self.loki_object_bucket_configuration {
                             LokiObjectBucketConfiguration::S3(_) => "s3",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
                         }
                         .to_string(),
                     },
@@ -218,6 +240,7 @@ impl ToCommonHelmChart for LokiChart {
                         value: match &self.loki_object_bucket_configuration {
                             LokiObjectBucketConfiguration::S3(_) => "aws",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
                         }
                         .to_string(),
                     },
@@ -286,6 +309,31 @@ impl ToCommonHelmChart for LokiChart {
                             .unwrap_or(&"".to_string())
                             .to_string(),
                     },
+                    // Azure blob storage configuration
+                    ChartSetValue {
+                        key: "loki.storage.azure.account_name".to_string(),
+                        value: blob_storage_configuration
+                            .azure_loki_storage_service_account
+                            .as_ref()
+                            .unwrap_or(&"".to_string())
+                            .to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.storage.azure.container_name".to_string(),
+                        value: bucket_name.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.storage_config.azure.container_name".to_string(),
+                        value: bucket_name.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "loki.storage_config.azure.account_name".to_string(),
+                        value: blob_storage_configuration
+                            .azure_loki_storage_service_account
+                            .as_ref()
+                            .unwrap_or(&"".to_string())
+                            .to_string(),
+                    },
                 ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
@@ -314,7 +362,36 @@ impl ToCommonHelmChart for LokiChart {
                 )),
                 false => None,
             },
-        })
+        };
+
+        // Specific Azure blob storage configuration
+        if let LokiObjectBucketConfiguration::BlobStorage(_azure_blob_storage_config) =
+            &self.loki_object_bucket_configuration
+        {
+            // Add this label to the Loki pods to enable workload identity
+            common_chart.chart_info.values_string.push(ChartSetValue {
+                key: r"loki.podLabels.azure\.workload\.identity/use".to_string(),
+                value: "true".to_string(),
+            });
+            common_chart.chart_info.values.push(ChartSetValue {
+                key: r"serviceAccount.name".to_string(),
+                value: "qovery-storage".to_string(),
+            });
+            common_chart.chart_info.values_string.push(ChartSetValue {
+                key: r"serviceAccount.labels.azure\.workload\.identity/use".to_string(),
+                value: "true".to_string(),
+            });
+            common_chart.chart_info.values.push(ChartSetValue {
+                key: r"serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
+                value: blob_storage_configuration
+                    .azure_loki_msi_client_id
+                    .as_ref()
+                    .unwrap_or(&"".to_string())
+                    .to_string(),
+            });
+        }
+
+        Ok(common_chart)
     }
 }
 
@@ -351,8 +428,8 @@ mod tests {
         LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
     };
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartTimeout, HelmChartType, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
@@ -474,6 +551,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

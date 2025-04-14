@@ -6,15 +6,15 @@ use crate::environment::models::scaleway::ScwRegion;
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use crate::infrastructure::models::container_registry::{
-    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
-    RepositoryInfo,
+    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
 use crate::runtime::block_on_with_timeout;
-use base64::engine::general_purpose;
 use base64::Engine;
-use retry::delay::Fixed;
+use base64::engine::general_purpose;
 use retry::OperationResult;
+use retry::delay::Fixed;
 use std::collections::HashSet;
 use url::Url;
 use uuid::Uuid;
@@ -171,7 +171,7 @@ impl ScalewayCR {
                     registry_name: self.name.to_string(),
                     repository_name: image.registry_name.to_string(),
                     image_name: image.name.to_string(),
-                })
+                });
             }
         };
 
@@ -397,13 +397,13 @@ impl ContainerRegistry for ScalewayCR {
                     registry_name: self.name.to_string(),
                     repository_name: repository_name.to_string(),
                     raw_error_message,
-                })
+                });
             }
             Err(_) => {
                 return Err(ContainerRegistryError::RepositoryDoesntExistInRegistry {
                     registry_name: self.name.to_string(),
                     repository_name: repository_name.to_string(),
-                })
+                });
             }
         };
 

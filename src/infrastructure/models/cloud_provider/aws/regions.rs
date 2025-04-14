@@ -1,5 +1,5 @@
-use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::domain::ToTerraformString;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone::*;
 use crate::infrastructure::models::cloud_provider::aws::regions::RegionAndZoneErrors::*;
 use crate::infrastructure::models::object_storage::StorageRegion;
@@ -72,6 +72,10 @@ pub enum AwsZone {
     EuCentral1A,
     EuCentral1B,
     EuCentral1C,
+    // Zurich
+    EuCentral2A,
+    EuCentral2B,
+    EuCentral2C,
     // Ireland
     EuWest1A,
     EuWest1B,
@@ -133,6 +137,7 @@ impl AwsZone {
             CnNorth1A | CnNorth1B | CnNorth1C => AwsRegion::CnNorth1,
             CnNorthwest1A | CnNorthwest1B | CnNorthwest1C => AwsRegion::CnNorthwest1,
             EuCentral1A | EuCentral1B | EuCentral1C => AwsRegion::EuCentral1,
+            EuCentral2A | EuCentral2B | EuCentral2C => AwsRegion::EuCentral2,
             EuWest1A | EuWest1B | EuWest1C => AwsRegion::EuWest1,
             EuWest2A | EuWest2B | EuWest2C => AwsRegion::EuWest2,
             EuWest3A | EuWest3B | EuWest3C => AwsRegion::EuWest3,
@@ -200,6 +205,9 @@ impl ToCloudProviderFormat for AwsZone {
             EuCentral1A => "eu-central-1a",
             EuCentral1B => "eu-central-1b",
             EuCentral1C => "eu-central-1c",
+            EuCentral2A => "eu-central-2a",
+            EuCentral2B => "eu-central-2b",
+            EuCentral2C => "eu-central-2c",
             EuWest1A => "eu-west-1a",
             EuWest1B => "eu-west-1b",
             EuWest1C => "eu-west-1c",
@@ -291,6 +299,9 @@ impl FromStr for AwsZone {
             "eu-central-1a" => Ok(EuCentral1A),
             "eu-central-1b" => Ok(EuCentral1B),
             "eu-central-1c" => Ok(EuCentral1C),
+            "eu-central-2a" => Ok(EuCentral2A),
+            "eu-central-2b" => Ok(EuCentral2B),
+            "eu-central-2c" => Ok(EuCentral2C),
             "eu-west-1a" => Ok(EuWest1A),
             "eu-west-1b" => Ok(EuWest1B),
             "eu-west-1c" => Ok(EuWest1C),
@@ -345,6 +356,7 @@ pub enum AwsRegion {
     CnNorth1,
     CnNorthwest1,
     EuCentral1,
+    EuCentral2,
     EuWest1,
     EuWest2,
     EuWest3,
@@ -372,6 +384,7 @@ impl FromStr for AwsRegion {
             "ap-southeast-2" | "apsoutheast2" => Ok(AwsRegion::ApSoutheast2),
             "ca-central-1" | "cacentral1" => Ok(AwsRegion::CaCentral1),
             "eu-central-1" | "eucentral1" => Ok(AwsRegion::EuCentral1),
+            "eu-central-2" | "eucentral2" => Ok(AwsRegion::EuCentral2),
             "eu-west-1" | "euwest1" => Ok(AwsRegion::EuWest1),
             "eu-west-2" | "euwest2" => Ok(AwsRegion::EuWest2),
             "eu-west-3" | "euwest3" => Ok(AwsRegion::EuWest3),
@@ -413,6 +426,7 @@ impl ToCloudProviderFormat for AwsRegion {
             AwsRegion::CnNorth1 => "cn-north-1",
             AwsRegion::CnNorthwest1 => "cn-northwest-1",
             AwsRegion::EuCentral1 => "eu-central-1",
+            AwsRegion::EuCentral2 => "eu-central-2",
             AwsRegion::EuWest1 => "eu-west-1",
             AwsRegion::EuWest2 => "eu-west-2",
             AwsRegion::EuWest3 => "eu-west-3",
@@ -487,6 +501,9 @@ impl AwsRegion {
             }
             AwsRegion::EuCentral1 => {
                 vec![EuCentral1A, EuCentral1B, EuCentral1C]
+            }
+            AwsRegion::EuCentral2 => {
+                vec![EuCentral2A, EuCentral2B, EuCentral2C]
             }
             AwsRegion::EuWest1 => {
                 vec![EuWest1A, EuWest1B, EuWest1C]
@@ -604,6 +621,7 @@ mod tests {
                     AwsRegion::CnNorth1 => "cn-north-1",
                     AwsRegion::CnNorthwest1 => "cn-northwest-1",
                     AwsRegion::EuCentral1 => "eu-central-1",
+                    AwsRegion::EuCentral2 => "eu-central-2",
                     AwsRegion::EuWest1 => "eu-west-1",
                     AwsRegion::EuWest2 => "eu-west-2",
                     AwsRegion::EuWest3 => "eu-west-3",
@@ -672,6 +690,9 @@ mod tests {
                     AwsRegion::EuCentral1 => {
                         vec![AwsZone::EuCentral1A, AwsZone::EuCentral1B, AwsZone::EuCentral1C]
                     }
+                    AwsRegion::EuCentral2 => {
+                        vec![AwsZone::EuCentral2A, AwsZone::EuCentral2B, AwsZone::EuCentral2C]
+                    }
                     AwsRegion::EuWest1 => {
                         vec![AwsZone::EuWest1A, AwsZone::EuWest1B, AwsZone::EuWest1C]
                     }
@@ -726,6 +747,7 @@ mod tests {
                     AwsRegion::CnNorth1 => "CnNorth1",
                     AwsRegion::CnNorthwest1 => "CnNorthwest1",
                     AwsRegion::EuCentral1 => "EuCentral1",
+                    AwsRegion::EuCentral2 => "EuCentral2",
                     AwsRegion::EuWest1 => "EuWest1",
                     AwsRegion::EuWest2 => "EuWest2",
                     AwsRegion::EuWest3 => "EuWest3",
@@ -802,6 +824,9 @@ mod tests {
                     AwsZone::EuCentral1A => "eu-central-1a",
                     AwsZone::EuCentral1B => "eu-central-1b",
                     AwsZone::EuCentral1C => "eu-central-1c",
+                    AwsZone::EuCentral2A => "eu-central-2a",
+                    AwsZone::EuCentral2B => "eu-central-2b",
+                    AwsZone::EuCentral2C => "eu-central-2c",
                     AwsZone::EuWest1A => "eu-west-1a",
                     AwsZone::EuWest1B => "eu-west-1b",
                     AwsZone::EuWest1C => "eu-west-1c",
@@ -860,6 +885,7 @@ mod tests {
                     AwsZone::CnNorth1A | AwsZone::CnNorth1B | AwsZone::CnNorth1C => AwsRegion::CnNorth1,
                     AwsZone::CnNorthwest1A | AwsZone::CnNorthwest1B | AwsZone::CnNorthwest1C => AwsRegion::CnNorthwest1,
                     AwsZone::EuCentral1A | AwsZone::EuCentral1B | AwsZone::EuCentral1C => AwsRegion::EuCentral1,
+                    AwsZone::EuCentral2A | AwsZone::EuCentral2B | AwsZone::EuCentral2C => AwsRegion::EuCentral2,
                     AwsZone::EuWest1A | AwsZone::EuWest1B | AwsZone::EuWest1C => AwsRegion::EuWest1,
                     AwsZone::EuWest2A | AwsZone::EuWest2B | AwsZone::EuWest2C => AwsRegion::EuWest2,
                     AwsZone::EuWest3A | AwsZone::EuWest3B | AwsZone::EuWest3C => AwsRegion::EuWest3,
@@ -925,6 +951,9 @@ mod tests {
                     AwsZone::EuCentral1A => "eu-central-1a",
                     AwsZone::EuCentral1B => "eu-central-1b",
                     AwsZone::EuCentral1C => "eu-central-1c",
+                    AwsZone::EuCentral2A => "eu-central-2a",
+                    AwsZone::EuCentral2B => "eu-central-2b",
+                    AwsZone::EuCentral2C => "eu-central-2c",
                     AwsZone::EuWest1A => "eu-west-1a",
                     AwsZone::EuWest1B => "eu-west-1b",
                     AwsZone::EuWest1C => "eu-west-1c",

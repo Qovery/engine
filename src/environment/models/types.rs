@@ -1,4 +1,5 @@
 use serde_derive::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::fmt;
 use std::fmt::Write;
 use std::str::FromStr;
@@ -36,7 +37,7 @@ pub trait ToTeraContext {
 
 // unfortunately some proposed versions are not SemVer like Elasticache (6.x)
 // this is why we need ot have our own structure
-#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct VersionsNumber {
     pub(crate) major: String,
     pub(crate) minor: Option<String>,
@@ -65,6 +66,35 @@ impl VersionsNumber {
     }
 }
 
+impl PartialEq for VersionsNumber {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == Ordering::Equal
+    }
+}
+
+impl Eq for VersionsNumber {}
+
+impl Ord for VersionsNumber {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Helper to parse Option<String> into numeric value or default to 0
+        fn parse_or_default(version_part: &Option<String>) -> String {
+            version_part.as_deref().unwrap_or("0").to_string()
+        }
+
+        self.major
+            .cmp(&other.major) // Compare major versions
+            .then_with(|| parse_or_default(&self.minor).cmp(&parse_or_default(&other.minor)))
+            .then_with(|| parse_or_default(&self.patch).cmp(&parse_or_default(&other.patch)))
+            .then_with(|| self.suffix.cmp(&other.suffix))
+    }
+}
+
+impl PartialOrd for VersionsNumber {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl FromStr for VersionsNumber {
     type Err = CommandError;
 
@@ -83,7 +113,7 @@ impl FromStr for VersionsNumber {
             None => {
                 return Err(CommandError::new_from_safe_message(format!(
                     "please check the version you've sent ({version}), it can't be checked"
-                )))
+                )));
             }
         };
 
@@ -92,9 +122,20 @@ impl FromStr for VersionsNumber {
             Arc::from(minor.replace('+', ""))
         });
 
-        let patch: Option<Arc<str>> = version_split.next().map(|patch| Arc::from(patch.to_string()));
+        let mut patch: Option<Arc<str>> = None;
+        let mut suffix: Option<Arc<str>> = None;
 
-        let suffix: Option<Arc<str>> = version_split.next().map(|suffix| Arc::from(suffix.to_string()));
+        if let Some(patch_or_suffix) = version_split.next() {
+            let patch_parts: Vec<&str> = patch_or_suffix.splitn(2, '-').collect();
+            patch = Some(Arc::from(patch_parts[0].to_string()));
+            if patch_parts.len() > 1 {
+                suffix = Some(Arc::from(patch_parts[1].to_string()));
+            }
+        }
+
+        if let Some(explicit_suffix) = version_split.next() {
+            suffix = Some(Arc::from(explicit_suffix.to_string()));
+        }
 
         // TODO(benjaminch): Handle properly the case where versions are empty
         // eq. 1..2
@@ -123,7 +164,7 @@ impl fmt::Display for VersionsNumber {
         }
 
         if let Some(suffix) = &self.suffix {
-            f.write_char('.')?;
+            f.write_char('-')?;
             f.write_str(suffix)?;
         }
 
@@ -235,5 +276,218 @@ impl TryFrom<f64> for Percentage {
         }
 
         Ok(Percentage(value))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_versions_number_to_string() {
+        // setup:
+        struct TestCase {
+            input: VersionsNumber,
+            expected: String,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                expected: "1.2.3".to_string(),
+            },
+            TestCase {
+                input: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: Some("beta".to_string()),
+                },
+                expected: "1.2.3-beta".to_string(),
+            },
+            TestCase {
+                input: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: None,
+                    suffix: None,
+                },
+                expected: "1.2".to_string(),
+            },
+            TestCase {
+                input: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: "1".to_string(),
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let result = test_case.input.to_string();
+
+            // validate:
+            assert_eq!(test_case.expected, result);
+        }
+    }
+
+    #[test]
+    fn test_versions_number_from_str() {
+        // setup:
+        struct TestCase<'a> {
+            input: &'a str,
+            expected: VersionsNumber,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: "1.2.3",
+                expected: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+            },
+            TestCase {
+                input: "1.2.3-beta",
+                expected: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: Some("beta".to_string()),
+                },
+            },
+            TestCase {
+                input: "1.2",
+                expected: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: None,
+                    suffix: None,
+                },
+            },
+            TestCase {
+                input: "1",
+                expected: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: None,
+                    patch: None,
+                    suffix: None,
+                },
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let result = VersionsNumber::from_str(test_case.input).unwrap();
+
+            // validate:
+            assert_eq!(test_case.expected, result);
+        }
+    }
+
+    #[test]
+    fn test_versions_number_compare() {
+        // setup:
+        struct TestCase {
+            left: VersionsNumber,
+            right: VersionsNumber,
+            expected: Ordering,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                left: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                right: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                expected: Ordering::Equal,
+            },
+            TestCase {
+                left: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                right: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("4".to_string()),
+                    suffix: None,
+                },
+                expected: Ordering::Less,
+            },
+            TestCase {
+                left: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                right: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("2".to_string()),
+                    suffix: None,
+                },
+                expected: Ordering::Greater,
+            },
+            TestCase {
+                left: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+                right: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: Some("beta".to_string()),
+                },
+                expected: Ordering::Less,
+            },
+            TestCase {
+                left: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: Some("beta".to_string()),
+                },
+                right: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: Some("alpha".to_string()),
+                },
+                expected: Ordering::Greater,
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let result = test_case.left.cmp(&test_case.right);
+
+            // validate:
+            assert_eq!(test_case.expected, result);
+        }
     }
 }

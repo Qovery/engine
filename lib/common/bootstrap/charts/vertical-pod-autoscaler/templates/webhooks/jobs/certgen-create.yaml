@@ -2,10 +2,11 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name:  {{ include "vpa.fullname" . }}-admission-certgen-create
+  name:  {{ include "vpa.fullname" . }}-admission-certgen
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "helm.sh/hook-weight": "-110"
   labels:
     app.kubernetes.io/component: certgen
     {{- include "vpa.labels" . | nindent 4 }}
@@ -15,7 +16,7 @@ spec:
     metadata:
       name: {{ include "vpa.fullname" . }}-admission-certgen
       labels:
-        app.kubernetes.io/component: cadmission-ertgen
+        app.kubernetes.io/component: admission-certgen
         {{- include "vpa.labels" . | nindent 8 }}
     spec:
       restartPolicy: OnFailure
@@ -34,7 +35,11 @@ spec:
             - --secret-name={{ include "vpa.webhook.secret" . }}
           resources:
             {{- toYaml .Values.admissionController.certGen.resources | nindent 12 }}
-      {{- with .Values.admissionController.certGen.securityContext }}
+          {{- with .Values.admissionController.certGen.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.admissionController.certGen.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}

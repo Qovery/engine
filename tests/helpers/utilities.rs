@@ -4,8 +4,8 @@ extern crate passwords;
 extern crate scaleway_api_rs;
 extern crate time;
 
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use chrono::Utc;
 use curl::easy::Easy;
 use dirs::home_dir;
@@ -27,6 +27,12 @@ use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
 
+use crate::helpers::azure::AZURE_SELF_HOSTED_DATABASE_DISK_TYPE;
+use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
+use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
+use crate::helpers::scaleway::{
+    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
+};
 use qovery_engine::cmd;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::cmd::kubectl::{kubectl_get_pvc, kubectl_get_svc};
@@ -35,31 +41,25 @@ use qovery_engine::constants::{
     AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, SCW_ACCESS_KEY, SCW_DEFAULT_PROJECT_ID, SCW_SECRET_KEY,
 };
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
+use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
-use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::local_docker::LocalDocker;
-use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::{Context, Features, Metadata};
 use qovery_engine::io_models::database::{DatabaseKind, DatabaseMode};
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::variable_utils::VariableInfo;
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::msg_publisher::StdMsgPublisher;
-
-use crate::helpers::common::{DEFAULT_QUICK_RESOURCE_TTL_IN_SECONDS, DEFAULT_RESOURCE_TTL_IN_SECONDS};
-use crate::helpers::gcp::GCP_SELF_HOSTED_DATABASE_DISK_TYPE;
-use crate::helpers::scaleway::{
-    SCW_MANAGED_DATABASE_DISK_TYPE, SCW_MANAGED_DATABASE_INSTANCE_TYPE, SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
-};
 
 pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
     #[derive(Deserialize)]
@@ -111,7 +111,9 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         forced_upgrade: Option::from(env::var_os("forced_upgrade").is_some()),
         is_first_cluster_deployment: Some(false),
     };
-    let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    // todo(pmavro): temporary remove metrics while implementing them
+    // let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
+    let mut enabled_features = vec![Features::LogsHistory];
     if let Some(kkind) = kind {
         if kkind == KKind::Eks {
             enabled_features.push(Features::Grafana)
@@ -175,11 +177,19 @@ pub struct FuncTestsSecrets {
     pub AWS_DEFAULT_REGION: Option<String>,
     pub AWS_TEST_KUBECONFIG_b64: Option<String>,
     pub AWS_SECRET_ACCESS_KEY: Option<String>,
+    pub AWS_SESSION_TOKEN: Option<String>,
     pub AWS_TEST_CLUSTER_ID: Option<String>,
     pub AWS_TEST_CLUSTER_LONG_ID: Option<Uuid>,
     pub AWS_TEST_ORGANIZATION_ID: Option<String>,
     pub AWS_TEST_ORGANIZATION_LONG_ID: Option<Uuid>,
     pub AWS_TEST_CLUSTER_REGION: Option<String>,
+    pub AZURE_STORAGE_ACCOUNT: Option<String>,
+    pub AZURE_STORAGE_ACCESS_KEY: Option<String>,
+    pub AZURE_TENANT_ID: Option<String>,
+    pub AZURE_CLIENT_ID: Option<String>,
+    pub AZURE_CLIENT_SECRET: Option<String>,
+    pub AZURE_SUBSCRIPTION_ID: Option<String>,
+    pub AZURE_TEST_KUBECONFIG_b64: Option<String>,
     pub BIN_VERSION_FILE: Option<String>,
     pub CLOUDFLARE_DOMAIN: Option<String>,
     pub CLOUDFLARE_ID: Option<String>,
@@ -279,11 +289,19 @@ impl FuncTestsSecrets {
             AWS_DEFAULT_REGION: None,
             AWS_TEST_KUBECONFIG_b64: None,
             AWS_SECRET_ACCESS_KEY: None,
+            AWS_SESSION_TOKEN: None,
             AWS_TEST_CLUSTER_ID: None,
             AWS_TEST_CLUSTER_LONG_ID: None,
             AWS_TEST_ORGANIZATION_ID: None,
             AWS_TEST_ORGANIZATION_LONG_ID: None,
             AWS_TEST_CLUSTER_REGION: None,
+            AZURE_STORAGE_ACCOUNT: None,
+            AZURE_STORAGE_ACCESS_KEY: None,
+            AZURE_CLIENT_ID: None,
+            AZURE_CLIENT_SECRET: None,
+            AZURE_SUBSCRIPTION_ID: None,
+            AZURE_TENANT_ID: None,
+            AZURE_TEST_KUBECONFIG_b64: None,
             BIN_VERSION_FILE: None,
             CLOUDFLARE_DOMAIN: None,
             CLOUDFLARE_ID: None,
@@ -293,11 +311,12 @@ impl FuncTestsSecrets {
             DISCORD_API_URL: None,
             GCP_CREDENTIALS: None,
             GCP_PROJECT_NAME: None,
-            GCP_DEFAULT_REGION: None,
             GCP_TEST_ORGANIZATION_ID: None,
             GCP_TEST_ORGANIZATION_LONG_ID: None,
             GCP_TEST_CLUSTER_ID: None,
             GCP_TEST_CLUSTER_LONG_ID: None,
+            GCP_DEFAULT_REGION: None,
+            GCP_TEST_KUBECONFIG_b64: None,
             GITHUB_ACCESS_TOKEN: None,
             HTTP_LISTEN_ON: None,
             LETS_ENCRYPT_EMAIL_REPORT: None,
@@ -307,8 +326,8 @@ impl FuncTestsSecrets {
             QOVERY_ENGINE_CONTROLLER_TOKEN: None,
             QOVERY_SSH_USER: None,
             RUST_LOG: None,
-            SCALEWAY_ACCESS_KEY: None,
             SCALEWAY_DEFAULT_PROJECT_ID: None,
+            SCALEWAY_ACCESS_KEY: None,
             SCALEWAY_SECRET_KEY: None,
             SCALEWAY_DEFAULT_REGION: None,
             SCALEWAY_TEST_CLUSTER_ID: None,
@@ -329,13 +348,14 @@ impl FuncTestsSecrets {
             QOVERY_DNS_API_URL: None,
             QOVERY_DNS_API_KEY: None,
             QOVERY_DNS_DOMAIN: None,
-            GCP_TEST_KUBECONFIG_b64: None,
         };
 
         let vault_config = match Self::get_vault_config() {
             Ok(vault_config) => vault_config,
             Err(_) => {
-                warn!("Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables");
+                warn!(
+                    "Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables"
+                );
                 return empty_secrets;
             }
         };
@@ -381,6 +401,7 @@ impl FuncTestsSecrets {
                 .ok(),
             ),
             AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
+            AWS_SESSION_TOKEN: Self::select_secret("AWS_SESSION_TOKEN", secrets.AWS_SESSION_TOKEN),
             AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
             AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
                 "AWS_TEST_ORGANIZATION_LONG_ID",
@@ -389,6 +410,21 @@ impl FuncTestsSecrets {
             AWS_TEST_CLUSTER_REGION: Self::select_secret("AWS_TEST_CLUSTER_REGION", secrets.AWS_TEST_CLUSTER_REGION),
             AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
             AWS_TEST_CLUSTER_LONG_ID: Self::select_secret("AWS_TEST_CLUSTER_LONG_ID", secrets.AWS_TEST_CLUSTER_LONG_ID),
+            AZURE_STORAGE_ACCOUNT: Self::select_secret("AZURE_STORAGE_ACCOUNT", secrets.AZURE_STORAGE_ACCOUNT),
+            AZURE_STORAGE_ACCESS_KEY: Self::select_secret("AZURE_STORAGE_ACCESS_KEY", secrets.AZURE_STORAGE_ACCESS_KEY),
+            AZURE_CLIENT_ID: Self::select_secret("AZURE_CLIENT_ID", secrets.AZURE_CLIENT_ID),
+            AZURE_CLIENT_SECRET: Self::select_secret("AZURE_CLIENT_SECRET", secrets.AZURE_CLIENT_SECRET),
+            AZURE_TENANT_ID: Self::select_secret("AZURE_TENANT_ID", secrets.AZURE_TENANT_ID),
+            AZURE_SUBSCRIPTION_ID: Self::select_secret("AZURE_SUBSCRIPTION_ID", secrets.AZURE_SUBSCRIPTION_ID),
+            AZURE_TEST_KUBECONFIG_b64: Self::select_secret(
+                "AZURE_TEST_KUBECONFIG",
+                String::from_utf8(
+                    general_purpose::STANDARD
+                        .decode(secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().unwrap())
+                        .unwrap(),
+                )
+                .ok(),
+            ),
             BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
             CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
             CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
@@ -511,12 +547,12 @@ pub fn init() -> Instant {
     let _ = match env::var_os(ci_var) {
         Some(_) => tracing_subscriber::fmt()
             .json()
+            .compact()
             .with_max_level(tracing::Level::INFO)
-            .with_current_span(true)
             .try_init(),
         None => {
             if env::var_os("RUST_LOG").is_none() {
-                env::set_var("RUST_LOG", "INFO")
+                unsafe { env::set_var("RUST_LOG", "INFO") }
             }
             tracing_subscriber::fmt()
                 .with_env_filter(EnvFilter::try_from_env("RUST_LOG").unwrap())
@@ -644,6 +680,7 @@ fn get_cloud_provider_credentials(provider_kind: Kind) -> KubernetesCredentials 
                     .expect("SCALEWAY_DEFAULT_PROJECT_ID is not set in secrets"),
             ),
         ],
+        Kind::Azure => vec![],
         Kind::Gcp => vec![],
         Kind::OnPremise => vec![],
     }
@@ -883,6 +920,10 @@ pub fn db_disk_type(provider_kind: Kind, database_mode: DatabaseMode) -> String 
             DatabaseMode::MANAGED => AwsStorageType::GP2.to_cloud_provider_format().to_string(),
             DatabaseMode::CONTAINER => AwsStorageType::GP2.to_k8s_storage_class(),
         },
+        Kind::Azure => match database_mode {
+            DatabaseMode::MANAGED => todo!(),
+            DatabaseMode::CONTAINER => AZURE_SELF_HOSTED_DATABASE_DISK_TYPE.to_k8s_storage_class(),
+        },
         Kind::Scw => match database_mode {
             DatabaseMode::MANAGED => SCW_MANAGED_DATABASE_DISK_TYPE,
             DatabaseMode::CONTAINER => SCW_SELF_HOSTED_DATABASE_DISK_TYPE,
@@ -912,7 +953,8 @@ pub fn db_instance_type(
             DatabaseMode::MANAGED => Some(Box::new(SCW_MANAGED_DATABASE_INSTANCE_TYPE)),
             DatabaseMode::CONTAINER => None,
         },
-        Kind::Gcp => None, // TODO: once managed DB is implemented
+        Kind::Azure => None, // TODO: once managed DB is implemented
+        Kind::Gcp => None,   // TODO: once managed DB is implemented
         Kind::OnPremise => todo!(),
     }
 }

@@ -1,7 +1,7 @@
 use crate::environment::report::logger::{EnvLogger, EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use std::sync::mpsc::RecvTimeoutError;
-use std::sync::{mpsc, Arc, Barrier};
+use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -13,6 +13,7 @@ pub mod logger;
 pub mod obfuscation_service;
 mod recap_reporter;
 pub mod router;
+pub mod terraform_service;
 mod utils;
 
 const MAX_ELAPSED_TIME_WITHOUT_REPORT: Duration = Duration::from_secs(20);
@@ -71,7 +72,7 @@ where
     pub post_run_success: &'a Post,
 }
 
-impl<'a, Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskImpl<'a, Pre, Run, Post, Ret>
+impl<Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskImpl<'_, Pre, Run, Post, Ret>
 where
     Pre: Fn(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
     Run: Fn(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
@@ -211,12 +212,12 @@ pub fn execute_long_deployment<Log, TaskRet>(
 
 #[cfg(test)]
 mod test {
-    use crate::environment::report::{execute_long_deployment, DeploymentReporter, DeploymentTask};
+    use crate::environment::report::{DeploymentReporter, DeploymentTask, execute_long_deployment};
     use crate::errors::EngineError;
     use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
     use crate::io_models::QoveryIdentifier;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
     use std::time::Duration;
     use uuid::Uuid;

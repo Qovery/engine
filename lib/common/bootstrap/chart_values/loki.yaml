@@ -7,6 +7,7 @@ tableManager:
   retention_deletes_enabled: set-by-engine-code # qovery setting
   retention_period: set-by-engine-code # qovery setting
 loki:
+  podLabels: { }
   # remove if you don't want to use a custom image
   image:
     registry: set-by-engine-code
@@ -86,6 +87,10 @@ loki:
       chunkBufferSize: 0
       requestTimeout: "0s"
       enableHttp2: true
+    azure:
+      account_name: set-by-engine-code
+      container_name: set-by-engine-code
+      use_federated_token: true # Use federated token for authentication
   storage_config:
     gcs:
       bucket_name: set-by-engine-code
@@ -94,7 +99,10 @@ loki:
       shared_store: set-by-engine-code
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
-
+    azure:
+      account_name: set-by-engine-code
+      container_name: set-by-engine-code
+      use_federated_token: true # Use federated token for authentication
 monitoring:
   dashboards:
     enabled: false
@@ -145,4 +153,6 @@ singleBinary:
   #   storageClass: set-by-engine-code
 
 serviceAccount:
+  name: null
+  labels: { }
   annotations: { }

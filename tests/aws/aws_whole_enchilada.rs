@@ -1,13 +1,13 @@
 use crate::helpers;
-use crate::helpers::common::ClusterDomain;
-use crate::helpers::kubernetes::{cluster_test, ClusterTestType};
+use crate::helpers::common::{ClusterDomain, NodeManager};
+use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_cluster, engine_run_test, generate_cluster_id, generate_id, logger, metrics_registry,
 };
 use ::function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
-use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
+use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::io_models::models::CpuArchitecture;
 use qovery_engine::io_models::models::VpcQoveryNetworkMode::WithNatGateways;
@@ -59,6 +59,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -105,6 +106,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             None,
             CpuArchitecture::AMD64,
             None,
+            NodeManager::Default,
         )
     })
 }
@@ -152,6 +154,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }
@@ -199,6 +202,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
+            NodeManager::Default,
         )
     })
 }

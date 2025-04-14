@@ -12,6 +12,7 @@ rules:
       - pods
       - pods/log
       - namespaces
+      - nodes
     verbs:
       - get
       - list
@@ -28,4 +29,15 @@ rules:
       - list
       - watch
       - create
+  - apiGroups:
+      - "batch"
+    resources:
+        - "jobs"
+        - "jobs/status"
+    verbs:
+        - "create"
+        - "delete"
+        - "get"
+        - "list"
+        - "watch"
 {{- end }}

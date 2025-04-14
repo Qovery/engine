@@ -189,50 +189,50 @@ mod tests {
         assert!(
             is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(4).minor(1).build()).is_ok()
         );
-        assert!(is_allowed_containered_mongodb_version(
-            &VersionsNumberBuilder::new().major(4).minor(2).patch(3).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(4).minor(2).patch(3).build())
+                .is_ok()
+        );
 
         // v5
         assert!(is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(5).build()).is_ok());
         assert!(
             is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(5).minor(2).build()).is_ok()
         );
-        assert!(is_allowed_containered_mongodb_version(
-            &VersionsNumberBuilder::new().major(5).minor(3).patch(4).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(5).minor(3).patch(4).build())
+                .is_ok()
+        );
 
         // v6
         assert!(is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(6).build()).is_ok());
         assert!(
             is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(6).minor(3).build()).is_ok()
         );
-        assert!(is_allowed_containered_mongodb_version(
-            &VersionsNumberBuilder::new().major(6).minor(4).patch(5).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(6).minor(4).patch(5).build())
+                .is_ok()
+        );
 
         // v7
         assert!(is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(7).build()).is_ok());
         assert!(
             is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(7).minor(4).build()).is_ok()
         );
-        assert!(is_allowed_containered_mongodb_version(
-            &VersionsNumberBuilder::new().major(7).minor(5).patch(6).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(7).minor(5).patch(6).build())
+                .is_ok()
+        );
 
         // v8
         assert!(is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).build()).is_ok());
         assert!(
             is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).minor(4).build()).is_ok()
         );
-        assert!(is_allowed_containered_mongodb_version(
-            &VersionsNumberBuilder::new().major(8).minor(5).patch(6).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_mongodb_version(&VersionsNumberBuilder::new().major(8).minor(5).patch(6).build())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -262,70 +262,70 @@ mod tests {
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(11).minor(6).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(11).minor(7).patch(2).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(11).minor(7).patch(2).build())
+                .is_ok()
+        );
 
         // v12
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(12).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(12).minor(7).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(12).minor(8).patch(3).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(12).minor(8).patch(3).build())
+                .is_ok()
+        );
 
         // v13
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(13).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(13).minor(8).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(13).minor(9).patch(4).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(13).minor(9).patch(4).build())
+                .is_ok()
+        );
 
         // v14
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(14).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(14).minor(9).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(14).minor(10).patch(5).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(14).minor(10).patch(5).build())
+                .is_ok()
+        );
 
         // v15
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(15).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(15).minor(10).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(15).minor(11).patch(6).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(15).minor(11).patch(6).build())
+                .is_ok()
+        );
 
         // v16
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).minor(11).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(16).minor(12).patch(7).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(16).minor(12).patch(7).build())
+                .is_ok()
+        );
 
         // v17
         assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).build()).is_ok());
         assert!(
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).minor(11).build()).is_ok()
         );
-        assert!(is_allowed_containered_postgres_version(
-            &VersionsNumberBuilder::new().major(17).minor(12).patch(7).build()
-        )
-        .is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).minor(12).patch(7).build())
+                .is_ok()
+        );
     }
 
     #[test]

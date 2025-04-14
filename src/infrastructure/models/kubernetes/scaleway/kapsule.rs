@@ -2,25 +2,28 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
-use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
 use crate::infrastructure::models::kubernetes::{
     self, InstanceType, Kind, Kubernetes, KubernetesVersion, ProviderOptions,
 };
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::{CpuArchitecture, NodeGroups};
-use crate::io_models::QoveryIdentifier;
 use crate::logger::Logger;
 
 use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::scaleway::ScwZone;
 use crate::infrastructure::action::InfrastructureAction;
+use crate::infrastructure::models::cloud_provider::scaleway::ScalewayCredentials;
 use crate::infrastructure::models::object_storage::scaleway_object_storage::ScalewayOS;
+use crate::io_models::metrics::MetricsParameters;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
+use chrono::{DateTime, Utc};
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -76,14 +79,12 @@ pub struct KapsuleOptions {
     pub qovery_engine_location: EngineLocation,
 
     // Scaleway
-    pub scaleway_project_id: String,
-    pub scaleway_access_key: String,
-    pub scaleway_secret_key: String,
     #[serde(default)]
     pub scaleway_kubernetes_type: KapsuleClusterType,
 
     // Other
     pub tls_email_report: String,
+    pub metrics_parameters: Option<MetricsParameters>,
 }
 
 impl ProviderOptions for KapsuleOptions {}
@@ -98,11 +99,9 @@ impl KapsuleOptions {
         grafana_admin_user: String,
         grafana_admin_password: String,
         qovery_engine_location: EngineLocation,
-        scaleway_project_id: String,
-        scaleway_access_key: String,
-        scaleway_secret_key: String,
         tls_email_report: String,
         scaleway_kubernetes_type: KapsuleClusterType,
+        metrics_parameters: Option<MetricsParameters>,
     ) -> KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
@@ -114,11 +113,9 @@ impl KapsuleOptions {
             grafana_admin_user,
             grafana_admin_password,
             qovery_engine_location,
-            scaleway_project_id,
-            scaleway_access_key,
-            scaleway_secret_key,
             tls_email_report,
             scaleway_kubernetes_type,
+            metrics_parameters,
         }
     }
 }
@@ -128,8 +125,10 @@ pub struct Kapsule {
     id: String,
     pub long_id: Uuid,
     name: String,
+    pub credentials: ScalewayCredentials,
     pub version: KubernetesVersion,
     pub zone: ScwZone,
+    pub created_at: DateTime<Utc>,
     pub object_storage: ScalewayOS,
     pub nodes_groups: Vec<NodeGroups>,
     pub template_directory: PathBuf,
@@ -149,6 +148,7 @@ impl Kapsule {
         version: KubernetesVersion,
         zone: ScwZone,
         cloud_provider: &dyn CloudProvider,
+        created_at: DateTime<Utc>,
         nodes_groups: Vec<NodeGroups>,
         options: KapsuleOptions,
         logger: Box<dyn Logger>,
@@ -204,21 +204,34 @@ impl Kapsule {
 
         advanced_settings.validate(event_details.clone())?;
 
+        let creds = cloud_provider.downcast_ref();
+        let creds = creds
+            .as_scw()
+            .ok_or_else(|| {
+                Box::new(EngineError::new_bad_cast(
+                    event_details.clone(),
+                    "Cloudprovider is not Scaleway",
+                ))
+            })?
+            .credentials()
+            .clone();
         let object_storage = ScalewayOS::new(
             "s3-temp-id".to_string(),
             "default-s3".to_string(),
-            cloud_provider.access_key_id(),
-            cloud_provider.secret_access_key(),
+            creds.access_key.to_string(),
+            creds.secret_key.to_string(),
             zone,
         );
 
         let cluster = Kapsule {
             context,
             id: to_short_id(&long_id),
+            credentials: creds,
             long_id,
             name,
             version,
             zone,
+            created_at,
             object_storage,
             nodes_groups,
             template_directory,
@@ -244,7 +257,7 @@ impl Kapsule {
     pub fn get_configuration(&self) -> scaleway_api_rs::apis::configuration::Configuration {
         scaleway_api_rs::apis::configuration::Configuration {
             api_key: Some(scaleway_api_rs::apis::configuration::ApiKey {
-                key: self.options.scaleway_secret_key.clone(),
+                key: self.credentials.secret_key.clone(),
                 prefix: None,
             }),
             ..scaleway_api_rs::apis::configuration::Configuration::default()
@@ -259,7 +272,7 @@ impl Kapsule {
             &self.get_configuration(),
             self.region(),
             None,
-            Some(self.options.scaleway_project_id.as_str()),
+            Some(self.credentials.project_id.as_str()),
             None,
             None,
             None,
@@ -303,6 +316,10 @@ impl Kapsule {
 
     pub fn logs_bucket_name(&self) -> String {
         format!("qovery-logs-{}", self.id)
+    }
+
+    pub fn prometheus_bucket_name(&self) -> String {
+        format!("qovery-prometheus-{}", self.id)
     }
 }
 

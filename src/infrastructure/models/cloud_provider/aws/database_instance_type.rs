@@ -1,6 +1,6 @@
 use crate::environment::models::database::{DatabaseError, DatabaseInstanceType};
-use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;
@@ -1573,30 +1573,45 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_12XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_12XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_12XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_16XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_16XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_16XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_2XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_2XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_2XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_4XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_4XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_4XLARGE,
             DatabaseType::PostgreSQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_8XLARGE,
+            DatabaseType::MongoDB
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_8XLARGE,
             DatabaseType::MySQL
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_8XLARGE,
@@ -1607,6 +1622,9 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_LARGE,
             DatabaseType::PostgreSQL
+        ) | (
+            AwsDatabaseInstanceType::DB_R6GD_XLARGE,
+            DatabaseType::MongoDB
         ) | (
             AwsDatabaseInstanceType::DB_R6GD_XLARGE,
             DatabaseType::MySQL
@@ -3483,18 +3501,24 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_R6G_XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6G_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_12XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_12XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_12XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_16XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_16XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_16XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_2XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_2XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_2XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_4XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_4XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_4XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_8XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_8XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_8XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_LARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_LARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_R6GD_XLARGE, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_R6GD_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R6GD_XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R6I_12XLARGE, DatabaseType::MySQL)

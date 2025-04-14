@@ -1,11 +1,11 @@
 use crate::cmd::kubectl::{kubectl_delete_completed_jobs, kubectl_exec_delete_pod, kubectl_get_crash_looping_pods};
 use crate::errors::{CommandError, EngineError};
 use crate::events::Stage;
-use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::{
-    check_master_version_status, check_workers_pause, check_workers_status, check_workers_upgrade_status,
-    send_progress_on_long_task, Kubernetes, KubernetesVersion,
+    Kubernetes, KubernetesVersion, check_master_version_status, check_workers_pause, check_workers_status,
+    check_workers_upgrade_status, send_progress_on_long_task,
 };
 
 pub fn check_workers_on_upgrade(

@@ -8,8 +8,8 @@ use tera::Context as TeraContext;
 use uuid::Uuid;
 
 use crate::environment::models::domain::Domain;
-use crate::io_models::context::Context;
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::context::Context;
 
 pub mod cloudflare;
 pub mod errors;

@@ -21,8 +21,8 @@ webhooks:
   failurePolicy: {{ .Values.admissionController.mutatingWebhookConfiguration.failurePolicy }}
   matchPolicy: Equivalent
   name: vpa.k8s.io
-  namespaceSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.namespaceSelector | toYaml }}
-  objectSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.objectSelector | toYaml }}
+  namespaceSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.namespaceSelector | toYaml | nindent 4 }}
+  objectSelector: {{ .Values.admissionController.mutatingWebhookConfiguration.objectSelector | toYaml | nindent 4 }}
   reinvocationPolicy: Never
   rules:
   - apiGroups:

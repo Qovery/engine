@@ -1,6 +1,6 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::gcp::{CredentialsError, JsonCredentials};
-use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
@@ -10,8 +10,8 @@ use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_googleapis::devtools::artifact_registry::v1::{
     DockerImage as GcpDockerImage, Package as GcpPackage, Repository as GcpRepository,
 };
-use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use google_cloud_storage::http::buckets::Bucket as GcpBucket;
+use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use regex::Regex;
 use std::str::FromStr;
 use std::time::Duration;
@@ -19,7 +19,6 @@ use std::time::Duration;
 /// Handle conversion and deal with external types for Google cloud
 /// defined here https://github.com/yoshidan/google-cloud-rust
 /// Keeping it isolated prevent from high coupling with third party crate
-
 pub fn new_gcp_credentials_file_from_credentials(
     credentials: JsonCredentials,
 ) -> Result<CredentialsFile, CredentialsError> {
@@ -40,10 +39,7 @@ impl TryFrom<GcpBucket> for Bucket {
     type Error = String;
 
     fn try_from(gcp_bucket: GcpBucket) -> Result<Self, Self::Error> {
-        let gcp_storage_region = match GcpStorageRegion::from_str(gcp_bucket.location.as_str()) {
-            Ok(r) => r,
-            Err(e) => return Err(e),
-        };
+        let gcp_storage_region = GcpStorageRegion::from_str(gcp_bucket.location.as_str())?;
 
         Ok(Bucket {
             name: gcp_bucket.name,
@@ -56,12 +52,16 @@ impl TryFrom<GcpBucket> for Bucket {
                         _ => false,
                     })
                     .and_then(|r| r.condition.clone())
-                    .map(|c| Duration::from_secs(c.age as u64 * 60 * 60 * 24)),
+                    .map(|c| Duration::from_secs(c.age.unwrap_or_default() as u64 * 60 * 60 * 24)),
                 None => None,
             },
             versioning_activated: match gcp_bucket.versioning {
                 None => false,
                 Some(v) => v.enabled,
+            },
+            logging_activated: match gcp_bucket.logging {
+                None => false,
+                Some(l) => !l.log_bucket.is_empty(),
             },
             location: BucketRegion::GcpRegion(gcp_storage_region.clone()),
             labels: gcp_bucket.labels,
@@ -93,7 +93,7 @@ pub fn from_gcp_repository(
                     return Err(format!(
                         "Cannot extract repository name and parent from fully qualified name: `{}`",
                         gcp_repository.name.as_str()
-                    ))
+                    ));
                 }
             }
         }
@@ -137,7 +137,7 @@ impl TryFrom<GcpDockerImage> for DockerImage {
                         return Err(format!(
                             "Cannot extract docker image name and repository from fully qualified name: `{}`",
                             gcp_docker_image.name.as_str()
-                        ))
+                        ));
                     }
                 }
             }
@@ -178,7 +178,7 @@ impl TryFrom<GcpPackage> for DockerImage {
                         return Err(format!(
                             "Cannot extract docker image name and repository from fully qualified name: `{}`",
                             gcp_package.name.as_str()
-                        ))
+                        ));
                     }
                 }
             }

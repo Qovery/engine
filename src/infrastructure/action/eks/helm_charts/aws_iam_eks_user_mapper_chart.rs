@@ -1,9 +1,11 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::runtime::block_on;
 use chrono::Duration;
@@ -29,22 +31,14 @@ pub enum SSOConfig {
     Enabled { sso_role_arn: String },
 }
 
-pub enum KarpenterConfig {
-    Disabled,
-    Enabled {
-        aws_account_id: String,
-        cluster_name: String,
-    },
-}
-
 pub struct AwsIamEksUserMapperChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    aws_region: AwsRegion,
     aws_service_account_name: String,
     aws_iam_eks_user_mapper_role_arn: String,
     aws_iam_group_config: GroupConfig,
     aws_iam_sso_config: SSOConfig,
-    aws_iam_enable_karpenter: KarpenterConfig,
     refresh_interval: Duration,
     chart_resources: HelmChartResources,
 }
@@ -52,15 +46,16 @@ pub struct AwsIamEksUserMapperChart {
 impl AwsIamEksUserMapperChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
+        aws_region: AwsRegion,
         aws_service_account_name: String,
         aws_iam_eks_user_mapper_role_arn: String,
         aws_iam_group_config: GroupConfig,
         aws_iam_sso_config: SSOConfig,
-        aws_iam_enable_karpenter: KarpenterConfig,
         refresh_interval: Duration,
         chart_resources: HelmChartResourcesConstraintType,
     ) -> AwsIamEksUserMapperChart {
         AwsIamEksUserMapperChart {
+            aws_region,
             aws_service_account_name,
             aws_iam_eks_user_mapper_role_arn,
             aws_iam_group_config,
@@ -76,7 +71,6 @@ impl AwsIamEksUserMapperChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 AwsIamEksUserMapperChart::chart_name(),
             ),
-            aws_iam_enable_karpenter,
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
@@ -106,6 +100,10 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                         // we use string templating (r"...") to escape dot in annotation's key
                         key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                         value: self.aws_iam_eks_user_mapper_role_arn.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "aws.defaultRegion".to_string(),
+                        value: self.aws_region.to_cloud_provider_format().to_string(),
                     },
                     ChartSetValue {
                         key: "refreshIntervalSeconds".to_string(),
@@ -166,32 +164,10 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
             }
         }
 
-        // Enabling Karpenter
-        match &self.aws_iam_enable_karpenter {
-            KarpenterConfig::Disabled => {
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.enabled".to_string(),
-                    value: "false".to_string(),
-                });
-            }
-            KarpenterConfig::Enabled {
-                aws_account_id,
-                cluster_name,
-            } => {
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.enabled".to_string(),
-                    value: "true".to_string(),
-                });
-                chart.chart_info.values.push(ChartSetValue {
-                    key: "karpenter.iamKarpenterRoleArn".to_string(),
-                    value: format!(
-                        "arn:aws:iam::{}:role/KarpenterNodeRole-{}",
-                        aws_account_id.clone(),
-                        cluster_name.clone()
-                    ),
-                });
-            }
-        }
+        chart.chart_info.values.push(ChartSetValue {
+            key: "karpenter.enabled".to_string(),
+            value: "false".to_string(),
+        });
 
         // Activating SSO option
         match &self.aws_iam_sso_config {
@@ -247,17 +223,19 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
         ) {
             Ok(iam_user_mapper_role_result) => {
                 if iam_user_mapper_role_result.items.is_empty() {
-                    return Err(CommandError::new_from_safe_message(
-                        format!("Required role binding `eks-configmap-modifier-role` created by `{}` chart not found, chart is not installed properly.", AwsIamEksUserMapperChart::chart_name()),
-                    ));
+                    return Err(CommandError::new_from_safe_message(format!(
+                        "Required role binding `eks-configmap-modifier-role` created by `{}` chart not found, chart is not installed properly.",
+                        AwsIamEksUserMapperChart::chart_name()
+                    )));
                 }
 
                 for role_binding in iam_user_mapper_role_result.items {
                     // Check if it references the proper role
                     if role_binding.role_ref.name.to_lowercase() != "eks-configmap-modifier-role" {
-                        return Err(CommandError::new_from_safe_message(
-                            format!("Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should references `eks-configmap-modifier-role` role.", AwsIamEksUserMapperChart::chart_name()),
-                        ));
+                        return Err(CommandError::new_from_safe_message(format!(
+                            "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should references `eks-configmap-modifier-role` role.",
+                            AwsIamEksUserMapperChart::chart_name()
+                        )));
                     }
 
                     // Check if contains the subject
@@ -265,9 +243,10 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
                         if !subjects.iter().any(|e| {
                             e.name.to_lowercase() == "iam-eks-user-mapper" && e.kind.to_lowercase() == "serviceaccount"
                         }) {
-                            return Err(CommandError::new_from_safe_message(
-                                format!("Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.", AwsIamEksUserMapperChart::chart_name()),
-                            ));
+                            return Err(CommandError::new_from_safe_message(format!(
+                                "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.",
+                                AwsIamEksUserMapperChart::chart_name()
+                            )));
                         }
                     }
                 }
@@ -292,12 +271,13 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_chart::{
-        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, KarpenterConfig, SSOConfig,
+        AwsIamEksUserMapperChart, GroupConfig, GroupConfigMapping, SSOConfig,
     };
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
+        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use chrono::Duration;
     use std::env;
@@ -308,6 +288,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -319,7 +300,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -350,6 +330,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -361,7 +342,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -393,6 +373,7 @@ mod tests {
         // setup:
         let chart = AwsIamEksUserMapperChart::new(
             None,
+            AwsRegion::AfSouth1,
             "whatever".to_string(),
             "whatever".to_string(),
             GroupConfig::Enabled {
@@ -404,7 +385,6 @@ mod tests {
             SSOConfig::Enabled {
                 sso_role_arn: "whatever".to_string(),
             },
-            KarpenterConfig::Disabled,
             Duration::seconds(30),
             HelmChartResourcesConstraintType::ChartDefault,
         );
@@ -424,7 +404,11 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 
     #[test]

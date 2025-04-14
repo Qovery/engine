@@ -8,6 +8,15 @@ groupUsersSync:
   enabled: false
   iamK8sGroups: "" # "group1,group2"
 
+aws:
+  # if you want to use an existing secret, set the name here
+  # it must contain AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  # Otherwise use STS to assume a role with the service account
+  #accessKeyId: ""
+  #secretAccessKey: ""
+  existingSecretName: ""
+  defaultRegion: "us-west-1"
+
 sso:
   enabled: false
   iamSSORoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/aws-reserved/sso.amazonaws.com/[AWS_REGION]/AWSReservedSSO_AdministratorAccess_53b82e109c5e2cac"

@@ -36,6 +36,12 @@ variable "storage_type" {
   type = string
 }
 
+variable "disk_iops" {
+  description = "The amount of provisioned IOPS. Setting this implies a storage_type of 'io1' or 'io2'. Can only be set when storage_type is 'io1', 'io2' or 'gp3'. Cannot be specified for gp3 storage if the allocated_storage value is below a per-engine threshold"
+  default = {{ database_disk_iops }}
+  type = number
+}
+
 variable "encrypt_disk" {
   description = "Enable disk encryption"
   default = "{{ encrypt_disk }}"

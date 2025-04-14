@@ -1,13 +1,15 @@
 use crate::environment::models::types::Percentage;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationSnippet as NginxConfigurationSnippetModel,
-    NginxHttpSnippet as NginxHttpSnippetModel, NginxServerSnippet as NginxServerSnippetModel,
+    NginxHttpSnippet as NginxHttpSnippetModel, NginxLimitRequestStatusCode as NginxLimitRequestStatusCodeModel,
+    NginxServerSnippet as NginxServerSnippetModel,
 };
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
+use reqwest::StatusCode;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str;
@@ -36,6 +38,7 @@ fn default_nginx_controller_log_format_escaping() -> LogFormatEscaping {
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
     Aws,
+    Azure,
     Do,
     Scw,
     Gcp,
@@ -46,6 +49,7 @@ impl From<KindModel> for Kind {
     fn from(kind: KindModel) -> Self {
         match kind {
             KindModel::Aws => Kind::Aws,
+            KindModel::Azure => Kind::Azure,
             KindModel::Scw => Kind::Scw,
             KindModel::Gcp => Kind::Gcp,
             KindModel::OnPremise => Kind::SelfManaged,
@@ -128,6 +132,19 @@ pub struct NginxConfigurationSnippet(String);
 impl NginxConfigurationSnippet {
     pub fn to_model(&self) -> NginxConfigurationSnippetModel {
         NginxConfigurationSnippetModel::new(self.0.to_string())
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub struct NginxLimitRequestStatusCode(u16);
+
+impl NginxLimitRequestStatusCode {
+    pub fn to_model(&self) -> Result<NginxLimitRequestStatusCodeModel, InputError> {
+        let status_code = StatusCode::from_u16(self.0).map_err(|_e| InputError::InvalidInputFieldValue {
+            field_name: "nginx.controller.limit_request_status_code".to_string(),
+            message: "Should be a proper HTTP status code".to_string(),
+        })?;
+        Ok(NginxLimitRequestStatusCodeModel::new(status_code))
     }
 }
 
@@ -217,10 +234,24 @@ pub struct ClusterAdvancedSettings {
     pub nginx_controller_log_format_escaping: LogFormatEscaping,
     #[serde(alias = "nginx.controller.http_snippet")]
     pub nginx_controller_http_snippet: Option<NginxHttpSnippet>,
+    #[serde(alias = "nginx.controller.server_snippet")]
+    pub nginx_controller_server_snippet: Option<NginxServerSnippet>,
+    #[serde(alias = "nginx.controller.limit_request_status_code")]
+    pub nginx_controller_limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     #[serde(alias = "nginx.controller.configuration_snippet")]
     pub nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
     pub nginx_hpa_max_number_instances: u32,
+
+    #[serde(alias = "nginx.controller.custom_http_errors")]
+    pub nginx_controller_custom_http_errors: Option<String>,
+    #[serde(alias = "nginx.default_backend.enabled")]
+    pub nginx_default_backend_enabled: Option<bool>,
+    #[serde(alias = "nginx.default_backend.image_repository")]
+    pub nginx_default_backend_image_repository: Option<String>,
+    #[serde(alias = "nginx.default_backend.image_tag")]
+    pub nginx_default_backend_image_tag: Option<String>,
+
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
     #[serde(alias = "gcp.vpc.enable_flow_logs")]
@@ -233,6 +264,9 @@ pub struct ClusterAdvancedSettings {
     pub k8s_api_allowed_public_access_cidrs: Option<Vec<String>>,
     #[serde(alias = "storageclass.fast_ssd")]
     pub k8s_storage_class_fast_ssd: StorageClass,
+
+    #[serde(alias = "object_storage.enable_logging")]
+    pub object_storage_enable_logging: bool,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -276,7 +310,9 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_log_format_upstream: None,
             nginx_controller_log_format_escaping: LogFormatEscaping::Default,
             nginx_controller_http_snippet: None,
+            nginx_controller_server_snippet: None,
             nginx_controller_configuration_snippet: None,
+            nginx_controller_limit_request_status_code: None,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             gcp_vpc_enable_flow_logs: false,
@@ -288,6 +324,11 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
+            nginx_controller_custom_http_errors: None,
+            nginx_default_backend_enabled: None,
+            nginx_default_backend_image_repository: None,
+            nginx_default_backend_image_tag: None,
+            object_storage_enable_logging: false,
         }
     }
 }
@@ -343,8 +384,8 @@ mod tests {
     use uuid::Uuid;
 
     use crate::infrastructure::models::cloud_provider::io::{
-        validate_aws_cloudwatch_eks_logs_retention_days, ClusterAdvancedSettings, LogFormatEscaping,
-        RegistryMirroringMode,
+        ClusterAdvancedSettings, InputError, LogFormatEscaping, RegistryMirroringMode,
+        validate_aws_cloudwatch_eks_logs_retention_days,
     };
     use crate::{
         events::{EventDetails, Stage, Transmitter},
@@ -509,5 +550,39 @@ mod tests {
 
         // verify:
         assert_eq!(snippet_json, model.get_snippet_value());
+    }
+
+    #[test]
+    fn test_nginx_limit_request_status_code_to_model() {
+        // setup:
+        let status_code = 200;
+        let nginx_limit_request_status_code_io = super::NginxLimitRequestStatusCode(status_code);
+
+        // execute:
+        let res = nginx_limit_request_status_code_io
+            .to_model()
+            .expect("Should be a proper HTTP status code");
+
+        // verify:
+        assert_eq!(status_code, res.as_u16());
+    }
+
+    #[test]
+    fn test_nginx_limit_request_status_code_to_model_wrong_http_code_value() {
+        // setup:
+        let status_code = 2000;
+        let nginx_limit_request_status_code_io = super::NginxLimitRequestStatusCode(status_code);
+
+        // execute:
+        let res = nginx_limit_request_status_code_io.to_model();
+
+        // verify:
+        assert_eq!(
+            InputError::InvalidInputFieldValue {
+                field_name: "nginx.controller.limit_request_status_code".to_string(),
+                message: "Should be a proper HTTP status code".to_string(),
+            },
+            res.err().expect("Should be an error")
+        );
     }
 }

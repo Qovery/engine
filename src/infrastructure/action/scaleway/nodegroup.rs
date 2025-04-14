@@ -1,7 +1,7 @@
 use crate::errors::CommandError;
+use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, ScwNodeGroupErrors};
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwNodeGroup;
-use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::runtime::block_on;
 use scaleway_api_rs::models::ScalewayK8sV1Cluster;
 

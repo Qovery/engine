@@ -14,6 +14,25 @@ defaultRules:
     nodeExporterRecording: false
     windows: false
 
+kube-state-metrics:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-kube-state-metrics
+  prometheus:
+    monitor:
+      enabled: true
+      honorLabels: true
+  resources:
+    limits:
+      cpu: 75m
+      memory: 384Mi
+    requests:
+      cpu: 75m
+      memory: 384Mi
+
+crds:
+  enabled: false
+
 alertmanager:
   enabled: false
 
@@ -31,6 +50,8 @@ kubeEtcd:
 kubelet:
   serviceMonitor:
     resource: true
+    # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
+    resourcePath: "/metrics/resource"
 
 kubeScheduler:
   enabled: false
@@ -39,15 +60,35 @@ kubeProxy:
   enabled: false
 
 kubeStateMetrics:
-  enabled: false
+  enabled: true
 
 prometheus:
   enabled: true
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "set-by-engine-code"
+  thanosService:
+    enabled: true
+  thanosServiceMonitor:
+    enabled: true
   prometheusSpec:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus
+    thanos:
+      objectStorageConfig:
+         secret:
+           type: S3
+           config:
+             aws_sdk_auth: true
+             bucket: "set-by-engine-code"
+             endpoint: "set-by-engine-code"
+             region: "set-by-engine-code"
+             signature_version2: "set-by-engine-code" 
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
     retention: 90d
-    retentionSize: "40GB"
+    retentionSize: "7GB" # prometheus db
     walCompression: true
     externalUrl: set-by-engine-code
     storageSpec:
@@ -57,9 +98,26 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: "50Gi"
+              storage: "8Gi"
+    resources:
+      limits:
+        cpu: "3"
+        memory: "1Gi"
+      requests:
+        cpu: "1"
+    replicas: "set-by-engine-code"
 
 prometheusOperator:
+  prometheusConfigReloader:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus-config-reloader
+  thanosImage:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-thanos
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-operator
   resources:
     limits:
       cpu: "1"
@@ -73,6 +131,9 @@ prometheusOperator:
     enabled: false
 
 prometheus-node-exporter:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-node-exporter
   priorityClassName: set-by-engine-code
   resources:
     limits:

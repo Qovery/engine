@@ -6,27 +6,27 @@ use crate::environment::models::job::{ImageSource, JobError, JobService};
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{OnPremise, AWS, GCP, SCW};
+use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
 use crate::infrastructure::models::container_registry::{ContainerRegistry, ContainerRegistryInfo};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{to_environment_variable, GitCredentials};
+use crate::io_models::application::{GitCredentials, to_environment_variable};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
-use crate::io_models::variable_utils::{default_environment_vars_with_info, VariableInfo};
+use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
-    fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url, ssh_keys_from_env_vars, Action,
-    MountedFile, QoveryIdentifier,
+    Action, MountedFile, QoveryIdentifier, fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url,
+    ssh_keys_from_env_vars,
 };
 use crate::utilities::to_short_id;
-use base64::engine::general_purpose;
 use base64::Engine;
+use base64::engine::general_purpose;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,6 +62,9 @@ pub struct JobAdvancedSettings {
     pub build_cpu_max_in_milli: u32,
     #[serde(alias = "build.ram_max_in_gib")]
     pub build_ram_max_in_gib: u32,
+    #[serde(default)]
+    #[serde(alias = "build.ephemeral_storage_in_gib")]
+    pub build_ephemeral_storage_in_gib: Option<u32>,
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
@@ -83,6 +86,7 @@ impl Default for JobAdvancedSettings {
             build_timeout_max_sec: 30 * 60, // 30 minutes
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
+            build_ephemeral_storage_in_gib: None,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
@@ -142,6 +146,7 @@ pub enum JobSource {
         root_path: String,
         dockerfile_path: Option<String>,
         dockerfile_content: Option<String>,
+        docker_target_build_stage: Option<String>,
     },
 }
 
@@ -202,33 +207,52 @@ impl Job {
         cluster_id: &QoveryIdentifier,
     ) -> Option<Build> {
         let qovery_dockerfile = Some("Dockerfile.qovery".to_string());
-        let (git_url, git_credentials, _branch, commit_id, dockerfile_path, dockerfile_content, root_path) =
-            match &self.source {
-                JobSource::Docker {
-                    git_url,
-                    git_credentials,
-                    branch,
-                    commit_id,
-                    root_path,
-                    dockerfile_path,
-                    dockerfile_content,
-                } => {
-                    if dockerfile_content.is_some() {
-                        (
-                            git_url,
-                            git_credentials,
-                            branch,
-                            commit_id,
-                            &qovery_dockerfile,
-                            dockerfile_content,
-                            root_path,
-                        )
-                    } else {
-                        (git_url, git_credentials, branch, commit_id, dockerfile_path, &None, root_path)
-                    }
+        let (
+            git_url,
+            git_credentials,
+            _branch,
+            commit_id,
+            dockerfile_path,
+            dockerfile_content,
+            root_path,
+            docker_target_build_stage,
+        ) = match &self.source {
+            JobSource::Docker {
+                git_url,
+                git_credentials,
+                branch,
+                commit_id,
+                root_path,
+                dockerfile_path,
+                dockerfile_content,
+                docker_target_build_stage,
+            } => {
+                if dockerfile_content.is_some() {
+                    (
+                        git_url,
+                        git_credentials,
+                        branch,
+                        commit_id,
+                        &qovery_dockerfile,
+                        dockerfile_content,
+                        root_path,
+                        docker_target_build_stage,
+                    )
+                } else {
+                    (
+                        git_url,
+                        git_credentials,
+                        branch,
+                        commit_id,
+                        dockerfile_path,
+                        &None,
+                        root_path,
+                        docker_target_build_stage,
+                    )
                 }
-                _ => return None,
-            };
+            }
+            _ => return None,
+        };
 
         // Retrieve ssh keys from env variables
 
@@ -257,6 +281,8 @@ impl Job {
                 dockerfile_path,
                 dockerfile_content: dockerfile_content.clone(),
                 root_path,
+                extra_files_to_inject: vec![],
+                docker_target_build_stage: docker_target_build_stage.clone(),
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url),
             environment_variables: self
@@ -283,6 +309,7 @@ impl Job {
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
+            ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
             registries: self.container_registries.registries.clone(),
         };
 
@@ -475,6 +502,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
             )?),
+            Kind::Azure => todo!(),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,

@@ -122,6 +122,7 @@ pub struct Build {
     pub architectures: Vec<CpuArchitecture>,
     pub max_cpu_in_milli: u32,
     pub max_ram_in_gib: u32,
+    pub ephemeral_storage_in_gib: Option<u32>,
     // registries used by the build where we need to login to pull image
     pub registries: Vec<Registry>,
 }
@@ -132,8 +133,10 @@ impl Build {
             &self.git_repository.root_path,
             &self.git_repository.dockerfile_path,
             &self.git_repository.dockerfile_content,
+            &self.git_repository.extra_files_to_inject,
             &self.environment_variables,
             &self.git_repository.commit_id,
+            &self.git_repository.docker_target_build_stage,
         );
     }
 }
@@ -157,6 +160,11 @@ pub struct SshKey {
     pub public_key: Option<String>,
 }
 
+pub struct GitRepositoryExtraFile {
+    pub path: PathBuf,
+    pub content: String,
+}
+
 pub struct GitRepository {
     pub url: Url,
     pub get_credentials: Option<Box<dyn Fn() -> anyhow::Result<Credentials> + Send + Sync>>,
@@ -165,6 +173,8 @@ pub struct GitRepository {
     pub dockerfile_path: Option<PathBuf>,
     pub dockerfile_content: Option<String>,
     pub root_path: PathBuf,
+    pub extra_files_to_inject: Vec<GitRepositoryExtraFile>,
+    pub docker_target_build_stage: Option<String>,
 }
 impl GitRepository {
     fn credentials(&self) -> Option<anyhow::Result<Credentials>> {

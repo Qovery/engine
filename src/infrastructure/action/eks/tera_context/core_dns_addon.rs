@@ -23,6 +23,7 @@ impl AwsCoreDnsAddon {
                 KubernetesVersion::V1_28 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_29 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_30 { .. } => "v1.11.3-eksbuild.1",
+                KubernetesVersion::V1_31 { .. } => "v1.11.4-eksbuild.2",
             }
             .to_string(),
         }
@@ -127,6 +128,16 @@ mod tests {
                 },
                 expected: AwsCoreDnsAddon {
                     version: "v1.11.3-eksbuild.1".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_31 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.11.4-eksbuild.2".to_string(),
                 },
             },
         ];

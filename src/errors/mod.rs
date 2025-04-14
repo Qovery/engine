@@ -1,15 +1,14 @@
-pub mod io;
-
 extern crate derivative;
 extern crate url;
+pub mod io;
 
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
 use crate::helm::HelmChartError;
 use crate::infrastructure::models::build_platform::BuildError;
-use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 
 use crate::cmd::{command, terraform};
@@ -20,6 +19,7 @@ use crate::events::{EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::io::InputError;
 use crate::infrastructure::models::kubernetes::KubernetesError;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
+use crate::services::kubernetes_api_deprecation_service::KubernetesDeprecationServiceError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
 use aws_sdk_docdb::operation::describe_db_clusters::DescribeDBClustersError;
 use aws_sdk_ec2::error::SdkError as Ec2SdkError;
@@ -31,8 +31,8 @@ use aws_sdk_elasticache::operation::describe_cache_clusters::DescribeCacheCluste
 use aws_sdk_rds::error::SdkError as RdsSdkError;
 use aws_sdk_rds::operation::describe_db_instances::DescribeDBInstancesError;
 use derivative::Derivative;
-use kube::error::Error as KubeError;
 use kube::Resource;
+use kube::error::Error as KubeError;
 use serde::de::DeserializeOwned;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Error;
@@ -315,6 +315,14 @@ impl From<ObjectStorageError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ObjectStorageError::CannotActivateBucketLogging {
+                bucket_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Object storage error, cannot activate bucket logging for: `{bucket_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ObjectStorageError::CannotUploadFile {
                 bucket_name,
                 object_name: file_name,
@@ -389,15 +397,17 @@ impl From<ContainerRegistryError> for CommandError {
     fn from(container_registry_error: ContainerRegistryError) -> Self {
         // Note: safe message to be manually computed here because we are not 100% sure error won't leak some data
         match container_registry_error {
-            ContainerRegistryError::CannotInstantiateClient { raw_error_message} => {
-                CommandError::new("Container registry error, cannot instantiate client".to_string(), Some(raw_error_message), None)
-            }
+            ContainerRegistryError::CannotInstantiateClient { raw_error_message } => CommandError::new(
+                "Container registry error, cannot instantiate client".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
             ContainerRegistryError::InvalidCredentials => {
                 CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
             }
-            ContainerRegistryError::InvalidRegistryUrl { registry_url} => {
-                CommandError::new_from_safe_message(format!("Container registry error, invalid registry URL: `{registry_url}`"))
-            }
+            ContainerRegistryError::InvalidRegistryUrl { registry_url } => CommandError::new_from_safe_message(
+                format!("Container registry error, invalid registry URL: `{registry_url}`"),
+            ),
             ContainerRegistryError::CannotGetCredentials => {
                 CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
             }
@@ -647,18 +657,31 @@ impl From<RouterError> for CommandError {
                 None,
             ),
 
-            RouterError::BasicAuthEnvVarBase64DecodeError {env_var_name, env_var_value} => CommandError::new(
-                format!("Router error: Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`"),
+            RouterError::BasicAuthEnvVarBase64DecodeError {
+                env_var_name,
+                env_var_value,
+            } => CommandError::new(
+                format!(
+                    "Router error: Error decoding base64 basic Auth environment variable `{env_var_name}`: `{env_var_value}`"
+                ),
                 Some(router_error.to_string()),
                 None,
             ),
 
-            RouterError::BasicAuthEnvVarNotFound {env_var_name } => CommandError::new(
+            RouterError::BasicAuthEnvVarNotFound { env_var_name } => CommandError::new(
                 format!("Router error: basic auth env var `{env_var_name}` not found"),
                 Some(router_error.to_string()),
                 None,
             ),
         }
+    }
+}
+
+impl From<KubernetesDeprecationServiceError> for CommandError {
+    fn from(error: KubernetesDeprecationServiceError) -> Self {
+        CommandError::new_from_safe_message(
+            error.to_string(), // error message is safe
+        )
     }
 }
 
@@ -816,6 +839,8 @@ pub enum Tag {
     K8sGetDeploymentError,
     /// K8sGetWebhookConfigurationError: Kubernetes get Webhook configuration error
     K8sGetWebHookConfigurationError,
+    /// K8sGetCrdError: Kubernetes get CRD error
+    K8sGetCrdError,
     /// K8sDeleteDeploymentError: Kubernetes delete deployment error
     K8sDeleteDeploymentError,
     /// K8sGetStatefulsetError: Kubernetes get statefulset error
@@ -1045,6 +1070,8 @@ pub enum Tag {
     ObjectStorageCannotGetBucket,
     /// ObjectStorageCannotActivateBucketVersioning: represents an error while trying to activate bucket versioning for bucket.
     ObjectStorageCannotActivateBucketVersioning,
+    /// ObjectStorageCannotActivateBucketLogging: represents an error while trying to activate bucket logging for bucket.
+    ObjectStorageCannotActivateBucketLogging,
     /// ObjectStorageQuotaExceeded: represents an error, quotas has been exceeded.
     ObjectStorageQuotaExceeded,
     /// ObjectStorageInvalidBucketName: represents an error, bucket name is not valid.
@@ -1115,6 +1142,8 @@ pub enum Tag {
     CannotGetRegistryCredentials,
     /// CannotCreateAwsServiceLinkedRoleForSpotInstance: represents an error while trying to create an AWS Service Linked Role
     CannotCreateAwsServiceLinkedRoleForSpotInstance,
+    /// CannotUpgradeClusterDeprecatedKubernetesApiCallDetected: represents an error while trying to upgrade a cluster having deprecated Kubernetes API calls
+    CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
 }
 
 impl Tag {
@@ -1167,7 +1196,7 @@ impl EngineError {
     /// Returns proper error message.
     pub fn message(&self, message_verbosity: ErrorMessageVerbosity) -> String {
         match &self.underlying_error {
-            Some(msg) => msg.message(message_verbosity),
+            Some(msg) => format!("{}: {}", self.user_log_message, msg.message(message_verbosity)),
             None => self.user_log_message.to_string(),
         }
     }
@@ -1293,6 +1322,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new bad cast error.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `user_log_message`: Error log message targeting Qovery user, avoiding any extending pointless details.
+    /// * `underlying_error`: raw error message such as command input / output.
+    /// * `link`: Link documenting the given error.
+    /// * `hint_message`: hint message aiming to give an hint to the user. For example: "Happens when application port has been changed but application hasn't been restarted.".
+    pub fn new_bad_cast(event_details: EventDetails, user_log_message: &str) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderInformationError,
+            user_log_message.to_string(),
+            None,
+            None,
+            None,
+        )
+    }
+
     /// Creates new from an engine error. Only change the use log message and hint
     ///
     /// Arguments:
@@ -1348,7 +1397,9 @@ impl EngineError {
             Tag::InvalidEnginePayload,
             match &input_error {
                 InputError::InvalidInputFieldValue { field_name, message } => {
-                    format!("Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`")
+                    format!(
+                        "Input is invalid and cannot be executed by the engine: `{field_name}` has an invalid value: `{message}`"
+                    )
                 }
             },
             Some(CommandError::from(input_error)),
@@ -2807,11 +2858,16 @@ impl EngineError {
         // All Terraform issues are handled here.
         // TODO(benjaminch): Add some point, safe message should be moved inside Terraform impl directly
         match terraform_error {
-            TerraformError::Unknown { .. } => EngineError::new(
+            TerraformError::Unknown { ref raw_message, ..} => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
                 terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
-                Some(terraform_error.into()), // Note: Terraform error message are supposed to be safe
+                Some(
+                    CommandError::new(
+                        terraform_error.to_string(),
+                        Some(raw_message.clone()),
+                        None,
+                    )), // Note: Terraform error message are supposed to be safe
                 None,
                 Some(DEFAULT_HINT_MESSAGE.to_string()),
             ),
@@ -3337,6 +3393,7 @@ impl EngineError {
             HelmChartError::CommandError(cmd_error) => Some(cmd_error),
             HelmChartError::CreateTemplateError { .. }
             | HelmChartError::RenderingError { .. }
+            | HelmChartError::CannotUpdateCrds { .. }
             | HelmChartError::HelmError(_) => None,
         };
 
@@ -3529,6 +3586,16 @@ impl EngineError {
             None,
             None,
         )
+    }
+
+    /// Creates new error from a command error
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `error`: Raw error message.
+    pub fn new_k8s_get_crd_error(event_details: EventDetails, error: CommandError) -> EngineError {
+        EngineError::new(event_details, Tag::K8sGetCrdError, error.to_string(), Some(error), None, None)
     }
 
     /// Creates new error from a command error
@@ -3919,7 +3986,9 @@ impl EngineError {
     /// * `event_details`: Error linked event details.
     /// * `safe_error`: Raw error message.
     pub fn new_nodegroup_delete_any_nodegroup_error(event_details: EventDetails, raw_error: String) -> EngineError {
-        let message = format!("Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider interface and manually fix issues.\n{raw_error}");
+        let message = format!(
+            "Error, can't delete any nodegroup. It looks like all of them are in a bad shape. Check your nodegroup health status from the Cloud provider interface and manually fix issues.\n{raw_error}"
+        );
         EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
     }
 
@@ -4571,6 +4640,14 @@ impl EngineError {
                 None,
                 None,
             ),
+            ObjectStorageError::CannotActivateBucketLogging { ref bucket_name, .. } => EngineError::new(
+                event_details,
+                Tag::ObjectStorageCannotActivateBucketLogging,
+                format!("Error while trying to activate logging for object storage bucket `{bucket_name}`.",),
+                Some(object_storage_error.into()),
+                None,
+                None,
+            ),
             ObjectStorageError::CannotGetObjectFile {
                 ref bucket_name,
                 object_name: ref file_name,
@@ -5101,7 +5178,62 @@ impl EngineError {
             None,
         )
     }
+
+    /// Creates new error when some API deprecations found.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `k8s_target_version`: Target kubernetes version.
+    /// * `deprecation_error`: Kubernetes deprecation API service error.
+    pub(crate) fn new_k8s_deprecated_api_calls_found_error(
+        event_details: EventDetails,
+        k8s_target_version: &VersionsNumber,
+        deprecation_error: KubernetesDeprecationServiceError,
+    ) -> EngineError {
+        let mut message_safe = format!("Some API deprecations found for kubernetes version: `{}` ", k8s_target_version);
+        let mut hint_message = None;
+
+        match &deprecation_error {
+            KubernetesDeprecationServiceError::ClientError { .. } => {
+                message_safe.push_str("a client error was triggered")
+            }
+            KubernetesDeprecationServiceError::ApiVersionNumberParsingError { invalid_version } => {
+                message_safe.push_str(
+                    format!(
+                        "an error occurred while getting kubernetes api version, invalid version: `{}`",
+                        invalid_version
+                    )
+                    .as_str(),
+                );
+            }
+            KubernetesDeprecationServiceError::QoveryIdentifierParsingError {
+                qovery_identifier_error,
+            } => {
+                message_safe.push_str(
+                    format!(
+                        "an error occurred while getting qovery identifier, invalid qovery id: `{}`",
+                        qovery_identifier_error
+                    )
+                    .as_str(),
+                );
+            }
+            KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { .. } => {
+                hint_message = Some("Some services on this cluster use deprecated kubernetes APIs which will be deleted in next kubernetes version. You should update your services to use the new API version.".to_string());
+            }
+        }
+
+        EngineError::new(
+            event_details,
+            Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
+            message_safe,
+            Some(CommandError::from(deprecation_error)),
+            None,
+            hint_message,
+        )
+    }
 }
+
 impl Display for EngineError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         // Note: just in case, env vars are not leaked since it can hold sensitive data such as secrets.

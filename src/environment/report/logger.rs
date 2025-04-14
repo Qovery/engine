@@ -4,7 +4,7 @@ use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::logger::Logger;
 use std::sync::Arc;
 
-use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput};
+use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput, TerraformServiceOutput};
 #[cfg(feature = "env-logger-check")]
 use std::sync::atomic::AtomicUsize;
 #[cfg(feature = "env-logger-check")]
@@ -125,7 +125,7 @@ impl EnvLogger {
         }
 
         self.logger
-            .log(EngineEvent::Error(err.clone(), Some(EventMessage::new_from_engine_error(err))));
+            .log(EngineEvent::Error(err.clone(), Some(EventMessage::from(err))));
     }
 
     pub fn send_core_configuration_for_job(&self, safe_message: String, json: String) {
@@ -134,6 +134,10 @@ impl EnvLogger {
 
     pub fn send_core_configuration_for_database(&self, safe_message: String, json: String) {
         self.send_core_configuration(safe_message, json, DatabaseOutput);
+    }
+
+    pub fn send_core_configuration_for_terraform_service(&self, safe_message: String, json: String) {
+        self.send_core_configuration(safe_message, json, TerraformServiceOutput);
     }
 
     fn send_core_configuration(&self, safe_message: String, json: String, step: EnvironmentStep) {
@@ -156,7 +160,7 @@ pub struct EnvProgressLogger<'a> {
     logger: &'a EnvLogger,
 }
 
-impl<'a> EnvProgressLogger<'a> {
+impl EnvProgressLogger<'_> {
     pub fn new(env_logger: &EnvLogger) -> EnvProgressLogger {
         EnvProgressLogger { logger: env_logger }
     }
@@ -180,13 +184,17 @@ impl<'a> EnvProgressLogger<'a> {
     pub fn core_configuration_for_database(&self, msg: String, json: String) {
         self.logger.send_core_configuration_for_database(msg, json)
     }
+
+    pub fn core_configuration_for_terraform_service(&self, msg: String, json: String) {
+        self.logger.send_core_configuration_for_terraform_service(msg, json)
+    }
 }
 
 pub struct EnvSuccessLogger<'a> {
     logger: &'a EnvLogger,
 }
 
-impl<'a> EnvSuccessLogger<'a> {
+impl EnvSuccessLogger<'_> {
     pub fn new(env_logger: &EnvLogger) -> EnvSuccessLogger {
         EnvSuccessLogger { logger: env_logger }
     }

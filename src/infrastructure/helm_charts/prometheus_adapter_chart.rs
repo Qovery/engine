@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmAction, HelmChartError,
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
@@ -13,6 +13,7 @@ use kube::Client;
 use semver::Version;
 
 pub struct PrometheusAdapterChart {
+    action: HelmAction,
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -25,6 +26,7 @@ pub struct PrometheusAdapterChart {
 
 impl PrometheusAdapterChart {
     pub fn new(
+        action: HelmAction,
         chart_prefix_path: Option<&str>,
         prometheus_url: String,
         prometheus_namespace: HelmChartNamespaces,
@@ -33,6 +35,7 @@ impl PrometheusAdapterChart {
         karpenter_enabled: bool,
     ) -> Self {
         PrometheusAdapterChart {
+            action,
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -73,6 +76,7 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
 
         Ok(CommonChart {
             chart_info: ChartInfo {
+                action: self.action.clone(),
                 name: "prometheus-adapter".to_string(),
                 path: self.chart_path.to_string(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
@@ -141,11 +145,11 @@ impl ChartInstallationChecker for PrometheusAdapterChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::HelmChartNamespaces;
+    use crate::helm::{HelmAction, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
     use crate::infrastructure::helm_charts::{
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
-        HelmChartType, ToCommonHelmChart,
+        HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
@@ -165,6 +169,7 @@ mod tests {
     fn kube_prometheus_stack_chart_directory_exists_test() {
         // setup:
         let chart = PrometheusAdapterChart::new(
+            HelmAction::Deploy,
             None,
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
@@ -195,6 +200,7 @@ mod tests {
     fn kube_prometheus_stack_chart_values_file_exists_test() {
         // setup:
         let chart = PrometheusAdapterChart::new(
+            HelmAction::Deploy,
             None,
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
@@ -229,6 +235,7 @@ mod tests {
     fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = PrometheusAdapterChart::new(
+            HelmAction::Deploy,
             None,
             "whatever".to_string(),
             HelmChartNamespaces::Prometheus,
@@ -252,6 +259,10 @@ mod tests {
         );
 
         // verify:
-        assert!(missing_fields.is_none(), "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}", missing_fields.unwrap_or_default().join(","));
+        assert!(
+            missing_fields.is_none(),
+            "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
+            missing_fields.unwrap_or_default().join(",")
+        );
     }
 }

@@ -1,21 +1,18 @@
 use super::GkeChartsConfigPrerequisites;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
-use crate::environment::models::gcp::GcpStorageType;
 use crate::errors::CommandError;
 use crate::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::KubePrometheusStackChart;
-use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
-use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
@@ -30,8 +27,8 @@ use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
 use url::Url;
@@ -139,55 +136,6 @@ pub(super) fn gke_helm_charts(
         )),
     };
 
-    // Kube prometheus stack
-    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled
-    {
-        false => None,
-        true => Some(Box::new(
-            KubePrometheusStackChart::new(
-                chart_prefix_path,
-                GcpStorageType::Balanced.to_k8s_storage_class(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace,
-                true,
-                get_chart_override_fn.clone(),
-                true,
-                false,
-            )
-            .to_common_helm_chart()?,
-        )),
-    };
-
-    // Prometheus adapter
-    let prometheus_adapter: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(Box::new(
-            PrometheusAdapterChart::new(
-                chart_prefix_path,
-                prometheus_internal_url.clone(),
-                prometheus_namespace,
-                get_chart_override_fn.clone(),
-                true,
-                false,
-            )
-            .to_common_helm_chart()?,
-        )),
-    };
-
-    // Kube state metrics
-    let kube_state_metrics: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_metrics_history_enabled {
-        false => None,
-        true => Some(Box::new(
-            KubeStateMetricsChart::new(
-                chart_prefix_path,
-                HelmChartNamespaces::Qovery,
-                true,
-                get_chart_override_fn.clone(),
-            )
-            .to_common_helm_chart()?,
-        )),
-    };
-
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
@@ -264,6 +212,7 @@ pub(super) fn gke_helm_charts(
         chart_config_prerequisites.cluster_long_id.to_string(),
         chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Gke,
+        chart_config_prerequisites.cluster_creation_date,
         Some(
             chart_config_prerequisites
                 .cluster_advanced_settings
@@ -300,12 +249,46 @@ pub(super) fn gke_helm_charts(
             .nginx_controller_http_snippet
             .as_ref()
             .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_server_snippet
+            .as_ref()
+            .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_limit_request_status_code
+            .as_ref()
+            .map(|v| v.to_model().map_err(CommandError::from))
+            .transpose()?,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_controller_custom_http_errors
+            .clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_enabled,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_image_repository
+            .clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .nginx_default_backend_image_tag
+            .clone(),
     )
     .to_common_helm_chart()?;
 
     // K8s Event Logger
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+
+    let metrics_charts = generate_metrics_charts(
+        CloudProviderMetricsConfig::Gke(chart_config_prerequisites),
+        chart_prefix_path,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+    )?;
 
     // Qovery cluster agent
     let qovery_cluster_agent = QoveryClusterAgentChart::new(
@@ -352,15 +335,34 @@ pub(super) fn gke_helm_charts(
     )
     .to_common_helm_chart()?;
 
+    let prometheus_operator_crds_chart = metrics_charts
+        .prometheus_operator_crds_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let kube_prometheus_stack_chart = metrics_charts
+        .kube_prometheus_stack_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let thanos_chart = metrics_charts
+        .thanos_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
+    let kube_state_metrics_chart = metrics_charts
+        .kube_state_metrics_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
     // chart deployment order matters!!!
     // Helm chart deployment order
+
+    // Add prometheus CRDs early to avoid issues with other charts
+    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart, kube_state_metrics_chart];
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
+        kube_prometheus_stack_chart,
         promtail,
-        kube_prometheus_stack,
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, prometheus_adapter, kube_state_metrics];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
@@ -373,6 +375,7 @@ pub(super) fn gke_helm_charts(
     ];
 
     Ok(vec![
+        level_0.into_iter().flatten().collect(),
         level_1.into_iter().flatten().collect(),
         level_2.into_iter().flatten().collect(),
         level_3.into_iter().flatten().collect(),

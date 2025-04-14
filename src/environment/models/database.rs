@@ -11,10 +11,10 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::service::{
-    check_service_version, default_tera_context, get_service_statefulset_name_and_volumes, Action, Service,
-    ServiceType, ServiceVersionCheckResult,
+    Action, Service, ServiceType, ServiceVersionCheckResult, check_service_version, default_tera_context,
+    get_service_statefulset_name_and_volumes,
 };
-use crate::infrastructure::models::cloud_provider::{service, DeploymentTarget, Kind};
+use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind, service};
 use crate::infrastructure::models::kubernetes;
 use crate::io_models::annotations_group::{Annotation, AnnotationsGroup};
 use crate::io_models::context::Context;
@@ -127,19 +127,25 @@ pub enum DatabaseError {
         database_version: Arc<str>,
     },
 
-    #[error("Database instance type `{requested_database_instance_type}` is invalid for cloud provider `{database_cloud_provider}`.")]
+    #[error(
+        "Database instance type `{requested_database_instance_type}` is invalid for cloud provider `{database_cloud_provider}`."
+    )]
     InvalidDatabaseInstance {
         requested_database_instance_type: String,
         database_cloud_provider: Kind,
     },
 
-    #[error("Database instance type `{database_instance_type_str}` doesn't belong to the database cloud provider `{database_cloud_provider:?}`")]
+    #[error(
+        "Database instance type `{database_instance_type_str}` doesn't belong to the database cloud provider `{database_cloud_provider:?}`"
+    )]
     DatabaseInstanceTypeMismatchCloudProvider {
         database_instance_type_str: String,
         database_cloud_provider: Kind,
     },
 
-    #[error("Database instance type `{database_instance_type_str}` is not compatible with database type `{database_type:?}`")]
+    #[error(
+        "Database instance type `{database_instance_type_str}` is not compatible with database type `{database_type:?}`"
+    )]
     DatabaseInstanceTypeMismatchDatabaseType {
         database_instance_type_str: String,
         database_type: service::DatabaseType,

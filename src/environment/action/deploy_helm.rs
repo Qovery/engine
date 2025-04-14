@@ -122,7 +122,7 @@ impl DeploymentAction for HelmDeployment {
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let command_error = CommandError::new_from_safe_message("Cannot restart Helm deployment".to_string());
-        return Err(Box::new(EngineError::new_cannot_restart_service(
+        Err(Box::new(EngineError::new_cannot_restart_service(
             EventDetails::clone_changing_stage(
                 self.event_details.clone(),
                 Stage::Environment(EnvironmentStep::Restart),
@@ -130,7 +130,7 @@ impl DeploymentAction for HelmDeployment {
             target.environment.namespace(),
             "",
             command_error,
-        )));
+        )))
     }
 }
 
@@ -138,7 +138,7 @@ impl DeploymentAction for HelmDeployment {
 #[cfg(test)]
 mod tests {
     use crate::cmd::helm::Helm;
-    use crate::environment::action::deploy_helm::{default_helm_timeout, HelmDeployment};
+    use crate::environment::action::deploy_helm::{HelmDeployment, default_helm_timeout};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::helm::ChartInfo;
     use crate::io_models::QoveryIdentifier;

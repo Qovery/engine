@@ -1,10 +1,10 @@
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::scaleway::scw_infra_config;
 use crate::helpers::utilities::{
-    context_for_cluster, engine_run_test, init, logger, metrics_registry, FuncTestsSecrets,
+    FuncTestsSecrets, context_for_cluster, engine_run_test, init, logger, metrics_registry,
 };
 use ::function_name::named;
-use tracing::{span, Level};
+use tracing::{Level, span};
 
 // Warning: This test shouldn't be ran by CI
 // Note: this test creates the test cluster where all application tests will be ran

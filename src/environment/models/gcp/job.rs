@@ -1,5 +1,5 @@
 use crate::environment::models::job::Job;
-use crate::environment::models::types::{ToTeraContext, GCP};
+use crate::environment::models::types::{GCP, ToTeraContext};
 use crate::errors::EngineError;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use tera::Context as TeraContext;

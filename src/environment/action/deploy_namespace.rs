@@ -5,8 +5,8 @@ use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::kubernetes::kube_create_namespace_if_not_exists;
 use crate::runtime::block_on;
 use k8s_openapi::api::core::v1::Namespace;
-use kube::api::DeleteParams;
 use kube::Api;
+use kube::api::DeleteParams;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -56,7 +56,7 @@ impl DeploymentAction for NamespaceDeployment {
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         block_on(async {
-            let api: Api<Namespace> = Api::all(target.kube.clone());
+            let api: Api<Namespace> = Api::all(target.kube.client());
             if api.get(target.environment.namespace()).await.is_ok() {
                 // do not catch potential error - to confirm
                 let _ = api

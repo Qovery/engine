@@ -351,14 +351,14 @@ async fn wait_until_service_pods_are_restarted(
 #[cfg(test)]
 mod tests {
     use crate::environment::action::restart_service::restart_daemon_set;
-    use crate::environment::action::test_utils::get_simple_daemon_set;
     use crate::environment::action::test_utils::NamespaceForTest;
+    use crate::environment::action::test_utils::get_simple_daemon_set;
     use function_name::named;
     use k8s_openapi::api::apps::v1::DaemonSet;
+    use kube::Api;
     use kube::api::ListParams;
     use kube::api::PostParams;
-    use kube::runtime::wait::{await_condition, Condition};
-    use kube::Api;
+    use kube::runtime::wait::{Condition, await_condition};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     fn has_daemon_set_number_ready() -> impl Condition<DaemonSet> {

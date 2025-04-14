@@ -1,12 +1,12 @@
-use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    take_last_x_chars_and_remove_leading_dash_char, ContainerRegistry, ContainerRegistryInfo, Kind, Repository,
-    RepositoryInfo,
+    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
