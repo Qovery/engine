@@ -188,6 +188,11 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .dns_coredns_extra_config
+            .clone()
+            .unwrap_or_default(),
         HelmChartNamespaces::KubeSystem,
     );
 

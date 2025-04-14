@@ -46,6 +46,11 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
             .map(|x| x.clone().to_string())
             .collect(),
     );
+    let dns_coredns_extra_config = cluster
+        .advanced_settings()
+        .dns_coredns_extra_config
+        .clone()
+        .unwrap_or_default();
 
     context.insert("managed_dns", &managed_dns_list);
     context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
@@ -63,6 +68,7 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         "wildcard_managed_dns",
         &infra_ctx.dns_provider().domain().wildcarded().to_string(),
     );
+    context.insert("dns_coredns_extra_config", &dns_coredns_extra_config);
 
     // add specific DNS fields
     infra_ctx.dns_provider().insert_into_teracontext(&mut context);

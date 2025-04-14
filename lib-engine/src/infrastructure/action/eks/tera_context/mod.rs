@@ -253,6 +253,11 @@ pub fn eks_tera_context(
         terraform_list_format(vec![dns_provider.domain().root_domain().to_string()]);
     let managed_dns_resolvers_terraform_format =
         terraform_list_format(dns_provider.resolvers().iter().map(|x| x.clone().to_string()).collect());
+    let dns_coredns_extra_config = &kubernetes
+        .advanced_settings()
+        .dns_coredns_extra_config
+        .clone()
+        .unwrap_or_default();
 
     context.insert("managed_dns", &managed_dns_list);
     context.insert("managed_dns_domains_helm_format", &managed_dns_domains_helm_format);
@@ -266,6 +271,7 @@ pub fn eks_tera_context(
         "managed_dns_resolvers_terraform_format",
         &managed_dns_resolvers_terraform_format,
     );
+    context.insert("dns_coredns_extra_config", &dns_coredns_extra_config);
 
     // add specific DNS fields
     dns_provider.insert_into_teracontext(&mut context);
