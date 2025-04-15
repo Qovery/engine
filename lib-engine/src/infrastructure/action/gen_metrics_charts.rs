@@ -78,24 +78,34 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Kapsule(cfg) => cfg.metrics_parameters.as_ref(),
         }
     }
+
+    pub fn metrics_query_url_for_qovery_installation(&self) -> String {
+        match self {
+            CloudProviderMetricsConfig::Eks(_) | CloudProviderMetricsConfig::Kapsule(_) => {
+                "http://thanos-query.prometheus.svc.cluster.local:9090".to_string()
+            }
+            CloudProviderMetricsConfig::Gke(_) => "http://thanos-query.qovery.svc.cluster.local:9090".to_string(),
+        }
+    }
 }
 
 #[derive(Default)]
-pub struct MetricsCharts {
+pub struct MetricsConfig {
     pub prometheus_operator_crds_chart: Option<CommonChart>,
     pub kube_prometheus_stack_chart: Option<CommonChart>,
     pub thanos_chart: Option<CommonChart>,
     pub prometheus_adapter_chart: Option<CommonChart>,
     pub kube_state_metrics_chart: Option<CommonChart>,
+    pub metrics_query_url: Option<String>,
 }
 
-pub fn generate_metrics_charts(
+pub fn generate_metrics_config(
     provider_config: CloudProviderMetricsConfig,
     chart_prefix_path: Option<&str>,
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
-) -> Result<MetricsCharts, CommandError> {
+) -> Result<MetricsConfig, CommandError> {
     let metrics_configuration = provider_config.metrics_parameters().map(|it| it.config.clone());
 
     match metrics_configuration {
@@ -119,12 +129,13 @@ pub fn generate_metrics_charts(
             prometheus_namespace,
             get_chart_override_fn,
         ),
-        Some(_) => Ok(MetricsCharts {
+        Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
             kube_prometheus_stack_chart: None,
             thanos_chart: None,
             prometheus_adapter_chart: None,
             kube_state_metrics_chart: None,
+            metrics_query_url: None,
         }),
     }
 }
@@ -137,7 +148,7 @@ fn generate_charts_installed_by_qovery(
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
-) -> Result<MetricsCharts, CommandError> {
+) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
     let prometheus_operator_crds_chart = match helm_action {
@@ -205,11 +216,12 @@ fn generate_charts_installed_by_qovery(
     )
     .to_common_helm_chart()?;
 
-    Ok(MetricsCharts {
+    Ok(MetricsConfig {
         prometheus_operator_crds_chart,
         kube_prometheus_stack_chart: Some(kube_prometheus_stack_chart),
         thanos_chart: Some(thanos_chart),
         prometheus_adapter_chart: Some(prometheus_adapter_chart),
         kube_state_metrics_chart: Some(kube_state_metrics_chart),
+        metrics_query_url: Some(provider_config.metrics_query_url_for_qovery_installation()),
     })
 }
