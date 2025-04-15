@@ -205,8 +205,6 @@ pub struct ClusterAdvancedSettings {
     pub database_mongodb_deny_any_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
     pub database_mongodb_allowed_cidrs: Vec<String>,
-    #[serde(alias = "dns.coredns.extra_config")]
-    pub dns_coredns_extra_config: Option<String>,
     #[serde(alias = "registry.mirroring_mode", default = "default_registry_mirroring_mode")]
     pub registry_mirroring_mode: RegistryMirroringMode,
     #[serde(alias = "nginx.vcpu.request_in_milli_cpu")]
@@ -298,7 +296,6 @@ impl Default for ClusterAdvancedSettings {
             database_redis_allowed_cidrs: default_database_cirds.clone(),
             database_mongodb_deny_any_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
-            dns_coredns_extra_config: None,
             registry_mirroring_mode: RegistryMirroringMode::Service,
             nginx_vcpu_request_in_milli_cpu: 100,
             nginx_vcpu_limit_in_milli_cpu: 500,
