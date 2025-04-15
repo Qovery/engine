@@ -99,6 +99,16 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                 namespace: HelmChartNamespaces::Qovery,
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
+                values_string: vec![
+                    ChartSetValue {
+                        key: "environmentVariables.KARPENTER_ENABLED".to_string(),
+                        value: format!("{}", self.karpenter_enabled),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.CLUSTER_METRICS_ENABLED".to_string(),
+                        value: format!("{}", metrics_enabled),
+                    },
+                ],
                 values: vec![
                     ChartSetValue {
                         key: "image.tag".to_string(),
@@ -131,14 +141,6 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     ChartSetValue {
                         key: "environmentVariables.ORGANIZATION_ID".to_string(),
                         value: self.organization_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.KARPENTER_ENABLED".to_string(),
-                        value: format!("\"{}\"", self.karpenter_enabled),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.CLUSTER_METRICS_ENABLED".to_string(),
-                        value: format!("\"{}\"", metrics_enabled),
                     },
                     ChartSetValue {
                         key: "environmentVariables.CLUSTER_METRICS_QUERY_URL".to_string(),
