@@ -26,6 +26,8 @@ pub struct QoveryClusterAgentChart {
     organization_id: QoveryIdentifier,
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
+    karpenter_enabled: bool,
+    metrics_query_url: Option<String>,
 }
 
 impl QoveryClusterAgentChart {
@@ -40,6 +42,8 @@ impl QoveryClusterAgentChart {
         chart_resources: HelmChartResourcesConstraintType,
         update_strategy: UpdateStrategy,
         enable_vpa: bool,
+        karpenter_enabled: bool,
+        metrics_query_url: Option<String>,
     ) -> Self {
         Self {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -70,6 +74,8 @@ impl QoveryClusterAgentChart {
             },
             update_strategy,
             enable_vpa,
+            karpenter_enabled,
+            metrics_query_url,
         }
     }
 
@@ -82,6 +88,11 @@ impl QoveryClusterAgentChart {
 
 impl ToCommonHelmChart for QoveryClusterAgentChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let (metrics_enabled, metrics_url) = match &self.metrics_query_url {
+            None => (false, String::new()),
+            Some(url) => (true, url.to_string()),
+        };
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryClusterAgentChart::chart_name(),
@@ -120,6 +131,18 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     ChartSetValue {
                         key: "environmentVariables.ORGANIZATION_ID".to_string(),
                         value: self.organization_id.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.KARPENTER_ENABLED".to_string(),
+                        value: format!("\"{}\"", self.karpenter_enabled),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.CLUSTER_METRICS_ENABLED".to_string(),
+                        value: format!("\"{}\"", metrics_enabled),
+                    },
+                    ChartSetValue {
+                        key: "environmentVariables.CLUSTER_METRICS_QUERY_URL".to_string(),
+                        value: metrics_url,
                     },
                     // Resources
                     ChartSetValue {
@@ -218,6 +241,8 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
             false,
+            false,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -252,6 +277,8 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             UpdateStrategy::RollingUpdate,
             false,
+            true,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
