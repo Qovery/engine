@@ -38,6 +38,8 @@ fn create_and_destroy_kapsule_cluster(
             CpuArchitecture::AMD64,
             None,
             NodeManager::Default,
+            vec![],
+            // TODO (mzo)
         )
     })
 }

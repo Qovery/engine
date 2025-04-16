@@ -53,6 +53,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_europe_west9() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::AutoPilot,
+            vec![],
         )
     })
 }
@@ -97,6 +98,7 @@ fn create_and_destroy_kapsule_cluster_with_static_ip_in_europe_west12() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::AutoPilot,
+            vec![],
         )
     })
 }

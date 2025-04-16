@@ -697,6 +697,9 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
     .unwrap()
 }
 
+/// This method is dedicated to test services deployments
+/// `node_manager` is set to default (no Karpenter)
+/// `actionable_features` is empty
 fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
     AWS::docker_cr_engine(
         test_kube.context(),
@@ -714,7 +717,8 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
         test_kube.kubeconfig_local_file_path().to_str().map(|s| s.to_string()),
-        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
+        NodeManager::Default,
+        vec![],
     )
 }
 

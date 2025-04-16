@@ -60,6 +60,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -107,6 +108,7 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             None,
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -155,6 +157,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -203,6 +206,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
