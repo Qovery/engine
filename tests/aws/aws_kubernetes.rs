@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::helpers::common::{ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, ClusterDomain, NodeManager};
 use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
@@ -36,6 +36,7 @@ fn create_and_destroy_eks_cluster(
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
     node_manager: NodeManager,
+    actionable_features: Vec<ActionableFeature>,
 ) {
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
@@ -59,6 +60,7 @@ fn create_and_destroy_eks_cluster(
             CpuArchitecture::AMD64,
             None,
             node_manager,
+            actionable_features,
         )
     })
 }
@@ -69,6 +71,7 @@ fn create_and_destroy_arm64_eks_cluster(
     test_type: ClusterTestType,
     vpc_network_mode: VpcQoveryNetworkMode,
     test_name: &str,
+    actionable_features: Vec<ActionableFeature>,
 ) {
     engine_run_test(|| {
         let region = AwsRegion::from_str(region.as_str()).expect("Wasn't able to convert the desired region");
@@ -92,6 +95,7 @@ fn create_and_destroy_arm64_eks_cluster(
             CpuArchitecture::ARM64,
             None,
             NodeManager::Default,
+            actionable_features,
         )
     })
 }
@@ -113,6 +117,7 @@ fn create_and_destroy_eks_cluster_without_nat_gw_in_eu_west_3() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Default,
+        vec![],
     );
 }
 
@@ -127,6 +132,7 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_us_east_2() {
         WithNatGateways,
         function_name!(),
         NodeManager::Default,
+        vec![],
     );
 }
 
@@ -142,6 +148,7 @@ fn create_and_destroy_eks_cluster_in_us_east_2() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Default,
+        vec![],
     );
 }
 
@@ -156,6 +163,22 @@ fn create_pause_and_destroy_eks_cluster_in_us_east_2() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Default,
+        vec![],
+    );
+}
+
+#[cfg(feature = "test-aws-infra")]
+#[named]
+#[test]
+fn create_destroy_eks_cluster_with_metrics_in_us_east_2() {
+    let region = "us-east-2".to_string();
+    create_and_destroy_eks_cluster(
+        region,
+        ClusterTestType::Classic,
+        WithoutNatGateways,
+        function_name!(),
+        NodeManager::Default,
+        vec![ActionableFeature::Metrics],
     );
 }
 
@@ -171,6 +194,7 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Default,
+        vec![],
     );
 }
 
@@ -181,7 +205,13 @@ fn create_upgrade_and_destroy_eks_cluster_in_eu_west_3() {
 #[test]
 fn create_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3".to_string();
-    create_and_destroy_arm64_eks_cluster(region, ClusterTestType::Classic, WithoutNatGateways, function_name!());
+    create_and_destroy_arm64_eks_cluster(
+        region,
+        ClusterTestType::Classic,
+        WithoutNatGateways,
+        function_name!(),
+        vec![],
+    );
 }
 
 #[cfg(feature = "test-aws-infra-upgrade")]
@@ -189,7 +219,13 @@ fn create_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
 #[test]
 fn create_upgrade_and_destroy_eks_cluster_arm64_without_nat_gw_in_eu_west_3() {
     let region = "eu-west-3".to_string();
-    create_and_destroy_arm64_eks_cluster(region, ClusterTestType::WithUpgrade, WithoutNatGateways, function_name!());
+    create_and_destroy_arm64_eks_cluster(
+        region,
+        ClusterTestType::WithUpgrade,
+        WithoutNatGateways,
+        function_name!(),
+        vec![],
+    );
 }
 
 // Karpenter
@@ -250,6 +286,7 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
         NodeManager::Karpenter {
             config: karpenter_parameters,
         },
+        vec![],
     );
 }
 
@@ -304,6 +341,7 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
         NodeManager::Karpenter {
             config: karpenter_parameters,
         },
+        vec![],
     );
 }
 
@@ -356,5 +394,6 @@ fn create_upgrade_and_destroy_eks_cluster_karpenter_with_nat_gw_in_eu_west_3() {
         NodeManager::Karpenter {
             config: karpenter_parameters,
         },
+        vec![],
     );
 }

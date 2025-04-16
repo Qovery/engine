@@ -842,6 +842,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Aks | KubernetesKind::AksSelfManaged => Azure::docker_cr_engine(
                     &context,
@@ -858,6 +859,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => Scaleway::docker_cr_engine(
                     &context,
@@ -874,6 +876,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => Gke::docker_cr_engine(
                     &context,
@@ -890,6 +893,7 @@ pub fn test_db(
                     EngineLocation::QoverySide,
                     secrets.GCP_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
             };
@@ -981,6 +985,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Aks => Azure::docker_cr_engine(
                     &context_for_delete,
@@ -997,6 +1002,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.AZURE_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -1013,6 +1019,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Gke => Gke::docker_cr_engine(
                     &context_for_delete,
@@ -1029,6 +1036,7 @@ pub fn test_db(
                     EngineLocation::ClientSide,
                     secrets.GCP_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
@@ -1183,6 +1191,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Aks => Azure::docker_cr_engine(
                     &context,
@@ -1199,6 +1208,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context,
@@ -1215,6 +1225,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
@@ -1303,6 +1314,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.AWS_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Aks => Azure::docker_cr_engine(
                     &context_for_delete,
@@ -1319,6 +1331,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.AZURE_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::ScwKapsule => Scaleway::docker_cr_engine(
                     &context_for_delete,
@@ -1335,6 +1348,7 @@ pub fn test_pause_managed_db(
                     EngineLocation::ClientSide,
                     secrets.SCALEWAY_TEST_KUBECONFIG_b64,
                     NodeManager::Default,
+                    vec![],
                 ),
                 KubernetesKind::Gke => todo!(), // TODO(benjaminch): GKE integration
                 KubernetesKind::EksSelfManaged => todo!(), // TODO byok integration
@@ -1511,6 +1525,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
             NodeManager::Default,
+            vec![],
         ),
         Kind::Azure => Azure::docker_cr_engine(
             &context,
@@ -1529,6 +1544,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
             NodeManager::Default,
+            vec![],
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context,
@@ -1547,6 +1563,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
             NodeManager::Default,
+            vec![],
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),
@@ -1622,6 +1639,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.AWS_TEST_KUBECONFIG_b64,
             NodeManager::Default,
+            vec![],
         ),
         Kind::Azure => Azure::docker_cr_engine(
             &context_for_delete,
@@ -1640,6 +1658,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.AZURE_TEST_KUBECONFIG_b64,
             NodeManager::Default,
+            vec![],
         ),
         Kind::Scw => Scaleway::docker_cr_engine(
             &context_for_delete,
@@ -1658,6 +1677,7 @@ pub fn test_db_on_upgrade(
             EngineLocation::ClientSide,
             secrets.SCALEWAY_TEST_KUBECONFIG_b64,
             NodeManager::Default,
+            vec![],
         ),
         Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
         Kind::OnPremise => todo!(),

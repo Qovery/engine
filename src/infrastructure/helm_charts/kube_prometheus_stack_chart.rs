@@ -340,7 +340,6 @@ impl Default for KubePrometheusStackChartChecker {
 
 impl ChartInstallationChecker for KubePrometheusStackChartChecker {
     fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO(ENG-1373): Implement chart install verification
         Ok(())
     }
 

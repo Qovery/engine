@@ -5,7 +5,7 @@ use rand::Rng;
 use tracing::error;
 use uuid::Uuid;
 
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
     KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
@@ -80,6 +80,9 @@ pub fn container_registry_scw(context: &Context) -> ScalewayCR {
     .unwrap()
 }
 
+/// This method is dedicated to test services deployments
+/// `node_manager` is set to default (no Karpenter)
+/// `actionable_features` is empty
 pub fn scw_infra_config(
     targeted_cluster: &TargetCluster,
     context: &Context,
@@ -111,6 +114,7 @@ pub fn scw_infra_config(
             TargetCluster::New => None, // <- creating a new cluster
         },
         NodeManager::Default,
+        vec![],
     )
 }
 
@@ -130,6 +134,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Scaleway CR
         let container_registry = Box::new(container_registry_scw(context));
@@ -156,6 +161,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             StorageClass(ScwStorageType::SbvSsd.to_k8s_storage_class()),
             kubeconfig,
             node_manager,
+            actionable_features,
         );
 
         InfrastructureContext::new(

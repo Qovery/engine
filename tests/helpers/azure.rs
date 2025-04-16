@@ -1,4 +1,4 @@
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::get_environment_test_kubernetes;
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
@@ -94,6 +94,7 @@ impl Cluster<Azure, AksOptions> for Azure {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Azure container registry
         let container_registry = Box::new(azure_container_registry(context));
@@ -119,6 +120,7 @@ impl Cluster<Azure, AksOptions> for Azure {
             StorageClass(AzureStorageType::StandardSSDZRS.to_k8s_storage_class()),
             kubeconfig,
             node_manager,
+            actionable_features,
         );
 
         InfrastructureContext::new(

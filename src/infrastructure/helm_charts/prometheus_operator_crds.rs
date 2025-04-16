@@ -1,11 +1,13 @@
-use kube::Client;
-
-use crate::{
-    errors::CommandError,
-    helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces},
-};
-
 use super::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::errors::CommandError;
+use crate::helm::{
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+};
+use crate::runtime::block_on;
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::api::ListParams;
+use kube::{Api, Client, ResourceExt};
+use std::collections::HashMap;
 
 pub struct PrometheusOperatorCrdsChart {
     chart_path: HelmChartPath,
@@ -25,8 +27,8 @@ impl PrometheusOperatorCrdsChart {
     }
 
     // list of supported CRDs by the chart. If the list change, we'll have to make sure the chart is updated and a migration may be needed
-    pub fn list_of_crds() -> Vec<String> {
-        [
+    pub fn expected_list_of_crds<'a>() -> Vec<&'a str> {
+        vec![
             "alertmanagerconfigs.monitoring.coreos.com",
             "alertmanagers.monitoring.coreos.com",
             "podmonitors.monitoring.coreos.com",
@@ -38,9 +40,14 @@ impl PrometheusOperatorCrdsChart {
             "servicemonitors.monitoring.coreos.com",
             "thanosrulers.monitoring.coreos.com",
         ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect()
+    }
+
+    pub fn expected_list_of_crd_annotations<'a, 'b>() -> HashMap<&'a str, &'b str> {
+        HashMap::from([
+            ("meta.helm.sh/release-name", "prometheus-operator-crds"),
+            ("operator.prometheus.io/version", "0.79.2"),
+            ("qovery.com/service-type", "crd"),
+        ])
     }
 
     pub fn chart_name() -> String {
@@ -86,9 +93,75 @@ impl Default for PrometheusOperatorCrdsChartChecker {
 }
 
 impl ChartInstallationChecker for PrometheusOperatorCrdsChartChecker {
-    fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO (ENG-1986): Implement checker: ensure CRD are present with the correct label
-        Ok(())
+    fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
+        let api_crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+        match block_on(api_crds.list(&ListParams::default())) {
+            Ok(crds_result) => {
+                let installed_prometheus_operator_crds = crds_result
+                    .items
+                    .into_iter()
+                    .filter(|crd| crd.spec.group == "monitoring.coreos.com")
+                    .collect::<Vec<CustomResourceDefinition>>();
+                let expected_prometheus_operator_crds = PrometheusOperatorCrdsChart::expected_list_of_crds();
+                if installed_prometheus_operator_crds.len() != expected_prometheus_operator_crds.len() {
+                    return Err(CommandError::new(
+                        format!(
+                            "There should be {} CRDs but only {} found",
+                            expected_prometheus_operator_crds.len(),
+                            installed_prometheus_operator_crds.len()
+                        ),
+                        None,
+                        None,
+                    ));
+                }
+
+                let prometheus_operator_crds_installed_by_name = installed_prometheus_operator_crds
+                    .iter()
+                    .map(|crd| (crd.name_any(), crd))
+                    .collect::<HashMap<String, &CustomResourceDefinition>>();
+
+                let expected_crd_annotations = PrometheusOperatorCrdsChart::expected_list_of_crd_annotations();
+
+                for expected_crd in expected_prometheus_operator_crds {
+                    let crd_installed = match prometheus_operator_crds_installed_by_name.get(expected_crd) {
+                        None => return Err(CommandError::new(format!("Cannot find CRD '{expected_crd}'"), None, None)),
+                        Some(crd_installed) => crd_installed,
+                    };
+
+                    let crd_installed_annotations = crd_installed.annotations();
+                    for (expected_crd_annotation, expected_crd_annotation_value) in expected_crd_annotations.iter() {
+                        match crd_installed_annotations.get(*expected_crd_annotation) {
+                            None => {
+                                return Err(CommandError::new(
+                                    format!(
+                                        "Cannot find annotation '{expected_crd_annotation}' for CRD '{expected_crd}'"
+                                    ),
+                                    None,
+                                    None,
+                                ));
+                            }
+                            Some(annotation_value) => {
+                                if annotation_value != expected_crd_annotation_value {
+                                    return Err(CommandError::new(
+                                        format!(
+                                            "Annotation '{expected_crd_annotation}' for CRD '{expected_crd}' is '{annotation_value}' instead of '{expected_crd_annotation_value}'"
+                                        ),
+                                        None,
+                                        None,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            }
+            Err(err) => Err(CommandError::new(
+                "Cannot retrieve CRDs".to_string(),
+                Some(err.to_string()),
+                None,
+            )),
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
@@ -184,7 +257,10 @@ mod tests {
             }
         }
 
-        let set1: HashSet<String> = PrometheusOperatorCrdsChart::list_of_crds().iter().cloned().collect();
+        let set1: HashSet<String> = PrometheusOperatorCrdsChart::expected_list_of_crds()
+            .iter()
+            .map(|it| it.to_string())
+            .collect();
         let set2: HashSet<String> = resource_names.iter().cloned().collect();
         let diff: Vec<String> = set1.symmetric_difference(&set2).cloned().collect();
 
