@@ -322,5 +322,10 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         );
     }
 
+    context.insert(
+        "nginx_controller_enable_compression",
+        &cluster.advanced_settings().nginx_controller_enable_compression,
+    );
+
     Ok(context)
 }
