@@ -227,6 +227,11 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         );
     }
 
+    context.insert(
+        "nginx_controller_enable_compression",
+        &cluster.advanced_settings().nginx_controller_enable_compression,
+    );
+
     Ok(context)
 }
 
