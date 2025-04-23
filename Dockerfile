@@ -5,7 +5,7 @@ ARG KUBECTL_VERSION="1.30.8"
 ARG HELM_VERSION="3.17.0-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"
-ARG HELM_DIFF_VERSION="v3.9.14"
+ARG HELM_DIFF_VERSION="v3.11.0"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
 ARG DOCKER_VERSION="5:27.1.1-1~debian.12~bookworm"
