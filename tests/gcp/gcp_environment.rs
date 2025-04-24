@@ -10,6 +10,7 @@ use base64::engine::general_purpose;
 use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::application::{Port, Protocol};

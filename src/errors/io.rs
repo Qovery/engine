@@ -98,6 +98,7 @@ pub enum Tag {
     ContainerRegistryInvalidCredentials,
     ContainerRegistryInvalidInformation,
     ContainerRegistryInvalidRegistryUrl,
+    ContainerRegistryInvalidRegistryName,
     ContainerRegistryRegistryDoesntExist,
     ContainerRegistryRepositoryDoesntExistInRegistry,
     ContainerRegistryRepositoryNameInvalid,
@@ -361,6 +362,7 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::ContainerRegistryCannotGetCredentials => Tag::ContainerRegistryCannotGetCredentials,
             errors::Tag::ContainerRegistryInvalidRegistryUrl => Tag::ContainerRegistryInvalidRegistryUrl,
+            errors::Tag::ContainerRegistryInvalidRegistryName => Tag::ContainerRegistryInvalidRegistryName,
             errors::Tag::ContainerRegistryCannotDeleteImage => Tag::ContainerRegistryCannotDeleteImage,
             errors::Tag::ContainerRegistryImageDoesntExist => Tag::ContainerRegistryImageDoesntExist,
             errors::Tag::ContainerRegistryImageUnreachableAfterPush => Tag::ContainerRegistryImageUnreachableAfterPush,

@@ -60,6 +60,7 @@ pub(super) fn delete_aks_cluster(
         },
         &logger,
     )?;
+
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
 }

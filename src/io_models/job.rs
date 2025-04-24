@@ -10,7 +10,9 @@ use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
-use crate::infrastructure::models::container_registry::{ContainerRegistry, ContainerRegistryInfo};
+use crate::infrastructure::models::container_registry::{
+    ContainerRegistryInfo, DockerRegistryInfo, InteractWithRegistry,
+};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{GitCredentials, to_environment_variable};
@@ -324,6 +326,11 @@ impl Job {
         cluster_id: &QoveryIdentifier,
         git_url: &str,
     ) -> Image {
+        let repository_name = cr_info.get_repository_name(&self.name);
+        let image_name = match self.shared_image_feature_enabled {
+            true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(git_url)),
+            false => cr_info.get_image_name(&self.long_id.to_string()),
+        };
         Image {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
@@ -335,9 +342,14 @@ impl Job {
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
-            registry_url: cr_info.endpoint.clone(),
+            registry_url: cr_info.registry_endpoint.clone(),
+            registry_url_prefix: cr_info.get_registry_url_prefix(cluster_id.clone()),
             registry_insecure: cr_info.insecure_registry,
-            registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
+            registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
+                registry_name: Some(cr_info.registry_name.to_string()),
+                repository_name: Some(repository_name.to_string()),
+                image_name: Some(image_name.to_string()),
+            }),
             repository_name: cr_info.get_repository_name(&self.long_id.to_string()),
             shared_repository_name: cr_info.get_shared_repository_name(cluster_id, sanitized_git_url(git_url)),
             shared_image_feature_enabled: self.shared_image_feature_enabled,
@@ -348,7 +360,7 @@ impl Job {
         self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-        default_container_registry: &dyn ContainerRegistry,
+        default_container_registry: &dyn InteractWithRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
@@ -376,9 +388,9 @@ impl Job {
                 image,
                 tag,
             } => {
-                // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved by us with some tags
+                // Default registry is a bit special as the core does not know its url/credentials as it is retrieved by us with some tags
                 if registry.id() == default_container_registry.long_id() {
-                    registry.set_url(default_container_registry.registry_info().endpoint.clone());
+                    registry.set_url(default_container_registry.registry_info().registry_endpoint.clone());
                 }
                 ImageSource::Registry {
                     source: Box::new(RegistryImageSource {

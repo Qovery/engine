@@ -124,7 +124,7 @@ impl ContainerImage {
         }
     }
 
-    fn host_with_port(&self) -> String {
+    fn host_with_credentials_and_port(&self) -> String {
         let host = if let Some(port) = self.registry.port() {
             format!("{}:{}", self.registry.host_str().unwrap_or_default(), port)
         } else {
@@ -135,7 +135,7 @@ impl ContainerImage {
     }
 
     pub fn image_names(&self) -> Vec<String> {
-        let host = self.host_with_port();
+        let host = self.host_with_credentials_and_port();
         match &self.id {
             ImageId::Digest(digest) => vec![format!("{}/{}@{}", host, &self.name, digest)],
             ImageId::Tags(tags) => tags
@@ -150,7 +150,7 @@ impl ContainerImage {
     }
 
     pub fn repository_with_host(&self) -> String {
-        format!("{}/{}", self.host_with_port(), self.name)
+        format!("{}/{}", self.host_with_credentials_and_port(), self.name)
     }
 }
 

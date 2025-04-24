@@ -19,6 +19,11 @@ pub enum ContainerRegistryError {
     CannotInstantiateClient { raw_error_message: String },
     #[error("Invalid registry URL error, cannot be parsed: `{registry_url}`.")]
     InvalidRegistryUrl { registry_url: String },
+    #[error("Invalid registry name error, name `{registry_name}` is invalid: {raw_error_message:?}")]
+    InvalidRegistryName {
+        registry_name: String,
+        raw_error_message: String,
+    },
     #[error("Invalid credentials error.")]
     InvalidCredentials,
     #[error("Cannot get credentials error.")]

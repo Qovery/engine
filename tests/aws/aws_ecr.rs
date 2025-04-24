@@ -2,7 +2,7 @@ use crate::helpers::aws::AWS_QUICK_RESOURCE_TTL_IN_SECONDS;
 use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, init, logger};
 use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
-use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::runtime::block_on;
 use rusoto_ecr::Ecr;
@@ -48,11 +48,13 @@ fn create_ecr_repository_with_tags() {
 
         let repo_name = format!("test-{}", Uuid::new_v4());
         let repo_creation = container_registry.create_repository(
+            Some(registry_name.as_str()),
             repo_name.as_str(),
             AWS_QUICK_RESOURCE_TTL_IN_SECONDS,
             RegistryTags {
-                environment_id: Uuid::new_v4().to_string(),
-                project_id: Uuid::new_v4().to_string(),
+                cluster_id: None,
+                environment_id: Some(Uuid::new_v4().to_string()),
+                project_id: Some(Uuid::new_v4().to_string()),
                 resource_ttl: Some(Duration::from_secs(AWS_QUICK_RESOURCE_TTL_IN_SECONDS as u64)),
             },
         );

@@ -7,7 +7,9 @@ use crate::services::azure::azure_cloud_sdk_types::{DockerImageTag, from_azure_c
 use azure_core::authority_hosts::AZURE_PUBLIC_CLOUD;
 use azure_core::new_http_client;
 use azure_identity::ClientSecretCredential;
-use azure_mgmt_containerregistry::models::{Registry, Resource, Sku};
+use azure_mgmt_containerregistry::models::{
+    Policies, Registry, RegistryPropertiesUpdateParameters, RegistryUpdateParameters, Resource, Sku,
+};
 use azure_mgmt_containerregistry::{Client, ClientBuilder};
 use chrono::Duration;
 use std::collections::HashMap;
@@ -55,6 +57,19 @@ pub enum ContainerRegistryServiceError {
         image_tag: String,
         raw_error_message: String,
     },
+    #[error("Invalid registry name: {raw_error_message:?}")]
+    InvalidRegistryName {
+        registry_name: String,
+        raw_error_message: String,
+    },
+    #[error(
+        "Error while trying to allow cluster `{cluster_name}` to pull from `{registry_name}`: {raw_error_message:?}"
+    )]
+    CannotAllowClusterToPullFromRegistry {
+        registry_name: String,
+        cluster_name: String,
+        raw_error_message: String,
+    },
 }
 
 pub const MAX_REGISTRY_NAME_LENGTH: usize = 50;
@@ -89,16 +104,85 @@ impl AzureContainerRegistryService {
         })
     }
 
+    pub fn try_get_sanitized_registry_name(registry_name: &str) -> Result<String, ContainerRegistryServiceError> {
+        // If registry name has less than minimum length, we don't pad, just return an error
+        if registry_name.len() < MIN_REGISTRY_NAME_LENGTH {
+            return Err(ContainerRegistryServiceError::InvalidRegistryName {
+                registry_name: registry_name.to_string(),
+                raw_error_message: format!(
+                    "Registry name must contain alpha numeric characters only and be at least {} characters",
+                    MIN_REGISTRY_NAME_LENGTH
+                ),
+            });
+        }
+
+        Ok(registry_name
+            .chars()
+            .filter(|c| c.is_alphanumeric()) // Replace all non-alphanumeric characters with an empty string
+            .take(MAX_REGISTRY_NAME_LENGTH) // Trimming the registry name if over 50 characters
+            .collect::<String>())
+    }
+
+    pub fn allow_cluster_to_pull_from_registry(
+        &self,
+        resource_group_name: &str,
+        registry_name: &str,
+        cluster_name: &str,
+    ) -> Result<(), ContainerRegistryServiceError> {
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
+        // TODO(benjaminch): move out azure CLI once AKS cluster operations will be available in SDK
+        // https://crates.io/crates/azure_containers_containerregistry
+        let mut output = vec![];
+        let mut error = vec![];
+        //az aks update -n <myAKSCluster> -g <myResourceGroup> --attach-acr <acr-resource-id>
+        QoveryCommand::new(
+            "az",
+            &[
+                "aks",
+                "update",
+                "-n",
+                cluster_name,
+                "-g",
+                resource_group_name,
+                "--attach-acr",
+                registry_name.as_str(),
+                "-u",
+                self.client_id.as_str(),
+                "-p",
+                self.client_secret.as_str(),
+            ],
+            &[],
+        )
+        .exec_with_abort(
+            &mut |line| {
+                output.push(line);
+            },
+            &mut |line| {
+                error.push(line);
+            },
+            &CommandKiller::from_timeout(StdDuration::from_secs(30)),
+        )
+        .map_err(|e| ContainerRegistryServiceError::CannotAllowClusterToPullFromRegistry {
+            cluster_name: cluster_name.to_string(),
+            registry_name: registry_name.to_string(),
+            raw_error_message: format!("Cannot allow cluster to pull from ACR: {}", e),
+        })?;
+
+        Ok(())
+    }
+
     pub fn get_registry(
         &self,
         subscription_id: &str,
         resource_group_name: &str,
         registry_name: &str,
     ) -> Result<Repository, ContainerRegistryServiceError> {
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
+
         let registry = block_on(
             self.client
                 .registries_client()
-                .get(subscription_id, resource_group_name, registry_name)
+                .get(subscription_id, resource_group_name, registry_name.to_string())
                 .into_future(),
         )
         .map_err(|e| ContainerRegistryServiceError::CannotGetRepository {
@@ -119,22 +203,10 @@ impl AzureContainerRegistryService {
         location: AzureLocation,
         registry_name: &str,
         registry_sku: Sku, // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
-        _image_retention_time: Option<Duration>, // TODO(benjaminch): Add image retention time
-        _labels: Option<HashMap<String, String>>, // TODO(benjaminch): Add labels
+        image_retention_time: Option<Duration>,
+        labels: Option<HashMap<String, String>>, // TODO(benjaminch): Add labels
     ) -> Result<Repository, ContainerRegistryServiceError> {
-        // Checking registry name validity
-        // Resource names may contain alpha numeric characters only and must be between 5 and 50 characters..
-        if (registry_name.len() < MIN_REGISTRY_NAME_LENGTH || registry_name.len() > MAX_REGISTRY_NAME_LENGTH)
-            || !registry_name.chars().all(char::is_alphanumeric)
-        {
-            return Err(ContainerRegistryServiceError::CannotCreateRepository {
-                repository_name: registry_name.to_string(),
-                raw_error_message: format!(
-                    "Registry name must contain alpha numeric characters only and be between {} and {} characters",
-                    MIN_REGISTRY_NAME_LENGTH, MAX_REGISTRY_NAME_LENGTH
-                ),
-            });
-        }
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
 
         let registry = block_on(
             self.client
@@ -142,8 +214,11 @@ impl AzureContainerRegistryService {
                 .create(
                     subscription_id,
                     resource_group_name,
-                    registry_name,
-                    Registry::new(Resource::new(location.to_cloud_provider_format().to_string()), registry_sku),
+                    registry_name.to_string(),
+                    Registry::new(
+                        Resource::new(location.to_cloud_provider_format().to_string()),
+                        registry_sku.clone(),
+                    ),
                 )
                 .into_future(),
         )
@@ -152,7 +227,49 @@ impl AzureContainerRegistryService {
             raw_error_message: e.to_string(),
         })?;
 
-        // TODO(benjaminch): Add labels to the registry
+        let mut retention_policies = registry
+            .properties
+            .unwrap_or_default()
+            .policies
+            .unwrap_or_default()
+            .retention_policy
+            .unwrap_or_default();
+        retention_policies.days = image_retention_time.map(|d| d.num_days() as i32);
+
+        let registry = block_on(
+            self.client
+                .registries_client()
+                .update(
+                    subscription_id,
+                    resource_group_name,
+                    registry_name.to_string(),
+                    RegistryUpdateParameters {
+                        identity: None,
+                        sku: Some(registry_sku),
+                        tags: match &labels {
+                            Some(labels) => Some(serde_json::to_value(labels).map_err(|e| {
+                                ContainerRegistryServiceError::CannotCreateRepository {
+                                    repository_name: registry_name.to_string(),
+                                    raw_error_message: e.to_string(),
+                                }
+                            })?),
+                            None => None,
+                        },
+                        properties: Some(RegistryPropertiesUpdateParameters {
+                            policies: Some(Policies {
+                                retention_policy: Some(retention_policies),
+                                ..Default::default()
+                            }),
+                            ..Default::default()
+                        }),
+                    },
+                )
+                .into_future(),
+        )
+        .map_err(|e| ContainerRegistryServiceError::CannotCreateRepository {
+            repository_name: registry_name.to_string(),
+            raw_error_message: e.to_string(),
+        })?;
 
         from_azure_container_registry(registry).map_err(|e| ContainerRegistryServiceError::CannotCreateRepository {
             repository_name: registry_name.to_string(),
@@ -166,10 +283,11 @@ impl AzureContainerRegistryService {
         resource_group_name: &str,
         registry_name: &str,
     ) -> Result<(), ContainerRegistryServiceError> {
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
         block_on(
             self.client
                 .registries_client()
-                .delete(subscription_id, resource_group_name, registry_name)
+                .delete(subscription_id, resource_group_name, registry_name.to_string())
                 .send(),
         )
         .map_err(|e| ContainerRegistryServiceError::CannotDeleteRepository {
@@ -188,6 +306,7 @@ impl AzureContainerRegistryService {
         image_name: &str,
         image_tag: &str,
     ) -> Result<DockerImage, ContainerRegistryServiceError> {
+        let sanitized_registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
         // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK
         // https://crates.io/crates/azure_containers_containerregistry
         let mut output = vec![];
@@ -199,7 +318,7 @@ impl AzureContainerRegistryService {
                 "repository",
                 "show",
                 "-n",
-                registry_name,
+                sanitized_registry_name.as_str(),
                 "-o",
                 "json",
                 "--image",
@@ -221,7 +340,7 @@ impl AzureContainerRegistryService {
             &CommandKiller::from_timeout(StdDuration::from_secs(30)),
         )
         .map_err(|e| ContainerRegistryServiceError::CannotGetDockerImage {
-            repository_name: registry_name.to_string(),
+            repository_name: sanitized_registry_name.to_string(),
             image_name: image_name.to_string(),
             image_tag: image_tag.to_string(),
             raw_error_message: format!("Cannot get docker image: {}", e),
@@ -229,7 +348,7 @@ impl AzureContainerRegistryService {
 
         let docker_image_tag = serde_json::from_str::<DockerImageTag>(output.join("").as_str()).map_err(|e| {
             ContainerRegistryServiceError::CannotGetDockerImage {
-                repository_name: registry_name.to_string(),
+                repository_name: sanitized_registry_name.to_string(),
                 image_name: image_name.to_string(),
                 image_tag: image_tag.to_string(),
                 raw_error_message: format!("Cannot parse docker image tag: {}", e),
@@ -237,10 +356,54 @@ impl AzureContainerRegistryService {
         })?;
 
         Ok(DockerImage {
-            repository_id: registry_name.to_string(),
+            repository_id: sanitized_registry_name.to_string(),
             name: image_name.to_string(),
             tag: docker_image_tag.name,
         })
+    }
+
+    pub fn delete_docker_image(
+        &self,
+        _subscription_id: &str,
+        _resource_group_name: &str,
+        registry_name: &str,
+        image_name: &str,
+        image_tag: &str,
+    ) -> Result<(), ContainerRegistryServiceError> {
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
+        // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK
+        // https://crates.io/crates/azure_containers_containerregistry
+        QoveryCommand::new(
+            "az",
+            &[
+                "acr",
+                "repository",
+                "delete",
+                "-n",
+                registry_name.as_str(),
+                "--image",
+                format!("{}:{}", image_name, image_tag).as_str(),
+                "--yes",
+                "-u",
+                self.client_id.as_str(),
+                "-p",
+                self.client_secret.as_str(),
+            ],
+            &[],
+        )
+        .exec_with_abort(
+            &mut |_line| {},
+            &mut |_line| {},
+            &CommandKiller::from_timeout(StdDuration::from_secs(60)),
+        )
+        .map_err(|e| ContainerRegistryServiceError::CannotDeleteDockerImage {
+            repository_name: registry_name.to_string(),
+            image_name: image_name.to_string(),
+            image_tag: image_tag.to_string(),
+            raw_error_message: format!("Cannot delete docker image: {}", e),
+        })?;
+
+        Ok(())
     }
 
     pub fn list_docker_images(
@@ -249,6 +412,8 @@ impl AzureContainerRegistryService {
         _resource_group_name: &str,
         registry_name: &str,
     ) -> Result<Vec<DockerImage>, ContainerRegistryServiceError> {
+        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
+
         // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK
         // https://crates.io/crates/azure_containers_containerregistry
         let mut output = vec![];
@@ -260,7 +425,7 @@ impl AzureContainerRegistryService {
                 "repository",
                 "list",
                 "-n",
-                registry_name,
+                registry_name.as_str(),
                 "-o",
                 "json",
                 "-u",
@@ -302,5 +467,53 @@ impl AzureContainerRegistryService {
         }
 
         Ok(docker_images)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::services::azure::container_registry_service::ContainerRegistryServiceError;
+
+    #[test]
+    fn test_azure_container_registry_service_try_get_sanitized_registry_name() {
+        let registry_name = "myregistry";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(sanitized_registry_name, Ok("myregistry".to_string()));
+
+        let registry_name = "my-registry";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(sanitized_registry_name, Ok("myregistry".to_string()));
+
+        let registry_name = "my_registry";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(sanitized_registry_name, Ok("myregistry".to_string()));
+
+        let registry_name = " my registry ";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(sanitized_registry_name, Ok("myregistry".to_string()));
+
+        let registry_name = "myregistry12345678901234567890123456789012345678901234567890";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(
+            sanitized_registry_name,
+            Ok("myregistry1234567890123456789012345678901234567890".to_string())
+        );
+
+        let registry_name = "reg";
+        let sanitized_registry_name =
+            super::AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name);
+        assert_eq!(
+            sanitized_registry_name,
+            Err(ContainerRegistryServiceError::InvalidRegistryName {
+                registry_name: "reg".to_string(),
+                raw_error_message:
+                    "Registry name must contain alpha numeric characters only and be at least 5 characters".to_string(),
+            }),
+        );
     }
 }

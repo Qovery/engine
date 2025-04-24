@@ -16,6 +16,7 @@ use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext
 use qovery_engine::infrastructure::models::cloud_provider::gcp::Google;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
@@ -178,7 +179,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Google Artifact registry
-        let container_registry = Box::new(gcp_container_registry(context));
+        let container_registry = ContainerRegistry::GcpArtifactRegistry(gcp_container_registry(context));
 
         // use local Docker
         let build_platform = Box::new(build_platform_local_docker(context));
