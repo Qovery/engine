@@ -408,6 +408,14 @@ impl From<ContainerRegistryError> for CommandError {
             ContainerRegistryError::InvalidRegistryUrl { registry_url } => CommandError::new_from_safe_message(
                 format!("Container registry error, invalid registry URL: `{registry_url}`"),
             ),
+            ContainerRegistryError::InvalidRegistryName {
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Container registry error, invalid registry name: `{registry_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ContainerRegistryError::CannotGetCredentials => {
                 CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
             }
@@ -1010,6 +1018,8 @@ pub enum Tag {
     ContainerRegistryCannotGetCredentials,
     /// ContainerRegistryInvalidRegistryUrl: represents an error where registry URL is invalid (cannot be parsed).
     ContainerRegistryInvalidRegistryUrl,
+    /// ContainerRegistryInvalidRegistryName: represents an error where registry name is invalid (unauthorized chars for example).
+    ContainerRegistryInvalidRegistryName,
     /// ContainerRegistryCannotDeleteImage: represents an error while trying to delete an image.
     ContainerRegistryCannotDeleteImage,
     /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
@@ -3225,6 +3235,14 @@ impl EngineError {
                 event_details,
                 Tag::ContainerRegistryInvalidRegistryUrl,
                 format!("Container registry: invalid registry URL: `{registry_url}`"),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::InvalidRegistryName { ref registry_name, ..} => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryInvalidRegistryName,
+                format!("Container registry: invalid registry name: `{registry_name}`"),
                 Some(error.into()),
                 None,
                 None,

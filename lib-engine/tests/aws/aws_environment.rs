@@ -20,6 +20,7 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use k8s_openapi::api::core::v1::ConfigMap;
 use qovery_engine::environment::models::aws::AwsStorageType;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, Registry};

@@ -48,8 +48,20 @@ pub fn from_azure_container_registry(
     Ok(Repository {
         registry_id: azure_container_registry.resource.id.unwrap_or_default(),
         name: azure_container_registry.resource.name.unwrap_or_default(),
-        uri: azure_container_registry.properties.unwrap_or_default().login_server,
-        ttl: None,    // TODO(benjaminch): TTL to be added
+        uri: azure_container_registry
+            .properties
+            .clone()
+            .unwrap_or_default()
+            .login_server,
+        ttl: azure_container_registry
+            .properties
+            .unwrap_or_default()
+            .policies
+            .unwrap_or_default()
+            .retention_policy
+            .unwrap_or_default()
+            .days
+            .map(|d| Duration::from_secs(d as u64 * 24 * 60 * 60)),
         labels: None, // TODO(benjaminch): labels to be added
     })
 }

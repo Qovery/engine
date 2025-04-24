@@ -4,7 +4,7 @@ use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::generic_cr::GenericCr;
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, Kind, Repository, RepositoryInfo,
 };
 use crate::io_models::context::Context;
 use itertools::Itertools;
@@ -112,7 +112,7 @@ impl GithubCr {
     }
 }
 
-impl ContainerRegistry for GithubCr {
+impl InteractWithRegistry for GithubCr {
     fn context(&self) -> &Context {
         self.generic_cr.context()
     }
@@ -135,12 +135,13 @@ impl ContainerRegistry for GithubCr {
 
     fn create_repository(
         &self,
+        _registry_name: Option<&str>,
         name: &str,
         image_retention_time_in_seconds: u32,
         registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         self.generic_cr
-            .create_repository(name, image_retention_time_in_seconds, registry_tags)
+            .create_repository(None, name, image_retention_time_in_seconds, registry_tags)
     }
 
     fn get_repository(&self, repository_name: &str) -> Result<Repository, ContainerRegistryError> {
@@ -268,7 +269,7 @@ impl ContainerRegistry for GithubCr {
         // If you delete the tag, GithubCr does not also delete the other layers of the image (i.e: multi-arch images)
         // They stay there forever, so we need to delete them manually
         let container = ContainerImage::new(
-            self.generic_cr.registry_info().endpoint.clone(),
+            self.generic_cr.registry_info().registry_endpoint.clone(),
             image.name.clone(),
             vec![image.tag.clone()],
         );

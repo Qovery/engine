@@ -1,3 +1,4 @@
+use enum_dispatch::enum_dispatch;
 use std::collections::HashMap;
 use std::time::Duration;
 use url::Url;
@@ -35,12 +36,14 @@ pub struct DockerImage {
 }
 
 pub struct RegistryTags {
-    pub environment_id: String,
-    pub project_id: String,
+    pub cluster_id: Option<String>,
+    pub environment_id: Option<String>,
+    pub project_id: Option<String>,
     pub resource_ttl: Option<Duration>,
 }
 
-pub trait ContainerRegistry: Send + Sync {
+#[enum_dispatch]
+pub trait InteractWithRegistry: Send + Sync {
     fn context(&self) -> &Context;
     fn kind(&self) -> Kind;
     fn long_id(&self) -> &Uuid;
@@ -56,6 +59,7 @@ pub trait ContainerRegistry: Send + Sync {
     // DEPRECATED: The convention for us is that we create one per application
     fn create_repository(
         &self,
+        registry_name: Option<&str>,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
         registry_tags: RegistryTags,
@@ -85,6 +89,25 @@ pub trait ContainerRegistry: Send + Sync {
     }
 }
 
+#[enum_dispatch(InteractWithRegistry)]
+pub enum ContainerRegistry {
+    Ecr(ecr::ECR),
+    AzureContainerRegistry(azure_container_registry::AzureContainerRegistry),
+    ScalewayCr(scaleway_container_registry::ScalewayCR),
+    GcpArtifactRegistry(google_artifact_registry::GoogleArtifactRegistry),
+    GenericCr(generic_cr::GenericCr),
+    GithubCr(github_cr::GithubCr),
+}
+
+impl ContainerRegistry {
+    pub fn as_azure_container_registry(&self) -> Option<&azure_container_registry::AzureContainerRegistry> {
+        match self {
+            ContainerRegistry::AzureContainerRegistry(azure_cr) => Some(azure_cr),
+            _ => None,
+        }
+    }
+}
+
 pub fn to_engine_error(event_details: EventDetails, err: ContainerRegistryError) -> EngineError {
     EngineError::new_container_registry_error(event_details, err)
 }
@@ -94,12 +117,24 @@ pub struct ImageBuildContext {
     pub git_repo_url_sanitized: String,
 }
 
+type RegistryName = String;
+type RepositoryName = String;
+type ImageName = String;
+
+pub struct DockerRegistryInfo {
+    pub registry_name: Option<RegistryName>,
+    pub repository_name: Option<RepositoryName>,
+    pub image_name: Option<ImageName>,
+}
+
 pub struct ContainerRegistryInfo {
-    pub endpoint: Url,
+    pub registry_endpoint: Url,
+    get_registry_url_prefix: Box<dyn Fn(QoveryIdentifier) -> Option<String> + Send + Sync>,
     // Contains username and password if necessary
     pub registry_name: String,
-    pub registry_docker_json_config: Option<String>,
+    get_registry_docker_json_config: Box<dyn Fn(DockerRegistryInfo) -> Option<String> + Send + Sync>,
     pub insecure_registry: bool,
+
     // this one is deprecated in favor of shared one, but we still need it for registry deletion purpose
     // give it the name of your image, and it returns the full name with prefix if needed
     // i.e: fo scaleway => image_name/image_name
@@ -114,6 +149,14 @@ pub struct ContainerRegistryInfo {
 }
 
 impl ContainerRegistryInfo {
+    pub fn get_registry_docker_json_config(&self, docker_registry_info: DockerRegistryInfo) -> Option<String> {
+        (self.get_registry_docker_json_config)(docker_registry_info)
+    }
+
+    pub fn get_registry_url_prefix(&self, cluster_id: QoveryIdentifier) -> Option<String> {
+        (self.get_registry_url_prefix)(cluster_id)
+    }
+
     pub fn get_repository_name(&self, image_name: &str) -> String {
         (self.get_repository_name)(image_name)
     }

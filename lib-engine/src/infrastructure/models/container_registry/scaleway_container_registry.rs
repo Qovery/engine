@@ -6,7 +6,7 @@ use crate::environment::models::scaleway::ScwRegion;
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::container_registry::errors::{ContainerRegistryError, RepositoryNamingRule};
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, Kind, Repository, RepositoryInfo,
     take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
@@ -55,12 +55,16 @@ impl ScalewayCR {
             return Err(ContainerRegistryError::InvalidCredentials);
         }
         const MAX_REGISTRY_NAME_LENGTH: usize = 40; // 50 (Scaleway CR limit) - 10 (prefix)
-        let registry_info = ContainerRegistryInfo {
-            endpoint: registry,
-            registry_name: name.to_string(),
-            registry_docker_json_config: Some(Self::get_docker_json_config_raw(&login, &secret_token, region.as_str())),
-            insecure_registry: false,
 
+        let secret_token_clone = secret_token.to_string(); // for closure
+        let registry_info = ContainerRegistryInfo {
+            registry_endpoint: registry,
+            registry_name: name.to_string(),
+            get_registry_docker_json_config: Box::new(move |_docker_registry_info| {
+                Some(Self::get_docker_json_config_raw(&login, &secret_token_clone, region.as_str()))
+            }),
+            insecure_registry: false,
+            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_shared_image_name: Box::new(|image_build_context| {
                 // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
                 let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
@@ -307,7 +311,7 @@ impl ScalewayCR {
     }
 }
 
-impl ContainerRegistry for ScalewayCR {
+impl InteractWithRegistry for ScalewayCR {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -330,6 +334,7 @@ impl ContainerRegistry for ScalewayCR {
 
     fn create_repository(
         &self,
+        _registry_name: Option<&str>,
         name: &str,
         _image_retention_time_in_seconds: u32,
         _registry_tags: RegistryTags,
@@ -435,8 +440,11 @@ impl ContainerRegistry for ScalewayCR {
     }
 
     fn image_exists(&self, image: &Image) -> bool {
-        let image =
-            docker::ContainerImage::new(self.registry_info.endpoint.clone(), image.name(), vec![image.tag.clone()]);
+        let image = docker::ContainerImage::new(
+            self.registry_info.registry_endpoint.clone(),
+            image.name(),
+            vec![image.tag.clone()],
+        );
         // SCW container registry is sometimes flaky, stick a retry just to be sure there is no sync issue
         let image_exists = retry::retry(Fixed::from_millis(1000).take(5), || {
             match self.context.docker.does_image_exist_remotely(&image) {

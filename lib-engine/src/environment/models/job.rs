@@ -10,6 +10,7 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
+use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
@@ -175,12 +176,14 @@ impl<T: CloudProvider> Job<T> {
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
+        let registry_endpoint = registry_info.registry_endpoint.clone();
+        let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
-                let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
-                    format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+                let repository: Cow<str> = if let Some(port) = registry_info.registry_endpoint.port() {
+                    format!("{}:{}", registry_endpoint_host, port).into()
                 } else {
-                    registry_info.endpoint.host_str().unwrap_or_default().into()
+                    registry_endpoint_host.into()
                 };
 
                 let (_, image_name, image_tag, _) = source
@@ -233,13 +236,23 @@ impl<T: CloudProvider> Job<T> {
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings,
             },
-            registry: registry_info
-                .registry_docker_json_config
-                .as_ref()
-                .map(|docker_json| RegistryTeraContext {
-                    secret_name: format!("{}-registry", self.kube_name()),
-                    docker_json_config: Some(docker_json.to_string()),
+            registry: match &self.image_source {
+                ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
+                    registry_name: None,
+                    repository_name: None,
+                    image_name: Some(source.image.to_string()),
                 }),
+                ImageSource::Build { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
+                    registry_name: Some(source.image.registry_name()),
+                    repository_name: Some(source.image.repository_name().to_string()),
+                    image_name: Some(source.image.name()),
+                }),
+            }
+            .as_ref()
+            .map(|docker_json| RegistryTeraContext {
+                secret_name: format!("{}-registry", self.kube_name()),
+                docker_json_config: Some(docker_json.to_string()),
+            }),
             environment_variables: self.environment_variables.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),

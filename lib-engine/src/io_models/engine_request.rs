@@ -636,12 +636,12 @@ impl ContainerRegistry {
         context: Context,
         logger: Box<dyn Logger>,
         tags: HashMap<String, String>,
-    ) -> Result<Box<dyn container_registry::ContainerRegistry>, anyhow::Error> {
+    ) -> Result<container_registry::ContainerRegistry, anyhow::Error> {
         match self.clone() {
             ContainerRegistry::Ecr { long_id, name, options } => {
                 let credentials =
                     AwsCredentials::new(options.access_key_id, options.secret_access_key, options.session_token);
-                Ok(Box::new(ECR::new(
+                Ok(container_registry::ContainerRegistry::Ecr(ECR::new(
                     context,
                     long_id,
                     name.as_str(),
@@ -652,16 +652,18 @@ impl ContainerRegistry {
                     tags,
                 )?))
             }
-            ContainerRegistry::ScalewayCr { long_id, name, options } => Ok(Box::new(ScalewayCR::new(
-                context,
-                long_id,
-                &name,
-                &options.scaleway_secret_key,
-                &options.scaleway_project_id,
-                ScwRegion::from_str(&options.region).map_err(|_| {
-                    anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
-                })?,
-            )?)),
+            ContainerRegistry::ScalewayCr { long_id, name, options } => {
+                Ok(container_registry::ContainerRegistry::ScalewayCr(ScalewayCR::new(
+                    context,
+                    long_id,
+                    &name,
+                    &options.scaleway_secret_key,
+                    &options.scaleway_project_id,
+                    ScwRegion::from_str(&options.region).map_err(|_| {
+                        anyhow!("cannot parse `{}`, it doesn't seem to be a valid SCW zone", options.region)
+                    })?,
+                )?))
+            }
             ContainerRegistry::GcpArtifactRegistry { long_id, name, options } => {
                 let credentials = JsonCredentials::try_from(
                     options
@@ -671,42 +673,48 @@ impl ContainerRegistry {
                 )
                 .map_err(|err| anyhow!("cannot deserialize gcp credentials: {:?}", err))?;
 
-                Ok(Box::new(GoogleArtifactRegistry::new(
+                Ok(container_registry::ContainerRegistry::GcpArtifactRegistry(
+                    GoogleArtifactRegistry::new(
+                        context,
+                        long_id,
+                        &name,
+                        &credentials.project_id,
+                        GcpRegion::from_str(&options.region)
+                            .map_err(|err| anyhow!("cannot deserialize gcp region: {:?}", err))?,
+                        credentials.clone(),
+                        Arc::new(
+                            ArtifactRegistryService::new(
+                                credentials.clone(),
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                            )
+                            .with_context(|| "cannot instantiate ArtifactRegistryService")?,
+                        ),
+                    )?,
+                ))
+            }
+            ContainerRegistry::GenericCr { long_id, name, options } => {
+                Ok(container_registry::ContainerRegistry::GenericCr(GenericCr::new(
                     context,
                     long_id,
                     &name,
-                    &credentials.project_id,
-                    GcpRegion::from_str(&options.region)
-                        .map_err(|err| anyhow!("cannot deserialize gcp region: {:?}", err))?,
-                    credentials.clone(),
-                    Arc::new(
-                        ArtifactRegistryService::new(
-                            credentials.clone(),
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                        )
-                        .with_context(|| "cannot instantiate ArtifactRegistryService")?,
-                    ),
+                    options.url.clone(),
+                    options.skip_tls_verify,
+                    options.repository_name,
+                    options.username.and_then(|l| options.password.map(|p| (l, p))),
+                    options.url.host_str().unwrap_or("") != "qovery-registry.lan",
                 )?))
             }
-            ContainerRegistry::GenericCr { long_id, name, options } => Ok(Box::new(GenericCr::new(
-                context,
-                long_id,
-                &name,
-                options.url.clone(),
-                options.skip_tls_verify,
-                options.repository_name,
-                options.username.and_then(|l| options.password.map(|p| (l, p))),
-                options.url.host_str().unwrap_or("") != "qovery-registry.lan",
-            )?)),
-            ContainerRegistry::GithubCr { long_id, name, options } => Ok(Box::new(GithubCr::new(
-                context,
-                long_id,
-                &name,
-                options.url,
-                options.username,
-                options.token,
-            )?)),
+            ContainerRegistry::GithubCr { long_id, name, options } => {
+                Ok(container_registry::ContainerRegistry::GithubCr(GithubCr::new(
+                    context,
+                    long_id,
+                    &name,
+                    options.url,
+                    options.username,
+                    options.token,
+                )?))
+            }
         }
     }
 }

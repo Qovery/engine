@@ -14,7 +14,7 @@ use crate::infrastructure::models::build_platform::{BuildError, BuildPlatform};
 use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
-use crate::infrastructure::models::container_registry::{ContainerRegistry, RegistryTags, to_engine_error};
+use crate::infrastructure::models::container_registry::{InteractWithRegistry, RegistryTags, to_engine_error};
 use crate::io_models::Action;
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRequest};
@@ -185,8 +185,9 @@ impl EnvironmentTask {
                         build_platform,
                         img_retention_time_sec,
                         RegistryTags {
-                            environment_id: environment_id.to_string(),
-                            project_id: project_id.to_string(),
+                            cluster_id: None,
+                            environment_id: Some(environment_id.to_string()),
+                            project_id: Some(project_id.to_string()),
                             resource_ttl,
                         },
                         cr_to_engine_error,
@@ -210,7 +211,7 @@ impl EnvironmentTask {
     fn build_and_push_service(
         service: &mut dyn Service,
         option: &DeploymentOption,
-        cr_registry: &dyn ContainerRegistry,
+        cr_registry: &dyn InteractWithRegistry,
         build_platform: &dyn BuildPlatform,
         image_retention_time_sec: u32,
         registry_tags: RegistryTags,
@@ -235,7 +236,8 @@ impl EnvironmentTask {
 
         // Be sure that our repository exist before trying to pull/push images from it
         logger.send_progress(format!(
-            "🗂️ Provisioning container repository {}",
+            "🗂️ Provisioning container repository {}/{}",
+            build.image.registry_name.as_str(),
             build.image.repository_name()
         ));
         let provision_registry_record = metrics_registry.start_record(
@@ -244,7 +246,12 @@ impl EnvironmentTask {
             StepName::RegistryCreateRepository,
         );
 
-        match cr_registry.create_repository(build.image.repository_name(), image_retention_time_sec, registry_tags) {
+        match cr_registry.create_repository(
+            Some(build.image.registry_name.as_str()),
+            build.image.repository_name(),
+            image_retention_time_sec,
+            registry_tags,
+        ) {
             Err(err) => {
                 provision_registry_record.stop(StepStatus::Error);
                 return Err(Box::new(cr_to_engine_error(err)));

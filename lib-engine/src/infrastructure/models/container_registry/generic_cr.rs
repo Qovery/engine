@@ -4,7 +4,7 @@ use base64::engine::general_purpose;
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, Kind, Repository, RepositoryInfo,
     take_last_x_chars_and_remove_leading_dash_char,
 };
 
@@ -67,11 +67,15 @@ impl GenericCr {
         })?;
 
         const MAX_REGISTRY_NAME_LENGTH: usize = 90; // 100 (github limit) - 10 (prefix length)
+        let registry_docker_json_config_clone = registry_docker_json_config.clone(); // for closure
         let container_registry_info = ContainerRegistryInfo {
-            endpoint: url.clone(),
+            registry_endpoint: url.clone(),
             registry_name: name.to_string(),
-            registry_docker_json_config,
+            get_registry_docker_json_config: Box::new(move |_docker_registry_info| {
+                registry_docker_json_config_clone.clone()
+            }),
             insecure_registry: skip_tls_verification,
+            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_shared_image_name: Box::new({
                 let repository = repository_name.clone();
                 move |image_build_context| {
@@ -152,7 +156,7 @@ impl GenericCr {
     }
 }
 
-impl ContainerRegistry for GenericCr {
+impl InteractWithRegistry for GenericCr {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -175,6 +179,7 @@ impl ContainerRegistry for GenericCr {
 
     fn create_repository(
         &self,
+        _registry_name: Option<&str>,
         name: &str,
         _image_retention_time_in_seconds: u32,
         _registry_tags: RegistryTags,
@@ -212,8 +217,11 @@ impl ContainerRegistry for GenericCr {
             return Ok(());
         }
 
-        let container =
-            ContainerImage::new(self.cr_info.endpoint.clone(), repository_name.to_string(), vec!["".to_string()]);
+        let container = ContainerImage::new(
+            self.cr_info.registry_endpoint.clone(),
+            repository_name.to_string(),
+            vec!["".to_string()],
+        );
         let tags = self
             .skopeo
             .list_tags(&container, !self.skip_tls_verification)
@@ -224,7 +232,8 @@ impl ContainerRegistry for GenericCr {
             })?;
 
         for tag in tags {
-            let container = ContainerImage::new(self.cr_info.endpoint.clone(), repository_name.to_string(), vec![tag]);
+            let container =
+                ContainerImage::new(self.cr_info.registry_endpoint.clone(), repository_name.to_string(), vec![tag]);
             self.skopeo
                 .delete_image(&container, !self.skip_tls_verification)
                 .map_err(|err| ContainerRegistryError::CannotDeleteRepository {
@@ -242,7 +251,11 @@ impl ContainerRegistry for GenericCr {
             return Ok(());
         }
 
-        let container = ContainerImage::new(self.cr_info.endpoint.clone(), image.name.clone(), vec![image.tag.clone()]);
+        let container = ContainerImage::new(
+            self.cr_info.registry_endpoint.clone(),
+            image.name.clone(),
+            vec![image.tag.clone()],
+        );
         self.skopeo
             .delete_image(&container, !self.skip_tls_verification)
             .map_err(|err| ContainerRegistryError::CannotDeleteImage {
@@ -256,7 +269,11 @@ impl ContainerRegistry for GenericCr {
     }
 
     fn image_exists(&self, image: &Image) -> bool {
-        let container = ContainerImage::new(self.cr_info.endpoint.clone(), image.name.clone(), vec![image.tag.clone()]);
+        let container = ContainerImage::new(
+            self.cr_info.registry_endpoint.clone(),
+            image.name.clone(),
+            vec![image.tag.clone()],
+        );
         let Ok(tags) = self.skopeo.list_tags(&container, !self.skip_tls_verification) else {
             return false;
         };

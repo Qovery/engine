@@ -13,6 +13,7 @@ use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsStorageTyp
 use qovery_engine::environment::models::types::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,

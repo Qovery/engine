@@ -14,6 +14,7 @@ use qovery_engine::infrastructure::models::cloud_provider::aws::database_instanc
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::aws::Options;
@@ -126,7 +127,7 @@ impl Cluster<AWS, Options> for AWS {
         actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use ECR
-        let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
+        let container_registry = ContainerRegistry::Ecr(container_registry_ecr(context, logger.clone()));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));

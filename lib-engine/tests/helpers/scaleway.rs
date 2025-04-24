@@ -18,9 +18,9 @@ use qovery_engine::infrastructure::models::build_platform::Build;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
-use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
+use qovery_engine::infrastructure::models::container_registry::{ContainerRegistry, InteractWithRegistry};
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
@@ -137,7 +137,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Scaleway CR
-        let container_registry = Box::new(container_registry_scw(context));
+        let container_registry = ContainerRegistry::ScalewayCr(container_registry_scw(context));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
