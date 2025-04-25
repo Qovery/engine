@@ -13,8 +13,10 @@ pdns:
   # Qovery DNS: apiKey: "443"
   apiKey: set-by-engine-code
 
-podDisruptionBudget:
-  maxUnavailable: 1
+# We have only 1 instance of external-dns, so creating pdb benefits nothing and may create unnecessary constraints
+# i.e: Karpenter will take them into account
+pdb:
+  create: false
 
 # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
 annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true)
