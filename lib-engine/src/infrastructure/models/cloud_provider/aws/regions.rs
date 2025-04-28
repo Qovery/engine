@@ -100,6 +100,10 @@ pub enum AwsZone {
     MeSouth1A,
     MeSouth1B,
     MeSouth1C,
+    // Mexico
+    MxCentral1A,
+    MxCentral1B,
+    MxCentral1C,
     // Sao Paulo
     SaEast1A,
     SaEast1B,
@@ -146,6 +150,7 @@ impl AwsZone {
             EuSouth2A | EuSouth2B | EuSouth2C => AwsRegion::EuSouth2,
             MeSouth1A | MeSouth1B | MeSouth1C => AwsRegion::MeSouth1,
             MeCentral1A | MeCentral1B | MeCentral1C => AwsRegion::MeCentral1,
+            MxCentral1A | MxCentral1B | MxCentral1C => AwsRegion::MxCentral1,
             SaEast1A | SaEast1B | SaEast1C => AwsRegion::SaEast1,
         }
     }
@@ -226,6 +231,9 @@ impl ToCloudProviderFormat for AwsZone {
             MeSouth1A => "me-south-1a",
             MeSouth1B => "me-south-1b",
             MeSouth1C => "me-south-1c",
+            MxCentral1A => "mx-central-1a",
+            MxCentral1B => "mx-central-1b",
+            MxCentral1C => "mx-central-1c",
             SaEast1A => "sa-east-1a",
             SaEast1B => "sa-east-1b",
             SaEast1C => "sa-east-1c",
@@ -320,6 +328,9 @@ impl FromStr for AwsZone {
             "me-south-1a" => Ok(MeSouth1A),
             "me-south-1b" => Ok(MeSouth1B),
             "me-south-1c" => Ok(MeSouth1C),
+            "mx-central-1a" => Ok(MxCentral1A),
+            "mx-central-1b" => Ok(MxCentral1B),
+            "mx-central-1c" => Ok(MxCentral1C),
             "sa-east-1a" => Ok(SaEast1A),
             "sa-east-1b" => Ok(SaEast1B),
             "sa-east-1c" => Ok(SaEast1C),
@@ -365,6 +376,7 @@ pub enum AwsRegion {
     EuSouth2,
     MeCentral1,
     MeSouth1,
+    MxCentral1,
     SaEast1,
 }
 
@@ -393,6 +405,7 @@ impl FromStr for AwsRegion {
             "eu-south-2" | "eusouth2" => Ok(AwsRegion::EuSouth2),
             "me-south-1" | "mesouth1" => Ok(AwsRegion::MeSouth1),
             "me-central-1" | "mecentral1" => Ok(AwsRegion::MeCentral1),
+            "mx-central-1" | "mxcentral1" => Ok(AwsRegion::MxCentral1),
             "sa-east-1" | "saeast1" => Ok(AwsRegion::SaEast1),
             "us-east-1" | "useast1" => Ok(AwsRegion::UsEast1),
             "us-east-2" | "useast2" => Ok(AwsRegion::UsEast2),
@@ -435,6 +448,7 @@ impl ToCloudProviderFormat for AwsRegion {
             AwsRegion::EuSouth2 => "eu-south-2",
             AwsRegion::MeSouth1 => "me-south-1",
             AwsRegion::MeCentral1 => "me-central-1",
+            AwsRegion::MxCentral1 => "mx-central-1",
             AwsRegion::SaEast1 => "sa-east-1",
         }
     }
@@ -528,6 +542,9 @@ impl AwsRegion {
             }
             AwsRegion::MeCentral1 => {
                 vec![MeCentral1A, MeCentral1B, MeCentral1C]
+            }
+            AwsRegion::MxCentral1 => {
+                vec![MxCentral1A, MxCentral1B, MxCentral1C]
             }
             AwsRegion::SaEast1 => {
                 vec![SaEast1A, SaEast1B, SaEast1C]
@@ -630,6 +647,7 @@ mod tests {
                     AwsRegion::EuSouth2 => "eu-south-2",
                     AwsRegion::MeSouth1 => "me-south-1",
                     AwsRegion::MeCentral1 => "me-central-1",
+                    AwsRegion::MxCentral1 => "mx-central-1",
                     AwsRegion::SaEast1 => "sa-east-1",
                 },
                 region.to_cloud_provider_format()
@@ -717,6 +735,9 @@ mod tests {
                     AwsRegion::MeCentral1 => {
                         vec![AwsZone::MeCentral1A, AwsZone::MeCentral1B, AwsZone::MeCentral1C]
                     }
+                    AwsRegion::MxCentral1 => {
+                        vec![AwsZone::MxCentral1A, AwsZone::MxCentral1B, AwsZone::MxCentral1C]
+                    }
                     AwsRegion::SaEast1 => {
                         vec![AwsZone::SaEast1A, AwsZone::SaEast1B, AwsZone::SaEast1C]
                     }
@@ -756,6 +777,7 @@ mod tests {
                     AwsRegion::EuSouth2 => "EuSouth2",
                     AwsRegion::MeSouth1 => "MeSouth1",
                     AwsRegion::MeCentral1 => "MeCentral1",
+                    AwsRegion::MxCentral1 => "MxCentral1",
                     AwsRegion::SaEast1 => "SaEast1",
                 },
                 region.to_string()
@@ -858,6 +880,9 @@ mod tests {
                     AwsZone::MeCentral1A => "me-central-1a",
                     AwsZone::MeCentral1B => "me-central-1b",
                     AwsZone::MeCentral1C => "me-central-1c",
+                    AwsZone::MxCentral1A => "mx-central-1a",
+                    AwsZone::MxCentral1B => "mx-central-1b",
+                    AwsZone::MxCentral1C => "mx-central-1c",
                 },
                 zone.to_cloud_provider_format(),
             );
@@ -894,6 +919,7 @@ mod tests {
                     AwsZone::EuSouth2A | AwsZone::EuSouth2B | AwsZone::EuSouth2C => AwsRegion::EuSouth2,
                     AwsZone::MeSouth1A | AwsZone::MeSouth1B | AwsZone::MeSouth1C => AwsRegion::MeSouth1,
                     AwsZone::MeCentral1A | AwsZone::MeCentral1B | AwsZone::MeCentral1C => AwsRegion::MeCentral1,
+                    AwsZone::MxCentral1A | AwsZone::MxCentral1B | AwsZone::MxCentral1C => AwsRegion::MxCentral1,
                     AwsZone::SaEast1A | AwsZone::SaEast1B | AwsZone::SaEast1C => AwsRegion::SaEast1,
                 },
                 zone.region()
@@ -984,6 +1010,9 @@ mod tests {
                     AwsZone::MeCentral1A => "me-central-1a",
                     AwsZone::MeCentral1B => "me-central-1b",
                     AwsZone::MeCentral1C => "me-central-1c",
+                    AwsZone::MxCentral1A => "mx-central-1a",
+                    AwsZone::MxCentral1B => "mx-central-1b",
+                    AwsZone::MxCentral1C => "mx-central-1c",
                 },
                 zone.to_string(),
             );

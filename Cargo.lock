@@ -4765,7 +4765,7 @@ dependencies = [
 [[package]]
 name = "rusoto_core"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "base64 0.13.1",
@@ -4789,7 +4789,7 @@ dependencies = [
 [[package]]
 name = "rusoto_credential"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4806,7 +4806,7 @@ dependencies = [
 [[package]]
 name = "rusoto_ecr"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4819,7 +4819,7 @@ dependencies = [
 [[package]]
 name = "rusoto_eks"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4833,7 +4833,7 @@ dependencies = [
 [[package]]
 name = "rusoto_s3"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "bytes",
@@ -4845,7 +4845,7 @@ dependencies = [
 [[package]]
 name = "rusoto_signature"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "base64 0.13.1",
  "bytes",
@@ -4870,7 +4870,7 @@ dependencies = [
 [[package]]
 name = "rusoto_sts"
 version = "0.48.0"
-source = "git+https://github.com/Qovery/rusoto.git?rev=aa70b721f2779747d798cb0f58a086028638f0a4#aa70b721f2779747d798cb0f58a086028638f0a4"
+source = "git+https://github.com/Qovery/rusoto.git?rev=61ead3b7610c76f440197465a220226b7c790c75#61ead3b7610c76f440197465a220226b7c790c75"
 dependencies = [
  "async-trait",
  "bytes",
