@@ -309,7 +309,20 @@ function test_local_stack() {
     echo "==========================TEST WITH LOCAL STACK==========================="
     trap "destroy_kube_cluster $kube_cluster_name" EXIT
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
-    cargo test -j 2 --manifest-path lib-engine/Cargo.toml --features test-all-local --lib --tests
+
+    mkdir -p "$GITLAB_LOG_OUTPUT_DIR"
+
+    # Note: keep release, we don't waste time because of multiple cache and it drastically help to speed up prod build
+    # set -x
+    # Removing from Gitlab pipeline output non ERROR / WARN logs avoiding to have output over 100MB has it's the limit
+    # and we cannot increase it properly for the time being CF: https://docs.gitlab.com/ee/administration/instance_limits.html#maximum-file-size-for-job-logs
+    output_log_file="$GITLAB_LOG_OUTPUT_DIR/${filter_tests}.log"
+    touch "$output_log_file"
+    tail -f "$output_log_file" &
+
+    # Using nextest to run tests (mainly because its compatibility with junit)
+    # https://nexte.st/docs/machine-readable/junit/
+    cargo nextest run --lib --tests --features test-all-local --no-default-features --message-format human --manifest-path Cargo.toml --tool-config-file ci:"$(pwd)"/lib-engine/nextest.config.toml --no-fail-fast --profile default --no-tests=pass -- >>"$output_log_file" 2>&1
 }
 
 function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH branch name, threads

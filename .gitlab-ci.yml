@@ -299,6 +299,14 @@ infra-without-cloud-providers:
     - build-and-lint-code
   tags:
     - bm-7cpu-16gmem-0g
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 week
   interruptible: true
   retry: 2 # because of docker rate exceeded error
 
