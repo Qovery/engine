@@ -22,6 +22,8 @@ kube-state-metrics:
     monitor:
       enabled: true
       honorLabels: true
+  metricLabelsAllowlist:
+    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id]
   resources:
     limits:
       cpu: 75m
@@ -49,7 +51,10 @@ kubeEtcd:
 
 kubelet:
   serviceMonitor:
-    resource: true
+    ## Disable scrapping from resource service, because it's already handled by cAvisor service, as per the official doc:
+    ## Enable scraping /metrics/resource from kubelet's service
+    ## This is disabled by default because container metrics are already exposed by cAdvisor
+    resource: false
     # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
     resourcePath: "/metrics/resource"
 
@@ -75,6 +80,8 @@ prometheus:
     image:
       registry: public.ecr.aws/r3m4q3r9
       repository: pub-mirror-prometheus
+    # Replica label to be used by thanos
+    replicaExternalLabelName: "replica"
     thanos:
       objectStorageConfig:
          secret:

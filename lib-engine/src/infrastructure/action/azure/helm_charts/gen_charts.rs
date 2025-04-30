@@ -329,7 +329,6 @@ pub(super) fn aks_helm_charts(
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 PrometheusConfiguration::AzureBlobContainer,
-                true,
                 get_chart_override_fn.clone(),
                 false,
                 false,
