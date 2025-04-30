@@ -10,6 +10,7 @@
 <img src="https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg?style=flat-square" alt="work in progress badge">
 <img src="https://github.com/Qovery/engine/workflows/functionnal-tests/badge.svg?style=flat-square" alt="Func tests">
 <a href="https://discord.qovery.com"> <img alt="Discord" src="https://img.shields.io/discord/688766934917185556?label=discord&style=flat-square"> </a>
+<a href="https://x.com/qovery_"> <img alt="Twitter" src="https://img.shields.io/twitter/follow/qovery_"> </a>
 </p>
 
 <br />
