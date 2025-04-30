@@ -57,7 +57,6 @@ pub struct KubePrometheusStackChart {
     prometheus_object_bucket_configuration: PrometheusConfiguration,
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
-    kubelet_service_monitor_resource_enabled: bool,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     additional_chart_path: Option<HelmChartValuesFilePath>,
@@ -71,7 +70,6 @@ impl KubePrometheusStackChart {
         prometheus_internal_url: String,
         prometheus_namespace: HelmChartNamespaces,
         prometheus_object_bucket_configuration: PrometheusConfiguration,
-        kubelet_service_monitor_resource_enabled: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         karpenter_enabled: bool,
@@ -93,7 +91,6 @@ impl KubePrometheusStackChart {
             prometheus_object_bucket_configuration,
             prometheus_internal_url,
             prometheus_namespace,
-            kubelet_service_monitor_resource_enabled,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             enable_vpa,
             additional_chart_path: match karpenter_enabled {
@@ -230,10 +227,6 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.externalUrl".to_string(),
                         value: self.prometheus_internal_url.clone(),
-                    },
-                    ChartSetValue {
-                        key: "kubelet.serviceMonitor.resource".to_string(),
-                        value: self.kubelet_service_monitor_resource_enabled.to_string(),
                     },
                     ChartSetValue {
                         key: "prometheus-node-exporter.priorityClassName".to_string(),
@@ -414,7 +407,6 @@ mod tests {
                     PrometheusConfiguration::NotInstalled
                 }
             },
-            true,
             get_prometheus_chart_override(),
             false,
             false,

@@ -166,7 +166,6 @@ fn generate_charts_installed_by_qovery(
         prometheus_internal_url.to_string(),
         prometheus_namespace,
         provider_config.prometheus_configuration(),
-        true,
         get_chart_override_fn.clone(),
         false,
         provider_config.is_karpenter_enabled(),
