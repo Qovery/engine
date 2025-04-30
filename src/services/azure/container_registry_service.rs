@@ -12,9 +12,12 @@ use azure_mgmt_containerregistry::models::{
 };
 use azure_mgmt_containerregistry::{Client, ClientBuilder};
 use chrono::Duration;
+use governor::middleware::NoOpMiddleware;
+use governor::state::{InMemoryState, NotKeyed};
+use governor::{RateLimiter, clock};
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::Duration as StdDuration;
+use std::time::{Duration as StdDuration, Instant};
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
@@ -75,14 +78,27 @@ pub enum ContainerRegistryServiceError {
 pub const MAX_REGISTRY_NAME_LENGTH: usize = 50;
 pub const MIN_REGISTRY_NAME_LENGTH: usize = 5;
 
+enum RateLimiterKind {
+    Write,
+    Read,
+}
+
 pub struct AzureContainerRegistryService {
     client: Arc<Client>,
     client_id: String,
     client_secret: String,
+    write_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+    read_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
 }
 
 impl AzureContainerRegistryService {
-    pub fn new(tenant_id: &str, client_id: &str, client_secret: &str) -> Result<Self, ContainerRegistryServiceError> {
+    pub fn new(
+        tenant_id: &str,
+        client_id: &str,
+        client_secret: &str,
+        write_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+        read_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+    ) -> Result<Self, ContainerRegistryServiceError> {
         let credentials = Arc::new(ClientSecretCredential::new(
             new_http_client(),
             AZURE_PUBLIC_CLOUD.clone(),
@@ -101,7 +117,37 @@ impl AzureContainerRegistryService {
             client: Arc::new(client),
             client_id: client_id.to_string(),
             client_secret: client_secret.to_string(),
+            write_rate_limiter,
+            read_rate_limiter,
         })
+    }
+
+    fn wait_for_a_slot_in_admission_control(
+        &self,
+        rate_limiter_kind: RateLimiterKind,
+        timeout: std::time::Duration,
+    ) -> Result<(), ContainerRegistryServiceError> {
+        if let Some(rate_limiter) = match rate_limiter_kind {
+            RateLimiterKind::Write => &self.write_rate_limiter,
+            RateLimiterKind::Read => &self.read_rate_limiter,
+        } {
+            let start = Instant::now();
+
+            loop {
+                if start.elapsed() > timeout {
+                    return Err(ContainerRegistryServiceError::AdmissionControlCannotProceedAfterSeveralTries);
+                }
+
+                if rate_limiter.check().is_err() {
+                    std::thread::sleep(std::time::Duration::from_secs(3));
+                    continue;
+                }
+
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     pub fn try_get_sanitized_registry_name(registry_name: &str) -> Result<String, ContainerRegistryServiceError> {
@@ -177,6 +223,8 @@ impl AzureContainerRegistryService {
         resource_group_name: &str,
         registry_name: &str,
     ) -> Result<Repository, ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Read, std::time::Duration::from_secs(60))?;
+
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
 
         let registry = block_on(
@@ -204,8 +252,10 @@ impl AzureContainerRegistryService {
         registry_name: &str,
         registry_sku: Sku, // https://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
         image_retention_time: Option<Duration>,
-        labels: Option<HashMap<String, String>>, // TODO(benjaminch): Add labels
+        labels: Option<HashMap<String, String>>,
     ) -> Result<Repository, ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Write, std::time::Duration::from_secs(60))?;
+
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
 
         let registry = block_on(
@@ -235,6 +285,8 @@ impl AzureContainerRegistryService {
             .retention_policy
             .unwrap_or_default();
         retention_policies.days = image_retention_time.map(|d| d.num_days() as i32);
+
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Write, std::time::Duration::from_secs(60))?;
 
         let registry = block_on(
             self.client
@@ -283,6 +335,8 @@ impl AzureContainerRegistryService {
         resource_group_name: &str,
         registry_name: &str,
     ) -> Result<(), ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Write, std::time::Duration::from_secs(60))?;
+
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
         block_on(
             self.client
@@ -306,6 +360,8 @@ impl AzureContainerRegistryService {
         image_name: &str,
         image_tag: &str,
     ) -> Result<DockerImage, ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Read, std::time::Duration::from_secs(60))?;
+
         let sanitized_registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
         // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK
         // https://crates.io/crates/azure_containers_containerregistry
@@ -370,6 +426,8 @@ impl AzureContainerRegistryService {
         image_name: &str,
         image_tag: &str,
     ) -> Result<(), ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Write, std::time::Duration::from_secs(60))?;
+
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
         // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK
         // https://crates.io/crates/azure_containers_containerregistry
@@ -412,6 +470,8 @@ impl AzureContainerRegistryService {
         _resource_group_name: &str,
         registry_name: &str,
     ) -> Result<Vec<DockerImage>, ContainerRegistryServiceError> {
+        self.wait_for_a_slot_in_admission_control(RateLimiterKind::Read, std::time::Duration::from_secs(60))?;
+
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
 
         // TODO(benjaminch): move out azure CLI once repository operations will be available in SDK

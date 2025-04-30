@@ -5,6 +5,10 @@ use crate::helpers::kubernetes::{
 };
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 use azure_mgmt_containerregistry::models::{Sku, sku};
+use governor::middleware::NoOpMiddleware;
+use governor::state::{InMemoryState, NotKeyed};
+use governor::{Quota, RateLimiter, clock};
+use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
 use qovery_engine::environment::models::azure::{AzureStorageType, Credentials};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
@@ -36,6 +40,20 @@ pub const AZURE_LOCATION: AzureLocation = AzureLocation::FranceCentral;
 pub static AZURE_CONTAINER_REGISTRY_SKU: Lazy<Sku> = Lazy::new(|| Sku::new(sku::Name::Basic));
 pub const AZURE_RESOURCE_TTL_IN_SECONDS: u32 = 9000;
 pub const AZURE_SELF_HOSTED_DATABASE_DISK_TYPE: AzureStorageType = AzureStorageType::StandardSSDZRS;
+
+/// A rate limiter making sure we do not send too many repository writes requests while testing
+/// Max default quotas are 100 RPM on Basic SKU, let's take some room and use 10x less (1 per 10 seconds)
+/// more info here hhttps://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
+pub static AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER: Lazy<
+    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
+
+/// A rate limiter making sure we do not send too many repository writes requests while testing
+/// Max default quotas are 1000 RPM on Basic SKU, let's take some room and use 20x less (1 per 2 seconds)
+/// more info here hhttps://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
+pub static AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER: Lazy<
+    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32)))));
 
 pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
     let secrets = FuncTestsSecrets::new();
@@ -77,6 +95,8 @@ pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
                     .AZURE_CLIENT_SECRET
                     .as_ref()
                     .expect("AZURE_CLIENT_SECRET is not set in secrets"),
+                Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+                Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
             )
             .expect("Cannot create Azure Artifact registry service"),
         ),
