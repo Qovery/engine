@@ -298,7 +298,7 @@ infra-without-cloud-providers:
   dependencies:
     - build-and-lint-code
   tags:
-    - bm-4cpu-8gmem-0g
+    - bm-7cpu-16gmem-0g
   interruptible: true
   retry: 2 # because of docker rate exceeded error
 
