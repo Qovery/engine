@@ -22,6 +22,8 @@ use crate::environment::action::deploy_helm::default_helm_timeout;
 use crate::events::EventDetails;
 use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use retry::OperationResult;
+use retry::delay::Fixed;
 use std::fs;
 
 #[derive(Error, Debug, Clone)]
@@ -286,6 +288,12 @@ impl Display for VpaControllerResources {
 }
 
 #[derive(Clone, Debug)]
+pub struct ChartInfoUpgradeRetry {
+    pub nb_retry: usize,
+    pub delay_in_milli_sec: u64,
+}
+
+#[derive(Clone, Debug)]
 pub struct ChartInfo {
     pub name: String,
     pub path: String,
@@ -309,6 +317,7 @@ pub struct ChartInfo {
     pub backup_resources: Option<Vec<String>>,
     pub crds_update: Option<CRDSUpdate>,
     pub skip_if_already_installed: bool,
+    pub upgrade_retry: Option<ChartInfoUpgradeRetry>,
 }
 
 impl ChartInfo {
@@ -395,6 +404,7 @@ impl Default for ChartInfo {
             backup_resources: None,
             crds_update: None,
             skip_if_already_installed: false,
+            upgrade_retry: None,
         }
     }
 }
@@ -546,7 +556,19 @@ pub trait HelmChart: Send {
                 // Verify that we don't need to upgrade the CRDS
                 update_crds_on_upgrade(kubernetes_config, chart_info.clone(), envs, &helm)?;
 
-                match helm.upgrade(chart_info, &[], cmd_killer) {
+                let attempts = if let Some(upgrade_retry) = &chart_info.upgrade_retry {
+                    Fixed::from_millis(upgrade_retry.delay_in_milli_sec).take(upgrade_retry.nb_retry)
+                } else {
+                    Fixed::from_millis(0).take(0)
+                };
+                let result = retry::retry(attempts, || match helm.upgrade(chart_info, &[], cmd_killer) {
+                    Ok(_) => OperationResult::Ok(()),
+                    Err(e) => {
+                        warn!("Helm upgrade failed, retrying... error: {:?}", e);
+                        OperationResult::Retry(e)
+                    }
+                });
+                match result {
                     Ok(_) => {
                         if upgrade_status.is_backupable {
                             if let Err(e) = apply_chart_backup(
@@ -566,7 +588,7 @@ pub trait HelmChart: Send {
                             }
                         }
 
-                        return Err(HelmChartError::HelmError(e));
+                        return Err(HelmChartError::HelmError(e.error));
                     }
                 };
             }

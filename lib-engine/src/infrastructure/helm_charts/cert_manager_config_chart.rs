@@ -1,7 +1,8 @@
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -148,6 +149,10 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                         },
                     },
                 ],
+                upgrade_retry: Some(ChartInfoUpgradeRetry {
+                    nb_retry: 10,
+                    delay_in_milli_sec: 30_000,
+                }),
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(CertManagerConfigsChartChecker::new())),
