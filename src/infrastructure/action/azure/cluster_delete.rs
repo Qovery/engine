@@ -9,6 +9,7 @@ use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::azure::aks::AKS;
+use crate::infrastructure::models::object_storage::BucketDeleteStrategy;
 use crate::infrastructure::models::object_storage::azure_object_storage::StorageAccount;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
@@ -68,10 +69,13 @@ fn delete_object_storage(
     storage_account: &StorageAccount,
     logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
+    if let Err(e) = cluster.blob_storage.delete_bucket(
+        storage_account,
+        &cluster.logs_bucket_name(),
+        BucketDeleteStrategy::HardDelete,
+    )
     // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
-    if let Err(e) = cluster
-        .blob_storage
-        .delete_bucket_non_blocking(storage_account, &cluster.logs_bucket_name())
+    //.delete_bucket_non_blocking(storage_account, &cluster.logs_bucket_name())
     {
         logger.warn(EventMessage::new(
             format!("Cannot delete cluster logs blob container `{}`", &cluster.logs_bucket_name()),
