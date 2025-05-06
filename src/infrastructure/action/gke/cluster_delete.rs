@@ -1,7 +1,7 @@
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventMessage, InfrastructureStep};
-use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
+use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
@@ -46,6 +46,12 @@ pub(super) fn delete_gke_cluster(
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
+
+    // delete all PDBs first, because those will prevent node deletion
+    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+    }
+
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));

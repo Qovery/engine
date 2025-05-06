@@ -13,8 +13,9 @@ use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manag
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use k8s_openapi::api::core::v1::Namespace;
+use k8s_openapi::api::policy::v1::PodDisruptionBudget;
 use kube::Api;
-use kube::api::DeleteParams;
+use kube::api::{DeleteParams, ListParams};
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -46,6 +47,52 @@ fn delete_namespace(
     }
 
     Ok(())
+}
+
+pub(super) fn delete_all_pdbs(
+    infra_ctx: &InfrastructureContext,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+) -> Result<(), Vec<EngineError>> {
+    logger.info("Deleting PDBs");
+
+    let kube_client = infra_ctx.mk_kube_client().map_err(|e| vec![*e])?;
+    let pdbs: Api<PodDisruptionBudget> = Api::all(kube_client.client());
+
+    let list_params = ListParams::default();
+    let pdb_list = block_on(pdbs.list(&list_params))
+        .map_err(|e| {
+            EngineError::new_k8s_cannot_get_pdbs(
+                event_details.clone(),
+                CommandError::new("Error listing PDBs".to_string(), Some(e.to_string()), None),
+            )
+        })
+        .map_err(|e| vec![e])?;
+
+    let mut errors = Vec::new();
+    for pdb in pdb_list {
+        if let Some(name) = pdb.metadata.name {
+            let namespace = pdb.metadata.namespace.clone().unwrap_or_else(|| "default".to_string());
+            let pdb_ns_api: Api<PodDisruptionBudget> = Api::namespaced(pdbs.clone().into_client(), &namespace);
+            logger.info(format!("Deleting PDB: {}/{}", namespace, name));
+            // if an error occurs while deleting PDB, just continue, it means PDB is managed by cloud provider
+            if let Err(e) = block_on(pdb_ns_api.delete(&name, &DeleteParams::default())) {
+                let safe_error_message = format!("Error deleting PDB {}/{}", namespace, name,);
+                logger.warn(safe_error_message.to_string());
+                errors.push(EngineError::new_k8s_cannot_delete_pdb(
+                    namespace.as_str(),
+                    name.as_str(),
+                    event_details.clone(),
+                    CommandError::new(safe_error_message.to_string(), Some(e.to_string()), None),
+                ));
+            }
+        }
+    }
+
+    match errors.is_empty() {
+        true => Ok(()),
+        false => Err(errors),
+    }
 }
 
 pub(super) fn delete_kube_apps(

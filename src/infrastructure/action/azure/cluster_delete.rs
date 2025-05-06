@@ -2,7 +2,7 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventMessage, InfrastructureStep};
 use crate::infrastructure::action::azure::AksQoveryTerraformOutput;
-use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
+use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
@@ -44,6 +44,11 @@ pub(super) fn delete_aks_cluster(
     );
     let qovery_terraform_output: AksQoveryTerraformOutput = tf_resources.create(&logger)?;
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+
+    // delete all PDBs first, because those will prevent node deletion
+    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+    }
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
