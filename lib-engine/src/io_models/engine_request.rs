@@ -21,6 +21,7 @@ use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
 use crate::infrastructure::models::cloud_provider::scaleway::Scaleway;
 use crate::infrastructure::models::cloud_provider::self_managed::SelfManaged;
+use crate::infrastructure::models::container_registry::azure_container_registry::AzureContainerRegistry;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::generic_cr::GenericCr;
 use crate::infrastructure::models::container_registry::github_cr::{GithubCr, RegistryType};
@@ -42,6 +43,7 @@ use crate::io_models::models::NodeGroups;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::services::azure::container_registry_service::AzureContainerRegistryService;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
 use anyhow::{Context as OtherContext, anyhow};
@@ -617,6 +619,11 @@ pub enum ContainerRegistry {
         name: String,
         options: GcpCrOptions,
     },
+    AzureCr {
+        long_id: Uuid,
+        name: String,
+        options: AzureCrOptions,
+    },
     GenericCr {
         long_id: Uuid,
         name: String,
@@ -693,6 +700,28 @@ impl ContainerRegistry {
                     )?,
                 ))
             }
+            ContainerRegistry::AzureCr { long_id, name, options } => Ok(
+                container_registry::ContainerRegistry::AzureContainerRegistry(AzureContainerRegistry::new(
+                    context,
+                    long_id,
+                    &name,
+                    &options.client_id,
+                    &options.client_secret,
+                    &options.subscription_id,
+                    &options.resource_group_name,
+                    options.location.clone(),
+                    Arc::new(
+                        AzureContainerRegistryService::new(
+                            &options.tenant_id,
+                            &options.client_id,
+                            &options.client_secret,
+                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                        )
+                        .with_context(|| "cannot instantiate AzureContainerRegistryService")?,
+                    ),
+                )?),
+            ),
             ContainerRegistry::GenericCr { long_id, name, options } => {
                 Ok(container_registry::ContainerRegistry::GenericCr(GenericCr::new(
                     context,
@@ -826,6 +855,17 @@ pub struct ScwCrOptions {
     #[derivative(Debug = "ignore")]
     pub scaleway_secret_key: String,
     region: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct AzureCrOptions {
+    location: AzureLocation,
+    subscription_id: String,
+    tenant_id: String,
+    resource_group_name: String,
+    client_id: String,
+    #[derivative(Debug = "ignore")]
+    client_secret: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
