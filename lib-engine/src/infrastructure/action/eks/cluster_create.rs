@@ -385,6 +385,7 @@ fn restore_access_to_eks(
             &[
                 "aws_eks_access_entry.qovery_eks_access",
                 "aws_eks_access_policy_association.qovery_eks_access",
+                "aws_eks_cluster.eks_cluster", // TODO: remove after cluster with withelisted ips are updated
             ],
             logger,
         )
