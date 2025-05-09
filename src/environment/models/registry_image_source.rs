@@ -2,6 +2,7 @@ use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 
 use crate::environment::models::container::get_mirror_repository_name;
 use crate::infrastructure::models::container_registry::ContainerRegistryInfo;
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::container::Registry;
 use crate::string::cut;
 use url::Url;
@@ -41,7 +42,8 @@ impl RegistryImageSource {
         cluster_registry_mirroring_mode: &RegistryMirroringMode,
         cluster_registry_info: &ContainerRegistryInfo,
     ) -> (Url, String, String, bool) {
-        let cluster_container_registry = cluster_registry_info.registry_endpoint.clone();
+        let cluster_container_registry = cluster_registry_info
+            .get_registry_endpoint(Some(QoveryIdentifier::new(*cluster_id).qovery_resource_name()));
         let service_container_registry = self.registry.get_url();
 
         let cluster_container_registry_host = cluster_container_registry.host_str().unwrap_or_default();

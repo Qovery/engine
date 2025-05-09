@@ -71,6 +71,10 @@ pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
 }
 
+pub fn to_qovery_name(id: &Uuid) -> String {
+    format!("qovery-{}", to_short_id(id))
+}
+
 pub fn base64_replace_comma_to_new_line(multiple_credentials: String) -> Result<String, DecodeError> {
     let decoded_value_byte = general_purpose::STANDARD.decode(multiple_credentials)?;
     let decoded_value = decoded_value_byte.iter().map(|c| *c as char).collect::<String>();

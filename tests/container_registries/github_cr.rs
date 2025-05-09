@@ -58,7 +58,7 @@ fn test_github_cr() {
             vec!["pause-3.10".to_string()],
         );
         let dest_img = ContainerImage::new(
-            container_registry.registry_info().registry_endpoint.clone(),
+            container_registry.registry_info().get_registry_endpoint(None),
             container_registry
                 .registry_info()
                 .get_image_name(img_name.to_string().as_str()),
@@ -74,7 +74,7 @@ fn test_github_cr() {
             vec!["debian-bookworm-slim".to_string()],
         );
         let dest_img = ContainerImage::new(
-            container_registry.registry_info().registry_endpoint.clone(),
+            container_registry.get_registry_endpoint(None),
             container_registry
                 .registry_info()
                 .get_image_name(img_name.to_string().as_str()),

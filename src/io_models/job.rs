@@ -342,8 +342,7 @@ impl Job {
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
-            registry_url: cr_info.registry_endpoint.clone(),
-            registry_url_prefix: cr_info.get_registry_url_prefix(cluster_id.clone()),
+            registry_url: cr_info.get_registry_endpoint(Some(cluster_id.qovery_resource_name())),
             registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
                 registry_name: Some(cr_info.registry_name.to_string()),
@@ -390,7 +389,9 @@ impl Job {
             } => {
                 // Default registry is a bit special as the core does not know its url/credentials as it is retrieved by us with some tags
                 if registry.id() == default_container_registry.long_id() {
-                    registry.set_url(default_container_registry.registry_info().registry_endpoint.clone());
+                    registry.set_url(
+                        default_container_registry.get_registry_endpoint(Some(cluster.cluster_name().as_str())),
+                    );
                 }
                 ImageSource::Registry {
                     source: Box::new(RegistryImageSource {

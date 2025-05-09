@@ -570,8 +570,7 @@ impl Application {
             tag: "".to_string(), // It needs to be computed after creation
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
-            registry_url: cr_info.registry_endpoint.clone(),
-            registry_url_prefix: cr_info.get_registry_url_prefix(cluster_id.clone()),
+            registry_url: cr_info.get_registry_endpoint(Some(cluster_id.qovery_resource_name())),
             registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
                 registry_name: Some(cr_info.registry_name.to_string()),
