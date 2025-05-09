@@ -1,3 +1,4 @@
+mod database;
 mod router;
 
 use crate::environment::models::ToCloudProviderFormat;

@@ -197,7 +197,6 @@ pub struct Image {
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
-    pub registry_url_prefix: Option<String>,
     pub registry_insecure: bool,
     pub repository_name: String,
     pub shared_repository_name: String,
@@ -205,27 +204,8 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn registry_url_with_prefix(&self) -> Url {
-        match &self.registry_url_prefix {
-            Some(prefix) => {
-                let mut url_with_prefix = self.registry_url.clone();
-
-                url_with_prefix
-                    .set_host(Some(
-                        format!("{}.{}", prefix, self.registry_url.host_str().unwrap_or_default()).as_str(),
-                    ))
-                    .unwrap();
-
-                url_with_prefix
-            }
-            None => self.registry_url.clone(),
-        }
-    }
     pub fn registry_host(&self) -> String {
-        match &self.registry_url_prefix {
-            Some(prefix) => format!("{}.{}", prefix, self.registry_url.host_str().unwrap_or_default()),
-            None => self.registry_url.host_str().unwrap_or_default().to_string(),
-        }
+        self.registry_url.host_str().unwrap_or_default().to_string()
     }
     pub fn registry_secret_name(&self) -> String {
         self.registry_host()
@@ -297,7 +277,6 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
-            registry_url_prefix: None,
             registry_insecure: false,
             repository_name: "".to_string(),
             shared_repository_name: "".to_string(),
@@ -311,12 +290,7 @@ impl Display for Image {
         write!(
             f,
             "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
-            self.name,
-            self.tag,
-            self.commit_id,
-            self.service_id,
-            self.registry_name,
-            self.registry_url_with_prefix()
+            self.name, self.tag, self.commit_id, self.service_id, self.registry_name, self.registry_url
         )
     }
 }
