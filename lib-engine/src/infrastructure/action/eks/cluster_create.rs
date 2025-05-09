@@ -380,16 +380,25 @@ fn restore_access_to_eks(
         infra_ctx.context().is_dry_run_deploy(),
     );
 
-    match tf_action.apply_specific_resources(
-        &[
-            "aws_eks_access_entry.qovery_eks_access",
-            "aws_eks_access_policy_association.qovery_eks_access",
-        ],
-        logger,
-    ) {
-        Ok(_) => {}
-        Err(err) => logger.warn(*err),
+    let _ = tf_action
+        .apply_specific_resources(
+            &[
+                "aws_eks_access_entry.qovery_eks_access",
+                "aws_eks_access_policy_association.qovery_eks_access",
+            ],
+            logger,
+        )
+        .map_err(|err| logger.warn(*err));
+
+    if infra_ctx.context().is_dry_run_deploy() {
+        return Ok(());
     }
+
+    // This should never happen in real life, but just in case we re-create the cluster outside Qovery
+    // and that the kubeconfig changed in the meantime
+    let _ = tf_action
+        .output::<AwsEksQoveryTerraformOutput>()
+        .map(|eks_tf_output| update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig));
 
     Ok(())
 }
