@@ -40,7 +40,7 @@ impl EngineConfigError {
 pub struct InfrastructureContext {
     context: Context,
     build_platform: Box<dyn BuildPlatform>,
-    container_registry: Box<dyn ContainerRegistry>,
+    container_registry: ContainerRegistry,
     cloud_provider: Box<dyn CloudProvider>,
     dns_provider: Box<dyn DnsProvider>,
     kubernetes: Box<dyn Kubernetes>,
@@ -54,7 +54,7 @@ impl InfrastructureContext {
     pub fn new(
         context: Context,
         build_platform: Box<dyn BuildPlatform>,
-        container_registry: Box<dyn ContainerRegistry>,
+        container_registry: ContainerRegistry,
         cloud_provider: Box<dyn CloudProvider>,
         dns_provider: Box<dyn DnsProvider>,
         kubernetes: Box<dyn Kubernetes>,
@@ -91,7 +91,7 @@ impl InfrastructureContext {
         self.build_platform.borrow()
     }
 
-    pub fn container_registry(&self) -> &dyn ContainerRegistry {
+    pub fn container_registry(&self) -> &ContainerRegistry {
         self.container_registry.borrow()
     }
 

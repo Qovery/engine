@@ -45,6 +45,7 @@ pub(super) fn create_aks_cluster(
 
     logger.info("Kubernetes nodes have been successfully created");
 
+    // Create Qovery managed blob container
     if let Err(err) = create_object_storage(
         cluster,
         &StorageAccount {

@@ -1,11 +1,17 @@
-use crate::helpers::azure::{AZURE_CONTAINER_REGISTRY_SKU, AZURE_LOCATION, AZURE_RESOURCE_GROUP_NAME};
+use crate::helpers::azure::{
+    AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER, AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER,
+    AZURE_CONTAINER_REGISTRY_SKU, AZURE_LOCATION, AZURE_RESOURCE_GROUP_NAME,
+};
 use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, init};
+use chrono::Duration;
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::{ContainerImage, Docker};
 use qovery_engine::infrastructure::models::container_registry::{DockerImage, Repository};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::services::azure::container_registry_service::AzureContainerRegistryService;
+use retry::OperationResult;
+use retry::delay::Fixed;
 use tracing::{Level, error, info, span};
 
 #[cfg(feature = "test-azure-minimal")]
@@ -38,8 +44,14 @@ fn test_get_repository() {
             .as_ref()
             .expect("AZURE_CLIENT_SECRET should be defined in secrets");
 
-        let service = AzureContainerRegistryService::new(azure_tenant_id, azure_client_id, azure_client_secret)
-            .expect("Cannot initialize azure container registry service");
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
 
         // create a repository for the test
         let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());
@@ -121,8 +133,14 @@ fn test_create_repository() {
             .as_ref()
             .expect("AZURE_CLIENT_SECRET should be defined in secrets");
 
-        let service = AzureContainerRegistryService::new(azure_tenant_id, azure_client_id, azure_client_secret)
-            .expect("Cannot initialize azure container registry service");
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
 
         // execute:
         let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());
@@ -132,7 +150,7 @@ fn test_create_repository() {
             AZURE_LOCATION,
             repository_name.as_str(),
             AZURE_CONTAINER_REGISTRY_SKU.to_owned(),
-            None,
+            Some(Duration::days(1)),
             None,
         );
         // stick a guard on the repository to delete after test
@@ -195,8 +213,14 @@ fn test_delete_repository() {
             .as_ref()
             .expect("AZURE_CLIENT_SECRET should be defined in secrets");
 
-        let service = AzureContainerRegistryService::new(azure_tenant_id, azure_client_id, azure_client_secret)
-            .expect("Cannot initialize azure container registry service");
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
 
         // create a repository for the test
         let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());
@@ -268,8 +292,14 @@ fn test_get_docker_image() {
             .as_ref()
             .expect("AZURE_CLIENT_SECRET should be defined in secrets");
 
-        let service = AzureContainerRegistryService::new(azure_tenant_id, azure_client_id, azure_client_secret)
-            .expect("Cannot initialize azure container registry service");
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
 
         // create a repository for the test
         let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());
@@ -376,6 +406,166 @@ fn test_get_docker_image() {
 #[cfg(feature = "test-azure-minimal")]
 #[test]
 #[named]
+fn test_delete_docker_image() {
+    // setup:
+    use url::Url;
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let secrets = FuncTestsSecrets::new();
+        let azure_subscription_id = secrets
+            .AZURE_SUBSCRIPTION_ID
+            .as_ref()
+            .expect("AZURE_SUBSCRIPTION_ID should be defined in secrets");
+        let azure_tenant_id = secrets
+            .AZURE_TENANT_ID
+            .as_ref()
+            .expect("AZURE_TENANT_ID should be defined in secrets");
+        let azure_client_id = secrets
+            .AZURE_CLIENT_ID
+            .as_ref()
+            .expect("AZURE_CLIENT_ID should be defined in secrets");
+        let azure_client_secret = secrets
+            .AZURE_CLIENT_SECRET
+            .as_ref()
+            .expect("AZURE_CLIENT_SECRET should be defined in secrets");
+
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
+
+        // create a repository for the test
+        let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());
+        let _created_repository = service
+            .create_registry(
+                azure_subscription_id.as_str(),
+                AZURE_RESOURCE_GROUP_NAME,
+                AZURE_LOCATION,
+                repository_name.as_str(),
+                AZURE_CONTAINER_REGISTRY_SKU.to_owned(),
+                None,
+                None,
+            )
+            .expect("Cannot create repository");
+        // stick a guard on the repository to delete after test
+        let _created_repository_name_guard = scopeguard::guard(&repository_name, |repository_name| {
+            // make sure to delete the repository after test
+            service
+                .delete_registry(
+                    azure_subscription_id.as_str(),
+                    AZURE_RESOURCE_GROUP_NAME,
+                    repository_name.as_str(),
+                )
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+        });
+
+        // pushing image into the repository
+        let docker = Docker::new_with_local_builder(None).expect("Cannot create Docker client");
+
+        let mut repository_url = Url::parse(format!("https://{}.azurecr.io", repository_name.as_str(),).as_str())
+            .expect("Cannot create repository URL");
+        repository_url
+            .set_username(azure_client_id.as_str())
+            .expect("Cannot set repository URL username");
+        repository_url
+            .set_password(Some(azure_client_secret.as_str()))
+            .expect("Cannot set repository URL password");
+
+        let source_container_image = ContainerImage::new(
+            Url::parse("https://mcr.microsoft.com").expect("Cannot parse registry Url"),
+            "hello-world".to_string(),
+            vec!["latest".to_string()],
+        );
+        let destination_image_name = "hello-world";
+        let destination_image_tag = "v1";
+        let destination_container_image = ContainerImage::new(
+            Url::parse(format!("https://{}.azurecr.io", repository_name).as_str()).expect("Cannot parse registry Url"),
+            destination_image_name.to_string(),
+            vec![destination_image_tag.to_string()],
+        );
+
+        docker.login(&repository_url).expect("Cannot execute Docker login");
+        docker
+            .pull(
+                &source_container_image,
+                &mut |msg| info!("{msg}"),
+                &mut |msg| error!("{msg}"),
+                &CommandKiller::never(),
+            )
+            .expect("Cannot pull docker image");
+        docker
+            .tag(
+                &source_container_image,
+                &destination_container_image,
+                &mut |msg| info!("{msg}"),
+                &mut |msg| error!("{msg}"),
+                &CommandKiller::never(),
+            )
+            .expect("Cannot tag docker image");
+        docker
+            .push(
+                &destination_container_image,
+                &mut |msg| info!("{msg}"),
+                &mut |msg| error!("{msg}"),
+                &CommandKiller::never(),
+            )
+            .expect("Cannot push docker image");
+
+        // Check image is properly pushed
+        let _ = service
+            .get_docker_image(
+                azure_subscription_id.as_str(),
+                AZURE_RESOURCE_GROUP_NAME,
+                repository_name.as_str(),
+                destination_image_name,
+                destination_image_tag,
+            )
+            .expect("Cannot retrieve docker image");
+
+        // execute:
+        service
+            .delete_docker_image(
+                azure_subscription_id.as_str(),
+                AZURE_RESOURCE_GROUP_NAME,
+                repository_name.as_str(),
+                destination_image_name,
+                destination_image_tag,
+            )
+            .expect("Cannot delete docker image");
+
+        // there might be a little lag for provider to reflect the deletion, so stick a retry
+        let get_image_res = retry::retry(Fixed::from_millis(5000).take(3), || {
+            match service.get_docker_image(
+                azure_subscription_id.as_str(),
+                AZURE_RESOURCE_GROUP_NAME,
+                repository_name.as_str(),
+                destination_image_name,
+                destination_image_tag,
+            ) {
+                Ok(_) => OperationResult::Err(()), // Image exists
+                Err(_) => OperationResult::Ok(()), // Image doesn't exist
+            }
+        });
+
+        // verify:
+        assert!(get_image_res.is_ok()); // Image doesn't exist
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-minimal")]
+#[test]
+#[named]
 fn test_list_docker_images() {
     // setup:
     use url::Url;
@@ -404,8 +594,14 @@ fn test_list_docker_images() {
             .as_ref()
             .expect("AZURE_CLIENT_SECRET should be defined in secrets");
 
-        let service = AzureContainerRegistryService::new(azure_tenant_id, azure_client_id, azure_client_secret)
-            .expect("Cannot initialize azure container registry service");
+        let service = AzureContainerRegistryService::new(
+            azure_tenant_id,
+            azure_client_id,
+            azure_client_secret,
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+            Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
+        )
+        .expect("Cannot initialize azure container registry service");
 
         // create a repository for the test
         let repository_name = format!("testrepository{}", QoveryIdentifier::new_random().short());

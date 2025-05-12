@@ -38,6 +38,14 @@ pub enum NodeManager {
     AutoPilot,
 }
 
+/// Represents a feature that can be enabled at demand
+/// When specified, the given `ActionableFeature`(s) will be:
+/// - enabled at cluster update (after cluster creation)
+/// - disabled after cluster update (before cluster deletion)
+pub enum ActionableFeature {
+    Metrics,
+}
+
 pub trait Cluster<T, U> {
     fn docker_cr_engine(
         context: &Context,
@@ -54,6 +62,7 @@ pub trait Cluster<T, U> {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<T>;
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;

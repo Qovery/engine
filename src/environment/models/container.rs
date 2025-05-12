@@ -24,6 +24,7 @@ use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use crate::infrastructure::models::cloud_provider::service::{
     Action, Service, ServiceType, get_service_statefulset_name_and_volumes,
 };
+use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol::{TCP, UDP};
@@ -231,10 +232,12 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
-        let repository: Cow<str> = if let Some(port) = registry_info.endpoint.port() {
-            format!("{}:{}", registry_info.endpoint.host_str().unwrap_or_default(), port).into()
+        let registry_endpoint = registry_info.registry_endpoint.clone();
+        let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
+        let repository: Cow<str> = if let Some(port) = registry_endpoint.port() {
+            format!("{}:{}", registry_endpoint_host, port).into()
         } else {
-            registry_info.endpoint.host_str().unwrap_or_default().into()
+            registry_endpoint_host.into()
         };
 
         let (_, image_name, image_tag, _) = self
@@ -307,7 +310,11 @@ impl<T: CloudProvider> Container<T> {
                 tolerations,
             },
             registry: registry_info
-                .registry_docker_json_config
+                .get_registry_docker_json_config(DockerRegistryInfo {
+                    registry_name: None,
+                    repository_name: None,
+                    image_name: Some(self.source.image.to_string()),
+                })
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
                     secret_name: format!("{}-registry", self.kube_name()),

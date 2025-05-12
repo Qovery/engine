@@ -3302,7 +3302,7 @@ prometheus:
   ## ref: https://kubernetes.io/docs/tasks/run-application/configure-pdb/#specifying-a-poddisruptionbudget
   ##
   podDisruptionBudget:
-    enabled: false
+    enabled: true
     minAvailable: 1
     maxUnavailable: ""
 

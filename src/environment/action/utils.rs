@@ -147,7 +147,7 @@ pub fn delete_cached_image(
             let image = Image {
                 name: mirror_repo_name.clone(),
                 tag: last_image_tag,
-                registry_url: target.container_registry.registry_info().endpoint.clone(),
+                registry_url: target.container_registry.registry_info().registry_endpoint.clone(),
                 repository_name: mirror_repo_name.clone(),
                 ..Default::default()
             };
@@ -202,8 +202,9 @@ pub fn mirror_image_if_necessary(
             logger,
             event_details.clone(),
             RegistryTags {
-                environment_id: target.environment.id.clone(),
-                project_id: target.environment.project_id.clone(),
+                cluster_id: None,
+                environment_id: Some(target.environment.id.clone()),
+                project_id: Some(target.environment.project_id.clone()),
                 resource_ttl: target.kubernetes.advanced_settings().resource_ttl(),
             },
         );
@@ -270,6 +271,7 @@ fn mirror_image(
     target
         .container_registry
         .create_repository(
+            None,
             mirror_repo_name.as_str(),
             target.kubernetes.advanced_settings().registry_image_retention_time_sec,
             tags,

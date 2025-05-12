@@ -20,7 +20,7 @@ use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, Kind, Repository, RepositoryInfo,
     take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
@@ -76,10 +76,11 @@ impl ECR {
         const MAX_REGISTRY_NAME_LENGTH: usize = 118; // 128 (ECR limit) - 10 (prefix length)
 
         let registry_info = ContainerRegistryInfo {
-            endpoint: registry_url,
+            registry_endpoint: registry_url,
             registry_name: cr.name.to_string(),
-            registry_docker_json_config: None,
+            get_registry_docker_json_config: Box::new(move |_docker_registry_info| None),
             insecure_registry: false,
+            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_shared_image_name: Box::new(|image_build_context| {
                 let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
                     image_build_context.git_repo_url_sanitized.as_str(),
@@ -193,16 +194,25 @@ impl ECR {
             ..Default::default()
         };
 
-        let mut tags = vec![
-            Tag {
+        let mut tags = vec![];
+        if let Some(cluster_id) = registry_tags.cluster_id {
+            tags.push(Tag {
+                key: Some("ClusterId".to_string()),
+                value: Some(cluster_id.to_string()),
+            })
+        };
+        if let Some(environment_id) = registry_tags.environment_id {
+            tags.push(Tag {
                 key: Some("EnvironmentId".to_string()),
-                value: Some(registry_tags.environment_id.to_string()),
-            },
-            Tag {
+                value: Some(environment_id.to_string()),
+            })
+        };
+        if let Some(project_id) = registry_tags.project_id {
+            tags.push(Tag {
                 key: Some("ProjectId".to_string()),
-                value: Some(registry_tags.project_id.to_string()),
-            },
-        ];
+                value: Some(project_id.to_string()),
+            })
+        };
         if let Some(duration) = registry_tags.resource_ttl {
             tags.push(Tag {
                 key: Some("ttl".to_string()),
@@ -391,7 +401,7 @@ impl ECR {
     }
 }
 
-impl ContainerRegistry for ECR {
+impl InteractWithRegistry for ECR {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -415,6 +425,7 @@ impl ContainerRegistry for ECR {
 
     fn create_repository(
         &self,
+        _registry_name: Option<&str>,
         name: &str,
         image_retention_time_in_seconds: u32,
         registry_tags: RegistryTags,

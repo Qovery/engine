@@ -10,7 +10,7 @@ use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
 use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::infrastructure::models::container_registry::ContainerRegistry;
+use crate::infrastructure::models::container_registry::InteractWithRegistry;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::kubernetes::Kubernetes;
@@ -69,6 +69,12 @@ pub enum Registry {
         session_token: Option<String>,
     },
 
+    AzureCr {
+        long_id: Uuid,
+        url: Url,
+        credentials: Option<Credentials>,
+    },
+
     // AWS public ecr
     PublicEcr {
         long_id: Uuid,
@@ -92,6 +98,7 @@ pub enum Registry {
 impl Registry {
     pub fn url(&self) -> &Url {
         match self {
+            Registry::AzureCr { url, .. } => url,
             Registry::DockerHub { url, .. } => url,
             Registry::DoCr { url, .. } => url,
             Registry::ScalewayCr { url, .. } => url,
@@ -107,6 +114,7 @@ impl Registry {
         let _ = new_url.set_password(None);
 
         match self {
+            Registry::AzureCr { url, .. } => *url = new_url,
             Registry::DockerHub { url, .. } => *url = new_url,
             Registry::DoCr { url, .. } => *url = new_url,
             Registry::ScalewayCr { url, .. } => *url = new_url,
@@ -119,6 +127,7 @@ impl Registry {
 
     pub fn id(&self) -> &Uuid {
         match self {
+            Registry::AzureCr { long_id, .. } => long_id,
             Registry::DockerHub { long_id, .. } => long_id,
             Registry::DoCr { long_id, .. } => long_id,
             Registry::ScalewayCr { long_id, .. } => long_id,
@@ -132,6 +141,14 @@ impl Registry {
     // Does some network calls for AWS/ECR
     pub fn get_url_with_credentials(&self) -> Result<Url, ContainerRegistryError> {
         let url = match self {
+            Registry::AzureCr { url, credentials, .. } => {
+                let mut url = url.clone();
+                if let Some(credentials) = credentials {
+                    let _ = url.set_username(&credentials.login);
+                    let _ = url.set_password(Some(&credentials.password));
+                }
+                url
+            }
             Registry::DockerHub { url, credentials, .. } => {
                 let mut url = url.clone();
                 if let Some(credentials) = credentials {
@@ -201,6 +218,7 @@ impl Registry {
 
     pub(crate) fn get_url(&self) -> Url {
         match self {
+            Registry::AzureCr { url, .. } => url.clone(),
             Registry::DockerHub { url, .. } => url.clone(),
             Registry::DoCr { url, .. } => url.clone(),
             Registry::ScalewayCr { url, .. } => url.clone(),
@@ -402,7 +420,7 @@ impl Container {
         mut self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-        default_container_registry: &dyn ContainerRegistry,
+        default_container_registry: &dyn InteractWithRegistry,
         cluster: &dyn Kubernetes,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
@@ -413,7 +431,7 @@ impl Container {
         // by us with some tags
         if self.registry.id() == default_container_registry.long_id() {
             self.registry
-                .set_url(default_container_registry.registry_info().endpoint.clone());
+                .set_url(default_container_registry.registry_info().registry_endpoint.clone());
         }
 
         let image_source = RegistryImageSource {

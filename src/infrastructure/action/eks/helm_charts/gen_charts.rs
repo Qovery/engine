@@ -33,7 +33,7 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
-use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -188,6 +188,10 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .dns_coredns_extra_config
+            .clone(),
         HelmChartNamespaces::KubeSystem,
     );
 
@@ -293,7 +297,7 @@ pub(super) fn eks_helm_charts(
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
-    let metrics_charts = generate_metrics_charts(
+    let metrics_config = generate_metrics_config(
         CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
         chart_prefix_path,
         &prometheus_internal_url,
@@ -503,6 +507,8 @@ pub(super) fn eks_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         true,
+        chart_config_prerequisites.karpenter_parameters.is_some(),
+        metrics_config.metrics_query_url,
     )
     .to_common_helm_chart()?;
 
@@ -634,7 +640,7 @@ pub(super) fn eks_helm_charts(
         Box::new(q_priority_class_chart),
     ];
     // Add prometheus CRDs early to avoid issues with other charts
-    if let Some(chart) = metrics_charts.prometheus_operator_crds_chart {
+    if let Some(chart) = metrics_config.prometheus_operator_crds_chart {
         level_0.push(Box::new(chart));
     }
 
@@ -701,16 +707,16 @@ pub(super) fn eks_helm_charts(
     ];
 
     // observability
-    if let Some(kube_state_metrics_chart) = metrics_charts.kube_state_metrics_chart {
+    if let Some(kube_state_metrics_chart) = metrics_config.kube_state_metrics_chart {
         level_3.push(Box::new(kube_state_metrics_chart));
     }
-    if let Some(kube_prometheus_stack_chart) = metrics_charts.kube_prometheus_stack_chart {
+    if let Some(kube_prometheus_stack_chart) = metrics_config.kube_prometheus_stack_chart {
         level_4.push(Box::new(kube_prometheus_stack_chart));
     }
-    if let Some(thanos_chart) = metrics_charts.thanos_chart {
+    if let Some(thanos_chart) = metrics_config.thanos_chart {
         level_5.push(Box::new(thanos_chart));
     }
-    if let Some(prometheus_adapter_chart) = metrics_charts.prometheus_adapter_chart {
+    if let Some(prometheus_adapter_chart) = metrics_config.prometheus_adapter_chart {
         level_5.push(Box::new(prometheus_adapter_chart));
     }
     if let Some(promtail_chart) = promtail {

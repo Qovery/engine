@@ -16,6 +16,7 @@ use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext
 use qovery_engine::infrastructure::models::cloud_provider::gcp::Google;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::container_registry::google_artifact_registry::GoogleArtifactRegistry;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
@@ -30,7 +31,7 @@ use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
 
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{TargetCluster, get_environment_test_kubernetes};
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
@@ -121,6 +122,9 @@ pub fn gcp_container_registry(context: &Context) -> GoogleArtifactRegistry {
     .expect("Cannot create Google Artifact Registry")
 }
 
+/// This method is dedicated to test services deployments
+/// `node_manager` is set to default (no Karpenter)
+/// `actionable_features` is empty
 pub fn gcp_infra_config(
     targeted_cluster: &TargetCluster,
     context: &Context,
@@ -152,6 +156,7 @@ pub fn gcp_infra_config(
             TargetCluster::New => None, // <- creating a new cluster
         },
         NodeManager::AutoPilot,
+        vec![],
     )
 }
 
@@ -171,9 +176,10 @@ impl Cluster<Google, GkeOptions> for Gke {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Google Artifact registry
-        let container_registry = Box::new(gcp_container_registry(context));
+        let container_registry = ContainerRegistry::GcpArtifactRegistry(gcp_container_registry(context));
 
         // use local Docker
         let build_platform = Box::new(build_platform_local_docker(context));
@@ -200,6 +206,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             StorageClass(GcpStorageType::Balanced.to_k8s_storage_class()),
             kubeconfig,
             node_manager,
+            actionable_features,
         );
 
         InfrastructureContext::new(

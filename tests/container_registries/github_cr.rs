@@ -3,7 +3,7 @@ use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::ContainerImage;
 use qovery_engine::infrastructure::models::build_platform::Image;
-use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::infrastructure::models::container_registry::github_cr::GithubCr;
 use tracing::{Level, span};
 use url::Url;
@@ -39,11 +39,13 @@ fn test_github_cr() {
             .registry_info()
             .get_repository_name(img_name.to_string().as_str());
         let repo_creation = container_registry.create_repository(
+            Some(registry_name.as_str()),
             repo_name.as_str(),
             0,
             RegistryTags {
-                environment_id: Uuid::new_v4().to_string(),
-                project_id: Uuid::new_v4().to_string(),
+                cluster_id: None,
+                environment_id: Some(Uuid::new_v4().to_string()),
+                project_id: Some(Uuid::new_v4().to_string()),
                 resource_ttl: None,
             },
         );
@@ -56,7 +58,7 @@ fn test_github_cr() {
             vec!["pause-3.10".to_string()],
         );
         let dest_img = ContainerImage::new(
-            container_registry.registry_info().endpoint.clone(),
+            container_registry.registry_info().registry_endpoint.clone(),
             container_registry
                 .registry_info()
                 .get_image_name(img_name.to_string().as_str()),
@@ -72,7 +74,7 @@ fn test_github_cr() {
             vec!["debian-bookworm-slim".to_string()],
         );
         let dest_img = ContainerImage::new(
-            container_registry.registry_info().endpoint.clone(),
+            container_registry.registry_info().registry_endpoint.clone(),
             container_registry
                 .registry_info()
                 .get_image_name(img_name.to_string().as_str()),

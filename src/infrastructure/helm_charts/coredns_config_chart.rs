@@ -35,6 +35,7 @@ impl CoreDNSConfigChart {
         declare_hosts: bool,
         managed_dns_helm_format: String,
         managed_dns_resolvers_terraform_format: String,
+        dns_coredns_extra_config_helm_format: Option<String>,
         namespace: HelmChartNamespaces,
     ) -> CoreDNSConfigChart {
         let chart_path = HelmChartPath::new(
@@ -48,7 +49,7 @@ impl CoreDNSConfigChart {
             format!("{}-config", CoreDNSConfigChart::chart_name()),
         );
 
-        CoreDNSConfigChart {
+        let mut chart = CoreDNSConfigChart {
             _chart_path: chart_path.clone(),
             _chart_values_path: chart_values_path.clone(),
             chart_info: ChartInfo {
@@ -82,7 +83,14 @@ impl CoreDNSConfigChart {
                 ..Default::default()
             },
             chart_installation_checker: CoreDNSConfigChartChecker::new(),
+        };
+        if let Some(extra_config) = dns_coredns_extra_config_helm_format {
+            chart.chart_info.values_string.push(ChartSetValue {
+                key: "extra_config".to_string(),
+                value: extra_config,
+            });
         }
+        chart
     }
 
     fn chart_name() -> String {
@@ -161,7 +169,7 @@ impl HelmChart for CoreDNSConfigChart {
         configmap_hash.insert("checksum".to_string(), current_configmap_hash.to_string());
         let payload = ChartPayload::new(configmap_hash);
 
-        // set labels and annotations to give helm ownership
+        // set labels and annotations to give helm ownership on coredns configmap
         info!("setting annotations and labels on {}/{}", &kind, &self.chart_info.name);
         let steps = || -> Result<(), CommandError> {
             kubectl_exec_with_output(
@@ -208,7 +216,66 @@ impl HelmChart for CoreDNSConfigChart {
             )?;
             Ok(())
         };
+        // set labels and annotations to give helm ownership on coredns-custom configmap
+        info!(
+            "setting annotations and labels on {}/{}",
+            &kind,
+            &format!("{}-custom", &self.chart_info.name)
+        );
+        let steps_custom = || -> Result<(), CommandError> {
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    kind,
+                    &format!("{}-custom", &self.chart_info.name),
+                    format!("meta.helm.sh/release-name={}", &self.chart_info.name).as_str(),
+                ],
+                envs.to_vec(),
+                &mut |_| {},
+                &mut |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "annotate",
+                    "--overwrite",
+                    kind,
+                    &format!("{}-custom", &self.chart_info.name),
+                    "meta.helm.sh/release-namespace=kube-system",
+                ],
+                envs.to_vec(),
+                &mut |_| {},
+                &mut |_| {},
+            )?;
+            kubectl_exec_with_output(
+                vec![
+                    "-n",
+                    "kube-system",
+                    "label",
+                    "--overwrite",
+                    kind,
+                    &format!("{}-custom", &self.chart_info.name),
+                    "app.kubernetes.io/managed-by=Helm",
+                ],
+                envs.to_vec(),
+                &mut |_| {},
+                &mut |_| {},
+            )?;
+            Ok(())
+        };
         steps()?;
+        // Handle errors from steps_custom gracefully
+        // Best would be to execute the following only for AKS
+        if let Err(e) = steps_custom() {
+            warn!(
+                "Failed to set annotations and labels on coredns-custom configmap: {:?}. Continuing execution...",
+                e
+            );
+        }
         Ok(Some(payload))
     }
 
@@ -392,6 +459,7 @@ mod tests {
             false,
             "whatever".to_string(),
             "whatever".to_string(),
+            Some("whatever".to_string()),
             HelmChartNamespaces::KubeSystem,
         );
 
@@ -424,6 +492,7 @@ mod tests {
             false,
             "whatever".to_string(),
             "whatever".to_string(),
+            Some("whatever".to_string()),
             HelmChartNamespaces::KubeSystem,
         );
 
@@ -457,6 +526,7 @@ mod tests {
             false,
             "whatever".to_string(),
             "whatever".to_string(),
+            Some("whatever".to_string()),
             HelmChartNamespaces::KubeSystem,
         );
         let chart_values_file_path = chart._chart_values_path.helm_path().clone();

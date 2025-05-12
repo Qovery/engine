@@ -12,7 +12,7 @@ use crate::errors::EngineError;
 use crate::events::EnvironmentStep;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Service;
-use crate::infrastructure::models::container_registry::ContainerRegistry;
+use crate::infrastructure::models::container_registry::InteractWithRegistry;
 use crate::infrastructure::models::dns_provider::DnsProvider;
 use crate::infrastructure::models::kubernetes;
 use crate::infrastructure::models::kubernetes::Kubernetes;
@@ -148,7 +148,7 @@ impl TerraformStateCredentials {
 
 pub struct DeploymentTarget<'a> {
     pub kubernetes: &'a dyn Kubernetes,
-    pub container_registry: &'a dyn ContainerRegistry,
+    pub container_registry: &'a dyn InteractWithRegistry,
     pub cloud_provider: &'a dyn CloudProvider,
     pub dns_provider: &'a dyn DnsProvider,
     pub environment: &'a Environment,

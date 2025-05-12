@@ -39,6 +39,8 @@ fn create_and_destroy_gke_cluster(
             CpuArchitecture::AMD64,
             None,
             NodeManager::AutoPilot,
+            vec![],
+            // TODO (mzo)
         )
     })
 }

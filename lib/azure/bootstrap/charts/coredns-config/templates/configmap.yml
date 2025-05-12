@@ -1,34 +1,17 @@
+---
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: coredns-custom   # Name must be `coredns-custom`
+  name: coredns-custom
   namespace: kube-system
   labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
     k8s-app: kube-dns
+    kubernetes.io/cluster-service: "true"
 data:
-  Corefile: |
-    .:53 {
-        errors
-        health
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-          pods insecure
-          fallthrough in-addr.arpa ip6.arpa
-        }
-        {{ if .Values.declare_node_hosts }}
-        hosts /etc/coredns/NodeHosts {
-          ttl 60
-          reload 15s
-          fallthrough
-        }
-        {{ end }}
-        prometheus :9153
-        forward . /etc/resolv.conf
-        cache 30
-        loop
-        reload
-        loadbalance
-    }
+  qovery-custom.server: |
+    # Qovery custom DNS configuration
+    # This file adds custom DNS zones for Qovery services
     {{- range .Values.managed_dns }}
     {{ . }}:53 {
       errors
@@ -36,3 +19,8 @@ data:
       forward . {{ join " " $.Values.managed_dns_resolvers }}
     }
     {{ end }}
+  {{- if .Values.extra_config }}
+  extra-config.server: |
+    # Extra config from advanced settings
+{{ .Values.extra_config | indent 4 }}
+  {{- end }}

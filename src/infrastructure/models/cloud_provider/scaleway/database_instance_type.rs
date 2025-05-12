@@ -21,24 +21,22 @@ pub enum ScwDatabaseInstanceType {
     DB_DEV_M,
     DB_DEV_S,
     DB_DEV_XL,
+    DB_GP_L,
+    DB_GP_M,
     DB_GP_S,
     DB_GP_XS,
     DB_PLAY2_NANO,
     DB_PLAY2_PICO,
+    DB_POP2_16C_64G,
     DB_POP2_2C_8G,
+    DB_POP2_32C_128G,
     DB_POP2_4C_16G,
     DB_POP2_8C_32G,
+    DB_PRO2_L,
+    DB_PRO2_M,
     DB_PRO2_S,
     DB_PRO2_XS,
     DB_PRO2_XXS,
-    DOCDB_PLAY2_NANO,
-    DOCDB_PLAY2_PICO,
-    DOCDB_POP2_2C_8G,
-    DOCDB_POP2_4C_16G,
-    DOCDB_POP2_8C_32G,
-    DOCDB_PRO2_S,
-    DOCDB_PRO2_XS,
-    DOCDB_PRO2_XXS,
 }
 
 impl DatabaseInstanceType for ScwDatabaseInstanceType {
@@ -59,24 +57,22 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
             ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
             ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+            ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
+            ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
             ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
             ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
             ScwDatabaseInstanceType::DB_PLAY2_NANO => "db-play2-nano",
             ScwDatabaseInstanceType::DB_PLAY2_PICO => "db-play2-pico",
+            ScwDatabaseInstanceType::DB_POP2_16C_64G => "db-pop2-16c-64g",
             ScwDatabaseInstanceType::DB_POP2_2C_8G => "db-pop2-2c-8g",
+            ScwDatabaseInstanceType::DB_POP2_32C_128G => "db-pop2-32c-128g",
             ScwDatabaseInstanceType::DB_POP2_4C_16G => "db-pop2-4c-16g",
             ScwDatabaseInstanceType::DB_POP2_8C_32G => "db-pop2-8c-32g",
+            ScwDatabaseInstanceType::DB_PRO2_L => "db-pro2-l",
+            ScwDatabaseInstanceType::DB_PRO2_M => "db-pro2-m",
             ScwDatabaseInstanceType::DB_PRO2_S => "db-pro2-s",
             ScwDatabaseInstanceType::DB_PRO2_XS => "db-pro2-xs",
             ScwDatabaseInstanceType::DB_PRO2_XXS => "db-pro2-xxs",
-            ScwDatabaseInstanceType::DOCDB_PLAY2_NANO => "docdb-play2-nano",
-            ScwDatabaseInstanceType::DOCDB_PLAY2_PICO => "docdb-play2-pico",
-            ScwDatabaseInstanceType::DOCDB_POP2_2C_8G => "docdb-pop2-2c-8g",
-            ScwDatabaseInstanceType::DOCDB_POP2_4C_16G => "docdb-pop2-4c-16g",
-            ScwDatabaseInstanceType::DOCDB_POP2_8C_32G => "docdb-pop2-8c-32g",
-            ScwDatabaseInstanceType::DOCDB_PRO2_S => "docdb-pro2-s",
-            ScwDatabaseInstanceType::DOCDB_PRO2_XS => "docdb-pro2-xs",
-            ScwDatabaseInstanceType::DOCDB_PRO2_XXS => "docdb-pro2-xxs",
         }
         .to_string()
     }
@@ -94,24 +90,22 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             ScwDatabaseInstanceType::DB_DEV_M => true,
             ScwDatabaseInstanceType::DB_DEV_S => true,
             ScwDatabaseInstanceType::DB_DEV_XL => true,
+            ScwDatabaseInstanceType::DB_GP_L => true,
+            ScwDatabaseInstanceType::DB_GP_M => true,
             ScwDatabaseInstanceType::DB_GP_S => true,
             ScwDatabaseInstanceType::DB_GP_XS => true,
             ScwDatabaseInstanceType::DB_PLAY2_NANO => true,
             ScwDatabaseInstanceType::DB_PLAY2_PICO => true,
+            ScwDatabaseInstanceType::DB_POP2_16C_64G => true,
             ScwDatabaseInstanceType::DB_POP2_2C_8G => true,
+            ScwDatabaseInstanceType::DB_POP2_32C_128G => true,
             ScwDatabaseInstanceType::DB_POP2_4C_16G => true,
             ScwDatabaseInstanceType::DB_POP2_8C_32G => true,
+            ScwDatabaseInstanceType::DB_PRO2_L => true,
+            ScwDatabaseInstanceType::DB_PRO2_M => true,
             ScwDatabaseInstanceType::DB_PRO2_S => true,
             ScwDatabaseInstanceType::DB_PRO2_XS => true,
             ScwDatabaseInstanceType::DB_PRO2_XXS => true,
-            ScwDatabaseInstanceType::DOCDB_PLAY2_NANO => true,
-            ScwDatabaseInstanceType::DOCDB_PLAY2_PICO => true,
-            ScwDatabaseInstanceType::DOCDB_POP2_2C_8G => true,
-            ScwDatabaseInstanceType::DOCDB_POP2_4C_16G => true,
-            ScwDatabaseInstanceType::DOCDB_POP2_8C_32G => true,
-            ScwDatabaseInstanceType::DOCDB_PRO2_S => true,
-            ScwDatabaseInstanceType::DOCDB_PRO2_XS => true,
-            ScwDatabaseInstanceType::DOCDB_PRO2_XXS => true,
         }
     }
 
@@ -162,6 +156,18 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             ScwDatabaseInstanceType::DB_DEV_XL,
             DatabaseType::PostgreSQL
         ) | (
+            ScwDatabaseInstanceType::DB_GP_L,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_L,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_M,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_GP_M,
+            DatabaseType::PostgreSQL
+        ) | (
             ScwDatabaseInstanceType::DB_GP_S,
             DatabaseType::MySQL
         ) | (
@@ -186,10 +192,22 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             ScwDatabaseInstanceType::DB_PLAY2_PICO,
             DatabaseType::PostgreSQL
         ) | (
+            ScwDatabaseInstanceType::DB_POP2_16C_64G,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_POP2_16C_64G,
+            DatabaseType::PostgreSQL
+        ) | (
             ScwDatabaseInstanceType::DB_POP2_2C_8G,
             DatabaseType::MySQL
         ) | (
             ScwDatabaseInstanceType::DB_POP2_2C_8G,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_POP2_32C_128G,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_POP2_32C_128G,
             DatabaseType::PostgreSQL
         ) | (
             ScwDatabaseInstanceType::DB_POP2_4C_16G,
@@ -202,6 +220,18 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             DatabaseType::MySQL
         ) | (
             ScwDatabaseInstanceType::DB_POP2_8C_32G,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PRO2_L,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PRO2_L,
+            DatabaseType::PostgreSQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PRO2_M,
+            DatabaseType::MySQL
+        ) | (
+            ScwDatabaseInstanceType::DB_PRO2_M,
             DatabaseType::PostgreSQL
         ) | (
             ScwDatabaseInstanceType::DB_PRO2_S,
@@ -220,54 +250,6 @@ impl DatabaseInstanceType for ScwDatabaseInstanceType {
             DatabaseType::MySQL
         ) | (
             ScwDatabaseInstanceType::DB_PRO2_XXS,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PLAY2_NANO,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PLAY2_NANO,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PLAY2_PICO,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PLAY2_PICO,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_2C_8G,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_2C_8G,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_4C_16G,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_4C_16G,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_8C_32G,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_POP2_8C_32G,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_S,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_S,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_XS,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_XS,
-            DatabaseType::PostgreSQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_XXS,
-            DatabaseType::MySQL
-        ) | (
-            ScwDatabaseInstanceType::DOCDB_PRO2_XXS,
             DatabaseType::PostgreSQL
         ))
     }
@@ -295,24 +277,22 @@ impl FromStr for ScwDatabaseInstanceType {
             "db-dev-m" => Ok(ScwDatabaseInstanceType::DB_DEV_M),
             "db-dev-s" => Ok(ScwDatabaseInstanceType::DB_DEV_S),
             "db-dev-xl" => Ok(ScwDatabaseInstanceType::DB_DEV_XL),
+            "db-gp-l" => Ok(ScwDatabaseInstanceType::DB_GP_L),
+            "db-gp-m" => Ok(ScwDatabaseInstanceType::DB_GP_M),
             "db-gp-s" => Ok(ScwDatabaseInstanceType::DB_GP_S),
             "db-gp-xs" => Ok(ScwDatabaseInstanceType::DB_GP_XS),
             "db-play2-nano" => Ok(ScwDatabaseInstanceType::DB_PLAY2_NANO),
             "db-play2-pico" => Ok(ScwDatabaseInstanceType::DB_PLAY2_PICO),
+            "db-pop2-16c-64g" => Ok(ScwDatabaseInstanceType::DB_POP2_16C_64G),
             "db-pop2-2c-8g" => Ok(ScwDatabaseInstanceType::DB_POP2_2C_8G),
+            "db-pop2-32c-128g" => Ok(ScwDatabaseInstanceType::DB_POP2_32C_128G),
             "db-pop2-4c-16g" => Ok(ScwDatabaseInstanceType::DB_POP2_4C_16G),
             "db-pop2-8c-32g" => Ok(ScwDatabaseInstanceType::DB_POP2_8C_32G),
+            "db-pro2-l" => Ok(ScwDatabaseInstanceType::DB_PRO2_L),
+            "db-pro2-m" => Ok(ScwDatabaseInstanceType::DB_PRO2_M),
             "db-pro2-s" => Ok(ScwDatabaseInstanceType::DB_PRO2_S),
             "db-pro2-xs" => Ok(ScwDatabaseInstanceType::DB_PRO2_XS),
             "db-pro2-xxs" => Ok(ScwDatabaseInstanceType::DB_PRO2_XXS),
-            "docdb-play2-nano" => Ok(ScwDatabaseInstanceType::DOCDB_PLAY2_NANO),
-            "docdb-play2-pico" => Ok(ScwDatabaseInstanceType::DOCDB_PLAY2_PICO),
-            "docdb-pop2-2c-8g" => Ok(ScwDatabaseInstanceType::DOCDB_POP2_2C_8G),
-            "docdb-pop2-4c-16g" => Ok(ScwDatabaseInstanceType::DOCDB_POP2_4C_16G),
-            "docdb-pop2-8c-32g" => Ok(ScwDatabaseInstanceType::DOCDB_POP2_8C_32G),
-            "docdb-pro2-s" => Ok(ScwDatabaseInstanceType::DOCDB_PRO2_S),
-            "docdb-pro2-xs" => Ok(ScwDatabaseInstanceType::DOCDB_PRO2_XS),
-            "docdb-pro2-xxs" => Ok(ScwDatabaseInstanceType::DOCDB_PRO2_XXS),
             _ => Err(DatabaseError::InvalidDatabaseInstance {
                 database_cloud_provider: Kind::Scw,
                 requested_database_instance_type: s.to_string(),
@@ -356,24 +336,22 @@ mod tests {
                     ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
                     ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
                     ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+                    ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
+                    ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
                     ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
                     ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
                     ScwDatabaseInstanceType::DB_PLAY2_NANO => "db-play2-nano",
                     ScwDatabaseInstanceType::DB_PLAY2_PICO => "db-play2-pico",
+                    ScwDatabaseInstanceType::DB_POP2_16C_64G => "db-pop2-16c-64g",
                     ScwDatabaseInstanceType::DB_POP2_2C_8G => "db-pop2-2c-8g",
+                    ScwDatabaseInstanceType::DB_POP2_32C_128G => "db-pop2-32c-128g",
                     ScwDatabaseInstanceType::DB_POP2_4C_16G => "db-pop2-4c-16g",
                     ScwDatabaseInstanceType::DB_POP2_8C_32G => "db-pop2-8c-32g",
+                    ScwDatabaseInstanceType::DB_PRO2_L => "db-pro2-l",
+                    ScwDatabaseInstanceType::DB_PRO2_M => "db-pro2-m",
                     ScwDatabaseInstanceType::DB_PRO2_S => "db-pro2-s",
                     ScwDatabaseInstanceType::DB_PRO2_XS => "db-pro2-xs",
                     ScwDatabaseInstanceType::DB_PRO2_XXS => "db-pro2-xxs",
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_NANO => "docdb-play2-nano",
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_PICO => "docdb-play2-pico",
-                    ScwDatabaseInstanceType::DOCDB_POP2_2C_8G => "docdb-pop2-2c-8g",
-                    ScwDatabaseInstanceType::DOCDB_POP2_4C_16G => "docdb-pop2-4c-16g",
-                    ScwDatabaseInstanceType::DOCDB_POP2_8C_32G => "docdb-pop2-8c-32g",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_S => "docdb-pro2-s",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XS => "docdb-pro2-xs",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XXS => "docdb-pro2-xxs",
                 }
                     .to_string(),
                 instance_type.to_cloud_provider_format()
@@ -398,24 +376,22 @@ mod tests {
                     ScwDatabaseInstanceType::DB_DEV_M => "db-dev-m",
                     ScwDatabaseInstanceType::DB_DEV_S => "db-dev-s",
                     ScwDatabaseInstanceType::DB_DEV_XL => "db-dev-xl",
+                    ScwDatabaseInstanceType::DB_GP_L => "db-gp-l",
+                    ScwDatabaseInstanceType::DB_GP_M => "db-gp-m",
                     ScwDatabaseInstanceType::DB_GP_S => "db-gp-s",
                     ScwDatabaseInstanceType::DB_GP_XS => "db-gp-xs",
                     ScwDatabaseInstanceType::DB_PLAY2_NANO => "db-play2-nano",
                     ScwDatabaseInstanceType::DB_PLAY2_PICO => "db-play2-pico",
+                    ScwDatabaseInstanceType::DB_POP2_16C_64G => "db-pop2-16c-64g",
                     ScwDatabaseInstanceType::DB_POP2_2C_8G => "db-pop2-2c-8g",
+                    ScwDatabaseInstanceType::DB_POP2_32C_128G => "db-pop2-32c-128g",
                     ScwDatabaseInstanceType::DB_POP2_4C_16G => "db-pop2-4c-16g",
                     ScwDatabaseInstanceType::DB_POP2_8C_32G => "db-pop2-8c-32g",
+                    ScwDatabaseInstanceType::DB_PRO2_L => "db-pro2-l",
+                    ScwDatabaseInstanceType::DB_PRO2_M => "db-pro2-m",
                     ScwDatabaseInstanceType::DB_PRO2_S => "db-pro2-s",
                     ScwDatabaseInstanceType::DB_PRO2_XS => "db-pro2-xs",
                     ScwDatabaseInstanceType::DB_PRO2_XXS => "db-pro2-xxs",
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_NANO => "docdb-play2-nano",
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_PICO => "docdb-play2-pico",
-                    ScwDatabaseInstanceType::DOCDB_POP2_2C_8G => "docdb-pop2-2c-8g",
-                    ScwDatabaseInstanceType::DOCDB_POP2_4C_16G => "docdb-pop2-4c-16g",
-                    ScwDatabaseInstanceType::DOCDB_POP2_8C_32G => "docdb-pop2-8c-32g",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_S => "docdb-pro2-s",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XS => "docdb-pro2-xs",
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XXS => "docdb-pro2-xxs",
                 }
                     .to_string(),
                 instance_type.to_string()
@@ -464,24 +440,22 @@ mod tests {
                     ScwDatabaseInstanceType::DB_DEV_M => true,
                     ScwDatabaseInstanceType::DB_DEV_S => true,
                     ScwDatabaseInstanceType::DB_DEV_XL => true,
+                    ScwDatabaseInstanceType::DB_GP_L => true,
+                    ScwDatabaseInstanceType::DB_GP_M => true,
                     ScwDatabaseInstanceType::DB_GP_S => true,
                     ScwDatabaseInstanceType::DB_GP_XS => true,
                     ScwDatabaseInstanceType::DB_PLAY2_NANO => true,
                     ScwDatabaseInstanceType::DB_PLAY2_PICO => true,
+                    ScwDatabaseInstanceType::DB_POP2_16C_64G => true,
                     ScwDatabaseInstanceType::DB_POP2_2C_8G => true,
+                    ScwDatabaseInstanceType::DB_POP2_32C_128G => true,
                     ScwDatabaseInstanceType::DB_POP2_4C_16G => true,
                     ScwDatabaseInstanceType::DB_POP2_8C_32G => true,
+                    ScwDatabaseInstanceType::DB_PRO2_L => true,
+                    ScwDatabaseInstanceType::DB_PRO2_M => true,
                     ScwDatabaseInstanceType::DB_PRO2_S => true,
                     ScwDatabaseInstanceType::DB_PRO2_XS => true,
                     ScwDatabaseInstanceType::DB_PRO2_XXS => true,
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_NANO => true,
-                    ScwDatabaseInstanceType::DOCDB_PLAY2_PICO => true,
-                    ScwDatabaseInstanceType::DOCDB_POP2_2C_8G => true,
-                    ScwDatabaseInstanceType::DOCDB_POP2_4C_16G => true,
-                    ScwDatabaseInstanceType::DOCDB_POP2_8C_32G => true,
-                    ScwDatabaseInstanceType::DOCDB_PRO2_S => true,
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XS => true,
-                    ScwDatabaseInstanceType::DOCDB_PRO2_XXS => true,
                 },
                 instance_type.is_instance_allowed(),
             )
@@ -511,6 +485,10 @@ mod tests {
                         | (ScwDatabaseInstanceType::DB_DEV_S, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_DEV_XL, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_DEV_XL, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_L, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_L, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_GP_M, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_GP_M, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_GP_S, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_GP_S, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_GP_XS, DatabaseType::MySQL)
@@ -519,34 +497,26 @@ mod tests {
                         | (ScwDatabaseInstanceType::DB_PLAY2_NANO, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_PLAY2_PICO, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_PLAY2_PICO, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_POP2_16C_64G, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_POP2_16C_64G, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_POP2_2C_8G, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_POP2_2C_8G, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_POP2_32C_128G, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_POP2_32C_128G, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_POP2_4C_16G, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_POP2_4C_16G, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_POP2_8C_32G, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_POP2_8C_32G, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_PRO2_L, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_PRO2_L, DatabaseType::PostgreSQL)
+                        | (ScwDatabaseInstanceType::DB_PRO2_M, DatabaseType::MySQL)
+                        | (ScwDatabaseInstanceType::DB_PRO2_M, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_S, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_S, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_XS, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_XS, DatabaseType::PostgreSQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_XXS, DatabaseType::MySQL)
                         | (ScwDatabaseInstanceType::DB_PRO2_XXS, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PLAY2_NANO, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PLAY2_NANO, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PLAY2_PICO, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PLAY2_PICO, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_2C_8G, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_2C_8G, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_4C_16G, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_4C_16G, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_8C_32G, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_POP2_8C_32G, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_S, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_S, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_XS, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_XS, DatabaseType::PostgreSQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_XXS, DatabaseType::MySQL)
-                        | (ScwDatabaseInstanceType::DOCDB_PRO2_XXS, DatabaseType::PostgreSQL)
                     ),
                     instance_type.is_instance_compatible_with(db_type),
                 )

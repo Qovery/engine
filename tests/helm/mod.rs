@@ -262,6 +262,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
                 registry_name: "my_image_registry_name".to_string(),
                 registry_docker_json_config: Some("my_image_registry_docker_json_config".to_string()),
                 registry_url: Url::parse("https://my_image_registry_url.com").unwrap(),
+                registry_url_prefix: None,
                 registry_insecure: false,
                 repository_name: "my_image_repository_name".to_string(),
                 shared_repository_name: "my_image_shared_repository_name".to_string(),
@@ -697,6 +698,9 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
     .unwrap()
 }
 
+/// This method is dedicated to test services deployments
+/// `node_manager` is set to default (no Karpenter)
+/// `actionable_features` is empty
 fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
     AWS::docker_cr_engine(
         test_kube.context(),
@@ -714,7 +718,8 @@ fn infra_ctx(test_kube: &dyn Kubernetes) -> InfrastructureContext {
         CpuArchitecture::AMD64,
         EngineLocation::QoverySide,
         test_kube.kubeconfig_local_file_path().to_str().map(|s| s.to_string()),
-        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
+        NodeManager::Default,
+        vec![],
     )
 }
 

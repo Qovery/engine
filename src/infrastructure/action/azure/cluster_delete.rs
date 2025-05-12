@@ -2,13 +2,14 @@ use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventMessage, InfrastructureStep};
 use crate::infrastructure::action::azure::AksQoveryTerraformOutput;
-use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
+use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::azure::aks::AKS;
+use crate::infrastructure::models::object_storage::BucketDeleteStrategy;
 use crate::infrastructure::models::object_storage::azure_object_storage::StorageAccount;
 use crate::utilities::envs_to_string;
 use std::collections::HashSet;
@@ -44,6 +45,11 @@ pub(super) fn delete_aks_cluster(
     let qovery_terraform_output: AksQoveryTerraformOutput = tf_resources.create(&logger)?;
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
 
+    // delete all PDBs first, because those will prevent node deletion
+    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+    }
+
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
@@ -59,6 +65,7 @@ pub(super) fn delete_aks_cluster(
         },
         &logger,
     )?;
+
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
 }
@@ -68,10 +75,13 @@ fn delete_object_storage(
     storage_account: &StorageAccount,
     logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
+    if let Err(e) = cluster.blob_storage.delete_bucket(
+        storage_account,
+        &cluster.logs_bucket_name(),
+        BucketDeleteStrategy::HardDelete,
+    )
     // Because cluster logs buckets can be sometimes very beefy, we delete them in a non-blocking way via a GCP job.
-    if let Err(e) = cluster
-        .blob_storage
-        .delete_bucket_non_blocking(storage_account, &cluster.logs_bucket_name())
+    //.delete_bucket_non_blocking(storage_account, &cluster.logs_bucket_name())
     {
         logger.warn(EventMessage::new(
             format!("Cannot delete cluster logs blob container `{}`", &cluster.logs_bucket_name()),

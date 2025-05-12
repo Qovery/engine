@@ -37,3 +37,7 @@ data:
       forward . {{ join " " $.Values.managed_dns_resolvers }}
     }
     {{ end }}
+    {{- if .Values.extra_config }}
+    # Extra config from advanced settings
+{{ .Values.extra_config | indent 4 }}
+    {{- end }}

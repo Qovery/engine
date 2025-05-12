@@ -105,13 +105,39 @@ impl LocalDocker {
 
         // Prepare image we want to build
         let image_to_build = ContainerImage::new(
-            build.image.registry_url.clone(),
+            build.image.registry_url_with_prefix(),
             build.image.name(),
             vec![build.image.tag.clone(), "latest".to_string()],
         );
 
-        let image_cache =
-            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["cache".to_string()]);
+        let image_cache = ContainerImage::new(
+            build.image.registry_url_with_prefix(),
+            build.image.name(),
+            vec!["cache".to_string()],
+        );
+
+        // Login to the registry at repository level if needed
+        let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
+            self.context
+                .docker
+                .login(&build.image.registry_url_with_prefix())
+                .inspect_err(|_err| {
+                    logger.send_warning("🔓 Retrying to login to registry due to error...".to_string());
+                })
+        });
+
+        if let Err(err) = login_ret {
+            logger.send_warning(format!(
+                "❌ Failed to login to registry {} due to {}",
+                build.image.registry_url_with_prefix(),
+                err
+            ));
+            let err = BuildError::DockerError {
+                application: build.image.service_id.clone(),
+                raw_error: err.error,
+            };
+            return Err(err);
+        }
 
         // Check if the image does not exist already remotely, if yes, we skip the build
         let image_name = image_to_build.image_name();

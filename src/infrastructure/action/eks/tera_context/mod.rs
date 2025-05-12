@@ -121,6 +121,10 @@ pub fn eks_tera_context(
     }
 
     context.insert(
+        "nginx_controller_enable_compression",
+        &kubernetes.advanced_settings().nginx_controller_enable_compression,
+    );
+    context.insert(
         "aws_enable_vpc_flow_logs",
         &kubernetes.advanced_settings().aws_vpc_enable_flow_logs,
     );

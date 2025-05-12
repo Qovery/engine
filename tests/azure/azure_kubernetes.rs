@@ -43,6 +43,7 @@ fn create_and_destroy_eks_cluster(
             CpuArchitecture::AMD64,
             None,
             node_manager,
+            vec![],
         )
     })
 }

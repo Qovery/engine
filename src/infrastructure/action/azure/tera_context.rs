@@ -168,6 +168,11 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
         );
     }
 
+    context.insert(
+        "nginx_controller_enable_compression",
+        &cluster.advanced_settings().nginx_controller_enable_compression,
+    );
+
     // Loki
     context.insert("loki_namespace", HelmChartNamespaces::Qovery.to_string().as_str());
 

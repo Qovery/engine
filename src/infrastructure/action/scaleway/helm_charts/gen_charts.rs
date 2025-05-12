@@ -36,7 +36,7 @@ use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryCluste
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
 // use crate::io_models::metrics::MetricsConfiguration;
-use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
@@ -59,7 +59,7 @@ pub fn kapsule_helm_charts(
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
-    let metrics_charts = generate_metrics_charts(
+    let metrics_config = generate_metrics_config(
         CloudProviderMetricsConfig::Kapsule(chart_config_prerequisites),
         chart_prefix_path,
         &prometheus_internal_url,
@@ -67,19 +67,19 @@ pub fn kapsule_helm_charts(
         get_chart_override_fn.clone(),
     )?;
 
-    let prometheus_operator_crds_chart = metrics_charts
+    let prometheus_operator_crds_chart = metrics_config
         .prometheus_operator_crds_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_prometheus_stack_chart = metrics_charts
+    let kube_prometheus_stack_chart = metrics_config
         .kube_prometheus_stack_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let thanos_chart = metrics_charts
+    let thanos_chart = metrics_config
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_state_metrics_chart = metrics_charts
+    let kube_state_metrics_chart = metrics_config
         .kube_state_metrics_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
@@ -106,6 +106,10 @@ pub fn kapsule_helm_charts(
         chart_config_prerequisites
             .managed_dns_resolvers_terraform_format
             .to_string(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .dns_coredns_extra_config
+            .clone(),
         HelmChartNamespaces::KubeSystem,
     );
 
@@ -380,6 +384,8 @@ pub fn kapsule_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         true,
+        false,
+        metrics_config.metrics_query_url,
     )
     .to_common_helm_chart()?;
 

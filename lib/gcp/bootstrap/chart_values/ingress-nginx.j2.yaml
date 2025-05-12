@@ -38,7 +38,16 @@ controller:
     log-format-escaping-json: "false" # set-by-engine-code
     log-format-escaping-none: "false" # set-by-engine-code
     limit-req-status-code: "503" # set-by-engine-code
-    
+    # Compression configuration (enabled by default)
+    {%- if nginx_controller_enable_compression is not defined or nginx_controller_enable_compression %}
+    enable-brotli: "true"
+    brotli-level: "6"
+    brotli-types: "text/xml text/yaml image/svg+xml application/x-font-ttf image/vnd.microsoft.icon application/x-font-opentype application/json font/eot application/vnd.ms-fontobject application/javascript font/otf application/xml application/xhtml+xml text/javascript application/x-javascript text/plain application/x-font-truetype application/xml+rss image/x-icon font/opentype text/css image/x-win-bitmap"
+    use-gzip: "true"
+    gzip-level: "6"
+    gzip-types: "text/xml text/yaml image/svg+xml application/x-font-ttf image/vnd.microsoft.icon application/x-font-opentype application/json font/eot application/vnd.ms-fontobject application/javascript font/otf application/xml application/xhtml+xml text/javascript application/x-javascript text/plain application/x-font-truetype application/xml+rss image/x-icon font/opentype text/css image/x-win-bitmap"
+    {%- endif %}
+
   # PDB
   maxUnavailable: 20%
 

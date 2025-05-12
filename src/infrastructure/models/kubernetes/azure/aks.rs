@@ -163,7 +163,8 @@ impl Kubernetes for AKS {
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
-        vec![CpuArchitecture::AMD64, CpuArchitecture::ARM64]
+        // TODO(benjaminch): AKS integration, add ARM support
+        vec![CpuArchitecture::AMD64]
     }
 
     fn temp_dir(&self) -> &Path {

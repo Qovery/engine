@@ -1,20 +1,28 @@
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
-use crate::helpers::kubernetes::get_environment_test_kubernetes;
+use crate::helpers::kubernetes::{
+    KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
+};
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 use azure_mgmt_containerregistry::models::{Sku, sku};
+use governor::middleware::NoOpMiddleware;
+use governor::state::{InMemoryState, NotKeyed};
+use governor::{Quota, RateLimiter, clock};
+use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
 use qovery_engine::environment::models::azure::{AzureStorageType, Credentials};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::TerraformStateCredentials;
 use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
 use qovery_engine::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::azure_container_registry::AzureContainerRegistry;
+use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::kubernetes::azure::AksOptions;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
-use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
+use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
@@ -33,15 +41,31 @@ pub static AZURE_CONTAINER_REGISTRY_SKU: Lazy<Sku> = Lazy::new(|| Sku::new(sku::
 pub const AZURE_RESOURCE_TTL_IN_SECONDS: u32 = 9000;
 pub const AZURE_SELF_HOSTED_DATABASE_DISK_TYPE: AzureStorageType = AzureStorageType::StandardSSDZRS;
 
+/// A rate limiter making sure we do not send too many repository writes requests while testing
+/// Max default quotas are 100 RPM on Basic SKU, let's take some room and use 10x less (1 per 10 seconds)
+/// more info here hhttps://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
+pub static AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER: Lazy<
+    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32)))));
+
+/// A rate limiter making sure we do not send too many repository writes requests while testing
+/// Max default quotas are 1000 RPM on Basic SKU, let's take some room and use 20x less (1 per 2 seconds)
+/// more info here hhttps://learn.microsoft.com/en-us/azure/container-registry/container-registry-skus
+pub static AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER: Lazy<
+    Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+> = Lazy::new(|| Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(30_u32)))));
+
 pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
     let secrets = FuncTestsSecrets::new();
 
-    let id = QoveryIdentifier::new_random();
-    let name = format!("test-artifact-registry-{id}");
+    // For Azure, there will be only one container registry per cluster
+    // it will be named after the cluster id
+    let id = context.cluster_long_id();
+    let name = format!("qovery-{}", context.cluster_short_id());
 
     AzureContainerRegistry::new(
         context.clone(),
-        id.to_uuid(),
+        *id,
         name.as_str(),
         secrets
             .AZURE_SUBSCRIPTION_ID
@@ -71,11 +95,48 @@ pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
                     .AZURE_CLIENT_SECRET
                     .as_ref()
                     .expect("AZURE_CLIENT_SECRET is not set in secrets"),
+                Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER.clone()),
+                Some(AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER.clone()),
             )
             .expect("Cannot create Azure Artifact registry service"),
         ),
     )
     .expect("Cannot create Azure Artifact Registry")
+}
+
+pub fn azure_infra_config(
+    targeted_cluster: &TargetCluster,
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+) -> InfrastructureContext {
+    let secrets = FuncTestsSecrets::new();
+
+    Azure::docker_cr_engine(
+        context,
+        logger,
+        metrics_registry,
+        secrets
+            .AZURE_DEFAULT_REGION
+            .expect("AZURE_DEFAULT_REGION is not set in secrets")
+            .as_str(),
+        KubernetesKind::Gke,
+        AZURE_KUBERNETES_VERSION,
+        &ClusterDomain::Default {
+            cluster_id: context.cluster_short_id().to_string(),
+        },
+        None,
+        KUBERNETES_MIN_NODES,
+        KUBERNETES_MAX_NODES,
+        CpuArchitecture::AMD64,
+        EngineLocation::ClientSide,
+        match targeted_cluster {
+            TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
+            TargetCluster::New => None, // <- creating a new cluster
+        },
+        NodeManager::Default,
+        vec![],
+    )
 }
 
 impl Cluster<Azure, AksOptions> for Azure {
@@ -94,9 +155,10 @@ impl Cluster<Azure, AksOptions> for Azure {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use Azure container registry
-        let container_registry = Box::new(azure_container_registry(context));
+        let container_registry = ContainerRegistry::AzureContainerRegistry(azure_container_registry(context));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
@@ -119,6 +181,7 @@ impl Cluster<Azure, AksOptions> for Azure {
             StorageClass(AzureStorageType::StandardSSDZRS.to_k8s_storage_class()),
             kubeconfig,
             node_manager,
+            actionable_features,
         );
 
         InfrastructureContext::new(
@@ -225,4 +288,17 @@ impl Cluster<Azure, AksOptions> for Azure {
             None,
         )
     }
+}
+
+pub fn clean_environments(
+    _context: &Context,
+    _environments: Vec<EnvironmentRequest>,
+    _region: AzureLocation,
+) -> Result<(), ContainerRegistryError> {
+    let _secrets = FuncTestsSecrets::new();
+
+    // delete repository created in registry
+    // TODO(benjaminch): delete repository
+
+    Ok(())
 }

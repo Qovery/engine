@@ -4,7 +4,7 @@ use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
-use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_charts};
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
@@ -282,7 +282,7 @@ pub(super) fn gke_helm_charts(
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
 
-    let metrics_charts = generate_metrics_charts(
+    let metrics_config = generate_metrics_config(
         CloudProviderMetricsConfig::Gke(chart_config_prerequisites),
         chart_prefix_path,
         &prometheus_internal_url,
@@ -316,6 +316,8 @@ pub(super) fn gke_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         UpdateStrategy::RollingUpdate,
         true,
+        false,
+        metrics_config.metrics_query_url,
     )
     .to_common_helm_chart()?;
 
@@ -335,19 +337,19 @@ pub(super) fn gke_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    let prometheus_operator_crds_chart = metrics_charts
+    let prometheus_operator_crds_chart = metrics_config
         .prometheus_operator_crds_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_prometheus_stack_chart = metrics_charts
+    let kube_prometheus_stack_chart = metrics_config
         .kube_prometheus_stack_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let thanos_chart = metrics_charts
+    let thanos_chart = metrics_config
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_state_metrics_chart = metrics_charts
+    let kube_state_metrics_chart = metrics_config
         .kube_state_metrics_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 

@@ -7,7 +7,7 @@ use crate::environment::models::job::{JobError, JobService};
 use crate::environment::models::router::{RouterAdvancedSettings, RouterError};
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
-use crate::infrastructure::models::container_registry::ContainerRegistry;
+use crate::infrastructure::models::container_registry::InteractWithRegistry;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Application;
@@ -93,7 +93,7 @@ impl EnvironmentRequest {
         &self,
         context: &Context,
         cloud_provider: &dyn CloudProvider,
-        container_registry: &dyn ContainerRegistry,
+        container_registry: &dyn InteractWithRegistry,
         cluster: &dyn Kubernetes,
     ) -> Result<Environment, DomainError> {
         let applications: Result<Vec<Box<dyn ApplicationService>>, ApplicationError> = self

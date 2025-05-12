@@ -241,7 +241,11 @@ impl<T: CloudProvider> Application<T> {
                 tolerations,
             },
             registry: registry_info
-                .registry_docker_json_config
+                .get_registry_docker_json_config(DockerRegistryInfo {
+                    registry_name: Some(self.build.image.registry_name()),
+                    repository_name: Some(self.build.image.repository_name().to_string()),
+                    image_name: Some(self.build.image.name()),
+                })
                 .as_ref()
                 .map(|docker_json| RegistryTeraContext {
                     secret_name: format!("{}-registry", self.kube_name()),
@@ -406,7 +410,9 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use tera::Context as TeraContext;
+
 impl<T: CloudProvider> ToTeraContext for Application<T> {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         let context = self.default_tera_context(target);

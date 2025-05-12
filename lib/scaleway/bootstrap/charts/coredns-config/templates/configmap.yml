@@ -1,7 +1,46 @@
+# ToDo(guillaume): remove the configmap coredns (NOT coredns-custom) after the migration, we do this to prevent Helm to remove coredns configmap when the release is deleted 
 kind: ConfigMap
 apiVersion: v1
 metadata:
+  annotations:
+    helm.sh/resource-policy: keep # This annotation is used to prevent the configmap from being deleted when the helm release is deleted
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    k8s.scw.cloud/object: ConfigMap
+    k8s.scw.cloud/system: coredns
   name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    .:53 {
+        errors
+        health {
+            lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+            pods insecure
+            fallthrough in-addr.arpa ip6.arpa
+        }
+        prometheus :9153
+        forward internal 169.254.169.254:53
+        forward . /run/systemd/resolve/resolv.conf 169.254.169.254:53 {
+            policy sequential
+        }
+        cache 300
+        loop
+        reload
+        loadbalance
+        import custom/*.override
+    }
+    import custom/*.server
+  empty: |
+    # empty to skip coredns warnings
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: coredns-custom
   namespace: kube-system
   labels:
     addonmanager.kubernetes.io/mode: EnsureExists
@@ -9,29 +48,9 @@ metadata:
     k8s.scw.cloud/system: coredns
     k8s-app: kube-dns
 data:
-  Corefile: |
-    .:53 {
-        errors
-        health
-        ready
-        kubernetes cluster.local in-addr.arpa ip6.arpa {
-          pods insecure
-          fallthrough in-addr.arpa ip6.arpa
-        }
-        {{ if .Values.declare_node_hosts }}
-        hosts /etc/coredns/NodeHosts {
-          ttl 60
-          reload 15s
-          fallthrough
-        }
-        {{ end }}
-        prometheus :9153
-        forward . /etc/resolv.conf
-        cache 30
-        loop
-        reload
-        loadbalance
-    }
+  qovery-custom.server: |
+    # Qovery custom DNS configuration
+    # This file adds custom DNS zones for Qovery services
     {{- range .Values.managed_dns }}
     {{ . }}:53 {
       errors
@@ -39,3 +58,8 @@ data:
       forward . {{ join " " $.Values.managed_dns_resolvers }}
     }
     {{ end }}
+  {{- if .Values.extra_config }}
+  extra-config.server: |
+    # Extra config from advanced settings
+{{ .Values.extra_config | indent 4 }}
+  {{- end }}

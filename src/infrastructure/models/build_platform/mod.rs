@@ -160,6 +160,7 @@ pub struct SshKey {
     pub public_key: Option<String>,
 }
 
+#[derive(Clone)]
 pub struct GitRepositoryExtraFile {
     pub path: PathBuf,
     pub content: String,
@@ -196,6 +197,7 @@ pub struct Image {
     pub registry_docker_json_config: Option<String>,
     // complete registry URL where the image has been pushed
     pub registry_url: Url,
+    pub registry_url_prefix: Option<String>,
     pub registry_insecure: bool,
     pub repository_name: String,
     pub shared_repository_name: String,
@@ -203,12 +205,36 @@ pub struct Image {
 }
 
 impl Image {
-    pub fn registry_host(&self) -> &str {
-        self.registry_url.host_str().unwrap()
+    pub fn registry_url_with_prefix(&self) -> Url {
+        match &self.registry_url_prefix {
+            Some(prefix) => {
+                let mut url_with_prefix = self.registry_url.clone();
+
+                url_with_prefix
+                    .set_host(Some(
+                        format!("{}.{}", prefix, self.registry_url.host_str().unwrap_or_default()).as_str(),
+                    ))
+                    .unwrap();
+
+                url_with_prefix
+            }
+            None => self.registry_url.clone(),
+        }
     }
-    pub fn registry_secret_name(&self) -> &str {
+    pub fn registry_host(&self) -> String {
+        match &self.registry_url_prefix {
+            Some(prefix) => format!("{}.{}", prefix, self.registry_url.host_str().unwrap_or_default()),
+            None => self.registry_url.host_str().unwrap_or_default().to_string(),
+        }
+    }
+    pub fn registry_secret_name(&self) -> String {
         self.registry_host()
     }
+
+    pub fn registry_name(&self) -> String {
+        self.registry_name.to_string()
+    }
+
     pub fn repository_name(&self) -> &str {
         match self.shared_image_feature_enabled {
             true => self.shared_repository_name(),
@@ -227,12 +253,10 @@ impl Image {
     pub fn full_image_name_with_tag(&self) -> String {
         match self.registry_url.port_or_known_default() {
             None | Some(443) => {
-                let host = self.registry_url.host_str().unwrap_or_default();
-                format!("{}/{}:{}", host, self.name, self.tag)
+                format!("{}/{}:{}", self.registry_host(), self.name, self.tag)
             }
             Some(port) => {
-                let host = self.registry_url.host_str().unwrap_or_default();
-                format!("{}:{}/{}:{}", host, port, self.name, self.tag)
+                format!("{}:{}/{}:{}", self.registry_host(), port, self.name, self.tag)
             }
         }
     }
@@ -240,12 +264,10 @@ impl Image {
     pub fn full_image_name(&self) -> String {
         match self.registry_url.port_or_known_default() {
             None | Some(443) => {
-                let host = self.registry_url.host_str().unwrap_or_default();
-                format!("{}/{}", host, self.name)
+                format!("{}/{}", self.registry_host(), self.name)
             }
             Some(port) => {
-                let host = self.registry_url.host_str().unwrap_or_default();
-                format!("{}:{}/{}", host, port, self.name)
+                format!("{}:{}/{}", self.registry_host(), port, self.name)
             }
         }
     }
@@ -275,6 +297,7 @@ impl Default for Image {
             registry_name: "".to_string(),
             registry_docker_json_config: None,
             registry_url: Url::parse("https://default.com").unwrap(),
+            registry_url_prefix: None,
             registry_insecure: false,
             repository_name: "".to_string(),
             shared_repository_name: "".to_string(),
@@ -288,7 +311,12 @@ impl Display for Image {
         write!(
             f,
             "Image (name={}, tag={}, commit_id={}, application_id={}, registry_name={:?}, registry_url={:?})",
-            self.name, self.tag, self.commit_id, self.service_id, self.registry_name, self.registry_url
+            self.name,
+            self.tag,
+            self.commit_id,
+            self.service_id,
+            self.registry_name,
+            self.registry_url_with_prefix()
         )
     }
 }

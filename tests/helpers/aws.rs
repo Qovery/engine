@@ -1,7 +1,7 @@
 extern crate serde;
 extern crate serde_derive;
 
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{
     KUBERNETES_MAX_NODES, KUBERNETES_MIN_NODES, TargetCluster, get_environment_test_kubernetes,
@@ -14,6 +14,7 @@ use qovery_engine::infrastructure::models::cloud_provider::aws::database_instanc
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, TerraformStateCredentials};
+use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::aws::Options;
@@ -69,6 +70,9 @@ pub fn container_registry_ecr(context: &Context, logger: Box<dyn Logger>) -> ECR
     .unwrap()
 }
 
+/// This method is dedicated to test services deployments
+/// `node_manager` is set to default (no Karpenter)
+/// `actionable_features` is empty
 pub fn aws_infra_config(
     targeted_cluster: &TargetCluster,
     context: &Context,
@@ -99,7 +103,8 @@ pub fn aws_infra_config(
             TargetCluster::MutualizedTestCluster { kubeconfig } => Some(kubeconfig.to_string()), // <- using test cluster, not creating a new one
             TargetCluster::New => None, // <- creating a new cluster
         },
-        NodeManager::Default, // no karpenter parameters here, as this method is dedicated to test services deployments
+        NodeManager::Default,
+        vec![],
     )
 }
 
@@ -119,9 +124,10 @@ impl Cluster<AWS, Options> for AWS {
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
         node_manager: NodeManager,
+        actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext {
         // use ECR
-        let container_registry = Box::new(container_registry_ecr(context, logger.clone()));
+        let container_registry = ContainerRegistry::Ecr(container_registry_ecr(context, logger.clone()));
 
         // use LocalDocker
         let build_platform = Box::new(build_platform_local_docker(context));
@@ -144,6 +150,7 @@ impl Cluster<AWS, Options> for AWS {
             StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
             kubeconfig,
             node_manager,
+            actionable_features,
         );
 
         InfrastructureContext::new(

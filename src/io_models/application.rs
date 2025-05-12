@@ -15,15 +15,16 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::application::{ApplicationError, ApplicationService};
 use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::infrastructure::models::container_registry::ContainerRegistryInfo;
+use crate::infrastructure::models::container_registry::{ContainerRegistryInfo, DockerRegistryInfo};
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
@@ -424,7 +425,38 @@ impl Application {
                     self.should_delete_shared_registry,
                 )?))
             }
-            CPKind::Azure => todo!(),
+            CPKind::Azure => Ok(Box::new(models::application::Application::<Azure>::new(
+                context,
+                self.long_id,
+                self.action.to_service_action(),
+                self.name.as_str(),
+                self.kube_name,
+                self.public_domain,
+                self.ports,
+                self.min_instances,
+                self.max_instances,
+                build,
+                self.command_args,
+                self.entrypoint,
+                self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                AzureAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.should_delete_shared_registry,
+            )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
                 self.long_id,
@@ -525,21 +557,28 @@ impl Application {
     }
 
     fn to_image(&self, cr_info: &ContainerRegistryInfo, cluster_id: &QoveryIdentifier) -> Image {
+        let repository_name = cr_info.get_repository_name(&self.name);
+        let image_name = match self.shared_image_feature_enabled {
+            true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(self.git_url.as_str())),
+            false => cr_info.get_image_name(&self.name),
+        };
         Image {
             service_id: to_short_id(&self.long_id),
             service_long_id: self.long_id,
             service_name: self.name.clone(),
-            name: match self.shared_image_feature_enabled {
-                true => cr_info.get_shared_image_name(cluster_id, sanitized_git_url(self.git_url.as_str())),
-                false => cr_info.get_image_name(&self.name),
-            },
+            name: image_name.to_string(),
             tag: "".to_string(), // It needs to be computed after creation
             commit_id: self.commit_id.clone(),
             registry_name: cr_info.registry_name.clone(),
-            registry_url: cr_info.endpoint.clone(),
+            registry_url: cr_info.registry_endpoint.clone(),
+            registry_url_prefix: cr_info.get_registry_url_prefix(cluster_id.clone()),
             registry_insecure: cr_info.insecure_registry,
-            registry_docker_json_config: cr_info.registry_docker_json_config.clone(),
-            repository_name: cr_info.get_repository_name(&self.name),
+            registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
+                registry_name: Some(cr_info.registry_name.to_string()),
+                repository_name: Some(repository_name.to_string()),
+                image_name: Some(image_name.to_string()),
+            }),
+            repository_name,
             shared_repository_name: cr_info
                 .get_shared_repository_name(cluster_id, sanitized_git_url(self.git_url.as_str())),
             shared_image_feature_enabled: self.shared_image_feature_enabled,

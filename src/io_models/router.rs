@@ -1,10 +1,11 @@
 use crate::environment::models;
 use crate::environment::models::aws::AwsRouterExtraSettings;
+use crate::environment::models::azure::AzureRouterExtraSettings;
 use crate::environment::models::gcp::GcpRouterExtraSettings;
 use crate::environment::models::router::{RouterAdvancedSettings, RouterError, RouterService};
 use crate::environment::models::scaleway::ScwRouterExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseRouterExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::io_models::Action;
 use crate::io_models::annotations_group::AnnotationsGroup;
@@ -127,7 +128,21 @@ impl Router {
                 annotations_groups,
                 labels_groups,
             )?)),
-            CPKind::Azure => todo!(),
+            CPKind::Azure => Ok(Box::new(models::router::Router::<Azure>::new(
+                context,
+                self.long_id,
+                self.name.as_str(),
+                self.kube_name.to_string(),
+                self.action.to_service_action(),
+                self.default_domain.as_str(),
+                custom_domains,
+                routes,
+                AzureRouterExtraSettings {},
+                advanced_settings,
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+            )?)),
             CPKind::OnPremise => {
                 let router = Box::new(models::router::Router::<OnPremise>::new(
                     context,

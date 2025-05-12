@@ -41,7 +41,7 @@ impl RegistryImageSource {
         cluster_registry_mirroring_mode: &RegistryMirroringMode,
         cluster_registry_info: &ContainerRegistryInfo,
     ) -> (Url, String, String, bool) {
-        let cluster_container_registry = cluster_registry_info.endpoint.clone();
+        let cluster_container_registry = cluster_registry_info.registry_endpoint.clone();
         let service_container_registry = self.registry.get_url();
 
         let cluster_container_registry_host = cluster_container_registry.host_str().unwrap_or_default();

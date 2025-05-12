@@ -29,13 +29,17 @@ pub fn copy_files(from: &Path, to: &Path, exclude_j2_files: bool) -> Result<(), 
     };
 
     create_dir_all(to)?;
-    let from_str = from.to_str().unwrap();
+    let from_str = from.to_string_lossy();
 
     for file in files {
-        let path_str = file.path().to_str().unwrap();
-        let dest = format!("{}{}", to.to_str().unwrap(), path_str.replace(from_str, "").as_str());
+        let path_str = file.path().to_string_lossy();
+        let dest = format!(
+            "{}{}",
+            to.to_str().unwrap_or(""),
+            path_str.replace(from_str.as_ref(), "").as_str()
+        );
 
-        if file.metadata().unwrap().is_dir() {
+        if file.metadata()?.is_dir() {
             create_dir_all(&dest)?;
         }
 

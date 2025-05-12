@@ -209,10 +209,8 @@ impl ToCommonHelmChart for ThanosChart {
                     },
                 },
                 ChartSetValue {
-                    key: "query.pdb.minAvailable".to_string(),
-                    value: (self.query_autoscaling.min_replicas + self.query_autoscaling.max_replicas)
-                        .div_ceil(2)
-                        .to_string(),
+                    key: "query.pdb.maxUnavailable".to_string(),
+                    value: "20%".to_string(),
                 },
                 // query Frontend
                 ChartSetValue {
@@ -329,10 +327,8 @@ impl ToCommonHelmChart for ThanosChart {
                     },
                 },
                 ChartSetValue {
-                    key: "storegateway.pdb.minAvailable".to_string(),
-                    value: (self.store_gateway_autoscaling.min_replicas + self.store_gateway_autoscaling.max_replicas)
-                        .div_ceil(2)
-                        .to_string(),
+                    key: "storegateway.pdb.maxUnavailable".to_string(),
+                    value: "20%".to_string(),
                 },
                 ChartSetValue {
                     key: "storegateway.persistence.storageClass".to_string(),

@@ -4,7 +4,7 @@ use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::action::InfraLogger;
-use crate::infrastructure::action::delete_kube_apps::delete_kube_apps;
+use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
 use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
@@ -126,6 +126,11 @@ pub fn delete_eks_cluster(
         }
     };
     update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
+
+    // delete all PDBs first, because those will prevent node deletion
+    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+    }
 
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([

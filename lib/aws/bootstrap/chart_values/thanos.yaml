@@ -53,7 +53,7 @@ query:
     targetCPU: "set-by-engine-code"
   pdb:
     create: set-by-engine-code
-    minAvailable: "set-by-engine-code"
+    maxUnavailable: "set-by-engine-code"
 
 queryFrontend:
   enabled: true
@@ -149,7 +149,7 @@ storegateway:
     targetCPU: "set-by-engine-code"
   pdb:
     create: set-by-engine-code
-    minAvailable: "set-by-engine-code"
+    maxUnavailable: "set-by-engine-code"
   resources:
     requests:
       cpu: set-by-engine-code

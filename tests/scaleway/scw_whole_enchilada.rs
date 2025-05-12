@@ -52,6 +52,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_waw_1() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -97,6 +98,7 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -142,6 +144,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }
@@ -187,6 +190,7 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
+            vec![],
         )
     })
 }

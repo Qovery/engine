@@ -408,6 +408,14 @@ impl From<ContainerRegistryError> for CommandError {
             ContainerRegistryError::InvalidRegistryUrl { registry_url } => CommandError::new_from_safe_message(
                 format!("Container registry error, invalid registry URL: `{registry_url}`"),
             ),
+            ContainerRegistryError::InvalidRegistryName {
+                registry_name,
+                raw_error_message,
+            } => CommandError::new(
+                format!("Container registry error, invalid registry name: `{registry_name}`"),
+                Some(raw_error_message),
+                None,
+            ),
             ContainerRegistryError::CannotGetCredentials => {
                 CommandError::new_from_safe_message("Container registry error, cannot get credentials".to_string())
             }
@@ -1010,6 +1018,8 @@ pub enum Tag {
     ContainerRegistryCannotGetCredentials,
     /// ContainerRegistryInvalidRegistryUrl: represents an error where registry URL is invalid (cannot be parsed).
     ContainerRegistryInvalidRegistryUrl,
+    /// ContainerRegistryInvalidRegistryName: represents an error where registry name is invalid (unauthorized chars for example).
+    ContainerRegistryInvalidRegistryName,
     /// ContainerRegistryCannotDeleteImage: represents an error while trying to delete an image.
     ContainerRegistryCannotDeleteImage,
     /// ContainerRegistryImageDoesntExist: represents an error, image doesn't exist in the registry.
@@ -1126,6 +1136,10 @@ pub enum Tag {
     CannotFetchScalewayPrivateNetworks,
     /// K8sCannotGetNodes: represents an error where we are not able to get nodes.
     K8sCannotGetNodes,
+    /// K8sCannotGetPDBs: represents an error where we are not able to get PDBs.
+    K8sCannotGetPDBs,
+    /// K8sCannotDeletePDB: represents an error where we are not able to delete a PDB.
+    K8sCannotDeletePDB,
     /// K8sPatchNodeError: represents an error where we are not able to patch a node.
     K8sPatchNodeError,
     /// K8sUninstallEc2NodeClassesError: represents an error where we are not able to uninstall Ec2NodeClasses.
@@ -3229,6 +3243,14 @@ impl EngineError {
                 None,
                 None,
             ),
+            ContainerRegistryError::InvalidRegistryName { ref registry_name, ..} => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryInvalidRegistryName,
+                format!("Container registry: invalid registry name: `{registry_name}`"),
+                Some(error.into()),
+                None,
+                None,
+            ),
             ContainerRegistryError::CannotGetCredentials => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotGetCredentials,
@@ -5043,6 +5065,49 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::K8sCannotGetNodes,
+            message.to_string(),
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for kubernetes not being able to get pods disruption budgets.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_get_pdbs(event_details: EventDetails, raw_k8s_error: CommandError) -> EngineError {
+        let message = "Unable to get Pod Disruption Budgets.";
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotGetPDBs,
+            message.to_string(),
+            Some(raw_k8s_error),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error for kubernetes not being able to delete pod disruption budget.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_k8s_error`: Raw error message.
+    pub fn new_k8s_cannot_delete_pdb(
+        pdb_namespace: &str,
+        pdb_name: &str,
+        event_details: EventDetails,
+        raw_k8s_error: CommandError,
+    ) -> EngineError {
+        let message = format!("Unable to delete Pod Disruption Budget `{}/{}`.", pdb_namespace, pdb_name);
+
+        EngineError::new(
+            event_details,
+            Tag::K8sCannotDeletePDB,
             message.to_string(),
             Some(raw_k8s_error),
             None,

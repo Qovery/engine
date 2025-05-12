@@ -205,6 +205,8 @@ pub struct ClusterAdvancedSettings {
     pub database_mongodb_deny_any_access: bool,
     #[serde(alias = "database.mongodb.allowed_cidrs")]
     pub database_mongodb_allowed_cidrs: Vec<String>,
+    #[serde(alias = "dns.coredns.extra_config")]
+    pub dns_coredns_extra_config: Option<String>,
     #[serde(alias = "registry.mirroring_mode", default = "default_registry_mirroring_mode")]
     pub registry_mirroring_mode: RegistryMirroringMode,
     #[serde(alias = "nginx.vcpu.request_in_milli_cpu")]
@@ -245,6 +247,8 @@ pub struct ClusterAdvancedSettings {
 
     #[serde(alias = "nginx.controller.custom_http_errors")]
     pub nginx_controller_custom_http_errors: Option<String>,
+    #[serde(alias = "nginx.controller.enable_compression")]
+    pub nginx_controller_enable_compression: bool,
     #[serde(alias = "nginx.default_backend.enabled")]
     pub nginx_default_backend_enabled: Option<bool>,
     #[serde(alias = "nginx.default_backend.image_repository")]
@@ -296,6 +300,7 @@ impl Default for ClusterAdvancedSettings {
             database_redis_allowed_cidrs: default_database_cirds.clone(),
             database_mongodb_deny_any_access: false,
             database_mongodb_allowed_cidrs: default_database_cirds,
+            dns_coredns_extra_config: None,
             registry_mirroring_mode: RegistryMirroringMode::Service,
             nginx_vcpu_request_in_milli_cpu: 100,
             nginx_vcpu_limit_in_milli_cpu: 500,
@@ -325,6 +330,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
             nginx_controller_custom_http_errors: None,
+            nginx_controller_enable_compression: true,
             nginx_default_backend_enabled: None,
             nginx_default_backend_image_repository: None,
             nginx_default_backend_image_tag: None,
@@ -483,6 +489,7 @@ mod tests {
             cluster_advanced_settings.nginx_controller_log_format_escaping,
             LogFormatEscaping::Default
         );
+        assert!(cluster_advanced_settings.nginx_controller_enable_compression);
     }
 
     #[test]
@@ -493,7 +500,8 @@ mod tests {
             r#"
         {{
             "nginx.vcpu.request_in_milli_cpu": {},
-            "nginx.hpa.cpu_utilization_percentage_threshold": {}
+            "nginx.hpa.cpu_utilization_percentage_threshold": {},
+            "nginx.controller.enable_compression": false
         }}"#,
             nginx_vcpu_request_in_milli_cpu, nginx_hpa_cpu_utilization_percentage_threshold
         );
@@ -511,6 +519,7 @@ mod tests {
         );
         assert_eq!(cluster_advanced_settings.nginx_hpa_min_number_instances, 2);
         assert_eq!(cluster_advanced_settings.nginx_hpa_max_number_instances, 25);
+        assert!(!cluster_advanced_settings.nginx_controller_enable_compression);
     }
 
     #[test]

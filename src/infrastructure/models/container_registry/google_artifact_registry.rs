@@ -5,7 +5,7 @@ use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistry, ContainerRegistryInfo, Kind, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, Kind, Repository, RepositoryInfo,
     take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
@@ -66,10 +66,11 @@ impl GoogleArtifactRegistry {
         let project_name2 = project_id.to_string();
         const MAX_REGISTRY_NAME_LENGTH: usize = 53; // 63 (Artifact Registry limit) - 10 (prefix length)
         let registry_info = ContainerRegistryInfo {
-            endpoint: registry,
+            registry_endpoint: registry,
             registry_name: name.to_string(),
-            registry_docker_json_config: None,
+            get_registry_docker_json_config: Box::new(move |_docker_registry_info| None),
             insecure_registry: false,
+            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_shared_image_name: Box::new(move |image_build_context| {
                 let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
                     image_build_context.git_repo_url_sanitized.as_str(),
@@ -123,23 +124,24 @@ impl GoogleArtifactRegistry {
         registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         let creation_date: DateTime<Utc> = Utc::now();
+        let mut tags = vec![
+            ("creation_date".to_string(), creation_date.timestamp().to_string()),
+            (
+                "ttl".to_string(),
+                format!("{}", registry_tags.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
+            ),
+        ];
+        if let Some(environment_id) = registry_tags.environment_id {
+            tags.push(("environment_id".to_string(), environment_id));
+        }
+        if let Some(project_id) = registry_tags.project_id {
+            tags.push(("project_id".to_string(), project_id));
+        }
+        if let Some(cluster_id) = registry_tags.cluster_id {
+            tags.push(("cluster_id".to_string(), cluster_id));
+        }
         self.service
-            .create_repository(
-                &self.project_id,
-                self.region.clone(),
-                repository_name,
-                HashMap::from([
-                    // Tags keys rule: Only hyphens (-), underscores (_), lowercase characters, and numbers are allowed.
-                    // Keys must start with a lowercase character. International characters are allowed.
-                    ("creation_date".to_string(), creation_date.timestamp().to_string()),
-                    (
-                        "ttl".to_string(),
-                        format!("{}", registry_tags.resource_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
-                    ),
-                    ("environment_id".to_string(), registry_tags.environment_id),
-                    ("project_id".to_string(), registry_tags.project_id),
-                ]),
-            )
+            .create_repository(&self.project_id, self.region.clone(), repository_name, HashMap::from_iter(tags))
             .map(|r| (r, RepositoryInfo { created: true }))
             .map_err(|e| ContainerRegistryError::CannotCreateRepository {
                 registry_name: self.name.to_string(),
@@ -171,7 +173,7 @@ impl GoogleArtifactRegistry {
     }
 }
 
-impl ContainerRegistry for GoogleArtifactRegistry {
+impl InteractWithRegistry for GoogleArtifactRegistry {
     fn context(&self) -> &Context {
         &self.context
     }
@@ -194,6 +196,7 @@ impl ContainerRegistry for GoogleArtifactRegistry {
 
     fn create_repository(
         &self,
+        _registry_name: Option<&str>,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
         registry_tags: RegistryTags,

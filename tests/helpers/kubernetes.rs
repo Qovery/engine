@@ -1,4 +1,4 @@
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::utilities::{FuncTestsSecrets, init};
 
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS};
@@ -31,11 +31,14 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS};
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider;
 use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
 use qovery_engine::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use qovery_engine::infrastructure::models::cloud_provider::service::Action;
 use qovery_engine::infrastructure::models::kubernetes::azure::aks::AKS;
+use qovery_engine::io_models::metrics::MetricsConfiguration::MetricsInstalledByQovery;
+use qovery_engine::io_models::metrics::MetricsParameters;
 use std::str::FromStr;
 use tracing::{Level, span};
 
@@ -70,6 +73,7 @@ pub fn cluster_test(
     cpu_archi: CpuArchitecture,
     environment_to_deploy: Option<&EnvironmentRequest>,
     node_manager: NodeManager,
+    actionable_features: Vec<ActionableFeature>,
 ) -> String {
     init();
 
@@ -103,81 +107,61 @@ pub fn cluster_test(
         },
     };
 
-    let mut engine = match provider_kind {
-        Kind::Aws => AWS::docker_cr_engine(
-            &context,
-            logger.clone(),
-            metrics_registry.clone(),
-            region,
-            kubernetes_kind,
-            kubernetes_boot_version.clone(),
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            cpu_archi,
-            EngineLocation::ClientSide,
-            None, // <- no kubeconfig provided, new cluster
-            node_manager.clone(),
-        ),
-        Kind::Azure => Azure::docker_cr_engine(
-            &context,
-            logger.clone(),
-            metrics_registry.clone(),
-            region,
-            kubernetes_kind,
-            kubernetes_boot_version.clone(),
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            cpu_archi,
-            EngineLocation::ClientSide,
-            None, // <- no kubeconfig provided, new cluster
-            node_manager.clone(),
-        ),
-        Kind::Scw => Scaleway::docker_cr_engine(
-            &context,
-            logger.clone(),
-            metrics_registry.clone(),
-            region,
-            kubernetes_kind,
-            kubernetes_boot_version.clone(),
-            cluster_domain,
-            vpc_network_mode.clone(),
-            KUBERNETES_MIN_NODES,
-            KUBERNETES_MAX_NODES,
-            CpuArchitecture::AMD64,
-            EngineLocation::ClientSide,
-            None, // <- no kubeconfig provided, new cluster
-            node_manager.clone(),
-        ),
-        Kind::Gcp => Gke::docker_cr_engine(
-            &context,
-            logger.clone(),
-            metrics_registry.clone(),
-            region,
-            kubernetes_kind,
-            kubernetes_boot_version.clone(),
-            cluster_domain,
-            vpc_network_mode.clone(),
-            i32::MIN, // NA due to GKE autopilot
-            i32::MAX, // NA due to GKE autopilot
-            CpuArchitecture::AMD64,
-            EngineLocation::ClientSide,
-            None, // <- no kubeconfig provided, new cluster
-            node_manager.clone(),
-        ),
-        Kind::OnPremise => todo!(),
-    };
+    let mut engine = create_infrastructure_context(
+        None,
+        &provider_kind,
+        &context,
+        logger.clone(),
+        metrics_registry.clone(),
+        region,
+        kubernetes_kind,
+        &kubernetes_boot_version,
+        cluster_domain,
+        &vpc_network_mode,
+        cpu_archi,
+        &node_manager,
+        vec![],
+    );
+
     // Bootstrap
     let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
     assert!(deploy_tx.is_ok());
 
     // update
     engine.context_mut().update_is_first_cluster_deployment(false);
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-    assert!(deploy_tx.is_ok());
+
+    // If no actionable features, then trigger a cluster update as usual
+    if actionable_features.is_empty() {
+        let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
+        assert!(deploy_tx.is_ok());
+    } else {
+        // 1. Enable actionable features
+        let engine_with_features_enabled = create_infrastructure_context(
+            None,
+            &provider_kind,
+            &context,
+            logger.clone(),
+            metrics_registry.clone(),
+            region,
+            kubernetes_kind,
+            &kubernetes_boot_version,
+            cluster_domain,
+            &vpc_network_mode,
+            cpu_archi,
+            &node_manager,
+            actionable_features,
+        );
+
+        let deploy_tx = engine
+            .kubernetes()
+            .as_infra_actions()
+            .create_cluster(&engine_with_features_enabled, false);
+        assert!(deploy_tx.is_ok());
+
+        // 2. Disable actionable features
+        let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
+        assert!(deploy_tx.is_ok());
+    }
 
     // Deploy env if any
     if let Some(env) = environment_to_deploy {
@@ -212,73 +196,21 @@ pub fn cluster_test(
             let upgrade_to_version = kubernetes_boot_version.next_version().unwrap_or_else(|| {
                 panic!("Kubernetes version `{kubernetes_boot_version}` has no next version defined for now",)
             });
-            let engine = match provider_kind {
-                Kind::Aws => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Eks,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None, // <- no kubeconfig provided, new cluster
-                    node_manager,
-                ),
-                Kind::Azure => Azure::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Aks,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None, // <- no kubeconfig provided, new cluster
-                    node_manager,
-                ),
-                Kind::Scw => Scaleway::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::ScwKapsule,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None, // <- no kubeconfig provided, new cluster
-                    node_manager,
-                ),
-                Kind::Gcp => Gke::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Gke,
-                    upgrade_to_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide,
-                    None, // <- no kubeconfig provided, new cluster
-                    node_manager,
-                ),
-                Kind::OnPremise => todo!(),
-            };
+            let engine = create_infrastructure_context(
+                None,
+                &provider_kind,
+                &context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                KubernetesKind::Eks,
+                &upgrade_to_version,
+                cluster_domain,
+                &vpc_network_mode,
+                cpu_archi,
+                &node_manager,
+                vec![],
+            );
 
             // Upgrade
             let upgrade_tx = engine.kubernetes().as_infra_actions().run(&engine, Action::Create);
@@ -291,75 +223,21 @@ pub fn cluster_test(
             return test_name.to_string();
         }
         ClusterTestType::WithNodesResize => {
-            let min_nodes = 11;
-            let max_nodes = 15;
-            let engine = match provider_kind {
-                Kind::Aws => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Eks,
-                    kubernetes_boot_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None,                 // <- no kubeconfig provided, new cluster
-                    NodeManager::Default, // no karpenter parameters here, as this section is dedicated to test node autoscaling
-                ),
-                Kind::Azure => Azure::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Aks,
-                    kubernetes_boot_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None,                 // <- no kubeconfig provided, new cluster
-                    NodeManager::Default, // TODO(benjaminch): To set Karpenter
-                ),
-                Kind::Scw => Scaleway::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::ScwKapsule,
-                    kubernetes_boot_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    None, // <- no kubeconfig provided, new cluster
-                    NodeManager::Default,
-                ),
-                Kind::Gcp => Gke::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    region,
-                    KubernetesKind::Gke,
-                    kubernetes_boot_version,
-                    cluster_domain,
-                    vpc_network_mode,
-                    min_nodes,
-                    max_nodes,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::QoverySide,
-                    None, // <- no kubeconfig provided, new cluster
-                    NodeManager::AutoPilot,
-                ),
-                Kind::OnPremise => todo!(),
-            };
+            let engine = create_infrastructure_context(
+                Some(test_type),
+                &provider_kind,
+                &context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                KubernetesKind::Eks,
+                &kubernetes_boot_version,
+                cluster_domain,
+                &vpc_network_mode,
+                cpu_archi,
+                &node_manager,
+                vec![],
+            );
 
             // Upgrade
             let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
@@ -398,6 +276,114 @@ pub fn cluster_test(
     test_name.to_string()
 }
 
+fn create_infrastructure_context(
+    cluster_test_type: Option<ClusterTestType>,
+    provider_kind: &Kind,
+    context: &Context,
+    logger: Box<dyn Logger>,
+    metrics_registry: Box<dyn MetricsRegistry>,
+    region: &str,
+    kubernetes_kind: KubernetesKind,
+    kubernetes_boot_version: &KubernetesVersion,
+    cluster_domain: &ClusterDomain,
+    vpc_network_mode: &Option<VpcQoveryNetworkMode>,
+    cpu_archi: CpuArchitecture,
+    node_manager: &NodeManager,
+    actionable_features: Vec<ActionableFeature>,
+) -> InfrastructureContext {
+    match provider_kind {
+        Kind::Aws => {
+            let (min_nodes, max_nodes) = match cluster_test_type {
+                Some(ClusterTestType::WithNodesResize) => (11, 15),
+                _ => (KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES),
+            };
+            AWS::docker_cr_engine(
+                context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                kubernetes_kind,
+                kubernetes_boot_version.clone(),
+                cluster_domain,
+                vpc_network_mode.clone(),
+                min_nodes,
+                max_nodes,
+                cpu_archi,
+                EngineLocation::ClientSide,
+                None, // <- no kubeconfig provided, new cluster
+                node_manager.clone(),
+                actionable_features,
+            )
+        }
+        Kind::Scw => {
+            let (min_nodes, max_nodes) = match cluster_test_type {
+                Some(ClusterTestType::WithNodesResize) => (11, 15),
+                _ => (KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES),
+            };
+            Scaleway::docker_cr_engine(
+                context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                kubernetes_kind,
+                kubernetes_boot_version.clone(),
+                cluster_domain,
+                vpc_network_mode.clone(),
+                min_nodes,
+                max_nodes,
+                cpu_archi,
+                EngineLocation::ClientSide,
+                None, // <- no kubeconfig provided, new cluster
+                node_manager.clone(),
+                actionable_features,
+            )
+        }
+        Kind::Gcp => {
+            Gke::docker_cr_engine(
+                context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                kubernetes_kind,
+                kubernetes_boot_version.clone(),
+                cluster_domain,
+                vpc_network_mode.clone(),
+                i32::MIN, // NA due to GKE autopilot
+                i32::MAX, // NA due to GKE autopilot
+                cpu_archi,
+                EngineLocation::ClientSide,
+                None, // <- no kubeconfig provided, new cluster
+                node_manager.clone(),
+                actionable_features,
+            )
+        }
+        Kind::Azure => {
+            let (min_nodes, max_nodes) = match cluster_test_type {
+                Some(ClusterTestType::WithNodesResize) => (11, 15),
+                _ => (KUBERNETES_MIN_NODES, KUBERNETES_MAX_NODES),
+            };
+            Azure::docker_cr_engine(
+                context,
+                logger.clone(),
+                metrics_registry.clone(),
+                region,
+                kubernetes_kind,
+                kubernetes_boot_version.clone(),
+                cluster_domain,
+                vpc_network_mode.clone(),
+                min_nodes,
+                max_nodes,
+                cpu_archi,
+                EngineLocation::ClientSide,
+                None, // <- no kubeconfig provided, new cluster
+                node_manager.clone(),
+                actionable_features,
+            )
+        }
+        Kind::OnPremise => todo!(),
+    }
+}
+
 pub fn get_environment_test_kubernetes(
     context: &Context,
     cloud_provider: &dyn CloudProvider,
@@ -412,6 +398,7 @@ pub fn get_environment_test_kubernetes(
     default_kubernetes_storage_class: StorageClass,
     kubeconfig: Option<String>,
     node_manager: NodeManager,
+    actionable_features: Vec<ActionableFeature>,
 ) -> Box<dyn Kubernetes> {
     let secrets = FuncTestsSecrets::new();
 
@@ -425,15 +412,30 @@ pub fn get_environment_test_kubernetes(
     let kubernetes: Box<dyn Kubernetes> = match cloud_provider.kubernetes_kind() {
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
+
             let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location, None);
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
+
             match node_manager {
                 NodeManager::Karpenter { config } => options.karpenter_parameters = Some(config),
                 NodeManager::Default => {}
                 NodeManager::AutoPilot => {}
             }
+
+            actionable_features.iter().for_each(|feature| {
+                match feature {
+                    ActionableFeature::Metrics => {
+                        options.metrics_parameters = Some(MetricsParameters {
+                            config: MetricsInstalledByQovery {
+                                install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                            },
+                        })
+                    }
+                }
+            });
+
             Box::new(
                 EKS::new(
                     context.clone(),
@@ -496,6 +498,21 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
+
+            let mut options =
+                Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None);
+            actionable_features.iter().for_each(|feature| {
+                match feature {
+                    ActionableFeature::Metrics => {
+                        options.metrics_parameters = Some(MetricsParameters {
+                            config: MetricsInstalledByQovery {
+                                install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                            },
+                        })
+                    }
+                }
+            });
+
             Box::new(
                 Kapsule::new(
                     context.clone(),
@@ -506,7 +523,7 @@ pub fn get_environment_test_kubernetes(
                     cloud_provider,
                     Utc::now(),
                     Scaleway::kubernetes_nodes(min_nodes, max_nodes, cpu_archi),
-                    Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
+                    options,
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: SCW_RESOURCE_TTL_IN_SECONDS as i32,
@@ -524,6 +541,21 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::Gke => {
             let region = GcpRegion::from_str(localisation).expect("GCP zone not supported");
+            let mut options =
+                Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, vpc_network_mode);
+
+            actionable_features.iter().for_each(|feature| {
+                match feature {
+                    ActionableFeature::Metrics => {
+                        options.metrics_parameters = Some(MetricsParameters {
+                            config: MetricsInstalledByQovery {
+                                install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                            },
+                        })
+                    }
+                }
+            });
+
             Box::new(
                 Gke::new(
                     context.clone(),
@@ -533,12 +565,7 @@ pub fn get_environment_test_kubernetes(
                     kubernetes_version,
                     region,
                     Utc::now(),
-                    Gke::kubernetes_cluster_options(
-                        secrets.clone(),
-                        None,
-                        EngineLocation::ClientSide,
-                        vpc_network_mode,
-                    ),
+                    options,
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: GCP_RESOURCE_TTL.as_secs() as i32,

@@ -9,6 +9,7 @@ use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisi
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
+use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
@@ -95,16 +96,19 @@ pub(super) fn aks_helm_charts(
     .to_common_helm_chart()?;
 
     // CoreDNS config
-    // TODO(benjaminch): add CoreDNS config
-    // let coredns_config = CoreDNSConfigChart::new(
-    //     chart_prefix_path,
-    //     false,
-    //     chart_config_prerequisites.managed_dns_helm_format.to_string(),
-    //     chart_config_prerequisites
-    //         .managed_dns_resolvers_terraform_format
-    //         .to_string(),
-    //     HelmChartNamespaces::KubeSystem,
-    // );
+    let coredns_config = CoreDNSConfigChart::new(
+        chart_prefix_path,
+        false,
+        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        chart_config_prerequisites
+            .managed_dns_resolvers_terraform_format
+            .to_string(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .dns_coredns_extra_config
+            .clone(),
+        HelmChartNamespaces::KubeSystem,
+    );
 
     // K8s Event Logger
     let k8s_event_logger =
@@ -325,7 +329,6 @@ pub(super) fn aks_helm_charts(
                 prometheus_internal_url.to_string(),
                 prometheus_namespace,
                 PrometheusConfiguration::AzureBlobContainer,
-                true,
                 get_chart_override_fn.clone(),
                 false,
                 false,
@@ -355,6 +358,7 @@ pub(super) fn aks_helm_charts(
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
+        Some(Box::new(coredns_config)),
     ];
     let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![
         // This chart is required in order to install CRDs and declare later charts with VPA
@@ -375,7 +379,7 @@ pub(super) fn aks_helm_charts(
     ];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, kube_state_metrics, promtail, kube_prometheus_stack];
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
-    let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![/*Some(Box::new(coredns_config))*/];
+    let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![];
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {

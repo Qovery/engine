@@ -1,3 +1,5 @@
+priorityClassName: system-cluster-critical
+
 recommender:
   extraArgs:
     pod-recommendation-min-cpu-millicores: 50

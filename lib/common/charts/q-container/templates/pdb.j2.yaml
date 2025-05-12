@@ -16,7 +16,7 @@ metadata:
     {%- endfor %}
 spec:
   unhealthyPodEvictionPolicy: AlwaysAllow
-  maxUnavailable: 10%
+  maxUnavailable: 20%
   selector:
     matchLabels:
       qovery.com/service-id: {{ service.long_id }}
