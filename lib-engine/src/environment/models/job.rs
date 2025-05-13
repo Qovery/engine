@@ -241,12 +241,12 @@ impl<T: CloudProvider> Job<T> {
             },
             registry: match &self.image_source {
                 ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: Some(source.registry.name().unwrap_or_default()),
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: None,
                     image_name: Some(source.image.to_string()),
                 }),
                 ImageSource::Build { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: Some(source.image.registry_name()),
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: Some(source.image.repository_name().to_string()),
                     image_name: Some(source.image.name()),
                 }),
