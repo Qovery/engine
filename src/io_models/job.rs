@@ -1,12 +1,13 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::job::{ImageSource, JobError, JobService};
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
@@ -515,7 +516,38 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
             )?),
-            Kind::Azure => todo!(),
+            Kind::Azure => Box::new(models::job::Job::<Azure>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.schedule,
+                self.max_nb_restart,
+                Duration::from_secs(self.max_duration_in_sec),
+                self.default_port,
+                self.command_args,
+                self.entrypoint,
+                self.force_trigger,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.advanced_settings,
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                AzureAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.should_delete_shared_registry,
+            )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,

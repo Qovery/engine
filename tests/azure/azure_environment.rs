@@ -9,6 +9,9 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use bstr::ByteSlice;
 use function_name::named;
+use k8s_openapi::api::batch::v1::CronJob;
+use kube::Api;
+use kube::api::ListParams;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::environment::models::azure::AzureStorageType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
@@ -19,11 +22,13 @@ use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
+use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -1245,6 +1250,708 @@ fn azure_aks_deploy_container_without_router() {
                 key: "label_key".to_string(),
                 value: "label_value".to_string(),
                 propagate_to_cloud_provider: true,
+            }]
+        }};
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-minimal")]
+#[named]
+#[test]
+fn azure_aks_deploy_job() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}, "foo_3": {"value": "bar_3", "description": "bar_3"}}"#;
+        let job_id = QoveryIdentifier::new_random();
+        //environment.long_id = Uuid::default();
+        //environment.project_long_id = Uuid::default();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
+            source: JobSource::Image {
+                registry: Registry::PublicEcr {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
+                },
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6-ci".to_string(),
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-minimal")]
+#[named]
+#[test]
+fn azure_aks_deploy_job_with_dockerfile_content() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        let job_id = QoveryIdentifier::new_random();
+        //environment.long_id = Uuid::default();
+        //environment.project_long_id = Uuid::default();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: job_id.to_uuid(), //Uuid::default(),
+            name: format!("job-test-{}", job_id.short()),
+            kube_name: format!("job-test-{}", job_id.short()),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::GENERIC,
+            }, //JobSchedule::Cron("* * * * *".to_string()),
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                git_credentials: None,
+                branch: "main".to_string(),
+                commit_id: "168be6d16d8ade877f679ae752de5d095d95b8d0".to_string(),
+                root_path: "/".to_string(),
+                dockerfile_path: None,
+                dockerfile_content: Some(
+                    r#"
+FROM debian:bookworm-slim
+CMD ["/bin/sh", "-c", "echo hello"]
+                    "#
+                    .trim()
+                    .to_string(),
+                ),
+                docker_target_build_stage: None,
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-minimal")]
+#[named]
+#[test]
+fn azure_aks_deploy_cronjob() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::Cron {
+                schedule: "* * * * *".to_string(),
+                timezone: "Etc/UTC".to_string(),
+            },
+            source: JobSource::Image {
+                registry: Registry::PublicEcr {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
+                },
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6-ci".to_string(),
+            },
+            max_nb_restart: 1,
+            max_duration_in_sec: 30,
+            default_port: Some(8080),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
+        }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::CronJobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
+            }]
+        }};
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+fn azure_aks_deploy_cronjob_force_trigger() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+
+        let cronjob_uuid = Uuid::new_v4();
+        environment.jobs = vec![Job {
+            long_id: cronjob_uuid,
+            name: "job test #####||||*_-(".to_string(),
+            kube_name: "job-test".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::Cron {
+                schedule: "*/10 * * * *".to_string(),
+                timezone: "Etc/UTC".to_string(),
+            },
+            source: JobSource::Image {
+                registry: Registry::PublicEcr {
+                    long_id: Uuid::new_v4(),
+                    url: Url::parse("https://public.ecr.aws").unwrap(),
+                },
+                image: "r3m4q3r9/pub-mirror-debian".to_string(),
+                tag: "11.6-ci".to_string(),
+            },
+            max_nb_restart: 1,
+            max_duration_in_sec: 30,
+            default_port: Some(8080),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo starting; sleep 10; echo started".to_string(),
+            ],
+            entrypoint: None,
+            force_trigger: true,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        // verify cronjob is well uninstalled
+        let cronjob_namespace = format!(
+            "{}-{}",
+            to_short_id(&environment.project_long_id),
+            to_short_id(&environment.long_id)
+        );
+        let cronjob_label = format!("qovery.com/service-id={cronjob_uuid}");
+
+        let k8s_cronjob_api: Api<CronJob> = Api::namespaced(
+            infra_ctx
+                .mk_kube_client()
+                .expect("should always contain kube_client")
+                .client(),
+            &cronjob_namespace,
+        );
+        let result_list_cronjobs = block_on(k8s_cronjob_api.list(&ListParams::default().labels(&cronjob_label)));
+        match result_list_cronjobs {
+            Ok(list) => {
+                assert!(list.items.is_empty());
+            }
+            Err(kube_error) => {
+                panic!("{kube_error}");
+            }
+        }
+
+        // delete environment
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-minimal")]
+#[named]
+#[test]
+fn azure_aks_build_and_deploy_job() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        init();
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let annotations_group_id = Uuid::new_v4();
+        let labels_group_id = Uuid::new_v4();
+        let json_output = r#"{"foo": {"value": "bar", "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
+        environment.applications = vec![];
+        environment.jobs = vec![Job {
+            long_id: Uuid::new_v4(),
+            name: "job test #####".to_string(),
+            kube_name: "job-test".to_string(),
+            action: Action::Create,
+            schedule: JobSchedule::OnStart {
+                lifecycle_type: LifecycleType::TERRAFORM,
+            },
+            source: JobSource::Docker {
+                git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
+                commit_id: "d22414a253db2bcf3acf91f85565d2dabe9211cc".to_string(),
+                dockerfile_path: Some("Dockerfile".to_string()),
+                root_path: String::from("/"),
+                git_credentials: None,
+                branch: "main".to_string(),
+                dockerfile_content: None,
+                docker_target_build_stage: None,
+            },
+            max_nb_restart: 2,
+            max_duration_in_sec: 300,
+            default_port: Some(8080),
+            //command_args: vec![],
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+            ],
+            entrypoint: None,
+            force_trigger: false,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            environment_vars_with_infos: Default::default(),
+            mounted_files: vec![],
+            advanced_settings: Default::default(),
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            container_registries: ContainerRegistries { registries: vec![] },
+            annotations_group_ids: btreeset! { annotations_group_id },
+            labels_group_ids: btreeset! { labels_group_id },
+            should_delete_shared_registry: false,
+            shared_image_feature_enabled: false,
+        }];
+        environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
+            annotations: vec![Annotation {
+                key: "annot_key".to_string(),
+                value: "annot_value".to_string(),
+            },
+            Annotation {
+                key: "annot_key2".to_string(),
+                value: "true".to_string(),
+            }],
+            scopes: vec![
+                AnnotationsGroupScope::Jobs,
+                AnnotationsGroupScope::Pods,
+                AnnotationsGroupScope::Secrets,
+            ],
+        }};
+        environment.labels_groups = btreemap! { labels_group_id => LabelsGroup {
+            labels: vec![Label {
+                key: "label_key".to_string(),
+                value: "label_value".to_string(),
+                propagate_to_cloud_provider: false,
             }]
         }};
 
