@@ -1,5 +1,6 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
+use crate::environment::models::container::RegistryTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::utils;
@@ -7,6 +8,7 @@ use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::{Build, Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
 use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind};
+use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -164,10 +166,12 @@ impl<T: CloudProvider> TerraformService<T> {
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> TerraformServiceTeraContext {
         let environment = target.environment;
-        let (image_full, image_tag) = match &self.terraform_files_source {
-            TerraformFilesSource::Git { .. } => {
-                (self.build.image.full_image_name_with_tag(), self.build.image.tag.clone())
-            }
+        let (image_full, image_name, image_tag) = match &self.terraform_files_source {
+            TerraformFilesSource::Git { .. } => (
+                self.build.image.full_image_name_with_tag(),
+                self.build.image.name.to_string(),
+                self.build.image.tag.clone(),
+            ),
         };
 
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
@@ -192,6 +196,9 @@ impl<T: CloudProvider> TerraformService<T> {
             .iter()
             .map(|config| config.0.clone())
             .collect::<Vec<_>>();
+
+        let kubernetes = target.kubernetes;
+        let registry_info = target.container_registry.registry_info();
 
         let command_args = self.get_command_args();
 
@@ -221,6 +228,17 @@ impl<T: CloudProvider> TerraformService<T> {
                 persistence_size_in_gib: self.persistent_storage.size_in_gib.to_string(),
                 persistence_storage_type: self.persistent_storage.storage_class.clone(),
             },
+            registry: registry_info
+                .get_registry_docker_json_config(DockerRegistryInfo {
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
+                    repository_name: None,
+                    image_name: Some(image_name),
+                })
+                .as_ref()
+                .map(|docker_json| RegistryTeraContext {
+                    secret_name: format!("{}-registry", self.kube_name()),
+                    docker_json_config: Some(docker_json.to_string()),
+                }),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
             environment_variables: self.get_environment_variables(),
@@ -443,6 +461,7 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) environment_long_id: Uuid,
     pub(crate) namespace: String,
     pub(crate) service: ServiceTeraContext,
+    pub(crate) registry: Option<RegistryTeraContext>,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,

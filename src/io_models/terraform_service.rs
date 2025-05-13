@@ -1,7 +1,7 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, GitRepositoryExtraFile, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
@@ -310,7 +310,31 @@ impl TerraformService {
                 annotations_groups,
                 labels_groups,
             )?),
-            Kind::Aks | Kind::AksSelfManaged => todo!(),
+            Kind::Aks | Kind::AksSelfManaged => Box::new(models::terraform_service::TerraformService::<Azure>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                self.cpu_request_in_milli,
+                self.cpu_limit_in_milli,
+                self.ram_request_in_mib,
+                self.ram_limit_in_mib,
+                persistent_storage,
+                build,
+                root_module_path,
+                tf_files_source_domain,
+                self.tf_var_file_paths,
+                self.tf_vars,
+                backend,
+                terraform_action,
+                Duration::from_secs(self.timeout_sec),
+                environment_variables_with_info,
+                self.advanced_settings,
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+            )?),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
                 self.long_id,
