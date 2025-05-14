@@ -95,10 +95,11 @@ prometheus:
               storage: "8Gi"
     resources:
       limits:
-        cpu: "3"
-        memory: "1Gi"
+        cpu: "4"
+        memory: "8Gi"
       requests:
         cpu: "1"
+        memory: "2Gi"
     replicas: "set-by-engine-code"
 
 prometheusOperator:
