@@ -3,7 +3,7 @@ use crate::infrastructure::models::build_platform::{Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::variable_utils::VariableInfo;
-use crate::utilities::to_short_id;
+use crate::utilities::{to_qovery_name, to_short_id};
 use base64::Engine;
 use base64::engine::general_purpose;
 use regex::Regex;
@@ -59,6 +59,7 @@ pub enum QoveryIdentifierError {
 pub struct QoveryIdentifier {
     long_id: Uuid,
     short: String,
+    name: String,
 }
 
 impl QoveryIdentifier {
@@ -66,6 +67,7 @@ impl QoveryIdentifier {
         QoveryIdentifier {
             long_id,
             short: to_short_id(&long_id),
+            name: to_qovery_name(&long_id),
         }
     }
 
@@ -75,6 +77,10 @@ impl QoveryIdentifier {
 
     pub fn short(&self) -> &str {
         &self.short
+    }
+
+    pub fn qovery_resource_name(&self) -> &str {
+        &self.name
     }
 
     pub fn to_uuid(&self) -> Uuid {

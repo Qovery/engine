@@ -76,8 +76,8 @@ impl ECR {
         const MAX_REGISTRY_NAME_LENGTH: usize = 118; // 128 (ECR limit) - 10 (prefix length)
 
         let registry_info = ContainerRegistryInfo {
-            registry_endpoint: registry_url,
             registry_name: cr.name.to_string(),
+            get_registry_endpoint: Box::new(move |_registry_url_prefix| registry_url.clone()),
             get_registry_docker_json_config: Box::new(move |_docker_registry_info| None),
             insecure_registry: false,
             get_registry_url_prefix: Box::new(|_repository_name| None),
@@ -421,6 +421,10 @@ impl InteractWithRegistry for ECR {
     fn registry_info(&self) -> &ContainerRegistryInfo {
         // At this point the registry info should be initialize, so unwrap is safe
         self.registry_info.as_ref().unwrap()
+    }
+
+    fn get_registry_endpoint(&self, registry_endpoint_prefix: Option<&str>) -> Url {
+        self.registry_info().get_registry_endpoint(registry_endpoint_prefix)
     }
 
     fn create_repository(

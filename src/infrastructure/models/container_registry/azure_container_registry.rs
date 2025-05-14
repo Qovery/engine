@@ -40,18 +40,34 @@ impl AzureContainerRegistry {
         service: Arc<AzureContainerRegistryService>,
     ) -> Result<Self, ContainerRegistryError> {
         let registry_raw_url = "https://azurecr.io";
-
         let mut registry = Url::parse(registry_raw_url).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
             registry_url: registry_raw_url.to_string(),
         })?;
         let _ = registry.set_username(client_id);
         let _ = registry.set_password(Some(client_secret));
 
+        let registry_raw_cluster_url = format!("https://qovery{}.azurecr.io", context.cluster_short_id());
+        let mut registry_cluster =
+            Url::parse(registry_raw_cluster_url.as_str()).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
+                registry_url: registry_raw_cluster_url.to_string(),
+            })?;
+        let _ = registry_cluster.set_username(client_id);
+        let _ = registry_cluster.set_password(Some(client_secret));
+
         let client_id_clone = client_id.to_string(); // for closure
         let client_secret_clone = client_secret.to_string(); // for closure
         let registry_info = ContainerRegistryInfo {
-            registry_endpoint: registry.clone(),
             registry_name: name.to_string(),
+            get_registry_endpoint: Box::new(move |registry_endpoint_prefix| {
+                let sanitized_name = registry_endpoint_prefix
+                    .map(|e| AzureContainerRegistryService::try_get_sanitized_registry_name(e).unwrap_or_default());
+
+                let mut registry_url = registry.clone();
+                let _ =
+                    registry_url.set_host(Some(format!("{}.azurecr.io", sanitized_name.unwrap_or_default()).as_str()));
+
+                registry_url
+            }),
             get_registry_docker_json_config: Box::new(move |docker_registry_info| {
                 Some(Self::get_docker_json_config_raw(
                     &client_id_clone,
@@ -101,7 +117,7 @@ impl AzureContainerRegistry {
             }),
         };
 
-        Ok(Self {
+        let cr = Self {
             context,
             long_id,
             name: name.to_string(),
@@ -110,7 +126,18 @@ impl AzureContainerRegistry {
             location,
             registry_info,
             service,
-        })
+        };
+
+        // Login to the registry if cluster has already been deployed
+        if !cr.context.is_first_cluster_deployment() {
+            // login to cluster registry
+            cr.context
+                .docker
+                .login(&registry_cluster)
+                .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
+        }
+
+        Ok(cr)
     }
 
     fn create_repository_without_exist_check(
@@ -247,6 +274,12 @@ impl InteractWithRegistry for AzureContainerRegistry {
 
     fn registry_info(&self) -> &ContainerRegistryInfo {
         &self.registry_info
+    }
+
+    fn get_registry_endpoint(&self, registry_endpoint_prefix: Option<&str>) -> Url {
+        let sanitized_name = registry_endpoint_prefix
+            .map(|e| AzureContainerRegistryService::try_get_sanitized_registry_name(e).unwrap_or_default());
+        self.registry_info().get_registry_endpoint(sanitized_name.as_deref())
     }
 
     fn create_repository(

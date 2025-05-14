@@ -176,11 +176,14 @@ impl<T: CloudProvider> Job<T> {
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
-        let registry_endpoint = registry_info.registry_endpoint.clone();
+        let registry_endpoint = registry_info.get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()));
         let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
         let (image_full, image_tag) = match &self.image_source {
             ImageSource::Registry { source } => {
-                let repository: Cow<str> = if let Some(port) = registry_info.registry_endpoint.port() {
+                let repository: Cow<str> = if let Some(port) = registry_info
+                    .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()))
+                    .port()
+                {
                     format!("{}:{}", registry_endpoint_host, port).into()
                 } else {
                     registry_endpoint_host.into()
@@ -238,12 +241,12 @@ impl<T: CloudProvider> Job<T> {
             },
             registry: match &self.image_source {
                 ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: None,
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: None,
                     image_name: Some(source.image.to_string()),
                 }),
                 ImageSource::Build { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: Some(source.image.registry_name()),
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: Some(source.image.repository_name().to_string()),
                     image_name: Some(source.image.name()),
                 }),

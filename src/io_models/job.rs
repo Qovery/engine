@@ -1,12 +1,13 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::job::{ImageSource, JobError, JobService};
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::{Build, GitRepository, Image, SshKey};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind};
@@ -342,8 +343,7 @@ impl Job {
             tag: "".to_string(), // It needs to be compute after creation
             commit_id,
             registry_name: cr_info.registry_name.clone(),
-            registry_url: cr_info.registry_endpoint.clone(),
-            registry_url_prefix: cr_info.get_registry_url_prefix(cluster_id.clone()),
+            registry_url: cr_info.get_registry_endpoint(Some(cluster_id.qovery_resource_name())),
             registry_insecure: cr_info.insecure_registry,
             registry_docker_json_config: cr_info.get_registry_docker_json_config(DockerRegistryInfo {
                 registry_name: Some(cr_info.registry_name.to_string()),
@@ -390,7 +390,9 @@ impl Job {
             } => {
                 // Default registry is a bit special as the core does not know its url/credentials as it is retrieved by us with some tags
                 if registry.id() == default_container_registry.long_id() {
-                    registry.set_url(default_container_registry.registry_info().registry_endpoint.clone());
+                    registry.set_url(
+                        default_container_registry.get_registry_endpoint(Some(cluster.cluster_name().as_str())),
+                    );
                 }
                 ImageSource::Registry {
                     source: Box::new(RegistryImageSource {
@@ -514,7 +516,38 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
             )?),
-            Kind::Azure => todo!(),
+            Kind::Azure => Box::new(models::job::Job::<Azure>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.schedule,
+                self.max_nb_restart,
+                Duration::from_secs(self.max_duration_in_sec),
+                self.default_port,
+                self.command_args,
+                self.entrypoint,
+                self.force_trigger,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.advanced_settings,
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                AzureAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+                self.should_delete_shared_registry,
+            )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
                 self.long_id,

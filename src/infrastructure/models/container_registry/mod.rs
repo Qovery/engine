@@ -52,6 +52,8 @@ pub trait InteractWithRegistry: Send + Sync {
     // Get info for this registry, url endpoint with login/password, image name convention, ...
     fn registry_info(&self) -> &ContainerRegistryInfo;
 
+    fn get_registry_endpoint(&self, registry_endpoint_prefix: Option<&str>) -> Url;
+
     // Call to create a specific repository in the registry
     // i.e: docker.io/erebe or docker.io/qovery
     // All providers requires action for that
@@ -127,8 +129,10 @@ pub struct DockerRegistryInfo {
     pub image_name: Option<ImageName>,
 }
 
+pub type RegistryEndpointPrefix<'a> = Option<&'a str>;
+
 pub struct ContainerRegistryInfo {
-    pub registry_endpoint: Url,
+    get_registry_endpoint: Box<dyn Fn(RegistryEndpointPrefix) -> Url + Send + Sync>,
     get_registry_url_prefix: Box<dyn Fn(QoveryIdentifier) -> Option<String> + Send + Sync>,
     // Contains username and password if necessary
     pub registry_name: String,
@@ -140,6 +144,7 @@ pub struct ContainerRegistryInfo {
     // i.e: fo scaleway => image_name/image_name
     // i.e: for AWS => image_name
     get_image_name: Box<dyn Fn(&str) -> String + Send + Sync>,
+    // get_mirrored_image_name: Box<dyn Fn(&Uuid, &Uuid, &RegistryMirroringMode) -> String + Send + Sync>,
     get_shared_image_name: Box<dyn Fn(&ImageBuildContext) -> String + Send + Sync>,
 
     // this one is deprecated in favor of shared one, but we still need it for registry deletion purpose
@@ -177,6 +182,10 @@ impl ContainerRegistryInfo {
             cluster_id: cluster_id.clone(),
             git_repo_url_sanitized,
         })
+    }
+
+    pub fn get_registry_endpoint(&self, registry_url_prefix: Option<&str>) -> Url {
+        (self.get_registry_endpoint)(registry_url_prefix)
     }
 }
 

@@ -1,12 +1,13 @@
 use super::{PodAntiAffinity, UpdateStrategy};
 use crate::environment::models;
 use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::container::{ContainerError, ContainerService};
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::registry_image_source::RegistryImageSource;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
@@ -73,6 +74,7 @@ pub enum Registry {
         long_id: Uuid,
         url: Url,
         credentials: Option<Credentials>,
+        name: String,
     },
 
     // AWS public ecr
@@ -135,6 +137,19 @@ impl Registry {
             Registry::PublicEcr { long_id, .. } => long_id,
             Registry::GenericCr { long_id, .. } => long_id,
             Registry::GcpArtifactRegistry { long_id, .. } => long_id,
+        }
+    }
+
+    pub fn name(&self) -> Option<String> {
+        match self {
+            Registry::AzureCr { name, .. } => Some(name.clone()),
+            Registry::DockerHub { .. } => None,
+            Registry::DoCr { .. } => None,
+            Registry::ScalewayCr { .. } => None,
+            Registry::PrivateEcr { .. } => None,
+            Registry::PublicEcr { .. } => None,
+            Registry::GenericCr { .. } => None,
+            Registry::GcpArtifactRegistry { .. } => None,
         }
     }
 
@@ -427,11 +442,11 @@ impl Container {
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
 
-        // Default registry is a bit special as the core does not knows its url/credentials as it is retrieved
+        // Default registry is a bit special as the core does not know its url/credentials as it is retrieved
         // by us with some tags
         if self.registry.id() == default_container_registry.long_id() {
             self.registry
-                .set_url(default_container_registry.registry_info().registry_endpoint.clone());
+                .set_url(default_container_registry.get_registry_endpoint(Some(cluster.cluster_name().as_str())));
         }
 
         let image_source = RegistryImageSource {
@@ -485,7 +500,37 @@ impl Container {
                 annotations_groups,
                 labels_groups,
             )?),
-            CPKind::Azure => todo!(),
+            CPKind::Azure => Box::new(models::container::Container::<Azure>::new(
+                context,
+                self.long_id,
+                self.name,
+                self.kube_name,
+                self.action.to_service_action(),
+                image_source,
+                self.command_args,
+                self.entrypoint,
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_request_in_milli),
+                KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
+                KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.min_instances,
+                self.max_instances,
+                self.public_domain,
+                self.ports,
+                self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
+                environment_variables,
+                self.mounted_files
+                    .iter()
+                    .map(|e| e.to_domain())
+                    .collect::<BTreeSet<_>>(),
+                self.readiness_probe.map(|p| p.to_domain()),
+                self.liveness_probe.map(|p| p.to_domain()),
+                self.advanced_settings,
+                AzureAppExtraSettings {},
+                |transmitter| context.get_event_details(transmitter),
+                annotations_groups,
+                labels_groups,
+            )?),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
                 self.long_id,

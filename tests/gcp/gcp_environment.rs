@@ -559,6 +559,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
 #[named]
 #[test]
 fn gcp_gke_deploy_container_with_router() {
+    let test_name = function_name!();
     engine_run_test(|| {
         init();
         let span = span!(Level::INFO, "test", name = function_name!());
@@ -723,7 +724,7 @@ fn gcp_gke_deploy_container_with_router() {
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());
 
-        "".to_string()
+        test_name.to_string()
     })
 }
 

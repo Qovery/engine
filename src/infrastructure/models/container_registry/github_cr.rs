@@ -133,6 +133,10 @@ impl InteractWithRegistry for GithubCr {
         self.generic_cr.registry_info()
     }
 
+    fn get_registry_endpoint(&self, registry_endpoint_prefix: Option<&str>) -> Url {
+        self.registry_info().get_registry_endpoint(registry_endpoint_prefix)
+    }
+
     fn create_repository(
         &self,
         _registry_name: Option<&str>,
@@ -269,7 +273,7 @@ impl InteractWithRegistry for GithubCr {
         // If you delete the tag, GithubCr does not also delete the other layers of the image (i.e: multi-arch images)
         // They stay there forever, so we need to delete them manually
         let container = ContainerImage::new(
-            self.generic_cr.registry_info().registry_endpoint.clone(),
+            self.generic_cr.registry_info().get_registry_endpoint(None),
             image.name.clone(),
             vec![image.tag.clone()],
         );

@@ -232,7 +232,7 @@ impl<T: CloudProvider> Container<T> {
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
         let registry_info = target.container_registry.registry_info();
-        let registry_endpoint = registry_info.registry_endpoint.clone();
+        let registry_endpoint = registry_info.get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()));
         let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
         let repository: Cow<str> = if let Some(port) = registry_endpoint.port() {
             format!("{}:{}", registry_endpoint_host, port).into()
@@ -311,7 +311,7 @@ impl<T: CloudProvider> Container<T> {
             },
             registry: registry_info
                 .get_registry_docker_json_config(DockerRegistryInfo {
-                    registry_name: None,
+                    registry_name: Some(kubernetes.cluster_name()), // TODO(benjaminch): this is a bit of a hack, considering registry name will be the same as cluster one, it should be the case, but worth doing it better
                     repository_name: None,
                     image_name: Some(self.source.image.to_string()),
                 })

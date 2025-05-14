@@ -2,7 +2,7 @@ use crate::environment::models;
 use crate::environment::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
 };
-use crate::environment::models::types::{AWS, OnPremise, SCW, VersionsNumber};
+use crate::environment::models::types::{AWS, Azure, OnPremise, SCW, VersionsNumber};
 use crate::environment::models::types::{CloudProvider as CloudProviderTrait, GCP};
 use crate::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use crate::infrastructure::models::cloud_provider::scaleway::database_instance_type::ScwDatabaseInstanceType;
@@ -351,28 +351,125 @@ impl Database {
                 )?))
             }
             (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
-                todo!()
+                Err(DatabaseError::UnsupportedManagedMode(
+                    service::DatabaseType::PostgreSQL,
+                    Azure::full_name().to_string(),
+                ))
             }
             (CPKind::Azure, DatabaseKind::Postgresql, DatabaseMode::CONTAINER) => {
-                todo!()
+                Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
-            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::MANAGED) => {
-                todo!()
-            }
+            (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::MySQL,
+                Azure::full_name().to_string(),
+            )),
             (CPKind::Azure, DatabaseKind::Mysql, DatabaseMode::CONTAINER) => {
-                todo!()
+                Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
-            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => {
-                todo!()
-            }
+            (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::MANAGED) => Err(
+                DatabaseError::UnsupportedManagedMode(service::DatabaseType::MongoDB, Azure::full_name().to_string()),
+            ),
             (CPKind::Azure, DatabaseKind::Mongodb, DatabaseMode::CONTAINER) => {
-                todo!()
+                Ok(Box::new(models::database::Database::<Azure, Container, MongoDB>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
-            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::MANAGED) => {
-                todo!()
-            }
+            (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::MANAGED) => Err(DatabaseError::UnsupportedManagedMode(
+                service::DatabaseType::Redis,
+                Azure::full_name().to_string(),
+            )),
             (CPKind::Azure, DatabaseKind::Redis, DatabaseMode::CONTAINER) => {
-                todo!()
+                Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
+                    context,
+                    self.long_id,
+                    self.action.to_service_action(),
+                    self.name.as_str(),
+                    self.kube_name.clone(),
+                    version,
+                    self.created_at,
+                    self.fqdn.as_str(),
+                    self.fqdn_id.as_str(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    database_options.disk_size_in_gib,
+                    None,
+                    database_options.publicly_accessible,
+                    database_options.port,
+                    database_options,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    additional_annotations,
+                    labels_groups,
+                )?))
             }
             (CPKind::Scw, DatabaseKind::Postgresql, DatabaseMode::MANAGED) => {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(

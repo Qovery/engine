@@ -58,13 +58,13 @@ impl ScalewayCR {
 
         let secret_token_clone = secret_token.to_string(); // for closure
         let registry_info = ContainerRegistryInfo {
-            registry_endpoint: registry,
             registry_name: name.to_string(),
+            get_registry_endpoint: Box::new(move |_registry_url_prefix| registry.clone()),
+            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_registry_docker_json_config: Box::new(move |_docker_registry_info| {
                 Some(Self::get_docker_json_config_raw(&login, &secret_token_clone, region.as_str()))
             }),
             insecure_registry: false,
-            get_registry_url_prefix: Box::new(|_repository_name| None),
             get_shared_image_name: Box::new(|image_build_context| {
                 // We need to keep the last 40 characters of the git repo url to prevent from exceeding the 50 characters limit
                 let git_repo_truncated: String = take_last_x_chars_and_remove_leading_dash_char(
@@ -332,6 +332,10 @@ impl InteractWithRegistry for ScalewayCR {
         &self.registry_info
     }
 
+    fn get_registry_endpoint(&self, registry_endpoint_prefix: Option<&str>) -> Url {
+        self.registry_info().get_registry_endpoint(registry_endpoint_prefix)
+    }
+
     fn create_repository(
         &self,
         _registry_name: Option<&str>,
@@ -441,7 +445,7 @@ impl InteractWithRegistry for ScalewayCR {
 
     fn image_exists(&self, image: &Image) -> bool {
         let image = docker::ContainerImage::new(
-            self.registry_info.registry_endpoint.clone(),
+            self.registry_info.get_registry_endpoint(None),
             image.name(),
             vec![image.tag.clone()],
         );

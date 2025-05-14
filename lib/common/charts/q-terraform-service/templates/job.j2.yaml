@@ -67,10 +67,10 @@ spec:
       serviceAccountName: {{ service.name }}
       {%- endif %}
       terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
-      #  {%- if registry %}
-    #  imagePullSecrets:
-    #    - name: {{ registry.secret_name }}
-    #  {%- endif %}
+      {%- if registry %}
+      imagePullSecrets:
+        - name: {{ registry.secret_name }}
+      {%- endif %}
       volumes:
         - name: output
           emptyDir: {}
