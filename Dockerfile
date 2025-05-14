@@ -2,7 +2,7 @@
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
 ARG KUBECTL_VERSION="1.30.8"
-ARG HELM_VERSION="3.17.0-1"
+ARG HELM_VERSION="3.17.3-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.11.0"
