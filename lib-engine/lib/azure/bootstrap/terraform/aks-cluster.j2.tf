@@ -11,7 +11,7 @@ resource "azurerm_kubernetes_cluster" "primary" {
 
   default_node_pool {
     name    = "default1"
-    vm_size = "Standard_DS2_v2"
+    vm_size = "Standard_DS2_v2" # TODO(benjaminch): hardcoded for now, to be variabilized if needed later one
     # only_critical_addons_enabled = true # tainting the nodes with CriticalAddonsOnly=true:NoSchedule to avoid scheduling workloads on the system node pool
     zones                  = ["1"]
     vnet_subnet_id         = azurerm_subnet.node_cidr_zone_1.id

@@ -11,7 +11,7 @@ use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
-use qovery_engine::infrastructure::models::kubernetes::aws::{
+use qovery_engine::infrastructure::models::kubernetes::karpenter::{
     KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
     KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
     KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
