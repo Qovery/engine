@@ -116,9 +116,10 @@ compactor:
   consistencyDelay: 30m
   cronJob:
     enabled: true
-    schedule: "0 */3 * * *"
+    schedule: "0 */1 * * *"
     successfulJobsHistoryLimit: "1"
     failedJobsHistoryLimit: "1"
+    ttlSecondsAfterFinished: "30"
   resources:
     requests:
       cpu: set-by-engine-code
@@ -135,7 +136,7 @@ compactor:
     enabled: true
     ephemeral: true
     defaultEmptyDir: true
-    size: 20Gi
+    size: 50Gi
 
 # Store Gateway: implements Prometheus’s v1 API to proxy it to the underlying components.
 storegateway:
