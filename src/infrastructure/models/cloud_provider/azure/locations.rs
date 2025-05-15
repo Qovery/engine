@@ -5,59 +5,113 @@ use std::str::FromStr;
 use strum_macros::EnumIter;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter)]
+#[serde(rename_all = "lowercase")]
 pub enum AzureLocation {
+    #[serde(alias = "AustraliaCentral")]
     AustraliaCentral,
+    #[serde(alias = "AustraliaCentral2")]
     AustraliaCentral2,
+    #[serde(alias = "AustraliaEast")]
     AustraliaEast,
+    #[serde(alias = "AustraliaSoutheast")]
     AustraliaSoutheast,
+    #[serde(alias = "AustriaEast")]
     AustriaEast,
+    #[serde(alias = "BrazilSouth")]
     BrazilSouth,
+    #[serde(alias = "BrazilSoutheast")]
     BrazilSoutheast,
+    #[serde(alias = "CanadaCentral")]
     CanadaCentral,
+    #[serde(alias = "CanadaEast")]
     CanadaEast,
+    #[serde(alias = "CentralIndia")]
     CentralIndia,
+    #[serde(alias = "CentralUS")]
     CentralUS,
+    #[serde(alias = "EastAsia")]
     EastAsia,
+    #[serde(alias = "EastUS")]
     EastUS,
+    #[serde(alias = "EastUS2")]
     EastUS2,
+    #[serde(alias = "FranceCentral")]
     FranceCentral,
+    #[serde(alias = "FranceSouth")]
     FranceSouth,
+    #[serde(alias = "GermanyNorth")]
     GermanyNorth,
+    #[serde(alias = "GermanyWestCentral")]
     GermanyWestCentral,
+    #[serde(alias = "IndonesiaCentral")]
     IndonesiaCentral,
+    #[serde(alias = "IsraelCentral")]
     IsraelCentral,
+    #[serde(alias = "ItalyNorth")]
     ItalyNorth,
+    #[serde(alias = "JapanEast")]
     JapanEast,
+    #[serde(alias = "JapanWest")]
     JapanWest,
+    #[serde(alias = "KoreaCentral")]
     KoreaCentral,
+    #[serde(alias = "KoreaSouth")]
     KoreaSouth,
+    #[serde(alias = "MexicoCentral")]
     MexicoCentral,
+    #[serde(alias = "NewZealandNorth")]
     NewZealandNorth,
+    #[serde(alias = "NorthCentralUS")]
     NorthCentralUS,
+    #[serde(alias = "NorthEurope")]
     NorthEurope,
+    #[serde(alias = "NorwayEast")]
     NorwayEast,
+    #[serde(alias = "NorwayWest")]
     NorwayWest,
+    #[serde(alias = "PolandCentral")]
     PolandCentral,
+    #[serde(alias = "QatarCentral")]
     QatarCentral,
+    #[serde(alias = "SouthAfricaNorth")]
     SouthAfricaNorth,
+    #[serde(alias = "SouthAfricaWest")]
     SouthAfricaWest,
+    #[serde(alias = "SouthCentralUS")]
     SouthCentralUS,
+    #[serde(alias = "SouthIndia")]
     SouthIndia,
+    #[serde(alias = "SoutheastAsia")]
     SoutheastAsia,
+    #[serde(alias = "SpainCentral")]
     SpainCentral,
+    #[serde(alias = "SwedenCentral")]
     SwedenCentral,
+    #[serde(alias = "SwedenSouth")]
     SwedenSouth,
+    #[serde(alias = "SwitzerlandNorth")]
     SwitzerlandNorth,
+    #[serde(alias = "SwitzerlandWest")]
     SwitzerlandWest,
+    #[serde(alias = "UAECentral")]
     UAECentral,
+    #[serde(alias = "UAENorth")]
     UAENorth,
+    #[serde(alias = "UKSouth")]
     UKSouth,
+    #[serde(alias = "UKWest")]
     UKWest,
+    #[serde(alias = "WestCentralUS")]
     WestCentralUS,
+    #[serde(alias = "WestEurope")]
     WestEurope,
+    #[serde(alias = "WestIndia")]
     WestIndia,
+    #[serde(alias = "WestUS")]
     WestUS,
+    #[serde(alias = "WestUS2")]
     WestUS2,
+    #[serde(alias = "WestUS3")]
     WestUS3,
 }
 

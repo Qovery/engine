@@ -316,9 +316,14 @@ impl CloudProvider {
                 else {
                     return None;
                 };
+
+                let Ok(region) = AzureLocation::from_str(region) else {
+                    return None;
+                };
+
                 Some(Box::new(Azure::new(
                     self.long_id,
-                    AzureLocation::NorthEurope, // TODO(benjaminch): check how to pass properly location / region
+                    region,
                     Credentials {
                         client_id: client_id.to_string(),
                         client_secret: client_secret.to_string(),
@@ -556,7 +561,12 @@ impl KubernetesDto {
                     &self.name,
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    AzureLocation::NorthEurope, // TODO(benjaminch): To be implemented
+                    AzureLocation::from_str(self.region.as_str()).unwrap_or_else(|_| {
+                        panic!(
+                            "cannot parse `{}`, it doesn't seem to be a valid Azure location",
+                            self.region.as_str()
+                        )
+                    }),
                     cloud_provider,
                     self.created_at,
                     options,
@@ -705,10 +715,10 @@ impl ContainerRegistry {
                     context,
                     long_id,
                     &name,
-                    &options.client_id,
-                    &options.client_secret,
                     &options.subscription_id,
                     &options.resource_group_name,
+                    &options.client_id,
+                    &options.client_secret,
                     options.location.clone(),
                     Arc::new(
                         AzureContainerRegistryService::new(
@@ -859,12 +869,15 @@ pub struct ScwCrOptions {
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct AzureCrOptions {
+    #[serde(alias = "region")]
     location: AzureLocation,
     subscription_id: String,
     tenant_id: String,
     resource_group_name: String,
+    #[serde(alias = "username")]
     client_id: String,
     #[derivative(Debug = "ignore")]
+    #[serde(alias = "password")]
     client_secret: String,
 }
 
