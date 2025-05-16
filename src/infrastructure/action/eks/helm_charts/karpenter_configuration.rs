@@ -6,9 +6,10 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::infrastructure::models::kubernetes::aws::{
+use crate::infrastructure::models::kubernetes::aws::UserNetworkConfig;
+use crate::infrastructure::models::kubernetes::karpenter::{
     KarpenterNodePool, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
-    KarpenterRequirementOperator, UserNetworkConfig,
+    KarpenterRequirementOperator,
 };
 use itertools::Itertools;
 use kube::Client;
@@ -308,7 +309,7 @@ mod tests {
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
-    use crate::infrastructure::models::kubernetes::aws::{
+    use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
         KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
         KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,

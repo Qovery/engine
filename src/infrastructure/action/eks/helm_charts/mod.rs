@@ -3,7 +3,8 @@ use chrono::{DateTime, Utc};
 use crate::helm::HelmChart;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::Kubernetes;
-use crate::infrastructure::models::kubernetes::aws::{KarpenterParameters, Options};
+use crate::infrastructure::models::kubernetes::aws::Options;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::models::CpuArchitecture;
 

@@ -6,7 +6,7 @@ use crate::helpers::utilities::FuncTestsSecrets;
 use qovery_engine::environment::models::environment::Environment;
 use qovery_engine::errors::EngineError;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
-use qovery_engine::infrastructure::models::kubernetes::aws::KarpenterParameters;
+use qovery_engine::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;

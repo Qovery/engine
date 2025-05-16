@@ -1,6 +1,7 @@
 pub mod aws;
 pub mod azure;
 pub mod gcp;
+pub mod karpenter;
 pub mod scaleway;
 pub mod self_managed;
 

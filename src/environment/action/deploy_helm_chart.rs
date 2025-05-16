@@ -709,7 +709,7 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
         (Some(requested_ns), _) => {
             if requested_ns != namespace {
                 return Err(format!(
-                    "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}",
+                    "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}. To deploy resources outside the environment namespace (or CRD etc..) cluster-wide resource should be allowed",
                     kube_obj.types.as_ref().map(|x| x.kind.as_str()).unwrap_or(""),
                     kube_obj.metadata.name.as_deref().unwrap_or(""),
                     &kube_obj.metadata.namespace,
@@ -719,7 +719,7 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
         }
         (None, None) => {
             return Err(format!(
-                "Cannot deploy resource as no namespace is set and no type is set {kube_obj:?}"
+                "To deploy resources outside the environment namespace (or CRD etc..) cluster-wide resource should be allowed. Got object {kube_obj:?}"
             ));
         }
     }
