@@ -2,7 +2,7 @@ use crate::helpers::azure::{
     AZURE_ARTIFACT_REGISTRY_REPOSITORY_READ_RATE_LIMITER, AZURE_ARTIFACT_REGISTRY_REPOSITORY_WRITE_RATE_LIMITER,
     AZURE_CONTAINER_REGISTRY_SKU, AZURE_LOCATION, AZURE_RESOURCE_GROUP_NAME,
 };
-use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, init};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test};
 use chrono::Duration;
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
@@ -21,8 +21,6 @@ fn test_get_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -110,8 +108,6 @@ fn test_create_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -190,8 +186,6 @@ fn test_delete_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -269,8 +263,6 @@ fn test_get_docker_image() {
     use url::Url;
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -411,8 +403,6 @@ fn test_delete_docker_image() {
     use url::Url;
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -571,8 +561,6 @@ fn test_list_docker_images() {
     use url::Url;
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

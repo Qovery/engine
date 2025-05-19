@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, init};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id};
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::ContainerImage;
@@ -17,7 +17,6 @@ fn test_github_cr() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

@@ -5,7 +5,7 @@ use std::time::Duration;
 use tonic::codec::CompressionEncoding;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::{AsciiMetadataValue, MetadataValue};
-use tonic::service::Interceptor;
+use tonic::service::{Interceptor, InterceptorLayer};
 use tonic::transport::{Channel, ClientTlsConfig, Uri};
 use tonic::{Request, Status};
 use tower::ServiceBuilder;
@@ -68,7 +68,7 @@ pub async fn new_engine_client(
         MetadataValue::try_from(format!("Bearer {cluster_token}").as_str()).unwrap_or_else(|_| MetadataValue::from(0));
     let cluster_id = MetadataValue::try_from(&cluster_id.to_string()).unwrap_or_else(|_| MetadataValue::from(0));
     let channel = ServiceBuilder::new()
-        .layer(tonic::service::interceptor(QoveryInterceptor { token, cluster_id }))
+        .layer(InterceptorLayer::new(QoveryInterceptor { token, cluster_id }))
         .service(channel);
 
     let client = EngineClient::new(channel)
@@ -103,7 +103,7 @@ pub mod test {
             .unwrap();
 
         let channel = ServiceBuilder::new()
-            .layer(tonic::service::interceptor(QoveryInterceptor {
+            .layer(InterceptorLayer::new(QoveryInterceptor {
                 token: AsciiMetadataValue::from_static(""),
                 cluster_id: AsciiMetadataValue::from_static(""),
             }))

@@ -206,6 +206,10 @@ struct Cli {
 }
 
 pub fn main() -> io::Result<()> {
+    rustls::crypto::aws_lc_rs::default_provider()
+        .install_default()
+        .expect("Cannot install rustls crypto provider");
+
     // Load env variable from .env file
     dotenv().ok();
     let mut cli: Cli = Cli::parse();

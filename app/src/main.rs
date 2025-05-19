@@ -37,6 +37,7 @@ use crate::utils::{check_libs_directory, check_versions_from};
 use qovery_engine::metrics_registry::StdMetricsRegistry;
 use qovery_engine::msg_publisher::StdMsgPublisher;
 use reqwest::header;
+use rustls::crypto::CryptoProvider;
 use serde::Deserialize;
 
 mod constants;
@@ -51,6 +52,9 @@ pub fn generate_id() -> u32 {
 
 pub fn main() -> io::Result<()> {
     println!("{ASCII_BANNER}");
+
+    CryptoProvider::install_default(rustls::crypto::aws_lc_rs::default_provider())
+        .expect("Cannot install rustls crypto provider");
 
     // Load env variable from .env file
     dotenv().ok();

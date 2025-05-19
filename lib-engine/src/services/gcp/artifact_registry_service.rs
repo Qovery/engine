@@ -19,7 +19,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
 use tokio::sync::Mutex;
-use tonic::Code;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ArtifactRegistryServiceError {
@@ -262,8 +261,7 @@ impl ArtifactRegistryService {
         match delete_repository_result {
             Ok(_) => {}
             Err(status) => {
-                let code = status.code();
-                if code != Code::NotFound {
+                if status.code() != google_cloud_gax::grpc::Code::NotFound {
                     return Err(ArtifactRegistryServiceError::CannotDeleteRepository {
                         repository_name: repository_identifier,
                         raw_error_message: status.to_string(),

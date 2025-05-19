@@ -1,6 +1,6 @@
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::StorageSize::Resize;
-use crate::helpers::utilities::{engine_run_test, init};
+use crate::helpers::utilities::engine_run_test;
 use crate::kube::{TestEnvOption, kube_test_env};
 use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
@@ -27,8 +27,6 @@ fn should_increase_db_storage_size() {
     let test_name = function_name!();
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

@@ -692,6 +692,10 @@ mod tests {
     use super::QubeClient;
 
     pub fn get_qube_client() -> (QubeClient, EventDetails) {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
         let kubeconfig = env::var("HOME").unwrap() + "/.kube/config";
         let uuid = Uuid::new_v4();
         let qovery_id = QoveryIdentifier::new(uuid);

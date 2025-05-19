@@ -3,7 +3,7 @@ use crate::helpers::azure::{azure_infra_config, clean_environments};
 use crate::helpers::common::Infrastructure;
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, logger, metrics_registry,
 };
 use base64::Engine;
 use base64::engine::general_purpose;
@@ -48,8 +48,6 @@ use uuid::Uuid;
 fn azure_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -109,8 +107,6 @@ fn azure_test_build_phase() {
 fn azure_aks_deploy_a_working_environment_without_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -190,7 +186,6 @@ fn azure_aks_deploy_a_working_environment_without_router() {
 fn azure_aks_deploy_a_working_environment_with_shared_registry() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -320,8 +315,6 @@ fn azure_aks_deploy_a_working_environment_with_shared_registry() {
 fn azure_aks_deploy_a_not_working_environment_without_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -388,8 +381,6 @@ fn azure_aks_deploy_a_not_working_environment_without_router() {
 fn azure_aks_deploy_a_working_environment_and_pause() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -479,8 +470,6 @@ fn azure_aks_deploy_a_working_environment_and_pause() {
 fn azure_aks_deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test",);
         let _enter = span.enter();
 
@@ -587,7 +576,6 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
 fn azure_aks_deploy_container_with_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -774,7 +762,6 @@ fn azure_aks_deploy_container_with_router() {
 fn azure_aks_deploy_container_with_storages() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -928,7 +915,6 @@ fn azure_aks_deploy_container_with_storages() {
 fn azure_aks_deploy_container_with_mounted_files_as_volume() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1114,7 +1100,6 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
 fn azure_aks_deploy_container_without_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1280,7 +1265,6 @@ fn azure_aks_deploy_container_without_router() {
 fn azure_aks_deploy_job() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -1406,7 +1390,6 @@ fn azure_aks_deploy_job() {
 fn azure_aks_deploy_job_with_dockerfile_content() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -1541,7 +1524,6 @@ CMD ["/bin/sh", "-c", "echo hello"]
 fn azure_aks_deploy_cronjob() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -1683,7 +1665,6 @@ fn azure_aks_deploy_cronjob() {
 fn azure_aks_deploy_cronjob_force_trigger() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -1833,7 +1814,6 @@ fn azure_aks_deploy_cronjob_force_trigger() {
 fn azure_aks_build_and_deploy_job() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -2026,7 +2006,6 @@ fn azure_aks_deploy_terraform_service() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 

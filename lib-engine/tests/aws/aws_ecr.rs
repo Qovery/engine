@@ -1,5 +1,5 @@
 use crate::helpers::aws::AWS_QUICK_RESOURCE_TTL_IN_SECONDS;
-use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, init, logger};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id, logger};
 use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
@@ -20,7 +20,6 @@ fn create_ecr_repository_with_tags() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
