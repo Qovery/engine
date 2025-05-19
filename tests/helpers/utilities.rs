@@ -566,6 +566,7 @@ pub fn build_platform_local_docker(context: &Context) -> LocalDocker {
 
 pub fn init() -> Instant {
     let ci_var = "CI";
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     dotenv().ok();
     let _ = match env::var_os(ci_var) {

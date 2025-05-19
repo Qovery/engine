@@ -546,10 +546,17 @@ mod tests {
     use kube::runtime::wait::await_condition;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+    async fn get_kube_client() -> kube::Client {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
+        kube::Client::try_default().await.expect("create client")
+    }
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_deployment() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("create client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -624,7 +631,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_deployment_with_statefulset() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("create client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -727,7 +734,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_statefulset() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("create client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -813,7 +820,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_scale_cron_job() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("create client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -883,7 +890,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_unpause_deployment() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("create client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -951,7 +958,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_pause_daemonset() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("kubernetes client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),
@@ -1026,7 +1033,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_pause_daemonset_having_node_selector() -> Result<(), Box<dyn std::error::Error>> {
-        let kube_client = kube::Client::try_default().await.expect("kubernetes client");
+        let kube_client = get_kube_client().await;
         let namespace = format!(
             "{}-{:?}",
             function_name!().replace('_', "-"),

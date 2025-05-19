@@ -2,7 +2,7 @@ use crate::helpers::gcp::{
     GCP_ARTIFACT_REGISTRY_IMAGE_API_OBJECT_WRITE_RATE_LIMITER,
     GCP_ARTIFACT_REGISTRY_REPOSITORY_API_OBJECT_WRITE_RATE_LIMITER, GCP_REGION, try_parse_json_credentials_from_str,
 };
-use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, init};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test};
 use function_name::named;
 use qovery_engine::cmd::command::CommandKiller;
 use qovery_engine::cmd::docker::{ContainerImage, Docker};
@@ -25,8 +25,6 @@ fn test_get_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -107,8 +105,6 @@ fn test_create_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -185,8 +181,6 @@ fn test_delete_repository() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -238,8 +232,6 @@ fn test_get_docker_image() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -372,8 +364,6 @@ fn test_delete_docker_image() {
     // setup:
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

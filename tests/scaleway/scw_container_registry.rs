@@ -1,5 +1,5 @@
 use crate::helpers::scaleway::random_valid_registry_name;
-use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, init};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test};
 use function_name::named;
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
@@ -22,7 +22,6 @@ fn zones_to_test() -> Vec<ScwZone> {
 fn test_push_image() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -39,7 +38,6 @@ fn test_push_image() {
 fn test_delete_image() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -55,7 +53,6 @@ fn test_delete_image() {
 fn test_get_repository() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -106,7 +103,6 @@ fn test_get_repository() {
 fn test_create_registry_namespace() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -157,7 +153,6 @@ fn test_create_registry_namespace() {
 fn test_create_registry_namespace_invalid_name() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -262,7 +257,6 @@ fn test_create_registry_namespace_invalid_name() {
 fn test_delete_repository() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -309,7 +303,6 @@ fn test_delete_repository() {
 fn test_get_or_create_registry_namespace() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:

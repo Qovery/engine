@@ -1,5 +1,5 @@
 use crate::helpers::aws::AWS_RESOURCE_TTL_IN_SECONDS;
-use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id, init};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id};
 use function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::aws::AwsCredentials;
@@ -19,7 +19,6 @@ use tracing::{Level, info, span};
 fn test_delete_hard_strategy_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -78,7 +77,6 @@ fn test_delete_hard_strategy_bucket() {
 fn test_delete_empty_strategy_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -131,7 +129,6 @@ fn test_delete_empty_strategy_bucket() {
 fn test_create_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -187,7 +184,6 @@ fn test_create_bucket() {
 fn test_get_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -238,7 +234,6 @@ fn test_get_bucket() {
 fn test_recreate_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -316,7 +311,6 @@ fn test_recreate_bucket() {
 fn test_put_file() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -380,7 +374,6 @@ fn test_put_file() {
 fn test_get_file() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

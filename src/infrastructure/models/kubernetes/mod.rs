@@ -1518,6 +1518,10 @@ mod tests {
     }
 
     fn create_kube_client() -> QubeClient {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
         let event = EventDetails::new(
             None,
             QoveryIdentifier::new_random(),

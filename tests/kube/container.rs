@@ -1,6 +1,6 @@
 use crate::helpers::common::Infrastructure;
 use crate::helpers::database::StorageSize::Resize;
-use crate::helpers::utilities::{engine_run_test, init};
+use crate::helpers::utilities::engine_run_test;
 use crate::kube::{TestEnvOption, kube_test_env};
 use base64::Engine;
 use base64::engine::general_purpose;
@@ -33,8 +33,6 @@ fn should_increase_container_storage_size() {
     let test_name = function_name!();
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -192,8 +190,6 @@ fn should_have_mounted_files_as_volume() {
     let test_name = function_name!();
 
     engine_run_test(|| {
-        init();
-
         // setup:
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
