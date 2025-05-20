@@ -267,6 +267,11 @@ pub enum AwsInstancesType {
     I4I_8XLARGE,
     I4I_LARGE,
     I4I_XLARGE,
+    I7I_2XLARGE,
+    I7I_4XLARGE,
+    I7I_8XLARGE,
+    I7I_LARGE,
+    I7I_XLARGE,
     I7IE_2XLARGE,
     I7IE_3XLARGE,
     I7IE_6XLARGE,
@@ -880,6 +885,11 @@ impl InstanceType for AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
             AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+            AwsInstancesType::I7I_2XLARGE => "i7i.2xlarge",
+            AwsInstancesType::I7I_4XLARGE => "i7i.4xlarge",
+            AwsInstancesType::I7I_8XLARGE => "i7i.8xlarge",
+            AwsInstancesType::I7I_LARGE => "i7i.large",
+            AwsInstancesType::I7I_XLARGE => "i7i.xlarge",
             AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
             AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
             AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
@@ -1500,6 +1510,11 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I7IE_6XLARGE
                 | AwsInstancesType::I7IE_LARGE
                 | AwsInstancesType::I7IE_XLARGE
+                | AwsInstancesType::I7I_2XLARGE
+                | AwsInstancesType::I7I_4XLARGE
+                | AwsInstancesType::I7I_8XLARGE
+                | AwsInstancesType::I7I_LARGE
+                | AwsInstancesType::I7I_XLARGE
                 | AwsInstancesType::I8G_2XLARGE
                 | AwsInstancesType::I8G_4XLARGE
                 | AwsInstancesType::I8G_8XLARGE
@@ -2303,6 +2318,11 @@ impl InstanceType for AwsInstancesType {
                 | AwsInstancesType::I7IE_6XLARGE
                 | AwsInstancesType::I7IE_LARGE
                 | AwsInstancesType::I7IE_XLARGE
+                | AwsInstancesType::I7I_2XLARGE
+                | AwsInstancesType::I7I_4XLARGE
+                | AwsInstancesType::I7I_8XLARGE
+                | AwsInstancesType::I7I_LARGE
+                | AwsInstancesType::I7I_XLARGE
                 | AwsInstancesType::I8G_2XLARGE
                 | AwsInstancesType::I8G_4XLARGE
                 | AwsInstancesType::I8G_8XLARGE
@@ -2909,6 +2929,11 @@ impl AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
             AwsInstancesType::I4I_LARGE => "i4i.large",
             AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+            AwsInstancesType::I7I_2XLARGE => "i7i.2xlarge",
+            AwsInstancesType::I7I_4XLARGE => "i7i.4xlarge",
+            AwsInstancesType::I7I_8XLARGE => "i7i.8xlarge",
+            AwsInstancesType::I7I_LARGE => "i7i.large",
+            AwsInstancesType::I7I_XLARGE => "i7i.xlarge",
             AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
             AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
             AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
@@ -3524,6 +3549,11 @@ impl fmt::Display for AwsInstancesType {
             AwsInstancesType::I4I_8XLARGE => write!(f, "i4i.8xlarge"),
             AwsInstancesType::I4I_LARGE => write!(f, "i4i.large"),
             AwsInstancesType::I4I_XLARGE => write!(f, "i4i.xlarge"),
+            AwsInstancesType::I7I_2XLARGE => write!(f, "i7i.2xlarge"),
+            AwsInstancesType::I7I_4XLARGE => write!(f, "i7i.4xlarge"),
+            AwsInstancesType::I7I_8XLARGE => write!(f, "i7i.8xlarge"),
+            AwsInstancesType::I7I_LARGE => write!(f, "i7i.large"),
+            AwsInstancesType::I7I_XLARGE => write!(f, "i7i.xlarge"),
             AwsInstancesType::I7IE_2XLARGE => write!(f, "i7ie.2xlarge"),
             AwsInstancesType::I7IE_3XLARGE => write!(f, "i7ie.3xlarge"),
             AwsInstancesType::I7IE_6XLARGE => write!(f, "i7ie.6xlarge"),
@@ -4141,6 +4171,11 @@ impl FromStr for AwsInstancesType {
             "i4i.8xlarge" => Ok(AwsInstancesType::I4I_8XLARGE),
             "i4i.large" => Ok(AwsInstancesType::I4I_LARGE),
             "i4i.xlarge" => Ok(AwsInstancesType::I4I_XLARGE),
+            "i7i.2xlarge" => Ok(AwsInstancesType::I7I_2XLARGE),
+            "i7i.4xlarge" => Ok(AwsInstancesType::I7I_4XLARGE),
+            "i7i.8xlarge" => Ok(AwsInstancesType::I7I_8XLARGE),
+            "i7i.large" => Ok(AwsInstancesType::I7I_LARGE),
+            "i7i.xlarge" => Ok(AwsInstancesType::I7I_XLARGE),
             "i7ie.2xlarge" => Ok(AwsInstancesType::I7IE_2XLARGE),
             "i7ie.3xlarge" => Ok(AwsInstancesType::I7IE_3XLARGE),
             "i7ie.6xlarge" => Ok(AwsInstancesType::I7IE_6XLARGE),
@@ -4773,6 +4808,11 @@ mod tests {
                     AwsInstancesType::I4I_8XLARGE => "i4i.8xlarge",
                     AwsInstancesType::I4I_LARGE => "i4i.large",
                     AwsInstancesType::I4I_XLARGE => "i4i.xlarge",
+                    AwsInstancesType::I7I_2XLARGE => "i7i.2xlarge",
+                    AwsInstancesType::I7I_4XLARGE => "i7i.4xlarge",
+                    AwsInstancesType::I7I_8XLARGE => "i7i.8xlarge",
+                    AwsInstancesType::I7I_LARGE => "i7i.large",
+                    AwsInstancesType::I7I_XLARGE => "i7i.xlarge",
                     AwsInstancesType::I7IE_2XLARGE => "i7ie.2xlarge",
                     AwsInstancesType::I7IE_3XLARGE => "i7ie.3xlarge",
                     AwsInstancesType::I7IE_6XLARGE => "i7ie.6xlarge",
