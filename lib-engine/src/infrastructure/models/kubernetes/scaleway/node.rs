@@ -589,7 +589,7 @@ pub struct ScwNodeGroup {
     pub max_nodes: i32,
     pub instance_type: String,
     pub disk_size_in_gib: i32,
-    pub status: scaleway_api_rs::models::scaleway_k8s_v1_pool::Status,
+    pub status: scaleway_api_rs::models::scaleway_period_k8s_period_v1_period_pool::Status,
 }
 
 impl ScwNodeGroup {
@@ -600,7 +600,7 @@ impl ScwNodeGroup {
         max_nodes: i32,
         instance_type: String,
         disk_size_in_gib: i32,
-        status: scaleway_api_rs::models::scaleway_k8s_v1_pool::Status,
+        status: scaleway_api_rs::models::scaleway_period_k8s_period_v1_period_pool::Status,
     ) -> Result<Self, CommandError> {
         if min_nodes > max_nodes {
             let msg = format!(

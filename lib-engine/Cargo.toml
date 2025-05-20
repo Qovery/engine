@@ -102,7 +102,7 @@ azure_mgmt_containerregistry = "0.21.0"
 azure_identity = "0.21.0"
 
 # Scaleway deps
-scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "engine" }
+scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "main" }
 
 # GCP deps
 google-cloud-auth = { version = "0.20.0", features = [] }

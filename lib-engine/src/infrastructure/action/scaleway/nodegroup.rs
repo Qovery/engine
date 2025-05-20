@@ -3,11 +3,11 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, ScwNodeGroupErrors};
 use crate::infrastructure::models::kubernetes::scaleway::node::ScwNodeGroup;
 use crate::runtime::block_on;
-use scaleway_api_rs::models::ScalewayK8sV1Cluster;
+use scaleway_api_rs::models::ScalewayPeriodK8sPeriodV1PeriodCluster;
 
 pub(super) fn get_existing_sanitized_node_groups(
     cluster: &Kapsule,
-    cluster_info: ScalewayK8sV1Cluster,
+    cluster_info: ScalewayPeriodK8sPeriodV1PeriodCluster,
 ) -> Result<Vec<ScwNodeGroup>, ScwNodeGroupErrors> {
     let error_cluster_id = "expected cluster id for this Scaleway cluster".to_string();
     let cluster_id = match cluster_info.id {
@@ -51,7 +51,7 @@ pub(super) fn get_existing_sanitized_node_groups(
     }
 
     // create sanitized nodegroup pools
-    let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or(0f32) as usize);
+    let mut nodegroup_pool: Vec<ScwNodeGroup> = Vec::with_capacity(pools.total_count.unwrap_or_default() as usize);
     for ng in pools.pools.unwrap() {
         if ng.id.is_none() {
             return Err(ScwNodeGroupErrors::NodeGroupValidationError(

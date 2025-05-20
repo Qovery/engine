@@ -16,7 +16,7 @@ use crate::infrastructure::models::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
 use retry::OperationResult;
 use retry::delay::Fixed;
-use scaleway_api_rs::models::ScalewayK8sV1Cluster;
+use scaleway_api_rs::models::ScalewayPeriodK8sPeriodV1PeriodCluster;
 use std::path::PathBuf;
 
 pub fn create_kapsule_cluster(
@@ -103,7 +103,7 @@ pub fn create_kapsule_cluster(
 fn sanitize_node_groups(
     cluster: &Kapsule,
     event_details: EventDetails,
-    cluster_info: ScalewayK8sV1Cluster,
+    cluster_info: ScalewayPeriodK8sPeriodV1PeriodCluster,
     logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     if cluster.context().is_dry_run_deploy() {
@@ -222,7 +222,8 @@ fn sanitize_node_groups(
                         };
                     }
                 };
-                match scw_ng.status == scaleway_api_rs::models::scaleway_k8s_v1_pool::Status::Ready {
+                match scw_ng.status == scaleway_api_rs::models::scaleway_period_k8s_period_v1_period_pool::Status::Ready
+                {
                     true => OperationResult::Ok(()),
                     false => OperationResult::Retry(EngineError::new_k8s_node_not_ready(
                         event_details.clone(),
