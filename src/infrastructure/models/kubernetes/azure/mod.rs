@@ -2,6 +2,7 @@ use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
 
 pub mod aks;
+mod node;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpcMode {
