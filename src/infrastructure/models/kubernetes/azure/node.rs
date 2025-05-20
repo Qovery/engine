@@ -848,10 +848,18 @@ pub enum AzureInstancesType {
     STANDARD_F8S,
     STANDARD_F8S_V2,
     STANDARD_FX12MDS,
+    STANDARD_FX12MS_V2,
     STANDARD_FX24MDS,
     STANDARD_FX36MDS,
     STANDARD_FX48MDS,
     STANDARD_FX4MDS,
+    STANDARD_FX64_16MS_V2,
+    STANDARD_FX64MS_V2,
+    STANDARD_FX8_2MS_V2,
+    STANDARD_FX8MS_V2,
+    STANDARD_FX96_24MS_V2,
+    STANDARD_FX96_48MS_V2,
+    STANDARD_FX96MS_V2,
     STANDARD_G1,
     STANDARD_G2,
     STANDARD_G3,
@@ -1888,10 +1896,18 @@ impl InstanceType for AzureInstancesType {
             AzureInstancesType::STANDARD_F8S => "standard_f8s",
             AzureInstancesType::STANDARD_F8S_V2 => "standard_f8s_v2",
             AzureInstancesType::STANDARD_FX12MDS => "standard_fx12mds",
+            AzureInstancesType::STANDARD_FX12MS_V2 => "standard_fx12ms_v2",
             AzureInstancesType::STANDARD_FX24MDS => "standard_fx24mds",
             AzureInstancesType::STANDARD_FX36MDS => "standard_fx36mds",
             AzureInstancesType::STANDARD_FX48MDS => "standard_fx48mds",
             AzureInstancesType::STANDARD_FX4MDS => "standard_fx4mds",
+            AzureInstancesType::STANDARD_FX64_16MS_V2 => "standard_fx64-16ms_v2",
+            AzureInstancesType::STANDARD_FX64MS_V2 => "standard_fx64ms_v2",
+            AzureInstancesType::STANDARD_FX8_2MS_V2 => "standard_fx8-2ms_v2",
+            AzureInstancesType::STANDARD_FX8MS_V2 => "standard_fx8ms_v2",
+            AzureInstancesType::STANDARD_FX96_24MS_V2 => "standard_fx96-24ms_v2",
+            AzureInstancesType::STANDARD_FX96_48MS_V2 => "standard_fx96-48ms_v2",
+            AzureInstancesType::STANDARD_FX96MS_V2 => "standard_fx96ms_v2",
             AzureInstancesType::STANDARD_G1 => "standard_g1",
             AzureInstancesType::STANDARD_G2 => "standard_g2",
             AzureInstancesType::STANDARD_G3 => "standard_g3",
@@ -2766,7 +2782,10 @@ impl InstanceType for AzureInstancesType {
                 | AzureInstancesType::STANDARD_F8S
                 | AzureInstancesType::STANDARD_F8S_V2
                 | AzureInstancesType::STANDARD_FX12MDS
+                | AzureInstancesType::STANDARD_FX12MS_V2
                 | AzureInstancesType::STANDARD_FX4MDS
+                | AzureInstancesType::STANDARD_FX8MS_V2
+                | AzureInstancesType::STANDARD_FX8_2MS_V2
                 | AzureInstancesType::STANDARD_G1
                 | AzureInstancesType::STANDARD_G2
                 | AzureInstancesType::STANDARD_G3
@@ -3593,7 +3612,10 @@ impl InstanceType for AzureInstancesType {
                 | AzureInstancesType::STANDARD_F8S
                 | AzureInstancesType::STANDARD_F8S_V2
                 | AzureInstancesType::STANDARD_FX12MDS
+                | AzureInstancesType::STANDARD_FX12MS_V2
                 | AzureInstancesType::STANDARD_FX4MDS
+                | AzureInstancesType::STANDARD_FX8MS_V2
+                | AzureInstancesType::STANDARD_FX8_2MS_V2
                 | AzureInstancesType::STANDARD_G1
                 | AzureInstancesType::STANDARD_G2
                 | AzureInstancesType::STANDARD_G3
@@ -3651,7 +3673,6 @@ impl InstanceType for AzureInstancesType {
 }
 
 impl AzureInstancesType {
-    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         match self {
             AzureInstancesType::STANDARD_A1_V2 => "standard_a1_v2",
@@ -4492,10 +4513,18 @@ impl AzureInstancesType {
             AzureInstancesType::STANDARD_F8S => "standard_f8s",
             AzureInstancesType::STANDARD_F8S_V2 => "standard_f8s_v2",
             AzureInstancesType::STANDARD_FX12MDS => "standard_fx12mds",
+            AzureInstancesType::STANDARD_FX12MS_V2 => "standard_fx12ms_v2",
             AzureInstancesType::STANDARD_FX24MDS => "standard_fx24mds",
             AzureInstancesType::STANDARD_FX36MDS => "standard_fx36mds",
             AzureInstancesType::STANDARD_FX48MDS => "standard_fx48mds",
             AzureInstancesType::STANDARD_FX4MDS => "standard_fx4mds",
+            AzureInstancesType::STANDARD_FX64_16MS_V2 => "standard_fx64-16ms_v2",
+            AzureInstancesType::STANDARD_FX64MS_V2 => "standard_fx64ms_v2",
+            AzureInstancesType::STANDARD_FX8_2MS_V2 => "standard_fx8-2ms_v2",
+            AzureInstancesType::STANDARD_FX8MS_V2 => "standard_fx8ms_v2",
+            AzureInstancesType::STANDARD_FX96_24MS_V2 => "standard_fx96-24ms_v2",
+            AzureInstancesType::STANDARD_FX96_48MS_V2 => "standard_fx96-48ms_v2",
+            AzureInstancesType::STANDARD_FX96MS_V2 => "standard_fx96ms_v2",
             AzureInstancesType::STANDARD_G1 => "standard_g1",
             AzureInstancesType::STANDARD_G2 => "standard_g2",
             AzureInstancesType::STANDARD_G3 => "standard_g3",
@@ -5534,10 +5563,18 @@ impl fmt::Display for AzureInstancesType {
             AzureInstancesType::STANDARD_F8S => write!(f, "standard_f8s"),
             AzureInstancesType::STANDARD_F8S_V2 => write!(f, "standard_f8s_v2"),
             AzureInstancesType::STANDARD_FX12MDS => write!(f, "standard_fx12mds"),
+            AzureInstancesType::STANDARD_FX12MS_V2 => write!(f, "standard_fx12ms_v2"),
             AzureInstancesType::STANDARD_FX24MDS => write!(f, "standard_fx24mds"),
             AzureInstancesType::STANDARD_FX36MDS => write!(f, "standard_fx36mds"),
             AzureInstancesType::STANDARD_FX48MDS => write!(f, "standard_fx48mds"),
             AzureInstancesType::STANDARD_FX4MDS => write!(f, "standard_fx4mds"),
+            AzureInstancesType::STANDARD_FX64_16MS_V2 => write!(f, "standard_fx64-16ms_v2"),
+            AzureInstancesType::STANDARD_FX64MS_V2 => write!(f, "standard_fx64ms_v2"),
+            AzureInstancesType::STANDARD_FX8_2MS_V2 => write!(f, "standard_fx8-2ms_v2"),
+            AzureInstancesType::STANDARD_FX8MS_V2 => write!(f, "standard_fx8ms_v2"),
+            AzureInstancesType::STANDARD_FX96_24MS_V2 => write!(f, "standard_fx96-24ms_v2"),
+            AzureInstancesType::STANDARD_FX96_48MS_V2 => write!(f, "standard_fx96-48ms_v2"),
+            AzureInstancesType::STANDARD_FX96MS_V2 => write!(f, "standard_fx96ms_v2"),
             AzureInstancesType::STANDARD_G1 => write!(f, "standard_g1"),
             AzureInstancesType::STANDARD_G2 => write!(f, "standard_g2"),
             AzureInstancesType::STANDARD_G3 => write!(f, "standard_g3"),
@@ -5714,7 +5751,9 @@ impl fmt::Display for AzureInstancesType {
             AzureInstancesType::STANDARD_ND96AMSR_A100_V4 => write!(f, "standard_nd96amsr_a100_v4"),
             AzureInstancesType::STANDARD_ND96IS_MI300X_V5 => write!(f, "standard_nd96is_mi300x_v5"),
             AzureInstancesType::STANDARD_ND96ISR_H100_V5 => write!(f, "standard_nd96isr_h100_v5"),
-            AzureInstancesType::STANDARD_ND96ISR_MI300X_V5 => write!(f, "standard_nd96isr_mi300x_v5"),
+            AzureInstancesType::STANDARD_ND96ISR_MI300X_V5 => {
+                write!(f, "standard_nd96isr_mi300x_v5")
+            }
             AzureInstancesType::STANDARD_NP10S => write!(f, "standard_np10s"),
             AzureInstancesType::STANDARD_NP20S => write!(f, "standard_np20s"),
             AzureInstancesType::STANDARD_NP40S => write!(f, "standard_np40s"),
@@ -6578,10 +6617,18 @@ impl FromStr for AzureInstancesType {
             "standard_f8s" => Ok(AzureInstancesType::STANDARD_F8S),
             "standard_f8s_v2" => Ok(AzureInstancesType::STANDARD_F8S_V2),
             "standard_fx12mds" => Ok(AzureInstancesType::STANDARD_FX12MDS),
+            "standard_fx12ms_v2" => Ok(AzureInstancesType::STANDARD_FX12MS_V2),
             "standard_fx24mds" => Ok(AzureInstancesType::STANDARD_FX24MDS),
             "standard_fx36mds" => Ok(AzureInstancesType::STANDARD_FX36MDS),
             "standard_fx48mds" => Ok(AzureInstancesType::STANDARD_FX48MDS),
             "standard_fx4mds" => Ok(AzureInstancesType::STANDARD_FX4MDS),
+            "standard_fx64-16ms_v2" => Ok(AzureInstancesType::STANDARD_FX64_16MS_V2),
+            "standard_fx64ms_v2" => Ok(AzureInstancesType::STANDARD_FX64MS_V2),
+            "standard_fx8-2ms_v2" => Ok(AzureInstancesType::STANDARD_FX8_2MS_V2),
+            "standard_fx8ms_v2" => Ok(AzureInstancesType::STANDARD_FX8MS_V2),
+            "standard_fx96-24ms_v2" => Ok(AzureInstancesType::STANDARD_FX96_24MS_V2),
+            "standard_fx96-48ms_v2" => Ok(AzureInstancesType::STANDARD_FX96_48MS_V2),
+            "standard_fx96ms_v2" => Ok(AzureInstancesType::STANDARD_FX96MS_V2),
             "standard_g1" => Ok(AzureInstancesType::STANDARD_G1),
             "standard_g2" => Ok(AzureInstancesType::STANDARD_G2),
             "standard_g3" => Ok(AzureInstancesType::STANDARD_G3),
@@ -7637,10 +7684,18 @@ mod tests {
                     AzureInstancesType::STANDARD_F8S => "standard_f8s",
                     AzureInstancesType::STANDARD_F8S_V2 => "standard_f8s_v2",
                     AzureInstancesType::STANDARD_FX12MDS => "standard_fx12mds",
+                    AzureInstancesType::STANDARD_FX12MS_V2 => "standard_fx12ms_v2",
                     AzureInstancesType::STANDARD_FX24MDS => "standard_fx24mds",
                     AzureInstancesType::STANDARD_FX36MDS => "standard_fx36mds",
                     AzureInstancesType::STANDARD_FX48MDS => "standard_fx48mds",
                     AzureInstancesType::STANDARD_FX4MDS => "standard_fx4mds",
+                    AzureInstancesType::STANDARD_FX64_16MS_V2 => "standard_fx64-16ms_v2",
+                    AzureInstancesType::STANDARD_FX64MS_V2 => "standard_fx64ms_v2",
+                    AzureInstancesType::STANDARD_FX8_2MS_V2 => "standard_fx8-2ms_v2",
+                    AzureInstancesType::STANDARD_FX8MS_V2 => "standard_fx8ms_v2",
+                    AzureInstancesType::STANDARD_FX96_24MS_V2 => "standard_fx96-24ms_v2",
+                    AzureInstancesType::STANDARD_FX96_48MS_V2 => "standard_fx96-48ms_v2",
+                    AzureInstancesType::STANDARD_FX96MS_V2 => "standard_fx96ms_v2",
                     AzureInstancesType::STANDARD_G1 => "standard_g1",
                     AzureInstancesType::STANDARD_G2 => "standard_g2",
                     AzureInstancesType::STANDARD_G3 => "standard_g3",
