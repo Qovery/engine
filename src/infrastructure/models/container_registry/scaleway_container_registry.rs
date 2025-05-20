@@ -1,6 +1,5 @@
 extern crate scaleway_api_rs;
 
-use self::scaleway_api_rs::models::scaleway_registry_v1_namespace::Status;
 use crate::cmd::docker;
 use crate::environment::models::scaleway::ScwRegion;
 use crate::infrastructure::models::build_platform::Image;
@@ -15,6 +14,8 @@ use base64::Engine;
 use base64::engine::general_purpose;
 use retry::OperationResult;
 use retry::delay::Fixed;
+use scaleway_api_rs::models::CreateNamespaceRequest;
+use scaleway_api_rs::models::scaleway_period_registry_period_v1_period_namespace::Status;
 use std::collections::HashSet;
 use url::Url;
 use uuid::Uuid;
@@ -131,7 +132,10 @@ impl ScalewayCR {
         }
     }
 
-    pub fn get_image(&self, image: &Image) -> Option<scaleway_api_rs::models::ScalewayRegistryV1Image> {
+    pub fn get_image(
+        &self,
+        image: &Image,
+    ) -> Option<scaleway_api_rs::models::ScalewayPeriodRegistryPeriodV1PeriodImage> {
         // https://developers.scaleway.com/en/products/registry/api/#get-a6f1bc
         let scaleway_images = match block_on_with_timeout(scaleway_api_rs::apis::images_api::list_images(
             &self.get_configuration(),
@@ -166,7 +170,7 @@ impl ScalewayCR {
     pub fn delete_image(
         &self,
         image: &Image,
-    ) -> Result<scaleway_api_rs::models::ScalewayRegistryV1Image, ContainerRegistryError> {
+    ) -> Result<scaleway_api_rs::models::ScalewayPeriodRegistryPeriodV1PeriodImage, ContainerRegistryError> {
         // https://developers.scaleway.com/en/products/registry/api/#delete-67dbf7
         let image_to_delete = match self.get_image(image) {
             Some(image_to_delete) => image_to_delete,
@@ -252,10 +256,10 @@ impl ScalewayCR {
         match block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),
             self.region.as_str(),
-            scaleway_api_rs::models::inline_object_29::InlineObject29 {
+            CreateNamespaceRequest {
                 name: namespace_name.to_string(),
                 description: None,
-                project_id: Some(self.default_project_id.clone()),
+                project_id: Some(Some(self.default_project_id.clone())),
                 is_public: Some(false),
                 organization_id: None,
             },
