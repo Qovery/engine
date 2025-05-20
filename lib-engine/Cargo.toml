@@ -50,8 +50,6 @@ rustls = { version = "0.23.27", features = [] }
 kube = { version = "1.0.0", default-features = false, features = ["rustls-tls", "client", "derive", "runtime", "ws", "aws-lc-rs", "gzip"] }
 k8s-openapi = { version = "0.25.0", default-features = false, features = ["v1_31"] }
 
-# FIXME use https://crates.io/crates/blocking instead of runtime.rs
-
 # tar gz
 flate2 = "1.1.1"
 tar = "0.4.44"

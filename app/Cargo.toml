@@ -29,7 +29,7 @@ retry = "2.1.0"
 url = "2.5.4"
 anyhow = "1.0.98"
 scopeguard = "1.2.0"
-reqwest = { version = "0.12.15", features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots"] }
+reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots-no-provider"] }
 serde = "1.0.219"
 clap = { version = "4.5.38", features = ["derive", "env"] }
 rustls = "0.23.27"
