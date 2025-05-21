@@ -19,6 +19,7 @@ use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::aws::Options;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass, VpcQoveryNetworkMode};
@@ -212,14 +213,14 @@ impl Cluster<AWS, Options> for AWS {
         };
 
         vec![
-            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, node_type, 100, cpu_archi)
+            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, node_type, 100, cpu_archi, None)
                 .expect("Problem while setup EKS nodes"),
         ]
     }
 
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
-        _cluster_id: Option<String>,
+        _cluster_id: QoveryIdentifier,
         engine_location: EngineLocation,
         _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> Options {

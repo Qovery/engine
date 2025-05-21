@@ -9,6 +9,7 @@ use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::azure::AksOptions;
+use crate::infrastructure::models::kubernetes::azure::node_group::AzureNodeGroups;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, event_details};
 use crate::infrastructure::models::object_storage::azure_object_storage::AzureOS;
 use crate::io_models::context::Context;
@@ -41,6 +42,7 @@ pub struct AKS {
     pub temp_dir: PathBuf,
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     pub credentials: Credentials,
+    pub node_groups: AzureNodeGroups,
 }
 
 impl AKS {
@@ -53,6 +55,7 @@ impl AKS {
         cloud_provider: &dyn CloudProvider,
         created_at: DateTime<Utc>,
         options: AksOptions,
+        node_groups: AzureNodeGroups,
         logger: Box<dyn Logger>,
         advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -90,6 +93,7 @@ impl AKS {
             blob_storage,
             template_directory,
             options,
+            node_groups,
             logger,
             advanced_settings,
             customer_helm_charts_override,
@@ -163,8 +167,11 @@ impl Kubernetes for AKS {
     }
 
     fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
-        // TODO(benjaminch): AKS integration, add ARM support
-        vec![CpuArchitecture::AMD64]
+        self.node_groups
+            .get_all_node_groups()
+            .iter()
+            .map(|node| node.instance_architecture)
+            .collect()
     }
 
     fn temp_dir(&self) -> &Path {

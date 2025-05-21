@@ -256,7 +256,7 @@ impl Cluster<Google, GkeOptions> for Gke {
 
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
-        _cluster_id: Option<String>,
+        _cluster_id: QoveryIdentifier,
         engine_location: EngineLocation,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> GkeOptions {

@@ -402,6 +402,11 @@ impl From<ContainerRegistryError> for CommandError {
                 Some(raw_error_message),
                 None,
             ),
+            ContainerRegistryError::CannotConvertClient { raw_error_message } => CommandError::new(
+                "Container registry error, cannot convert client".to_string(),
+                Some(raw_error_message),
+                None,
+            ),
             ContainerRegistryError::InvalidCredentials => {
                 CommandError::new_from_safe_message("Container registry error, invalid credentials".to_string())
             }
@@ -1036,6 +1041,8 @@ pub enum Tag {
     ContainerRegistryInvalidInformation,
     /// ContainerRegistryCannotInstantiateClient: represents an error where the container registry client cannot be instantiated.
     ContainerRegistryCannotInstantiateClient,
+    /// ContainerRegistryCannotConvertClient: represents an error on container registry where the client cannot be converted.
+    ContainerRegistryCannotConvertClient,
     /// ContainerRegistryInvalidCredentials: represents an error on container registry, credentials are not valid.
     ContainerRegistryInvalidCredentials,
     /// ContainerRegistryRepositoryNameInvalid: represents an error on container registry repository name is not valid.
@@ -3223,6 +3230,14 @@ impl EngineError {
                 event_details,
                 Tag::ContainerRegistryCannotInstantiateClient,
                 "Container registry: cannot instantiate client.".to_string(),
+                Some(error.into()),
+                None,
+                None,
+            ),
+            ContainerRegistryError::CannotConvertClient {..} => EngineError::new(
+                event_details,
+                Tag::ContainerRegistryCannotConvertClient,
+                "Container registry: cannot convert client.".to_string(),
                 Some(error.into()),
                 None,
                 None,

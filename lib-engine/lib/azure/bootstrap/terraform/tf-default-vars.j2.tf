@@ -22,24 +22,6 @@ variable "kubernetes_version" {
   default     = "{{ kubernetes_cluster_version }}"
 }
 
-variable "node_pool_machine_type" {
-  description = "The VM size for the default node pool"
-  type        = string
-  default     = "Standard_D2s_v3" # TODO(benjaminch): to be variabilized
-}
-
-variable "min_count" {
-  description = "Minimum number of nodes in the default node pool"
-  type        = number
-  default     = 1 # TODO(benjaminch): to be variabilized
-}
-
-variable "max_count" {
-  description = "Maximum number of nodes in the default node pool"
-  type        = number
-  default     = 5 # TODO(benjaminch): to be variabilized
-}
-
 # variable "subnet_id" {
 #   description = "The ID of the subnet where the AKS cluster will be deployed"
 #   type        = string
