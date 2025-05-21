@@ -79,10 +79,6 @@ pub fn kapsule_helm_charts(
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_state_metrics_chart = metrics_config
-        .kube_state_metrics_chart
-        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
-
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
@@ -556,9 +552,6 @@ pub fn kapsule_helm_charts(
     // observability
     if let Some(prometheus_operator_crds_chart) = prometheus_operator_crds_chart {
         level_0.push(prometheus_operator_crds_chart)
-    }
-    if let Some(kube_state_metrics_chart) = kube_state_metrics_chart {
-        level_0.push(kube_state_metrics_chart);
     }
     if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack_chart {
         level_1.push(kube_prometheus_stack_chart)

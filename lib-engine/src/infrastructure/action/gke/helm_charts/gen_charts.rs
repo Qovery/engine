@@ -349,15 +349,11 @@ pub(super) fn gke_helm_charts(
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
-    let kube_state_metrics_chart = metrics_config
-        .kube_state_metrics_chart
-        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
-
     // chart deployment order matters!!!
     // Helm chart deployment order
 
     // Add prometheus CRDs early to avoid issues with other charts
-    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart, kube_state_metrics_chart];
+    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart];
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
