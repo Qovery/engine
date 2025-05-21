@@ -8,78 +8,73 @@ edition = "2024"
 
 [dependencies]
 atomic_enum = "0.3.0"
-bitflags = "2.6.0"
-bytes = "1.10.0"
-chrono = "0.4.39"
+bitflags = "2.9.1"
+chrono = "0.4.41"
 derivative = "2.2.0"
-git2 = "0.19.0"
+git2 = "0.20.2"
 walkdir = "2.5.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
 dirs = "6.0.0"
-retry = "2.0.0"
+retry = "2.1.0"
 trust-dns-resolver = "0.23.2"
-rand = "0.9.0"
-semver = "1.0.24"
-gethostname = "1.0.0"
-reqwest = { version = "0.12.12", features = ["blocking", "json", "rustls-tls-native-roots", "gzip", "zstd"] }
+rand = "0.9.1"
+semver = "1.0.26"
+gethostname = "1.0.2"
+reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls-manual-roots-no-provider", "gzip", "zstd"] }
 futures = "0.3.31"
 timeout-readwrite = "0.4.0"
-uuid = { version = "1.11.0", features = ["v4", "serde"] }
+uuid = { version = "1.16.0", features = ["v4", "serde"] }
 url = { version = "2.5.4", features = ["serde"] }
 function_name = "0.3.0"
-thiserror = "2.0.9"
-strum = "0.27.0"
-strum_macros = "0.27.0"
+thiserror = "2.0.12"
+strum = "0.27.1"
+strum_macros = "0.27.1"
 urlencoding = "2.1.3"
 regex = "1.11.1"
-async-trait = "0.1.84"
+async-trait = "0.1.88"
 scopeguard = "1.2.0"
-libc = "0.2.169"
-anyhow = "1.0.95"
+libc = "0.2.172"
+anyhow = "1.0.98"
 tempfile = "3"
-governor = "0.8.0"
-once_cell = "1.20.2"
+governor = "0.10.0"
+once_cell = "1.21.3"
 nonzero_ext = "0.3.0"
-json-patch = "3.0.1"
-jsonptr = "0.6.3"
+json-patch = "4.0.0"
+jsonptr = "0.7.1"
 enum_dispatch = "0.3.13"
-time = { version = "0.3.37", features = ["formatting", "parsing"] }
-derive_more = { version = "2.0.0", features = ["display"] }
+time = { version = "0.3.41", features = ["formatting", "parsing"] }
+derive_more = { version = "2.0.1", features = ["display"] }
+rustls = { version = "0.23.27", features = [] }
 
-kube = { version = "0.98.0", features = ["default", "runtime", "derive", "ws"] }
-k8s-openapi = { version = "0.24.0", default-features = false, features = ["v1_30"] }
-
-# FIXME use https://crates.io/crates/blocking instead of runtime.rs
+kube = { version = "1.0.0", default-features = false, features = ["rustls-tls", "client", "derive", "runtime", "ws", "aws-lc-rs", "gzip"] }
+k8s-openapi = { version = "0.25.0", default-features = false, features = ["v1_31"] }
 
 # tar gz
-flate2 = "1.0.35"
-tar = "0.4.43"
+flate2 = "1.1.1"
+tar = "0.4.44"
 
 # logger
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["json"] }
 
-# Docker deps
-# shiplift = "0.6.0"
-
 # Network
-ipnet = "2.10.1"
+ipnet = "2.11.0"
 
 # Jinja2
 tera = "1.20.0"
 
 # Json
-serde = "1.0.217"
-serde_json = "1.0.134"
-serde_derive = "1.0.217"
+serde = "1.0.219"
+serde_json = "1.0.140"
+serde_derive = "1.0.219"
 serde_yaml = "0.9.34"
 serde_with = "3.12.0"
-schemars = "0.8.21"
-duration-str = "0.12.0"
+schemars = "0.8.22"
+duration-str = "0.17.0"
 
 # AWS deps
-tokio = { version = "1.42.0", features = ["full"] }
+tokio = { version = "1.45.0", features = ["full"] }
 rusoto_core = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
 rusoto_sts = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
 rusoto_credential = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
@@ -87,18 +82,15 @@ rusoto_ecr = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c
 rusoto_eks = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
 rusoto_s3 = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
 rusoto_signature = { git = "https://github.com/Qovery/rusoto.git", rev = "61ead3b7610c76f440197465a220226b7c790c75" }
-aws-config = "1.5.12"
-aws-sdk-elasticloadbalancingv2 = "1.60.0"
-aws-sdk-eks = "1.65.0"
-aws-sdk-rds = "1.71.0"
-aws-sdk-elasticache = "1.57.0"
-aws-sdk-docdb = "1.56.0"
-aws-sdk-ec2 = "1.99.0"
-aws-types = "1.3.3"
-aws-sdk-iam = "1.55.0"
-aws-smithy-client = "0.60.3"
-aws-smithy-async = { version = "1.2.3", features = ["rt-tokio"] }
-aws-credential-types = "1.2.1"
+aws-sdk-elasticloadbalancingv2 = "1.77.0"
+aws-sdk-eks = "1.87.0"
+aws-sdk-rds = "1.87.0"
+aws-sdk-elasticache = "1.74.0"
+aws-sdk-docdb = "1.72.0"
+aws-sdk-ec2 = "1.130.0"
+aws-types = "1.3.7"
+aws-sdk-iam = "1.72.0"
+aws-credential-types = "1.2.3"
 
 # Azure deps
 azure_core = "0.21.0"
@@ -108,21 +100,20 @@ azure_mgmt_containerregistry = "0.21.0"
 azure_identity = "0.21.0"
 
 # Scaleway deps
-scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "engine" }
+scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = "main" }
 
 # GCP deps
-google-cloud-auth = "0.17.2"
-google-cloud-storage = "0.24.0"
-google-cloud-artifact-registry = "0.8.0"
-google-cloud-googleapis = "0.16.0"
-
-# GRPC
-tonic = "0.12.3"
+google-cloud-auth = { version = "0.20.0", features = [] }
+google-cloud-storage = {  version = "0.24.0", default-features = false, features = ["rustls-tls", "auth"] }
+google-cloud-artifact-registry = { version = "0.8.0", default-features = false, features = ["rustls-tls", "auth"] }
+google-cloud-googleapis = { version = "0.16.1", features = [] }
+# don't update, needs to be in sync with google-cloud-artifact-registry internal version
+google-cloud-gax = { version = "0.19.2", features = [] }
 
 [dev-dependencies]
-bstr = "1.11.3"
+bstr = "1.12.0"
 tempdir = "0.3.7"
-tempfile = "3.15.0"
+tempfile = "3.20.0"
 maplit = "1.0.2"
 tracing-test = "0.2.5"
 passwords = "3.1.16"
@@ -130,7 +121,7 @@ hashicorp_vault = "2.1.1"
 curl = "0.4.47"
 dotenv = "0.15.0"
 faux = "0.1.12"
-testcontainers = { version = "0.23.1", features = ["blocking"] }
+testcontainers = { version = "0.24.0", features = ["blocking"] }
 
 
 [features]

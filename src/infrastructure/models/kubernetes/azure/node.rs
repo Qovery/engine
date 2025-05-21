@@ -3673,6 +3673,7 @@ impl InstanceType for AzureInstancesType {
 }
 
 impl AzureInstancesType {
+    #[allow(dead_code)]
     pub fn as_str(&self) -> &str {
         match self {
             AzureInstancesType::STANDARD_A1_V2 => "standard_a1_v2",

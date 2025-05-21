@@ -1,8 +1,6 @@
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::scaleway::scw_infra_config;
-use crate::helpers::utilities::{
-    FuncTestsSecrets, context_for_cluster, engine_run_test, init, logger, metrics_registry,
-};
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_cluster, engine_run_test, logger, metrics_registry};
 use ::function_name::named;
 use tracing::{Level, span};
 
@@ -18,8 +16,6 @@ fn create_scaleway_kubernetes_kapsule_test_cluster() {
     let test_name = function_name!();
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 
@@ -55,8 +51,6 @@ fn destroy_scaleway_kubernetes_kapsule_test_cluster() {
     let test_name = function_name!();
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "utility", name = test_name);
         let _enter = span.enter();
 

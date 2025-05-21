@@ -383,6 +383,10 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     #[named]
     async fn test_restart_daemon_set() -> Result<(), Box<dyn std::error::Error>> {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
         let kube_client = kube::Client::try_default().await.unwrap();
         let namespace = format!(
             "{}-{:?}",

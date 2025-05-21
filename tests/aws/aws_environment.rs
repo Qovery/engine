@@ -4,7 +4,7 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::environment::session_is_sticky;
 use crate::helpers::utilities::{
     FuncTestsSecrets, TcpCheckSource, check_tcp_port_is_open, check_udp_port_is_open, context_for_resource,
-    engine_run_test, get_pods, get_pvc, init, is_pod_restarted_env, logger, metrics_registry,
+    engine_run_test, get_pods, get_pvc, is_pod_restarted_env, logger, metrics_registry,
 };
 use ::function_name::named;
 use bstr::ByteSlice;
@@ -57,7 +57,6 @@ fn aws_test_build_phase() {
     // basically building and pushing each application
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -104,7 +103,6 @@ fn aws_test_build_phase_with_git_lfs() {
     // basically building and pushing each applications
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -150,7 +148,6 @@ fn aws_test_build_phase_with_git_lfs() {
 fn deploy_a_working_environment_with_no_router_on_aws_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -291,7 +288,6 @@ fn deploy_a_working_environment_with_no_router_on_aws_eks() {
 fn deploy_a_working_environment_with_shared_registry() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -418,7 +414,6 @@ fn deploy_a_working_environment_with_shared_registry() {
 fn deploy_a_working_environment_and_pause_it_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -493,7 +488,6 @@ fn deploy_a_working_environment_and_pause_it_eks() {
 fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -547,8 +541,6 @@ fn deploy_a_not_working_environment_with_no_router_on_aws_eks() {
 fn deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -607,8 +599,6 @@ fn deploy_a_working_environment_with_domain() {
 fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -702,8 +692,6 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
 fn deploy_a_working_environment_with_storage_on_aws_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -786,8 +774,6 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -885,8 +871,6 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
 fn redeploy_same_app_with_ebs() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -990,8 +974,6 @@ fn redeploy_same_app_with_ebs() {
 fn deploy_a_not_working_environment_and_after_working_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1072,8 +1054,6 @@ fn deploy_a_not_working_environment_and_after_working_environment() {
 fn deploy_ok_fail_fail_ok_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -1173,8 +1153,6 @@ fn deploy_ok_fail_fail_ok_environment() {
 fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1228,8 +1206,6 @@ fn aws_eks_deploy_a_working_environment_with_sticky_session() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1345,8 +1321,6 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1477,8 +1451,6 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1606,7 +1578,6 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 #[test]
 fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1832,7 +1803,6 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
 #[test]
 fn deploy_container_with_no_router_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1974,7 +1944,6 @@ fn deploy_container_with_no_router_on_aws_eks() {
 #[test]
 fn deploy_container_with_storages_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -2116,7 +2085,6 @@ fn deploy_container_with_storages_on_aws_eks() {
 #[test]
 fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -2290,7 +2258,6 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
 #[test]
 fn deploy_container_with_router_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -2463,7 +2430,6 @@ fn deploy_container_with_router_on_aws_eks() {
 #[test]
 fn deploy_job_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -2577,7 +2543,6 @@ fn deploy_job_on_aws_eks() {
 #[test]
 fn deploy_job_on_aws_eks_with_dockerfile_content() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -2700,7 +2665,6 @@ CMD ["/bin/sh", "-c", "echo hello"]
 #[test]
 fn deploy_cronjob_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -2830,7 +2794,6 @@ fn deploy_cronjob_on_aws_eks() {
 #[test]
 fn deploy_cronjob_force_trigger_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -2968,7 +2931,6 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
 #[test]
 fn build_and_deploy_job_on_aws_eks() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -3105,7 +3067,6 @@ fn build_and_deploy_job_on_aws_eks() {
 #[test]
 fn test_restart_deployment() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -3243,7 +3204,6 @@ fn test_restart_deployment() {
 #[test]
 fn test_restart_statefulset() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -3433,7 +3393,6 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
     }
 
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -3546,7 +3505,6 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
 #[test]
 fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -3702,8 +3660,6 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
 fn deploy_a_working_environment_with_multiple_resized_storage_on_aws_eks() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -3857,7 +3813,6 @@ fn deploy_container_with_udp_tcp_public_ports() {
     use tracing::info;
 
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -4035,7 +3990,6 @@ fn deploy_container_with_udp_tcp_public_ports() {
 #[test]
 fn deploy_helm_chart() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -4128,7 +4082,6 @@ fn deploy_helm_chart() {
 // 2. Check admission controller config map is updated with new version
 fn deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_created_and_updated() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", function_name!());
         let _enter = span.enter();
 
@@ -4298,7 +4251,6 @@ fn deploy_helm_chart_and_pause_it() {
 
     fn test_deploy_helm_chart_and_pause_it(allow_cluster_wide_resources: bool) {
         engine_run_test(|| {
-            init();
             let span = span!(Level::INFO, "test", name = function_name!());
             let _enter = span.enter();
 
@@ -4416,7 +4368,6 @@ fn deploy_helm_chart_and_restart_it() {
 
     fn test_deploy_helm_chart_and_restart_it(allow_cluster_wide_resources: bool) {
         engine_run_test(|| {
-            init();
             let span = span!(Level::INFO, "test", name = function_name!());
             let _enter = span.enter();
 
@@ -4509,7 +4460,6 @@ fn deploy_helm_chart_and_restart_it() {
 #[test]
 fn deploy_helm_chart_with_router() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
         let _enter = span.enter();
 

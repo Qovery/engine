@@ -7,7 +7,7 @@ use crate::helpers::gcp::{
 };
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    FuncTestsSecrets, context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name, init,
+    FuncTestsSecrets, context_for_resource, engine_run_test, generate_password, get_pods, get_svc_name,
     is_pod_restarted_env, logger, metrics_registry,
 };
 use base64::Engine;
@@ -34,8 +34,6 @@ use uuid::Uuid;
 fn deploy_an_environment_with_3_databases_and_3_apps() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -92,8 +90,6 @@ fn deploy_an_environment_with_3_databases_and_3_apps() {
 fn deploy_an_environment_with_db_and_pause_it() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -165,8 +161,6 @@ fn deploy_an_environment_with_db_and_pause_it() {
 fn postgresql_deploy_a_working_development_environment_with_all_options() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -250,8 +244,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -484,8 +476,6 @@ fn test_postgresql_configuration(version: &str, test_name: &str, database_mode: 
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -652,8 +642,6 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -788,8 +776,6 @@ fn test_mysql_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -869,8 +855,6 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
     let environment = database_test_environment(&context);
 
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 

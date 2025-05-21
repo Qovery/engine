@@ -4,7 +4,7 @@ use crate::helpers::environment::session_is_sticky;
 use crate::helpers::scaleway::clean_environments;
 use crate::helpers::scaleway::scw_infra_config;
 use crate::helpers::utilities::{
-    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, logger, metrics_registry,
 };
 use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
@@ -46,8 +46,6 @@ use uuid::Uuid;
 fn scaleway_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -92,8 +90,6 @@ fn scaleway_test_build_phase() {
 fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -160,8 +156,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_no_router() {
 fn scaleway_kapsule_deploy_a_working_environment_with_shared_registry() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -280,8 +274,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_shared_registry() {
 fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -349,8 +341,6 @@ fn scaleway_kapsule_deploy_a_not_working_environment_with_no_router() {
 fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -437,8 +427,6 @@ fn scaleway_kapsule_deploy_a_working_environment_and_pause() {
 fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test",);
         let _enter = span.enter();
 
@@ -533,8 +521,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
 fn scaleway_kapsule_deploy_a_working_environment_with_storage() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -631,8 +617,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -730,7 +714,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
 fn deploy_a_working_environment_and_pause_it() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -803,8 +786,6 @@ fn deploy_a_working_environment_and_pause_it() {
 fn scaleway_kapsule_redeploy_same_app() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -925,8 +906,6 @@ fn scaleway_kapsule_redeploy_same_app() {
 fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -1021,8 +1000,6 @@ fn scaleway_kapsule_deploy_a_not_working_environment_and_then_working_environmen
 fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1137,8 +1114,6 @@ fn scaleway_kapsule_deploy_ok_fail_fail_ok_environment() {
 fn scaleway_kapsule_deploy_a_non_working_environment_with_no_failover() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -1207,8 +1182,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1338,8 +1311,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1481,8 +1452,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -1621,7 +1590,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
 #[test]
 fn deploy_container_with_no_router_on_scw() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1755,7 +1723,6 @@ fn deploy_container_with_no_router_on_scw() {
 #[test]
 fn deploy_container_on_scw_with_mounted_files_as_volume() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -1931,7 +1898,6 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
 #[test]
 fn deploy_container_with_router_on_scw() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -2097,7 +2063,6 @@ fn deploy_container_with_router_on_scw() {
 #[test]
 fn deploy_job_on_scw_kapsule() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "deploy_job_on_scw_kapsule");
         let _enter = span.enter();
 
@@ -2232,7 +2197,6 @@ fn deploy_job_on_scw_kapsule() {
 #[test]
 fn deploy_cronjob_on_scw_kapsule() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_scw_kapsule");
         let _enter = span.enter();
 
@@ -2341,7 +2305,6 @@ fn deploy_cronjob_on_scw_kapsule() {
 #[test]
 fn deploy_cronjob_force_trigger_on_scw_kapsule() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "deploy_cronjob_on_scw_kapsule");
         let _enter = span.enter();
 
@@ -2450,7 +2413,6 @@ fn deploy_cronjob_force_trigger_on_scw_kapsule() {
 #[test]
 fn build_and_deploy_job_on_scw_kapsule() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_scw_kapsule");
         let _enter = span.enter();
 
@@ -2562,7 +2524,6 @@ fn build_and_deploy_job_on_scw_kapsule() {
 #[test]
 fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = "build_and_deploy_job_on_scw_kapsule");
         let _enter = span.enter();
 
@@ -2717,7 +2678,6 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
 #[test]
 fn deploy_container_with_tcp_public_port() {
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 

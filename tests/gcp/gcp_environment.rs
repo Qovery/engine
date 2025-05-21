@@ -3,7 +3,7 @@ use crate::helpers::common::Infrastructure;
 use crate::helpers::gcp::{clean_environments, gcp_infra_config};
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{
-    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, init, logger, metrics_registry,
+    FuncTestsSecrets, context_for_resource, engine_run_test, get_pods, logger, metrics_registry,
 };
 use base64::Engine;
 use base64::engine::general_purpose;
@@ -38,8 +38,6 @@ use uuid::Uuid;
 fn gcp_test_build_phase() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -87,8 +85,6 @@ fn gcp_test_build_phase() {
 fn gcp_gke_deploy_a_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -169,7 +165,6 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
 fn deploy_a_working_environment_with_shared_registry() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -314,8 +309,6 @@ fn deploy_a_working_environment_with_shared_registry() {
 fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name,);
         let _enter = span.enter();
 
@@ -381,8 +374,6 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
 fn gcp_gke_deploy_a_working_environment_and_pause() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -467,8 +458,6 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
 fn gcp_gke_deploy_a_working_environment_with_domain() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
-
         let span = span!(Level::INFO, "test",);
         let _enter = span.enter();
 
@@ -561,7 +550,6 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
 fn gcp_gke_deploy_container_with_router() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 
@@ -777,7 +765,6 @@ fn gcp_gke_deploy_terraform_service() {
     }
 
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
 

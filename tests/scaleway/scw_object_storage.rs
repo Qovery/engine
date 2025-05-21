@@ -1,4 +1,4 @@
-use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id, init};
+use crate::helpers::utilities::{FuncTestsSecrets, engine_run_test, generate_id};
 use function_name::named;
 use std::time::Duration;
 
@@ -20,7 +20,6 @@ pub const SCW_OBJECT_STORAGE_TEST_ZONE: ScwZone = ScwZone::Warsaw1;
 fn test_delete_bucket_hard_delete_strategy() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -65,7 +64,6 @@ fn test_delete_bucket_hard_delete_strategy() {
 fn test_delete_bucket_empty_strategy() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -110,7 +108,6 @@ fn test_delete_bucket_empty_strategy() {
 fn test_create_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -160,7 +157,6 @@ fn test_create_bucket() {
 fn test_get_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -212,7 +208,6 @@ fn test_get_bucket() {
 fn test_recreate_bucket() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
 
@@ -277,7 +272,6 @@ fn test_recreate_bucket() {
 fn test_file_handling() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:
@@ -340,7 +334,6 @@ fn test_file_handling() {
 fn test_ensure_file_is_absent() {
     let test_name = function_name!();
     engine_run_test(|| {
-        init();
         let span = span!(Level::INFO, "test", name = test_name);
         let _enter = span.enter();
         // setup:

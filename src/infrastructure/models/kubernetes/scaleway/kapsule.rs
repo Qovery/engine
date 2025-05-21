@@ -24,7 +24,7 @@ use crate::io_models::metrics::MetricsParameters;
 use crate::runtime::block_on;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
-use scaleway_api_rs::models::ScalewayK8sV1Cluster;
+use scaleway_api_rs::models::ScalewayPeriodK8sPeriodV1PeriodCluster;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -264,7 +264,7 @@ impl Kapsule {
         }
     }
 
-    pub fn get_scw_cluster_info(&self) -> Result<Option<ScalewayK8sV1Cluster>, Box<EngineError>> {
+    pub fn get_scw_cluster_info(&self) -> Result<Option<ScalewayPeriodK8sPeriodV1PeriodCluster>, Box<EngineError>> {
         let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
 
         // get cluster info
@@ -277,6 +277,7 @@ impl Kapsule {
             None,
             None,
             Some(self.cluster_name().as_str()),
+            None,
             None,
             None,
         )) {

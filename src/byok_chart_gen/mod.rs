@@ -303,6 +303,10 @@ mod tests {
         use super::QoverySelfManagedChart;
         use std::{fs, io::Read, path::Path, process::Command};
 
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
         // create chart directories
         dotenv::dotenv().ok();
         let prefix = std::env::var("WORKSPACE_ROOT_DIR").unwrap();

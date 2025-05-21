@@ -1175,6 +1175,10 @@ mod tests {
     #[cfg(feature = "test-local-kube")]
     #[test]
     fn test_with_kube_builder() {
+        rustls::crypto::aws_lc_rs::default_provider()
+            .install_default()
+            .expect("Cannot install rustls crypto provider");
+
         // start a local registry to run this test
         // docker run --rm -d -p 5000:5000 --name registry registry:2
         let mut kube_config = dirs::home_dir().unwrap();

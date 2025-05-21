@@ -6,10 +6,10 @@ use crate::infrastructure::models::container_registry::{DockerImage, Repository}
 use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
 use crate::runtime::block_on;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
-use google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_googleapis::devtools::artifact_registry::v1::{
     DockerImage as GcpDockerImage, Package as GcpPackage, Repository as GcpRepository,
 };
+use google_cloud_storage::client::google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_storage::http::buckets::Bucket as GcpBucket;
 use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
 use regex::Regex;
