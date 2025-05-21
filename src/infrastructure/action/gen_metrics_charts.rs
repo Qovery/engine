@@ -11,7 +11,6 @@ use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
     KubePrometheusStackChart, PrometheusConfiguration,
 };
-use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
@@ -95,7 +94,6 @@ pub struct MetricsConfig {
     pub kube_prometheus_stack_chart: Option<CommonChart>,
     pub thanos_chart: Option<CommonChart>,
     pub prometheus_adapter_chart: Option<CommonChart>,
-    pub kube_state_metrics_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
 }
 
@@ -134,7 +132,6 @@ pub fn generate_metrics_config(
             kube_prometheus_stack_chart: None,
             thanos_chart: None,
             prometheus_adapter_chart: None,
-            kube_state_metrics_chart: None,
             metrics_query_url: None,
         }),
     }
@@ -188,17 +185,6 @@ fn generate_charts_installed_by_qovery(
     )
     .to_common_helm_chart()?;
 
-    // Kube State Metrics
-    let kube_state_metrics_chart = KubeStateMetricsChart::new(
-        HelmAction::Destroy, //uninstall all kube_state_metrics_chart, as it is now enabled in the kube-prometheus-stack chart.
-        // (TODO QOV-595 it can be removed once the chart has been removed from all the clusters)
-        chart_prefix_path,
-        HelmChartNamespaces::Prometheus,
-        true,
-        get_chart_override_fn.clone(),
-    )
-    .to_common_helm_chart()?;
-
     // Prometheus Adapter
     let prometheus_adapter_helm_action = match install_prometheus_adapter {
         true => HelmAction::Deploy,
@@ -220,7 +206,6 @@ fn generate_charts_installed_by_qovery(
         kube_prometheus_stack_chart: Some(kube_prometheus_stack_chart),
         thanos_chart: Some(thanos_chart),
         prometheus_adapter_chart: Some(prometheus_adapter_chart),
-        kube_state_metrics_chart: Some(kube_state_metrics_chart),
         metrics_query_url: match helm_action {
             HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
             HelmAction::Destroy => None,
