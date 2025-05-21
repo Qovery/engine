@@ -1,4 +1,4 @@
-use crate::engine_task::qovery_api::QoveryApi;
+use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::environment::models::gcp::GcpStorageType;
 use crate::errors::CommandError;
@@ -7,6 +7,7 @@ use crate::helm::{
 };
 use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
@@ -22,7 +23,9 @@ use crate::infrastructure::helm_charts::loki_chart::{
 use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
+use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
+use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::infrastructure::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::infrastructure::helm_charts::{
@@ -32,15 +35,17 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::{Kind as CloudProviderKind, Kind};
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use crate::io_models::QoveryIdentifier;
 use crate::io_models::metrics::MetricsConfiguration;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
+use url::Url;
 
 pub(super) fn aks_helm_charts(
     chart_config_prerequisites: &AksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
-    _qovery_api: &dyn QoveryApi,
+    qovery_api: &dyn QoveryApi,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn =
@@ -90,7 +95,7 @@ pub(super) fn aks_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         true,
-        HelmChartNamespaces::KubeSystem,
+        HelmChartNamespaces::Qovery,
         false,
     )
     .to_common_helm_chart()?;
@@ -122,8 +127,8 @@ pub(super) fn aks_helm_charts(
                 qovery_dns_config.clone(),
                 HelmChartResourcesConstraintType::ChartDefault,
                 UpdateStrategy::RollingUpdate,
-                HelmChartNamespaces::CertManager,
-                HelmChartNamespaces::CertManager,
+                HelmChartNamespaces::Qovery,
+                HelmChartNamespaces::Qovery,
             )
             .to_common_helm_chart()?,
         );
@@ -141,8 +146,8 @@ pub(super) fn aks_helm_charts(
         UpdateStrategy::RollingUpdate,
         get_chart_override_fn.clone(),
         true,
-        HelmChartNamespaces::CertManager,
-        HelmChartNamespaces::KubeSystem,
+        HelmChartNamespaces::Qovery,
+        HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
@@ -152,7 +157,7 @@ pub(super) fn aks_helm_charts(
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
         chart_config_prerequisites.managed_dns_helm_format.to_string(),
-        HelmChartNamespaces::CertManager,
+        HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
@@ -207,7 +212,7 @@ pub(super) fn aks_helm_charts(
                 .cluster_advanced_settings
                 .nginx_hpa_cpu_utilization_percentage_threshold,
         ),
-        HelmChartNamespaces::NginxIngress,
+        HelmChartNamespaces::Qovery,
         None,
         chart_config_prerequisites
             .cluster_advanced_settings
@@ -353,6 +358,61 @@ pub(super) fn aks_helm_charts(
         Some(_) | None => None,
     };
 
+    let metrics_config = generate_metrics_config(
+        CloudProviderMetricsConfig::Aks(chart_config_prerequisites),
+        chart_prefix_path,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+    )?;
+
+    // Qovery cluster agent
+    let qovery_cluster_agent = QoveryClusterAgentChart::new(
+        chart_prefix_path,
+        qovery_api
+            .service_version(EngineServiceType::ClusterAgent)
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        Url::parse(&chart_config_prerequisites.infra_options.qovery_grpc_url)
+            .map_err(|e| CommandError::new("cannot parse GRPC url".to_string(), Some(e.to_string()), None))?,
+        match chart_config_prerequisites.ff_log_history_enabled {
+            true => {
+                match loki {
+                    Some(_) => Some(Url::parse("http://loki.qovery.svc.cluster.local:3100").map_err(|e| {
+                        CommandError::new("cannot parse Loki url".to_string(), Some(e.to_string()), None)
+                    })?),
+                    None => None,
+                }
+            }
+            false => None,
+        },
+        &chart_config_prerequisites.infra_options.jwt_token,
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
+        true,
+        false,
+        metrics_config.metrics_query_url,
+    )
+    .to_common_helm_chart()?;
+
+    // Qovery shell agent
+    let qovery_shell_agent = QoveryShellAgentChart::new(
+        chart_prefix_path,
+        qovery_api
+            .service_version(EngineServiceType::ShellAgent)
+            .map_err(|e| CommandError::new("cannot get cluster agent version".to_string(), Some(e.to_string()), None))?
+            .as_str(),
+        chart_config_prerequisites.infra_options.jwt_token.clone(),
+        QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+        QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+        chart_config_prerequisites.infra_options.qovery_grpc_url.clone(),
+        HelmChartResourcesConstraintType::ChartDefault,
+        UpdateStrategy::RollingUpdate,
+    )
+    .to_common_helm_chart()?;
+
     // chart deployment order matters!!!
     // Helm chart deployment order
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
@@ -371,7 +431,7 @@ pub(super) fn aks_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartResourcesConstraintType::ChartDefault,
                 false, // <- VPA not activated
-                HelmChartNamespaces::KubeSystem,
+                HelmChartNamespaces::Qovery,
                 true, // <- wont be deployed if already exists
             )
             .to_common_helm_chart()?,
@@ -389,8 +449,12 @@ pub(super) fn aks_helm_charts(
         Some(Box::new(external_dns_chart)), /*Some(Box::new(metrics_server))*/
     ];
     let level_9: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
-    let level_10: Vec<Option<Box<dyn HelmChart>>> =
-        vec![Some(Box::new(k8s_event_logger)), Some(Box::new(cert_manager_config))];
+    let level_10: Vec<Option<Box<dyn HelmChart>>> = vec![
+        Some(Box::new(k8s_event_logger)),
+        Some(Box::new(qovery_cluster_agent)),
+        Some(Box::new(qovery_shell_agent)),
+        Some(Box::new(cert_manager_config)),
+    ];
 
     Ok(vec![
         level_1.into_iter().flatten().collect(),

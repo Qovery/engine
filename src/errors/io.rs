@@ -90,6 +90,7 @@ pub enum Tag {
     ContainerRegistryCannotGetCredentials,
     ContainerRegistryCannotGetRepository,
     ContainerRegistryCannotInstantiateClient,
+    ContainerRegistryCannotConvertClient,
     ContainerRegistryCannotLinkRegistryToCluster,
     ContainerRegistryCannotSetRepositoryLifecycleError,
     ContainerRegistryCannotSetRepositoryTags,
@@ -357,6 +358,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::DockerPushImageError => Tag::DockerPushImageError,
             errors::Tag::DockerPullImageError => Tag::DockerPullImageError,
             errors::Tag::ContainerRegistryCannotInstantiateClient => Tag::ContainerRegistryCannotInstantiateClient,
+            errors::Tag::ContainerRegistryCannotConvertClient => Tag::ContainerRegistryCannotConvertClient,
             errors::Tag::ContainerRegistryCannotCreateRepository => Tag::ContainerRegistryCannotCreateRepository,
             errors::Tag::ContainerRegistryCannotGetRepository => Tag::ContainerRegistryCannotGetRepository,
             errors::Tag::ContainerRegistryCannotSetRepositoryLifecycle => {

@@ -48,7 +48,6 @@ pub struct Credentials {
     pub client_secret: String,
     pub tenant_id: String,
     pub subscription_id: String,
-    pub resource_group_name: String,
 }
 
 #[derive(Clone, Eq, PartialEq)]

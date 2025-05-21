@@ -50,13 +50,26 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
 
     // AZURE
     context.insert("azure_location", cluster.location.to_cloud_provider_format());
+    context.insert(
+        "azure_zones",
+        &cluster
+            .location
+            .zones()
+            .iter()
+            .map(|x| x.to_cloud_provider_format())
+            .collect::<Vec<_>>(),
+    );
 
-    // credentials
+    // Node groups
+    context.insert("node_group_default", &cluster.node_groups.get_default_node_group());
+    context.insert("node_groups_additional", &cluster.node_groups.get_additional_node_groups());
+
+    // Credentials
     context.insert("azure_client_id", cluster.credentials.client_id.as_str());
     context.insert("azure_client_secret", cluster.credentials.client_secret.as_str());
     context.insert("azure_tenant_id", cluster.credentials.tenant_id.as_str());
     context.insert("azure_subscription_id", cluster.credentials.subscription_id.as_str());
-    context.insert("azure_resource_group_name", cluster.credentials.resource_group_name.as_str());
+    context.insert("azure_resource_group_name", cluster.options.azure_resource_group_name.as_str());
 
     // Storage
     context.insert("main_storage_account_name", cluster.cluster_name().replace('-', "").as_str()); // can only consist of lowercase letters and numbers, and must be between 3 and 24 characters long

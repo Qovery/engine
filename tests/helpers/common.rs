@@ -12,6 +12,7 @@ use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
@@ -68,7 +69,7 @@ pub trait Cluster<T, U> {
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
-        cluster_id: Option<String>,
+        cluster_id: QoveryIdentifier,
         engine_location: EngineLocation,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> U;

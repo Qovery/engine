@@ -1116,6 +1116,7 @@ impl NodeGroups {
         instance_type: String,
         disk_size_in_gib: i32,
         instance_architecture: CpuArchitecture,
+        zone: Option<String>,
     ) -> Result<Self, CommandError> {
         if min_nodes > max_nodes {
             return Err(CommandError::new_from_safe_message(format!(
@@ -1133,6 +1134,7 @@ impl NodeGroups {
             disk_size_in_gib,
             desired_nodes: None,
             instance_architecture,
+            zone,
         })
     }
 
