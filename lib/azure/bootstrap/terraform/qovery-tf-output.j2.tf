@@ -3,7 +3,11 @@ output "kubeconfig" {
     depends_on = [azurerm_kubernetes_cluster.primary]
     value = azurerm_kubernetes_cluster.primary.kube_config_raw
 }
-output "aks_cluster_public_hostname" { value = "todo" }
+output "aks_cluster_public_hostname" {
+    sensitive = true
+    depends_on = [azurerm_kubernetes_cluster.primary]
+    value = azurerm_kubernetes_cluster.primary.kube_config[0].host
+}
 output "main_storage_account_name" { value = azurerm_storage_account.main_storage.name  }
 output "main_storage_account_primary_access_key" {
     sensitive = true

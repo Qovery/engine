@@ -63,9 +63,9 @@ resource "azurerm_kubernetes_cluster" "primary" {
   tags = local.tags_aks
 
   depends_on = [
-    azurerm_subnet_nat_gateway_association.zone_1,
-    azurerm_subnet_nat_gateway_association.zone_2,
-    azurerm_subnet_nat_gateway_association.zone_3
+    {% for zone in azure_zones %}
+    azurerm_subnet_nat_gateway_association.zone_{{ zone }},
+    {% endfor %}
   ]
 }
 
