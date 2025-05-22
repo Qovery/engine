@@ -29,6 +29,7 @@ resource "azurerm_kubernetes_cluster" "primary" {
     max_count              = {{ node_group_default.max_nodes }}
     node_public_ip_enabled = false
     orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
+    temporary_name_for_rotation = "{{ node_group_default.name }}temp"
     upgrade_settings {
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
@@ -91,6 +92,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_{{ node_group.zo
   max_count              = {{ node_group.max_nodes }}
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
+  temporary_name_for_rotation = "{{ node_group.name }}temp"
 
   tags = local.tags_aks
 }
