@@ -707,9 +707,6 @@ pub(super) fn eks_helm_charts(
     ];
 
     // observability
-    if let Some(kube_state_metrics_chart) = metrics_config.kube_state_metrics_chart {
-        level_3.push(Box::new(kube_state_metrics_chart));
-    }
     if let Some(kube_prometheus_stack_chart) = metrics_config.kube_prometheus_stack_chart {
         level_4.push(Box::new(kube_prometheus_stack_chart));
     }
