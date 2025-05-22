@@ -552,9 +552,15 @@ impl KubernetesDto {
                         ))
                     },
                 )?;
-                let options = AksOptions::try_from(options).map_err(|e: String| {
+                let mut options = AksOptions::try_from(options).map_err(|e: String| {
                     Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
                 })?;
+
+                // TODO(benjaminch): for the time being, resource group name is hardcoded to the cluster name
+                // this will be updated once we will let user specify the resource group name
+                options.azure_resource_group_name = QoveryIdentifier::new(*context.cluster_long_id())
+                    .qovery_resource_name()
+                    .to_string();
 
                 match kubernetes::azure::aks::AKS::new(
                     context.clone(),
