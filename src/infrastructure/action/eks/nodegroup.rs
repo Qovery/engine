@@ -598,6 +598,7 @@ mod tests {
             "t1000.xlarge".to_string(),
             20,
             CpuArchitecture::AMD64,
+            None,
         )
         .unwrap();
 

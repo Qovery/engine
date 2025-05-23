@@ -2,7 +2,8 @@ use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
 
 pub mod aks;
-mod node;
+pub mod node;
+pub mod node_group;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VpcMode {
@@ -31,6 +32,9 @@ pub struct AksOptions {
     // Other
     pub tls_email_report: String,
     pub metrics_parameters: Option<MetricsParameters>,
+
+    // Azure specifics
+    pub azure_resource_group_name: String,
 }
 
 impl AksOptions {
@@ -46,6 +50,7 @@ impl AksOptions {
         qovery_engine_location: EngineLocation,
         tls_email_report: String,
         metrics_parameters: Option<MetricsParameters>,
+        azure_resource_group_name: String,
     ) -> Self {
         AksOptions {
             qovery_api_url,
@@ -59,6 +64,7 @@ impl AksOptions {
             qovery_engine_location,
             tls_email_report,
             metrics_parameters,
+            azure_resource_group_name,
         }
     }
 }

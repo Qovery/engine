@@ -14,12 +14,15 @@ use qovery_engine::environment::models::azure::{AzureStorageType, Credentials};
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::TerraformStateCredentials;
 use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
-use qovery_engine::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
+use qovery_engine::infrastructure::models::cloud_provider::azure::locations::{AzureLocation, AzureZone};
 use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::azure_container_registry::AzureContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use qovery_engine::infrastructure::models::kubernetes::azure::AksOptions;
+use qovery_engine::infrastructure::models::kubernetes::azure::node::AzureInstancesType;
+use qovery_engine::infrastructure::models::kubernetes::azure::node_group::{AzureNodeGroup, AzureNodeGroups};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -71,7 +74,7 @@ pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
             .AZURE_SUBSCRIPTION_ID
             .as_ref()
             .expect("AZURE_SUBSCRIPTION_ID is not set in secrets"),
-        AZURE_RESOURCE_GROUP_NAME,
+        QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
         secrets
             .AZURE_CLIENT_ID
             .as_ref()
@@ -207,7 +210,6 @@ impl Cluster<Azure, AksOptions> for Azure {
                 client_secret: secrets.AZURE_CLIENT_SECRET.expect("AZURE_CLIENT_SECRET is not set"),
                 tenant_id: secrets.AZURE_TENANT_ID.expect("AZURE_TENANT_ID is not set"),
                 subscription_id: secrets.AZURE_SUBSCRIPTION_ID.expect("AZURE_SUBSCRIPTION_ID is not set"),
-                resource_group_name: format!("qovery-{}", context.cluster_short_id()), // one per cluster
             },
             TerraformStateCredentials {
                 access_key_id: secrets
@@ -226,34 +228,35 @@ impl Cluster<Azure, AksOptions> for Azure {
     }
 
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
-        // TODO(benjaminch): add support for more instance type ARM64
-
         vec![
             NodeGroups::new(
                 "default1".to_string(),
                 min_nodes,
                 max_nodes,
-                "Standard_D2s_v3".to_string(),
+                "standard_ds2_v2".to_string(),
                 100,
                 cpu_archi,
+                Some("1".to_string()),
             )
             .expect("Problem while setup AKS nodes"),
             NodeGroups::new(
                 "default2".to_string(),
                 min_nodes,
                 max_nodes,
-                "Standard_D2s_v3".to_string(),
+                "standard_ds2_v2".to_string(),
                 100,
                 cpu_archi,
+                Some("2".to_string()),
             )
             .expect("Problem while setup AKS nodes"),
             NodeGroups::new(
                 "default3".to_string(),
                 min_nodes,
                 max_nodes,
-                "Standard_D2s_v3".to_string(),
+                "standard_ds2_v2".to_string(),
                 100,
                 cpu_archi,
+                Some("3".to_string()),
             )
             .expect("Problem while setup AKS nodes"),
         ]
@@ -261,7 +264,7 @@ impl Cluster<Azure, AksOptions> for Azure {
 
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
-        _cluster_id: Option<String>,
+        cluster_id: QoveryIdentifier,
         engine_location: EngineLocation,
         _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> AksOptions {
@@ -286,6 +289,7 @@ impl Cluster<Azure, AksOptions> for Azure {
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),
             None,
+            cluster_id.qovery_resource_name().to_string(),
         )
     }
 }
@@ -301,4 +305,22 @@ pub fn clean_environments(
     // TODO(benjaminch): delete repository
 
     Ok(())
+}
+
+pub fn azure_nodes_groups(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> AzureNodeGroups {
+    AzureNodeGroups::new(
+        Azure::kubernetes_nodes(min_nodes, max_nodes, cpu_archi)
+            .into_iter()
+            .map(|node_group| AzureNodeGroup {
+                name: node_group.name,
+                min_nodes: node_group.min_nodes,
+                max_nodes: node_group.max_nodes,
+                instance_type: AzureInstancesType::from_str(&node_group.instance_type)
+                    .expect("Instance type is not valid"),
+                disk_size_in_gib: node_group.disk_size_in_gib,
+                instance_architecture: node_group.instance_architecture,
+                zone: AzureZone::from_str(&node_group.zone.unwrap_or_default()).expect("Zone is not valid"),
+            })
+            .collect::<Vec<AzureNodeGroup>>(),
+    )
 }

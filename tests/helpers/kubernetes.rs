@@ -28,7 +28,7 @@ use qovery_engine::io_models::models::{CpuArchitecture, StorageClass, VpcQoveryN
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
-use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS};
+use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS, azure_nodes_groups};
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
@@ -37,6 +37,7 @@ use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
 use qovery_engine::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use qovery_engine::infrastructure::models::cloud_provider::service::Action;
 use qovery_engine::infrastructure::models::kubernetes::azure::aks::AKS;
+use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::metrics::MetricsConfiguration::MetricsInstalledByQovery;
 use qovery_engine::io_models::metrics::MetricsParameters;
 use std::str::FromStr;
@@ -413,7 +414,12 @@ pub fn get_environment_test_kubernetes(
         KubernetesKind::Eks => {
             let region = AwsRegion::from_str(localisation).expect("AWS region not supported");
 
-            let mut options = AWS::kubernetes_cluster_options(secrets.clone(), None, engine_location, None);
+            let mut options = AWS::kubernetes_cluster_options(
+                secrets.clone(),
+                QoveryIdentifier::new(*context.cluster_long_id()),
+                engine_location,
+                None,
+            );
             if let Some(vpc_network_mode) = vpc_network_mode {
                 options.vpc_qovery_network_mode = vpc_network_mode;
             }
@@ -479,7 +485,13 @@ pub fn get_environment_test_kubernetes(
                     region,
                     cloud_provider,
                     Utc::now(),
-                    Azure::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None),
+                    Azure::kubernetes_cluster_options(
+                        secrets.clone(),
+                        QoveryIdentifier::new(*context.cluster_long_id()),
+                        EngineLocation::ClientSide,
+                        None,
+                    ),
+                    azure_nodes_groups(min_nodes, max_nodes, cpu_archi),
                     logger,
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AZURE_RESOURCE_TTL_IN_SECONDS as i32,
@@ -499,8 +511,12 @@ pub fn get_environment_test_kubernetes(
         KubernetesKind::ScwKapsule => {
             let zone = ScwZone::from_str(localisation).expect("SCW zone not supported");
 
-            let mut options =
-                Scaleway::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, None);
+            let mut options = Scaleway::kubernetes_cluster_options(
+                secrets.clone(),
+                QoveryIdentifier::new(*context.cluster_long_id()),
+                EngineLocation::ClientSide,
+                None,
+            );
             actionable_features.iter().for_each(|feature| {
                 match feature {
                     ActionableFeature::Metrics => {
@@ -541,8 +557,12 @@ pub fn get_environment_test_kubernetes(
         }
         KubernetesKind::Gke => {
             let region = GcpRegion::from_str(localisation).expect("GCP zone not supported");
-            let mut options =
-                Gke::kubernetes_cluster_options(secrets.clone(), None, EngineLocation::ClientSide, vpc_network_mode);
+            let mut options = Gke::kubernetes_cluster_options(
+                secrets.clone(),
+                QoveryIdentifier::new(*context.cluster_long_id()),
+                EngineLocation::ClientSide,
+                vpc_network_mode,
+            );
 
             actionable_features.iter().for_each(|feature| {
                 match feature {

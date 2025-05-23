@@ -1,9 +1,11 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::aws::AwsStorageType;
+use crate::environment::models::azure::AzureStorageType;
 use crate::environment::models::gcp::GcpStorageType;
 use crate::environment::models::scaleway::ScwStorageType;
 use crate::errors::CommandError;
 use crate::helm::{CommonChart, HelmAction, HelmChartNamespaces};
+use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
 use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::action::gke::helm_charts::GkeChartsConfigPrerequisites;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleChartsConfigPrerequisites;
@@ -23,6 +25,7 @@ pub enum CloudProviderMetricsConfig<'a> {
     Eks(&'a EksChartsConfigPrerequisites),
     Gke(&'a GkeChartsConfigPrerequisites),
     Kapsule(&'a KapsuleChartsConfigPrerequisites),
+    Aks(&'a AksChartsConfigPrerequisites),
 }
 
 impl CloudProviderMetricsConfig<'_> {
@@ -51,6 +54,7 @@ impl CloudProviderMetricsConfig<'_> {
                 access_key: cfg.access_key.clone(),
                 secret_key: cfg.secret_key.clone(),
             },
+            Self::Aks(_cfg) => PrometheusConfiguration::AzureBlobContainer {},
         }
     }
 
@@ -59,6 +63,7 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Eks(_) => AwsStorageType::GP2.to_k8s_storage_class(),
             Self::Gke(_) => GcpStorageType::Balanced.to_k8s_storage_class(),
             Self::Kapsule(_) => ScwStorageType::SbvSsd.to_k8s_storage_class(),
+            Self::Aks(_) => AzureStorageType::StandardSSDZRS.to_k8s_storage_class(),
         }
     }
 
@@ -67,6 +72,7 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Eks(cfg) => cfg.is_karpenter_enabled,
             Self::Gke(_) => false,
             Self::Kapsule(_) => false,
+            Self::Aks(_) => true,
         }
     }
 
@@ -75,14 +81,15 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Eks(cfg) => cfg.metrics_parameters.as_ref(),
             Self::Gke(cfg) => cfg.metrics_parameters.as_ref(),
             Self::Kapsule(cfg) => cfg.metrics_parameters.as_ref(),
+            Self::Aks(cfg) => cfg.metrics_parameters.as_ref(),
         }
     }
 
     pub fn metrics_query_url_for_qovery_installation(&self) -> String {
         match self {
-            CloudProviderMetricsConfig::Eks(_) | CloudProviderMetricsConfig::Kapsule(_) => {
-                "http://thanos-query.prometheus.svc.cluster.local:9090".to_string()
-            }
+            CloudProviderMetricsConfig::Eks(_)
+            | CloudProviderMetricsConfig::Kapsule(_)
+            | CloudProviderMetricsConfig::Aks(_) => "http://thanos-query.prometheus.svc.cluster.local:9090".to_string(),
             CloudProviderMetricsConfig::Gke(_) => "http://thanos-query.qovery.svc.cluster.local:9090".to_string(),
         }
     }

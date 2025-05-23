@@ -4,6 +4,46 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use strum_macros::EnumIter;
 
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter, Hash)]
+pub enum AzureZone {
+    #[serde(rename = "1")]
+    One,
+    #[serde(rename = "2")]
+    Two,
+    #[serde(rename = "3")]
+    Three,
+}
+
+impl ToCloudProviderFormat for AzureZone {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            AzureZone::One => "1",
+            AzureZone::Two => "2",
+            AzureZone::Three => "3",
+        }
+    }
+}
+
+impl Display for AzureZone {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.to_cloud_provider_format())
+    }
+}
+
+impl FromStr for AzureZone {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<AzureZone, ()> {
+        let v: &str = &s.to_lowercase();
+        match v {
+            "1" => Ok(AzureZone::One),
+            "2" => Ok(AzureZone::Two),
+            "3" => Ok(AzureZone::Three),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum AzureLocation {
@@ -113,6 +153,13 @@ pub enum AzureLocation {
     WestUS2,
     #[serde(alias = "WestUS3")]
     WestUS3,
+}
+
+impl AzureLocation {
+    pub fn zones(&self) -> Vec<AzureZone> {
+        // TODO(benjaminch): Azure integration, make sure to check if the location supports zones
+        vec![AzureZone::One, AzureZone::Two, AzureZone::Three]
+    }
 }
 
 impl ToCloudProviderFormat for AzureLocation {
@@ -248,7 +295,8 @@ impl FromStr for AzureLocation {
 #[cfg(test)]
 mod tests {
     use crate::environment::models::ToCloudProviderFormat;
-    use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
+    use crate::infrastructure::models::cloud_provider::azure::locations::{AzureLocation, AzureZone};
+    use std::collections::HashSet;
     use std::str::FromStr;
     use strum::IntoEnumIterator;
 
@@ -388,6 +436,55 @@ mod tests {
 
             // test unsupported location
             assert!(AzureLocation::from_str("an-unsupported-location").is_err());
+        }
+    }
+
+    #[test]
+    fn test_azure_location_zones() {
+        let expected: HashSet<_> = [AzureZone::One, AzureZone::Two, AzureZone::Three].into_iter().collect();
+
+        for location in AzureLocation::iter() {
+            let actual: HashSet<_> = location.zones().into_iter().collect();
+            assert_eq!(expected, actual, "Mismatch for location {:?}", location);
+        }
+    }
+
+    #[test]
+    fn test_azure_zone_to_azure_format() {
+        for zone in AzureZone::iter() {
+            assert_eq!(
+                match zone {
+                    AzureZone::One => "1",
+                    AzureZone::Two => "2",
+                    AzureZone::Three => "3",
+                },
+                zone.to_cloud_provider_format()
+            );
+        }
+    }
+
+    #[test]
+    fn test_azure_zone_to_string() {
+        for zone in AzureZone::iter() {
+            assert_eq!(
+                match zone {
+                    AzureZone::One => "1",
+                    AzureZone::Two => "2",
+                    AzureZone::Three => "3",
+                },
+                zone.to_string()
+            );
+        }
+    }
+
+    #[test]
+    fn test_azure_zone_from_str() {
+        // test all supported zones
+        for zone in AzureZone::iter() {
+            assert_eq!(zone, AzureZone::from_str(zone.to_cloud_provider_format()).unwrap());
+
+            // test unsupported zone
+            assert!(AzureZone::from_str("an-unsupported-zone").is_err());
         }
     }
 }

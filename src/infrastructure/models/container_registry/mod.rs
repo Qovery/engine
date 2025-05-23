@@ -102,10 +102,14 @@ pub enum ContainerRegistry {
 }
 
 impl ContainerRegistry {
-    pub fn as_azure_container_registry(&self) -> Option<&azure_container_registry::AzureContainerRegistry> {
+    pub fn as_azure_container_registry(
+        &self,
+    ) -> Result<&azure_container_registry::AzureContainerRegistry, ContainerRegistryError> {
         match self {
-            ContainerRegistry::AzureContainerRegistry(azure_cr) => Some(azure_cr),
-            _ => None,
+            ContainerRegistry::AzureContainerRegistry(azure_cr) => Ok(azure_cr),
+            _ => Err(ContainerRegistryError::CannotConvertClient {
+                raw_error_message: "Cannot convert client to AzureContainerRegistry".to_string(),
+            }),
         }
     }
 }

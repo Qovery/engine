@@ -146,6 +146,7 @@ pub struct NodeGroups {
     pub instance_type: String,
     pub disk_size_in_gib: i32,
     pub instance_architecture: CpuArchitecture,
+    pub zone: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Copy, Hash)]

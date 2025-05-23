@@ -729,12 +729,12 @@ mod tests {
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20, CpuArchitecture::AMD64, None).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64, None).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20, CpuArchitecture::AMD64, None).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64, None).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 id: None,
@@ -744,6 +744,7 @@ mod tests {
                 disk_size_in_gib: 20,
                 desired_nodes: None,
                 instance_architecture: CpuArchitecture::AMD64,
+                zone: None,
             }
         );
     }

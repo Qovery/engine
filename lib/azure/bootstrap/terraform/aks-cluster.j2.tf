@@ -10,16 +10,26 @@ resource "azurerm_kubernetes_cluster" "primary" {
   kubernetes_version = var.kubernetes_version
 
   default_node_pool {
-    name    = "default1"
-    vm_size = "Standard_DS2_v2" # TODO(benjaminch): hardcoded for now, to be variabilized if needed later one
+    name    = "{{ node_group_default.name }}"
+    vm_size = "{{ node_group_default.instance_type }}"
     # only_critical_addons_enabled = true # tainting the nodes with CriticalAddonsOnly=true:NoSchedule to avoid scheduling workloads on the system node pool
-    zones                  = ["1"]
+    zones                  = ["{{ node_group_default.zone }}"]
+    {% if node_group_default.zone == "1" %}
     vnet_subnet_id         = azurerm_subnet.node_cidr_zone_1.id
+    {% elif node_group_default.zone == "2" %}
+    vnet_subnet_id         = azurerm_subnet.node_cidr_zone_2.id
+    {% elif node_group_default.zone == "3" %}
+    vnet_subnet_id         = azurerm_subnet.node_cidr_zone_3.id
+    {% else %}
+    # this is an error and should fail
+    vnet_subnet_id         = "unsupported"
+    {% endif %}
     auto_scaling_enabled   = true
-    min_count              = 1
-    max_count              = 3
+    min_count              = {{ node_group_default.min_nodes }}
+    max_count              = {{ node_group_default.max_nodes }}
     node_public_ip_enabled = false
     orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
+    temporary_name_for_rotation = "{{ node_group_default.name }}temp"
     upgrade_settings {
       drain_timeout_in_minutes      = 0
       max_surge                     = "10%"
@@ -43,9 +53,10 @@ resource "azurerm_kubernetes_cluster" "primary" {
     dns_service_ip      = local.dns_service_ip
   }
 
+  # TODO(benjaminch): Azure integration, to be variabilized
   maintenance_window {
     allowed {
-      day   = "Saturday"
+      day   = "Tuesday"
       hours = [21, 22, 23]
     }
   }
@@ -53,42 +64,39 @@ resource "azurerm_kubernetes_cluster" "primary" {
   tags = local.tags_aks
 
   depends_on = [
-    azurerm_subnet_nat_gateway_association.zone_1,
-    azurerm_subnet_nat_gateway_association.zone_2,
-    azurerm_subnet_nat_gateway_association.zone_3
+    {% for zone in azure_zones %}
+    azurerm_subnet_nat_gateway_association.zone_{{ zone }},
+    {% endfor %}
   ]
 }
 
-resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_2" {
-  name                   = "default2"
+{% for node_group in node_groups_additional %}
+resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_{{ node_group.zone }}" {
+  name    = "{{ node_group.name }}"
   kubernetes_cluster_id  = azurerm_kubernetes_cluster.primary.id
-  vm_size                = "Standard_DS2_v2"
-  zones                  = ["2"]
+  vm_size = "{{ node_group.instance_type }}"
+  # only_critical_addons_enabled = true # tainting the nodes with CriticalAddonsOnly=true:NoSchedule to avoid scheduling workloads on the system node pool
+  zones                  = ["{{ node_group.zone }}"]
+  {% if node_group.zone == "1" %}
+  vnet_subnet_id         = azurerm_subnet.node_cidr_zone_1.id
+  {% elif node_group.zone == "2" %}
   vnet_subnet_id         = azurerm_subnet.node_cidr_zone_2.id
-  auto_scaling_enabled   = true
-  min_count              = 1
-  max_count              = 3
-  node_public_ip_enabled = false
-  orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
-
-  tags = local.tags_aks
-}
-
-resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_3" {
-  name                   = "default3"
-  kubernetes_cluster_id  = azurerm_kubernetes_cluster.primary.id
-  vm_size                = "Standard_DS2_v2"
-  zones                  = ["3"]
+  {% elif node_group.zone == "3" %}
   vnet_subnet_id         = azurerm_subnet.node_cidr_zone_3.id
+  {% else %}
+  # this is an error and should fail
+  vnet_subnet_id         = "unsupported"
+  {% endif %}
   auto_scaling_enabled   = true
-  min_count              = 1
-  max_count              = 3
+  min_count              = {{ node_group.min_nodes }}
+  max_count              = {{ node_group.max_nodes }}
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
+  temporary_name_for_rotation = "{{ node_group.name }}temp"
 
   tags = local.tags_aks
 }
-
+{% endfor %}
 
 # Update the AKS cluster to enable NAP using the azapi provider
 # resource "azapi_update_resource" "nap" {

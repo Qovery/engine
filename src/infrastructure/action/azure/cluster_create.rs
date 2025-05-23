@@ -9,6 +9,7 @@ use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::container_registry::RegistryTags;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::azure::aks::AKS;
 use crate::infrastructure::models::object_storage::azure_object_storage::StorageAccount;
@@ -61,6 +62,12 @@ pub(super) fn create_aks_cluster(
         return Err(err);
     }
 
+    // Create cluster container registry
+    if let Err(err) = create_container_registry(infra_ctx, event_details.clone()) {
+        logger.error(*err.clone(), None::<&str>);
+        return Err(err);
+    }
+
     let helms_deployments = AksHelmsDeployment::new(
         HelmInfraContext::new(
             tera_context,
@@ -75,6 +82,33 @@ pub(super) fn create_aks_cluster(
         cluster,
     );
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
+
+    Ok(())
+}
+
+fn create_container_registry(
+    infra_ctx: &InfrastructureContext,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let azure_cr = infra_ctx
+        .container_registry()
+        .as_azure_container_registry()
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
+    let kubernetes = infra_ctx.kubernetes();
+
+    azure_cr
+        .create_repository_in_resource_group(
+            Some(infra_ctx.kubernetes().cluster_name().as_str()), // Create the registry in the same resource group as the cluster
+            infra_ctx.kubernetes().cluster_name().as_str(),
+            kubernetes.advanced_settings().registry_image_retention_time_sec,
+            RegistryTags {
+                cluster_id: Some(kubernetes.long_id().to_string()),
+                environment_id: None,
+                project_id: None,
+                resource_ttl: kubernetes.advanced_settings().resource_ttl(),
+            },
+        )
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
 
     Ok(())
 }

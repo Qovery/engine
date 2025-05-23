@@ -106,7 +106,12 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
             ],
             cloud_provider.as_ref(),
             Utc::now(),
-            AWS::kubernetes_cluster_options(FuncTestsSecrets::default(), None, EngineLocation::ClientSide, None),
+            AWS::kubernetes_cluster_options(
+                FuncTestsSecrets::default(),
+                QoveryIdentifier::new(cluster_id),
+                EngineLocation::ClientSide,
+                None,
+            ),
             AWS::kubernetes_nodes(3, 5, CpuArchitecture::AMD64),
             logger(),
             ClusterAdvancedSettings {

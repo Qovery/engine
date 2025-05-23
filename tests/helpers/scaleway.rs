@@ -216,14 +216,14 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
         vec![
-            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, node_type, 0, cpu_archi)
+            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, node_type, 0, cpu_archi, None)
                 .expect("Problem while setup SCW nodes"),
         ]
     }
 
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
-        _cluster_id: Option<String>,
+        _cluster_id: QoveryIdentifier,
         engine_location: EngineLocation,
         _vpc_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> KapsuleOptions {

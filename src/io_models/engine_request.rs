@@ -15,7 +15,7 @@ use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::cloud_provider::aws::{AWS, AwsCredentials};
 use crate::infrastructure::models::cloud_provider::azure::Azure;
-use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
+use crate::infrastructure::models::cloud_provider::azure::locations::{AzureLocation, AzureZone};
 use crate::infrastructure::models::cloud_provider::gcp::Google;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, CustomerHelmChartsOverrideEncoded};
@@ -32,6 +32,8 @@ use crate::infrastructure::models::dns_provider::io::Kind;
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDns;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::azure::AksOptions;
+use crate::infrastructure::models::kubernetes::azure::node::AzureInstancesType;
+use crate::infrastructure::models::kubernetes::azure::node_group::{AzureNodeGroup, AzureNodeGroups};
 use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion, event_details};
@@ -311,7 +313,6 @@ impl CloudProvider {
                     client_secret,
                     tenant_id,
                     subscription_id,
-                    resource_group_name,
                 } = &self.options
                 else {
                     return None;
@@ -329,7 +330,6 @@ impl CloudProvider {
                         client_secret: client_secret.to_string(),
                         tenant_id: tenant_id.to_string(),
                         subscription_id: subscription_id.to_string(),
-                        resource_group_name: resource_group_name.to_string(),
                     },
                     terraform_state_credentials,
                 )))
@@ -552,9 +552,16 @@ impl KubernetesDto {
                         ))
                     },
                 )?;
-                let options = AksOptions::try_from(options).map_err(|e: String| {
+                let mut options = AksOptions::try_from(options).map_err(|e: String| {
                     Box::new(EngineError::new_invalid_engine_payload(event_details.clone(), e.as_str(), None))
                 })?;
+
+                // TODO(benjaminch): for the time being, resource group name is hardcoded to the cluster name
+                // this will be updated once we will let user specify the resource group name
+                options.azure_resource_group_name = QoveryIdentifier::new(*context.cluster_long_id())
+                    .qovery_resource_name()
+                    .to_string();
+
                 match kubernetes::azure::aks::AKS::new(
                     context.clone(),
                     self.long_id,
@@ -570,6 +577,32 @@ impl KubernetesDto {
                     cloud_provider,
                     self.created_at,
                     options,
+                    AzureNodeGroups::new(
+                        self.nodes_groups
+                            .iter()
+                            .map(|ng| {
+                                let zone = ng.zone.clone().unwrap_or_default();
+                                AzureNodeGroup {
+                                    name: ng.name.clone(),
+                                    min_nodes: ng.min_nodes,
+                                    max_nodes: ng.max_nodes,
+                                    instance_type: AzureInstancesType::from_str(&ng.instance_type).unwrap_or_else(
+                                        |_| {
+                                            panic!(
+                                                "cannot parse `{}`, it doesn't seem to be a valid Azure instance type",
+                                                &ng.instance_type,
+                                            )
+                                        },
+                                    ),
+                                    disk_size_in_gib: ng.disk_size_in_gib,
+                                    instance_architecture: ng.instance_architecture,
+                                    zone: AzureZone::from_str(&zone).unwrap_or_else(|_| {
+                                        panic!("cannot parse `{}`, it doesn't seem to be a valid Azure zone", zone,)
+                                    }),
+                                }
+                            })
+                            .collect(),
+                    ),
                     logger,
                     self.advanced_settings.clone(),
                     decoded_helm_charts_override,
@@ -712,11 +745,11 @@ impl ContainerRegistry {
             }
             ContainerRegistry::AzureCr { long_id, name, options } => Ok(
                 container_registry::ContainerRegistry::AzureContainerRegistry(AzureContainerRegistry::new(
-                    context,
+                    context.clone(),
                     long_id,
                     &name,
                     &options.subscription_id,
-                    &options.resource_group_name,
+                    QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
                     &options.client_id,
                     &options.client_secret,
                     options.location.clone(),
@@ -830,7 +863,6 @@ pub enum CloudProviderOptions {
         client_secret: String,
         tenant_id: String,
         subscription_id: String,
-        resource_group_name: String, // TODO(benjaminch): check if this is the proper place to set this
     },
     Scaleway {
         scaleway_access_key: String,
@@ -873,7 +905,6 @@ pub struct AzureCrOptions {
     location: AzureLocation,
     subscription_id: String,
     tenant_id: String,
-    resource_group_name: String,
     #[serde(alias = "username")]
     client_id: String,
     #[derivative(Debug = "ignore")]

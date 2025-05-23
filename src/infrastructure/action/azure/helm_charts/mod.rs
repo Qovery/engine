@@ -41,7 +41,7 @@ pub struct AksChartsConfigPrerequisites {
     pub metrics_parameters: Option<MetricsParameters>,
     pub _prometheus_config: Option<PrometheusConfiguration>,
     // qovery options form json input
-    pub _infra_options: AksOptions,
+    pub infra_options: AksOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
@@ -89,7 +89,7 @@ impl AksChartsConfigPrerequisites {
             logs_bucket_name,
             metrics_parameters,
             _prometheus_config: prometheus_config,
-            _infra_options: infra_options,
+            infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
         }

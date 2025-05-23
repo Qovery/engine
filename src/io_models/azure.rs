@@ -23,6 +23,9 @@ pub struct AksOptions {
     pub tls_email_report: String,
     #[serde(default)]
     pub metrics_parameters: Option<MetricsParameters>,
+
+    // Azure specifics
+    pub azure_resource_group_name: String,
 }
 
 impl AksOptions {}
@@ -43,6 +46,7 @@ impl TryFrom<AksOptions> for AksOptionsModel {
             qovery_engine_location: value.qovery_engine_location,
             metrics_parameters: value.metrics_parameters,
             tls_email_report: value.tls_email_report,
+            azure_resource_group_name: value.azure_resource_group_name,
         })
     }
 }
