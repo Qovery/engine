@@ -74,7 +74,7 @@ pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
             .AZURE_SUBSCRIPTION_ID
             .as_ref()
             .expect("AZURE_SUBSCRIPTION_ID is not set in secrets"),
-        AZURE_RESOURCE_GROUP_NAME,
+        QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
         secrets
             .AZURE_CLIENT_ID
             .as_ref()

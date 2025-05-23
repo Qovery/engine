@@ -749,7 +749,7 @@ impl ContainerRegistry {
                     long_id,
                     &name,
                     &options.subscription_id,
-                    context.cluster_short_id(),
+                    QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
                     &options.client_id,
                     &options.client_secret,
                     options.location.clone(),
