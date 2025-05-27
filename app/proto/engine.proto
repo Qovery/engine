@@ -19,6 +19,7 @@ service Engine {
   rpc GetServiceVersion(ServiceVersionRequest) returns (ServiceVersionResponse) {}
   rpc GetGitToken(GitTokenRequest) returns (GitTokenResponse) {}
   rpc updateClusterCredentials(ClusterCredentialsUpdate) returns (google.protobuf.Empty) {}
+  rpc updateClusterOutputs(ClusterOutputsUpdateRequest) returns (google.protobuf.Empty) {}
 }
 
 enum DeploymentType {
@@ -133,7 +134,30 @@ message GitTokenResponse {
   string accessToken = 2;
   string expiredAt = 3;
 }
+
 message ClusterCredentialsUpdate {
   string jwt_token = 1;
   string kubeconfig = 2;
+}
+
+enum KubernetesProviderKind {
+  EKS = 0;
+  GKE = 1;
+  SCW_KAPSULE = 2;
+  AKS = 3;
+}
+
+message ClusterOutputsUpdateRequest {
+  string jwt_token = 1;
+  string kubeconfig = 2;
+
+  KubernetesProviderKind KubernetesProviderKind = 3;
+  string clusterName = 4;
+  string clusterId = 5;
+  optional string clusterArn = 6;
+  optional string clusterSelfLink = 7;
+  optional string clusterOidcIssuer = 8;
+  optional string vpcId = 9;
+  optional string network = 10;
+  optional string privateNetworkId = 11;
 }

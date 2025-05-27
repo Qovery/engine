@@ -4,6 +4,7 @@ use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
@@ -126,6 +127,12 @@ pub fn delete_eks_cluster(
         }
     };
     update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(kubernetes, &tf_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            tf_output.cluster_id, err
+        ));
+    }
 
     // delete all PDBs first, because those will prevent node deletion
     if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {

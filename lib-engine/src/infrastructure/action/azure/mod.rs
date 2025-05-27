@@ -67,4 +67,10 @@ pub struct AksQoveryTerraformOutput {
     pub loki_logging_service_msi_client_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub kubeconfig: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_oidc_issuer: String,
 }

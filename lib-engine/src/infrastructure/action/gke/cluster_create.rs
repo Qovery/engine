@@ -1,6 +1,7 @@
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep};
+use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
@@ -42,6 +43,12 @@ pub(super) fn create_gke_cluster(
     );
     let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
     update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            qovery_terraform_output.cluster_id, err
+        ));
+    }
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error

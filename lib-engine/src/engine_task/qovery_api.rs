@@ -1,3 +1,4 @@
+use crate::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::application::GitCredentials;
 use anyhow::anyhow;
@@ -16,6 +17,7 @@ pub trait QoveryApi: Send + Sync {
     fn git_token(&self, service_type: ServiceType, service_id: &Uuid) -> anyhow::Result<GitCredentials>;
 
     fn update_cluster_credentials(&self, kubeconfig: String) -> anyhow::Result<()>;
+    fn update_cluster_outputs(&self, cluster_state_request: &ClusterOutputsRequest) -> anyhow::Result<()>;
 }
 
 pub struct FakeQoveryApi {}
@@ -30,6 +32,10 @@ impl QoveryApi for FakeQoveryApi {
     }
 
     fn update_cluster_credentials(&self, _kubeconfig: String) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -52,6 +58,10 @@ impl QoveryApi for StaticQoveryApi {
     }
 
     fn update_cluster_credentials(&self, _kubeconfig: String) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
         Ok(())
     }
 }

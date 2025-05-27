@@ -66,4 +66,16 @@ pub struct GkeQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     thanos_service_account_email: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub cluster_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub cluster_self_link: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub cluster_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub network: String,
 }

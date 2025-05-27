@@ -2,6 +2,7 @@ use crate::environment::models::kubernetes::K8sObject;
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EventDetails, InfrastructureStep, Stage};
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_user_network;
@@ -163,6 +164,12 @@ pub fn create_eks_cluster(
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply()?;
     update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(kubernetes, &eks_tf_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            eks_tf_output.cluster_id, err
+        ));
+    }
 
     let kube_client = infra_ctx.mk_kube_client()?;
 
@@ -396,9 +403,15 @@ fn restore_access_to_eks(
 
     // This should never happen in real life, but just in case we re-create the cluster outside Qovery
     // and that the kubeconfig changed in the meantime
-    let _ = tf_action
-        .output::<AwsEksQoveryTerraformOutput>()
-        .map(|eks_tf_output| update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig));
+    let _ = tf_action.output::<AwsEksQoveryTerraformOutput>().map(|eks_tf_output| {
+        if let Err(err) = update_cluster_outputs(kubernetes, &eks_tf_output) {
+            logger.info(format!(
+                "Failed to update outputs for cluster {}: {}",
+                eks_tf_output.cluster_id, err
+            ));
+        }
+        update_kubeconfig_file(kubernetes, &eks_tf_output.kubeconfig)
+    });
 
     Ok(())
 }
