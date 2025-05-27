@@ -121,4 +121,14 @@ pub struct AwsEksQoveryTerraformOutput {
     pub aws_s3_prometheus_bucket_name: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub kubeconfig: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_arn: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_oidc_issuer: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_vpc_id: String,
 }
