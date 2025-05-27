@@ -8,7 +8,6 @@ variables:
   DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
   GIT_DEPTH: 10
-  SLACK_PRODUCT_NOTIFICATIONS_WEBHOOK: https://hooks.slack.com/services/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
 
 services:
   - docker:dind
@@ -1056,7 +1055,6 @@ gitlab-release:
   script:
     - ./helper.sh update_engine_version
     - unset GITHUB_TOKEN ; goreleaser release --skip=validate --clean
-    - curl -X POST --data-urlencode "payload={\"channel\":\"#product-notifications\",\"username\":\"Engine release\",\"text\":\"🎉 New release done *${CI_COMMIT_TAG}* on ${CI_PROJECT_NAME}!\n<${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}|See release>\"}" $SLACK_PRODUCT_NOTIFICATIONS_WEBHOOK
   tags:
     - vm-1cpu-1gmem-0g
   rules:
