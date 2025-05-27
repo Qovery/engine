@@ -1,11 +1,11 @@
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep};
+use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
-use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -41,7 +41,7 @@ pub(super) fn create_gke_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
-    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error

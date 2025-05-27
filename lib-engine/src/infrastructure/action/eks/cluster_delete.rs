@@ -4,6 +4,7 @@ use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
 use crate::events::{EventMessage, InfrastructureStep, Stage};
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
@@ -14,7 +15,6 @@ use crate::infrastructure::action::eks::nodegroup::{
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
 use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
-use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
@@ -125,7 +125,7 @@ pub fn delete_eks_cluster(
             tf_resources.output()?
         }
     };
-    update_kubeconfig_file(kubernetes, &tf_output.kubeconfig)?;
+    update_cluster_outputs(kubernetes, &tf_output)?;
 
     // delete all PDBs first, because those will prevent node deletion
     if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {

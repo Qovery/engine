@@ -14,3 +14,15 @@ output "main_storage_account_primary_access_key" {
     value = azurerm_storage_account.main_storage.primary_access_key
 }
 output "loki_logging_service_msi_client_id" { value = azurerm_user_assigned_identity.storage_msi.client_id  }
+
+output "cluster_name" {
+    value = azurerm_kubernetes_cluster.primary.name
+}
+
+output "cluster_id" {
+    value = azurerm_kubernetes_cluster.primary.id
+}
+
+output "cluster_oidc_issuer" {
+    value = try(azurerm_kubernetes_cluster.primary.oidc_issuer_url, null)
+}
