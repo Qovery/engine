@@ -1,14 +1,10 @@
 use super::GrpcEngineClient;
-use crate::grpc::engine::{
-    ClusterOutputsUpdateRequest, GitTokenRequest, KubernetesProviderKind, ServiceVersionRequest,
-};
+use crate::grpc::engine::{ClusterCredentialsUpdate, GitTokenRequest, ServiceVersionRequest};
 use crate::tokio_utils::block_on;
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use chrono::DateTime;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, QoveryApi};
-use qovery_engine::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
-use qovery_engine::infrastructure::models::kubernetes::Kind;
 use qovery_engine::io_models::application::GitCredentials;
 use std::future::Future;
 use std::thread;
@@ -112,25 +108,14 @@ impl QoveryApi for GrpcCoreServiceApi {
         with_max_retry(call, 5)
     }
 
-    fn update_cluster_outputs(&self, cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
-        let kubernetes_provider_kind = to_kubernetes_provider_kind(cluster_outputs_request.kubernetes_kind)?;
-
+    fn update_cluster_credentials(&self, kubeconfig: String) -> anyhow::Result<()> {
         let call = || async {
-            info!("Updating cluster outputs");
+            info!("Updating cluster credentials");
             self.client
                 .clone()
-                .update_cluster_outputs(ClusterOutputsUpdateRequest {
+                .update_cluster_credentials(ClusterCredentialsUpdate {
                     jwt_token: self.jwt_token.clone(),
-                    kubeconfig: cluster_outputs_request.kubeconfig.clone(),
-                    kubernetes_provider_kind: kubernetes_provider_kind.into(),
-                    cluster_name: cluster_outputs_request.cluster_name.to_string(),
-                    cluster_id: cluster_outputs_request.cluster_id.to_string(),
-                    cluster_arn: cluster_outputs_request.cluster_arn.clone(),
-                    cluster_self_link: None,
-                    cluster_oidc_issuer: cluster_outputs_request.cluster_oidc_issuer.clone(),
-                    vpc_id: cluster_outputs_request.cluster_vpc_id.clone(),
-                    network: None,
-                    private_network_id: None,
+                    kubeconfig: kubeconfig.clone(),
                 })
                 .await?;
 
@@ -138,19 +123,5 @@ impl QoveryApi for GrpcCoreServiceApi {
         };
 
         with_max_retry(call, 5)
-    }
-}
-
-fn to_kubernetes_provider_kind(kubernetes_kind: Kind) -> anyhow::Result<KubernetesProviderKind> {
-    match kubernetes_kind {
-        Kind::Eks => Ok(KubernetesProviderKind::Eks),
-        Kind::ScwKapsule => Ok(KubernetesProviderKind::ScwKapsule),
-        Kind::Gke => Ok(KubernetesProviderKind::Gke),
-        Kind::Aks => Ok(KubernetesProviderKind::Aks),
-        Kind::EksSelfManaged
-        | Kind::GkeSelfManaged
-        | Kind::AksSelfManaged
-        | Kind::ScwSelfManaged
-        | Kind::OnPremiseSelfManaged => Err(anyhow!(format!("kubernetes_kind is not supported: {}", kubernetes_kind))),
     }
 }
