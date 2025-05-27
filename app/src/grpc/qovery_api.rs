@@ -144,11 +144,11 @@ impl QoveryApi for GrpcCoreServiceApi {
                     cluster_name: cluster_outputs_request.cluster_name.to_string(),
                     cluster_id: cluster_outputs_request.cluster_id.to_string(),
                     cluster_arn: cluster_outputs_request.cluster_arn.clone(),
-                    cluster_self_link: None,
+                    cluster_self_link: cluster_outputs_request.cluster_self_link.clone(),
                     cluster_oidc_issuer: cluster_outputs_request.cluster_oidc_issuer.clone(),
                     vpc_id: cluster_outputs_request.cluster_vpc_id.clone(),
-                    network: None,
-                    private_network_id: None,
+                    network: cluster_outputs_request.network.clone(),
+                    private_network_id: cluster_outputs_request.private_network_id.clone(),
                 })
                 .await?;
 
