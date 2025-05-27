@@ -10,6 +10,11 @@ output "cluster_security_group_id" { value = aws_eks_cluster.eks_cluster.vpc_con
 output "aws_iam_alb_controller_arn" { value = aws_iam_role.aws_load_balancer_controller.arn }
 output "aws_iam_eks_prometheus_role_arn" { value = aws_iam_role.iam_eks_prometheus.arn }
 output "aws_s3_prometheus_bucket_name" { value = aws_s3_bucket.prometheus_bucket.id }
+output "cluster_name" { value = aws_eks_cluster.eks_cluster.name }
+output "cluster_arn" { value = aws_eks_cluster.eks_cluster.arn } // or _long_id
+output "cluster_id" { value = aws_eks_cluster.eks_cluster.id }
+output "cluster_oidc_issuer" { value = try(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, null) }
+output "cluster_vpc_id" { value = try(aws_eks_cluster.eks_cluster.vpc_config[0].vpc_id, null) }
 output "kubeconfig" {
   sensitive = true
   depends_on = [aws_eks_cluster.eks_cluster]

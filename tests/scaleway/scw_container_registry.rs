@@ -150,6 +150,64 @@ fn test_create_registry_namespace() {
 #[cfg(feature = "test-scw-minimal")]
 #[named]
 #[test]
+fn test_recreate_existing_registry_namespace() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+        // setup:
+        let context = context_for_resource(Uuid::new_v4(), Uuid::new_v4());
+        let secrets = FuncTestsSecrets::new();
+        let scw_secret_key = secrets.SCALEWAY_SECRET_KEY.unwrap_or_else(|| "undefined".to_string());
+        let scw_default_project_id = secrets
+            .SCALEWAY_DEFAULT_PROJECT_ID
+            .unwrap_or_else(|| "undefined".to_string());
+
+        // testing it in all regions
+        for zone in zones_to_test().into_iter() {
+            let registry_name = format!("test-{}-{}", Uuid::new_v4(), &zone.to_string());
+
+            let container_registry = ScalewayCR::new(
+                context.clone(),
+                Uuid::new_v4(),
+                registry_name.as_str(),
+                scw_secret_key.as_str(),
+                scw_default_project_id.as_str(),
+                zone.region(),
+            )
+            .unwrap();
+
+            let image = registry_name.to_string();
+
+            debug!("test_create_registry_namespace - {}", zone);
+            let existing_registry_result = container_registry.create_registry_namespace(&image);
+
+            assert!(existing_registry_result.is_ok());
+
+            let existing_registry_result = container_registry.get_repository(&image);
+            assert!(existing_registry_result.is_ok());
+
+            // execute:
+            let result = container_registry.create_registry_namespace(&image);
+
+            // verify:
+            assert!(result.is_ok());
+            assert_eq!(
+                existing_registry_result.expect("Existing registry").registry_id,
+                result.expect("New registry").registry_id
+            );
+
+            // clean-up:
+            container_registry.delete_repository(&image).unwrap();
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-scw-minimal")]
+#[named]
+#[test]
 fn test_create_registry_namespace_invalid_name() {
     let test_name = function_name!();
     engine_run_test(|| {

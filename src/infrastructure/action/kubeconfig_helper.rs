@@ -1,31 +1,10 @@
 use crate::errors::{CommandError, EngineError};
-use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, InfrastructureStep};
-use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::events::EventDetails;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-
-pub fn update_kubeconfig_file(kube: &dyn Kubernetes, kubeconfig: &str) -> Result<(), Box<EngineError>> {
-    // Upload kubeconfig, so we can store it in the core
-    if let Err(err) = kube
-        .context()
-        .qovery_api
-        .update_cluster_credentials(kubeconfig.to_string())
-    {
-        error!("Cannot update cluster credentials {}", err);
-    }
-
-    write_kubeconfig_on_disk(
-        &kube.kubeconfig_local_file_path(),
-        kubeconfig,
-        kube.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
-    )?;
-
-    Ok(())
-}
 
 pub fn write_kubeconfig_on_disk(
     kubeconfig_path: &Path,

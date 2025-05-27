@@ -6,3 +6,15 @@ output "kubeconfig" {
   value =  scaleway_k8s_cluster.kubernetes_cluster.kubeconfig[0].config_file
   sensitive = true
 }
+
+output "cluster_name" {
+  value = scaleway_k8s_cluster.kubernetes_cluster.name
+}
+
+output "cluster_id" {
+  value = scaleway_k8s_cluster.kubernetes_cluster.id
+}
+
+output "private_network_id" {
+  value = scaleway_vpc_private_network.private_network.id
+}

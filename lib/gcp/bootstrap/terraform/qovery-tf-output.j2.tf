@@ -3,6 +3,10 @@ output "loki_logging_service_account_email" { value = resource.google_service_ac
 {%- endif %}
 output "gke_cluster_public_hostname" { value = google_container_cluster.primary.endpoint  }
 output "thanos_service_account_email" { value = resource.google_service_account.thanos_service_account.email }
+output "cluster_name" {value = google_container_cluster.primary.name }
+output "cluster_self_link" {value = google_container_cluster.primary.self_link }
+output "cluster_id" {value = google_container_cluster.primary.id }
+output "network" { value = google_container_cluster.primary.network }
 output "kubeconfig" {
     sensitive = true
     depends_on = [google_container_cluster.primary]

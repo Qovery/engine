@@ -252,6 +252,38 @@ impl ScalewayCR {
             });
         }
 
+        // This code is a bit ugly but is the way to check if registry (namespace) already exists SCW side
+        // if it exists, we return it directly instead of trying to create it again
+        if let Ok(Ok(repositories)) = block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::list_namespaces(
+            &self.get_configuration(),
+            self.region.as_str(),
+            None,
+            None,
+            None,
+            None,
+            Some(self.default_project_id.as_str()),
+            Some(namespace_name),
+        )) {
+            if let Some(r) = repositories.namespaces {
+                if r.len() == 1 {
+                    if let Some(existing_repository) = r.first() {
+                        return Ok(Repository {
+                            registry_id: existing_repository.id.clone().unwrap_or_default(),
+                            name: existing_repository.name.clone().unwrap_or_default(),
+                            uri: existing_repository.endpoint.clone(),
+                            ttl: None,
+                            labels: None,
+                        });
+                    }
+                    return Err(ContainerRegistryError::CannotCreateRepository {
+                        registry_name: self.name.to_string(),
+                        repository_name: namespace_name.to_string(),
+                        raw_error_message: "Cannot get first repository from returned list".to_string(),
+                    });
+                }
+            }
+        }
+
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
         match block_on_with_timeout(scaleway_api_rs::apis::namespaces_api::create_namespace(
             &self.get_configuration(),

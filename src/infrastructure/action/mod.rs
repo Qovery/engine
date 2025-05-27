@@ -1,4 +1,5 @@
 mod azure;
+pub mod cluster_outputs_helper;
 mod delete_kube_apps;
 mod deploy_helms;
 mod deploy_terraform;

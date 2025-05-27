@@ -59,4 +59,10 @@ pub struct ScalewayQoveryTerraformOutput {
     pub loki_storage_config_scaleway_s3: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub kubeconfig: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_name: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub cluster_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    pub private_network_id: String,
 }
