@@ -253,6 +253,19 @@ impl AzureContainerRegistry {
             .as_bytes(),
         )
     }
+
+    /// This function extracts the registry name from a full URL or hostname.
+    /// Azure registries follow the format `registry_name.azurecr.io`.
+    pub fn get_registry_name_from_url(registry_url: &Url) -> Option<String> {
+        let suffix = ".azurecr.io";
+        registry_url
+            .host_str()
+            .filter(|host| host.ends_with(suffix))
+            .and_then(|host| {
+                let end = host.len() - suffix.len();
+                if end > 0 { Some(host[..end].to_string()) } else { None }
+            })
+    }
 }
 
 impl InteractWithRegistry for AzureContainerRegistry {
@@ -360,5 +373,43 @@ impl InteractWithRegistry for AzureContainerRegistry {
                 image.tag.as_str(),
             )
             .is_ok()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_get_registry_name_from_url() {
+        // setup:
+        struct TestCase<'a> {
+            url: Url,
+            expected: Option<&'a str>,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                url: Url::from_str("https://myregistry.azurecr.io").expect("Valid URL"),
+                expected: Some("myregistry"),
+            },
+            TestCase {
+                url: Url::from_str("https://another.registry.azurecr.io").expect("Valid URL"),
+                expected: Some("another.registry"),
+            },
+            TestCase {
+                url: Url::from_str("https://myregistry.azurecr.io/some/path").expect("Valid URL"),
+                expected: Some("myregistry"),
+            },
+        ];
+
+        for tc in test_cases {
+            // execute and validate:
+            assert_eq!(
+                AzureContainerRegistry::get_registry_name_from_url(&tc.url),
+                tc.expected.map(|s| s.to_string())
+            );
+        }
     }
 }
