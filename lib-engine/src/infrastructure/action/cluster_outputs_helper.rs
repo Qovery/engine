@@ -14,7 +14,6 @@ pub fn update_cluster_outputs<T: IntoClusterOutputsRequest>(
 ) -> Result<(), Box<EngineError>> {
     info!("update_cluster_outputs");
     let cluster_outputs_request: ClusterOutputsRequest = tf_output.to_cluster_outputs_request();
-    debug!("update_cluster_outputs request: {:?}", cluster_outputs_request);
 
     // Upload cluster outputs, so we can store them in the core (it contains the kubeconfig)
     if let Err(err) = kube

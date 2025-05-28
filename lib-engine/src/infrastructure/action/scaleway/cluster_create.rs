@@ -4,7 +4,6 @@ use crate::events::{EventDetails, InfrastructureStep};
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleHelmsDeployment;
@@ -66,13 +65,7 @@ pub fn create_kapsule_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_action.create(&logger)?;
-    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
-    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
-        logger.info(format!(
-            "Failed to update outputs for cluster {}: {}",
-            qovery_terraform_output.cluster_id, err
-        ));
-    }
+    update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     let cluster_info = cluster.get_scw_cluster_info()?.ok_or_else(|| {
         Box::new(EngineError::new_no_cluster_found_error(

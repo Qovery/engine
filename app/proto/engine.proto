@@ -18,7 +18,6 @@ service Engine {
 
   rpc GetServiceVersion(ServiceVersionRequest) returns (ServiceVersionResponse) {}
   rpc GetGitToken(GitTokenRequest) returns (GitTokenResponse) {}
-  rpc updateClusterCredentials(ClusterCredentialsUpdate) returns (google.protobuf.Empty) {}
   rpc updateClusterOutputs(ClusterOutputsUpdateRequest) returns (google.protobuf.Empty) {}
 }
 
@@ -133,11 +132,6 @@ message GitTokenResponse {
   string login = 1;
   string accessToken = 2;
   string expiredAt = 3;
-}
-
-message ClusterCredentialsUpdate {
-  string jwt_token = 1;
-  string kubeconfig = 2;
 }
 
 enum KubernetesProviderKind {

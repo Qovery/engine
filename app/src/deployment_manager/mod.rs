@@ -481,9 +481,8 @@ mod test {
     use crate::deployment_manager::DeploymentManager;
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
-        ClusterCredentialsUpdate, ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx,
-        EngineMessageTx, GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse,
-        engine_message_rx,
+        ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx,
+        GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse, engine_message_rx,
     };
     use crate::grpc::test::new_engine_client_test;
     use crate::models::TaskSelector;
@@ -546,13 +545,6 @@ mod test {
             &self,
             _request: Request<GitTokenRequest>,
         ) -> Result<Response<GitTokenResponse>, Status> {
-            Err(Status::unimplemented("Not implemented"))
-        }
-
-        async fn update_cluster_credentials(
-            &self,
-            _request: Request<ClusterCredentialsUpdate>,
-        ) -> Result<Response<()>, Status> {
             Err(Status::unimplemented("Not implemented"))
         }
 
@@ -812,13 +804,6 @@ mod test {
             &self,
             _request: Request<GitTokenRequest>,
         ) -> Result<Response<GitTokenResponse>, Status> {
-            Err(Status::unimplemented("Not implemented"))
-        }
-
-        async fn update_cluster_credentials(
-            &self,
-            _request: Request<ClusterCredentialsUpdate>,
-        ) -> Result<Response<()>, Status> {
             Err(Status::unimplemented("Not implemented"))
         }
 

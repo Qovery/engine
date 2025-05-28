@@ -1,7 +1,6 @@
 use super::GrpcEngineClient;
 use crate::grpc::engine::{
-    ClusterCredentialsUpdate, ClusterOutputsUpdateRequest, GitTokenRequest, KubernetesProviderKind,
-    ServiceVersionRequest,
+    ClusterOutputsUpdateRequest, GitTokenRequest, KubernetesProviderKind, ServiceVersionRequest,
 };
 use crate::tokio_utils::block_on;
 use anyhow::{Context, anyhow};
@@ -110,22 +109,6 @@ impl QoveryApi for GrpcCoreServiceApi {
             })
         };
 
-        with_max_retry(call, 5)
-    }
-
-    fn update_cluster_credentials(&self, kubeconfig: String) -> anyhow::Result<()> {
-        let call = || async {
-            info!("Updating cluster credentials");
-            self.client
-                .clone()
-                .update_cluster_credentials(ClusterCredentialsUpdate {
-                    jwt_token: self.jwt_token.clone(),
-                    kubeconfig: kubeconfig.clone(),
-                })
-                .await?;
-
-            Ok(())
-        };
         with_max_retry(call, 5)
     }
 
