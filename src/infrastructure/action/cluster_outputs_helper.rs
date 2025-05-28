@@ -12,9 +12,11 @@ pub fn update_cluster_outputs<T: IntoClusterOutputsRequest>(
     kube: &dyn Kubernetes,
     tf_output: &T,
 ) -> Result<(), Box<EngineError>> {
+    info!("update_cluster_outputs");
     let cluster_outputs_request: ClusterOutputsRequest = tf_output.to_cluster_outputs_request();
+    debug!("update_cluster_outputs request: {:?}", cluster_outputs_request);
 
-    // Upload cluster outputs, so we can store it in the core (it contains the kubeconfig)
+    // Upload cluster outputs, so we can store them in the core (it contains the kubeconfig)
     if let Err(err) = kube
         .context()
         .qovery_api
@@ -39,6 +41,7 @@ pub trait IntoClusterOutputsRequest {
     fn to_cluster_outputs_request(&self) -> ClusterOutputsRequest;
 }
 
+#[derive(Debug)]
 pub struct ClusterOutputsRequest {
     pub kubernetes_kind: Kind,
     pub kubeconfig: String,

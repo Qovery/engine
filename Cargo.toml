@@ -21,7 +21,13 @@ trust-dns-resolver = "0.23.2"
 rand = "0.9.1"
 semver = "1.0.26"
 gethostname = "1.0.2"
-reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "rustls-tls-manual-roots-no-provider", "gzip", "zstd"] }
+reqwest = { version = "0.12.15", default-features = false, features = [
+  "blocking",
+  "json",
+  "rustls-tls-manual-roots-no-provider",
+  "gzip",
+  "zstd",
+] }
 futures = "0.3.31"
 timeout-readwrite = "0.4.0"
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
@@ -47,8 +53,18 @@ time = { version = "0.3.41", features = ["formatting", "parsing"] }
 derive_more = { version = "2.0.1", features = ["display"] }
 rustls = { version = "0.23.27", features = [] }
 
-kube = { version = "1.0.0", default-features = false, features = ["rustls-tls", "client", "derive", "runtime", "ws", "aws-lc-rs", "gzip"] }
-k8s-openapi = { version = "0.25.0", default-features = false, features = ["v1_31"] }
+kube = { version = "1.0.0", default-features = false, features = [
+  "rustls-tls",
+  "client",
+  "derive",
+  "runtime",
+  "ws",
+  "aws-lc-rs",
+  "gzip",
+] }
+k8s-openapi = { version = "0.25.0", default-features = false, features = [
+  "v1_31",
+] }
 
 # tar gz
 flate2 = "1.1.1"
@@ -104,8 +120,14 @@ scaleway_api_rs = { git = "https://github.com/Qovery/scaleway-api-rs", branch = 
 
 # GCP deps
 google-cloud-auth = { version = "0.20.0", features = [] }
-google-cloud-storage = {  version = "0.24.0", default-features = false, features = ["rustls-tls", "auth"] }
-google-cloud-artifact-registry = { version = "0.8.0", default-features = false, features = ["rustls-tls", "auth"] }
+google-cloud-storage = { version = "0.24.0", default-features = false, features = [
+  "rustls-tls",
+  "auth",
+] }
+google-cloud-artifact-registry = { version = "0.8.0", default-features = false, features = [
+  "rustls-tls",
+  "auth",
+] }
 google-cloud-googleapis = { version = "0.16.1", features = [] }
 # don't update, needs to be in sync with google-cloud-artifact-registry internal version
 google-cloud-gax = { version = "0.19.2", features = [] }
@@ -129,11 +151,11 @@ default = []
 # Check that env logger is in a correct state when emitting logs
 env-logger-check = []
 test-all = [
-    "test-all-minimal",
-    "test-all-self-hosted",
-    "test-all-infra",
-    "test-all-managed-services",
-    "test-all-whole-enchilada",
+  "test-all-minimal",
+  "test-all-self-hosted",
+  "test-all-infra",
+  "test-all-managed-services",
+  "test-all-whole-enchilada",
 ]
 
 # Minimal depencies test (i.e: build, deploy nothing managed)
@@ -142,10 +164,10 @@ test-azure-minimal = ["env-logger-check"]
 test-scw-minimal = ["env-logger-check"]
 test-gcp-minimal = ["env-logger-check"]
 test-all-minimal = [
-    "test-aws-minimal",
-    "test-azure-minimal",
-    "test-scw-minimal",
-    "test-gcp-minimal",
+  "test-aws-minimal",
+  "test-azure-minimal",
+  "test-scw-minimal",
+  "test-gcp-minimal",
 ]
 
 # functionnal tests by type
@@ -154,10 +176,10 @@ test-azure-self-hosted = ["env-logger-check", "test-git-container"]
 test-scw-self-hosted = ["env-logger-check", "test-git-container"]
 test-gcp-self-hosted = ["env-logger-check", "test-git-container"]
 test-all-self-hosted = [
-    "test-aws-self-hosted",
-    "test-azure-self-hosted",
-    "test-scw-self-hosted",
-    "test-gcp-self-hosted",
+  "test-aws-self-hosted",
+  "test-azure-self-hosted",
+  "test-scw-self-hosted",
+  "test-gcp-self-hosted",
 ]
 
 test-aws-managed-services = ["env-logger-check"]
@@ -165,10 +187,10 @@ test-azure-managed-services = ["env-logger-check"]
 test-scw-managed-services = ["env-logger-check"]
 test-gcp-managed-services = ["env-logger-check"]
 test-all-managed-services = [
-    "test-aws-managed-services",
-    "test-azure-managed-services",
-    "test-scw-managed-services",
-    "test-gcp-managed-services",
+  "test-aws-managed-services",
+  "test-azure-managed-services",
+  "test-scw-managed-services",
+  "test-gcp-managed-services",
 ]
 
 test-aws-infra = []
@@ -179,13 +201,13 @@ test-azure-infra = []
 test-scw-infra = []
 test-gcp-infra = []
 test-all-infra = [
-    "test-aws-infra",
-    "test-aws-infra-karpenter",
-    "test-aws-infra-arm",
-    "test-aws-infra-nat-gateway",
-    "test-azure-infra",
-    "test-scw-infra",
-    "test-gcp-infra",
+  "test-aws-infra",
+  "test-aws-infra-karpenter",
+  "test-aws-infra-arm",
+  "test-aws-infra-nat-gateway",
+  "test-azure-infra",
+  "test-scw-infra",
+  "test-gcp-infra",
 ]
 
 test-aws-infra-upgrade = []
@@ -193,10 +215,10 @@ test-azure-infra-upgrade = []
 test-scw-infra-upgrade = []
 test-gcp-infra-upgrade = []
 test-all-infra-upgrade = [
-    "test-aws-infra-upgrade",
-    "test-azure-infra-upgrade",
-    "test-scw-infra-upgrade",
-    "test-gcp-infra-upgrade",
+  "test-aws-infra-upgrade",
+  "test-azure-infra-upgrade",
+  "test-scw-infra-upgrade",
+  "test-gcp-infra-upgrade",
 ]
 
 test-aws-whole-enchilada = []
@@ -204,36 +226,36 @@ test-azure-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
-    "test-aws-whole-enchilada",
-    "test-azure-whole-enchilada",
-    "test-scw-whole-enchilada",
-    "test-gcp-whole-enchilada",
+  "test-aws-whole-enchilada",
+  "test-azure-whole-enchilada",
+  "test-scw-whole-enchilada",
+  "test-gcp-whole-enchilada",
 ]
 
 # functionnal tests by provider
 test-aws-all = [
-    "test-aws-infra",
-    "test-aws-managed-services",
-    "test-aws-self-hosted",
-    "test-aws-whole-enchilada",
+  "test-aws-infra",
+  "test-aws-managed-services",
+  "test-aws-self-hosted",
+  "test-aws-whole-enchilada",
 ]
 test-azure-all = [
-    "test-azure-infra",
-    "test-azure-managed-services",
-    "test-azure-self-hosted",
-    "test-azure-whole-enchilada",
+  "test-azure-infra",
+  "test-azure-managed-services",
+  "test-azure-self-hosted",
+  "test-azure-whole-enchilada",
 ]
 test-scw-all = [
-    "test-scw-infra",
-    "test-scw-managed-services",
-    "test-scw-self-hosted",
-    "test-scw-whole-enchilada",
+  "test-scw-infra",
+  "test-scw-managed-services",
+  "test-scw-self-hosted",
+  "test-scw-whole-enchilada",
 ]
 test-gcp-all = [
-    "test-gcp-infra",
-    "test-gcp-managed-services",
-    "test-gcp-self-hosted",
-    "test-gcp-whole-enchilada",
+  "test-gcp-infra",
+  "test-gcp-managed-services",
+  "test-gcp-self-hosted",
+  "test-gcp-whole-enchilada",
 ]
 
 test-quarantine = []

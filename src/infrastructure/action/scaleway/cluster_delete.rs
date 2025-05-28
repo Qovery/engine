@@ -4,6 +4,7 @@ use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::scaleway::ScalewayQoveryTerraformOutput;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -42,7 +43,13 @@ pub fn delete_kapsule_cluster(
     ));
     logger.info("Running Terraform apply before running a delete.");
     let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
-    update_cluster_outputs(cluster, &qovery_terraform_output)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            qovery_terraform_output.cluster_id, err
+        ));
+    }
 
     // delete all PDBs first, because those will prevent node deletion
     if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {

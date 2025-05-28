@@ -6,6 +6,7 @@ use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraRes
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
+use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -41,7 +42,13 @@ pub(super) fn create_gke_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
-    update_cluster_outputs(cluster, &qovery_terraform_output)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            qovery_terraform_output.cluster_id, err
+        ));
+    }
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error

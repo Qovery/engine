@@ -6,6 +6,7 @@ use crate::infrastructure::action::azure::helm_charts::AksHelmsDeployment;
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -38,7 +39,13 @@ pub(super) fn create_aks_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: AksQoveryTerraformOutput = tf_resources.create(&logger)?;
-    update_cluster_outputs(cluster, &qovery_terraform_output)?;
+    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
+    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
+        logger.info(format!(
+            "Failed to update outputs for cluster {}: {}",
+            qovery_terraform_output.cluster_id, err
+        ));
+    }
 
     // Ensure all nodes are ready on Kubernetes
     check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
