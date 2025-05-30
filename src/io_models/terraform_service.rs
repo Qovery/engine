@@ -87,7 +87,7 @@ pub enum TerraformFilesSource {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformProvider {
     Terraform,
     // OpenTofu
@@ -100,7 +100,7 @@ pub struct TerraformBackend {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformBackendType {
     DefinedInTerraformFile,
     Kubernetes,
@@ -116,6 +116,7 @@ impl TerraformBackendType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformActionCommand {
     PlanOnly,
     PlanAndApply,
