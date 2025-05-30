@@ -539,7 +539,8 @@ impl Task for EnvironmentTask {
             .chain(environment.routers.iter().map(|x| x.as_service().long_id()))
             .chain(environment.databases.iter().map(|x| x.as_service().long_id()))
             .chain(environment.jobs.iter().map(|x| x.as_service().long_id()))
-            .chain(environment.helm_charts.iter().map(|x| x.as_service().long_id()));
+            .chain(environment.helm_charts.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.terraform_services.iter().map(|x| x.as_service().long_id()));
 
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let service_records: Vec<StepRecordHandle> = service_ids
