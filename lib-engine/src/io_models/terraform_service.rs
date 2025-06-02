@@ -186,13 +186,8 @@ impl TerraformService {
         let ssh_keys = ssh_keys_from_env_vars(&self.environment_vars_with_infos);
         let environment_variables_with_info: HashMap<String, VariableInfo> = self
             .environment_vars_with_infos
-            .clone()
-            .into_iter()
-            .map(|(k, mut v)| {
-                v.value =
-                    String::from_utf8_lossy(&general_purpose::STANDARD.decode(v.value).unwrap_or_default()).to_string();
-                (k, v)
-            })
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
         let annotations_groups = self
