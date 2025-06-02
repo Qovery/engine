@@ -1,11 +1,12 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::aws::AwsAppExtraSettings;
+use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
 use crate::environment::models::helm_chart::{HelmChartError, HelmChartService};
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
-use crate::environment::models::types::{AWS, GCP, OnPremise, SCW};
+use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::build_platform::SshKey;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
@@ -362,7 +363,33 @@ impl HelmChart {
                     self.ports,
                 )?)
             }
-            kubernetes::Kind::Aks | kubernetes::Kind::AksSelfManaged => todo!(),
+            kubernetes::Kind::Aks | kubernetes::Kind::AksSelfManaged => {
+                Box::new(models::helm_chart::HelmChart::<Azure>::new(
+                    context,
+                    self.long_id,
+                    self.name,
+                    self.kube_name,
+                    self.action.to_service_action(),
+                    Self::to_chart_source_domain(
+                        self.chart_source.clone(),
+                        &ssh_keys,
+                        context.qovery_api.clone(),
+                        self.long_id,
+                    ),
+                    Self::to_chart_value_domain(self.chart_values, &ssh_keys, context.qovery_api.clone(), self.long_id),
+                    self.set_values,
+                    self.set_string_values,
+                    self.set_json_values,
+                    self.command_args,
+                    std::time::Duration::from_secs(self.timeout_sec),
+                    self.allow_cluster_wide_resources,
+                    environment_variables_with_info,
+                    self.advanced_settings,
+                    AzureAppExtraSettings {},
+                    |transmitter| context.get_event_details(transmitter),
+                    self.ports,
+                )?)
+            }
             kubernetes::Kind::OnPremiseSelfManaged => Box::new(models::helm_chart::HelmChart::<OnPremise>::new(
                 context,
                 self.long_id,
