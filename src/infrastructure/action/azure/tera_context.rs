@@ -5,6 +5,7 @@ use crate::helm::HelmChartNamespaces;
 use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::infrastructure::models::kubernetes::azure::SkuTier;
 use crate::infrastructure::models::kubernetes::azure::aks::AKS;
 use crate::io_models::context::Features;
 use crate::string::terraform_list_format;
@@ -59,6 +60,10 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
             .map(|x| x.to_cloud_provider_format())
             .collect::<Vec<_>>(),
     );
+    // TODO(QOV-861): those SKUs should be configurable from the Core
+    context.insert("azure_cluster_sku_tier", &SkuTier::Standard.to_string()); // Somehow, for this resource Azure needs Sku to start with a capital letter
+    context.insert("azure_load_balancer_sku_tier", SkuTier::Standard.to_cloud_provider_format());
+    context.insert("azure_nat_gateway_sku_tier_name", &SkuTier::Standard.to_string()); // Somehow, for this resource Azure needs Sku to start with a capital letter
 
     // Node groups
     context.insert("node_group_default", &cluster.node_groups.get_default_node_group());
