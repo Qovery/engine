@@ -185,17 +185,31 @@ impl AzureContainerRegistry {
 
     pub fn create_repository_in_resource_group(
         &self,
-        resource_group_name: Option<&str>,
+        resource_group_name: &str,
         repository_name: &str,
         image_retention_time_in_seconds: u32,
         registry_tags: RegistryTags,
     ) -> Result<(Repository, RepositoryInfo), ContainerRegistryError> {
         self.get_or_create_repository(
-            resource_group_name,
+            Some(resource_group_name),
             repository_name,
             Duration::seconds(image_retention_time_in_seconds as i64),
             registry_tags,
         )
+    }
+
+    pub fn delete_repository_in_resource_group(
+        &self,
+        resource_group_name: &str,
+        repository_name: &str,
+    ) -> Result<(), ContainerRegistryError> {
+        self.service
+            .delete_registry(self.subscription_id.as_str(), resource_group_name, repository_name)
+            .map_err(|e| ContainerRegistryError::CannotDeleteRepository {
+                registry_name: self.name.clone(),
+                repository_name: repository_name.to_string(),
+                raw_error_message: e.to_string(),
+            })
     }
 
     fn get_or_create_repository(

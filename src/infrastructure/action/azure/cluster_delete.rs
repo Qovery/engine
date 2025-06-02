@@ -1,6 +1,6 @@
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure::action::azure::AksQoveryTerraformOutput;
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
@@ -73,6 +73,8 @@ pub(super) fn delete_aks_cluster(
         &logger,
     )?;
 
+    delete_container_registry(infra_ctx, event_details.clone())?;
+
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
 }
@@ -95,6 +97,25 @@ fn delete_object_storage(
             Some(e.to_string()),
         ));
     }
+
+    Ok(())
+}
+
+fn delete_container_registry(
+    infra_ctx: &InfrastructureContext,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let azure_cr = infra_ctx
+        .container_registry()
+        .as_azure_container_registry()
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
+
+    azure_cr
+        .delete_repository_in_resource_group(
+            infra_ctx.kubernetes().cluster_name().as_str(), // Create the registry in the same resource group as the cluster
+            infra_ctx.kubernetes().cluster_name().as_str(),
+        )
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
 
     Ok(())
 }

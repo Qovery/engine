@@ -105,7 +105,7 @@ fn create_container_registry(
 
     azure_cr
         .create_repository_in_resource_group(
-            Some(infra_ctx.kubernetes().cluster_name().as_str()), // Create the registry in the same resource group as the cluster
+            infra_ctx.kubernetes().cluster_name().as_str(), // Create the registry in the same resource group as the cluster
             infra_ctx.kubernetes().cluster_name().as_str(),
             kubernetes.advanced_settings().registry_image_retention_time_sec,
             RegistryTags {
