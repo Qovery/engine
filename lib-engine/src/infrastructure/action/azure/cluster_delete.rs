@@ -59,6 +59,9 @@ pub(super) fn delete_aks_cluster(
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
+    // Delete cluster CR before terraform destroy because resource group should be deleted
+    delete_container_registry(infra_ctx, event_details.clone())?;
+
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(&[], &logger)?;
 
@@ -72,8 +75,6 @@ pub(super) fn delete_aks_cluster(
         },
         &logger,
     )?;
-
-    delete_container_registry(infra_ctx, event_details.clone())?;
 
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
