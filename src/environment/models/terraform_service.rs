@@ -277,7 +277,10 @@ impl<T: CloudProvider> TerraformService<T> {
                 args
             }
             TerraformAction::TerraformPlanAndApply => {
-                vec![base_path, "apply".to_string()]
+                let mut args = vec![base_path, "apply".to_string(), String::new()];
+                args.extend(var_file_args);
+                args.extend(var_args);
+                args
             }
             TerraformAction::TerraformApplyFromPlan { execution_id } => {
                 let mut args = vec![base_path, "apply_from_plan".to_string(), execution_id.clone()];
