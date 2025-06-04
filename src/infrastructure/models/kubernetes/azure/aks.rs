@@ -16,6 +16,7 @@ use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::CpuArchitecture;
 use crate::logger::Logger;
+use crate::services::azure::azure_auth_service::AzureAuthService;
 use crate::services::azure::blob_storage_service::BlobStorageService;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
@@ -74,6 +75,20 @@ impl AKS {
             .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not Azure")))?
             .credentials
             .clone();
+
+        // check credentials
+        // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
+        if AzureAuthService::login_with_retry(
+            &credentials.client_id,
+            &credentials.client_secret,
+            &credentials.tenant_id,
+        )
+        .is_err()
+        {
+            return Err(Box::new(EngineError::new_client_invalid_cloud_provider_credentials(
+                event_details,
+            )));
+        }
 
         let short_id = to_short_id(&long_id);
 
