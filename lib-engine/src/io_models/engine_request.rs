@@ -45,6 +45,7 @@ use crate::io_models::models::NodeGroups;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::services::azure::azure_auth_service::AzureAuthService;
 use crate::services::azure::container_registry_service::AzureContainerRegistryService;
 use crate::services::gcp::artifact_registry_service::ArtifactRegistryService;
 use crate::utilities::to_short_id;
@@ -743,28 +744,38 @@ impl ContainerRegistry {
                     )?,
                 ))
             }
-            ContainerRegistry::AzureCr { long_id, name, options } => Ok(
-                container_registry::ContainerRegistry::AzureContainerRegistry(AzureContainerRegistry::new(
-                    context.clone(),
-                    long_id,
-                    &name,
-                    &options.azure_subscription_id,
-                    QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
+            ContainerRegistry::AzureCr { long_id, name, options } => {
+                // check credentials
+                // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
+                AzureAuthService::login_with_retry(
                     &options.client_id,
                     &options.client_secret,
-                    options.location.clone(),
-                    Arc::new(
-                        AzureContainerRegistryService::new(
-                            &options.azure_tenant_id,
-                            &options.client_id,
-                            &options.client_secret,
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                            Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
-                        )
-                        .with_context(|| "cannot instantiate AzureContainerRegistryService")?,
-                    ),
-                )?),
-            ),
+                    &options.azure_tenant_id,
+                )?;
+
+                Ok(container_registry::ContainerRegistry::AzureContainerRegistry(
+                    AzureContainerRegistry::new(
+                        context.clone(),
+                        long_id,
+                        &name,
+                        &options.azure_subscription_id,
+                        QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
+                        &options.client_id,
+                        &options.client_secret,
+                        options.location.clone(),
+                        Arc::new(
+                            AzureContainerRegistryService::new(
+                                &options.azure_tenant_id,
+                                &options.client_id,
+                                &options.client_secret,
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                                Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
+                            )
+                            .with_context(|| "cannot instantiate AzureContainerRegistryService")?,
+                        ),
+                    )?,
+                ))
+            }
             ContainerRegistry::GenericCr { long_id, name, options } => {
                 Ok(container_registry::ContainerRegistry::GenericCr(GenericCr::new(
                     context,
