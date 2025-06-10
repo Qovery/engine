@@ -3389,6 +3389,7 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
+            terraform_credentials: None,
         }
     }
 
@@ -3547,6 +3548,7 @@ fn build_and_deploy_terraform_service_in_apply_mode_on_aws_eks() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
+            terraform_credentials: None,
         }
     }
 
