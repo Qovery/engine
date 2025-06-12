@@ -903,7 +903,9 @@ pub struct ScwCrOptions {
 pub struct AzureCrOptions {
     #[serde(alias = "region")]
     location: AzureLocation,
+    #[serde(alias = "azure_subscription_id")]
     subscription_id: String,
+    #[serde(alias = "azure_tenant_id")]
     tenant_id: String,
     #[serde(alias = "username")]
     client_id: String,
