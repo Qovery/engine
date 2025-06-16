@@ -1,5 +1,7 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
+use std::fmt::Display;
 
 pub mod aks;
 pub mod node;
@@ -9,6 +11,37 @@ pub mod node_group;
 pub enum VpcMode {
     Automatic {},
     UserNetworkConfig {},
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkuTier {
+    Free,
+    Standard,
+    Premium,
+}
+
+impl ToCloudProviderFormat for SkuTier {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            SkuTier::Free => "free",
+            SkuTier::Standard => "standard",
+            SkuTier::Premium => "premium",
+        }
+    }
+}
+
+impl Display for SkuTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SkuTier::Free => "Free",
+                SkuTier::Standard => "Standard",
+                SkuTier::Premium => "Premium",
+            }
+        )
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

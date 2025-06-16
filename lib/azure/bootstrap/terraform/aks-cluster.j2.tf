@@ -7,6 +7,8 @@ resource "azurerm_kubernetes_cluster" "primary" {
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
 
+  sku_tier = var.cluster_sku_tier
+
   kubernetes_version = var.kubernetes_version
 
   default_node_pool {
@@ -46,7 +48,7 @@ resource "azurerm_kubernetes_cluster" "primary" {
     network_plugin_mode = "overlay"
     network_policy      = "cilium"
     network_data_plane  = "cilium"
-    load_balancer_sku   = "standard"
+    load_balancer_sku   = var.load_balancer_sku_tier
     outbound_type       = "userAssignedNATGateway"
     pod_cidr            = local.pod_cidr
     service_cidr        = local.service_cidr

@@ -364,6 +364,8 @@ where
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),
                     JobStatus::Failure { reason, message } => {
                         let msg = format!("Job failed to correctly run due to {reason} {message}");
+                        debug!(msg);
+                        debug!("Job pod: {:?}", ret);
                         Err(EngineError::new_job_error(event_details.clone(), msg))
                     }
                 };

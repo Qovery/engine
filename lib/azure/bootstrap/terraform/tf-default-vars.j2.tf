@@ -47,7 +47,7 @@ variable "log_analytics_workspace_id" {
 
 variable "timeouts" {
   description = "Timeouts for resource operations"
-  type        = map(string)
+  type = map(string)
   default = {
     create = "45m"
     update = "45m"
@@ -195,3 +195,22 @@ variable "loki_namespace" {
   type        = string
   default     = "{{ loki_namespace }}"
 }
+
+variable "cluster_sku_tier" {
+  description = "Azure cluster SKU tier"
+  type        = string
+  default     = "{{ azure_cluster_sku_tier }}"
+}
+
+variable "load_balancer_sku_tier" {
+  description = "Azure load balancer SKU tier"
+  type        = string
+  default     = "{{ azure_load_balancer_sku_tier }}"
+}
+
+variable "nat_gateway_sku_tier_name" {
+  description = "Azure NAT SKU tier name"
+  type        = string
+  default     = "{{ azure_nat_gateway_sku_tier_name }}"
+}
+

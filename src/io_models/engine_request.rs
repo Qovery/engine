@@ -748,14 +748,14 @@ impl ContainerRegistry {
                     context.clone(),
                     long_id,
                     &name,
-                    &options.subscription_id,
+                    &options.azure_subscription_id,
                     QoveryIdentifier::new(*context.cluster_long_id()).qovery_resource_name(),
                     &options.client_id,
                     &options.client_secret,
                     options.location.clone(),
                     Arc::new(
                         AzureContainerRegistryService::new(
-                            &options.tenant_id,
+                            &options.azure_tenant_id,
                             &options.client_id,
                             &options.client_secret,
                             Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
@@ -903,8 +903,8 @@ pub struct ScwCrOptions {
 pub struct AzureCrOptions {
     #[serde(alias = "region")]
     location: AzureLocation,
-    subscription_id: String,
-    tenant_id: String,
+    azure_subscription_id: String,
+    azure_tenant_id: String,
     #[serde(alias = "username")]
     client_id: String,
     #[derivative(Debug = "ignore")]

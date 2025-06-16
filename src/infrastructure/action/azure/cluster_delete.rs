@@ -1,11 +1,10 @@
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventMessage, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::infrastructure::action::azure::AksQoveryTerraformOutput;
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
-use crate::infrastructure::action::kubeconfig_helper::update_kubeconfig_file;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
@@ -44,13 +43,7 @@ pub(super) fn delete_aks_cluster(
         cluster.context().is_dry_run_deploy(),
     );
     let qovery_terraform_output: AksQoveryTerraformOutput = tf_resources.create(&logger)?;
-    update_kubeconfig_file(cluster, &qovery_terraform_output.kubeconfig)?;
-    if let Err(err) = update_cluster_outputs(cluster, &qovery_terraform_output) {
-        logger.info(format!(
-            "Failed to update outputs for cluster {}: {}",
-            qovery_terraform_output.cluster_id, err
-        ));
-    }
+    update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     // delete all PDBs first, because those will prevent node deletion
     if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
@@ -58,6 +51,9 @@ pub(super) fn delete_aks_cluster(
     }
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
+
+    // Delete cluster CR before terraform destroy because resource group should be deleted
+    delete_container_registry(infra_ctx, event_details.clone())?;
 
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(&[], &logger)?;
@@ -95,6 +91,25 @@ fn delete_object_storage(
             Some(e.to_string()),
         ));
     }
+
+    Ok(())
+}
+
+fn delete_container_registry(
+    infra_ctx: &InfrastructureContext,
+    event_details: EventDetails,
+) -> Result<(), Box<EngineError>> {
+    let azure_cr = infra_ctx
+        .container_registry()
+        .as_azure_container_registry()
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
+
+    azure_cr
+        .delete_repository_in_resource_group(
+            infra_ctx.kubernetes().cluster_name().as_str(), // Create the registry in the same resource group as the cluster
+            infra_ctx.kubernetes().cluster_name().as_str(),
+        )
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
 
     Ok(())
 }

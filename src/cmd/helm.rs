@@ -248,6 +248,7 @@ impl Helm {
             &timeout,
             "--wait",
             "--cascade=foreground",
+            "--ignore-not-found",
             "--debug",
         ];
 

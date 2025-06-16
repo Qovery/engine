@@ -761,6 +761,7 @@ fn gcp_gke_deploy_terraform_service() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
+            terraform_credentials: None,
         }
     }
 

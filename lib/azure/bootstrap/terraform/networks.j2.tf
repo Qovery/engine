@@ -24,7 +24,7 @@ resource "azurerm_public_ip" "nat_zone_1" {
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = var.nat_gateway_sku_tier_name
   zones               = ["1"]
 
   tags = local.tags_network
@@ -34,7 +34,7 @@ resource "azurerm_nat_gateway" "zone_1" {
   name                = "${var.kubernetes_cluster_name}-nat-gateway-zone-1"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-  sku_name            = "Standard"
+  sku_name            = var.nat_gateway_sku_tier_name
   zones               = ["1"]
 
   tags = local.tags_network
@@ -67,7 +67,7 @@ resource "azurerm_public_ip" "nat_zone_2" {
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = var.nat_gateway_sku_tier_name
   zones               = ["2"]
 
   tags = local.tags_network
@@ -77,7 +77,7 @@ resource "azurerm_nat_gateway" "zone_2" {
   name                = "${var.kubernetes_cluster_name}-nat-gateway-zone-2"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-  sku_name            = "Standard"
+  sku_name            = var.nat_gateway_sku_tier_name
   zones               = ["2"]
 
   tags = local.tags_network
@@ -110,7 +110,7 @@ resource "azurerm_public_ip" "nat_zone_3" {
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = var.nat_gateway_sku_tier_name
   zones               = ["3"]
 
   tags = local.tags_network
@@ -120,7 +120,7 @@ resource "azurerm_nat_gateway" "zone_3" {
   name                = "${var.kubernetes_cluster_name}-nat-gateway-zone-3"
   location            = var.location
   resource_group_name = azurerm_resource_group.main.name
-  sku_name            = "Standard"
+  sku_name            = var.nat_gateway_sku_tier_name
   zones               = ["3"]
 
   tags = local.tags_network

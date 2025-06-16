@@ -195,6 +195,8 @@ impl BlobStorageService {
         match block_on(
             container_client
                 .create()
+                // No public access by default
+                .public_access(azure_storage_blobs::container::PublicAccess::None)
                 .metadata(&Headers::from(metadata))
                 .into_future(),
         ) {

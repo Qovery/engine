@@ -11,9 +11,9 @@ use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
 use crate::infrastructure::models::cloud_provider::aws::{AwsCredentials, new_rusoto_creds};
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
-use crate::infrastructure::models::container_registry::InteractWithRegistry;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
+use crate::infrastructure::models::container_registry::{InteractWithRegistry, azure_container_registry};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{Port, Storage, to_environment_variable};
@@ -74,7 +74,6 @@ pub enum Registry {
         long_id: Uuid,
         url: Url,
         credentials: Option<Credentials>,
-        name: String,
     },
 
     // AWS public ecr
@@ -142,7 +141,9 @@ impl Registry {
 
     pub fn name(&self) -> Option<String> {
         match self {
-            Registry::AzureCr { name, .. } => Some(name.clone()),
+            Registry::AzureCr { url, .. } => Some(
+                azure_container_registry::AzureContainerRegistry::get_registry_name_from_url(url).unwrap_or_default(),
+            ),
             Registry::DockerHub { .. } => None,
             Registry::DoCr { .. } => None,
             Registry::ScalewayCr { .. } => None,

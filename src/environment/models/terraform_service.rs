@@ -16,6 +16,8 @@ use crate::io_models::models::{EnvironmentVariable, KubernetesCpuResourceUnit, K
 use crate::io_models::terraform_service::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
+use base64::Engine;
+use base64::engine::general_purpose;
 use serde_derive::Serialize;
 use std::collections::HashMap;
 use std::marker::PhantomData;
@@ -58,6 +60,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
+    pub(crate) terraform_credentials: TerraformCredentials,
 }
 
 impl<T: CloudProvider> TerraformService<T> {
@@ -85,6 +88,7 @@ impl<T: CloudProvider> TerraformService<T> {
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
+        terraform_credentials: TerraformCredentials,
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
@@ -123,6 +127,7 @@ impl<T: CloudProvider> TerraformService<T> {
             labels_group: LabelsGroupTeraContext::new(labels_groups),
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
+            terraform_credentials,
         })
     }
 
@@ -165,6 +170,12 @@ impl<T: CloudProvider> TerraformService<T> {
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> TerraformServiceTeraContext {
+        let environment_variables = add_cloud_provider_credentials_if_necessary(
+            self.get_environment_variables(),
+            &self.terraform_credentials,
+            &target.cloud_provider.credentials_environment_variables(),
+        );
+
         let environment = target.environment;
         let (image_full, image_name, image_tag) = match &self.terraform_files_source {
             TerraformFilesSource::Git { .. } => (
@@ -241,7 +252,7 @@ impl<T: CloudProvider> TerraformService<T> {
                 }),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
-            environment_variables: self.get_environment_variables(),
+            environment_variables,
             backend_config: BackendConfigTeraContext {
                 secret_name: self.backend.kube_secret_name.to_owned(),
                 configs: backend_config,
@@ -277,7 +288,10 @@ impl<T: CloudProvider> TerraformService<T> {
                 args
             }
             TerraformAction::TerraformPlanAndApply => {
-                vec![base_path, "apply".to_string()]
+                let mut args = vec![base_path, "apply".to_string(), String::new()];
+                args.extend(var_file_args);
+                args.extend(var_args);
+                args
             }
             TerraformAction::TerraformApplyFromPlan { execution_id } => {
                 let mut args = vec![base_path, "apply_from_plan".to_string(), execution_id.clone()];
@@ -293,6 +307,24 @@ impl<T: CloudProvider> TerraformService<T> {
             }
         }
     }
+}
+
+fn add_cloud_provider_credentials_if_necessary(
+    mut existing_vars: Vec<EnvironmentVariable>,
+    terraform_credentials: &TerraformCredentials,
+    credential_vars: &[(&str, &str)],
+) -> Vec<EnvironmentVariable> {
+    if terraform_credentials.use_cluster_credentials {
+        let encoded_credentials = credential_vars.iter().map(|(key, value)| EnvironmentVariable {
+            key: (*key).to_string(),
+            value: general_purpose::STANDARD.encode(value),
+            is_secret: true,
+        });
+
+        existing_vars.extend(encoded_credentials);
+    }
+
+    existing_vars
 }
 
 impl<T: CloudProvider> Service for TerraformService<T> {
@@ -427,6 +459,10 @@ pub struct PersistentStorage {
     pub size_in_gib: KubernetesMemoryResourceUnit,
 }
 
+pub struct TerraformCredentials {
+    pub use_cluster_credentials: bool,
+}
+
 #[derive(Serialize, Debug, Clone)]
 pub(crate) struct ServiceTeraContext {
     pub(crate) short_id: String,
@@ -466,4 +502,103 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
     pub(crate) backend_config: BackendConfigTeraContext,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_add_credentials_when_flag_is_true() {
+        let existing = vec![EnvironmentVariable {
+            key: "EXISTING".to_string(),
+            value: "value".to_string(),
+            is_secret: false,
+        }];
+
+        let credentials = TerraformCredentials {
+            use_cluster_credentials: true,
+        };
+
+        let credential_vars = vec![("AWS_ACCESS_KEY_ID", "AKIA..."), ("AWS_SECRET_ACCESS_KEY", "secret123")];
+
+        let result = add_cloud_provider_credentials_if_necessary(existing.clone(), &credentials, &credential_vars);
+
+        assert_eq!(result.len(), 3);
+
+        assert!(result.contains(&EnvironmentVariable {
+            key: "EXISTING".to_string(),
+            value: "value".to_string(),
+            is_secret: false,
+        }));
+
+        assert!(result.contains(&EnvironmentVariable {
+            key: "AWS_ACCESS_KEY_ID".to_string(),
+            value: base64::encode("AKIA..."),
+            is_secret: true,
+        }));
+
+        assert!(result.contains(&EnvironmentVariable {
+            key: "AWS_SECRET_ACCESS_KEY".to_string(),
+            value: base64::encode("secret123"),
+            is_secret: true,
+        }));
+    }
+
+    #[test]
+    fn test_do_not_add_credentials_when_flag_is_false() {
+        let existing = vec![EnvironmentVariable {
+            key: "EXISTING".to_string(),
+            value: "value".to_string(),
+            is_secret: false,
+        }];
+
+        let credentials = TerraformCredentials {
+            use_cluster_credentials: false,
+        };
+
+        let credential_vars = vec![("AWS_ACCESS_KEY_ID", "AKIA..."), ("AWS_SECRET_ACCESS_KEY", "secret123")];
+
+        let result = add_cloud_provider_credentials_if_necessary(existing.clone(), &credentials, &credential_vars);
+
+        assert_eq!(result, existing);
+    }
+
+    #[test]
+    fn test_empty_existing_and_add_credentials() {
+        let existing = vec![];
+
+        let credentials = TerraformCredentials {
+            use_cluster_credentials: true,
+        };
+
+        let credential_vars = vec![("FOO", "bar")];
+
+        let result = add_cloud_provider_credentials_if_necessary(existing, &credentials, &credential_vars);
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0],
+            EnvironmentVariable {
+                key: "FOO".to_string(),
+                value: base64::encode("bar"),
+                is_secret: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_empty_existing_and_no_credentials_added() {
+        let existing = vec![];
+
+        let credentials = TerraformCredentials {
+            use_cluster_credentials: false,
+        };
+
+        let credential_vars = vec![("FOO", "bar")];
+
+        let result = add_cloud_provider_credentials_if_necessary(existing.clone(), &credentials, &credential_vars);
+
+        assert!(result.is_empty());
+    }
 }

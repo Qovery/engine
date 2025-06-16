@@ -15,8 +15,6 @@ pub enum EngineServiceType {
 pub trait QoveryApi: Send + Sync {
     fn service_version(&self, service_type: EngineServiceType) -> anyhow::Result<String>;
     fn git_token(&self, service_type: ServiceType, service_id: &Uuid) -> anyhow::Result<GitCredentials>;
-
-    fn update_cluster_credentials(&self, kubeconfig: String) -> anyhow::Result<()>;
     fn update_cluster_outputs(&self, cluster_state_request: &ClusterOutputsRequest) -> anyhow::Result<()>;
 }
 
@@ -29,10 +27,6 @@ impl QoveryApi for FakeQoveryApi {
 
     fn git_token(&self, _service_type: ServiceType, _service_id: &Uuid) -> anyhow::Result<GitCredentials> {
         Err(anyhow!("not implemented"))
-    }
-
-    fn update_cluster_credentials(&self, _kubeconfig: String) -> anyhow::Result<()> {
-        Ok(())
     }
 
     fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
@@ -55,10 +49,6 @@ impl QoveryApi for StaticQoveryApi {
 
     fn git_token(&self, _service_type: ServiceType, _service_id: &Uuid) -> anyhow::Result<GitCredentials> {
         Err(anyhow!("not implemented"))
-    }
-
-    fn update_cluster_credentials(&self, _kubeconfig: String) -> anyhow::Result<()> {
-        Ok(())
     }
 
     fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {

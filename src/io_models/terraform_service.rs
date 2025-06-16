@@ -87,7 +87,7 @@ pub enum TerraformFilesSource {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformProvider {
     Terraform,
     // OpenTofu
@@ -100,7 +100,7 @@ pub struct TerraformBackend {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformBackendType {
     DefinedInTerraformFile,
     Kubernetes,
@@ -116,6 +116,7 @@ impl TerraformBackendType {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformActionCommand {
     PlanOnly,
     PlanAndApply,
@@ -133,6 +134,11 @@ pub struct TerraformAction {
 pub struct PersistentStorage {
     pub storage_class: String,
     pub size_in_gib: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct TerraformCredentials {
+    pub use_cluster_credentials: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -168,6 +174,8 @@ pub struct TerraformService {
 
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
+
+    pub terraform_credentials: Option<TerraformCredentials>,
 }
 
 impl TerraformService {
@@ -185,13 +193,8 @@ impl TerraformService {
         let ssh_keys = ssh_keys_from_env_vars(&self.environment_vars_with_infos);
         let environment_variables_with_info: HashMap<String, VariableInfo> = self
             .environment_vars_with_infos
-            .clone()
-            .into_iter()
-            .map(|(k, mut v)| {
-                v.value =
-                    String::from_utf8_lossy(&general_purpose::STANDARD.decode(v.value).unwrap_or_default()).to_string();
-                (k, v)
-            })
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
 
         let annotations_groups = self
@@ -224,13 +227,17 @@ impl TerraformService {
         let terraform_action = self.get_terraform_action()?;
 
         let persistent_storage = models::terraform_service::PersistentStorage {
-            storage_class: self.persistent_storage.storage_class,
+            storage_class: self.persistent_storage.storage_class.clone(),
             size_in_gib: KubernetesMemoryResourceUnit::GibiByte(self.persistent_storage.size_in_gib),
         };
 
         let root_module_path = match self.tf_files_source {
-            TerraformFilesSource::Git { root_module_path, .. } => PathBuf::from(root_module_path),
+            TerraformFilesSource::Git {
+                ref root_module_path, ..
+            } => PathBuf::from(root_module_path),
         };
+
+        let terraform_credentials_domain = self.get_terraform_credentials_domain()?;
 
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged => Box::new(models::terraform_service::TerraformService::<AWS>::new(
@@ -257,6 +264,7 @@ impl TerraformService {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                terraform_credentials_domain,
             )?),
             Kind::ScwKapsule | Kind::ScwSelfManaged => {
                 Box::new(models::terraform_service::TerraformService::<SCW>::new(
@@ -283,6 +291,7 @@ impl TerraformService {
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
                     labels_groups,
+                    terraform_credentials_domain,
                 )?)
             }
             Kind::Gke | Kind::GkeSelfManaged => Box::new(models::terraform_service::TerraformService::<GCP>::new(
@@ -309,6 +318,7 @@ impl TerraformService {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                terraform_credentials_domain,
             )?),
             Kind::Aks | Kind::AksSelfManaged => Box::new(models::terraform_service::TerraformService::<Azure>::new(
                 context,
@@ -334,6 +344,7 @@ impl TerraformService {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                terraform_credentials_domain,
             )?),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
@@ -359,6 +370,7 @@ impl TerraformService {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                terraform_credentials_domain,
             )?),
         };
 
@@ -389,6 +401,20 @@ impl TerraformService {
                 ssh_keys: ssh_keys.to_owned(),
             },
         }
+    }
+
+    fn get_terraform_credentials_domain(
+        &self,
+    ) -> Result<models::terraform_service::TerraformCredentials, TerraformServiceError> {
+        let use_cluster_credentials = self
+            .terraform_credentials
+            .as_ref()
+            .map(|creds| creds.use_cluster_credentials)
+            .unwrap_or(false);
+
+        Ok(models::terraform_service::TerraformCredentials {
+            use_cluster_credentials,
+        })
     }
 
     fn get_terraform_action(&self) -> Result<models::terraform_service::TerraformAction, TerraformServiceError> {
@@ -569,7 +595,7 @@ ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
         // TODO TF remove from here
         r#"# entrypoint.sh
 #!/bin/bash
-set -x
+set -e
 
 echo "Starting entrypoint.sh"
 
@@ -577,12 +603,11 @@ ROOT_MODULE_PATH=$1
 CMD=$2
 PLAN_NAME=$3
 shift 3
-set -e
 
 mkdir -p /persistent-volume/terraform-work
 mkdir -p /persistent-volume/terraform-plan-output
 
-rsync -av --delete \
+rsync -a --delete \
           --exclude='entrypoint.sh' \
           --exclude='Dockerfile.qovery' \
           --exclude='.terraform' \
@@ -592,26 +617,45 @@ rsync -av --delete \
 
 cd /persistent-volume/terraform-work/$ROOT_MODULE_PATH
 
+log() {
+  echo -e "\n[==> TERRAFORM]: $1\n"
+}
+
+
+run_terraform_init() {
+  log "terraform init"
+  terraform init -backend-config="/backend-config/config" 2>&1 \
+    | awk '{print} /Terraform has been successfully initialized!/ {exit}'
+}
+
 case "$CMD" in
     "apply")
-        terraform init -backend-config="/backend-config/config"
+        run_terraform_init
+        log "terraform validate -no-tests"
         terraform validate -no-tests
+        log "terraform apply -input=false -auto-approve"
         terraform apply -input=false -auto-approve "$@"
+        log "terraform output"
         terraform output -json > /qovery-output/qovery-output.json
         ;;
     "plan_only")
-        rm -rf /persistent-volume/terraform-plan-output/*
-        terraform init -backend-config="/backend-config/config"
+        run_terraform_init
+        log  "terraform validate -no-tests"
         terraform validate -no-tests
+        log "terraform plan"
         terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@"
         ;;
     "apply_from_plan")
-        terraform init -backend-config="/backend-config/config"
+        run_terraform_init
+        log "terraform validate -no-tests"
         terraform validate -no-tests
+        log "terraform apply -input=false"
         terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
+        log "terraform output"
         terraform output -json > /qovery-output/qovery-output.json
         ;;
     "destroy")
+        log "terraform destroy"
         terraform destroy -auto-approve -input=false "$@"
         ;;
     *)

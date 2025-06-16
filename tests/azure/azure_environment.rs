@@ -10,6 +10,7 @@ use base64::engine::general_purpose;
 use bstr::ByteSlice;
 use function_name::named;
 use k8s_openapi::api::batch::v1::CronJob;
+use k8s_openapi::api::core::v1::ConfigMap;
 use kube::Api;
 use kube::api::ListParams;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
@@ -22,6 +23,7 @@ use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
+use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
 use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSource, LifecycleType};
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
@@ -35,6 +37,7 @@ use qovery_engine::io_models::{Action, MountedFile, QoveryIdentifier};
 use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tracing::Level;
 use tracing::log::warn;
@@ -2001,6 +2004,7 @@ fn azure_aks_deploy_terraform_service() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
+            terraform_credentials: None,
         }
     }
 
@@ -2141,6 +2145,681 @@ fn azure_aks_deploy_terraform_service() {
                 plan_execution_id: None,
             },
         )];
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+fn azure_aks_deploy_helm_chart() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx =
+            azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            //chart_values: HelmValueSource::Git {
+            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+            //    git_credentials: None,
+            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+            //},
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![("my-string".to_string(), "1".to_string())],
+            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![],
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+// 1. Deploy helm chart
+// 2. Check admission controller config map is created with good info
+// 3. Redeploy helm chart with different version
+// 2. Check admission controller config map is updated with new version
+fn azure_aks_deploy_helm_chart_twice_to_check_admission_controller_config_map_is_well_created_and_updated() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx =
+            azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![("my-string".to_string(), "1".to_string())],
+            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![],
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // Deploy the helm chart and check config map is well created
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let api_config_map: Api<ConfigMap> = Api::namespaced(kube_client, &environment.kube_name);
+        let short_id = to_short_id(&service_id);
+        let config_map_name = format!("{short_id}-admission-controller-config-map");
+
+        let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
+        let config_map_data = config_map.data.unwrap();
+        assert_eq!(config_map_data.len(), 5);
+        let config_map_project_id = config_map_data.get("project-id").expect("Cannot find project-id");
+        let config_map_environment_id = config_map_data
+            .get("environment-id")
+            .expect("Cannot find environment-id");
+        let config_map_service_id = config_map_data.get("service-id").expect("Cannot find service-id");
+        let config_map_service_version = config_map_data
+            .get("service-version")
+            .expect("Cannot find service-version");
+        assert_eq!(
+            &config_map_project_id.to_string(),
+            environment.project_long_id.to_string().as_str()
+        );
+        assert_eq!(&config_map_environment_id.to_string(), environment.long_id.to_string().as_str());
+        assert_eq!(&config_map_service_id.to_string(), service_id.to_string().as_str());
+        assert_eq!(
+            &config_map_service_version.to_string(),
+            "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string().as_str()
+        );
+
+        // Redeploy helm chart
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my little chart ****".to_string(),
+            kube_name: "my-little-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "b93c8d1b9c0bea63f7ce6a669c758cd6b9c9ece2".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            set_values: vec![
+                ("toto".to_string(), "tata".to_string()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![("my-string".to_string(), "1".to_string())],
+            set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![],
+        }];
+
+        // Delete helm chart dir otherwise it would fail
+        let chart_directory = qovery_engine::fs::workspace_directory(
+            context.workspace_root_dir(),
+            context.execution_id(),
+            format!("helm_charts/{service_id}"),
+        )
+        .unwrap();
+        let chart_dir = chart_directory.to_str().unwrap();
+        std::fs::remove_dir_all(Path::new(chart_dir)).unwrap();
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        let config_map: ConfigMap = block_on(api_config_map.get(&config_map_name)).unwrap();
+        let config_map_data = config_map.data.unwrap();
+        let config_map_service_version = config_map_data
+            .get("service-version")
+            .expect("Cannot find service-version");
+        assert_eq!(
+            &config_map_service_version.to_string(),
+            "b93c8d1b9c0bea63f7ce6a669c758cd6b9c9ece2".to_string().as_str()
+        );
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        if let Err(e) = clean_environments(&context, vec![environment], region) {
+            warn!("cannot clean environments, error: {:?}", e);
+        }
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+fn azure_aks_deploy_helm_chart_and_pause_it() {
+    test_deploy_helm_chart_and_pause_it(true);
+    test_deploy_helm_chart_and_pause_it(false);
+
+    fn test_deploy_helm_chart_and_pause_it(allow_cluster_wide_resources: bool) {
+        let test_name = function_name!();
+
+        engine_run_test(|| {
+            let span = span!(Level::INFO, "test", name = function_name!());
+            let _enter = span.enter();
+
+            let logger = logger();
+            let metrics_registry = metrics_registry();
+            let secrets = FuncTestsSecrets::new();
+            let context = context_for_resource(
+                secrets
+                    .AZURE_TEST_ORGANIZATION_LONG_ID
+                    .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+                secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+            );
+            let region = AzureLocation::from_str(
+                secrets
+                    .AZURE_DEFAULT_REGION
+                    .as_ref()
+                    .expect("AZURE_DEFAULT_REGION is not set")
+                    .to_string()
+                    .as_str(),
+            )
+            .expect("Unknown Azure region");
+            let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+                kubeconfig: secrets
+                    .AZURE_TEST_KUBECONFIG_b64
+                    .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                    .to_string(),
+            };
+            let infra_ctx =
+                azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry.clone());
+            let context_for_delete = context.clone_not_same_execution_id();
+            let infra_ctx_for_delete = azure_infra_config(
+                &target_cluster_azure_test,
+                &context_for_delete,
+                logger.clone(),
+                metrics_registry.clone(),
+            );
+
+            let mut environment = helpers::environment::working_minimal_environment(&context);
+
+            environment.applications = vec![];
+            let service_id = Uuid::new_v4();
+            println!("service id {}", service_id);
+            environment.helms = vec![HelmChart {
+                long_id: service_id,
+                name: "my little chart ****".to_string(),
+                kube_name: "my-little-chart".to_string(),
+                action: Action::Create,
+                chart_source: HelmChartSource::Git {
+                    git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                    git_credentials: None,
+                    commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
+                    root_path: PathBuf::from("/simple_app"),
+                },
+                chart_values: HelmValueSource::Raw {
+                    values: vec![HelmRawValues {
+                        name: "toto.yaml".to_string(),
+                        content: "nameOverride: tata".to_string(),
+                    }],
+                },
+                //chart_values: HelmValueSource::Git {
+                //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+                //    git_credentials: None,
+                //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+                //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+                //},
+                set_values: vec![("toto".to_string(), "tata".to_string())],
+                set_string_values: vec![
+                    ("my-string".to_string(), "1".to_string()),
+                    ("serviceId".to_string(), service_id.to_string()),
+                ],
+                set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+                command_args: vec!["--install".to_string()],
+                timeout_sec: 60,
+                allow_cluster_wide_resources,
+                environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+                advanced_settings: Default::default(),
+                ports: vec![],
+            }];
+
+            let mut environment_for_delete = environment.clone();
+            environment_for_delete.action = Action::Delete;
+
+            let ret = environment.deploy_environment(&environment, &infra_ctx);
+            assert!(ret.is_ok());
+
+            let ret = get_pods(&infra_ctx, Kind::Azure, &environment.clone(), &service_id);
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
+
+            let ret = environment.pause_environment(&environment, &infra_ctx_for_delete);
+            assert!(ret.is_ok());
+
+            // Check that we have actually 0 pods running for this app
+            let ret = get_pods(&infra_ctx, Kind::Azure, &environment.clone(), &service_id);
+            assert!(ret.is_ok());
+            assert!(ret.unwrap().items.is_empty());
+
+            // Check we can resume the env
+            let ctx_resume = context.clone_not_same_execution_id();
+            let infra_ctx_resume = azure_infra_config(
+                &target_cluster_azure_test,
+                &ctx_resume,
+                logger.clone(),
+                metrics_registry.clone(),
+            );
+            let ret = environment.deploy_environment(&environment, &infra_ctx_resume);
+            assert!(ret.is_ok());
+
+            let ret = get_pods(&infra_ctx, Kind::Azure, &environment.clone(), &service_id);
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
+
+            // Cleanup
+            let ret = environment.delete_environment(&environment, &infra_ctx_for_delete);
+            assert!(ret.is_ok());
+
+            if let Err(e) = clean_environments(&context, vec![environment], region) {
+                warn!("cannot clean environments, error: {:?}", e);
+            }
+
+            test_name.to_string()
+        })
+    }
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+fn azure_aks_deploy_helm_chart_and_restart_it() {
+    test_deploy_helm_chart_and_restart_it(true);
+    test_deploy_helm_chart_and_restart_it(false);
+
+    fn test_deploy_helm_chart_and_restart_it(allow_cluster_wide_resources: bool) {
+        let test_name = function_name!();
+        engine_run_test(|| {
+            let span = span!(Level::INFO, "test", name = function_name!());
+            let _enter = span.enter();
+
+            let logger = logger();
+            let metrics_registry = metrics_registry();
+
+            let secrets = FuncTestsSecrets::new();
+            let context = context_for_resource(
+                secrets
+                    .AZURE_TEST_ORGANIZATION_LONG_ID
+                    .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+                secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+            );
+            let region = AzureLocation::from_str(
+                secrets
+                    .AZURE_DEFAULT_REGION
+                    .as_ref()
+                    .expect("AZURE_DEFAULT_REGION is not set")
+                    .to_string()
+                    .as_str(),
+            )
+            .expect("Unknown Azure region");
+            let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+                kubeconfig: secrets
+                    .AZURE_TEST_KUBECONFIG_b64
+                    .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                    .to_string(),
+            };
+            let infra_ctx =
+                azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry.clone());
+            let context_for_delete = context.clone_not_same_execution_id();
+            let infra_ctx_for_delete = azure_infra_config(
+                &target_cluster_azure_test,
+                &context_for_delete,
+                logger.clone(),
+                metrics_registry.clone(),
+            );
+
+            let mut environment = helpers::environment::working_minimal_environment(&context);
+
+            environment.applications = vec![];
+            let service_id = Uuid::new_v4();
+            println!("service id {}", service_id);
+            environment.helms = vec![HelmChart {
+                long_id: service_id,
+                name: "my little chart ****".to_string(),
+                kube_name: "my-little-chart".to_string(),
+                action: Action::Create,
+                chart_source: HelmChartSource::Git {
+                    git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                    git_credentials: None,
+                    commit_id: "214310971046bc28db8c03b068248ed11b68315b".to_string(),
+                    root_path: PathBuf::from("/simple_app"),
+                },
+                chart_values: HelmValueSource::Raw {
+                    values: vec![HelmRawValues {
+                        name: "toto.yaml".to_string(),
+                        content: "nameOverride: tata".to_string(),
+                    }],
+                },
+                //chart_values: HelmValueSource::Git {
+                //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+                //    git_credentials: None,
+                //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+                //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+                //},
+                set_values: vec![("toto".to_string(), "tata".to_string())],
+                set_string_values: vec![
+                    ("my-string".to_string(), "1".to_string()),
+                    ("serviceId".to_string(), service_id.to_string()),
+                ],
+                set_json_values: vec![("my-json".to_string(), "{\"json\": \"value\"}".to_string())],
+                command_args: vec!["--install".to_string()],
+                timeout_sec: 60,
+                allow_cluster_wide_resources,
+                environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+                advanced_settings: Default::default(),
+                ports: vec![],
+            }];
+
+            let mut environment_for_delete = environment.clone();
+            environment_for_delete.action = Action::Delete;
+
+            let ret = environment.deploy_environment(&environment, &infra_ctx);
+            assert!(ret.is_ok());
+
+            let ret = get_pods(&infra_ctx, Kind::Azure, &environment.clone(), &service_id);
+            assert!(ret.is_ok());
+            assert!(!ret.unwrap().items.is_empty());
+
+            let ret = environment.restart_environment(&environment, &infra_ctx_for_delete);
+            assert!(ret.is_ok());
+
+            if let Err(e) = clean_environments(&context, vec![environment], region) {
+                warn!("cannot clean environments, error: {:?}", e);
+            }
+
+            test_name.to_string()
+        })
+    }
+}
+
+#[cfg(feature = "test-azure-self-hosted")]
+#[named]
+#[test]
+fn azure_aks_deploy_helm_chart_with_router() {
+    let test_name = function_name!();
+
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = "deploy_helm_chart");
+        let _enter = span.enter();
+
+        let logger = logger();
+        let metrics_registry = metrics_registry();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AZURE_TEST_ORGANIZATION_LONG_ID
+                .expect("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            secrets.AZURE_TEST_CLUSTER_LONG_ID.expect("AZURE_TEST_CLUSTER_LONG_ID"),
+        );
+        let region = AzureLocation::from_str(
+            secrets
+                .AZURE_DEFAULT_REGION
+                .as_ref()
+                .expect("AZURE_DEFAULT_REGION is not set")
+                .to_string()
+                .as_str(),
+        )
+        .expect("Unknown Azure region");
+        let target_cluster_azure_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AZURE_TEST_KUBECONFIG_b64
+                .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx =
+            azure_infra_config(&target_cluster_azure_test, &context, logger.clone(), metrics_registry.clone());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = azure_infra_config(
+            &target_cluster_azure_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry.clone(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        // generate an extra namespace to deploy a service and ingress
+        let extra_namespace = format!("extra-env-{}", Uuid::new_v4());
+        let host_suffix = Uuid::new_v4();
+
+        environment.applications = vec![];
+        let service_id = Uuid::new_v4();
+        environment.helms = vec![HelmChart {
+            long_id: service_id,
+            name: "my special chart ****".to_string(),
+            kube_name: "my-special-chart".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "8acb6e06d98c0c1b8f2285d5c5bc7f1a837a782a".to_string(),
+                root_path: PathBuf::from("/several_services"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "toto.yaml".to_string(),
+                    content: "nameOverride: tata".to_string(),
+                }],
+            },
+            //chart_values: HelmValueSource::Git {
+            //    git_url: Url::parse("https://github.com/erebe/test_http_server.git").unwrap(),
+            //    git_credentials: None,
+            //    commit_id: "753aa76982c710ee59db35e21669f6434ae4fa12".to_string(),
+            //    values_path: vec![PathBuf::from(".github/workflows/docker-image.yml")],
+            //},
+            set_values: vec![
+                ("service2.namespace".to_string(), extra_namespace.clone()),
+                ("serviceId".to_string(), service_id.to_string()),
+            ],
+            set_string_values: vec![],
+            set_json_values: vec![],
+            command_args: vec![],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: true,
+            environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
+            advanced_settings: Default::default(),
+            ports: vec![
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: false,
+                    name: format!("service1-p8080-{}", host_suffix),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                    namespace: None,
+                    service_name: Some("inner-namespace-service1".to_string()),
+                    additional_service: None,
+                },
+                Port {
+                    long_id: Uuid::new_v4(),
+                    port: 8080,
+                    is_default: false,
+                    name: format!("service2-p8080-{}", host_suffix),
+                    publicly_accessible: true,
+                    protocol: Protocol::HTTP,
+                    namespace: Some(extra_namespace.clone()),
+                    service_name: Some("outside-namespace-service2".to_string()),
+                    additional_service: None,
+                },
+            ],
+        }];
+        environment.routers = vec![Router {
+            long_id: Uuid::new_v4(),
+            name: "default-router".to_string(),
+            kube_name: "default-router".to_string(),
+            action: Action::Create,
+            default_domain: "main".to_string(),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: environment.helms[0].long_id,
+            }],
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());
