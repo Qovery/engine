@@ -297,7 +297,7 @@ infra-without-cloud-providers:
   dependencies:
     - build-and-lint-code
   tags:
-    - bm-7cpu-16gmem-0g
+    - bm-7cpu-20gmem-0g
   artifacts:
     when: always
     reports:
