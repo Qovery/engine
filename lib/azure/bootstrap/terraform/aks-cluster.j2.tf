@@ -30,6 +30,7 @@ resource "azurerm_kubernetes_cluster" "primary" {
     min_count              = {{ node_group_default.min_nodes }}
     max_count              = {{ node_group_default.max_nodes }}
     node_public_ip_enabled = false
+    os_disk_size_gb        = {{ node_group_default.disk_size_in_gib }}
     orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
     temporary_name_for_rotation = "{{ node_group_default.name }}temp"
     upgrade_settings {
@@ -92,6 +93,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_{{ node_group.zo
   auto_scaling_enabled   = true
   min_count              = {{ node_group.min_nodes }}
   max_count              = {{ node_group.max_nodes }}
+  os_disk_size_gb        = {{ node_group.disk_size_in_gib }}
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
   temporary_name_for_rotation = "{{ node_group.name }}temp"
