@@ -123,7 +123,7 @@ impl AzureContainerRegistry {
             // login to cluster registry
             cr.context
                 .docker
-                .login(&registry_cluster)
+                .login_with_retry(&registry_cluster)
                 .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
         }
 
