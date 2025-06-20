@@ -74,6 +74,11 @@ pub enum ContainerRegistryServiceError {
         cluster_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot login to Azure registry `{registry_name}`: {raw_error_message:?}")]
+    CannotLoginToRegistry {
+        registry_name: String,
+        raw_error_message: String,
+    },
 }
 
 pub const MAX_REGISTRY_NAME_LENGTH: usize = 50;

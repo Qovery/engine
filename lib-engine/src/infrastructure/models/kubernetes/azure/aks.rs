@@ -1,8 +1,8 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::azure::Credentials;
 use crate::errors::EngineError;
-use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -72,12 +72,18 @@ impl AKS {
         let credentials = cloud_provider
             .downcast_ref()
             .as_azure()
-            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not Azure")))?
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloud provider is not Azure")))?
             .credentials
             .clone();
 
         // check credentials
         // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
+        logger.log(EngineEvent::Info(
+            event_details.clone(),
+            EventMessage::new_from_safe(
+                "Checking Azure credentials, those can take some time to propagate...".to_string(),
+            ),
+        ));
         if AzureAuthService::login_with_retry(
             &credentials.client_id,
             &credentials.client_secret,
