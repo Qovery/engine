@@ -1,6 +1,7 @@
 use crate::cmd::docker::Docker;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::events::{EventDetails, Transmitter};
+use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
 use rand::Rng;
 use rand::distr::Alphanumeric;
@@ -14,6 +15,7 @@ pub struct Context {
     organization_short_id: String,
     cluster_id: Uuid,
     cluster_short_id: String,
+    cluster_name: String,
     execution_id: String,
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -44,6 +46,7 @@ impl Context {
             organization_short_id: to_short_id(&organization_id),
             cluster_id,
             cluster_short_id: to_short_id(&cluster_id),
+            cluster_name: QoveryIdentifier::new(cluster_id).qovery_resource_name().to_string(),
             execution_id,
             workspace_root_dir,
             lib_root_dir,
@@ -70,6 +73,10 @@ impl Context {
 
     pub fn cluster_short_id(&self) -> &str {
         &self.cluster_short_id
+    }
+
+    pub fn cluster_name(&self) -> &str {
+        &self.cluster_name
     }
 
     pub fn execution_id(&self) -> &str {

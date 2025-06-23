@@ -2,14 +2,12 @@ use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
 use crate::infrastructure::models::container_registry::{
-    ContainerRegistryInfo, DockerRegistryInfo, InteractWithRegistry, RegistryTags, Repository, RepositoryInfo,
+    ContainerRegistryInfo, InteractWithRegistry, RegistryTags, Repository, RepositoryInfo,
     take_last_x_chars_and_remove_leading_dash_char,
 };
 use crate::io_models::context::Context;
 use crate::services::azure::container_registry_service::{AzureContainerRegistryService, MAX_REGISTRY_NAME_LENGTH};
 use azure_mgmt_containerregistry::models::{Sku, sku};
-use base64::Engine;
-use base64::engine::general_purpose;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -54,8 +52,6 @@ impl AzureContainerRegistry {
         let _ = registry_cluster.set_username(client_id);
         let _ = registry_cluster.set_password(Some(client_secret));
 
-        let client_id_clone = client_id.to_string(); // for closure
-        let client_secret_clone = client_secret.to_string(); // for closure
         let registry_info = ContainerRegistryInfo {
             registry_name: name.to_string(),
             get_registry_endpoint: Box::new(move |registry_endpoint_prefix| {
@@ -68,13 +64,7 @@ impl AzureContainerRegistry {
 
                 registry_url
             }),
-            get_registry_docker_json_config: Box::new(move |docker_registry_info| {
-                Some(Self::get_docker_json_config_raw(
-                    &client_id_clone,
-                    &client_secret_clone,
-                    docker_registry_info,
-                ))
-            }),
+            get_registry_docker_json_config: Box::new(move |_docker_registry_info| None),
             insecure_registry: false,
             get_registry_url_prefix: Box::new(|cluster_id| {
                 Some(
@@ -133,7 +123,7 @@ impl AzureContainerRegistry {
             // login to cluster registry
             cr.context
                 .docker
-                .login(&registry_cluster)
+                .login_with_retry(&registry_cluster)
                 .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
         }
 
@@ -240,34 +230,6 @@ impl AzureContainerRegistry {
         }
     }
 
-    fn get_docker_json_config_raw(login: &str, secret_token: &str, docker_registry_info: DockerRegistryInfo) -> String {
-        general_purpose::STANDARD.encode(
-            format!(
-                r#"{{"auths":{{"{}.azurecr.io":{{"auth":"{}"}}}}}}"#,
-                match docker_registry_info.registry_name {
-                    Some(registry_name) =>
-                        AzureContainerRegistryService::try_get_sanitized_registry_name(registry_name.as_str())
-                            .unwrap_or_default(),
-                    None => {
-                        match docker_registry_info.image_name {
-                            Some(image_name) => image_name
-                                .split_once('/')
-                                .map(|(repository_name, _)| {
-                                    AzureContainerRegistryService::try_get_sanitized_registry_name(repository_name)
-                                        .unwrap_or_default()
-                                })
-                                .unwrap_or(image_name.to_string())
-                                .to_string(),
-                            None => "".to_string(), // Shouldn't happen, if so, it will fail
-                        }
-                    }
-                },
-                general_purpose::STANDARD.encode(format!("{login}:{secret_token}").as_bytes())
-            )
-            .as_bytes(),
-        )
-    }
-
     /// This function extracts the registry name from a full URL or hostname.
     /// Azure registries follow the format `registry_name.azurecr.io`.
     pub fn get_registry_name_from_url(registry_url: &Url) -> Option<String> {
@@ -278,6 +240,16 @@ impl AzureContainerRegistry {
             .and_then(|host| {
                 let end = host.len() - suffix.len();
                 if end > 0 { Some(host[..end].to_string()) } else { None }
+            })
+    }
+
+    pub fn allow_cluster_to_pull_from_registry(&self, cluster_name: &str) -> Result<(), ContainerRegistryError> {
+        self.service
+            .allow_cluster_to_pull_from_registry(self.resource_group_name.as_str(), &self.name, cluster_name) // there is only one registry per cluster named after cluster ID
+            .map_err(|e| ContainerRegistryError::CannotLinkRegistryToCluster {
+                registry_name: self.name.clone(),
+                cluster_id: cluster_name.to_string(),
+                raw_error_message: e.to_string(),
             })
     }
 }

@@ -86,7 +86,7 @@ spec:
       containers:
         - name: qovery-wait-container-output
           image: "debian:stable-slim"
-          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
+          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1; exit 0']
           volumeMounts:
             - name: output
               mountPath: /qovery-output

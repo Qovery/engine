@@ -2,6 +2,7 @@ use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, Qovery
 use crate::io_models::models::CpuArchitecture;
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use retry::{Error, OperationResult};
 use std::cmp::max;
 use std::fmt::{Display, Formatter};
 use std::io::Write;
@@ -546,6 +547,18 @@ impl Docker {
         )?;
 
         Ok(())
+    }
+
+    pub fn login_with_retry(&self, registry: &Url) -> Result<(), DockerError> {
+        match retry::retry(retry::delay::Fibonacci::from_millis(1_000).take(10), || {
+            match self.login(registry) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(err) => OperationResult::Retry(err),
+            }
+        }) {
+            Ok(_) => Ok(()),
+            Err(Error { error, .. }) => Err(error),
+        }
     }
 
     pub fn does_image_exist_locally(&self, image: &ContainerImage) -> Result<bool, DockerError> {

@@ -3,6 +3,7 @@ use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::models::cloud_provider::azure::locations::AzureLocation;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::runtime::block_on;
+use crate::services::azure::azure_auth_service::AzureAuthService;
 use crate::services::azure::azure_cloud_sdk_types::{DockerImageTag, from_azure_container_registry};
 use azure_core::authority_hosts::AZURE_PUBLIC_CLOUD;
 use azure_core::new_http_client;
@@ -73,6 +74,11 @@ pub enum ContainerRegistryServiceError {
         cluster_name: String,
         raw_error_message: String,
     },
+    #[error("Cannot login to Azure registry `{registry_name}`: {raw_error_message:?}")]
+    CannotLoginToRegistry {
+        registry_name: String,
+        raw_error_message: String,
+    },
 }
 
 pub const MAX_REGISTRY_NAME_LENGTH: usize = 50;
@@ -87,6 +93,7 @@ pub struct AzureContainerRegistryService {
     client: Arc<Client>,
     client_id: String,
     client_secret: String,
+    tenant_id: String,
     write_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     read_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
 }
@@ -117,6 +124,7 @@ impl AzureContainerRegistryService {
             client: Arc::new(client),
             client_id: client_id.to_string(),
             client_secret: client_secret.to_string(),
+            tenant_id: tenant_id.to_string(),
             write_rate_limiter,
             read_rate_limiter,
         })
@@ -176,45 +184,65 @@ impl AzureContainerRegistryService {
         cluster_name: &str,
     ) -> Result<(), ContainerRegistryServiceError> {
         let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
-        // TODO(benjaminch): move out azure CLI once AKS cluster operations will be available in SDK
-        // https://crates.io/crates/azure_containers_containerregistry
-        let mut output = vec![];
-        let mut error = vec![];
-        //az aks update -n <myAKSCluster> -g <myResourceGroup> --attach-acr <acr-resource-id>
-        QoveryCommand::new(
-            "az",
-            &[
-                "aks",
-                "update",
-                "-n",
-                cluster_name,
-                "-g",
-                resource_group_name,
-                "--attach-acr",
-                registry_name.as_str(),
-                "-u",
-                self.client_id.as_str(),
-                "-p",
-                self.client_secret.as_str(),
-            ],
-            &[],
-        )
-        .exec_with_abort(
-            &mut |line| {
-                output.push(line);
-            },
-            &mut |line| {
-                error.push(line);
-            },
-            &CommandKiller::from_timeout(StdDuration::from_secs(30)),
-        )
-        .map_err(|e| ContainerRegistryServiceError::CannotAllowClusterToPullFromRegistry {
-            cluster_name: cluster_name.to_string(),
-            registry_name: registry_name.to_string(),
-            raw_error_message: format!("Cannot allow cluster to pull from ACR: {}", e),
+        AzureAuthService::login(&self.client_id, &self.client_secret, &self.tenant_id).map_err(|e| {
+            ContainerRegistryServiceError::CannotAllowClusterToPullFromRegistry {
+                cluster_name: cluster_name.to_string(),
+                registry_name: registry_name.to_string(),
+                raw_error_message: format!("Cannot login to Azure to allow cluster to pull from ACR: {}", e),
+            }
         })?;
 
-        Ok(())
+        // Link the ACR to the AKS cluster
+        // This can fail especially if cluster is not yet ready or if there are any updates
+        // operations in progress on the cluster.
+        // Example error message:
+        // Operation is not allowed because there's an in progress update managed cluster operation
+        let mut output = vec![];
+        let mut error_output = vec![];
+        match retry::retry(retry::delay::Fixed::from_millis(15_000).take(20), || {
+            // az aks update -n <myAKSCluster> -g <myResourceGroup> --attach-acr <acr-resource-id>
+            match QoveryCommand::new(
+                "az",
+                &[
+                    "aks",
+                    "update",
+                    "-n",
+                    cluster_name,
+                    "-g",
+                    resource_group_name,
+                    "--attach-acr",
+                    registry_name.as_str(),
+                    "--no-wait",
+                ],
+                &[],
+            )
+            .exec_with_abort(
+                &mut |line| {
+                    output.push(line);
+                },
+                &mut |line| {
+                    error_output.push(line);
+                },
+                &CommandKiller::from_timeout(StdDuration::from_secs(10 * 60)),
+            ) {
+                Ok(_) => retry::OperationResult::Ok(()),
+                Err(e) => retry::OperationResult::Retry(e),
+            }
+        }) {
+            Ok(_) => Ok(()),
+            Err(retry::Error { error, .. }) => {
+                Err(ContainerRegistryServiceError::CannotAllowClusterToPullFromRegistry {
+                    cluster_name: cluster_name.to_string(),
+                    registry_name: registry_name.to_string(),
+                    raw_error_message: format!(
+                        "Cannot allow cluster to pull from ACR: {}\n\n{}\n\n{}",
+                        error,
+                        output.join("").as_str(),
+                        error_output.join("").as_str()
+                    ),
+                })
+            }
+        }
     }
 
     pub fn get_registry(

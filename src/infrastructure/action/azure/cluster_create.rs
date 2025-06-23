@@ -110,6 +110,11 @@ fn create_container_registry(
         )
         .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
 
+    // Allow AKS cluster to pull images from the container registry
+    azure_cr
+        .allow_cluster_to_pull_from_registry(infra_ctx.kubernetes().cluster_name().as_str())
+        .map_err(|e| EngineError::new_container_registry_error(event_details.clone(), e))?;
+
     Ok(())
 }
 

@@ -237,6 +237,7 @@ where
                     job.max_duration(),
                 )?;
                 set_of_pods_already_processed.insert(pod_name.clone());
+                debug!("set_of_pods_already_processed {:?}", set_of_pods_already_processed);
 
                 // FIXME(ENG-1941) correctly handle cancel
                 let should_force_cancel = async {
@@ -363,6 +364,9 @@ where
                     JobStatus::Success => return Ok(state),
                     JobStatus::NotRunning | JobStatus::Running => unreachable!(),
                     JobStatus::Failure { reason, message } => {
+                        let pod = block_on(kube_pod_api.get(&pod_name));
+                        debug!("Pod after unlocking qovery-wait-container-output: {:?}", pod);
+
                         let msg = format!("Job failed to correctly run due to {reason} {message}");
                         debug!(msg);
                         debug!("Job pod: {:?}", ret);
@@ -680,6 +684,7 @@ pub fn get_active_job_pod_by_selector(
                 ));
             }
         };
+        debug!("get_active_job_pod_by_selector Pods found: {:?}", pods);
 
         // If pod is pending for some reason (cluster scaling, etc.) let's move on to the next retry.
         if pods.items.iter().any(|pod| {
@@ -727,7 +732,11 @@ pub fn get_active_job_pod_by_selector(
             _ => {
                 return OperationResult::Retry(EngineError::new_job_error(
                     event_details.clone(),
-                    format!("Cannot find active pod having label {}", &job_pod_selector),
+                    format!(
+                        "Cannot find active pod having label {} (found {} pods)",
+                        &job_pod_selector,
+                        active_job_pods.len()
+                    ),
                 ));
             }
         };
