@@ -15,6 +15,7 @@ resources:
 
 # env -- A map of environment variables
 env: {}
+args: []
 
 securityContext: {}
 
