@@ -45,7 +45,11 @@ impl ToCommonHelmChart for K8sEventLoggerChart {
                 values: vec![
                     ChartSetValue {
                         key: "image.repository".to_string(),
-                        value: "public.ecr.aws/r3m4q3r9/pub-mirror-k8s-event-logger".to_string(),
+                        value: "public.ecr.aws/r3m4q3r9/k8s-event-logger-rs".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "image.tag".to_string(),
+                        value: "3e8a12db".to_string(),
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
@@ -62,6 +66,10 @@ impl ToCommonHelmChart for K8sEventLoggerChart {
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
                         value: KubernetesMemoryResourceUnit::MebiByte(32).to_string(),
+                    },
+                    ChartSetValue {
+                        key: "args".to_string(),
+                        value: "{--ignore-update=false}".to_string(),
                     },
                 ],
                 ..Default::default()
