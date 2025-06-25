@@ -10,6 +10,7 @@ metadata:
     qovery.com/service-type: job
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    qovery.com/deployment-id: {{ deployment_id }}
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}
@@ -35,6 +36,7 @@ spec:
         qovery.com/service-type: job
         qovery.com/environment-id: {{ environment_long_id }}
         qovery.com/project-id: {{ project_long_id }}
+        qovery.com/deployment-id: {{ deployment_id }}
         {%- for key, value in labels_group.common %}
         {{ key }}: |-
            {{ value }}
