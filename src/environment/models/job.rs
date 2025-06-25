@@ -38,6 +38,7 @@ pub struct Job<T: CloudProvider> {
     pub(crate) mk_event_details: Box<dyn Fn(Stage) -> EventDetails + Send + Sync>,
     pub(crate) id: String,
     pub(crate) long_id: Uuid,
+    pub(crate) deployment_id: String,
     pub(crate) name: String,
     pub(crate) kube_name: String,
     pub(crate) action: Action,
@@ -112,6 +113,11 @@ impl<T: CloudProvider> Job<T> {
             mk_event_details: Box::new(mk_event_details),
             id: to_short_id(&long_id),
             long_id,
+            deployment_id: context
+                .execution_id()
+                .rsplit_once('-')
+                .map(|s| s.0.to_string())
+                .unwrap_or_default(),
             action,
             image_source,
             schedule,
@@ -207,6 +213,7 @@ impl<T: CloudProvider> Job<T> {
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
             environment_long_id: environment.long_id,
+            deployment_id: self.deployment_id.to_string(),
             cluster: ClusterTeraContext::from(kubernetes),
             namespace: environment.namespace().to_string(),
             service: ServiceTeraContext {
@@ -500,6 +507,7 @@ pub(crate) struct JobTeraContext {
     pub(crate) project_long_id: Uuid,
     pub(crate) environment_short_id: String,
     pub(crate) environment_long_id: Uuid,
+    pub(crate) deployment_id: String,
     pub(crate) cluster: ClusterTeraContext,
     pub(crate) namespace: String,
     pub(crate) service: ServiceTeraContext,
