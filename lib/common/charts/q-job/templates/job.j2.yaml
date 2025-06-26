@@ -61,8 +61,8 @@ spec:
                   - {{ value }}
         {%- endfor %}
         {%- endif %}
-      restartPolicy: Never
-      shareProcessNamespace: true
+      restartPolicy: OnFailure
+      #shareProcessNamespace: true
       {%- if service.advanced_settings.security_service_account_name != "" %}
       automountServiceAccountToken: true
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
@@ -85,10 +85,34 @@ spec:
           secret:
             secretName: {{ mounted_file.id }}-{{ service.short_id }}
         {%- endfor %}
-      containers:
+      initContainers:
         - name: qovery-wait-container-output
+          # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
+          restartPolicy: Always # this tells that the initContainer is a sidecar
           image: "debian:stable-slim"
-          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1; exit 0']
+          command:
+            - '/usr/bin/bash'
+            - '-c'
+            - |-
+              _term() { 
+                if ! [ -f /qovery-output/qovery-output.json ]; then 
+                  echo "File /qovery-output/qovery-output.json does not exist. Exiting"
+                  exit 0
+                fi 
+              
+                while true
+                do 
+                  echo "Waiting for engine to retrieve qovery-output.json"
+                  if [ -f /qovery-output/terminate ]; then 
+                    exit 0
+                  fi 
+                  sleep 1
+                done
+                exit 0
+              }
+              trap _term EXIT
+              sleep infinity
+
           volumeMounts:
             - name: output
               mountPath: /qovery-output
@@ -101,6 +125,7 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
+      containers:
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
           {%- if service.entrypoint %}
