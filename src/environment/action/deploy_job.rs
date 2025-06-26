@@ -1,5 +1,4 @@
 use super::utils::delete_cached_image;
-use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::utils::{KubeObjectKind, get_last_deployed_image, mirror_image_if_necessary};
@@ -21,16 +20,14 @@ use anyhow::{Context, anyhow};
 use futures::pin_mut;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
-use k8s_openapi::api::core::v1::{ContainerState, ContainerStateTerminated, Pod};
+use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
 use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{Condition, await_condition};
-use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Duration;
@@ -562,24 +559,7 @@ where
 
         // We want the job to be half running. Meaning the task/job of the user is terminated
         // but our qovery-wait-container-output is still running, waiting for us.
-        let is_job_terminated = pod
-            .status
-            .as_ref()
-            .and_then(|st| st.container_statuses.as_ref())
-            .map(|st| {
-                st.iter().any(|c| {
-                    matches!(
-                        &c.state,
-                        &Some(ContainerState {
-                            terminated: Some(_),
-                            ..
-                        })
-                    )
-                })
-            })
-            .unwrap_or(false);
-
-        if is_job_terminated {
+        if user_job_terminated_exit_code(&pod).is_some() {
             return true;
         }
 
@@ -627,7 +607,7 @@ where
         let Some(pod) = pod else { continue };
 
         // user code has not terminated cleanly, restart the loop until backoff limit is reached
-        if !is_user_job_terminated_in_success(&pod) {
+        if !(user_job_terminated_exit_code(&pod) == Some(0)) {
             continue;
         }
 
@@ -704,21 +684,16 @@ fn is_pod_running_or_pending(pod: &Pod) -> bool {
     pod_phase == "Running" || pod_phase == "Pending"
 }
 
-fn is_user_job_terminated_in_success(pod: &Pod) -> bool {
+fn user_job_terminated_exit_code(pod: &Pod) -> Option<u32> {
     pod.status
         .as_ref()
         .and_then(|st| st.container_statuses.as_ref())
         .map(|st| st.iter())
         .unwrap_or_default()
-        .any(|st| {
-            matches!(
-                &st.state,
-                &Some(ContainerState {
-                    terminated: Some(ContainerStateTerminated { exit_code: 0, .. }),
-                    ..
-                })
-            )
-        })
+        .filter_map(|st| st.state.as_ref())
+        .filter_map(|st| st.terminated.as_ref())
+        .next()
+        .map(|st| st.exit_code as u32)
 }
 
 async fn get_active_pod_of_job(pod_api: Api<Pod>, selector: &str) -> anyhow::Result<String> {
@@ -893,137 +868,6 @@ pub fn is_job_terminated() -> impl Condition<K8sJob> {
         JobStatus::Success => true,
         JobStatus::Failure { .. } => true,
     }
-}
-
-pub fn get_active_job_pod_by_selector(
-    kube_pod_api: Api<Pod>,
-    job_pod_selector: &str,
-    event_details: &EventDetails,
-    set_of_pods_already_processed: &HashSet<String>,
-    job_max_duration: &Duration,
-) -> Result<String, Box<EngineError>> {
-    // We wait at max 30 times 10 seconds (5min) for the pod to be running.
-    // If the job max duration is lower than 5min, we reduce the number of retries to clamp it to its maximum duration
-    let retry_fixed_delay =
-        retry::delay::Fixed::from_millis(10_000).take(min(30, job_max_duration.as_secs() as usize / 10));
-
-    // Trying to get the pod name, letting it up to 5 minutes to be scheduled
-    let list_job_pods_result = retry::retry(retry_fixed_delay, || {
-        // List pods according to job label selector
-        let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
-            Ok(pods_list) => {
-                if pods_list.items.is_empty() {
-                    return OperationResult::Retry(EngineError::new_job_error(
-                        event_details.clone(),
-                        format!("No pod found when listing pods having label {}", &job_pod_selector),
-                    ));
-                } else {
-                    pods_list
-                }
-            }
-            Err(_) => {
-                return OperationResult::Retry(EngineError::new_job_error(
-                    event_details.clone(),
-                    format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
-                ));
-            }
-        };
-        debug!("get_active_job_pod_by_selector Pods found: {:?}", pods);
-
-        // If pod is pending for some reason (cluster scaling, etc.) let's move on to the next retry.
-        if pods.items.iter().any(|pod| {
-            if let Some(pod_status) = &pod.status {
-                if let Some(phase) = &pod_status.phase {
-                    // Pod has been scheduled but is Pending (e.q. in case of cluster node scale-up required)
-                    return phase.to_lowercase() == KubernetesPodStatusPhase::Pending.to_string().to_lowercase();
-                }
-            }
-            false
-        }) {
-            return OperationResult::Retry(EngineError::new_job_error(
-                event_details.clone(),
-                format!(
-                    "Error pods having label {} are still pending to be scheduled",
-                    &job_pod_selector
-                ),
-            ));
-        }
-
-        // Retrieve active pods
-        let active_job_pods: Vec<String> = pods
-            .items
-            .iter()
-            .filter_map(|pod| {
-                if let Some(pod_status) = &pod.status {
-                    if let Some(pod_container_statuses) = &pod_status.container_statuses {
-                        // Pod is running, checking container statuses
-                        let job_container_is_active = &pod_container_statuses
-                            .iter()
-                            .filter_map(|container_status| container_status.clone().state)
-                            .any(|status| status.running.is_some());
-                        if *job_container_is_active {
-                            return Some(pod.metadata.name.as_ref().unwrap().clone());
-                        }
-                    }
-                }
-                None
-            })
-            .collect();
-
-        // There should never be more than 1 pod in 'Running' status
-        let active_selected_pod_name = match active_job_pods.len() {
-            1 => active_job_pods.first().unwrap().to_string(),
-            _ => {
-                return OperationResult::Retry(EngineError::new_job_error(
-                    event_details.clone(),
-                    format!(
-                        "Cannot find active pod having label {} (found {} pods)",
-                        &job_pod_selector,
-                        active_job_pods.len()
-                    ),
-                ));
-            }
-        };
-
-        // Check that the selected running pod has not already been processed
-        if set_of_pods_already_processed.contains(&active_selected_pod_name) {
-            return OperationResult::Retry(EngineError::new_job_error(
-                event_details.clone(),
-                format!(
-                    "Selected pod has already been processed. Waiting for the next pod to be created having label {}",
-                    &job_pod_selector
-                ),
-            ));
-        }
-        OperationResult::Ok(active_selected_pod_name)
-    });
-    match list_job_pods_result {
-        Ok(active_pod_name) => Ok(active_pod_name),
-        Err(Error { error, .. }) => Err(Box::new(error)),
-    }
-}
-
-pub fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
-    if let Some(pod) = job_pod {
-        if let Some(pod_status) = &pod.status {
-            info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
-            if let Some(pod_container_statuses) = &pod_status.container_statuses {
-                info!("{}", format!("Job pod {} container status", job_container_name));
-                let job_container_terminated = &pod_container_statuses
-                    .iter()
-                    .filter(|container_status| container_status.name == job_container_name)
-                    .filter_map(|container_status| container_status.clone().state)
-                    .any(|status| status.terminated.is_some());
-                return *job_container_terminated;
-            }
-        }
-    }
-    info!("{}", format!("Job pod container: {} is not terminated", job_container_name));
-    false
-}
-
-pub fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
-    move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
 }
 
 // Used to validate the job json output format with serde
