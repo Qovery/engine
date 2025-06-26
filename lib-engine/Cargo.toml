@@ -11,7 +11,7 @@ atomic_enum = "0.3.0"
 bitflags = "2.9.1"
 chrono = "0.4.41"
 derivative = "2.2.0"
-git2 = "0.20.2"
+git2 = {  version = "0.20.2", features = ["vendored-libgit2"] }
 walkdir = "2.5.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
@@ -131,6 +131,7 @@ google-cloud-artifact-registry = { version = "0.8.0", default-features = false, 
 google-cloud-googleapis = { version = "0.16.1", features = [] }
 # don't update, needs to be in sync with google-cloud-artifact-registry internal version
 google-cloud-gax = { version = "0.19.2", features = [] }
+tokio-util = "0.7.15"
 
 [dev-dependencies]
 bstr = "1.12.0"
