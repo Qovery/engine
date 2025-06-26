@@ -559,7 +559,7 @@ where
 
         // We want the job to be half running. Meaning the task/job of the user is terminated
         // but our qovery-wait-container-output is still running, waiting for us.
-        if user_job_terminated_exit_code(&pod).is_some() {
+        if user_job_terminated_exit_code(pod).is_some() {
             return true;
         }
 
@@ -607,7 +607,7 @@ where
         let Some(pod) = pod else { continue };
 
         // user code has not terminated cleanly, restart the loop until backoff limit is reached
-        if !(user_job_terminated_exit_code(&pod) == Some(0)) {
+        if user_job_terminated_exit_code(&pod) != Some(0) {
             continue;
         }
 
