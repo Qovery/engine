@@ -1,15 +1,14 @@
 use super::utils::delete_cached_image;
-use crate::cmd::kubectl::{kubectl_exec_delete_job, kubectl_get_job_pod_output};
-use crate::cmd::structs::KubernetesPodStatusPhase;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::utils::{KubeObjectKind, get_last_deployed_image, mirror_image_if_necessary};
+use crate::environment::models::abort::Abort;
 use crate::environment::models::job::{ImageSource, Job, JobService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::job::reporter::JobDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+use crate::errors::{CommandError, EngineError};
 use crate::events::EngineEvent;
 use crate::events::{EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
@@ -17,6 +16,8 @@ use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
+use anyhow::{Context, anyhow};
+use futures::pin_mut;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
@@ -24,12 +25,11 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
 use kube::api::{AttachParams, ListParams, PostParams};
 use kube::runtime::wait::{Condition, await_condition};
-use retry::{Error, OperationResult};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::time::Duration;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
@@ -219,167 +219,64 @@ where
             // create job
             helm.on_create(target)?;
 
-            // Get kube config file
-            let job_pod_selector = format!("job-name={}", job.kube_name());
-            let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
+            let pod = block_on(await_user_job_to_terminate(
+                job,
+                target.environment.namespace(),
+                target.kube.client(),
+                target.abort,
+            ));
+            let pod =
+                pod.map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
+            let pod_name = pod.metadata.name.as_deref().unwrap_or("");
+            info!("Targeting job pod name: {}", pod_name);
 
-            let job_max_nb_restart = job.max_nb_restart();
-            let mut job_creation_iterations = 0;
-            let mut set_of_pods_already_processed: HashSet<String> = HashSet::new();
-
-            loop {
-                // Wait for the pod to be started to get its name
-                let pod_name = get_active_job_pod_by_selector(
-                    kube_pod_api.clone(),
-                    &job_pod_selector,
-                    event_details,
-                    &set_of_pods_already_processed,
-                    job.max_duration(),
-                )?;
-                set_of_pods_already_processed.insert(pod_name.clone());
-                debug!("set_of_pods_already_processed {:?}", set_of_pods_already_processed);
-
-                // FIXME(ENG-1941) correctly handle cancel
-                let should_force_cancel = async {
-                    while !target.abort.status().should_force_cancel() {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-                };
-
-                // Wait for the job container to be terminated
-                logger.info(format!("Waiting for the job container {} to be processed...", job.kube_name()));
-                block_on(async {
-                    tokio::select! {
-                        biased;
-                        _ = should_force_cancel => {},
-                        _ = await_condition(
-                            kube_pod_api.clone(),
-                            &pod_name,
-                            is_job_pod_container_terminated(job.kube_name()),
-                        ) => {},
-                    }
-                });
-
-                let status = target.abort.status();
-                // If abort is forced, we delete lifecycle jobs
-                if status.should_force_cancel() {
-                    // force delete lifecycle jobs
-                    for job in target.environment.jobs.iter().filter(|&j| j.job_schedule().is_job()) {
-                        info!("Trying to delete lifecycle jobs with label `{}`", job.kube_label_selector());
-                        match kubectl_exec_delete_job(
-                            &target.kube,
-                            job.kube_label_selector().as_str(),
-                            Some(target.environment.namespace()),
-                        ) {
-                            Ok(_) => {
-                                info!("Job with selector `{}` has been deleted", job.kube_label_selector());
-                                return Err(Box::new(EngineError::new_task_cancellation_requested(
-                                    event_details.clone(),
-                                )));
-                            }
-                            Err(_) => warn!("Cannot delete job with selector `{}`", job.kube_label_selector()),
-                        }
-                    }
+            // Fech Qovery Json output if any, and transmit it to the core for next deployment stage
+            match block_on(retrieve_qovery_output_from_pod(
+                target.kube.client(),
+                target.environment.namespace(),
+                pod_name,
+            )) {
+                Ok(None) => {}
+                Ok(Some(output)) => logger.core_configuration_for_job(
+                    "Job output succeeded. Environment variables will be synchronized.".to_string(),
+                    serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
+                ),
+                Err(err) => {
+                    logger.log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
+                            event_details.clone(),
+                            err.to_string(),
+                        )),
+                    ));
                 }
-
-                info!("Get JSON output from shared volume");
-                // Get JSON output from shared volume
-                let result_json_output = kubectl_get_job_pod_output(
-                    target.kubernetes.kubeconfig_local_file_path(),
-                    target.cloud_provider.credentials_environment_variables(),
-                    target.environment.namespace(),
-                    &pod_name,
-                );
-                match result_json_output {
-                    Ok(json) => {
-                        let result_serde_json: Result<HashMap<String, JobOutputVariable>, serde_json::Error> =
-                            serialize_job_output(&json);
-                        match result_serde_json {
-                            Ok(deserialized_json_hashmap) => {
-                                let deserialized_json_hashmap_with_uppercase_keys: HashMap<String, JobOutputVariable> =
-                                    deserialized_json_hashmap
-                                        .iter()
-                                        .map(|(key, value)| (key.to_uppercase(), value.clone()))
-                                        .collect();
-                                logger.core_configuration_for_job(
-                                    "Job output succeeded. Environment variables will be synchronized.".to_string(),
-                                    serde_json::to_string(&deserialized_json_hashmap_with_uppercase_keys)
-                                        .unwrap_or_else(|_| "{}".to_string()),
-                                )
-                            }
-                            Err(err) => {
-                                logger.log(EngineEvent::Warning(
-                                    event_details.clone(),
-                                    EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
-                                        event_details.clone(),
-                                        err,
-                                        &json,
-                                    )),
-                                ));
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        info!(
-                            "Cannot get JSON job output: {}",
-                            err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
-                        );
-                    }
-                };
-
-                info!("Write file in shared volume to let the waiting container terminate");
-                // Write file in shared volume to let the waiting container terminate
-                block_on(kube_pod_api.clone().exec(
-                    &pod_name,
-                    vec!["touch", "/qovery-output/terminate"],
-                    &AttachParams::default().container("qovery-wait-container-output"),
-                ))
-                .map_err(|_err| {
-                    EngineError::new_job_error(
-                        event_details.clone(),
-                        format!("Cannot create terminate file inside waiting container for pod {}", &pod_name),
-                    )
-                })?;
-
-                // wait for job to finish
-                let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
-
-                // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
-                info!("Get Jobs");
-                block_on(jobs.get(job.kube_name())).map_err(|err| {
-                    EngineError::new_job_error(
-                        event_details.clone(),
-                        format!("Cannot get job {}: {}", job.kube_name(), err),
-                    )
-                })?;
-                info!("Wait for job to finish");
-                let ret = block_on(await_condition(jobs, job.kube_name(), is_job_terminated())).map_err(|_err| {
-                    EngineError::new_job_error(
-                        event_details.clone(),
-                        format!("Cannot find job for terminated pod {}", &pod_name),
-                    )
-                })?;
-
-                let job_status_result = match job_status(&ret.as_ref()) {
-                    JobStatus::Success => return Ok(state),
-                    JobStatus::NotRunning | JobStatus::Running => unreachable!(),
-                    JobStatus::Failure { reason, message } => {
-                        let pod = block_on(kube_pod_api.get(&pod_name));
-                        debug!("Pod after unlocking qovery-wait-container-output: {:?}", pod);
-
-                        let msg = format!("Job failed to correctly run due to {reason} {message}");
-                        debug!(msg);
-                        debug!("Job pod: {:?}", ret);
-                        Err(EngineError::new_job_error(event_details.clone(), msg))
-                    }
-                };
-
-                // If job has restarted the maximum time, then return the result that should be an Err
-                if job_creation_iterations == job_max_nb_restart {
-                    job_status_result?;
-                }
-                job_creation_iterations += 1;
             }
+
+            if let Err(err) = block_on(unstuck_qovery_output_waiter(
+                target.kube.client(),
+                target.environment.namespace(),
+                pod_name,
+            )) {
+                warn!("Cannot unstuck qovery-output waiter: {}", err);
+            }
+
+            let job = block_on(await_job_to_complete(
+                job,
+                target.environment.namespace(),
+                target.kube.client(),
+                target.abort,
+            ))
+            .map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
+
+            if let Some(ConditionStatus { reason, message }) = job_is_failed(&job) {
+                let msg = format!("Job failed to correctly run due to {reason} {message}");
+                debug!(msg);
+                debug!("Job pod: {:?}", job);
+                return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
+            }
+
+            // job completed successfully :party:
+            return Ok(state);
         }
 
         // Cronjob will be installed
@@ -506,6 +403,328 @@ where
     };
 
     (pre_run, task, post_run)
+}
+
+async fn retrieve_qovery_output_from_pod(
+    kube_client: kube::Client,
+    namespace: &str,
+    pod_name: &str,
+) -> anyhow::Result<Option<HashMap<String, JobOutputVariable>>> {
+    let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
+
+    // Write file in shared volume to let the waiting container terminate
+    let mut process = pod_api
+        .exec(
+            pod_name,
+            vec!["cat", "/qovery-output/qovery-output.json"],
+            &AttachParams::default().container("qovery-wait-container-output"),
+        )
+        .await
+        .with_context(|| format!("Cannot retrive qovery-output.json {}", &pod_name))?;
+
+    let mut stdout = process
+        .stdout()
+        .with_context(|| format!("Cannot get stdout from waiting container for pod {}", &pod_name))?;
+
+    // write stdout into buffer
+    let mut buf = Vec::with_capacity(1024);
+    tokio_util::io::read_buf(&mut stdout, &mut buf).await?;
+
+    let Ok(_) = process.join().await else {
+        debug!("No qovery JSON job output available");
+        return Ok(None);
+    };
+
+    let json_str = String::from_utf8_lossy(&buf);
+    if json_str.is_empty() {
+        debug!("No qovery JSON job output available");
+        return Ok(None);
+    }
+
+    let json = serialize_job_output(&json_str)
+        .with_context(|| format!("qovery output json cannot be deserialized: {}", json_str))?
+        .into_iter()
+        .map(|(k, v)| (k.to_uppercase(), v))
+        .collect();
+
+    Ok(Some(json))
+}
+
+async fn unstuck_qovery_output_waiter(
+    kube_client: kube::Client,
+    namespace: &str,
+    pod_name: &str,
+) -> anyhow::Result<()> {
+    info!("Write file in shared volume to let the waiting container terminate");
+
+    let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
+    // Write file in shared volume to let the waiting container terminate
+    pod_api
+        .exec(
+            pod_name,
+            vec!["touch", "/qovery-output/terminate"],
+            &AttachParams::default().container("qovery-wait-container-output"),
+        )
+        .await
+        .with_context(|| format!("Cannot create terminate file inside waiting container for pod {}", &pod_name))?;
+
+    Ok(())
+}
+
+async fn await_job_to_complete<T: CloudProvider>(
+    qjob: &Job<T>,
+    namespace: &str,
+    kube_client: kube::Client,
+    abort_handle: impl Abort,
+) -> anyhow::Result<K8sJob>
+where
+    Job<T>: JobService,
+{
+    let job_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
+    let max_execution_duration = Duration::from_secs(60) + qjob.max_duration * (qjob.max_nb_restart + 1);
+    let execution_deadline = tokio::time::sleep_until(tokio::time::Instant::now() + max_execution_duration);
+    pin_mut!(execution_deadline);
+
+    let should_force_cancel = async || {
+        while !abort_handle.status().should_force_cancel() {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    };
+
+    let should_process_job = |job: Option<&K8sJob>| -> bool {
+        let Some(job) = job else {
+            return false;
+        };
+
+        if job_is_completed(job).is_some() {
+            return true;
+        }
+
+        false
+    };
+
+    await_kube_condition(
+        &mut execution_deadline,
+        should_force_cancel,
+        await_condition(job_api.clone(), qjob.kube_name(), should_process_job),
+        max_execution_duration,
+    )
+    .await?
+    .ok_or_else(|| anyhow!("Job not found"))
+}
+
+async fn await_user_job_to_terminate<T: CloudProvider>(
+    qjob: &Job<T>,
+    namespace: &str,
+    kube_client: kube::Client,
+    abort_handle: impl Abort,
+) -> anyhow::Result<Pod>
+where
+    Job<T>: JobService,
+{
+    let job_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
+    let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
+    let pod_selector = format!("job-name={}", qjob.kube_name());
+    let max_execution_duration = Duration::from_secs(60) + qjob.max_duration * (qjob.max_nb_restart + 1);
+    let execution_deadline = tokio::time::sleep_until(tokio::time::Instant::now() + max_execution_duration);
+    pin_mut!(execution_deadline);
+
+    let should_force_cancel = async || {
+        while !abort_handle.status().should_force_cancel() {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    };
+
+    let should_process_job = |job: Option<&K8sJob>| -> bool {
+        let Some(job) = job else {
+            return false;
+        };
+
+        if job_is_active(job) {
+            return true;
+        }
+
+        if job_is_completed(job).is_some() {
+            return true;
+        }
+
+        false
+    };
+
+    let should_process_pod = |pod: Option<&Pod>| -> bool {
+        // if the pod is not present anymore, we want to unstuck the loop
+        let Some(pod) = pod else {
+            return true;
+        };
+
+        // We want the job to be half running. Meaning the task/job of the user is terminated
+        // but our qovery-wait-container-output is still running, waiting for us.
+        if user_job_terminated_exit_code(pod).is_some() {
+            return true;
+        }
+
+        false
+    };
+
+    loop {
+        // To avoid hot looping
+        tokio::time::sleep(Duration::from_secs(1)).await;
+
+        // We wait for an event of interest to be triggered
+        let job = await_kube_condition(
+            &mut execution_deadline,
+            should_force_cancel,
+            await_condition(job_api.clone(), qjob.kube_name(), should_process_job),
+            max_execution_duration,
+        )
+        .await?
+        .ok_or_else(|| anyhow!("Job not found"))?;
+
+        if let Some(ConditionStatus { reason, message }) = job_is_failed(&job) {
+            return Err(anyhow::anyhow!(
+                "Job {} failed to run due to {} {}",
+                qjob.kube_name(),
+                reason,
+                message
+            ));
+        }
+
+        // fetch the correct pod
+        let Ok(pod_name) = get_active_pod_of_job(pod_api.clone(), &pod_selector).await else {
+            continue;
+        };
+
+        // wait for the pod to be completed
+        let pod = await_kube_condition(
+            &mut execution_deadline,
+            should_force_cancel,
+            await_condition(pod_api.clone(), &pod_name, should_process_pod),
+            max_execution_duration,
+        )
+        .await?;
+
+        // Pod is not present anymore, restart the loop
+        let Some(pod) = pod else { continue };
+
+        // user code has not terminated cleanly, restart the loop until backoff limit is reached
+        if user_job_terminated_exit_code(&pod) != Some(0) {
+            continue;
+        }
+
+        return Ok(pod);
+    }
+}
+
+async fn await_kube_condition<T>(
+    execution_deadline: &mut Pin<&mut tokio::time::Sleep>,
+    await_force_cancel: impl AsyncFnOnce(),
+    await_condition: impl Future<Output = Result<Option<T>, kube::runtime::wait::Error>>,
+    max_duration: Duration,
+) -> anyhow::Result<Option<T>> {
+    tokio::select! {
+        biased;
+        _ = await_force_cancel() => {
+            Err(anyhow::anyhow!(
+            "Job execution has exceeded the maximum duration of {:?} seconds",
+            max_duration
+            ))
+        },
+        _ = execution_deadline => {
+            Err(anyhow::anyhow!(
+                "Job execution has exceeded the maximum duration of {:?} seconds",
+                max_duration
+            ))
+        },
+        kube_obj = await_condition => match kube_obj {
+            Ok(obj) => Ok(obj),
+            Err(err) => Err(anyhow!("Cannot get {}: {:?}", std::any::type_name::<T>(), err))
+        }
+    }
+}
+
+fn job_is_active(job: &K8sJob) -> bool {
+    job.status.as_ref().and_then(|status| status.active).unwrap_or(0) as u32 > 0
+}
+
+struct ConditionStatus {
+    pub reason: String,
+    pub message: String,
+}
+fn job_is_failed(job: &K8sJob) -> Option<ConditionStatus> {
+    // https://kubernetes.io/docs/concepts/workloads/controllers/job/#termination-of-job-pods
+    job.status
+        .as_ref()
+        .and_then(|st| st.conditions.as_ref())
+        .and_then(|conds| conds.iter().find(|c| &c.type_ == "FailureTarget"))
+        .map(|c| ConditionStatus {
+            reason: c.reason.clone().unwrap_or_default(),
+            message: c.message.clone().unwrap_or_default(),
+        })
+}
+
+fn job_is_completed(job: &K8sJob) -> Option<ConditionStatus> {
+    // https://kubernetes.io/docs/concepts/workloads/controllers/job/#termination-of-job-pods
+    job.status
+        .as_ref()
+        .and_then(|st| st.conditions.as_ref())
+        .and_then(|conds| {
+            conds
+                .iter()
+                .find(|c| &c.type_ == "FailureTarget" || &c.type_ == "SuccessCriteriaMet")
+        })
+        .map(|c| ConditionStatus {
+            reason: c.reason.clone().unwrap_or_default(),
+            message: c.message.clone().unwrap_or_default(),
+        })
+}
+
+fn is_pod_running_or_pending(pod: &Pod) -> bool {
+    let pod_phase = pod.status.as_ref().and_then(|s| s.phase.as_deref()).unwrap_or("");
+
+    pod_phase == "Running" || pod_phase == "Pending"
+}
+
+fn user_job_terminated_exit_code(pod: &Pod) -> Option<u32> {
+    pod.status
+        .as_ref()
+        .and_then(|st| st.container_statuses.as_ref())
+        .map(|st| st.iter())
+        .unwrap_or_default()
+        .filter_map(|st| st.state.as_ref())
+        .filter_map(|st| st.terminated.as_ref())
+        .next()
+        .map(|st| st.exit_code as u32)
+}
+
+async fn get_active_pod_of_job(pod_api: Api<Pod>, selector: &str) -> anyhow::Result<String> {
+    let pods = pod_api.list(&ListParams::default().labels(selector)).await?;
+    if pods.items.is_empty() {
+        return Err(anyhow!("No pod found with this label selector {}", selector));
+    }
+
+    // Take only pods that are running or pending
+    let mut active_job_pods: Vec<String> = pods
+        .items
+        .into_iter()
+        .filter_map(|pod| {
+            if is_pod_running_or_pending(&pod) {
+                Some(pod.metadata.name?)
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    match *active_job_pods.as_slice() {
+        [] => Err(anyhow!("No pod found with this label selector {}", selector)),
+        [_] => Ok(()),
+        _ => Err(anyhow!(
+            "More than one active pod found with this label selector {}. It should not be possible",
+            selector
+        )),
+    }?;
+
+    Ok(active_job_pods.remove(0))
 }
 
 #[allow(clippy::type_complexity)]
@@ -649,137 +868,6 @@ pub fn is_job_terminated() -> impl Condition<K8sJob> {
         JobStatus::Success => true,
         JobStatus::Failure { .. } => true,
     }
-}
-
-pub fn get_active_job_pod_by_selector(
-    kube_pod_api: Api<Pod>,
-    job_pod_selector: &str,
-    event_details: &EventDetails,
-    set_of_pods_already_processed: &HashSet<String>,
-    job_max_duration: &Duration,
-) -> Result<String, Box<EngineError>> {
-    // We wait at max 30 times 10 seconds (5min) for the pod to be running.
-    // If the job max duration is lower than 5min, we reduce the number of retries to clamp it to its maximum duration
-    let retry_fixed_delay =
-        retry::delay::Fixed::from_millis(10_000).take(min(30, job_max_duration.as_secs() as usize / 10));
-
-    // Trying to get the pod name, letting it up to 5 minutes to be scheduled
-    let list_job_pods_result = retry::retry(retry_fixed_delay, || {
-        // List pods according to job label selector
-        let pods = match block_on(kube_pod_api.list(&ListParams::default().labels(job_pod_selector))) {
-            Ok(pods_list) => {
-                if pods_list.items.is_empty() {
-                    return OperationResult::Retry(EngineError::new_job_error(
-                        event_details.clone(),
-                        format!("No pod found when listing pods having label {}", &job_pod_selector),
-                    ));
-                } else {
-                    pods_list
-                }
-            }
-            Err(_) => {
-                return OperationResult::Retry(EngineError::new_job_error(
-                    event_details.clone(),
-                    format!("Error when listing pods having label {} through Kube API", &job_pod_selector),
-                ));
-            }
-        };
-        debug!("get_active_job_pod_by_selector Pods found: {:?}", pods);
-
-        // If pod is pending for some reason (cluster scaling, etc.) let's move on to the next retry.
-        if pods.items.iter().any(|pod| {
-            if let Some(pod_status) = &pod.status {
-                if let Some(phase) = &pod_status.phase {
-                    // Pod has been scheduled but is Pending (e.q. in case of cluster node scale-up required)
-                    return phase.to_lowercase() == KubernetesPodStatusPhase::Pending.to_string().to_lowercase();
-                }
-            }
-            false
-        }) {
-            return OperationResult::Retry(EngineError::new_job_error(
-                event_details.clone(),
-                format!(
-                    "Error pods having label {} are still pending to be scheduled",
-                    &job_pod_selector
-                ),
-            ));
-        }
-
-        // Retrieve active pods
-        let active_job_pods: Vec<String> = pods
-            .items
-            .iter()
-            .filter_map(|pod| {
-                if let Some(pod_status) = &pod.status {
-                    if let Some(pod_container_statuses) = &pod_status.container_statuses {
-                        // Pod is running, checking container statuses
-                        let job_container_is_active = &pod_container_statuses
-                            .iter()
-                            .filter_map(|container_status| container_status.clone().state)
-                            .any(|status| status.running.is_some());
-                        if *job_container_is_active {
-                            return Some(pod.metadata.name.as_ref().unwrap().clone());
-                        }
-                    }
-                }
-                None
-            })
-            .collect();
-
-        // There should never be more than 1 pod in 'Running' status
-        let active_selected_pod_name = match active_job_pods.len() {
-            1 => active_job_pods.first().unwrap().to_string(),
-            _ => {
-                return OperationResult::Retry(EngineError::new_job_error(
-                    event_details.clone(),
-                    format!(
-                        "Cannot find active pod having label {} (found {} pods)",
-                        &job_pod_selector,
-                        active_job_pods.len()
-                    ),
-                ));
-            }
-        };
-
-        // Check that the selected running pod has not already been processed
-        if set_of_pods_already_processed.contains(&active_selected_pod_name) {
-            return OperationResult::Retry(EngineError::new_job_error(
-                event_details.clone(),
-                format!(
-                    "Selected pod has already been processed. Waiting for the next pod to be created having label {}",
-                    &job_pod_selector
-                ),
-            ));
-        }
-        OperationResult::Ok(active_selected_pod_name)
-    });
-    match list_job_pods_result {
-        Ok(active_pod_name) => Ok(active_pod_name),
-        Err(Error { error, .. }) => Err(Box::new(error)),
-    }
-}
-
-pub fn job_pod_container_status_is_terminated(job_pod: &Option<&Pod>, job_container_name: &str) -> bool {
-    if let Some(pod) = job_pod {
-        if let Some(pod_status) = &pod.status {
-            info!("{}", format!("Job pod: {}  status {:?}", job_container_name, pod_status));
-            if let Some(pod_container_statuses) = &pod_status.container_statuses {
-                info!("{}", format!("Job pod {} container status", job_container_name));
-                let job_container_terminated = &pod_container_statuses
-                    .iter()
-                    .filter(|container_status| container_status.name == job_container_name)
-                    .filter_map(|container_status| container_status.clone().state)
-                    .any(|status| status.terminated.is_some());
-                return *job_container_terminated;
-            }
-        }
-    }
-    info!("{}", format!("Job pod container: {} is not terminated", job_container_name));
-    false
-}
-
-pub fn is_job_pod_container_terminated(job_container_name: &str) -> impl Condition<Pod> + '_ {
-    move |job_pod: Option<&Pod>| job_pod_container_status_is_terminated(&job_pod, job_container_name)
 }
 
 // Used to validate the job json output format with serde

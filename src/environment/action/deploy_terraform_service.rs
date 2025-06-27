@@ -1,8 +1,9 @@
+#![allow(unused_imports, unused_variables, dead_code)]
+
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
-use crate::environment::action::deploy_job::job_status;
-use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
+use crate::environment::models::terraform_service::TerraformService;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
@@ -17,8 +18,7 @@ use k8s_openapi::api::batch::v1::Job as K8sJob;
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::api::core::v1::Secret;
 use kube::Api;
-use kube::api::{AttachParams, DeleteParams, ListParams};
-use kube::runtime::wait::await_condition;
+use kube::api::{DeleteParams, ListParams};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -131,86 +131,86 @@ where
             let _ = delete_backend_config_secret(secret_name, event_details, target);
         });
 
-        let job_pod_selector = format!("job-name={}", self.kube_name());
-        let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
-
-        let mut set_of_pods_already_processed: HashSet<String> = HashSet::new();
+        // let job_pod_selector = format!("job-name={}", self.kube_name());
+        // let kube_pod_api: Api<Pod> = Api::namespaced(target.kube.client(), target.environment.namespace());
+        //
+        // let mut set_of_pods_already_processed: HashSet<String> = HashSet::new();
 
         // Wait for the pod to be started to get its name
-        let pod_name = crate::environment::action::deploy_job::get_active_job_pod_by_selector(
-            kube_pod_api.clone(),
-            &job_pod_selector,
-            event_details,
-            &set_of_pods_already_processed,
-            self.job_max_duration(),
-        )?;
-        set_of_pods_already_processed.insert(pod_name.clone());
-
-        // Wait for the job container to be terminated
-        logger.info(format!("Waiting for the job container {} to be processed...", self.kube_name()));
-        block_on(async {
-            tokio::select! {
-                biased;
-                _ = await_condition(
-                    kube_pod_api.clone(),
-                    &pod_name,
-                    crate::environment::action::deploy_job::is_job_pod_container_terminated(self.kube_name()),
-                ) => {},
-            }
-        });
-
-        // read json output
-        match self.terraform_action {
-            TerraformAction::TerraformPlanOnly { execution_id: _ } | TerraformAction::TerraformDestroy => {}
-            TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
-                retrieve_terraform_output(target, logger, event_details, &pod_name)?;
-            }
-        }
-
-        info!("Write file in shared volume to let the waiting container terminate");
-        // Write file in shared volume to let the waiting container terminate
-        block_on(kube_pod_api.clone().exec(
-            &pod_name,
-            vec!["touch", "/qovery-output/terminate"],
-            &AttachParams::default().container("qovery-wait-container-output"),
-        ))
-        .map_err(|_err| {
-            EngineError::new_job_error(
-                event_details.clone(),
-                format!("Cannot create terminate file inside waiting container for pod {}", &pod_name),
-            )
-        })?;
-
-        // wait for job to finish
-        let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
-
-        // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
-        info!("Get Jobs");
-        block_on(jobs.get(self.kube_name())).map_err(|err| {
-            EngineError::new_job_error(event_details.clone(), format!("Cannot get job {}: {}", self.kube_name(), err))
-        })?;
-        info!("Wait for job to finish");
-        let ret = block_on(await_condition(
-            jobs,
-            self.kube_name(),
-            crate::environment::action::deploy_job::is_job_terminated(),
-        ))
-        .map_err(|_err| {
-            EngineError::new_job_error(
-                event_details.clone(),
-                format!("Cannot find job for terminated pod {}", &pod_name),
-            )
-        })?;
-
-        match job_status(&ret.as_ref()) {
-            crate::environment::action::deploy_job::JobStatus::Success => return Ok(state),
-            crate::environment::action::deploy_job::JobStatus::NotRunning
-            | crate::environment::action::deploy_job::JobStatus::Running => unreachable!(),
-            crate::environment::action::deploy_job::JobStatus::Failure { reason, message } => {
-                let msg = format!("Job failed to correctly run due to {reason} {message}");
-                Err(EngineError::new_job_error(event_details.clone(), msg))
-            }
-        }?;
+        // let pod_name = crate::environment::action::deploy_job::get_active_job_pod_by_selector(
+        //     kube_pod_api.clone(),
+        //     &job_pod_selector,
+        //     event_details,
+        //     &set_of_pods_already_processed,
+        //     self.job_max_duration(),
+        // )?;
+        // set_of_pods_already_processed.insert(pod_name.clone());
+        //
+        // // Wait for the job container to be terminated
+        // logger.info(format!("Waiting for the job container {} to be processed...", self.kube_name()));
+        // block_on(async {
+        //     tokio::select! {
+        //         biased;
+        //         _ = await_condition(
+        //             kube_pod_api.clone(),
+        //             &pod_name,
+        //             crate::environment::action::deploy_job::is_job_pod_container_terminated(self.kube_name()),
+        //         ) => {},
+        //     }
+        // });
+        //
+        // // read json output
+        // match self.terraform_action {
+        //     TerraformAction::TerraformPlanOnly { execution_id: _ } | TerraformAction::TerraformDestroy => {}
+        //     TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
+        //         retrieve_terraform_output(target, logger, event_details, &pod_name)?;
+        //     }
+        // }
+        //
+        // info!("Write file in shared volume to let the waiting container terminate");
+        // // Write file in shared volume to let the waiting container terminate
+        // block_on(kube_pod_api.clone().exec(
+        //     &pod_name,
+        //     vec!["touch", "/qovery-output/terminate"],
+        //     &AttachParams::default().container("qovery-wait-container-output"),
+        // ))
+        // .map_err(|_err| {
+        //     EngineError::new_job_error(
+        //         event_details.clone(),
+        //         format!("Cannot create terminate file inside waiting container for pod {}", &pod_name),
+        //     )
+        // })?;
+        //
+        // // wait for job to finish
+        // let jobs: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
+        //
+        // // await_condition WILL NOT return an error if the job is not found, hence checking the job existence before
+        // info!("Get Jobs");
+        // block_on(jobs.get(self.kube_name())).map_err(|err| {
+        //     EngineError::new_job_error(event_details.clone(), format!("Cannot get job {}: {}", self.kube_name(), err))
+        // })?;
+        // info!("Wait for job to finish");
+        // let ret = block_on(await_condition(
+        //     jobs,
+        //     self.kube_name(),
+        //     crate::environment::action::deploy_job::is_job_terminated(),
+        // ))
+        // .map_err(|_err| {
+        //     EngineError::new_job_error(
+        //         event_details.clone(),
+        //         format!("Cannot find job for terminated pod {}", &pod_name),
+        //     )
+        // })?;
+        //
+        // match job_status(&ret.as_ref()) {
+        //     crate::environment::action::deploy_job::JobStatus::Success => return Ok(state),
+        //     crate::environment::action::deploy_job::JobStatus::NotRunning
+        //     | crate::environment::action::deploy_job::JobStatus::Running => unreachable!(),
+        //     crate::environment::action::deploy_job::JobStatus::Failure { reason, message } => {
+        //         let msg = format!("Job failed to correctly run due to {reason} {message}");
+        //         Err(EngineError::new_job_error(event_details.clone(), msg))
+        //     }
+        // }?;
         // TODO TF check if the pod should start only once
 
         // delete helm
@@ -300,8 +300,7 @@ fn retrieve_terraform_output(
                         event_details.clone(),
                         EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
                             event_details.clone(),
-                            err,
-                            &json,
+                            err.to_string(),
                         )),
                     ));
                 }

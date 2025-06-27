@@ -51,6 +51,12 @@ where
     }
 }
 
+impl Abort for &dyn Abort {
+    fn status(&self) -> AbortStatus {
+        (**self).status()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::environment::models::abort::AbortStatus;
