@@ -416,7 +416,7 @@ async fn retrieve_qovery_output_from_pod(
     let mut process = pod_api
         .exec(
             pod_name,
-            vec!["cat", "/qovery-output/qovery-output.json"],
+            vec!["/qovery-job-output-waiter", "--display-output-file"],
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
@@ -462,7 +462,7 @@ async fn unstuck_qovery_output_waiter(
     pod_api
         .exec(
             pod_name,
-            vec!["touch", "/qovery-output/terminate"],
+            vec!["/qovery-job-output-waiter", "--terminate"],
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
