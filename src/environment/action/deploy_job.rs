@@ -23,7 +23,7 @@ use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
-use kube::api::{AttachParams, ListParams, PostParams};
+use kube::api::{AttachParams, DeleteParams, ListParams, PostParams};
 use kube::runtime::wait::{Condition, await_condition};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -211,7 +211,7 @@ where
             chart,
         );
 
-        // Wait for the job to terminate in order to have his status
+        // Wait for the job to terminate in order to have its status
         // For cronjob we dont care as we don't control when it is executed
         if job.schedule().is_job() {
             // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
@@ -220,24 +220,28 @@ where
             // create job
             helm.on_create(target)?;
 
+            let job_name = job.kube_name();
             let pod = block_on(await_user_job_to_terminate(
                 job,
                 target.environment.namespace(),
                 target.kube.client(),
                 target.abort,
             ));
-            let pod =
-                pod.map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
-            let pod_name = pod.metadata.name.as_deref().unwrap_or("");
+            let pod_name = match pod {
+                Ok(pod) => pod.metadata.name.unwrap_or_default(),
+                Err(err) if err.to_string().contains("cancel") => {
+                    let _ = block_on(kill_job(target.kube.client(), target.environment.namespace(), job_name));
+                    return Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())));
+                }
+                Err(err) => return Err(Box::new(EngineError::new_job_error(event_details.clone(), err.to_string()))),
+            };
             info!("Targeting job pod name: {}", pod_name);
 
-            // TODO: force cancel handling
-            
             // Fech Qovery Json output if any, and transmit it to the core for next deployment stage
-            match block_on(retrieve_qovery_output_from_pod(
+            match block_on(retrieve_output_and_terminate_pod(
                 target.kube.client(),
                 target.environment.namespace(),
-                pod_name,
+                &pod_name,
             )) {
                 Ok(None) => {}
                 Ok(Some(output)) => logger.core_configuration_for_job(
@@ -400,7 +404,7 @@ where
     (pre_run, task, post_run)
 }
 
-async fn retrieve_qovery_output_from_pod(
+async fn retrieve_output_and_terminate_pod(
     kube_client: kube::Client,
     namespace: &str,
     pod_name: &str,
@@ -447,6 +451,14 @@ async fn retrieve_qovery_output_from_pod(
         .collect();
 
     Ok(Some(json))
+}
+
+async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) -> anyhow::Result<()> {
+    info!("Killing job {} from namespace {}", job_name, namespace);
+    let pod_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
+    let _ = pod_api.delete(job_name, &DeleteParams::foreground()).await?;
+
+    Ok(())
 }
 
 async fn await_job_to_complete<T: CloudProvider>(
@@ -602,10 +614,7 @@ async fn await_kube_condition<T>(
     tokio::select! {
         biased;
         _ = await_force_cancel() => {
-            Err(anyhow::anyhow!(
-            "Job execution has exceeded the maximum duration of {:?} seconds",
-            max_duration
-            ))
+            Err(anyhow::anyhow!("Job has been force cancelled"))
         },
         _ = execution_deadline => {
             Err(anyhow::anyhow!(
