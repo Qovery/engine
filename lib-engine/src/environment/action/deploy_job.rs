@@ -231,6 +231,8 @@ where
             let pod_name = pod.metadata.name.as_deref().unwrap_or("");
             info!("Targeting job pod name: {}", pod_name);
 
+            // TODO: force cancel handling
+            
             // Fech Qovery Json output if any, and transmit it to the core for next deployment stage
             match block_on(retrieve_qovery_output_from_pod(
                 target.kube.client(),
@@ -251,14 +253,6 @@ where
                         )),
                     ));
                 }
-            }
-
-            if let Err(err) = block_on(unstuck_qovery_output_waiter(
-                target.kube.client(),
-                target.environment.namespace(),
-                pod_name,
-            )) {
-                warn!("Cannot unstuck qovery-output waiter: {}", err);
             }
 
             let job = block_on(await_job_to_complete(
@@ -417,7 +411,7 @@ async fn retrieve_qovery_output_from_pod(
     let mut process = pod_api
         .exec(
             pod_name,
-            vec!["/qovery-job-output-waiter", "--display-output-file"],
+            vec!["/qovery-job-output-waiter", "--display-output-file", "--terminate"],
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
@@ -453,27 +447,6 @@ async fn retrieve_qovery_output_from_pod(
         .collect();
 
     Ok(Some(json))
-}
-
-async fn unstuck_qovery_output_waiter(
-    kube_client: kube::Client,
-    namespace: &str,
-    pod_name: &str,
-) -> anyhow::Result<()> {
-    info!("Write file in shared volume to let the waiting container terminate");
-
-    let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
-    // Write file in shared volume to let the waiting container terminate
-    pod_api
-        .exec(
-            pod_name,
-            vec!["/qovery-job-output-waiter", "--terminate"],
-            &AttachParams::default().container("qovery-wait-container-output"),
-        )
-        .await
-        .with_context(|| format!("Cannot create terminate file inside waiting container for pod {}", &pod_name))?;
-
-    Ok(())
 }
 
 async fn await_job_to_complete<T: CloudProvider>(
