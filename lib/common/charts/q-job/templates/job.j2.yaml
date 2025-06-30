@@ -89,30 +89,8 @@ spec:
         - name: qovery-wait-container-output
           # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
           restartPolicy: Always # this tells that the initContainer is a sidecar
-          image: "debian:stable-slim"
-          command:
-            - '/usr/bin/bash'
-            - '-c'
-            - |-
-              _term() { 
-                if ! [ -f /qovery-output/qovery-output.json ]; then 
-                  echo "File /qovery-output/qovery-output.json does not exist. Exiting"
-                  exit 0
-                fi 
-              
-                while true
-                do 
-                  echo "Waiting for engine to retrieve qovery-output.json"
-                  if [ -f /qovery-output/terminate ]; then 
-                    exit 0
-                  fi 
-                  sleep 1
-                done
-                exit 0
-              }
-              trap _term EXIT
-              sleep infinity
-
+          image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-06-27T15-32-11
+          command: ["/qovery-job-output-waiter", "--watch"]
           volumeMounts:
             - name: output
               mountPath: /qovery-output
