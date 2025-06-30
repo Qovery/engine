@@ -70,6 +70,15 @@ pub(super) fn eks_helm_charts(
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
 
+    let metrics_config = generate_metrics_config(
+        CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
+        chart_prefix_path,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string().as_str(),
+    )?;
+
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
@@ -258,6 +267,7 @@ pub(super) fn eks_helm_charts(
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 chart_config_prerequisites.is_karpenter_enabled,
+                chart_config_prerequisites.metrics_parameters.is_some() && metrics_config.advanced_metrics_feature,
             )
             .to_common_helm_chart()?,
         ),
@@ -296,14 +306,6 @@ pub(super) fn eks_helm_charts(
     // K8s Event Logger
     let k8s_event_logger =
         K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
-
-    let metrics_config = generate_metrics_config(
-        CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
-        chart_prefix_path,
-        &prometheus_internal_url,
-        prometheus_namespace,
-        get_chart_override_fn.clone(),
-    )?;
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {

@@ -311,6 +311,7 @@ pub(super) fn aks_helm_charts(
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
                 false,
+                false, // Metrics is not implemented for Azure
             )
             .to_common_helm_chart()?,
         )),
@@ -364,6 +365,7 @@ pub(super) fn aks_helm_charts(
         &prometheus_internal_url,
         prometheus_namespace,
         get_chart_override_fn.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string().as_str(),
     )?;
 
     // Qovery cluster agent
