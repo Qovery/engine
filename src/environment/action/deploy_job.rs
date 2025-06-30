@@ -17,7 +17,7 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
 use anyhow::{Context, anyhow};
-use futures::{StreamExt, pin_mut};
+use futures::pin_mut;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
@@ -31,7 +31,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Duration;
-use tokio_util::io::ReaderStream;
+use tokio::io::AsyncReadExt;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
 where
@@ -423,30 +423,31 @@ async fn retrieve_qovery_output_from_pod(
         .await
         .with_context(|| format!("Cannot retrive qovery-output.json {}", &pod_name))?;
 
-    let stdout = process
+    let mut stdout = process
         .stdout()
         .with_context(|| format!("Cannot get stdout from waiting container for pod {}", &pod_name))?;
 
     // write stdout into buffer
-    let mut buf = Vec::with_capacity(1024);
-    let mut stream = ReaderStream::new(stdout);
-    while let Some(Ok(chunk)) = stream.next().await {
-        buf.extend(chunk);
-    }
+    let mut json_str = Vec::with_capacity(4096);
+    stdout.read_to_end(&mut json_str).await?;
 
     let Ok(_) = process.join().await else {
         debug!("No qovery JSON job output available");
         return Ok(None);
     };
 
-    let json_str = String::from_utf8_lossy(&buf);
     if json_str.is_empty() {
         debug!("No qovery JSON job output available");
         return Ok(None);
     }
 
     let json = serialize_job_output(&json_str)
-        .with_context(|| format!("qovery output json cannot be deserialized: {}", json_str))?
+        .with_context(|| {
+            format!(
+                "qovery output json cannot be deserialized: {}",
+                String::from_utf8_lossy(&json_str)
+            )
+        })?
         .into_iter()
         .map(|(k, v)| (k.to_uppercase(), v))
         .collect();
@@ -893,8 +894,8 @@ impl Default for JobOutputVariable {
     }
 }
 
-pub fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
-    let serde_hash_map: HashMap<&str, Value> = serde_json::from_str(json)?;
+pub fn serialize_job_output(json: &[u8]) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
+    let serde_hash_map: HashMap<&str, Value> = serde_json::from_slice(json)?;
     let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
 
     for (key, value) in serde_hash_map {
@@ -948,7 +949,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_string_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_string_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
@@ -977,7 +978,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
@@ -1008,7 +1009,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
