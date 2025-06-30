@@ -279,7 +279,7 @@ fn retrieve_terraform_output(
             let result_serde_json: Result<
                 HashMap<String, crate::environment::action::deploy_job::JobOutputVariable>,
                 serde_json::Error,
-            > = crate::environment::action::deploy_job::serialize_job_output(&json);
+            > = crate::environment::action::deploy_job::serialize_job_output(json.as_bytes());
             match result_serde_json {
                 Ok(deserialized_json_hashmap) => {
                     let deserialized_json_hashmap_with_uppercase_keys: HashMap<
