@@ -1,0 +1,62 @@
+
+config:
+  snippets:
+    pipelineStages:
+      - cri: { }
+
+      # If the line is valid JSON, pull `level` or `severity` out of it.
+      # If the line is *not* JSON, the stage is skipped silently
+      - json:
+          expressions:
+            level: level
+            severity: severity
+          on_error: drop
+
+      # Promote whatever we found so far to a Loki label
+      - labels:
+          level:
+
+      - match:
+          selector: '{level=""}'
+          stages:
+            - regex:
+                expression: '.*(?:level|severity)[=:]\s*"?(?P<level>info)"?.*'
+
+            - labels:
+                level:
+
+
+      # Promote whatever we found so far to a Loki label
+      - labels:
+          level:
+
+      # Saves CPU by preventing them from reaching the heavy regex below.
+      - match:
+          selector: '{level="info"}'
+          action: drop
+
+      # Detect error patterns in log content and set level=error
+      - match:
+          selector: '{level!="info"} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
+          stages:
+            - static_labels:
+                level: error
+
+      #  Count all logs labeled as errors (from JSON or pattern matching)
+      - match:
+          selector: '{level="error"}'
+          stages:
+            - metrics:
+                q_log_errors_total:
+                  type: Counter
+                  description: "Lines classified as error"
+                  config:
+                    match_all: true
+                    action: inc
+
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels:
+    release: prometheus

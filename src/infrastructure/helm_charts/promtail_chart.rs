@@ -22,7 +22,7 @@ pub struct PromtailChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     priority_class: PriorityClass,
-    additional_char_path: Option<HelmChartValuesFilePath>,
+    additional_chart_values: Vec<HelmChartValuesFilePath>,
 }
 
 impl PromtailChart {
@@ -35,7 +35,17 @@ impl PromtailChart {
         namespace: HelmChartNamespaces,
         priority_class: PriorityClass,
         karpenter_enabled: bool,
+        metrics_enabled: bool,
     ) -> Self {
+        let mut additional_chart_values = vec![];
+        if karpenter_enabled {
+            add_chart_value(&mut additional_chart_values, chart_prefix_path, "promtail_with_karpenter");
+        }
+
+        if metrics_enabled {
+            add_chart_value(&mut additional_chart_values, chart_prefix_path, "promtail_with_prometheus");
+        }
+
         PromtailChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -53,14 +63,7 @@ impl PromtailChart {
             enable_vpa,
             namespace,
             priority_class,
-            additional_char_path: match karpenter_enabled {
-                true => Some(HelmChartValuesFilePath::new(
-                    chart_prefix_path,
-                    HelmChartDirectoryLocation::CommonFolder,
-                    "promtail_with_karpenter".to_string(),
-                )),
-                false => None,
-            },
+            additional_chart_values,
         }
     }
 
@@ -69,12 +72,20 @@ impl PromtailChart {
     }
 }
 
+fn add_chart_value(values: &mut Vec<HelmChartValuesFilePath>, chart_prefix_path: Option<&str>, name: &str) {
+    values.push(HelmChartValuesFilePath::new(
+        chart_prefix_path,
+        HelmChartDirectoryLocation::CommonFolder,
+        name.to_string(),
+    ));
+}
+
 impl ToCommonHelmChart for PromtailChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
-        let mut values_files = vec![self.chart_values_path.to_string()];
-        if let Some(additional_char_path) = &self.additional_char_path {
-            values_files.push(additional_char_path.to_string());
-        }
+        let values_files: Vec<String> = std::iter::once(&self.chart_values_path)
+            .chain(self.additional_chart_values.iter())
+            .map(ToString::to_string)
+            .collect();
 
         let mut chart_info = ChartInfo {
             name: PromtailChart::chart_name(),
@@ -206,6 +217,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
             false,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -237,6 +249,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
+            false,
             false,
         );
 
@@ -273,6 +286,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
+            false,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
