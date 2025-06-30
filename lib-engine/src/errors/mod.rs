@@ -4621,10 +4621,13 @@ impl EngineError {
                 None,
                 Some("Check your cloud provider documentation to know bucket naming rules.".to_string()),
             ),
-            ObjectStorageError::CannotCreateBucket { ref bucket_name, .. } => EngineError::new(
+            ObjectStorageError::CannotCreateBucket {
+                ref bucket_name,
+                ref raw_error_message,
+            } => EngineError::new(
                 event_details,
                 Tag::ObjectStorageCannotCreateBucket,
-                format!("Error, cannot create object storage bucket `{bucket_name}`.",),
+                format!("Error, cannot create object storage bucket `{bucket_name}`, error: `{raw_error_message}`.",),
                 Some(object_storage_error.into()),
                 None,
                 None,
