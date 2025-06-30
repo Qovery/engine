@@ -17,7 +17,7 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::{JobSchedule, LifecycleType};
 use crate::runtime::block_on;
 use anyhow::{Context, anyhow};
-use futures::pin_mut;
+use futures::{StreamExt, pin_mut};
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Duration;
+use tokio_util::io::ReaderStream;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
 where
@@ -422,13 +423,16 @@ async fn retrieve_qovery_output_from_pod(
         .await
         .with_context(|| format!("Cannot retrive qovery-output.json {}", &pod_name))?;
 
-    let mut stdout = process
+    let stdout = process
         .stdout()
         .with_context(|| format!("Cannot get stdout from waiting container for pod {}", &pod_name))?;
 
     // write stdout into buffer
     let mut buf = Vec::with_capacity(1024);
-    tokio_util::io::read_buf(&mut stdout, &mut buf).await?;
+    let mut stream = ReaderStream::new(stdout);
+    while let Some(Ok(chunk)) = stream.next().await {
+        buf.extend(chunk);
+    }
 
     let Ok(_) = process.join().await else {
         debug!("No qovery JSON job output available");
