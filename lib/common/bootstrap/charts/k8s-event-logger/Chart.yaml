@@ -23,4 +23,4 @@ maintainers:
 name: k8s-event-logger
 sources:
 - https://github.com/max-rocket-internet/k8s-event-logger
-version: 1.1.6
+version: 1.1.8

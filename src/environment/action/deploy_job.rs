@@ -23,7 +23,7 @@ use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
-use kube::api::{AttachParams, ListParams, PostParams};
+use kube::api::{AttachParams, DeleteParams, ListParams, PostParams};
 use kube::runtime::wait::{Condition, await_condition};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -31,6 +31,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 
 impl<T: CloudProvider> DeploymentAction for Job<T>
 where
@@ -210,7 +211,7 @@ where
             chart,
         );
 
-        // Wait for the job to terminate in order to have his status
+        // Wait for the job to terminate in order to have its status
         // For cronjob we dont care as we don't control when it is executed
         if job.schedule().is_job() {
             // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
@@ -219,22 +220,28 @@ where
             // create job
             helm.on_create(target)?;
 
+            let job_name = job.kube_name();
             let pod = block_on(await_user_job_to_terminate(
                 job,
                 target.environment.namespace(),
                 target.kube.client(),
                 target.abort,
             ));
-            let pod =
-                pod.map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
-            let pod_name = pod.metadata.name.as_deref().unwrap_or("");
+            let pod_name = match pod {
+                Ok(pod) => pod.metadata.name.unwrap_or_default(),
+                Err(err) if err.to_string().contains("cancel") => {
+                    let _ = block_on(kill_job(target.kube.client(), target.environment.namespace(), job_name));
+                    return Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())));
+                }
+                Err(err) => return Err(Box::new(EngineError::new_job_error(event_details.clone(), err.to_string()))),
+            };
             info!("Targeting job pod name: {}", pod_name);
 
             // Fech Qovery Json output if any, and transmit it to the core for next deployment stage
-            match block_on(retrieve_qovery_output_from_pod(
+            match block_on(retrieve_output_and_terminate_pod(
                 target.kube.client(),
                 target.environment.namespace(),
-                pod_name,
+                &pod_name,
             )) {
                 Ok(None) => {}
                 Ok(Some(output)) => logger.core_configuration_for_job(
@@ -250,14 +257,6 @@ where
                         )),
                     ));
                 }
-            }
-
-            if let Err(err) = block_on(unstuck_qovery_output_waiter(
-                target.kube.client(),
-                target.environment.namespace(),
-                pod_name,
-            )) {
-                warn!("Cannot unstuck qovery-output waiter: {}", err);
             }
 
             let job = block_on(await_job_to_complete(
@@ -405,7 +404,7 @@ where
     (pre_run, task, post_run)
 }
 
-async fn retrieve_qovery_output_from_pod(
+async fn retrieve_output_and_terminate_pod(
     kube_client: kube::Client,
     namespace: &str,
     pod_name: &str,
@@ -416,7 +415,7 @@ async fn retrieve_qovery_output_from_pod(
     let mut process = pod_api
         .exec(
             pod_name,
-            vec!["/qovery-job-output-waiter", "--display-output-file"],
+            vec!["/qovery-job-output-waiter", "--display-output-file", "--terminate"],
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
@@ -427,22 +426,26 @@ async fn retrieve_qovery_output_from_pod(
         .with_context(|| format!("Cannot get stdout from waiting container for pod {}", &pod_name))?;
 
     // write stdout into buffer
-    let mut buf = Vec::with_capacity(1024);
-    tokio_util::io::read_buf(&mut stdout, &mut buf).await?;
+    let mut json_str = Vec::with_capacity(4096);
+    stdout.read_to_end(&mut json_str).await?;
 
     let Ok(_) = process.join().await else {
         debug!("No qovery JSON job output available");
         return Ok(None);
     };
 
-    let json_str = String::from_utf8_lossy(&buf);
     if json_str.is_empty() {
         debug!("No qovery JSON job output available");
         return Ok(None);
     }
 
     let json = serialize_job_output(&json_str)
-        .with_context(|| format!("qovery output json cannot be deserialized: {}", json_str))?
+        .with_context(|| {
+            format!(
+                "qovery output json cannot be deserialized: {}",
+                String::from_utf8_lossy(&json_str)
+            )
+        })?
         .into_iter()
         .map(|(k, v)| (k.to_uppercase(), v))
         .collect();
@@ -450,23 +453,10 @@ async fn retrieve_qovery_output_from_pod(
     Ok(Some(json))
 }
 
-async fn unstuck_qovery_output_waiter(
-    kube_client: kube::Client,
-    namespace: &str,
-    pod_name: &str,
-) -> anyhow::Result<()> {
-    info!("Write file in shared volume to let the waiting container terminate");
-
-    let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
-    // Write file in shared volume to let the waiting container terminate
-    pod_api
-        .exec(
-            pod_name,
-            vec!["/qovery-job-output-waiter", "--terminate"],
-            &AttachParams::default().container("qovery-wait-container-output"),
-        )
-        .await
-        .with_context(|| format!("Cannot create terminate file inside waiting container for pod {}", &pod_name))?;
+async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) -> anyhow::Result<()> {
+    info!("Killing job {} from namespace {}", job_name, namespace);
+    let pod_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
+    let _ = pod_api.delete(job_name, &DeleteParams::foreground()).await?;
 
     Ok(())
 }
@@ -624,10 +614,7 @@ async fn await_kube_condition<T>(
     tokio::select! {
         biased;
         _ = await_force_cancel() => {
-            Err(anyhow::anyhow!(
-            "Job execution has exceeded the maximum duration of {:?} seconds",
-            max_duration
-            ))
+            Err(anyhow::anyhow!("Job has been force cancelled"))
         },
         _ = execution_deadline => {
             Err(anyhow::anyhow!(
@@ -889,8 +876,8 @@ impl Default for JobOutputVariable {
     }
 }
 
-pub fn serialize_job_output(json: &str) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
-    let serde_hash_map: HashMap<&str, Value> = serde_json::from_str(json)?;
+pub fn serialize_job_output(json: &[u8]) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
+    let serde_hash_map: HashMap<&str, Value> = serde_json::from_slice(json)?;
     let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
 
     for (key, value) in serde_hash_map {
@@ -944,7 +931,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_string_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_string_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
@@ -973,7 +960,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
@@ -1004,7 +991,7 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values).unwrap();
+        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
 
         // then
         assert_eq!(
