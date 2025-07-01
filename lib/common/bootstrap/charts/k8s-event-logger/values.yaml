@@ -40,3 +40,26 @@ affinity: {}
 podLabels: {}
 annotations: {}
 podAnnotations: {}
+
+service:
+  enabled: false
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+metrics:
+  enabled: false
+  port: 8080
+
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+  metricRelabelings: []
+
+clusterRole:
+  rules:
+    - apiGroups: [ "" ]
+      resources: [ "events" ]
+      verbs: [ "get", "list", "watch" ]
