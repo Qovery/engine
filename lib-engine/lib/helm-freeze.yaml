@@ -122,9 +122,9 @@ charts:
     repo_name: fairwinds
     version: 4.7.1
   - name: k8s-event-logger
-    repo_name: deliveryhero
-    version: 1.1.8
-    comment: https://artifacthub.io/packages/helm/deliveryhero/k8s-event-logger
+    repo_name: qovery-github
+    chart_path: chart
+    version: 1.1.6
   - name: karpenter
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
@@ -171,6 +171,9 @@ repos:
     url: https://charts.fairwinds.com/stable
   - name: deliveryhero
     url: https://charts.deliveryhero.io/
+  - name: qovery-github
+    type: git
+    url: https://github.com/Qovery/k8s-event-logger.git
 
 destinations:
   - name: default

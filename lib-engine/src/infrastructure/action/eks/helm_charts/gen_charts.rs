@@ -304,8 +304,13 @@ pub(super) fn eks_helm_charts(
     };
 
     // K8s Event Logger
-    let k8s_event_logger =
-        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery).to_common_helm_chart()?;
+    let k8s_event_logger = K8sEventLoggerChart::new(
+        chart_prefix_path,
+        true,
+        HelmChartNamespaces::Qovery,
+        chart_config_prerequisites.metrics_parameters.is_some() && metrics_config.advanced_metrics_feature,
+    )
+    .to_common_helm_chart()?;
 
     let mut qovery_cert_manager_webhook: Option<CommonChart> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {

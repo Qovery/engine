@@ -6,6 +6,4 @@ metadata:
     app.kubernetes.io/name: {{ include "k8s-event-logger.name" . }}
     {{- include "k8s-event-logger.labels" . | nindent 4 }}
 rules:
-- apiGroups: [""]
-  resources: ["events"]
-  verbs: ["get", "list", "watch"]
+{{- toYaml .Values.rbac.rules | nindent 2 }}

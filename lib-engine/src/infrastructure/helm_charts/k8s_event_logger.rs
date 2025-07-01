@@ -1,15 +1,19 @@
 use crate::helm::{
-    ChartInfo, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, HelmChartNamespaces, VpaConfig,
-    VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    ChartInfo, CommonChart, CommonChartVpa, HelmChartError, HelmChartNamespaces, VpaConfig, VpaContainerPolicy,
+    VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
-use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::infrastructure::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 pub struct K8sEventLoggerChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
+    chart_values_path: HelmChartValuesFilePath,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
+    additional_chart_values: Vec<HelmChartValuesFilePath>,
 }
 
 impl K8sEventLoggerChart {
@@ -17,7 +21,18 @@ impl K8sEventLoggerChart {
         chart_prefix_path: Option<&str>,
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
+        metrics_enabled: bool,
     ) -> K8sEventLoggerChart {
+        let mut additional_chart_values = vec![];
+
+        if metrics_enabled {
+            additional_chart_values.push(HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                "k8s-event-logger-with-prometheus".to_string(),
+            ));
+        }
+
         K8sEventLoggerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -25,8 +40,14 @@ impl K8sEventLoggerChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 K8sEventLoggerChart::chart_name(),
             ),
+            chart_values_path: HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                K8sEventLoggerChart::chart_name(),
+            ),
             enable_vpa,
             namespace,
+            additional_chart_values,
         }
     }
 
@@ -37,41 +58,18 @@ impl K8sEventLoggerChart {
 
 impl ToCommonHelmChart for K8sEventLoggerChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let values_files: Vec<String> = std::iter::once(&self.chart_values_path)
+            .chain(self.additional_chart_values.iter())
+            .map(ToString::to_string)
+            .collect();
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "k8s-event-logger".to_string(),
                 namespace: self.namespace,
                 path: self.chart_path.to_string(),
-                values: vec![
-                    ChartSetValue {
-                        key: "image.repository".to_string(),
-                        value: "public.ecr.aws/r3m4q3r9/k8s-event-logger-rs".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "image.tag".to_string(),
-                        value: "3e8a12db".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: KubernetesCpuResourceUnit::MilliCpu(500).to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: KubernetesMemoryResourceUnit::MebiByte(384).to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: KubernetesCpuResourceUnit::MilliCpu(50).to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: KubernetesMemoryResourceUnit::MebiByte(32).to_string(),
-                    },
-                    ChartSetValue {
-                        key: "args".to_string(),
-                        value: "{--ignore-update=false}".to_string(),
-                    },
-                ],
+                values_files,
+                values: vec![],
                 ..Default::default()
             },
             vertical_pod_autoscaler: match self.enable_vpa {
