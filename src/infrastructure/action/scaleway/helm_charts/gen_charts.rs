@@ -65,6 +65,7 @@ pub fn kapsule_helm_charts(
         &prometheus_internal_url,
         prometheus_namespace,
         get_chart_override_fn.clone(),
+        chart_config_prerequisites.cluster_long_id.to_string().as_str(),
     )?;
 
     let prometheus_operator_crds_chart = metrics_config
@@ -148,6 +149,7 @@ pub fn kapsule_helm_charts(
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 false,
+                chart_config_prerequisites.metrics_parameters.is_some() && metrics_config.advanced_metrics_feature,
             )
             .to_common_helm_chart()?,
         ),
