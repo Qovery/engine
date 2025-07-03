@@ -698,6 +698,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         get_annotations_group_for_job(),
         get_labels_group(),
         true,
+        "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
     )
     .unwrap()
 }

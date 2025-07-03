@@ -237,11 +237,12 @@ where
             };
             info!("Targeting job pod name: {}", pod_name);
 
-            // Fech Qovery Json output if any, and transmit it to the core for next deployment stage
+            // Fetch Qovery Json output if any, and transmit it to the core for next deployment stage
             match block_on(retrieve_output_and_terminate_pod(
                 target.kube.client(),
                 target.environment.namespace(),
                 &pod_name,
+                job.output_variable_validation_pattern.as_str(),
             )) {
                 Ok(None) => {}
                 Ok(Some(output)) => logger.core_configuration_for_job(
@@ -408,6 +409,7 @@ async fn retrieve_output_and_terminate_pod(
     kube_client: kube::Client,
     namespace: &str,
     pod_name: &str,
+    output_variable_validation_pattern: &str,
 ) -> anyhow::Result<Option<HashMap<String, JobOutputVariable>>> {
     let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
 
@@ -439,16 +441,21 @@ async fn retrieve_output_and_terminate_pod(
         return Ok(None);
     }
 
-    let json = serialize_job_output(&json_str)
-        .with_context(|| {
-            format!(
-                "qovery output json cannot be deserialized: {}",
-                String::from_utf8_lossy(&json_str)
-            )
+    let json = serialize_job_output(&json_str, output_variable_validation_pattern)
+        .map_err(|err| match err {
+            JobOutputSerializationError::SerializationError { .. } => {
+                anyhow::anyhow!(format!(
+                    "qovery output json cannot be deserialized: {}",
+                    String::from_utf8_lossy(&json_str)
+                ))
+            }
+            JobOutputSerializationError::OutputVariableValidationError { err } => {
+                anyhow::anyhow!("Validation error on job output json: {}", err)
+            }
         })?
         .into_iter()
         .map(|(k, v)| (k.to_uppercase(), v))
-        .collect();
+        .collect::<HashMap<String, JobOutputVariable>>();
 
     Ok(Some(json))
 }
@@ -876,11 +883,35 @@ impl Default for JobOutputVariable {
     }
 }
 
-pub fn serialize_job_output(json: &[u8]) -> Result<HashMap<String, JobOutputVariable>, serde_json::Error> {
-    let serde_hash_map: HashMap<&str, Value> = serde_json::from_slice(json)?;
+#[derive(Debug)]
+pub enum JobOutputSerializationError {
+    SerializationError { serde_err: serde_json::Error },
+    OutputVariableValidationError { err: String },
+}
+
+pub fn serialize_job_output(
+    json: &[u8],
+    output_variable_validation_pattern: &str,
+) -> Result<HashMap<String, JobOutputVariable>, JobOutputSerializationError> {
+    let serde_hash_map: HashMap<&str, Value> = serde_json::from_slice(json)
+        .map_err(|err| JobOutputSerializationError::SerializationError { serde_err: err })?;
     let mut job_output_variables: HashMap<String, JobOutputVariable> = HashMap::new();
+    // Validate all variable names against the pattern
+    let re = regex::Regex::new(output_variable_validation_pattern).map_err(|e| {
+        JobOutputSerializationError::OutputVariableValidationError {
+            err: format!("Invalid regex pattern: {}: {}", output_variable_validation_pattern, e),
+        }
+    })?;
 
     for (key, value) in serde_hash_map {
+        if !re.is_match(key) {
+            return Err(JobOutputSerializationError::OutputVariableValidationError {
+                err: format!(
+                    "Invalid job output variable name: '{}'. It must match pattern: {}",
+                    key, output_variable_validation_pattern
+                ),
+            });
+        }
         let job_output_variable_object = value.as_object();
         let job_output_variable_hashmap = match job_output_variable_object {
             None => continue,
@@ -921,7 +952,9 @@ pub fn serialize_job_output(json: &[u8]) -> Result<HashMap<String, JobOutputVari
 
 #[cfg(test)]
 mod test {
-    use crate::environment::action::deploy_job::{JobOutputVariable, serialize_job_output};
+    use crate::environment::action::deploy_job::{
+        JobOutputSerializationError, JobOutputVariable, serialize_job_output,
+    };
 
     #[test]
     fn should_serialize_json_to_job_output_variable_with_string_value() {
@@ -931,7 +964,8 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_string_values.as_bytes()).unwrap();
+        let hashmap =
+            serialize_job_output(json_output_with_string_values.as_bytes(), "^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
 
         // then
         assert_eq!(
@@ -960,7 +994,8 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
+        let hashmap =
+            serialize_job_output(json_output_with_numeric_values.as_bytes(), "^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
 
         // then
         assert_eq!(
@@ -991,7 +1026,8 @@ mod test {
         "#;
 
         // when
-        let hashmap = serialize_job_output(json_output_with_numeric_values.as_bytes()).unwrap();
+        let hashmap =
+            serialize_job_output(json_output_with_numeric_values.as_bytes(), "^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap();
 
         // then
         assert_eq!(
@@ -1004,5 +1040,32 @@ mod test {
         );
         let json_final = serde_json::to_string(&hashmap).unwrap();
         println!("{json_final}");
+    }
+
+    #[test]
+    fn should_fail_json_serialization_to_job_output_variable_when_invalid_name_pattern() {
+        // given
+        let json_output_with_numeric_values = r#"
+        {"---": { "value": 123, "description": "a description" }}
+        "#;
+
+        // when
+        let error = serialize_job_output(json_output_with_numeric_values.as_bytes(), "^[a-zA-Z_][a-zA-Z0-9_]*$")
+            .err()
+            .unwrap();
+
+        // then
+        match error {
+            JobOutputSerializationError::SerializationError { serde_err } => {
+                assert_eq!(serde_err.to_string(), "should not happen here");
+            }
+            JobOutputSerializationError::OutputVariableValidationError { err } => {
+                assert_eq!(
+                    err,
+                    "Invalid job output variable name: '---'. It must match pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$"
+                        .to_string()
+                )
+            }
+        }
     }
 }

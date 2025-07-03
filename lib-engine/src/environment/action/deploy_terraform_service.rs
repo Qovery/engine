@@ -3,6 +3,7 @@
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_job::JobOutputSerializationError;
 use crate::environment::models::terraform_service::TerraformService;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -278,8 +279,11 @@ fn retrieve_terraform_output(
         Ok(json) => {
             let result_serde_json: Result<
                 HashMap<String, crate::environment::action::deploy_job::JobOutputVariable>,
-                serde_json::Error,
-            > = crate::environment::action::deploy_job::serialize_job_output(json.as_bytes());
+                JobOutputSerializationError,
+            > = crate::environment::action::deploy_job::serialize_job_output(
+                json.as_bytes(),
+                "^[a-zA-Z_][a-zA-Z0-9_]*$",
+            ); // this pattern should come from core
             match result_serde_json {
                 Ok(deserialized_json_hashmap) => {
                     let deserialized_json_hashmap_with_uppercase_keys: HashMap<
@@ -300,7 +304,12 @@ fn retrieve_terraform_output(
                         event_details.clone(),
                         EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
                             event_details.clone(),
-                            err.to_string(),
+                            match err {
+                                JobOutputSerializationError::SerializationError { serde_err } => {
+                                    format!("{:?}", serde_err)
+                                }
+                                JobOutputSerializationError::OutputVariableValidationError { err } => err,
+                            },
                         )),
                     ));
                 }

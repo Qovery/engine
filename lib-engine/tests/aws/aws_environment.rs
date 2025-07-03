@@ -2523,6 +2523,7 @@ fn deploy_job_on_aws_eks() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2645,6 +2646,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2756,6 +2758,7 @@ fn deploy_cronjob_on_aws_eks() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2885,6 +2888,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3025,6 +3029,7 @@ fn build_and_deploy_job_on_aws_eks() {
             labels_group_ids: btreeset! { labels_group_id },
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3754,6 +3759,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
