@@ -66,6 +66,7 @@ pub struct Job<T: CloudProvider> {
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) should_delete_shared_registry: bool,
+    pub(crate) output_variable_validation_pattern: String,
 }
 
 // Here we define the common behavior among all providers
@@ -98,6 +99,7 @@ impl<T: CloudProvider> Job<T> {
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
         should_delete_shared_registry: bool,
+        output_variable_validation_pattern: String,
     ) -> Result<Self, JobError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -144,6 +146,7 @@ impl<T: CloudProvider> Job<T> {
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
             should_delete_shared_registry,
+            output_variable_validation_pattern,
         })
     }
 
