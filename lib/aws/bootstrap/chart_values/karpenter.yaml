@@ -3,6 +3,7 @@ logLevel: debug
 settings:
   clusterName: set-by-engine-code
   interruptionQueue: set-by-engine-code
+  eksControlPlane: "true"
 
 serviceMonitor:
   enabled: set-by-engine-code
