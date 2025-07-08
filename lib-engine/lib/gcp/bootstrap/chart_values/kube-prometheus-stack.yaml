@@ -22,6 +22,15 @@ kube-state-metrics:
     monitor:
       enabled: true
       honorLabels: true
+  metricLabelsAllowlist:
+    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id]
+    - horizontalpodautoscalers=[qovery.com/service-id]
+    - jobs=[qovery.com/service-id]
+    - cronjobs=[qovery.com/service-id]
+    - services=[qovery.com/service-id]
+    - deployments=[qovery.com/service-id]
+    - statefulsets=[qovery.com/service-id]
+    - ingresses=[qovery.com/associated-service-id]
   resources:
     limits:
       cpu: 75m
