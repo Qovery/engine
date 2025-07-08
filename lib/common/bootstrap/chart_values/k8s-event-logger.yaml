@@ -1,6 +1,6 @@
 image:
   repository: public.ecr.aws/r3m4q3r9/k8s-event-logger-rs
-  tag: 1a02ac55
+  tag: 360678ec
 
 resources:
   limits:
