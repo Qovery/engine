@@ -252,10 +252,17 @@ where
                 Err(err) => {
                     logger.log(EngineEvent::Warning(
                         event_details.clone(),
-                        EventMessage::from(EngineError::new_invalid_job_output_cannot_be_serialized(
-                            event_details.clone(),
-                            err.to_string(),
-                        )),
+                        EventMessage::from(if err.to_string().contains("Validation error") {
+                            EngineError::new_invalid_job_output_variable_validation_failed(
+                                event_details.clone(),
+                                err.to_string(),
+                            )
+                        } else {
+                            EngineError::new_invalid_job_output_cannot_be_serialized(
+                                event_details.clone(),
+                                err.to_string(),
+                            )
+                        }),
                     ));
                 }
             }
@@ -421,7 +428,7 @@ async fn retrieve_output_and_terminate_pod(
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
-        .with_context(|| format!("Cannot retrive qovery-output.json {}", &pod_name))?;
+        .with_context(|| format!("Cannot retrieve qovery-output.json {}", &pod_name))?;
 
     let mut stdout = process
         .stdout()

@@ -4996,6 +4996,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for Job output variable validation error.
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw serde message.
+    /// * `output_json`: The job output json that failed to be serialized
+    pub fn new_invalid_job_output_variable_validation_failed(
+        event_details: EventDetails,
+        validation_error: String,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEngineApiInputCannotBeDeserialized,
+            format!("Job output variable validation failed: {validation_error}").to_string(),
+            Some(CommandError::new(format!("Job output variable validation failed: {validation_error}").to_string(), Some(format!("Job output variable validation failed: {validation_error}")), None)),
+            None,
+            Some("Check that your job output json follows these rules: https://hub.qovery.com/docs/using-qovery/configuration/lifecycle-job/#job-output".to_string()),
+        )
+    }
+
     /// Creates new error for database
     ///
     /// Arguments:
