@@ -192,7 +192,7 @@ impl FromStr for GcpStorageRegion {
             "US-WEST2" => Ok(GcpStorageRegion::UsWest2),
             "US-WEST3" => Ok(GcpStorageRegion::UsWest3),
             "US-WEST4" => Ok(GcpStorageRegion::UsWest4),
-            _ => Err(format!("Unknown storage region: `{}`.", s)),
+            _ => Err(format!("Unknown storage region: `{s}`.")),
         }
     }
 }

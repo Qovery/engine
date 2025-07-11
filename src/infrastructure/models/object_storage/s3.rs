@@ -277,7 +277,7 @@ impl ObjectStorage for S3 {
         if !self.bucket_exists(bucket_name) {
             return Err(ObjectStorageError::CannotGetBucket {
                 bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Bucket `{}` doesn't exist", bucket_name),
+                raw_error_message: format!("Bucket `{bucket_name}` doesn't exist"),
             });
         }
 
@@ -402,7 +402,7 @@ impl ObjectStorage for S3 {
                     .map_err(|e| ObjectStorageError::CannotGetObjectFile {
                         bucket_name: bucket_name.to_string(),
                         object_name: object_key.to_string(),
-                        raw_error_message: format!("Cannot read response body: {}", e).to_string(),
+                        raw_error_message: format!("Cannot read response body: {e}").to_string(),
                     })?;
 
                 let tags = match res.tag_count {

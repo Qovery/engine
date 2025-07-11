@@ -262,7 +262,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_shared_registry() {
                 infra_ctx
                     .container_registry()
                     .delete_repository(repository_name.as_str())
-                    .unwrap_or_else(|_| println!("Cannot delete test repository `{}` after test", repository_name));
+                    .unwrap_or_else(|_| println!("Cannot delete test repository `{repository_name}` after test"));
             });
         test_name.to_string()
     })
@@ -1943,7 +1943,7 @@ fn deploy_container_with_router_on_scw() {
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: format!("my-little-container-{}", suffix),
+            kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -2035,7 +2035,7 @@ fn deploy_container_with_router_on_scw() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
-            kube_name: format!("router-{}", suffix),
+            kube_name: format!("router-{suffix}"),
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -2822,7 +2822,7 @@ fn deploy_container_with_tcp_public_port() {
         let timeout = Duration::from_secs(60 * 10);
         loop {
             if now.elapsed() > timeout {
-                panic!("Cannot connect to endpoint before timeout of {:?}", timeout);
+                panic!("Cannot connect to endpoint before timeout of {timeout:?}");
             }
 
             sleep(Duration::from_secs(10));

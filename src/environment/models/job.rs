@@ -193,7 +193,7 @@ impl<T: CloudProvider> Job<T> {
                     .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()))
                     .port()
                 {
-                    format!("{}:{}", registry_endpoint_host, port).into()
+                    format!("{registry_endpoint_host}:{port}").into()
                 } else {
                     registry_endpoint_host.into()
                 };
@@ -205,13 +205,13 @@ impl<T: CloudProvider> Job<T> {
                         &target.kubernetes.advanced_settings().registry_mirroring_mode,
                         target.container_registry.registry_info(),
                     );
-                let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+                let image_full = format!("{repository}/{image_name}:{image_tag}");
                 (image_full, image_tag)
             }
             ImageSource::Build { source } => (source.image.full_image_name_with_tag(), source.image.tag.clone()),
         };
 
-        let ctx = JobTeraContext {
+        JobTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
@@ -271,9 +271,7 @@ impl<T: CloudProvider> Job<T> {
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
-        };
-
-        ctx
+        }
     }
 
     pub fn service_type(&self) -> ServiceType {

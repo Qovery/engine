@@ -510,7 +510,7 @@ fn managed_database_exists(
         service::DatabaseType::Redis => {
             // Redis cluster append a suffix -001 to the db_id
             let db_id = if db_version.major != "5" {
-                format!("{}-001", db_id)
+                format!("{db_id}-001")
             } else {
                 db_id.to_string()
             };
@@ -731,7 +731,7 @@ where
                         )?;
                     }
                 }
-                Err(e) => logger.warning(format!("invalid_statefulset_storage fail with error: {}", e)),
+                Err(e) => logger.warning(format!("invalid_statefulset_storage fail with error: {e}")),
             }
 
             let chart = ChartInfo {

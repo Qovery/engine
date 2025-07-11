@@ -237,7 +237,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         Action::Create,
         "my_application_name",
         "my-application-name".to_string(),
-        format!("{}.{}", long_id, domain),
+        format!("{long_id}.{domain}"),
         vec![test_port()],
         4,
         5,

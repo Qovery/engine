@@ -401,7 +401,7 @@ fn deploy_a_working_environment_with_shared_registry() {
                 infra_ctx
                     .container_registry()
                     .delete_repository(repository_name.as_str())
-                    .unwrap_or_else(|_| println!("Cannot delete test repository `{}` after test", repository_name));
+                    .unwrap_or_else(|_| println!("Cannot delete test repository `{repository_name}` after test"));
             });
 
         test_name.to_string()
@@ -1646,7 +1646,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
-                    name: format!("p8080-{}", host_suffix),
+                    name: format!("p8080-{host_suffix}"),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -1657,7 +1657,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: format!("grpc-{}", host_suffix),
+                    name: format!("grpc-{host_suffix}"),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -1700,8 +1700,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
             None,
             qovery_engine::services::kube_client::SelectK8sResourceBy::LabelsSelector(format!(
-                "qovery.com/service-id={}",
-                service_id
+                "qovery.com/service-id={service_id}"
             )),
         ));
         assert!(preferred.is_ok());
@@ -1741,8 +1740,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             context.get_event_details(qovery_engine::events::Transmitter::Application(Uuid::new_v4(), "".to_string())),
             None,
             qovery_engine::services::kube_client::SelectK8sResourceBy::LabelsSelector(format!(
-                "qovery.com/service-id={}",
-                service_id
+                "qovery.com/service-id={service_id}"
             )),
         ));
         assert!(requirred.is_ok());
@@ -2302,7 +2300,7 @@ fn deploy_container_with_router_on_aws_eks() {
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: format!("my-little-container-{}", suffix),
+            kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -2325,7 +2323,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
-                    name: format!("http-{}", suffix),
+                    name: format!("http-{suffix}"),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -2336,7 +2334,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: format!("grpc-{}", suffix),
+                    name: format!("grpc-{suffix}"),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -2401,7 +2399,7 @@ fn deploy_container_with_router_on_aws_eks() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
-            kube_name: format!("router-{}", suffix),
+            kube_name: format!("router-{suffix}"),
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -4040,7 +4038,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     long_id: Uuid::new_v4(),
                     port: tcp_port,
                     is_default: true,
-                    name: format!("p{}", tcp_port),
+                    name: format!("p{tcp_port}"),
                     publicly_accessible: true,
                     protocol: Protocol::TCP,
                     service_name: None,
@@ -4062,7 +4060,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     long_id: Uuid::new_v4(),
                     port: udp_port,
                     is_default: false,
-                    name: format!("p{}", udp_port),
+                    name: format!("p{udp_port}"),
                     publicly_accessible: true,
                     protocol: Protocol::UDP,
                     service_name: None,
@@ -4110,7 +4108,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
         let udp_domain = format!("p{}-{}.{}", udp_port, service_id, infra_ctx.dns_provider().domain());
         loop {
             if now.elapsed() > timeout {
-                panic!("Cannot connect to endpoint before timeout of {:?}", timeout);
+                panic!("Cannot connect to endpoint before timeout of {timeout:?}");
             }
 
             sleep(Duration::from_secs(10));
@@ -4435,7 +4433,7 @@ fn deploy_helm_chart_and_pause_it() {
 
             environment.applications = vec![];
             let service_id = Uuid::new_v4();
-            println!("service id {}", service_id);
+            println!("service id {service_id}");
             environment.helms = vec![HelmChart {
                 long_id: service_id,
                 name: "my little chart ****".to_string(),
@@ -4552,7 +4550,7 @@ fn deploy_helm_chart_and_restart_it() {
 
             environment.applications = vec![];
             let service_id = Uuid::new_v4();
-            println!("service id {}", service_id);
+            println!("service id {service_id}");
             environment.helms = vec![HelmChart {
                 long_id: service_id,
                 name: "my little chart ****".to_string(),
@@ -4688,7 +4686,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: format!("service1-p8080-{}", host_suffix),
+                    name: format!("service1-p8080-{host_suffix}"),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: None,
@@ -4699,7 +4697,7 @@ fn deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: format!("service2-p8080-{}", host_suffix),
+                    name: format!("service2-p8080-{host_suffix}"),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: Some(extra_namespace.clone()),

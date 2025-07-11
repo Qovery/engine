@@ -663,15 +663,9 @@ fn test_get_object() {
     // verify:
     assert_eq!(object_key, retrieved_object.key);
     assert_eq!(object_content.into_bytes(), retrieved_object.value);
-    let mut created_object_tags = object_tags
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>();
+    let mut created_object_tags = object_tags.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>();
 
-    let mut object_tags = object_tags
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>();
+    let mut object_tags = object_tags.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>();
     object_tags.sort();
     created_object_tags.sort();
 
@@ -744,15 +738,9 @@ fn test_put_object() {
 
     assert_eq!(object_key, retrieved_object.key);
     assert_eq!(object_content.into_bytes(), retrieved_object.value);
-    let mut created_object_tags = object_tags
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>();
+    let mut created_object_tags = object_tags.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>();
     created_object_tags.sort();
-    let mut object_tags = object_tags
-        .iter()
-        .map(|(k, v)| format!("{}={}", k, v))
-        .collect::<Vec<_>>();
+    let mut object_tags = object_tags.iter().map(|(k, v)| format!("{k}={v}")).collect::<Vec<_>>();
     object_tags.sort();
     assert_eq!(object_tags, created_object_tags);
 }

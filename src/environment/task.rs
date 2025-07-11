@@ -745,7 +745,7 @@ impl BuilderThreadPool {
 
                 // We have a slot to run a new thread, so start a new build
                 let th = thread::Builder::new()
-                    .name(format!("builder-{}", ix))
+                    .name(format!("builder-{ix}"))
                     .spawn_scoped(scope, {
                         let current_thread = &current_thread;
                         let current_span = tracing::Span::current();

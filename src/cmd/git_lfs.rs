@@ -1,6 +1,6 @@
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use itertools::Itertools;
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::path::Path;
 use std::process::ExitStatus;
 
@@ -78,7 +78,7 @@ impl GitLfs {
 
         let mut total_size: u64 = 0;
         for line in output {
-            let Some(size) = line.split('(').last().map(|x| x.trim_end_matches(')')) else {
+            let Some(size) = line.split('(').next_back().map(|x| x.trim_end_matches(')')) else {
                 continue;
             };
             let Some((size, unit)) = size.split(' ').collect_tuple() else {
@@ -97,7 +97,7 @@ impl GitLfs {
                     let msg = format!("Unknown unit when using git-lfs: {unit}");
                     error!("{}", msg);
                     return Err(GitLfsError::ExecutionError {
-                        raw_error: Error::new(ErrorKind::Other, msg),
+                        raw_error: Error::other(msg),
                     });
                 }
             }

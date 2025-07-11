@@ -134,7 +134,7 @@ impl<T> EngineRequest<T> {
                     event_details.clone(),
                     CommandError::new(
                         "Invalid container registry information".to_string(),
-                        Some(format!("Invalid container registry information: {:?}", err)),
+                        Some(format!("Invalid container registry information: {err:?}")),
                         None,
                     ),
                 )
@@ -445,7 +445,7 @@ impl KubernetesDto {
                                 .map_err(|e| {
                                     Box::new(EngineError::new_base64_decode_issue(
                                         event_details.clone(),
-                                        format!("Failed to decode chart override {name}: {:?}", e).as_str(),
+                                        format!("Failed to decode chart override {name}: {e:?}").as_str(),
                                     ))
                                 })?,
                         );
@@ -598,7 +598,7 @@ impl KubernetesDto {
                                     disk_size_in_gib: ng.disk_size_in_gib,
                                     instance_architecture: ng.instance_architecture,
                                     zone: AzureZone::from_str(&zone).unwrap_or_else(|_| {
-                                        panic!("cannot parse `{}`, it doesn't seem to be a valid Azure zone", zone,)
+                                        panic!("cannot parse `{zone}`, it doesn't seem to be a valid Azure zone",)
                                     }),
                                 }
                             })

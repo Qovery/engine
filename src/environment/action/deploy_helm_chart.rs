@@ -266,7 +266,7 @@ fn write_helm_value_with_replacement<'a>(
             "qovery.annotations.loadbalancer",
             loadbalancer_l4_annotations
                 .iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
+                .map(|(k, v)| format!("{k}: {v}"))
                 .collect_vec(),
         ),
         (
@@ -421,7 +421,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             ..
         } => {
             fs::create_dir(this.chart_workspace_directory())
-                .map_err(|e| to_error(format!("Cannot create destination directory for chart due to {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot create destination directory for chart due to {e}")))?;
 
             let repository_url_with_credentials = match engine_helm_registry.get_url_with_credentials() {
                 Ok(url) => url,
@@ -436,8 +436,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                 url
             };
             logger.info(format!(
-                "📥 Downloading Helm chart {} at version {} from {}",
-                chart_name, chart_version, url_without_password
+                "📥 Downloading Helm chart {chart_name} at version {chart_version} from {url_without_password}"
             ));
 
             target
@@ -462,21 +461,20 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             ssh_keys,
         } => {
             logger.info(format!(
-                "📥 Cloning Helm chart from git repository {} at commit {}",
-                git_url, commit_id
+                "📥 Cloning Helm chart from git repository {git_url} at commit {commit_id}"
             ));
 
             let tmpdir = tempfile::tempdir_in(this.workspace_directory())
-                .map_err(|e| to_error(format!("Cannot create tempdir {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot create tempdir {e}")))?;
 
             let git_creds =
-                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {}", e)))?;
+                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {e}")))?;
 
             git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
-                .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {e}")))?;
 
             fs::rename(tmpdir.path().join(root_path), this.chart_workspace_directory())
-                .map_err(|e| to_error(format!("Cannot move helm chart directory due to {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot move helm chart directory due to {e}")))?;
         }
     }
 
@@ -529,37 +527,34 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             ssh_keys,
         } => {
             logger.info(format!(
-                "🧲 Grabbing Helm values from git repository {} at commit {}",
-                git_url, commit_id
+                "🧲 Grabbing Helm values from git repository {git_url} at commit {commit_id}"
             ));
 
             let tmpdir = tempfile::tempdir_in(this.workspace_directory())
-                .map_err(|e| to_error(format!("Cannot create tempdir {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot create tempdir {e}")))?;
 
             let git_creds =
-                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {}", e)))?;
+                get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {e}")))?;
 
             git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
-                .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {}", e)))?;
+                .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {e}")))?;
 
             for value in values_path {
                 let Some(filename) = value.file_name() else {
-                    logger.warning(format!("Invalid filename for {:?}", value));
+                    logger.warning(format!("Invalid filename for {value:?}"));
                     continue;
                 };
 
-                logger.info(format!("Preparing Helm values file {:?}", filename));
-                let input_file = File::open(tmpdir.path().join(value)).map_err(|e| {
-                    to_error(format!("Cannot open value file {:?} for helm value due to {}", filename, e))
-                })?;
+                logger.info(format!("Preparing Helm values file {filename:?}"));
+                let input_file = File::open(tmpdir.path().join(value))
+                    .map_err(|e| to_error(format!("Cannot open value file {filename:?} for helm value due to {e}")))?;
 
                 let lines = BufReader::new(input_file)
                     .lines()
                     .map(|l| Cow::Owned(l.unwrap_or_default()));
 
-                let mut output_path = File::create(this.chart_workspace_directory().join(filename)).map_err(|e| {
-                    to_error(format!("Cannot create output helm value file {:?} due to {}", filename, e))
-                })?;
+                let mut output_path = File::create(this.chart_workspace_directory().join(filename))
+                    .map_err(|e| to_error(format!("Cannot create output helm value file {filename:?} due to {e}")))?;
                 write_helm_value_with_replacement(
                     lines,
                     &mut output_path,
@@ -571,7 +566,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     this.environment_variables(),
                     target.kubernetes.loadbalancer_l4_annotations(Some(this.name())),
                 )
-                .map_err(|e| to_error(format!("Cannot prepare helm value file {:?} due to {}", filename, e)))?;
+                .map_err(|e| to_error(format!("Cannot prepare helm value file {filename:?} due to {e}")))?;
             }
         }
     }
@@ -611,7 +606,7 @@ fn check_resources_are_allowed_to_install<T: CloudProvider>(
                 event_details.clone(),
                 HelmChartError::RenderingError {
                     chart_name: this.name().to_string(),
-                    msg: format!("Cannot deserialize helm template into kube object: {}", err),
+                    msg: format!("Cannot deserialize helm template into kube object: {err}"),
                 },
             )
         })?;
@@ -786,8 +781,7 @@ fn create_config_map_for_webhook_admission_controller_if_not_exists<T: CloudProv
                     err.to_string(),
                     Some(
                         format!(
-                            "Error while trying to patch config map '{}' for helm admission controller",
-                            config_map_name
+                            "Error while trying to patch config map '{config_map_name}' for helm admission controller"
                         )
                         .to_string(),
                     ),

@@ -164,8 +164,7 @@ impl AzureContainerRegistryService {
             return Err(ContainerRegistryServiceError::InvalidRegistryName {
                 registry_name: registry_name.to_string(),
                 raw_error_message: format!(
-                    "Registry name must contain alpha numeric characters only and be at least {} characters",
-                    MIN_REGISTRY_NAME_LENGTH
+                    "Registry name must contain alpha numeric characters only and be at least {MIN_REGISTRY_NAME_LENGTH} characters"
                 ),
             });
         }
@@ -188,7 +187,7 @@ impl AzureContainerRegistryService {
             ContainerRegistryServiceError::CannotAllowClusterToPullFromRegistry {
                 cluster_name: cluster_name.to_string(),
                 registry_name: registry_name.to_string(),
-                raw_error_message: format!("Cannot login to Azure to allow cluster to pull from ACR: {}", e),
+                raw_error_message: format!("Cannot login to Azure to allow cluster to pull from ACR: {e}"),
             }
         })?;
 
@@ -406,7 +405,7 @@ impl AzureContainerRegistryService {
                 "-o",
                 "json",
                 "--image",
-                format!("{}:{}", image_name, image_tag).as_str(),
+                format!("{image_name}:{image_tag}").as_str(),
                 "-u",
                 self.client_id.as_str(),
                 "-p",
@@ -427,7 +426,7 @@ impl AzureContainerRegistryService {
             repository_name: sanitized_registry_name.to_string(),
             image_name: image_name.to_string(),
             image_tag: image_tag.to_string(),
-            raw_error_message: format!("Cannot get docker image: {}", e),
+            raw_error_message: format!("Cannot get docker image: {e}"),
         })?;
 
         let docker_image_tag = serde_json::from_str::<DockerImageTag>(output.join("").as_str()).map_err(|e| {
@@ -435,7 +434,7 @@ impl AzureContainerRegistryService {
                 repository_name: sanitized_registry_name.to_string(),
                 image_name: image_name.to_string(),
                 image_tag: image_tag.to_string(),
-                raw_error_message: format!("Cannot parse docker image tag: {}", e),
+                raw_error_message: format!("Cannot parse docker image tag: {e}"),
             }
         })?;
 
@@ -468,7 +467,7 @@ impl AzureContainerRegistryService {
                 "-n",
                 registry_name.as_str(),
                 "--image",
-                format!("{}:{}", image_name, image_tag).as_str(),
+                format!("{image_name}:{image_tag}").as_str(),
                 "--yes",
                 "-u",
                 self.client_id.as_str(),
@@ -486,7 +485,7 @@ impl AzureContainerRegistryService {
             repository_name: registry_name.to_string(),
             image_name: image_name.to_string(),
             image_tag: image_tag.to_string(),
-            raw_error_message: format!("Cannot delete docker image: {}", e),
+            raw_error_message: format!("Cannot delete docker image: {e}"),
         })?;
 
         Ok(())
@@ -534,13 +533,13 @@ impl AzureContainerRegistryService {
         )
         .map_err(|e| ContainerRegistryServiceError::CannotListDockerImages {
             repository_name: registry_name.to_string(),
-            raw_error_message: format!("Cannot list docker images: {}", e),
+            raw_error_message: format!("Cannot list docker images: {e}"),
         })?;
 
         let docker_image = serde_json::from_str::<Vec<String>>(output.join("").as_str()).map_err(|e| {
             ContainerRegistryServiceError::CannotListDockerImages {
                 repository_name: registry_name.to_string(),
-                raw_error_message: format!("Cannot parse docker images: {}", e),
+                raw_error_message: format!("Cannot parse docker images: {e}"),
             }
         })?;
 

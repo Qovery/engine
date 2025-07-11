@@ -41,11 +41,7 @@ pub(crate) fn render_recap_events(warning_events: &[Event]) -> Result<String, te
         .iter()
         .sorted_by(|a, b| Ord::cmp(&b.1, &a.1))
         .map(|(k, v)| {
-            let message = if *v > 1 {
-                format!("{} (x{})", k, v)
-            } else {
-                k.to_string()
-            };
+            let message = if *v > 1 { format!("{k} (x{v})") } else { k.to_string() };
             EventRenderContext {
                 message,
                 type_: "Warning".to_string(),

@@ -481,7 +481,7 @@ mod tests {
         assert_eq!(
             ObjectStorageError::CannotGetBucket {
                 bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Cannot get bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+                raw_error_message: format!("Cannot get bucket `{bucket_name}`: \"{raw_error_message}\""),
             },
             retrieved_bucket.unwrap_err()
         );
@@ -686,7 +686,7 @@ mod tests {
         assert_eq!(
             ObjectStorageError::CannotDeleteBucket {
                 bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Cannot delete bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+                raw_error_message: format!("Cannot delete bucket `{bucket_name}`: \"{raw_error_message}\""),
             },
             delete_result.unwrap_err(),
         );
@@ -746,7 +746,7 @@ mod tests {
         assert_eq!(
             ObjectStorageError::CannotDeleteBucket {
                 bucket_name: bucket_name.to_string(),
-                raw_error_message: format!("Cannot delete bucket `{}`: \"{}\"", bucket_name, raw_error_message),
+                raw_error_message: format!("Cannot delete bucket `{bucket_name}`: \"{raw_error_message}\""),
             },
             delete_result.unwrap_err(),
         );
@@ -834,8 +834,7 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot put object `{}` to bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot put object `{object_key}` to bucket `{bucket_name}`: \"{raw_error_message}\""
                 ),
             },
             added_object.unwrap_err()
@@ -917,8 +916,7 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot delete object `{}` from bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot delete object `{object_key}` from bucket `{bucket_name}`: \"{raw_error_message}\""
                 ),
             },
             delete_object_result.unwrap_err()
@@ -993,8 +991,7 @@ mod tests {
                 bucket_name: bucket_name.to_string(),
                 object_name: object_key.to_string(),
                 raw_error_message: format!(
-                    "Cannot get object `{}` from bucket `{}`: \"{}\"",
-                    object_key, bucket_name, raw_error_message
+                    "Cannot get object `{object_key}` from bucket `{bucket_name}`: \"{raw_error_message}\""
                 ),
             },
             retrieved_object.unwrap_err()

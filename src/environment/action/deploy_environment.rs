@@ -139,10 +139,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!(
-                "🎡 Proceeding with up to {} parallel deployment(s)",
-                parallel_deploys
-            )),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel deployment(s)")),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -202,7 +199,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel pause(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel pause(s)")),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -272,7 +269,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel delete(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel delete(s)")),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -329,7 +326,7 @@ impl<'a> EnvironmentDeployment<'a> {
 
         self.logger.log(EngineEvent::Info(
             event_details.clone(),
-            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {} parallel restart(s)", parallel_deploys)),
+            EventMessage::new_from_safe(format!("🎡 Proceeding with up to {parallel_deploys} parallel restart(s)")),
         ));
 
         let deployment_threads_pool = DeploymentThreadsPool::new();
@@ -441,7 +438,7 @@ impl DeploymentThreadsPool {
 
                 // We have a slot to run a new thread, so start a new deployment
                 let th = thread::Builder::new()
-                    .name(format!("deployer-{}", ix))
+                    .name(format!("deployer-{ix}"))
                     .spawn_scoped(scope, {
                         let current_span = tracing::Span::current();
                         let current_thread = &current_thread;

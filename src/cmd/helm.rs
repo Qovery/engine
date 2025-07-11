@@ -464,7 +464,7 @@ impl Helm {
 
         // Move the chart from tmpdir to the target_directory of the user
         // Rename must not cross mount point boundaries. It is ok as we don't have a tmpfs inside our container and we use user provided target_dir
-        let name = chart_name.split('/').last().unwrap_or_default();
+        let name = chart_name.split('/').next_back().unwrap_or_default();
         std::fs::rename(tmpdir.path().join(name), target_directory).map_err(|err| {
             CmdError(
                 chart_name.to_string(),
@@ -677,8 +677,7 @@ impl Helm {
                     FETCH,
                     errors::CommandError::new(
                         format!(
-                            "Helm failed to fetch chart {} at version {} from {}",
-                            chart_name, chart_version, repository_url_without_credentials
+                            "Helm failed to fetch chart {chart_name} at version {chart_version} from {repository_url_without_credentials}",
                         ),
                         Some(stderr_msg),
                         Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
@@ -1501,7 +1500,7 @@ impl Helm {
             &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
             &[],
             &mut |line| {
-                if let Err(e) = writeln!(output, "{}", line) {
+                if let Err(e) = writeln!(output, "{line}") {
                     error!("Error writing to output: {:?}", e);
                 }
                 debug!("{}", line);
@@ -1838,7 +1837,7 @@ mod tests {
             .write(true)
             .create(true)
             .truncate(true) // This will ensure the content is overridden
-            .open(helm_diffs_output_dir.path().join(format!("{}.diff", release_name)))
+            .open(helm_diffs_output_dir.path().join(format!("{release_name}.diff")))
             .unwrap();
 
         let ret = helm.upgrade_diff(&charts[0], &[], &mut |line| {
@@ -1850,7 +1849,7 @@ mod tests {
         assert!(
             helm_diffs_output_dir
                 .path()
-                .join(format!("{}.diff", release_name))
+                .join(format!("{release_name}.diff"))
                 .exists()
         );
         assert!(matches!(ret, Ok(())));

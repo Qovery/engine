@@ -250,14 +250,8 @@ impl TerraformError {
                     return TerraformError::QuotasExceeded {
                         sub_type: QuotaExceededError::ResourceLimitExceeded {
                             resource_type: resource_type.to_string(),
-                            current_resource_count: match current_resource_count {
-                                Ok(c) => Some(c),
-                                Err(_) => None,
-                            },
-                            max_resource_count: match max_resource_count {
-                                Ok(c) => Some(c),
-                                Err(_) => None,
-                            },
+                            current_resource_count: current_resource_count.ok(),
+                            max_resource_count: max_resource_count.ok(),
                         },
                         raw_message: raw_terraform_error_output.to_string(),
                     };
@@ -806,9 +800,9 @@ impl TerraformError {
                             "`{}` has reached its quotas{}.",
                             resource_type,
                             match (current_resource_count, max_resource_count) {
-                                (Some(current), Some(max)) => format!(": ({}/{})", current, max),
-                                (Some(current), None) => format!(", current count = {}", current),
-                                (None, Some(max)) => format!(" of {}", max),
+                                (Some(current), Some(max)) => format!(": ({current}/{max})"),
+                                (Some(current), None) => format!(", current count = {current}"),
+                                (None, Some(max)) => format!(" of {max}"),
                                 (None, None) => "".to_string(),
                             },
                         ),
@@ -1022,7 +1016,7 @@ impl From<TerraformValidationError> for TerraformError {
             } => TerraformError::ValidatorError {
                 validator_name,
                 validator_description,
-                raw_message: format!("Validation error on resource `{}`: {}", resource, raw_output),
+                raw_message: format!("Validation error on resource `{resource}`: {raw_output}"),
             },
         }
     }

@@ -254,7 +254,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
                 mounted_files: vec![],
-                public_domain: format!("{}.example.com", app_id),
+                public_domain: format!("{app_id}.example.com"),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -362,7 +362,7 @@ pub fn environment_3_apps_3_databases(
                     success_threshold: 1,
                     failure_threshold: 5,
                 }),
-                public_domain: format!("{}.example.com", app_id),
+                public_domain: format!("{app_id}.example.com"),
                 container_registries: Vec::new(),
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: BTreeSet::new(),
@@ -394,7 +394,7 @@ pub fn environment_3_apps_3_databases(
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(&database_password_mongo), is_secret:false},
                 },
                 mounted_files: vec![],
-                public_domain: format!("{}.example.com", app_id),
+                public_domain: format!("{app_id}.example.com"),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -680,7 +680,7 @@ pub fn test_db(
 ) -> String {
     let sem_ver = match VersionsNumber::from_str(version) {
         Ok(v) => v,
-        Err(e) => panic!("Database version has a wrong format: `{}`, error: {}", version, e),
+        Err(e) => panic!("Database version has a wrong format: `{version}`, error: {e}"),
     };
     let context_for_delete = context.clone_not_same_execution_id();
     let provider_kind = kubernetes_kind.get_cloud_provider_kind();

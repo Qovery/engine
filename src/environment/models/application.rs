@@ -182,7 +182,8 @@ impl<T: CloudProvider> Application<T> {
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
         let registry_info = target.container_registry.registry_info();
-        let ctx = ContainerTeraContext {
+
+        ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
@@ -257,9 +258,7 @@ impl<T: CloudProvider> Application<T> {
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
-        };
-
-        ctx
+        }
     }
 
     pub fn is_stateful(&self) -> bool {

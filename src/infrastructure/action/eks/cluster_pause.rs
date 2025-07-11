@@ -32,10 +32,7 @@ pub fn pause_eks_cluster(
 
     // Legacy flow, that manage node groups
     let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
-    let aws_eks_client = match get_rusoto_eks_client(event_details.clone(), kubernetes, infra_ctx.cloud_provider()) {
-        Ok(value) => Some(value),
-        Err(_) => None,
-    };
+    let aws_eks_client = get_rusoto_eks_client(event_details.clone(), kubernetes, infra_ctx.cloud_provider()).ok();
 
     let node_groups_with_desired_states = should_update_desired_nodes(
         event_details.clone(),

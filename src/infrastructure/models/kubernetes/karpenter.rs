@@ -87,7 +87,7 @@ impl fmt::Display for KarpenterRequirementOperator {
             KarpenterRequirementOperator::In => "In",
             KarpenterRequirementOperator::Gt => "Gt",
         };
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 
@@ -115,9 +115,9 @@ impl KarpenterNodePoolDisruptionBudget {
         let minutes = (total_seconds % 3600) / 60;
 
         match (hours, minutes) {
-            (0, m) => format!("{}m", m),
-            (h, 0) => format!("{}h", h),
-            (h, m) => format!("{}h{}m", h, m),
+            (0, m) => format!("{m}m"),
+            (h, 0) => format!("{h}h"),
+            (h, m) => format!("{h}h{m}m"),
         }
     }
 }
@@ -139,7 +139,7 @@ impl fmt::Display for KarpenterNodePoolDisruptionReason {
         let output = match self {
             KarpenterNodePoolDisruptionReason::Underutilized => "Underutilized",
         };
-        write!(f, "{}", output)
+        write!(f, "{output}")
     }
 }
 

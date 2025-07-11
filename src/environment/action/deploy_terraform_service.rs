@@ -230,7 +230,7 @@ fn delete_old_job_if_exist(
 ) -> Result<(), Box<EngineError>> {
     let kube_job_api: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
-    let field_selector = format!("metadata.name={}", job_name);
+    let field_selector = format!("metadata.name={job_name}");
     let jobs = block_on(kube_job_api.list(&ListParams::default().fields(&field_selector)))
         .map_err(|_err| EngineError::new_job_error(event_details.clone(), "Error when listing jobs".to_string()))?;
 
@@ -249,7 +249,7 @@ fn delete_backend_config_secret(
 ) -> Result<(), Box<EngineError>> {
     let kube_secret_api: Api<Secret> = Api::namespaced(target.kube.client(), target.environment.namespace());
 
-    let field_selector = format!("metadata.name={}", secret_name);
+    let field_selector = format!("metadata.name={secret_name}");
     let secrets = block_on(kube_secret_api.list(&ListParams::default().fields(&field_selector)))
         .map_err(|_err| EngineError::new_job_error(event_details.clone(), "Error when listing secrets".to_string()))?;
 
@@ -306,7 +306,7 @@ fn retrieve_terraform_output(
                             event_details.clone(),
                             match err {
                                 JobOutputSerializationError::SerializationError { serde_err } => {
-                                    format!("{:?}", serde_err)
+                                    format!("{serde_err:?}")
                                 }
                                 JobOutputSerializationError::OutputVariableValidationError { err } => err,
                             },

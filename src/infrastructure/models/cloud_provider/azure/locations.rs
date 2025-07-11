@@ -445,7 +445,7 @@ mod tests {
 
         for location in AzureLocation::iter() {
             let actual: HashSet<_> = location.zones().into_iter().collect();
-            assert_eq!(expected, actual, "Mismatch for location {:?}", location);
+            assert_eq!(expected, actual, "Mismatch for location {location:?}");
         }
     }
 

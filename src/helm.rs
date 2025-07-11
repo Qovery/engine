@@ -116,7 +116,7 @@ pub struct ChartValuesGenerated {
 impl ChartValuesGenerated {
     pub fn new(name: String, yaml_content: String) -> Self {
         ChartValuesGenerated {
-            filename: format!("{}_override.yaml", name),
+            filename: format!("{name}_override.yaml"),
             yaml_content,
         }
     }

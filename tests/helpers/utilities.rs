@@ -746,7 +746,7 @@ pub fn get_pods(
     cmd::kubectl::kubectl_exec_get_pods(
         infra_ctx.kubernetes().kubeconfig_local_file_path(),
         Some(environment_check.kube_name.as_str()),
-        Some(&format!("qovery.com/service-id={}", service_id)),
+        Some(&format!("qovery.com/service-id={service_id}")),
         get_cloud_provider_credentials(provider_kind)
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_str()))
@@ -1041,7 +1041,7 @@ pub fn check_tcp_port_is_open(address: &TcpCheckSource, port: u16) -> Result<(),
 
 pub fn check_udp_port_is_open(address: &str, port: u16) -> io::Result<bool> {
     let socket = UdpSocket::bind("0.0.0.0:0")?;
-    let full_address = format!("{}:{}", address, port);
+    let full_address = format!("{address}:{port}");
     socket.set_read_timeout(Some(Duration::from_secs(5)))?;
 
     socket.send_to(b"qovery", full_address)?;

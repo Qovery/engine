@@ -106,7 +106,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     },
                     ChartSetValue {
                         key: "environmentVariables.CLUSTER_METRICS_ENABLED".to_string(),
-                        value: format!("{}", metrics_enabled),
+                        value: format!("{metrics_enabled}"),
                     },
                 ],
                 values: vec![
