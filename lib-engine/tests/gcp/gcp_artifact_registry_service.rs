@@ -67,7 +67,7 @@ fn test_get_repository() {
             // make sure to delete the repository after test
             service
                 .delete_repository(gcp_project_name, GCP_REGION, repository_name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // execute:
@@ -147,7 +147,7 @@ fn test_create_repository() {
             // make sure to delete the repository after test
             service
                 .delete_repository(gcp_project_name, GCP_REGION, repository_name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // verify:
@@ -269,7 +269,7 @@ fn test_get_docker_image() {
             // make sure to delete the repository after test
             service
                 .delete_repository(gcp_project_name, GCP_REGION, repository_name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // pushing image into the repository
@@ -299,7 +299,7 @@ fn test_get_docker_image() {
         let destination_container_image = ContainerImage::new(
             Url::parse(format!("https://{}-docker.pkg.dev", GCP_REGION.to_cloud_provider_format(),).as_str())
                 .expect("Cannot parse registry Url"),
-            format!("{}/{}/{}", gcp_project_name, repository_name, destination_image_name,),
+            format!("{gcp_project_name}/{repository_name}/{destination_image_name}",),
             vec![destination_image_tag.to_string()],
         );
 
@@ -343,8 +343,7 @@ fn test_get_docker_image() {
         assert_eq!(
             Ok(DockerImage {
                 repository_id: format!(
-                    "projects/{}/locations/{}/repositories/{}",
-                    gcp_project_name, GCP_REGION, repository_name
+                    "projects/{gcp_project_name}/locations/{GCP_REGION}/repositories/{repository_name}"
                 ),
                 name: destination_image_name.to_string(),
                 tag: destination_image_tag.to_string(),
@@ -401,7 +400,7 @@ fn test_delete_docker_image() {
             // make sure to delete the repository after test
             service
                 .delete_repository(gcp_project_name, GCP_REGION, repository_name.as_str())
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // pushing image into the repository
@@ -431,7 +430,7 @@ fn test_delete_docker_image() {
         let destination_container_image = ContainerImage::new(
             Url::parse(format!("https://{}-docker.pkg.dev", GCP_REGION.to_cloud_provider_format(),).as_str())
                 .expect("Cannot parse registry Url"),
-            format!("{}/{}/{}", gcp_project_name, repository_name, destination_image_name,),
+            format!("{gcp_project_name}/{repository_name}/{destination_image_name}",),
             vec![destination_image_tag.to_string()],
         );
 

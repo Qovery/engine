@@ -40,7 +40,7 @@ pub fn working_environment(
         execution_id: context.execution_id().to_string(),
         long_id: env_id,
         name: "env".to_string(),
-        kube_name: format!("env-{}-myenv", env_id),
+        kube_name: format!("env-{env_id}-myenv"),
         project_long_id: Uuid::new_v4(),
         organization_long_id: Uuid::new_v4(),
         action: Action::Create,
@@ -346,7 +346,7 @@ pub fn environment_2_app_2_routers_1_psql(
                     success_threshold: 1,
                     failure_threshold: 5,
                 }),
-                public_domain: format!("{}.{}", application_id1, test_domain),
+                public_domain: format!("{application_id1}.{test_domain}"),
                 container_registries: Vec::new(),
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
@@ -376,7 +376,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
                 mounted_files: vec![],
-                public_domain: format!("{}.{}", application_id2, test_domain),
+                public_domain: format!("{application_id2}.{test_domain}"),
                 ports: vec![Port {
                     long_id: Default::default(),
                     port: 1234,
@@ -430,7 +430,7 @@ pub fn environment_2_app_2_routers_1_psql(
             Router {
                 long_id: router_1,
                 name: "main".to_string(),
-                kube_name: format!("router-{}", router_1),
+                kube_name: format!("router-{router_1}"),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
@@ -443,7 +443,7 @@ pub fn environment_2_app_2_routers_1_psql(
             Router {
                 long_id: router_2,
                 name: "second-router".to_string(),
-                kube_name: format!("router-{}", router_2),
+                kube_name: format!("router-{router_2}"),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
@@ -514,7 +514,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             },
             mounted_files: vec![],
             branch: "echo-app".to_string(),
-            public_domain: format!("{}.{}", application_id, test_domain),
+            public_domain: format!("{application_id}.{test_domain}"),
             ports: vec![Port {
                 long_id: Default::default(),
                 port: 5678,
@@ -630,7 +630,7 @@ pub fn environment_only_http_server(
             environment_vars_with_infos: btreemap! {},
             mounted_files: vec![],
             branch: "main".to_string(),
-            public_domain: format!("{}.{}", application_id, test_domain),
+            public_domain: format!("{application_id}.{test_domain}"),
             ports: vec![Port {
                 long_id: Default::default(),
                 port: 80,

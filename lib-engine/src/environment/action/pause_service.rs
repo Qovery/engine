@@ -325,7 +325,7 @@ fn get_patch_add_node_selector(
             value: Value::Object(serde_json::Map::new()),
         }));
     }
-    let patch_path_str = format!("/spec/template/spec/nodeSelector/{}", node_selector_key);
+    let patch_path_str = format!("/spec/template/spec/nodeSelector/{node_selector_key}");
     patch_operations.push(PatchOperation::Add(AddOperation {
         path: PointerBuf::parse(&patch_path_str).unwrap_or_default(),
         value: Value::String(node_selector_value.to_string()),
@@ -337,7 +337,7 @@ fn get_patch_add_node_selector(
 fn get_patch_remove_node_selector(key: &str) -> (PatchParams, Patch<Value>) {
     let patch_params = PatchParams::apply("node-selector-remove-patch");
 
-    let patch_path_str = format!("/spec/template/spec/nodeSelector/{}", key);
+    let patch_path_str = format!("/spec/template/spec/nodeSelector/{key}");
     let patch_operations = vec![PatchOperation::Remove(RemoveOperation {
         path: PointerBuf::parse(&patch_path_str).unwrap_or_default(),
     })];

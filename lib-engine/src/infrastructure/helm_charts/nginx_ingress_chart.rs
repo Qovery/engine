@@ -800,7 +800,7 @@ mod tests {
                 }
                 _ => {
                     assert!(common_chart.chart_info.values.iter().any(|x| x.key
-                        == format!("controller.config.log-format-escaping-{}", log_format_escaping)
+                        == format!("controller.config.log-format-escaping-{log_format_escaping}")
                         && x.value == "true"),);
                 }
             }

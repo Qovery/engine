@@ -219,7 +219,7 @@ pub fn main() -> io::Result<()> {
         cli.grpc_server
     };
 
-    println!("{}", ASCII_BANNER);
+    println!("{ASCII_BANNER}");
 
     // Init tracing subscriber
     let (log_file_writer, log_file_writer_inner) = LogFileWriter::new();

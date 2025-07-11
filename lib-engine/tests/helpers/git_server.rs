@@ -21,8 +21,7 @@ pub fn init_git_server_testcontainer(repo_id: String) -> Container<GenericImage>
             "sh",
             "-c",
             format!(
-                "git clone -b basic-app-deploy https://github.com/Qovery/engine-testing.git /srv/git/{}.git",
-                repo_id
+                "git clone -b basic-app-deploy https://github.com/Qovery/engine-testing.git /srv/git/{repo_id}.git"
             )
             .as_str(),
         ]))

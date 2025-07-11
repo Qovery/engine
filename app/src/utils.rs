@@ -55,7 +55,7 @@ pub fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
         // check if the binary need to be tested
         if bin_to_check.contains(&binary_name) {
             let result_cmd = cmd::command::run_version_command_for(binary_name);
-            let version = lowercase.split('=').last().unwrap_or("").replace('"', "");
+            let version = lowercase.split('=').next_back().unwrap_or("").replace('"', "");
 
             if !result_cmd.contains(&version) {
                 return Err(EngineInitError::Regular(BinVersion));

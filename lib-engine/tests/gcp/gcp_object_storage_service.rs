@@ -101,9 +101,9 @@ fn test_bucket_exists() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
-    let not_existing_bucket_name = format!("{}-not-existing", existing_bucket_name);
+    let not_existing_bucket_name = format!("{existing_bucket_name}-not-existing");
 
     // execute & verify:
     assert!(service.bucket_exists(existing_bucket_name.as_str()));
@@ -151,9 +151,9 @@ fn test_get_bucket() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
-    let not_existing_bucket_name = format!("{}-not-existing", existing_bucket_name);
+    let not_existing_bucket_name = format!("{existing_bucket_name}-not-existing");
 
     // execute & verify:
     assert!(service.get_bucket(existing_bucket_name.as_str()).is_ok());
@@ -359,7 +359,7 @@ fn test_update_bucket() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // Bucket versioning
@@ -376,7 +376,7 @@ fn test_update_bucket() {
         ) {
             // verify:
             Ok(updated_bucket_result) => assert_eq!(versioning, &updated_bucket_result.versioning_activated),
-            Err(e) => panic!("Cannot update bucket versioning: {}", e),
+            Err(e) => panic!("Cannot update bucket versioning: {e}"),
         }
     }
 
@@ -400,7 +400,7 @@ fn test_update_bucket() {
                     assert!(service.bucket_exists(logs_bucket.as_str()));
                 }
             }
-            Err(e) => panic!("Cannot update bucket logging: {}", e),
+            Err(e) => panic!("Cannot update bucket logging: {e}"),
         }
     }
 }
@@ -471,7 +471,7 @@ fn test_delete_bucket_using_run_job() {
         });
         assert!(bucket_exists_result.is_ok());
 
-        let logs_bucket = format!("{}-logs", existing_bucket_name);
+        let logs_bucket = format!("{existing_bucket_name}-logs");
         let logging_bucket_exists_result = retry::retry(Fibonacci::from_millis(5000).take(5), || {
             if service.bucket_exists(logs_bucket.as_str()) {
                 OperationResult::Retry("Logging bucket still exists")
@@ -579,7 +579,7 @@ fn test_empty_bucket_with_objects() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     let object_key = format!("uploaded-test-file-{}.txt", Uuid::new_v4());
@@ -647,7 +647,7 @@ fn test_list_bucket() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // execute:
@@ -701,7 +701,7 @@ fn test_list_bucket_from_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // execute:
@@ -754,7 +754,7 @@ fn test_put_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     let object_key = format!("uploaded-test-file-{}.txt", Uuid::new_v4());
@@ -815,7 +815,7 @@ fn test_get_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     let object_key = format!("uploaded-test-file-{}.txt", Uuid::new_v4());
@@ -879,7 +879,7 @@ fn test_list_objects_keys_only() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // create 10 files to put in the bucket
@@ -887,7 +887,7 @@ fn test_list_objects_keys_only() {
         .map(|i| BucketObject {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
-            value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            value: format!("FILE_CONTENT_{i}").into_bytes(),
             tags: vec![],
         })
         .collect();
@@ -957,7 +957,7 @@ fn test_list_objects_keys_only_with_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // create 10 files to put in the bucket, only 5 are prefixed
@@ -973,7 +973,7 @@ fn test_list_objects_keys_only_with_prefix() {
                 },
                 Uuid::new_v4()
             ),
-            value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            value: format!("FILE_CONTENT_{i}").into_bytes(),
             tags: vec![],
         })
         .collect();
@@ -1054,7 +1054,7 @@ fn test_list_objects() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // create 10 files to put in the bucket
@@ -1062,7 +1062,7 @@ fn test_list_objects() {
         .map(|i| BucketObject {
             bucket_name: existing_bucket_name.to_string(),
             key: format!("uploaded-test-file-{}.txt", Uuid::new_v4()),
-            value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            value: format!("FILE_CONTENT_{i}").into_bytes(),
             tags: vec![],
         })
         .collect();
@@ -1132,7 +1132,7 @@ fn test_list_objects_with_prefix() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     // create 10 files to put in the bucket
@@ -1148,7 +1148,7 @@ fn test_list_objects_with_prefix() {
                 },
                 Uuid::new_v4()
             ),
-            value: format!("FILE_CONTENT_{}", i).into_bytes(),
+            value: format!("FILE_CONTENT_{i}").into_bytes(),
             tags: vec![],
         })
         .collect();
@@ -1229,7 +1229,7 @@ fn test_delete_object() {
         // make sure to delete the bucket after test
         service
             .delete_bucket(bucket_name.as_str(), true, true)
-            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{}` after test", bucket_name));
+            .unwrap_or_else(|_| panic!("Cannot delete test bucket `{bucket_name}` after test"));
     });
 
     let object_key = format!("uploaded-test-file-{}.txt", Uuid::new_v4());

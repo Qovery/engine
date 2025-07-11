@@ -273,7 +273,7 @@ impl<T: CloudProvider> TerraformService<T> {
         let var_file_args: Vec<String> = self
             .terraform_var_file_paths
             .iter()
-            .map(|path| format!("-var-file={}", path))
+            .map(|path| format!("-var-file={path}"))
             .collect();
 
         let var_args: Vec<String> = self
@@ -281,7 +281,7 @@ impl<T: CloudProvider> TerraformService<T> {
             .iter()
             .flat_map(|(key, value)| {
                 let arg = "-var".to_string();
-                let val = format!("{}={}", key, value);
+                let val = format!("{key}={value}");
 
                 vec![arg, val]
             })

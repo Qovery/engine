@@ -32,7 +32,7 @@ impl Display for StepName {
             StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
         };
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 

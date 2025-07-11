@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_closure)]
 
-use std::io::{Error, ErrorKind};
+use std::io::Error;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -458,8 +458,7 @@ impl BuildPlatform for LocalDocker {
                 {
                     debug!("Retrying git clone...");
                     logger.send_warning(format!(
-                        "⚠️ Retrying cloning your git repository, due to following error: {}",
-                        message
+                        "⚠️ Retrying cloning your git repository, due to following error: {message}"
                     ));
                     OperationResult::Retry(BuildError::GitError {
                         application: build.image.service_id.clone(),
@@ -535,7 +534,7 @@ impl BuildPlatform for LocalDocker {
                     return Err(BuildError::IoError {
                         application: app_id,
                         action_description: "git lfs checkout".to_string(),
-                        raw_error: Error::new(ErrorKind::Other, "git lfs checkout failed"),
+                        raw_error: Error::other("git lfs checkout failed"),
                     });
                 }
             }

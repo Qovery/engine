@@ -175,17 +175,17 @@ impl TerraformInfraResources {
     fn delete_resources_from_state(&self, resources: &[&str], logger: &impl InfraLogger) {
         for resource in resources {
             if self.is_dry_run {
-                logger.warn(format!("👻 Skipping deletion of resource {} from terraform state", resource));
+                logger.warn(format!("👻 Skipping deletion of resource {resource} from terraform state"));
                 continue;
             }
 
-            logger.info(format!("Removing resource {} from terraform state", resource));
+            logger.info(format!("Removing resource {resource} from terraform state"));
             if let Err(err) = terraform_remove_resource_from_tf_state(
                 self.destination_folder.to_string_lossy().as_ref(),
                 resource,
                 &TerraformValidators::None,
             ) {
-                logger.warn(format!("Cannot remove resource {} from terraform state: {}", resource, err));
+                logger.warn(format!("Cannot remove resource {resource} from terraform state: {err}"));
             }
         }
     }

@@ -74,8 +74,7 @@ pub fn delete_nlb_or_alb_service(
     if deleted_nlb {
         // error message if timeout waiting for NLB to be deleted
         let msg = format!(
-            "Failed to delete NLB service in namespace '{}' with selector '{}', timed out. Please retry to deploy later or look at AWS Cloudwatch issue.",
-            namespace, service_nlb_annotation_to_delete
+            "Failed to delete NLB service in namespace '{namespace}' with selector '{service_nlb_annotation_to_delete}', timed out. Please retry to deploy later or look at AWS Cloudwatch issue."
         );
         let err = EngineError::new_k8s_delete_service_error(
             event_details.clone(),
@@ -131,7 +130,7 @@ pub fn delete_cached_image(
     // Delete previous image from cache to cleanup resources
     if let Some(last_image_tag) = last_image
         .as_ref()
-        .and_then(|img| img.split(':').last().map(str::to_string))
+        .and_then(|img| img.split(':').next_back().map(str::to_string))
     {
         if is_service_deletion || last_image_tag != current_image_tag {
             logger(format!("🪓 Deleting previous cached image {last_image_tag}"));
@@ -288,7 +287,8 @@ fn mirror_image(
 
     let should_abort_waiting_thread = AtomicBool::new(false);
     let current_span = tracing::Span::current();
-    let result = thread::scope(|scope| {
+
+    thread::scope(|scope| {
         let waiting_thread = scope.spawn(|| {
             // making sure to pass the current span to the new thread not to lose any tracing info
             let _span = current_span.enter();
@@ -356,9 +356,7 @@ fn mirror_image(
 
         // Return docker mirroring thread result
         result
-    });
-
-    result
+    })
 }
 
 pub enum KubeObjectKind {

@@ -18,7 +18,7 @@ fn hook(file: &File) -> SdResult<()> {
 fn append_engine_version_from_env(mut file: &File) -> SdResult<()> {
     let ci_commit = env::var("CI_COMMIT_SHORT_SHA").unwrap_or_default();
     let engine_version: String = if !ci_commit.is_empty() {
-        format!(r#"pub const ENGINE_VERSION: &str = "{}";"#, ci_commit)
+        format!(r#"pub const ENGINE_VERSION: &str = "{ci_commit}";"#)
     } else {
         r#"pub const ENGINE_VERSION: &str = SHORT_COMMIT;"#.to_string()
     };

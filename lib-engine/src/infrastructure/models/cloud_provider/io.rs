@@ -499,11 +499,10 @@ mod tests {
         let data = format!(
             r#"
         {{
-            "nginx.vcpu.request_in_milli_cpu": {},
-            "nginx.hpa.cpu_utilization_percentage_threshold": {},
+            "nginx.vcpu.request_in_milli_cpu": {nginx_vcpu_request_in_milli_cpu},
+            "nginx.hpa.cpu_utilization_percentage_threshold": {nginx_hpa_cpu_utilization_percentage_threshold},
             "nginx.controller.enable_compression": false
-        }}"#,
-            nginx_vcpu_request_in_milli_cpu, nginx_hpa_cpu_utilization_percentage_threshold
+        }}"#
         );
         let cluster_advanced_settings: ClusterAdvancedSettings = serde_json::from_str(data.as_str()).unwrap();
         assert_eq!(

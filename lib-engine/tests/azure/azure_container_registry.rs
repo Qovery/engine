@@ -73,7 +73,7 @@ fn test_get_repository() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // execute:
@@ -158,7 +158,7 @@ fn test_create_repository() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // verify:
@@ -238,7 +238,7 @@ fn test_delete_repository() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // execute:
@@ -315,7 +315,7 @@ fn test_get_docker_image() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // pushing image into the repository
@@ -338,7 +338,7 @@ fn test_get_docker_image() {
         let destination_image_name = "hello-world";
         let destination_image_tag = "v1";
         let destination_container_image = ContainerImage::new(
-            Url::parse(format!("https://{}.azurecr.io", repository_name).as_str()).expect("Cannot parse registry Url"),
+            Url::parse(format!("https://{repository_name}.azurecr.io").as_str()).expect("Cannot parse registry Url"),
             destination_image_name.to_string(),
             vec![destination_image_tag.to_string()],
         );
@@ -455,7 +455,7 @@ fn test_delete_docker_image() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // pushing image into the repository
@@ -478,7 +478,7 @@ fn test_delete_docker_image() {
         let destination_image_name = "hello-world";
         let destination_image_tag = "v1";
         let destination_container_image = ContainerImage::new(
-            Url::parse(format!("https://{}.azurecr.io", repository_name).as_str()).expect("Cannot parse registry Url"),
+            Url::parse(format!("https://{repository_name}.azurecr.io").as_str()).expect("Cannot parse registry Url"),
             destination_image_name.to_string(),
             vec![destination_image_tag.to_string()],
         );
@@ -613,7 +613,7 @@ fn test_list_docker_images() {
                     AZURE_RESOURCE_GROUP_NAME,
                     repository_name.as_str(),
                 )
-                .unwrap_or_else(|_| panic!("Cannot delete test repository `{}` after test", repository_name));
+                .unwrap_or_else(|_| panic!("Cannot delete test repository `{repository_name}` after test"));
         });
 
         // pushing image into the repository
@@ -636,7 +636,7 @@ fn test_list_docker_images() {
         let destination_image_name = "hello-world";
         let destination_image_tag = "v1";
         let destination_container_image = ContainerImage::new(
-            Url::parse(format!("https://{}.azurecr.io", repository_name).as_str()).expect("Cannot parse registry Url"),
+            Url::parse(format!("https://{repository_name}.azurecr.io").as_str()).expect("Cannot parse registry Url"),
             destination_image_name.to_string(),
             vec![destination_image_tag.to_string()],
         );

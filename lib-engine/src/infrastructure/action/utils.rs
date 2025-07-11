@@ -21,11 +21,11 @@ where
 
 pub fn mk_logger(kube: &dyn Kubernetes, step: InfrastructureStep) -> impl InfraLogger {
     let event_details = kube.get_event_details(Infrastructure(step));
-    let logger = InfraLoggerImpl {
+
+    InfraLoggerImpl {
         event_details,
         logger: kube.logger().clone_dyn(),
-    };
-    logger
+    }
 }
 
 #[cfg(test)]

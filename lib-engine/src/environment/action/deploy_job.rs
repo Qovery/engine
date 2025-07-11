@@ -906,7 +906,7 @@ pub fn serialize_job_output(
     // Validate all variable names against the pattern
     let re = regex::Regex::new(output_variable_validation_pattern).map_err(|e| {
         JobOutputSerializationError::OutputVariableValidationError {
-            err: format!("Invalid regex pattern: {}: {}", output_variable_validation_pattern, e),
+            err: format!("Invalid regex pattern: {output_variable_validation_pattern}: {e}"),
         }
     })?;
 
@@ -914,8 +914,7 @@ pub fn serialize_job_output(
         if !re.is_match(key) {
             return Err(JobOutputSerializationError::OutputVariableValidationError {
                 err: format!(
-                    "Invalid job output variable name: '{}'. It must match pattern: {}",
-                    key, output_variable_validation_pattern
+                    "Invalid job output variable name: '{key}'. It must match pattern: {output_variable_validation_pattern}"
                 ),
             });
         }

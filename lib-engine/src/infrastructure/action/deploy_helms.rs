@@ -59,7 +59,7 @@ pub(super) trait HelmInfraResources {
 
         for (ix, charts_level) in charts_to_deploy.into_iter().enumerate() {
             logger.info("");
-            logger.info(format!("🏁 Starting level {}", ix));
+            logger.info(format!("🏁 Starting level {ix}"));
             // Show diff for all chart we want to deploy
             charts_level
                 .iter()
@@ -94,7 +94,7 @@ pub(super) trait HelmInfraResources {
 
             // We do the actual deployment in parallel
             let chart_names = charts_names_user_str(&charts_level);
-            logger.info(format!("🛳️ Deploying in parallel charts of level {}: {}", ix, chart_names));
+            logger.info(format!("🛳️ Deploying in parallel charts of level {ix}: {chart_names}"));
             deploy_parallel_charts(
                 infra_ctx.mk_kube_client()?.as_ref(),
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
@@ -102,7 +102,7 @@ pub(super) trait HelmInfraResources {
                 charts_level,
             )
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e)))?;
-            logger.info(format!("✅ Charts of level {} deployed", ix));
+            logger.info(format!("✅ Charts of level {ix} deployed"));
         }
 
         logger.info("⚓ Helm charts deployed successfully");
@@ -288,7 +288,7 @@ fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<Bu
         if !filepath.exists() {
             fs::create_dir_all(&filepath)?;
         }
-        filepath.join(format!("{}.diff", chart_name))
+        filepath.join(format!("{chart_name}.diff"))
     };
 
     let file = OpenOptions::new()

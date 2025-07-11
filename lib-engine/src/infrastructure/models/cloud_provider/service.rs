@@ -96,7 +96,7 @@ impl Display for DatabaseType {
             DatabaseType::MySQL => "MySQL".to_string(),
             DatabaseType::Redis => "Redis".to_string(),
         };
-        write!(f, "{}", str)
+        write!(f, "{str}")
     }
 }
 
@@ -121,7 +121,7 @@ impl Display for ServiceType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             ServiceType::Application => f.write_str("Application"),
-            ServiceType::Database(db_type) => write!(f, "{} database", db_type),
+            ServiceType::Database(db_type) => write!(f, "{db_type} database"),
             ServiceType::Router => f.write_str("Router"),
             ServiceType::Container => f.write_str("Container"),
             ServiceType::Job => f.write_str("Job"),

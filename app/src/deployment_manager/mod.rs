@@ -68,7 +68,7 @@ enum DeploymentManagerState {
     ExecutingDeploymentTask {
         deployment: DeploymentContext,
         task: TaskContext,
-        upstream_gtw: UpstreamGatewayContext,
+        upstream_gtw: Box<UpstreamGatewayContext>,
     },
 
     // We lost the connectivity to the GTW while we are executing a task
@@ -272,7 +272,7 @@ impl DeploymentManager {
                                     let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                                         deployment,
                                         task: TaskContext::spawn_new_task(task),
-                                        upstream_gtw: upstream,
+                                        upstream_gtw: Box::new(upstream),
                                     };
                                     (next_step, None)
                                 }
@@ -321,13 +321,13 @@ impl DeploymentManager {
                 let next_step = DeploymentManagerState::ExecutingDeploymentTask {
                     deployment,
                     task,
-                    upstream_gtw: UpstreamGatewayContext::new(
+                    upstream_gtw: Box::new(UpstreamGatewayContext::new(
                         msg_stream,
                         close_upstream_tx,
                         logger,
                         metrics_registry,
                         log_file_writer,
-                    ),
+                    )),
                 };
                 (next_step, None)
             }
@@ -359,7 +359,7 @@ impl DeploymentManager {
         &mut self,
         mut deployment: DeploymentContext,
         mut task: TaskContext,
-        mut upstream: UpstreamGatewayContext,
+        mut upstream: Box<UpstreamGatewayContext>,
     ) -> (DeploymentManagerState, Option<Duration>) {
         info!("Starting to execute deployment task");
 

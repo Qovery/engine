@@ -86,7 +86,7 @@ where
             "get",
             "po",
             "-l",
-            &format!("qovery.com/service-id={}", service_id),
+            &format!("qovery.com/service-id={service_id}"),
             "-n",
             namespace,
             "-o=custom-columns=:.status.containerStatuses..restartCount",
@@ -154,7 +154,7 @@ pub fn kubectl_update_crd(kube_client: &Client, chart_name: &str, crd_folder: &s
     // Read all CRD files in the folder
     let mut dir = read_dir(crd_folder).map_err(|e| {
         CommandError::new(
-            format!("Error while trying to read CRD folder `{}`", crd_folder),
+            format!("Error while trying to read CRD folder `{crd_folder}`"),
             Some(e.to_string()),
             None,
         )

@@ -30,13 +30,11 @@ fn delete_namespace(
     match block_on(async {
         tokio::time::timeout(DELETE_TIMEOUT, ns_api.delete(ns_to_delete, &DeleteParams::foreground())).await
     }) {
-        Ok(Ok(_)) => logger.info(format!("Deleted successfully namespace `{}`", ns_to_delete)),
-        Ok(Err(err)) => logger.warn(format!("Can't delete the namespace `{}`: {:?}", ns_to_delete, err)),
+        Ok(Ok(_)) => logger.info(format!("Deleted successfully namespace `{ns_to_delete}`")),
+        Ok(Err(err)) => logger.warn(format!("Can't delete the namespace `{ns_to_delete}`: {err:?}")),
         Err(_timeout) => {
-            let msg = format!(
-                "Can't delete the namespace `{}`: due to {:?}s timeout elapsed",
-                ns_to_delete, DELETE_TIMEOUT
-            );
+            let msg =
+                format!("Can't delete the namespace `{ns_to_delete}`: due to {DELETE_TIMEOUT:?}s timeout elapsed");
             logger.warn(&msg);
             return Err(Box::new(EngineError::new_k8s_delete_service_error(
                 event_details.clone(),
@@ -74,10 +72,10 @@ pub(super) fn delete_all_pdbs(
         if let Some(name) = pdb.metadata.name {
             let namespace = pdb.metadata.namespace.clone().unwrap_or_else(|| "default".to_string());
             let pdb_ns_api: Api<PodDisruptionBudget> = Api::namespaced(pdbs.clone().into_client(), &namespace);
-            logger.info(format!("Deleting PDB: {}/{}", namespace, name));
+            logger.info(format!("Deleting PDB: {namespace}/{name}"));
             // if an error occurs while deleting PDB, just continue, it means PDB is managed by cloud provider
             if let Err(e) = block_on(pdb_ns_api.delete(&name, &DeleteParams::default())) {
-                let safe_error_message = format!("Error deleting PDB {}/{}", namespace, name,);
+                let safe_error_message = format!("Error deleting PDB {namespace}/{name}",);
                 logger.warn(safe_error_message.to_string());
                 errors.push(EngineError::new_k8s_cannot_delete_pdb(
                     namespace.as_str(),

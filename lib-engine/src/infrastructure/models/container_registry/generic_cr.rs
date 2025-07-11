@@ -94,7 +94,7 @@ impl GenericCr {
             }),
             get_image_name: Box::new({
                 let repository = repository_name.clone();
-                move |name| format!("{}/{}", repository, name)
+                move |name| format!("{repository}/{name}")
             }),
             get_shared_repository_name: Box::new({
                 let repository = repository_name.clone();
@@ -113,7 +113,7 @@ impl GenericCr {
             }),
             get_repository_name: Box::new({
                 let repository = repository_name.clone();
-                move |name| format!("{}/{}", repository, name)
+                move |name| format!("{repository}/{name}")
             }),
         };
 
@@ -143,7 +143,7 @@ impl GenericCr {
         let port = if port == 443 {
             "".to_string()
         } else {
-            format!(":{}", port)
+            format!(":{port}")
         };
         general_purpose::STANDARD.encode(
             format!(
