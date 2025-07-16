@@ -3,7 +3,7 @@
 use crate::cmd::kubectl::kubectl_get_job_pod_output;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
-use crate::environment::action::deploy_job::JobOutputSerializationError;
+use crate::environment::action::deploy_job::job_output::JobOutputSerializationError;
 use crate::environment::models::terraform_service::TerraformService;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
@@ -278,9 +278,9 @@ fn retrieve_terraform_output(
     match result_json_output {
         Ok(json) => {
             let result_serde_json: Result<
-                HashMap<String, crate::environment::action::deploy_job::JobOutputVariable>,
+                HashMap<String, crate::environment::action::deploy_job::job_output::JobOutputVariable>,
                 JobOutputSerializationError,
-            > = crate::environment::action::deploy_job::serialize_job_output(
+            > = crate::environment::action::deploy_job::job_output::serialize_job_output(
                 json.as_bytes(),
                 "^[a-zA-Z_][a-zA-Z0-9_]*$",
             ); // this pattern should come from core
@@ -288,7 +288,7 @@ fn retrieve_terraform_output(
                 Ok(deserialized_json_hashmap) => {
                     let deserialized_json_hashmap_with_uppercase_keys: HashMap<
                         String,
-                        crate::environment::action::deploy_job::JobOutputVariable,
+                        crate::environment::action::deploy_job::job_output::JobOutputVariable,
                     > = deserialized_json_hashmap
                         .iter()
                         .map(|(key, value)| (key.to_uppercase(), value.clone()))
