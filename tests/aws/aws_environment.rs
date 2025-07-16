@@ -9,8 +9,8 @@ use crate::helpers::utilities::{
 use ::function_name::named;
 use bstr::ByteSlice;
 use k8s_openapi::api::batch::v1::CronJob;
-use kube::Api;
-use kube::api::ListParams;
+use kube::api::{DeleteParams, ListParams};
+use kube::{Api, ResourceExt};
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::{Port, Protocol, Storage};
@@ -18,6 +18,7 @@ use qovery_engine::io_models::application::{Port, Protocol, Storage};
 use crate::helpers::kubernetes::TargetCluster;
 use base64::Engine;
 use base64::engine::general_purpose;
+use k8s_openapi::api;
 use k8s_openapi::api::core::v1::ConfigMap;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
@@ -41,9 +42,10 @@ use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
 use reqwest::StatusCode;
 use retry::delay::Fibonacci;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::thread::sleep;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::thread;
 use std::time::{Duration, Instant};
 use tracing::{Level, span};
 use url::Url;
@@ -2459,76 +2461,252 @@ fn deploy_job_on_aws_eks() {
 
         let mut environment = helpers::environment::working_minimal_environment(&context);
 
-        let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}, "foo_3": {"value": "bar_3", "description": "bar_3"}}"#;
-        let job_id = QoveryIdentifier::new_random();
-        //environment.long_id = Uuid::default();
-        //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
-        environment.jobs = vec![Job {
-            long_id: job_id.to_uuid(), //Uuid::default(),
-            name: format!("job-test-{}", job_id.short()),
-            kube_name: format!("job-test-{}", job_id.short()),
-            action: Action::Create,
-            schedule: JobSchedule::OnStart {
-                lifecycle_type: LifecycleType::TERRAFORM,
-            },
-            source: JobSource::Image {
-                registry: Registry::PublicEcr {
-                    long_id: Uuid::new_v4(),
-                    url: Url::parse("https://public.ecr.aws").unwrap(),
-                },
-                image: "r3m4q3r9/pub-mirror-debian".to_string(),
-                tag: "11.6-ci".to_string(),
-            },
-            max_nb_restart: 2,
-            max_duration_in_sec: 300,
-            default_port: Some(8080),
-            //command_args: vec![],
-            command_args: vec![
-                "/bin/sh".to_string(),
-                "-c".to_string(),
-                format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
-            ],
-            entrypoint: None,
-            force_trigger: false,
-            cpu_request_in_milli: 100,
-            cpu_limit_in_milli: 100,
-            ram_request_in_mib: 100,
-            ram_limit_in_mib: 100,
-            environment_vars_with_infos: Default::default(),
-            mounted_files: vec![],
-            advanced_settings: Default::default(),
-            readiness_probe: Some(Probe {
-                r#type: ProbeType::Tcp { host: None },
-                port: 8080,
-                initial_delay_seconds: 1,
-                timeout_seconds: 2,
-                period_seconds: 3,
-                success_threshold: 1,
-                failure_threshold: 5,
-            }),
-            liveness_probe: Some(Probe {
-                r#type: ProbeType::Tcp { host: None },
-                port: 8080,
-                initial_delay_seconds: 1,
-                timeout_seconds: 2,
-                period_seconds: 3,
-                success_threshold: 1,
-                failure_threshold: 5,
-            }),
-            container_registries: ContainerRegistries { registries: vec![] },
-            annotations_group_ids: btreeset! {},
-            labels_group_ids: btreeset! {},
-            should_delete_shared_registry: false,
-            shared_image_feature_enabled: false,
-            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
-        }];
+        environment.jobs = vec![a_working_job()];
 
         let mut environment_for_delete = environment.clone();
         environment_for_delete.action = Action::Delete;
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+fn a_working_job() -> Job {
+    let job_id = QoveryIdentifier::new_random();
+    let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}, "foo_3": {"value": "bar_3", "description": "bar_3"}}"#;
+    Job {
+        long_id: job_id.to_uuid(), //Uuid::default(),
+        name: format!("job-test-{}", job_id.short()),
+        kube_name: format!("job-test-{}", job_id.short()),
+        action: Action::Create,
+        schedule: JobSchedule::OnStart {
+            lifecycle_type: LifecycleType::TERRAFORM,
+        },
+        source: JobSource::Image {
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+        },
+        max_nb_restart: 2,
+        max_duration_in_sec: 300,
+        default_port: Some(8080),
+        //command_args: vec![],
+        command_args: vec![
+            "/bin/sh".to_string(),
+            "-c".to_string(),
+            format!("echo starting; sleep 10; echo '{json_output}' > /qovery-output/qovery-output.json"),
+        ],
+        entrypoint: None,
+        force_trigger: false,
+        cpu_request_in_milli: 100,
+        cpu_limit_in_milli: 100,
+        ram_request_in_mib: 100,
+        ram_limit_in_mib: 100,
+        environment_vars_with_infos: Default::default(),
+        mounted_files: vec![],
+        advanced_settings: Default::default(),
+        readiness_probe: Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: 8080,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        liveness_probe: Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: 8080,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        container_registries: ContainerRegistries { registries: vec![] },
+        annotations_group_ids: btreeset! {},
+        labels_group_ids: btreeset! {},
+        should_delete_shared_registry: false,
+        shared_image_feature_enabled: false,
+        output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+    }
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn deploy_fail_job_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![a_working_job()];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let should_exit = AtomicBool::new(false);
+        let ret = thread::scope(|s| {
+            let infra_ctx = &infra_ctx;
+            let environment = &environment;
+
+            // start deployment
+            let th = s.spawn(move || environment.deploy_environment(environment, infra_ctx));
+
+            {
+                let should_exit = &should_exit;
+                s.spawn(move || {
+                    let kube_client = infra_ctx.mk_kube_client().unwrap().client();
+                    let pods_api: Api<api::core::v1::Pod> = Api::namespaced(kube_client, &environment.kube_name);
+                    while !should_exit.load(Ordering::Relaxed) {
+                        let pods = block_on(pods_api.list(&ListParams::default())).unwrap();
+                        pods.items.into_iter().for_each(|pod| {
+                            let _ = block_on(pods_api.delete(&pod.name_any(), &DeleteParams::foreground()));
+                        });
+                        thread::sleep(Duration::from_secs(1));
+                    }
+                });
+            }
+
+            let ret = th.join();
+            should_exit.store(true, Ordering::Relaxed);
+            ret
+        });
+
+        // The deployment must fail due to being killed too many times
+        assert!(matches!(ret, Ok(Err(_))));
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn deploy_job_with_retry_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        environment.applications = vec![];
+        environment.jobs = vec![a_working_job()];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let should_exit = AtomicBool::new(false);
+        let max_nb_kill = AtomicU32::new(environment.jobs[0].max_nb_restart);
+        let ret = thread::scope(|s| {
+            let infra_ctx = &infra_ctx;
+            let environment = &environment;
+
+            // start deployment
+            let th = s.spawn(move || environment.deploy_environment(environment, infra_ctx));
+
+            // start thread that is going to kill pod's job at max the backoff limit
+            {
+                let should_exit = &should_exit;
+                let max_nb_kill = &max_nb_kill;
+                s.spawn(move || {
+                    let kube_client = infra_ctx.mk_kube_client().unwrap().client();
+                    let pods_api: Api<api::core::v1::Pod> = Api::namespaced(kube_client, &environment.kube_name);
+                    let mut killed_pods = HashSet::new();
+                    while !should_exit.load(Ordering::Relaxed) && max_nb_kill.load(Ordering::Relaxed) > 0 {
+                        thread::sleep(Duration::from_secs(1));
+                        let pods = block_on(pods_api.list(&ListParams::default())).unwrap();
+
+                        let pods_names: HashSet<_> = pods.items.iter().map(|pod| pod.name_any()).collect();
+                        if pods_names.difference(&killed_pods).count() == 0 {
+                            continue;
+                        }
+
+                        pods.items.into_iter().for_each(|pod| {
+                            let pod_name = pod.name_any();
+                            let _ = block_on(pods_api.delete(&pod_name, &DeleteParams::foreground()));
+                            killed_pods.insert(pod_name);
+                        });
+                        max_nb_kill.fetch_sub(1, Ordering::Relaxed);
+                    }
+                });
+            }
+
+            let ret = th.join();
+            should_exit.store(true, Ordering::Relaxed);
+            ret
+        });
+
+        // The deployment must work even if the job got killed sometimes
+        assert!(matches!(ret, Ok(Ok(_))));
+        assert_eq!(max_nb_kill.load(Ordering::Relaxed), 0);
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());
@@ -2575,8 +2753,6 @@ fn deploy_job_on_aws_eks_with_dockerfile_content() {
 
         let json_output = r#"{"foo": {"value": 123, "sensitive": true}, "foo_2": {"value": "bar_2"}}"#;
         let job_id = QoveryIdentifier::new_random();
-        //environment.long_id = Uuid::default();
-        //environment.project_long_id = Uuid::default();
         environment.applications = vec![];
         environment.jobs = vec![Job {
             long_id: job_id.to_uuid(), //Uuid::default(),
@@ -3190,7 +3366,7 @@ fn test_restart_deployment() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
-        sleep(Duration::from_secs(20));
+        thread::sleep(Duration::from_secs(20));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
         assert!(result.is_ok());
@@ -3335,7 +3511,7 @@ fn test_restart_statefulset() {
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
 
-        sleep(Duration::from_secs(10));
+        thread::sleep(Duration::from_secs(10));
 
         let result = environment.restart_environment(&environment, &infra_ctx);
         assert!(result.is_ok());
@@ -4101,7 +4277,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
         assert!(ret.is_ok());
 
         // check we can connect on ports
-        sleep(Duration::from_secs(30));
+        thread::sleep(Duration::from_secs(30));
         let now = Instant::now();
         let timeout = Duration::from_secs(60 * 10);
         let tcp_domain = format!("p{}-{}.{}", tcp_port, service_id, infra_ctx.dns_provider().domain());
@@ -4111,7 +4287,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                 panic!("Cannot connect to endpoint before timeout of {timeout:?}");
             }
 
-            sleep(Duration::from_secs(10));
+            thread::sleep(Duration::from_secs(10));
 
             // check we can connect on port
             if check_tcp_port_is_open(&TcpCheckSource::DnsName(&tcp_domain), tcp_port).is_err() {
