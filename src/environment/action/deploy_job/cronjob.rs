@@ -18,6 +18,7 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
 use kube::api::PostParams;
 use std::path::PathBuf;
+use std::time::Duration;
 
 pub(super) fn run_cronjob<'a, T: CloudProvider>(
     job: &'a Job<T>,
@@ -93,9 +94,10 @@ where
             EngineError::new_job_error(event_details.clone(), format!("Cannot create job from cronjob: {err}"))
         })?;
 
+        let max_execution_duration = Duration::from_secs(60) + job.max_duration * (job.max_nb_restart + 1);
         let job = block_on(super::job::await_job_to_complete(
-            job,
             &job_name,
+            max_execution_duration,
             target.environment.namespace(),
             target.kube.client(),
             target.abort,

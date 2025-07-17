@@ -29,7 +29,7 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 
 #[derive(thiserror::Error, Debug)]
-pub(super) enum JobRunError {
+pub enum JobRunError {
     #[error("Job aborted due to user cancel request")]
     Aborted,
 
@@ -92,8 +92,10 @@ where
     helm.on_create(target)?;
 
     let job_name = job.kube_name();
+    let max_execution_duration = Duration::from_secs(60) + job.max_duration * (job.max_nb_restart + 1);
     let pod = block_on(await_user_job_to_terminate(
-        job,
+        job.kube_name(),
+        max_execution_duration,
         target.environment.namespace(),
         target.kube.client(),
         target.abort,
@@ -136,8 +138,8 @@ where
     }
 
     let job = block_on(await_job_to_complete(
-        job,
         job.kube_name(),
+        max_execution_duration,
         target.environment.namespace(),
         target.kube.client(),
         target.abort,
@@ -155,7 +157,7 @@ where
     Ok(state)
 }
 
-async fn retrieve_output_and_terminate_pod(
+pub async fn retrieve_output_and_terminate_pod(
     kube_client: kube::Client,
     namespace: &str,
     pod_name: &str,
@@ -196,9 +198,10 @@ async fn retrieve_output_and_terminate_pod(
 
     let json = serialize_job_output(&json_str, output_variable_validation_pattern)
         .map_err(|err| match err {
-            JobOutputSerializationError::SerializationError { .. } => {
+            JobOutputSerializationError::SerializationError { serde_err } => {
                 anyhow::anyhow!(format!(
-                    "qovery output json cannot be deserialized: {}",
+                    "qovery output json cannot be deserialized: {} {}",
+                    serde_err,
                     String::from_utf8_lossy(&json_str)
                 ))
             }
@@ -213,7 +216,7 @@ async fn retrieve_output_and_terminate_pod(
     Ok(Some(json))
 }
 
-async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) -> anyhow::Result<()> {
+pub async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) -> anyhow::Result<()> {
     info!("Killing job {} from namespace {}", job_name, namespace);
     let pod_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
     let _ = pod_api.delete(job_name, &DeleteParams::foreground()).await?;
@@ -221,18 +224,14 @@ async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) ->
     Ok(())
 }
 
-pub(super) async fn await_job_to_complete<T: CloudProvider>(
-    qjob: &Job<T>,
+pub async fn await_job_to_complete(
     job_name: &str,
+    max_execution_duration: Duration,
     namespace: &str,
     kube_client: kube::Client,
     abort_handle: impl Abort,
-) -> Result<K8sJob, JobRunError>
-where
-    Job<T>: JobService,
-{
+) -> Result<K8sJob, JobRunError> {
     let job_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
-    let max_execution_duration = Duration::from_secs(60) + qjob.max_duration * (qjob.max_nb_restart + 1);
     let execution_deadline = tokio::time::sleep_until(tokio::time::Instant::now() + max_execution_duration);
     pin_mut!(execution_deadline);
 
@@ -264,19 +263,16 @@ where
     .ok_or_else(|| JobRunError::Unknown(anyhow!("Job not found")))
 }
 
-async fn await_user_job_to_terminate<T: CloudProvider>(
-    qjob: &Job<T>,
+pub async fn await_user_job_to_terminate(
+    job_name: &str,
+    max_execution_duration: Duration,
     namespace: &str,
     kube_client: kube::Client,
     abort_handle: impl Abort,
-) -> Result<Pod, JobRunError>
-where
-    Job<T>: JobService,
-{
+) -> Result<Pod, JobRunError> {
     let job_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
     let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
-    let pod_selector = format!("job-name={}", qjob.kube_name());
-    let max_execution_duration = Duration::from_secs(60) + qjob.max_duration * (qjob.max_nb_restart + 1);
+    let pod_selector = format!("job-name={job_name}");
     let execution_deadline = tokio::time::sleep_until(tokio::time::Instant::now() + max_execution_duration);
     pin_mut!(execution_deadline);
 
@@ -325,7 +321,7 @@ where
         let job = await_kube_condition(
             &mut execution_deadline,
             should_force_cancel,
-            await_condition(job_api.clone(), qjob.kube_name(), should_process_job),
+            await_condition(job_api.clone(), job_name, should_process_job),
             max_execution_duration,
         )
         .await?
@@ -334,7 +330,7 @@ where
         if let Some(ConditionStatus { reason, message }) = job_is_failed(&job) {
             return Err(JobRunError::Unknown(anyhow::anyhow!(
                 "Job {} failed to run due to {} {}",
-                qjob.kube_name(),
+                job_name,
                 reason,
                 message
             )));
@@ -394,11 +390,11 @@ fn job_is_active(job: &K8sJob) -> bool {
     job.status.as_ref().and_then(|status| status.active).unwrap_or(0) as u32 > 0
 }
 
-pub(super) struct ConditionStatus {
+pub struct ConditionStatus {
     pub reason: String,
     pub message: String,
 }
-pub(super) fn job_is_failed(job: &K8sJob) -> Option<ConditionStatus> {
+pub fn job_is_failed(job: &K8sJob) -> Option<ConditionStatus> {
     // https://kubernetes.io/docs/concepts/workloads/controllers/job/#termination-of-job-pods
     job.status
         .as_ref()

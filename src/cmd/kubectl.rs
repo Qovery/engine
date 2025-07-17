@@ -955,29 +955,6 @@ where
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }
 
-pub fn kubectl_get_job_pod_output<P>(
-    kubernetes_config: P,
-    envs: Vec<(&str, &str)>,
-    namespace: &str,
-    pod_name: &str,
-) -> Result<String, CommandError>
-where
-    P: AsRef<Path>,
-{
-    let cmd_args = vec![
-        "exec",
-        "-n",
-        namespace,
-        pod_name,
-        "-c",
-        "qovery-wait-container-output",
-        "--",
-        "cat",
-        "/qovery-output/qovery-output.json",
-    ];
-    kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
-}
-
 pub fn kubectl_get_secret(kube_client: Client, fields_selector: &str) -> Result<Vec<Secret>, CommandError> {
     let secrets: Api<Secret> = Api::all(kube_client);
 
