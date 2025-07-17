@@ -84,20 +84,20 @@ spec:
             claimName: {{ service.name }}-pvc
    #       secret:
    #         secretName: {#{ mounted_file.id }#}-{#{ service.short_id }#}
+      initContainers:
+          - name: qovery-wait-container-output
+            # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
+            restartPolicy: Always # this tells that the initContainer is a sidecar
+            image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-07-15T14-06-16
+            command: ["/qovery-job-output-waiter", "--watch"]
+            volumeMounts:
+              - name: output
+                mountPath: /qovery-output
+            resources:
+              limits:
+                cpu: "100m"
+                memory: "128Mi"
       containers:
-        - name: qovery-wait-container-output
-          image: "debian:stable-slim"
-          command: ['sh', '-c', 'while true; do sleep 1; if [ -f /qovery-output/terminate ]; then break; fi; done; sleep 1']
-          volumeMounts:
-            - name: output
-              mountPath: /qovery-output
-          resources:
-            limits:
-              cpu: "100m"
-              memory: "128Mi"
-            requests:
-              cpu: "100m"
-              memory: "128Mi"
         - name: {{ service.name }}
           image: "{{ service.image_full }}"
           args:
