@@ -518,6 +518,10 @@ impl Docker {
                 });
             }
         };
+        if username.is_empty() {
+            return Ok(());
+        }
+
         info!("Docker login {} as user {}", registry, username);
 
         let password = registry
