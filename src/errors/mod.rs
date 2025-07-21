@@ -576,8 +576,7 @@ impl From<BuildError> for CommandError {
                 raw_error,
             } => CommandError::new(
                 format!(
-                    "Git error, the cmd '{}' done for {context} has failed for `{application}` due to error",
-                    git_cmd,
+                    "Git error, the cmd '{git_cmd}' done for {context} has failed for `{application}` due to error",
                 ),
                 Some(raw_error.to_string()),
                 None,
@@ -2879,7 +2878,7 @@ impl EngineError {
         // All Terraform issues are handled here.
         // TODO(benjaminch): Add some point, safe message should be moved inside Terraform impl directly
         match terraform_error {
-            TerraformError::Unknown { ref raw_message, ..} => EngineError::new(
+            TerraformError::Unknown { ref raw_message, .. } => EngineError::new(
                 event_details,
                 Tag::TerraformUnknownError,
                 terraform_error.to_string(), // Note: end-game goal is to have 0 Unknown Terraform issues. Showing everything in this case is just more convenient for both user and Qovery team.
@@ -2910,7 +2909,7 @@ impl EngineError {
             ),
             TerraformError::AccountBlockedByProvider { .. } => {
                 let hint_message = match event_details.provider_kind() {
-                   Some(Kind::Aws) => Some("This AWS account is currently blocked and not recognized as a valid account. Please contact aws-verification@amazon.com directly to get more details. Maybe you are not allowed to use your free tier in this region? Maybe you need to provide billing info? ".to_string()),
+                    Some(Kind::Aws) => Some("This AWS account is currently blocked and not recognized as a valid account. Please contact aws-verification@amazon.com directly to get more details. Maybe you are not allowed to use your free tier in this region? Maybe you need to provide billing info? ".to_string()),
                     _ => Some("This account is currently blocked by your cloud provider, please contact them directly.".to_string()),
                 };
 
@@ -2922,7 +2921,7 @@ impl EngineError {
                     Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/#my-cloud-account-has-been-blocked-what-should-i-do").expect("Error while trying to parse error link helper for `Tag::TerraformAccountBlockedByProvider`, URL is not valid.")),
                     hint_message,
                 )
-            },
+            }
             TerraformError::ConfigFileNotFound { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformConfigFileNotFound,
@@ -2980,7 +2979,7 @@ impl EngineError {
                                 Some(format!("Request AWS to increase your `{}` limit (current count = {}, max count = {}) via this page https://aws.amazon.com/contact-us/ec2-request.", resource_type, match current_resource_count {
                                     None => "NA".to_string(),
                                     Some(count) => count.to_string(),
-                                },match max_resource_count {
+                                }, match max_resource_count {
                                     None => "NA".to_string(),
                                     Some(count) => count.to_string(),
                                 })),
@@ -2997,12 +2996,12 @@ impl EngineError {
                             Some(format!("Request your cloud provider to increase your `{}` limit (current count = {}, max count = {})", resource_type, match current_resource_count {
                                 None => "NA".to_string(),
                                 Some(count) => count.to_string(),
-                            },match max_resource_count {
+                            }, match max_resource_count {
                                 None => "NA".to_string(),
                                 Some(count) => count.to_string(),
                             })),
                         )
-                    },
+                    }
 
                     // SCW specifics
                     QuotaExceededError::ScwNewAccountNeedsValidation => EngineError::new(
@@ -3095,7 +3094,7 @@ impl EngineError {
                 None,
                 Some("Your deployment failed because Terraform faced a state lock. Please contact Qovery team to get unlocked.".to_string()),
             ),
-            TerraformError::S3BucketAlreadyOwnedByYou {.. } => EngineError::new(
+            TerraformError::S3BucketAlreadyOwnedByYou { .. } => EngineError::new(
                 event_details,
                 Tag::TerraformS3BucketCreationErrorAlreadyOwnedByYou,
                 terraform_error.to_safe_message(),
@@ -3129,7 +3128,7 @@ impl EngineError {
                         None,
                         Some("You should refer to your cloud provider documentation in order to proceed with database upgrade.".to_string()),
                     )
-                },
+                }
                 terraform::DatabaseError::VersionNotSupportedOnTheInstanceType { .. } => {
                     EngineError::new(
                         event_details,
@@ -3226,7 +3225,7 @@ impl EngineError {
     /// * `error`: Raw error message.
     pub fn new_container_registry_error(event_details: EventDetails, error: ContainerRegistryError) -> EngineError {
         match error {
-            ContainerRegistryError::CannotInstantiateClient {.. } => EngineError::new(
+            ContainerRegistryError::CannotInstantiateClient { .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotInstantiateClient,
                 "Container registry: cannot instantiate client.".to_string(),
@@ -3234,7 +3233,7 @@ impl EngineError {
                 None,
                 None,
             ),
-            ContainerRegistryError::CannotConvertClient {..} => EngineError::new(
+            ContainerRegistryError::CannotConvertClient { .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotConvertClient,
                 "Container registry: cannot convert client.".to_string(),
@@ -3250,7 +3249,7 @@ impl EngineError {
                 Some(Url::parse("https://hub.qovery.com/docs/getting-started/install-qovery/").expect("Error while trying to parse error link helper for `ContainerRegistryError::InvalidCredentials`, URL is not valid.")),
                 Some("Make sure you provide proper credentials for your cloud account.".to_string()),
             ),
-            ContainerRegistryError::InvalidRegistryUrl { ref registry_url} => EngineError::new(
+            ContainerRegistryError::InvalidRegistryUrl { ref registry_url } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryInvalidRegistryUrl,
                 format!("Container registry: invalid registry URL: `{registry_url}`"),
@@ -3258,7 +3257,7 @@ impl EngineError {
                 None,
                 None,
             ),
-            ContainerRegistryError::InvalidRegistryName { ref registry_name, ..} => EngineError::new(
+            ContainerRegistryError::InvalidRegistryName { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryInvalidRegistryName,
                 format!("Container registry: invalid registry name: `{registry_name}`"),
@@ -3277,7 +3276,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRegistry,
-                format!("Container registry: cannot create registry: `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot create registry: `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3285,7 +3284,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRegistry { ref registry_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRegistry,
-                format!("Container registry: cannot delete registry: `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot delete registry: `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3293,7 +3292,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteImage { ref image_name, ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteImage,
-                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot delete image `{image_name}` from repository `{repository_name}` in registry `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3325,7 +3324,7 @@ impl EngineError {
             ContainerRegistryError::CannotLinkRegistryToCluster { ref registry_name, ref cluster_id, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotLinkRegistryToCluster,
-                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`. Due to {}", error),
+                format!("Container registry: registry `{registry_name}` cannot be linked to cluster `{cluster_id}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3333,7 +3332,7 @@ impl EngineError {
             ContainerRegistryError::CannotCreateRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotCreateRepository,
-                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot create repository `{repository_name}` in registry `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3341,7 +3340,7 @@ impl EngineError {
             ContainerRegistryError::CannotGetRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotGetRepository,
-                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot get repository `{repository_name}` from registry `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3349,7 +3348,7 @@ impl EngineError {
             ContainerRegistryError::CannotDeleteRepository { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotDeleteRepository,
-                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot delete repository `{repository_name}` from registry `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
@@ -3357,27 +3356,27 @@ impl EngineError {
             ContainerRegistryError::CannotSetRepositoryLifecyclePolicy { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryCannotSetRepositoryLifecycle,
-                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
+                format!("Container registry: cannot set lifetime on repository `{repository_name}` in registry `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
             ),
             ContainerRegistryError::CannotSetRepositoryTags { ref registry_name, ref repository_name, .. } => EngineError::new(event_details,
-            Tag::ContainerRegistryCannotSetRepositoryTags,
-            format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`. Due to {}", error),
-            Some(error.into()),
+                                                                                                                               Tag::ContainerRegistryCannotSetRepositoryTags,
+                                                                                                                               format!("Container registry: cannot set tags on repository `{repository_name}` in registry `{registry_name}`. Due to {error}"),
+                                                                                                                               Some(error.into()),
                                                                                                                                None,
                                                                                                                                None,
             ),
-            ContainerRegistryError::RepositoryNameNotValid {ref registry_name, ref repository_name, ..} => EngineError::new(
+            ContainerRegistryError::RepositoryNameNotValid { ref registry_name, ref repository_name, .. } => EngineError::new(
                 event_details,
                 Tag::ContainerRegistryRepositoryNameInvalid,
-                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`. Due to {}", error),
+                format!("Container registry error, repository name `{repository_name}` is not valid in registry: `{registry_name}`. Due to {error}"),
                 Some(error.into()),
                 None,
                 None,
             ),
-            ContainerRegistryError::Unknown {..} => EngineError::new(event_details, Tag::ContainerRegistryUnknownError, "Container registry unknown error.".to_string(), Some(error.into()),None, None)
+            ContainerRegistryError::Unknown { .. } => EngineError::new(event_details, Tag::ContainerRegistryUnknownError, "Container registry unknown error.".to_string(), Some(error.into()), None, None)
         }
     }
 
@@ -4731,7 +4730,7 @@ impl EngineError {
         EngineError::new(
             event_details,
             Tag::CannotFetchScalewayPrivateNetworks,
-            format!("Impossible to fetch your cluster private networks: {}", raw_error),
+            format!("Impossible to fetch your cluster private networks: {raw_error}"),
             None,
             None,
             Some("Please check your credentials".to_string()),
@@ -4996,6 +4995,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new error for Job output variable validation error.
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw serde message.
+    /// * `output_json`: The job output json that failed to be serialized
+    pub fn new_invalid_job_output_variable_validation_failed(
+        event_details: EventDetails,
+        validation_error: String,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::InvalidEngineApiInputCannotBeDeserialized,
+            format!("Job output variable validation failed: {validation_error}").to_string(),
+            Some(CommandError::new(format!("Job output variable validation failed: {validation_error}").to_string(), Some(format!("Job output variable validation failed: {validation_error}")), None)),
+            None,
+            Some("Check that your job output json follows these rules: https://hub.qovery.com/docs/using-qovery/configuration/lifecycle-job/#job-output".to_string()),
+        )
+    }
+
     /// Creates new error for database
     ///
     /// Arguments:
@@ -5048,7 +5067,7 @@ impl EngineError {
                 None,
                 None,
             ),
-            RouterError::BasicAuthEnvVarBase64DecodeError{env_var_name, ..} => EngineError::new(
+            RouterError::BasicAuthEnvVarBase64DecodeError { env_var_name, .. } => EngineError::new(
                 event_details,
                 Tag::RouterBasicAuthEnvVarCannotDecodeBase64Error,
                 format!("Error, router cannot decode base 64 value from basic auth environment variable `{env_var_name}`"),
@@ -5056,7 +5075,7 @@ impl EngineError {
                 None,
                 None,
             ),
-            RouterError::BasicAuthEnvVarNotFound{env_var_name} => EngineError::new(
+            RouterError::BasicAuthEnvVarNotFound { env_var_name } => EngineError::new(
                 event_details,
                 Tag::RouterBasicAuthEnvVarNotFound,
                 format!("Error, router cannot find basic auth environment variable `{env_var_name}`"),
@@ -5117,7 +5136,7 @@ impl EngineError {
         event_details: EventDetails,
         raw_k8s_error: CommandError,
     ) -> EngineError {
-        let message = format!("Unable to delete Pod Disruption Budget `{}/{}`.", pdb_namespace, pdb_name);
+        let message = format!("Unable to delete Pod Disruption Budget `{pdb_namespace}/{pdb_name}`.");
 
         EngineError::new(
             event_details,
@@ -5270,7 +5289,7 @@ impl EngineError {
         k8s_target_version: &VersionsNumber,
         deprecation_error: KubernetesDeprecationServiceError,
     ) -> EngineError {
-        let mut message_safe = format!("Some API deprecations found for kubernetes version: `{}` ", k8s_target_version);
+        let mut message_safe = format!("Some API deprecations found for kubernetes version: `{k8s_target_version}` ");
         let mut hint_message = None;
 
         match &deprecation_error {
@@ -5280,8 +5299,7 @@ impl EngineError {
             KubernetesDeprecationServiceError::ApiVersionNumberParsingError { invalid_version } => {
                 message_safe.push_str(
                     format!(
-                        "an error occurred while getting kubernetes api version, invalid version: `{}`",
-                        invalid_version
+                        "an error occurred while getting kubernetes api version, invalid version: `{invalid_version}`",
                     )
                     .as_str(),
                 );
@@ -5291,10 +5309,9 @@ impl EngineError {
             } => {
                 message_safe.push_str(
                     format!(
-                        "an error occurred while getting qovery identifier, invalid qovery id: `{}`",
-                        qovery_identifier_error
+                        "an error occurred while getting qovery identifier, invalid qovery id: `{qovery_identifier_error}`",
                     )
-                    .as_str(),
+                        .as_str(),
                 );
             }
             KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound { .. } => {

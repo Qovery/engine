@@ -44,7 +44,7 @@ fn test_delete_bucket_hard_delete_strategy() {
             false,
         );
         assert!(create_result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
 
         // compute:
         let del_result = scaleway_os.delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete);
@@ -52,7 +52,7 @@ fn test_delete_bucket_hard_delete_strategy() {
         // validate:
         assert!(del_result.is_ok());
         assert!(!scaleway_os.bucket_exists(bucket_name.as_str()));
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
 
         test_name.to_string()
     })
@@ -88,7 +88,7 @@ fn test_delete_bucket_empty_strategy() {
             false,
         );
         assert!(create_result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
 
         // compute:
         let del_result = scaleway_os.delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::Empty);
@@ -96,7 +96,7 @@ fn test_delete_bucket_empty_strategy() {
         // validate:
         assert!(del_result.is_ok());
         assert!(scaleway_os.bucket_exists(bucket_name.as_str()));
-        info!("Bucket {} not deleted as expected.", bucket_name);
+        info!("Bucket {bucket_name} not deleted as expected.");
 
         test_name.to_string()
     })
@@ -135,9 +135,9 @@ fn test_create_bucket() {
 
         // validate:
         assert!(result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
         assert!(scaleway_os.bucket_exists(bucket_name.as_str()));
-        info!("Bucket {} exists.", bucket_name);
+        info!("Bucket {bucket_name} exists.");
 
         // clean-up:
         assert!(
@@ -145,7 +145,7 @@ fn test_create_bucket() {
                 .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
                 .is_ok()
         );
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
 
         test_name.to_string()
     })
@@ -234,13 +234,13 @@ fn test_recreate_bucket() {
             false,
         );
         assert!(create_result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
         assert!(scaleway_os.bucket_exists(bucket_name.as_str()));
-        info!("Bucket {} exists.", bucket_name);
+        info!("Bucket {bucket_name} exists.");
 
         let delete_result = scaleway_os.delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete);
         assert!(delete_result.is_ok());
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
         assert!(!scaleway_os.bucket_exists(bucket_name.as_str()));
 
         let recreate_result = scaleway_os.create_bucket(
@@ -250,9 +250,9 @@ fn test_recreate_bucket() {
             false,
         );
         assert!(recreate_result.is_ok());
-        info!("Bucket {} recreated.", bucket_name);
+        info!("Bucket {bucket_name} recreated.");
         assert!(scaleway_os.bucket_exists(bucket_name.as_str()));
-        info!("Bucket {} exists again.", bucket_name);
+        info!("Bucket {bucket_name} exists again.");
 
         // clean-up:
         assert!(
@@ -260,7 +260,7 @@ fn test_recreate_bucket() {
                 .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete,)
                 .is_ok()
         );
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
 
         test_name.to_string()
     })
@@ -297,7 +297,7 @@ fn test_file_handling() {
             false,
         );
         assert!(create_result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
 
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
 
@@ -310,11 +310,11 @@ fn test_file_handling() {
         );
         // validate:
         assert!(put_result.is_ok());
-        info!("File {} put in bucket {}.", object_key, bucket_name);
+        info!("File {object_key} put in bucket {bucket_name}.");
 
         let get_result = scaleway_os.get_object(bucket_name.as_str(), object_key.as_str());
         assert!(get_result.is_ok());
-        info!("File {} get from bucket {}.", object_key, bucket_name);
+        info!("File {object_key} get from bucket {bucket_name}.");
 
         // clean-up:
         assert!(
@@ -322,7 +322,7 @@ fn test_file_handling() {
                 .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
                 .is_ok()
         );
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
 
         test_name.to_string()
     })
@@ -359,10 +359,10 @@ fn test_ensure_file_is_absent() {
             false,
         );
         assert!(create_result.is_ok());
-        info!("Bucket {} created.", bucket_name);
+        info!("Bucket {bucket_name} created.");
 
         assert!(scaleway_os.delete_object(&bucket_name, &object_key).is_ok());
-        info!("File {} absent from bucket {} as expected.", object_key, bucket_name);
+        info!("File {object_key} absent from bucket {bucket_name} as expected.");
 
         let temp_file = NamedTempFile::new().expect("error while creating tempfile");
         let tempfile_path = temp_file.into_temp_path();
@@ -370,10 +370,10 @@ fn test_ensure_file_is_absent() {
 
         let put_result = scaleway_os.put_object(bucket_name.as_str(), object_key.as_str(), tempfile_path, None);
         assert!(put_result.is_ok());
-        info!("File {} put in bucket {}.", object_key, bucket_name);
+        info!("File {object_key} put in bucket {bucket_name}.");
 
         assert!(scaleway_os.delete_object(&bucket_name, &object_key).is_ok());
-        info!("File {} not in bucket {} anymore.", object_key, bucket_name);
+        info!("File {object_key} not in bucket {bucket_name} anymore.");
 
         // clean-up:
         assert!(
@@ -381,7 +381,7 @@ fn test_ensure_file_is_absent() {
                 .delete_bucket(bucket_name.as_str(), BucketDeleteStrategy::HardDelete)
                 .is_ok()
         );
-        info!("Bucket {} deleted.", bucket_name);
+        info!("Bucket {bucket_name} deleted.");
 
         test_name.to_string()
     })

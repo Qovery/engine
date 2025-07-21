@@ -235,7 +235,7 @@ impl<T: CloudProvider> Container<T> {
         let registry_endpoint = registry_info.get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()));
         let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
         let repository: Cow<str> = if let Some(port) = registry_endpoint.port() {
-            format!("{}:{}", registry_endpoint_host, port).into()
+            format!("{registry_endpoint_host}:{port}").into()
         } else {
             registry_endpoint_host.into()
         };
@@ -248,9 +248,9 @@ impl<T: CloudProvider> Container<T> {
                 &target.kubernetes.advanced_settings().registry_mirroring_mode,
                 target.container_registry.registry_info(),
             );
-        let image_full = format!("{}/{}:{}", repository, image_name, image_tag);
+        let image_full = format!("{repository}/{image_name}:{image_tag}");
 
-        let ctx = ContainerTeraContext {
+        ContainerTeraContext {
             organization_long_id: environment.organization_long_id,
             project_long_id: environment.project_long_id,
             environment_short_id: to_short_id(&environment.long_id),
@@ -326,9 +326,7 @@ impl<T: CloudProvider> Container<T> {
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
-        };
-
-        ctx
+        }
     }
 
     pub fn is_stateful(&self) -> bool {

@@ -23,8 +23,7 @@ impl AzureAuthService {
                 tenant_id,
                 "-u",
                 client_id,
-                "-p",
-                client_secret,
+                format!("-p={client_secret}").as_str(), // handling secrets starting with `-`
                 "--service-principal",
             ],
             &[],

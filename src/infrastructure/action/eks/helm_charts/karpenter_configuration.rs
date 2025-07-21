@@ -66,7 +66,7 @@ impl KarpenterConfigurationChart {
             region: region.to_string(),
             karpenter_parameters,
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
-                let combined_subnets = [
+                [
                     &user_network_config.eks_subnets_zone_a_ids,
                     &user_network_config.eks_subnets_zone_b_ids,
                     &user_network_config.eks_subnets_zone_c_ids,
@@ -74,9 +74,7 @@ impl KarpenterConfigurationChart {
                 .iter()
                 .flat_map(|v| v.iter())
                 .cloned()
-                .collect_vec();
-
-                combined_subnets
+                .collect_vec()
             } else {
                 vec![]
             },
@@ -160,7 +158,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             .iter()
             .enumerate()
             .for_each(|(index, requirement)| {
-                let prefix = format!("global_node_pools.requirements[{}]", index);
+                let prefix = format!("global_node_pools.requirements[{index}]");
 
                 let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
                     // The nodepool support only lowercase value for arch
@@ -170,11 +168,11 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 };
 
                 values.push(ChartSetValue {
-                    key: format!("{}.key", prefix),
+                    key: format!("{prefix}.key"),
                     value: requirement.key.to_k8s_label(),
                 });
                 values.push(ChartSetValue {
-                    key: format!("{}.operator", prefix),
+                    key: format!("{prefix}.operator"),
                     value: requirement
                         .operator
                         .as_ref()
@@ -182,8 +180,8 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                         .to_string(),
                 });
                 values.push(ChartSetValue {
-                    key: format!("{}.values", prefix),
-                    value: format!("{{{}}}", formated_values),
+                    key: format!("{prefix}.values"),
+                    value: format!("{{{formated_values}}}"),
                 });
             });
 
@@ -779,8 +777,7 @@ mod tests {
                 operator: operator.to_string(),
                 values,
             }),
-            "Expected {} requirement to be present",
-            key
+            "Expected {key} requirement to be present"
         );
     }
 

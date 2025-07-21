@@ -97,7 +97,7 @@ fn azure_test_build_phase() {
         assert!(img_exist);
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -176,7 +176,7 @@ fn azure_aks_deploy_a_working_environment_without_router() {
         assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -305,7 +305,7 @@ fn azure_aks_deploy_a_working_environment_with_shared_registry() {
         // assert!(!img_exist);
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -371,7 +371,7 @@ fn azure_aks_deploy_a_not_working_environment_without_router() {
         assert!(matches!(result, Ok(_) | Err(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -460,7 +460,7 @@ fn azure_aks_deploy_a_working_environment_and_pause() {
         assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -566,7 +566,7 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -632,7 +632,7 @@ fn azure_aks_deploy_container_with_router() {
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: format!("my-little-container-{}", suffix),
+            kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -655,7 +655,7 @@ fn azure_aks_deploy_container_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
-                    name: format!("http-{}", suffix),
+                    name: format!("http-{suffix}"),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -666,7 +666,7 @@ fn azure_aks_deploy_container_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: format!("grpc-{}", suffix),
+                    name: format!("grpc-{suffix}"),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -731,7 +731,7 @@ fn azure_aks_deploy_container_with_router() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
-            kube_name: format!("router-{}", suffix),
+            kube_name: format!("router-{suffix}"),
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -752,7 +752,7 @@ fn azure_aks_deploy_container_with_router() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -905,7 +905,7 @@ fn azure_aks_deploy_container_with_storages() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1090,7 +1090,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1149,7 +1149,7 @@ fn azure_aks_deploy_container_without_router() {
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: format!("my-little-container-{}", suffix),
+            kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -1172,7 +1172,7 @@ fn azure_aks_deploy_container_without_router() {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
-                    name: format!("http-{}", suffix),
+                    name: format!("http-{suffix}"),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -1183,7 +1183,7 @@ fn azure_aks_deploy_container_without_router() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: format!("grpc-{}", suffix),
+                    name: format!("grpc-{suffix}"),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -1255,7 +1255,7 @@ fn azure_aks_deploy_container_without_router() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1368,6 +1368,7 @@ fn azure_aks_deploy_job() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1380,7 +1381,7 @@ fn azure_aks_deploy_job() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1502,6 +1503,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1514,7 +1516,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1625,6 +1627,7 @@ fn azure_aks_deploy_cronjob() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -1655,7 +1658,7 @@ fn azure_aks_deploy_cronjob() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1766,6 +1769,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
             labels_group_ids: btreeset! {},
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1804,7 +1808,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -1918,6 +1922,7 @@ fn azure_aks_build_and_deploy_job() {
             labels_group_ids: btreeset! { labels_group_id },
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
+            output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -1952,7 +1957,7 @@ fn azure_aks_build_and_deploy_job() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -2056,7 +2061,7 @@ fn azure_aks_deploy_terraform_service() {
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
         let execution_id = Uuid::new_v4();
-        let kube_name = format!("my-little-terraform-service-{}", suffix);
+        let kube_name = format!("my-little-terraform-service-{suffix}");
         environment.terraform_services = vec![build_terraform_service(
             service_id,
             &kube_name,
@@ -2150,7 +2155,7 @@ fn azure_aks_deploy_terraform_service() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -2252,7 +2257,7 @@ fn azure_aks_deploy_helm_chart() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -2435,7 +2440,7 @@ fn azure_aks_deploy_helm_chart_twice_to_check_admission_controller_config_map_is
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -2494,7 +2499,7 @@ fn azure_aks_deploy_helm_chart_and_pause_it() {
 
             environment.applications = vec![];
             let service_id = Uuid::new_v4();
-            println!("service id {}", service_id);
+            println!("service id {service_id}");
             environment.helms = vec![HelmChart {
                 long_id: service_id,
                 name: "my little chart ****".to_string(),
@@ -2570,7 +2575,7 @@ fn azure_aks_deploy_helm_chart_and_pause_it() {
             assert!(ret.is_ok());
 
             if let Err(e) = clean_environments(&context, vec![environment], region) {
-                warn!("cannot clean environments, error: {:?}", e);
+                warn!("cannot clean environments, error: {e:?}");
             }
 
             test_name.to_string()
@@ -2630,7 +2635,7 @@ fn azure_aks_deploy_helm_chart_and_restart_it() {
 
             environment.applications = vec![];
             let service_id = Uuid::new_v4();
-            println!("service id {}", service_id);
+            println!("service id {service_id}");
             environment.helms = vec![HelmChart {
                 long_id: service_id,
                 name: "my little chart ****".to_string(),
@@ -2682,7 +2687,7 @@ fn azure_aks_deploy_helm_chart_and_restart_it() {
             assert!(ret.is_ok());
 
             if let Err(e) = clean_environments(&context, vec![environment], region) {
-                warn!("cannot clean environments, error: {:?}", e);
+                warn!("cannot clean environments, error: {e:?}");
             }
 
             test_name.to_string()
@@ -2781,7 +2786,7 @@ fn azure_aks_deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: format!("service1-p8080-{}", host_suffix),
+                    name: format!("service1-p8080-{host_suffix}"),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: None,
@@ -2792,7 +2797,7 @@ fn azure_aks_deploy_helm_chart_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
-                    name: format!("service2-p8080-{}", host_suffix),
+                    name: format!("service2-p8080-{host_suffix}"),
                     publicly_accessible: true,
                     protocol: Protocol::HTTP,
                     namespace: Some(extra_namespace.clone()),
@@ -2825,7 +2830,7 @@ fn azure_aks_deploy_helm_chart_with_router() {
         assert!(ret.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()

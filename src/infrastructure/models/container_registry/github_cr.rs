@@ -55,7 +55,7 @@ impl GithubCr {
         headers.insert("X-GitHub-Api-Version", HeaderValue::from_static("2022-11-28"));
         let mut auth_header = HeaderValue::from_str(&format!("Bearer {}", &token)).map_err(|e| {
             ContainerRegistryError::CannotInstantiateClient {
-                raw_error_message: format!("Cannot create auth header: {}", e),
+                raw_error_message: format!("Cannot create auth header: {e}"),
             }
         })?;
         auth_header.set_sensitive(true);
@@ -70,7 +70,7 @@ impl GithubCr {
             //.proxy(reqwest::Proxy::all("http://localhost:8080").unwrap())
             .build()
             .map_err(|e| ContainerRegistryError::CannotInstantiateClient {
-                raw_error_message: format!("Cannot create http client: {}", e),
+                raw_error_message: format!("Cannot create http client: {e}"),
             })?;
 
         let response: Result<GithubUserResponse, Error> = http_client
@@ -163,9 +163,9 @@ impl InteractWithRegistry for GithubCr {
         // https://api.github.com/user/packages/container/
         // https://api.github.com/orgs/ORG/packages/container/PACKAGE_NAME
         let api_url = match &self.registry_type {
-            RegistryType::User(_) => format!("https://api.github.com/user/packages/container/{}", repository_name),
+            RegistryType::User(_) => format!("https://api.github.com/user/packages/container/{repository_name}"),
             RegistryType::Organization(org) => {
-                format!("https://api.github.com/orgs/{}/packages/container/{}", org, repository_name)
+                format!("https://api.github.com/orgs/{org}/packages/container/{repository_name}")
             }
         };
         match self
@@ -210,12 +210,11 @@ impl InteractWithRegistry for GithubCr {
         fn list_versions(this: &GithubCr, repository_name: &str) -> reqwest::Result<Vec<ImageVersion>> {
             let api_url = match &this.registry_type {
                 RegistryType::User(_) => {
-                    format!("https://api.github.com/user/packages/container/{}/versions", repository_name)
+                    format!("https://api.github.com/user/packages/container/{repository_name}/versions")
                 }
-                RegistryType::Organization(org) => format!(
-                    "https://api.github.com/orgs/{}/packages/container/{}/versions",
-                    org, repository_name
-                ),
+                RegistryType::Organization(org) => {
+                    format!("https://api.github.com/orgs/{org}/packages/container/{repository_name}/versions")
+                }
             };
 
             match this
@@ -234,13 +233,11 @@ impl InteractWithRegistry for GithubCr {
             // https://docs.github.com/en/rest/packages/packages?apiVersion=2022-11-28#delete-package-version-for-an-organization
             // https://docs.github.com/en/rest/packages/packages?apiVersion=2022-11-28#delete-a-package-version-for-the-authenticated-user
             let api_url = match &this.registry_type {
-                RegistryType::User(_) => format!(
-                    "https://api.github.com/user/packages/container/{}/versions/{}",
-                    repository_name, version_id
-                ),
+                RegistryType::User(_) => {
+                    format!("https://api.github.com/user/packages/container/{repository_name}/versions/{version_id}")
+                }
                 RegistryType::Organization(org) => format!(
-                    "https://api.github.com/orgs/{}/packages/container/{}/versions/{}",
-                    org, repository_name, version_id
+                    "https://api.github.com/orgs/{org}/packages/container/{repository_name}/versions/{version_id}"
                 ),
             };
 

@@ -1,0 +1,20 @@
+image:
+  repository: public.ecr.aws/r3m4q3r9/k8s-event-logger-rs
+  tag: 360678ec
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 384Mi
+  requests:
+    cpu: 50m
+    memory: 32Mi
+
+args:
+  - --ignore-update=false
+
+rbac:
+  rules:
+    - apiGroups: [""]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]

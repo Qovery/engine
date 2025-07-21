@@ -69,12 +69,18 @@ Karpenter image to use
 */}}
 {{- define "karpenter.controller.image" -}}
 {{- if .Values.controller.image.digest }}
-{{- printf "%s:%s@%s" .Values.controller.image.repository  (default (printf "v%s" .Chart.AppVersion) .Values.controller.image.tag) .Values.controller.image.digest }}
+{{- printf "%s:%s@%s" .Values.controller.image.repository  (default (printf "%s" .Chart.AppVersion) .Values.controller.image.tag) .Values.controller.image.digest }}
 {{- else }}
-{{- printf "%s:%s" .Values.controller.image.repository  (default (printf "v%s" .Chart.AppVersion) .Values.controller.image.tag) }}
+{{- printf "%s:%s" .Values.controller.image.repository  (default (printf "%s" .Chart.AppVersion) .Values.controller.image.tag) }}
 {{- end }}
 {{- end }}
 
+{{/*
+Karpenter controller container name
+*/}}
+{{- define "karpenter.controller.containerName" -}}
+{{- .Values.controller.containerName | default "controller" -}}
+{{- end -}}
 
 {{/* Get PodDisruptionBudget API Version */}}
 {{- define "karpenter.pdb.apiVersion" -}}

@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 1.0.9
+appVersion: 1.5.1
 description: A Helm chart for Karpenter Custom Resource Definitions (CRDs).
 home: https://karpenter.sh/
 icon: https://repository-images.githubusercontent.com/278480393/dab059c8-caa1-4b55-aaa7-3d30e47a5616
@@ -13,4 +13,4 @@ name: karpenter-crd
 sources:
 - https://github.com/aws/karpenter/
 type: application
-version: 1.0.9
+version: 1.5.1

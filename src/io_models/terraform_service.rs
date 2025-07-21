@@ -458,8 +458,7 @@ impl TerraformService {
                 .collect::<Result<Vec<_>, _>>()?,
             TerraformBackendType::Kubernetes => vec![
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(
-                    "namespace=\"{}\"",
-                    environment_kube_name
+                    "namespace=\"{environment_kube_name}\""
                 ))
                 .map_err(TerraformServiceError::InvalidConfig)?,
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(

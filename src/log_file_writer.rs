@@ -46,10 +46,7 @@ impl LogFileWriter {
     }
 
     fn lock_file(&self) -> io::Result<MutexGuard<Option<BufWriter<File>>>> {
-        self.file
-            .1
-            .lock()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "Mutex lock failed"))
+        self.file.1.lock().map_err(|_| io::Error::other("Mutex lock failed"))
     }
 }
 
@@ -60,11 +57,7 @@ impl LogFileWriterInner {
 
     fn update_file_if_necessary(&mut self) -> io::Result<()> {
         if self.file_has_changed() {
-            let mut guard = self
-                .file
-                .1
-                .lock()
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "Mutex lock failed"))?;
+            let mut guard = self.file.1.lock().map_err(|_| io::Error::other("Mutex lock failed"))?;
             self.writer = mem::take(&mut *guard);
         }
         Ok(())

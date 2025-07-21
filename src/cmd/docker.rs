@@ -126,13 +126,11 @@ impl ContainerImage {
     }
 
     fn host_with_credentials_and_port(&self) -> String {
-        let host = if let Some(port) = self.registry.port() {
+        if let Some(port) = self.registry.port() {
             format!("{}:{}", self.registry.host_str().unwrap_or_default(), port)
         } else {
             self.registry.host_str().unwrap_or_default().to_string()
-        };
-
-        host
+        }
     }
 
     pub fn image_names(&self) -> Vec<String> {
@@ -357,7 +355,7 @@ impl Docker {
                 }
 
                 // We create build handle here to force the drop to run if some operation fail
-                let builder_name = format!("qovery-{}", builder_name);
+                let builder_name = format!("qovery-{builder_name}");
                 let build_handle = BuilderHandle {
                     config_path: self.config_path.path().to_path_buf(),
                     nb_builder,
@@ -369,10 +367,10 @@ impl Docker {
                     let cfg_path = self.config_path.path().join("buildkitd.toml");
                     let mut cfg_file = String::new();
                     for http in http_registries {
-                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  http = true\n", http));
+                        cfg_file.push_str(&format!("[registry.\"{http}\"]\n  http = true\n"));
                     }
                     for tls in tls_invalid_registries {
-                        cfg_file.push_str(&format!("[registry.\"{}\"]\n  insecure = true\n", tls));
+                        cfg_file.push_str(&format!("[registry.\"{tls}\"]\n  insecure = true\n"));
                     }
                     info!("Docker buildkitd config {}", &cfg_file);
                     let _ = fs::write(&cfg_path, cfg_file);
@@ -412,7 +410,7 @@ impl Docker {
                         driver_opt.push_str(",\"rootless=true\"");
                     }
                     if let Some(ephemeral_storage) = ephemeral_storage_gib {
-                        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={}Gi\"", ephemeral_storage));
+                        driver_opt.push_str(&format!(",\"requests.ephemeral-storage={ephemeral_storage}Gi\""));
                     }
 
                     let mut args = vec![
@@ -499,13 +497,13 @@ impl Docker {
                 "auth",
                 "activate-service-account",
                 google_client_email,
-                format!("--key-file={}", gcp_credentials_file_path).as_str(),
+                format!("--key-file={gcp_credentials_file_path}").as_str(),
             ],
             &[],
         )
         .exec()
         .map_err(|_e| DockerError::InvalidConfig {
-            raw_error_message: "Cannot connected to gcloud".to_string(),
+            raw_error_message: "Cannot connect to gcloud".to_string(),
         })?;
 
         self.login(registry)
@@ -516,10 +514,14 @@ impl Docker {
             Ok(decoded_username) => decoded_username,
             Err(err) => {
                 return Err(DockerError::InvalidConfig {
-                    raw_error_message: format!("Cannot decode username due to: {}", err),
+                    raw_error_message: format!("Cannot decode username due to: {err}"),
                 });
             }
         };
+        if username.is_empty() {
+            return Ok(());
+        }
+
         info!("Docker login {} as user {}", registry, username);
 
         let password = registry
@@ -716,9 +718,9 @@ impl Docker {
             "buildx".to_string(),
             "build".to_string(),
             if let Some(builder_name) = builder_name {
-                format!("--builder={}", builder_name)
+                format!("--builder={builder_name}")
             } else {
-                format!("--builder={}", DEFAULT_BUILDER_NAME)
+                format!("--builder={DEFAULT_BUILDER_NAME}",)
             },
             "--progress=plain".to_string(),
             if push_after_build {
@@ -768,7 +770,8 @@ impl Docker {
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
         let mut nb_retry = 3;
         let started_at = std::time::Instant::now();
-        let ret = loop {
+
+        loop {
             let mut transient_error = false;
             let ret = {
                 let mut stderr_output = |line: String| {
@@ -805,9 +808,7 @@ impl Docker {
             }
 
             break ret;
-        };
-
-        ret
+        }
     }
 
     pub fn push<Stdout, Stderr>(

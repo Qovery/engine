@@ -222,8 +222,8 @@ mod tests {
             ])
             .output()
         {
-            Ok(x) => format!("Helm rendering output: {:?}", x),
-            Err(e) => panic!("Error while trying to render crds from prometheus operator: {}", e),
+            Ok(x) => format!("Helm rendering output: {x:?}"),
+            Err(e) => panic!("Error while trying to render crds from prometheus operator: {e}"),
         };
 
         // list all crd rendered files
@@ -267,8 +267,7 @@ mod tests {
         // show the diff between our known CRDs base and the one in the current chart to avoid any unexpected issue
         assert!(
             diff.is_empty(),
-            "The following CRDs are not supported by Qovery or not present anymore in the list of CRDs: {:?}",
-            diff
+            "The following CRDs are not supported by Qovery or not present anymore in the list of CRDs: {diff:?}"
         );
     }
 }

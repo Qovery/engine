@@ -363,22 +363,19 @@ impl ObjectStorageService {
         }
 
         self.wait_for_a_slot_in_admission_control(Duration::from_secs(10 * 60), StorageResourceKind::Bucket)?;
-        let bucket = match block_on(self.client.insert_bucket(&create_bucket_request)) {
+
+        match block_on(self.client.insert_bucket(&create_bucket_request)) {
             Ok(created_bucket) => {
                 Bucket::try_from(created_bucket).map_err(|e| ObjectStorageServiceError::CannotCreateBucket {
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: e.to_string(),
                 })
             }
-            Err(e) => {
-                return Err(ObjectStorageServiceError::CannotCreateBucket {
-                    bucket_name: bucket_name.to_string(),
-                    raw_error_message: e.to_string(),
-                });
-            }
-        };
-
-        bucket
+            Err(e) => Err(ObjectStorageServiceError::CannotCreateBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            }),
+        }
     }
 
     pub fn update_bucket(
@@ -499,15 +496,10 @@ impl ObjectStorageService {
 
         let creation_date: DateTime<Utc> = Utc::now();
         match self.cloud_job_service.create_job(
-            format!("rm-bucket-{}", bucket_name).as_str(),
+            format!("rm-bucket-{bucket_name}").as_str(),
             "gcr.io/google.com/cloudsdktool/google-cloud-cli:latest",
             "gcloud",
-            &[
-                "storage",
-                "rm",
-                "--recursive",
-                format!("gs://{bucket_name}", bucket_name = bucket_name).as_str(),
-            ],
+            &["storage", "rm", "--recursive", format!("gs://{bucket_name}").as_str()],
             self.client_email.as_str(),
             self.project_id.as_str(),
             GcpCloudJobRegion::from_str(bucket_location.to_cloud_provider_format()).map_err(|_| {

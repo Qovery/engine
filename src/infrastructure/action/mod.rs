@@ -107,8 +107,7 @@ pub trait InfrastructureAction: Send + Sync {
                         None => kubernetes.version().clone().into(),
                     };
                     logger.info(format!(
-                        "Check if cluster has calls to deprecated kubernetes API for version `{}`",
-                        target_kubernetes_version
+                        "Check if cluster has calls to deprecated kubernetes API for version `{target_kubernetes_version}`"
                     ));
                     match infra_ctx
                         .kubernetes_api_deprecation_service()

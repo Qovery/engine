@@ -383,6 +383,7 @@ pub enum KubernetesApiDeprecationServiceGranuality<'a> {
     WithQoveryMetadata { kube_client: &'a Client },
 }
 
+#[derive(Default)]
 pub struct KubernetesApiDeprecationService {
     client: Kubent,
 }
@@ -436,12 +437,6 @@ impl KubernetesApiDeprecationService {
             });
         }
         Ok(())
-    }
-}
-
-impl Default for KubernetesApiDeprecationService {
-    fn default() -> Self {
-        Self { client: Kubent::new() }
     }
 }
 

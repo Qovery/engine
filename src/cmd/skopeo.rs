@@ -47,9 +47,9 @@ impl Skopeo {
     pub fn delete_image(&self, image: &ContainerImage, tls_verify: bool) -> Result<(), SkopeoError> {
         let uri = format!("docker://{}", image.image_name());
         info!("Deleting image {}", uri);
-        let tls = format!("--tls-verify={}", tls_verify);
+        let tls = format!("--tls-verify={tls_verify}");
         let creds = if let Some((user, pass)) = &self.credentials {
-            format!("--creds={}:{}", user, pass)
+            format!("--creds={user}:{pass}")
         } else {
             "--no-creds".to_string()
         };
@@ -68,9 +68,9 @@ impl Skopeo {
         let uri = format!("docker://{}", image.repository_with_host());
         info!("listing image tags {}", uri);
 
-        let tls = format!("--tls-verify={}", tls_verify);
+        let tls = format!("--tls-verify={tls_verify}");
         let creds = if let Some((user, pass)) = &self.credentials {
-            format!("--creds={}:{}", user, pass)
+            format!("--creds={user}:{pass}")
         } else {
             "--no-creds".to_string()
         };
@@ -110,9 +110,9 @@ impl Skopeo {
         let uri = format!("docker://{}", image.image_name());
         info!("listing digest of image {}", uri);
 
-        let tls = format!("--tls-verify={}", tls_verify);
+        let tls = format!("--tls-verify={tls_verify}");
         let creds = if let Some((user, pass)) = &self.credentials {
-            format!("--creds={}:{}", user, pass)
+            format!("--creds={user}:{pass}")
         } else {
             "--no-creds".to_string()
         };

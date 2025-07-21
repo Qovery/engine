@@ -187,7 +187,7 @@ impl BlobStorageService {
                 //  }
                 // ```
                 // Opened an issue to fix this: https://github.com/Azure/azure-sdk-for-rust/issues/2289
-                HeaderName::from(format!("{}{}", AZURE_STORAGE_METADATA_PREFIX, key)),
+                HeaderName::from(format!("{AZURE_STORAGE_METADATA_PREFIX}{key}")),
                 HeaderValue::from(value.to_string()),
             );
         }
@@ -381,7 +381,7 @@ impl BlobStorageService {
                     .metadata
                     .unwrap_or_default()
                     .into_iter()
-                    .map(|(k, v)| format!("{}={}", k, v))
+                    .map(|(k, v)| format!("{k}={v}"))
                     .collect(),
                 Err(e) => {
                     return Err(BlobStorageServiceError::CannotGetObjectProperties {
@@ -432,7 +432,7 @@ impl BlobStorageService {
                 //  }
                 // ```
                 // Opened an issue to fix this: https://github.com/Azure/azure-sdk-for-rust/issues/2289
-                HeaderName::from(format!("{}{}", AZURE_STORAGE_METADATA_PREFIX, key)),
+                HeaderName::from(format!("{AZURE_STORAGE_METADATA_PREFIX}{key}")),
                 HeaderValue::from(value.to_string()),
             );
         }

@@ -507,7 +507,7 @@ impl InteractWithRegistry for ECR {
                                 None => "".to_string(),
                             },
                             repository_name: repository_name.to_string(),
-                            raw_error_message: format!("No repository found with name `{}`", repository_name),
+                            raw_error_message: format!("No repository found with name `{repository_name}`"),
                         }),
                     }
                 }
@@ -517,7 +517,7 @@ impl InteractWithRegistry for ECR {
                         None => "".to_string(),
                     },
                     repository_name: repository_name.to_string(),
-                    raw_error_message: format!("No repository found with name `{}`", repository_name),
+                    raw_error_message: format!("No repository found with name `{repository_name}`"),
                 }),
             },
         }

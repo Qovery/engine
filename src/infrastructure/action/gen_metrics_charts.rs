@@ -43,7 +43,7 @@ impl CloudProviderMetricsConfig<'_> {
                     region: cfg.region.clone(),
                     bucket_name: cfg.aws_s3_prometheus_bucket_name.to_string(),
                     aws_iam_prometheus_role_arn: cfg.aws_iam_eks_prometheus_role_arn.to_string(),
-                    endpoint: format!("s3.{}.amazonaws.com", region),
+                    endpoint: format!("s3.{region}.amazonaws.com"),
                 }
             }
             Self::Gke(cfg) => PrometheusConfiguration::GcpCloudStorage {

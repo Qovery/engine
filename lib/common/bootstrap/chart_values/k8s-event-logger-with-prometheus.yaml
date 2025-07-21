@@ -1,0 +1,63 @@
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+metrics:
+  enabled: true
+  port: 8080
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
+  metricRelabelings: []
+
+args:
+  - --ignore-update=false
+  - --metrics-enabled=true
+
+rbac:
+  rules:
+    - apiGroups: [""]
+      resources: [
+        "events", "pods", "nodes", "services", "endpoints",
+        "persistentvolumes", "persistentvolumeclaims",
+        "namespaces", "configmaps"
+      ]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["apps"]
+      resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["batch"]
+      resources: ["jobs", "cronjobs"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["networking.k8s.io"]
+      resources: ["ingresses", "networkpolicies"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["autoscaling"]
+      resources: ["horizontalpodautoscalers"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [ "autoscaling.k8s.io" ]
+      resources: [ "verticalpodautoscalers" ]
+      verbs: [ "get", "list", "watch" ]
+    - apiGroups: ["storage.k8s.io"]
+      resources: ["storageclasses", "volumeattachments"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: ["metrics.k8s.io"]
+      resources: ["nodes", "pods"]
+      verbs: ["get", "list"]
+    - apiGroups: [ "elbv2.k8s.aws" ]
+      resources: ["targetgroupbindings"]
+      verbs: [ "get","list","watch" ]
+    - apiGroups: ["karpenter.sh"]
+      resources: ["nodeclaims", "nodepools"]
+      verbs: ["get", "list", "watch"]
+    - apiGroups: [ "coordination.k8s.io" ]
+      resources: [ "leases" ]
+      verbs: [ "get", "list", "watch" ]
+    - apiGroups: [ "cert-manager.io" ]
+      resources: [ "issuers", "certificates", "certificaterequests", "clusterissuers" ]
+      verbs: [ "get", "list", "watch" ]

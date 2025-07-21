@@ -194,6 +194,7 @@ pub struct Job {
     pub should_delete_shared_registry: bool,
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
+    pub output_variable_validation_pattern: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -451,6 +452,7 @@ impl Job {
                 annotations_groups,
                 labels_groups,
                 self.should_delete_shared_registry,
+                self.output_variable_validation_pattern,
             )?),
             Kind::Scw => Box::new(models::job::Job::<SCW>::new(
                 context,
@@ -483,6 +485,7 @@ impl Job {
                 annotations_groups,
                 labels_groups,
                 self.should_delete_shared_registry,
+                self.output_variable_validation_pattern,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -515,6 +518,7 @@ impl Job {
                 annotations_groups,
                 labels_groups,
                 self.should_delete_shared_registry,
+                self.output_variable_validation_pattern,
             )?),
             Kind::Azure => Box::new(models::job::Job::<Azure>::new(
                 context,
@@ -547,6 +551,7 @@ impl Job {
                 annotations_groups,
                 labels_groups,
                 self.should_delete_shared_registry,
+                self.output_variable_validation_pattern,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -579,6 +584,7 @@ impl Job {
                 annotations_groups,
                 labels_groups,
                 self.should_delete_shared_registry,
+                self.output_variable_validation_pattern,
             )?),
         };
 

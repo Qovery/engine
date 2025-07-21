@@ -89,7 +89,7 @@ spec:
         - name: qovery-wait-container-output
           # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
           restartPolicy: Always # this tells that the initContainer is a sidecar
-          image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-06-27T15-32-11
+          image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-07-15T14-06-16
           command: ["/qovery-job-output-waiter", "--watch"]
           volumeMounts:
             - name: output

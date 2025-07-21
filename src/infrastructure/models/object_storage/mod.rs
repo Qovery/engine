@@ -120,7 +120,7 @@ impl Bucket {
     }
 
     pub fn generate_logging_bucket_name_for_bucket(bucket_name: &str) -> String {
-        format!("{}-log", bucket_name)
+        format!("{bucket_name}-log")
     }
 }
 

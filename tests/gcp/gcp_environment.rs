@@ -151,7 +151,7 @@ fn gcp_gke_deploy_a_working_environment_with_no_router() {
         assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -297,7 +297,7 @@ fn deploy_a_working_environment_with_shared_registry() {
                 infra_ctx
                     .container_registry()
                     .delete_repository(repository_name.as_str())
-                    .unwrap_or_else(|_| println!("Cannot delete test repository `{}` after test", repository_name));
+                    .unwrap_or_else(|_| println!("Cannot delete test repository `{repository_name}` after test"));
             });
         test_name.to_string()
     })
@@ -361,7 +361,7 @@ fn gcp_gke_deploy_a_not_working_environment_with_no_router() {
         assert!(matches!(result, Ok(_) | Err(_)));
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -445,7 +445,7 @@ fn gcp_gke_deploy_a_working_environment_and_pause() {
         assert!(result.is_ok());
 
         if let Err(e) = clean_environments(&context, vec![environment], region) {
-            warn!("cannot clean environments, error: {:?}", e);
+            warn!("cannot clean environments, error: {e:?}");
         }
 
         test_name.to_string()
@@ -593,7 +593,7 @@ fn gcp_gke_deploy_container_with_router() {
         environment.containers = vec![Container {
             long_id: service_id,
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
-            kube_name: format!("my-little-container-{}", suffix),
+            kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
             registry: Registry::DockerHub {
                 url: Url::parse("https://public.ecr.aws").unwrap(),
@@ -616,7 +616,7 @@ fn gcp_gke_deploy_container_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
-                    name: format!("http-{}", suffix),
+                    name: format!("http-{suffix}"),
                     publicly_accessible: true,
                     protocol: HTTP,
                     service_name: None,
@@ -627,7 +627,7 @@ fn gcp_gke_deploy_container_with_router() {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
-                    name: format!("grpc-{}", suffix),
+                    name: format!("grpc-{suffix}"),
                     publicly_accessible: false,
                     protocol: HTTP,
                     service_name: None,
@@ -692,7 +692,7 @@ fn gcp_gke_deploy_container_with_router() {
         environment.routers = vec![Router {
             long_id: Uuid::new_v4(),
             name: "default-router".to_string(),
-            kube_name: format!("router-{}", suffix),
+            kube_name: format!("router-{suffix}"),
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -804,7 +804,7 @@ fn gcp_gke_deploy_terraform_service() {
         environment.applications = vec![];
         let service_id = Uuid::new_v4();
         let execution_id = Uuid::new_v4();
-        let kube_name = format!("my-little-terraform-service-{}", suffix);
+        let kube_name = format!("my-little-terraform-service-{suffix}");
         environment.terraform_services = vec![build_terraform_service(
             service_id,
             &kube_name,

@@ -78,16 +78,15 @@ pub trait InteractWithRegistry: Send + Sync {
 
     fn get_event_details(&self, stage: Stage) -> EventDetails {
         let context = self.context();
-        let ev = EventDetails::new(
+
+        EventDetails::new(
             None,
             QoveryIdentifier::new(*context.organization_long_id()),
             QoveryIdentifier::new(*context.cluster_long_id()),
             context.execution_id().to_string(),
             stage,
             Transmitter::ContainerRegistry(*self.long_id(), self.name().to_string()),
-        );
-
-        ev
+        )
     }
 }
 

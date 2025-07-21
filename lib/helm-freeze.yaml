@@ -73,7 +73,7 @@ charts:
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana
-    version: 6.16.6
+    version: 6.17.0
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
   - name: mongodb
     repo_name: bitnami
@@ -122,19 +122,19 @@ charts:
     repo_name: fairwinds
     version: 4.7.1
   - name: k8s-event-logger
-    repo_name: deliveryhero
-    version: 1.1.8
-    comment: https://artifacthub.io/packages/helm/deliveryhero/k8s-event-logger
+    repo_name: qovery-github
+    chart_path: chart
+    version: 1.1.6
   - name: karpenter
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 1.0.9
+    version: 1.5.1
   - name: karpenter-crd
     dest_folder_override: karpenter-crd
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 1.0.9
+    version: 1.5.1
 
 repos:
   - name: stable
@@ -171,6 +171,9 @@ repos:
     url: https://charts.fairwinds.com/stable
   - name: deliveryhero
     url: https://charts.deliveryhero.io/
+  - name: qovery-github
+    type: git
+    url: https://github.com/Qovery/k8s-event-logger.git
 
 destinations:
   - name: default

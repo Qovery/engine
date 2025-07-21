@@ -609,8 +609,7 @@ mod tests {
             // verify:
             assert!(
                 values_file.is_ok(),
-                "Chart values {} file should exist: `{chart_values_path}`",
-                provider_kind
+                "Chart values {provider_kind} file should exist: `{chart_values_path}`"
             );
         }
     }

@@ -20,12 +20,12 @@ pub fn git_initialize_opts(
         if let Err(err) = opts::set_server_connect_timeout_in_milliseconds(
             git_opts_set_server_connection_timeout_in_milliseconds.as_millis() as i32,
         ) {
-            debug(format!("Cannot set git_server_connect_timeout: {}", err));
+            debug(format!("Cannot set git_server_connect_timeout: {err}"));
         }
         if let Err(err) =
             opts::set_server_timeout_in_milliseconds(git_opts_set_server_timeout_in_milliseconds.as_millis() as i32)
         {
-            debug(format!("Cannot set git_server_timeout: {}", err));
+            debug(format!("Cannot set git_server_timeout: {err}"));
         }
     }
 }
@@ -42,7 +42,7 @@ where
     let repo = fetch(repository_url, into_dir, get_credentials, commit_id).map_err(|error| BuildError::GitError {
         application: "".to_string(),
         git_cmd: GitCmd::Fetch,
-        context: format!("url: {}/ commit id: {}", repository_url, commit_id),
+        context: format!("url: {repository_url}/ commit id: {commit_id}"),
         raw_error: error,
     })?;
     // position the repo at the correct commit

@@ -38,6 +38,7 @@ Common labels
 {{- define "k8s-event-logger.labels" -}}
 helm.sh/chart: {{ include "k8s-event-logger.chart" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/name: {{ .Release.Name }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}

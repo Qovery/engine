@@ -34,7 +34,7 @@ pub fn clean_up_deleted_k8s_nlb(
     let load_balancers = block_on(conn.list_all_aws_load_balancers()).map_err(|e| {
         EngineError::new_cloud_provider_error_getting_load_balancers(
             event_details.clone(),
-            CommandError::new_from_safe_message(format!("Can't list load balancers: {}", e)),
+            CommandError::new_from_safe_message(format!("Can't list load balancers: {e}")),
         )
     })?;
     // get tags from the aws load balancers
@@ -42,7 +42,7 @@ pub fn clean_up_deleted_k8s_nlb(
         .map_err(|e| {
             EngineError::new_cloud_provider_error_getting_load_balancer_tags(
                 event_details.clone(),
-                CommandError::new_from_safe_message(format!("Can't get load balancers tags {}", e)),
+                CommandError::new_from_safe_message(format!("Can't get load balancers tags {e}")),
             )
         })?;
     // get only ones matching the current cluster
@@ -68,7 +68,7 @@ pub fn clean_up_deleted_k8s_nlb(
         block_on(conn.delete_aws_load_balancer(arn)).map_err(|e| {
             EngineError::new_cloud_provider_error_deleting_load_balancer(
                 event_details.clone(),
-                CommandError::new_from_safe_message(format!("Can't delete load balancers {}", e)),
+                CommandError::new_from_safe_message(format!("Can't delete load balancers {e}")),
             )
         })?;
     }
