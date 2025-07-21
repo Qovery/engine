@@ -82,6 +82,7 @@ pub(super) trait HelmInfraResources {
                     logger.info(format!("🔍 Showing diff for chart: {}", chart.get_chart_info().name));
                     let _ = helm.upgrade_diff(chart.get_chart_info(), &envs, &mut |line| {
                         let _ = buf_writer.write_all(line.as_bytes());
+                        let _ = buf_writer.write_all(b"\n");
                         logger.diff(InfrastructureDiffType::Helm, line);
                     });
                 });
