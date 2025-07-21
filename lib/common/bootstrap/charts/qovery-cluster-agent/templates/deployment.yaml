@@ -71,11 +71,7 @@ spec:
       volumes:
         - name: tls-certs
           secret:
-          {{- if .Values.useSelfSignCertificate }}
             secretName: {{ include "qovery-cluster-agent.fullname" . }}-self-signed-tls
-          {{- else }}
-            secretName: {{ include "qovery-cluster-agent.fullname" . }}-tls
-          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
