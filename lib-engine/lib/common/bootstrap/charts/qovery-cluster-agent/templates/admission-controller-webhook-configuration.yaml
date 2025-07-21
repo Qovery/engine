@@ -3,17 +3,10 @@ kind: MutatingWebhookConfiguration
 metadata:
   name: {{ include "qovery-cluster-agent.fullname" . }}-webhook
   namespace: qovery
-  {{- if not .Values.useSelfSignCertificate }}
-  annotations:
-    cert-manager.io/inject-ca-from: qovery/{{ include "qovery-cluster-agent.fullname" . }}-tls
-  {{- end }}
-
 webhooks:
   - name: {{ include "qovery-cluster-agent.fullname" . }}-service.qovery.svc
     clientConfig:
-      {{- if .Values.useSelfSignCertificate }}
       caBundle: "LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURNVENDQWhtZ0F3SUJBZ0lVQVZKdEc5SDRiYng4bExUNGRJWFBpQW4yUlNBd0RRWUpLb1pJaHZjTkFRRUwKQlFBd0p6RWxNQ01HQTFVRUF3d2NjVzkyWlhKNUxXTnNkWE4wWlhJdFlXZGxiblF0ZDJWaWFHOXZhekFnRncweQpOREEzTURNeE5UVXdOVFZhR0E4ek1ERXdNREl5TlRFMU5UQTFOVm93SnpFbE1DTUdBMVVFQXd3Y2NXOTJaWEo1CkxXTnNkWE4wWlhJdFlXZGxiblF0ZDJWaWFHOXZhekNDQVNJd0RRWUpLb1pJaHZjTkFRRUJCUUFEZ2dFUEFEQ0MKQVFvQ2dnRUJBTGFsNUU1NmxZSXVOb01OUVBxOW9xYlQwc0xLdWh4alNicUlOQi92N1BRMlFjWEpoUmVNTXI3dQo3VjRVUmorWkxYRHRWUU93NFAzQmVYT25PV0REOFRETVZ5TnI5V3k1VVlWZzRWclJyeDUvSnBRdEdUUHFIZFByCk5wbDBBMkpiR1h1NVU5SlNhR1owNGdpOFNBemdYSS9zQTZ5RlE2SjR1eFZzSVZIbFFCWGY3YnBXTkdhazNNR1cKWVJzSzBhaHhDMlloRm16RjNjUmNKNUVXWnFkekpDd2x6RCtsNEQvUDZFcWN4ai8zUTZpMGl0L2tHWlJ1YXFCbwp2TlZWbmE1SzJtbG11MHNsQlBHTXhRWkpNRVNSSlVBTzZSbWtoYUMzaUhkVVJTTitpN09YTk5tSEhQRW5YTXBECnJGRjJ3WW5tL0tlOWFTd0NlMyt2L1VlNHBaZWFjeDhDQXdFQUFhTlRNRkV3SFFZRFZSME9CQllFRkgzUk00ZjEKZ0pzeGRQNnBmSk9hNlVyVHlDOWNNQjhHQTFVZEl3UVlNQmFBRkgzUk00ZjFnSnN4ZFA2cGZKT2E2VXJUeUM5YwpNQThHQTFVZEV3RUIvd1FGTUFNQkFmOHdEUVlKS29aSWh2Y05BUUVMQlFBRGdnRUJBRmNCRWpZaFlzSWZtYXBzCit6Mjh6aGpSYXMrbGhBQW0yV1BseEZkbE5zbXFua2R2eEJRcmlBRmJEQm51RUxVdElCUGxPdHozMlhnRzV0MjcKSExXd2pWWkFRNmRERjJJWVQzeWJDaExnYkdycVR6UFNCYTdrNm1WZUZ6cmZEVmNKTVhGdHJ3TUVqODgvT3pGaQpOQjhXdjNabGFxUGtsS1FyR2IrWDBCYVhKckswWEIrY0l5R1FCZ2QxR0tXcGIycEJWejRvc1FHMUN5ZHpuTllYCkp0ekxHb2NwdTljbHNpcmxjVVVYNjlHUVBNZldyS0hIRGtrejQ3NWFnT2pkSWI5TUFjZWwxWENsQmdlWHJuMkwKNkFGaGNYYnhVRVIzUjNTQlJtM3d6ZVowMllUYVpMVS9XOVYxam1hbVIwSDVsSzEwOU9CM2VPTmdVeC9uTjlBUApvU2VhN0djPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg=="
-      {{- end}}
       service:
         name: {{ include "qovery-cluster-agent.fullname" . }}-service
         namespace: qovery
