@@ -113,7 +113,7 @@ prometheus:
             bucket: "set-by-engine-code"
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
-    retention: 90d
+    retention: 7d
     retentionSize: "7GB" # prometheus db
     walCompression: true
     externalUrl: set-by-engine-code
@@ -131,10 +131,11 @@ prometheus:
         memory: "8Gi"
       requests:
         cpu: "1"
-        memory: "2Gi"
+        memory: "4Gi"
     replicas: "set-by-engine-code"
 
 prometheusOperator:
+  priorityClassName: qovery-high-priority
   prometheusConfigReloader:
     image:
       registry: public.ecr.aws/r3m4q3r9
