@@ -1,17 +1,3 @@
-prometheusOperator:
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-         - matchExpressions:
-            - key: "karpenter.sh/nodepool"
-              operator: "In"
-              values: [ "stable" ]
-  tolerations:
-    - key: "nodepool/stable"
-      operator: "Exists"
-      effect: "NoSchedule"
-
 prometheus:
   prometheusSpec:
     affinity:
