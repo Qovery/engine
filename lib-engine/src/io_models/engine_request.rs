@@ -8,7 +8,7 @@ use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
@@ -43,6 +43,7 @@ use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::models::NodeGroups;
 use crate::io_models::{Action, QoveryIdentifier};
+use crate::log_utils::send_progress_on_long_task_with_message;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::azure::azure_auth_service::AzureAuthService;
@@ -57,6 +58,7 @@ use rusoto_signature::Region;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -746,16 +748,19 @@ impl ContainerRegistry {
             ContainerRegistry::AzureCr { long_id, name, options } => {
                 // check credentials
                 // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
-                logger.log(EngineEvent::Info(
+                send_progress_on_long_task_with_message(
+                    logger,
                     event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "Checking Azure credentials, those can take some time to propagate...".to_string(),
-                    ),
-                ));
-                AzureAuthService::login_with_retry(
-                    &options.client_id,
-                    &options.client_secret,
-                    &options.azure_tenant_id,
+                    Some("Checking Azure credentials, those can take some time to propagate...".to_string()),
+                    || {
+                        AzureAuthService::login_with_retry(
+                            &options.client_id,
+                            &options.client_secret,
+                            &options.azure_tenant_id,
+                        )
+                    },
+                    Duration::from_secs(10),
+                    Some(Duration::from_secs(60 * 10)), // 10 minutes max
                 )?;
 
                 Ok(container_registry::ContainerRegistry::AzureContainerRegistry(
