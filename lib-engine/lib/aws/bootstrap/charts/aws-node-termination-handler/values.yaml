@@ -52,6 +52,8 @@ affinity: {}
 
 tolerations: []
 
+topologySpreadConstraints: []
+
 # Extra environment variables
 extraEnv: []
 
@@ -83,6 +85,9 @@ cordonOnly: false
 
 # Taint node upon spot interruption termination notice.
 taintNode: false
+
+# Add out-of-service taint to node after cordon/drain process which would forcefully evict pods without matching tolerations and detach persistent volumes.
+enableOutOfServiceTaint: false
 
 # Exclude node from load balancer before cordoning via the ServiceNodeExclusion feature gate.
 excludeFromLoadBalancers: false
@@ -268,6 +273,9 @@ metadataTries: 3
 # enableSpotInterruptionDraining If false, do not drain nodes when the spot interruption termination notice is received. Only used in IMDS mode.
 enableSpotInterruptionDraining: true
 
+# enableASGLifecycleDraining If false, do not drain nodes when ASG target lifecycle state Terminated is received. Only used in IMDS mode.
+enableASGLifecycleDraining: true
+
 # enableScheduledEventDraining If false, do not drain nodes before the maintenance window starts for an EC2 instance scheduled event. Only used in IMDS mode.
 enableScheduledEventDraining: true
 
@@ -276,6 +284,15 @@ enableRebalanceMonitoring: false
 
 # enableRebalanceDraining If true, drain nodes when the rebalance recommendation notice is received. Only used in IMDS mode.
 enableRebalanceDraining: false
+
+# deleteSqsMsgIfNodeNotFound If true, delete the SQS Message from the SQS Queue if the targeted node(s) are not found. Only used in Queue Processor mode.
+deleteSqsMsgIfNodeNotFound: false
+
+# The time period in seconds between consecutive heartbeat signals. Valid range: 30-3600 seconds (30 seconds to 1 hour).
+heartbeatInterval: -1
+
+# The duration in seconds over which heartbeat signals are sent. Valid range: 60-172800 seconds (1 minute to 48 hours).
+heartbeatUntil: -1
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Testing
