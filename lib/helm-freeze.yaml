@@ -53,10 +53,9 @@ charts:
     version: 0.2.2
     comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: aws-node-termination-handler
-    repo_name: aws
+    repo_name: oci://public.ecr.aws/aws-ec2/helm
     dest: aws-bootstrap
-    comment: https://github.com/aws/eks-charts/blob/master/stable/aws-node-termination-handler/Chart.yaml#L5
-    version: 0.21.0
+    version: 0.27.1
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap

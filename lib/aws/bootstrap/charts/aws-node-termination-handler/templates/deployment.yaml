@@ -102,6 +102,8 @@ spec:
               value: {{ .Values.cordonOnly | quote }}
             - name: TAINT_NODE
               value: {{ .Values.taintNode | quote }}
+            - name: ENABLE_OUT_OF_SERVICE_TAINT
+              value: {{ .Values.enableOutOfServiceTaint | quote }}
             - name: EXCLUDE_FROM_LOAD_BALANCERS
               value: {{ .Values.excludeFromLoadBalancers | quote }}
             - name: DELETE_LOCAL_DATA
@@ -164,8 +166,14 @@ spec:
             {{- end }}
             - name: QUEUE_URL
               value: {{ .Values.queueURL | quote }}
+            - name: DELETE_SQS_MSG_IF_NODE_NOT_FOUND
+              value: {{ .Values.deleteSqsMsgIfNodeNotFound | quote }}
             - name: WORKERS
               value: {{ .Values.workers | quote }}
+            - name: HEARTBEAT_INTERVAL
+              value: {{ .Values.heartbeatInterval | quote }}
+            - name: HEARTBEAT_UNTIL
+              value: {{ .Values.heartbeatUntil | quote }}
             {{- with .Values.extraEnv }}
               {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -206,6 +214,10 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end }}
