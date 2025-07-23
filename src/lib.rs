@@ -22,6 +22,7 @@ pub mod infrastructure;
 pub mod io_models;
 pub mod kubers_utils;
 pub mod log_file_writer;
+mod log_utils;
 pub mod logger;
 pub mod metrics_registry;
 pub mod msg_publisher;
