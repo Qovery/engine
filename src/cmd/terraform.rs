@@ -415,7 +415,7 @@ impl TerraformError {
         // Dependencies issues
         // AWS
         if let Ok(aws_state_expected_re) = Regex::new(
-            r"Error:? deleting (?P<resource_kind>.+?)(\(.+?\))?: DependencyViolation: .+ '(?P<resource_name>.+?)' has dependencies and cannot be deleted",
+            r"Error:?.*?(?:deleting|Error deleting) (?P<resource_kind>.*?)(?:\s*\([^)]+\))?\s*:.*?DependencyViolation:.*?'(?P<resource_name>[^']+)'",
         ) {
             if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
                 if let (Some(resource_kind), Some(resource_name)) = (
@@ -2245,6 +2245,14 @@ Error: creating Amazon S3 (Simple Storage) Bucket (qovery-logs-z0bb3e862): Bucke
                     resource_name: "igw-035c1695edd69cb10".to_string(),
                     resource_kind: "EC2 Internet Gateway".to_string(),
                     raw_message: r#"Error: deleting EC2 Internet Gateway (igw-035c1695edd69cb10): error detaching EC2 Internet Gateway (igw-035c1695edd69cb10) from VPC (vpc-074b19bdada752f7e): DependencyViolation: Network vpc-074b19bdada752f7e has some mapped public address(es). Please unmap those public address(es) before detaching the gateway."#.to_string(),
+                },
+            },
+            TestCase {
+                input_raw_error: r#"Error: deleting EC2 Subnet (subnet-0f59f4f19c8d338d9): operation error EC2: DeleteSubnet, https response error StatusCode: 400, RequestID: fdb0e2c0-6f50-4df2-bb5a-648637bd5173, api error DependencyViolation: The subnet 'subnet-0f59f4f19c8d338d9' has dependencies and cannot be deleted."#,
+                expected_terraform_error: TerraformError::ResourceDependencyViolation {
+                    resource_name: "subnet-0f59f4f19c8d338d9".to_string(),
+                    resource_kind: "EC2 Subnet".to_string(),
+                    raw_message: r#"Error: deleting EC2 Subnet (subnet-0f59f4f19c8d338d9): operation error EC2: DeleteSubnet, https response error StatusCode: 400, RequestID: fdb0e2c0-6f50-4df2-bb5a-648637bd5173, api error DependencyViolation: The subnet 'subnet-0f59f4f19c8d338d9' has dependencies and cannot be deleted."#.to_string(),
                 },
             },
         ];
