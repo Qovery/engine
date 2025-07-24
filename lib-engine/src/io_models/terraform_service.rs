@@ -586,7 +586,7 @@ RUN ls
 RUN chmod +x entrypoint.sh
 USER app
 
-ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/bin/sh", "/data/entrypoint.sh"]
                     "#,
             self.provider_version
         )
@@ -597,8 +597,6 @@ ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
         r#"# entrypoint.sh
 #!/bin/bash
 set -e
-
-echo "Starting entrypoint.sh"
 
 ROOT_MODULE_PATH=$1
 CMD=$2

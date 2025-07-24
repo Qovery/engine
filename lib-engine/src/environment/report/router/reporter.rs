@@ -36,7 +36,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
         &self.logger
     }
 
-    fn new_state(&self) -> Self::DeploymentState {}
+    fn new_state(&mut self) -> Self::DeploymentState {}
 
     fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
         self.metrics_registry

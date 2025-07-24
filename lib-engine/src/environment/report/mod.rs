@@ -32,7 +32,7 @@ pub trait DeploymentReporter: Send + Sync {
     type Logger;
 
     fn logger(&self) -> &Self::Logger;
-    fn new_state(&self) -> Self::DeploymentState;
+    fn new_state(&mut self) -> Self::DeploymentState;
     fn deployment_before_start(&self, state: &mut Self::DeploymentState);
     fn deployment_in_progress(&self, state: &mut Self::DeploymentState);
     fn deployment_terminated(
@@ -133,7 +133,7 @@ where
 // Reporter will not be executed while the task is running the pre_run and post_run_success methods.
 // Only during the run method
 pub fn execute_long_deployment<Log, TaskRet>(
-    deployment_reporter: impl DeploymentReporter<DeploymentResult = TaskRet, Logger = Log>,
+    mut deployment_reporter: impl DeploymentReporter<DeploymentResult = TaskRet, Logger = Log>,
     long_task: impl DeploymentTask<Logger = Log, DeploymentResult = TaskRet>,
 ) -> Result<(), Box<EngineError>> {
     // stop the thread when the blocking task is done
@@ -170,12 +170,13 @@ pub fn execute_long_deployment<Log, TaskRet>(
                         // Send deployment progress report every x secs
                         let report_frequency = deployment_reporter.report_frequency();
                         loop {
+                            deployment_reporter.deployment_in_progress(state);
                             match rx.recv_timeout(report_frequency) {
                                 // Deployment is terminated, we received the result of the task
                                 Ok(_) => break,
 
                                 // Deployment is still in progress
-                                Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
+                                Err(RecvTimeoutError::Timeout) => {}
 
                                 // Other side died without passing us the result ! this is a logical bug !
                                 Err(RecvTimeoutError::Disconnected) => {
@@ -245,7 +246,7 @@ mod test {
             &()
         }
 
-        fn new_state(&self) -> Self::DeploymentState {}
+        fn new_state(&mut self) -> Self::DeploymentState {}
 
         fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
             assert!(!self.is_task_started.load(Ordering::SeqCst));
