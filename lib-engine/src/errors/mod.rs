@@ -3059,8 +3059,8 @@ impl EngineError {
                 Tag::TerraformWrongState,
                 terraform_error.to_safe_message(),
                 Some(terraform_error.into()),
-                None,
-                None,
+                Some(Url::parse("https://hub.qovery.com/docs/using-qovery/troubleshoot/cluster-troubleshoot/#how-do-i-delete-a-cluster-with-dependency-violation-errors").expect("Error while trying to parse error link helper for `TerraformError::ResourceDependencyViolation`, URL is not valid.")),
+                Some("When attempting to delete a Qovery cluster, you may encounter dependency violation errors (DependencyViolation) indicating that certain items cannot be deleted due to existing dependencies. This typically happens when there are resources using the items (here: subnets) that were not deployed or managed by Qovery. Follow the link to the documentation to know how to proceed.".to_string()),
             ),
             TerraformError::InstanceTypeDoesntExist { .. } => EngineError::new(
                 event_details,
