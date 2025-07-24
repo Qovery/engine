@@ -128,7 +128,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         &self.logger
     }
 
-    fn new_state(&self) -> Self::DeploymentState {
+    fn new_state(&mut self) -> Self::DeploymentState {
         RecapReporterDeploymentState {
             report: "".to_string(),
             timestamp: Instant::now(),
