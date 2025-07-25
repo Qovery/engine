@@ -54,16 +54,16 @@ impl DeploymentReporter for RouterDeploymentReporter {
     }
 
     fn deployment_terminated(
-        &self,
+        self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        _: &mut Self::DeploymentState,
-    ) {
+        _: Self::DeploymentState,
+    ) -> EnvLogger {
         let error = match result {
             Ok(_) => {
                 self.stop_record(StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of router succeeded", self.action));
-                return;
+                return self.logger;
             }
             Err(err) => err,
         };
@@ -82,7 +82,7 @@ impl DeploymentReporter for RouterDeploymentReporter {
                 .to_string(),
                 None,
             ));
-            return;
+            return self.logger;
         }
         //self.logger.send_error(*error.clone());
         self.stop_record(StepStatus::Error);
@@ -97,6 +97,8 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 ", self.action),
             None,
         ));
+
+        self.logger
     }
 }
 

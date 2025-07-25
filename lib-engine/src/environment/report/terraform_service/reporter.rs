@@ -16,6 +16,7 @@ use std::future;
 use std::sync::{Arc, Mutex, mpsc};
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
+use tokio::time::timeout;
 use uuid::Uuid;
 
 pub struct TerraformServiceDeploymentReporter {
@@ -57,8 +58,10 @@ impl ReporterState {
     fn terraform_output_stream_mut(&mut self) -> &mut BoxStream<'static, Result<String, std::io::Error>> {
         self.log_lines.get_or_insert_with(|| {
             let pod = self.pod_recv.recv().unwrap_or_default();
-            let mut log_params = LogParams::default();
-            log_params.follow = true;
+            let log_params = LogParams {
+                follow: true,
+                ..Default::default()
+            };
 
             block_on(self.pod_api.log_stream(&pod.name_any(), &log_params))
                 .map(|s| s.lines().boxed())
@@ -107,7 +110,7 @@ impl DeploymentReporter for TerraformServiceDeploymentReporter {
         let mut ctx = Context::from_waker(Waker::noop());
         // To not block the thread we loop until we have some line to log
         // if nothing available yet, we return/yield to check if the task is not terminated
-        if let Some(Ok(log)) = block_on(logs_stream.next()) {
+        if let Ok(Some(Ok(log))) = block_on(async { timeout(Duration::from_secs(30), logs_stream.next()).await }) {
             self.logger.send_progress(log);
         }
         while let Poll::Ready(Some(Ok(log))) = logs_stream.poll_next_unpin(&mut ctx) {
@@ -116,10 +119,10 @@ impl DeploymentReporter for TerraformServiceDeploymentReporter {
     }
 
     fn deployment_terminated(
-        &self,
+        self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        reporter_state: &mut Self::DeploymentState,
-    ) {
+        mut reporter_state: Self::DeploymentState,
+    ) -> EnvLogger {
         // Consume all the remaining logs of the terraform output
         block_on(reporter_state.terraform_output_stream_mut().for_each(|line| {
             if let Ok(line) = line {
@@ -133,7 +136,7 @@ impl DeploymentReporter for TerraformServiceDeploymentReporter {
                 self.stop_record(StepStatus::Success);
                 self.logger
                     .send_success(format!("✅ {} of terraform service succeeded", self.action));
-                return;
+                return self.logger;
             }
             Err(err) => err,
         };
@@ -152,7 +155,7 @@ impl DeploymentReporter for TerraformServiceDeploymentReporter {
                 .to_string(),
                 None,
             ));
-            return;
+            return self.logger;
         }
         self.stop_record(StepStatus::Error);
         self.logger.send_error(*error.clone());
@@ -167,6 +170,8 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 ", self.action),
             None,
         ));
+
+        self.logger
     }
 
     fn report_frequency(&self) -> Duration {
