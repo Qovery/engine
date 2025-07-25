@@ -170,13 +170,12 @@ pub fn execute_long_deployment<Log, TaskRet>(
                         // Send deployment progress report every x secs
                         let report_frequency = deployment_reporter.report_frequency();
                         loop {
-                            deployment_reporter.deployment_in_progress(state);
                             match rx.recv_timeout(report_frequency) {
                                 // Deployment is terminated, we received the result of the task
                                 Ok(_) => break,
 
                                 // Deployment is still in progress
-                                Err(RecvTimeoutError::Timeout) => {}
+                                Err(RecvTimeoutError::Timeout) => deployment_reporter.deployment_in_progress(state),
 
                                 // Other side died without passing us the result ! this is a logical bug !
                                 Err(RecvTimeoutError::Disconnected) => {
