@@ -1,7 +1,8 @@
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError, UpdateStrategy,
-    VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
+    HelmChartNamespaces, UpdateStrategy, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
+    VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -15,16 +16,20 @@ pub struct MetricsServerChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     chart_resources: HelmChartResources,
+    namespace: HelmChartNamespaces,
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
+    allow_insecure_tls: bool,
 }
 
 impl MetricsServerChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
         chart_resources: HelmChartResourcesConstraintType,
+        namespace: HelmChartNamespaces,
         update_strategy: UpdateStrategy,
         enable_vpa: bool,
+        allow_insecure_tls: bool,
     ) -> MetricsServerChart {
         MetricsServerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -47,8 +52,10 @@ impl MetricsServerChart {
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
                 },
             },
+            namespace,
             update_strategy,
             enable_vpa,
+            allow_insecure_tls,
         }
     }
 
@@ -59,10 +66,11 @@ impl MetricsServerChart {
 
 impl ToCommonHelmChart for MetricsServerChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
-        Ok(CommonChart {
+        let mut common_chart = CommonChart {
             chart_info: ChartInfo {
                 name: MetricsServerChart::chart_name(),
                 path: self.chart_path.to_string(),
+                namespace: self.namespace.clone(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![
                     ChartSetValue {
@@ -109,7 +117,16 @@ impl ToCommonHelmChart for MetricsServerChart {
                 )),
                 false => None,
             },
-        })
+        };
+
+        if self.allow_insecure_tls {
+            common_chart.chart_info.values.push(ChartSetValue {
+                key: "args[0]".to_string(),
+                value: "--kubelet-insecure-tls".to_string(),
+            });
+        }
+
+        Ok(common_chart)
     }
 }
 
@@ -141,7 +158,7 @@ impl ChartInstallationChecker for MetricsServerChartChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::UpdateStrategy;
+    use crate::helm::{HelmChartNamespaces, UpdateStrategy};
     use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
     use crate::infrastructure::helm_charts::{
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
@@ -156,7 +173,9 @@ mod tests {
         let chart = MetricsServerChart::new(
             None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartNamespaces::Qovery,
             UpdateStrategy::Recreate,
+            false,
             false,
         );
 
@@ -184,7 +203,9 @@ mod tests {
         let chart = MetricsServerChart::new(
             None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartNamespaces::Qovery,
             UpdateStrategy::Recreate,
+            false,
             false,
         );
 
@@ -216,7 +237,9 @@ mod tests {
         let chart = MetricsServerChart::new(
             None,
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartNamespaces::Qovery,
             UpdateStrategy::Recreate,
+            false,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();

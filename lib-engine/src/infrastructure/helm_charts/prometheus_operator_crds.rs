@@ -67,7 +67,7 @@ impl ToCommonHelmChart for PrometheusOperatorCrdsChart {
         let chart_info: ChartInfo = ChartInfo {
             name: PrometheusOperatorCrdsChart::chart_name(),
             path: self.chart_path.to_string(),
-            namespace: self.prometheus_namespace,
+            namespace: self.prometheus_namespace.clone(),
             values: PrometheusOperatorCrdsChart::qovery_annotations(),
             ..Default::default()
         };

@@ -349,8 +349,7 @@ where
     let chart = ChartInfo {
         name: format!("{}-externalname", db.fqdn_id), // here it is the fqdn id :O
         path: format!("{}/{}", &workspace_dir, "service-chart"),
-        namespace: HelmChartNamespaces::Custom,
-        custom_namespace: Some(target.environment.namespace().to_string()),
+        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
         values,
         ..Default::default()
     };
@@ -676,8 +675,7 @@ where
                 let chart = ChartInfo {
                     name: format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
                     path: format!("{}/{}", &workspace_dir, "service-chart"),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                     action: HelmAction::Destroy,
                     ..Default::default()
                 };
@@ -737,8 +735,7 @@ where
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
+                namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 k8s_selector: Some(self.kube_label_selector()),
                 values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
                 // need to perform reinstall (but keep PVC) to update the statefulset
@@ -837,8 +834,7 @@ where
                 let chart = ChartInfo {
                     name: self.helm_release_name(),
                     action: HelmAction::Destroy,
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                     k8s_selector: Some(self.kube_label_selector()),
                     ..Default::default()
                 };

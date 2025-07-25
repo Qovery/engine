@@ -1,0 +1,53 @@
+fullnameOverride: loki
+loki:
+  auth_enabled: false
+  ingester:
+    lifecycler:
+      ring:
+        kvstore:
+          store: inmemory
+        replication_factor: 1
+  schema_config:
+    configs:
+      - from: 2020-05-15
+        store: boltdb-shipper
+        object_store: filesystem
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+monitoring:
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+    metricsInstance:
+      enabled: false
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  grafanaAgent:
+    enabled: false
+  lokiCanary:
+    enabled: false
+test:
+  enabled: false
+gateway:
+  enabled: false
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: false
+  extraVolumes:
+    - name: data
+      emptyDir: {}
+    - name: storage
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: data
+      mountPath: /data
+    - name: storage
+      mountPath: /var/loki

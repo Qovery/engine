@@ -178,6 +178,7 @@ pub enum Tag {
     K8sValidateRequiredCPUandBurstableError,
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     KubeconfigSecurityCheckError,
+    KubeconfigMandatoryMissingError,
     MissingRequiredEnvVariable,
     NoClusterFound,
     NotAllowedInstanceType,
@@ -403,6 +404,7 @@ impl From<errors::Tag> for Tag {
                 Tag::KubeconfigFileDoNotPermitToConnectToK8sCluster
             }
             errors::Tag::KubeconfigSecurityCheckError => Tag::KubeconfigSecurityCheckError,
+            errors::Tag::KubeconfigMandatoryMissingError => Tag::KubeconfigMandatoryMissingError,
             errors::Tag::DeleteLocalKubeconfigFileError => Tag::DeleteLocalKubeconfigFileError,
             errors::Tag::JsonDeserializationError => Tag::JsonDeserializationError,
             errors::Tag::ObjectStorageCannotDeleteFileIntoBucket => Tag::ObjectStorageCannotDeleteFileIntoBucket,

@@ -4,6 +4,7 @@ mod delete_kube_apps;
 mod deploy_helms;
 mod deploy_terraform;
 mod eks;
+mod eksanywhere;
 mod gen_metrics_charts;
 mod gke;
 pub(super) mod kubeconfig_helper;

@@ -1060,6 +1060,8 @@ pub enum Tag {
     KubeconfigFileDoNotPermitToConnectToK8sCluster,
     /// KubeconfigSecurityCheckError: represent an error because of a security concern/doubt on the kubeconfig file
     KubeconfigSecurityCheckError,
+    /// KubeconfigMandatoryMissing: represents an error when kubeconfig is required
+    KubeconfigMandatoryMissingError,
     /// DeleteLocalKubeconfigFileError: represent an error when trying to delete Kubeconfig
     DeleteLocalKubeconfigFileError,
     /// JsonDeserializationError: represent a deserialization issue
@@ -2151,6 +2153,17 @@ impl EngineError {
         );
 
         EngineError::new(event_details, Tag::KubeconfigSecurityCheckError, message, None, None, None)
+    }
+
+    /// Creates new error to catch missing mandatory kubeconfig
+    ///
+    /// Ensure kubeconfig is set
+    ///
+    /// Arguments:
+    /// * `event_details`: Error linked event details.
+    pub fn new_missing_kubeconfig_error(event_details: EventDetails) -> EngineError {
+        let message = "The cluster kubeconfig is missing".to_string();
+        EngineError::new(event_details, Tag::KubeconfigMandatoryMissingError, message, None, None, None)
     }
 
     /// Creates new error for cannot get api custom metrics.

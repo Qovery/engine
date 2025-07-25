@@ -1703,7 +1703,7 @@ mod tests {
     use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
     use crate::cmd::helm::{Helm, HelmError, helm_exec_with_output};
     use crate::environment::action::deploy_helm::default_helm_timeout;
-    use crate::helm::{ChartInfo, ChartSetValue};
+    use crate::helm::{ChartInfo, ChartSetValue, HelmChartNamespaces};
     use crate::io_models::container::Registry::GenericCr;
     use semver::Version;
     use std::fs::OpenOptions;
@@ -1786,7 +1786,7 @@ mod tests {
             ref helm,
             ref mut charts,
         } = HelmTestCtx::new("test-list-release");
-        charts[0].custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+        charts[0].namespace = HelmChartNamespaces::Custom("hello-my-friend-this-is-a-test".to_string());
 
         // no existing namespace should return an empty array
         let ret = helm.list_release(Some("tsdfsfsdf"), &[]);
@@ -1809,7 +1809,7 @@ mod tests {
             ref helm,
             ref mut charts,
         } = HelmTestCtx::new("test-list-release-2");
-        charts[0].custom_namespace = Some("hello-my-friend-this-is-a-test".to_string());
+        charts[0].namespace = HelmChartNamespaces::Custom("hello-my-friend-this-is-a-test".to_string());
         let ret = helm.upgrade(&charts[0], &[], &CommandKiller::never());
         assert!(matches!(ret, Ok(())));
 

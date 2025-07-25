@@ -82,7 +82,7 @@ pub fn cluster_test(
     let _enter = span.enter();
 
     let kubernetes_boot_version = match kubernetes_kind {
-        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => match test_type {
+        KubernetesKind::Eks | KubernetesKind::EksSelfManaged | KubernetesKind::EksAnywhere => match test_type {
             ClusterTestType::WithUpgrade => AWS_KUBERNETES_VERSION.previous_version().expect("No previous version"),
             _ => AWS_KUBERNETES_VERSION,
         },
@@ -605,7 +605,8 @@ pub fn get_environment_test_kubernetes(
         KubernetesKind::GkeSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::ScwSelfManaged => todo!(), // TODO: Byok integration
         KubernetesKind::EksSelfManaged => todo!(), // TODO: Byok integration
-        KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
+        KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusters ?
+        KubernetesKind::EksAnywhere => todo!(),    // TODO how to test on-premise clusters ?
     };
 
     kubernetes

@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+pub mod eksanywhere;
 pub mod gcp;
 pub mod karpenter;
 pub mod scaleway;
@@ -560,6 +561,7 @@ pub enum Kind {
     AksSelfManaged,
     ScwSelfManaged,
     OnPremiseSelfManaged,
+    EksAnywhere,
 }
 
 impl Kind {
@@ -570,6 +572,7 @@ impl Kind {
             Kind::Gke | Kind::GkeSelfManaged => CloudProviderKind::Gcp,
             Kind::Aks | Kind::AksSelfManaged => CloudProviderKind::Azure,
             Kind::OnPremiseSelfManaged => CloudProviderKind::OnPremise,
+            Kind::EksAnywhere => CloudProviderKind::Aws,
         }
     }
 
@@ -581,6 +584,7 @@ impl Kind {
                 | Kind::AksSelfManaged
                 | Kind::ScwSelfManaged
                 | Kind::OnPremiseSelfManaged
+                | Kind::EksAnywhere
         )
     }
 }
@@ -597,6 +601,7 @@ impl Display for Kind {
             Kind::AksSelfManaged => "AKS Self Managed",
             Kind::ScwSelfManaged => "Scw Self Managed",
             Kind::OnPremiseSelfManaged => "On Premise Self Managed",
+            Kind::EksAnywhere => "EKS Anywhere",
         })
     }
 }

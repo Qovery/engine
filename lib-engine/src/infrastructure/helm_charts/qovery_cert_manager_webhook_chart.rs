@@ -67,7 +67,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryCertManagerWebhookChart::chart_name(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![

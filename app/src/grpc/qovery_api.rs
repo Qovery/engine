@@ -152,6 +152,7 @@ fn to_kubernetes_provider_kind(kubernetes_kind: Kind) -> anyhow::Result<Kubernet
         | Kind::GkeSelfManaged
         | Kind::AksSelfManaged
         | Kind::ScwSelfManaged
-        | Kind::OnPremiseSelfManaged => Err(anyhow!(format!("kubernetes_kind is not supported: {}", kubernetes_kind))),
+        | Kind::OnPremiseSelfManaged
+        | Kind::EksAnywhere => Err(anyhow!(format!("kubernetes_kind is not supported: {}", kubernetes_kind))),
     }
 }

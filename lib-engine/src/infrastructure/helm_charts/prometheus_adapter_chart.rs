@@ -80,7 +80,7 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                 name: "prometheus-adapter".to_string(),
                 path: self.chart_path.to_string(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
-                namespace: self.prometheus_namespace,
+                namespace: self.prometheus_namespace.clone(),
                 values_files,
                 values: vec![ChartSetValue {
                     key: "prometheus.url".to_string(),

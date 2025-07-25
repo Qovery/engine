@@ -56,7 +56,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
             chart_info: ChartInfo {
                 name: CertManagerConfigsChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 // TODO: fix backup apply, it makes the chart deployment failed randomly
                 // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
                 values_files: vec![self.chart_values_path.to_string()],

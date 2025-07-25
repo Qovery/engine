@@ -1,0 +1,7 @@
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: qovery-pool
+spec:
+  addresses:
+{{ toYaml .Values.ipAddressPool.addresses | indent 4 }}

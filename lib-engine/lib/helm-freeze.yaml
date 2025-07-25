@@ -1,4 +1,10 @@
 charts:
+  - name: metallb
+    repo_name: bitnami
+    dest_folder_override: metal-lb 
+    dest: eksanywhere-bootstrap
+    version: 6.4.16
+    comment: https://artifacthub.io/packages/helm/bitnami/metallb
   - name: cert-manager
     version: v1.15.3
     repo_name: jetstack
@@ -184,3 +190,5 @@ destinations:
     path: azure/bootstrap/charts
   - name: services
     path: common/services
+  - name: eksanywhere-bootstrap
+    path: eksanywhere/bootstrap/charts

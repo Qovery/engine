@@ -44,10 +44,14 @@ pub struct BlobStorageLokiChartConfiguration {
     pub azure_loki_msi_client_id: Option<String>,
 }
 
+#[derive(Default)]
+pub struct LocalLokiChartConfiguration {}
+
 pub enum LokiObjectBucketConfiguration {
     S3(S3LokiChartConfiguration),
     GCS(GCSLokiChartConfiguration),
     BlobStorage(BlobStorageLokiChartConfiguration),
+    Local,
 }
 
 pub struct LokiChart {
@@ -80,6 +84,12 @@ impl LokiChart {
         chart_timeout: HelmChartTimeout,
         karpenter_enabled: bool,
     ) -> Self {
+        let chart_values_path_directory = match loki_object_bucket_configuration {
+            LokiObjectBucketConfiguration::S3(_)
+            | LokiObjectBucketConfiguration::GCS(_)
+            | LokiObjectBucketConfiguration::BlobStorage(_) => HelmChartDirectoryLocation::CommonFolder,
+            LokiObjectBucketConfiguration::Local => HelmChartDirectoryLocation::CloudProviderFolder,
+        };
         LokiChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -89,7 +99,7 @@ impl LokiChart {
             ),
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
+                chart_values_path_directory,
                 LokiChart::chart_name(),
             ),
             // encryption_type,
@@ -142,6 +152,11 @@ impl ToCommonHelmChart for LokiChart {
                 LokiObjectBucketConfiguration::BlobStorage(config) => {
                     (&default_gcs_configuration, &default_s3_configuration, config)
                 }
+                LokiObjectBucketConfiguration::Local => (
+                    &default_gcs_configuration,
+                    &default_s3_configuration,
+                    &default_blob_storage_configuration,
+                ),
             };
 
         let bucket_name = match &self.loki_object_bucket_configuration {
@@ -150,6 +165,7 @@ impl ToCommonHelmChart for LokiChart {
             LokiObjectBucketConfiguration::BlobStorage(c) => {
                 c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string()
             }
+            LokiObjectBucketConfiguration::Local => "".to_string(),
         };
 
         let mut values_files = vec![self.chart_values_path.to_string()];
@@ -161,7 +177,7 @@ impl ToCommonHelmChart for LokiChart {
             chart_info: ChartInfo {
                 name: LokiChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: self.chart_namespace,
+                namespace: self.chart_namespace.clone(),
                 timeout_in_seconds: match self.chart_timeout {
                     HelmChartTimeout::ChartDefault => 900,
                     HelmChartTimeout::Custom(t) => t.whole_seconds(),
@@ -223,6 +239,7 @@ impl ToCommonHelmChart for LokiChart {
                             LokiObjectBucketConfiguration::S3(_) => "s3",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
                             LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                            LokiObjectBucketConfiguration::Local => "filesystem",
                         }
                         .to_string(),
                     },
@@ -232,6 +249,7 @@ impl ToCommonHelmChart for LokiChart {
                             LokiObjectBucketConfiguration::S3(_) => "s3",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
                             LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                            LokiObjectBucketConfiguration::Local => "filesystem",
                         }
                         .to_string(),
                     },
@@ -241,6 +259,7 @@ impl ToCommonHelmChart for LokiChart {
                             LokiObjectBucketConfiguration::S3(_) => "aws",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
                             LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                            LokiObjectBucketConfiguration::Local => "filesystem",
                         }
                         .to_string(),
                     },
