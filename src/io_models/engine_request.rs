@@ -200,6 +200,7 @@ impl<T> EngineRequest<T> {
             kubernetes::Kind::AksSelfManaged => true,
             kubernetes::Kind::ScwSelfManaged => true,
             kubernetes::Kind::OnPremiseSelfManaged => true,
+            kubernetes::Kind::EksAnywhere => true,
         }
     }
 }
@@ -637,6 +638,31 @@ impl KubernetesDto {
                     logger,
                     ClusterAdvancedSettings::default(),
                     self.kubeconfig.clone(),
+                    temp_dir,
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
+            kubernetes::Kind::EksAnywhere => {
+                let kubeconfig = match self.kubeconfig.clone() {
+                    None => return Err(Box::new(EngineError::new_missing_kubeconfig_error(event_details.clone()))),
+                    Some(value) => value,
+                };
+                match kubernetes::eksanywhere::EksAnywhere::new(
+                    context.clone(),
+                    self.long_id,
+                    self.name.to_string(),
+                    cloud_provider,
+                    self.kind,
+                    self.region.to_string(),
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    serde_json::from_value::<kubernetes::eksanywhere::EksAnywhereOptions>(self.options.clone())
+                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    logger,
+                    self.advanced_settings.clone(),
+                    kubeconfig,
                     temp_dir,
                 ) {
                     Ok(res) => Ok(Box::new(res)),

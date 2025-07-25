@@ -59,7 +59,7 @@ pub enum HelmAction {
     Destroy,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub enum HelmChartNamespaces {
     KubeSystem,
     Prometheus,
@@ -67,13 +67,13 @@ pub enum HelmChartNamespaces {
     CertManager,
     NginxIngress,
     Qovery,
-    Custom,
+    Custom(String),
 }
 
 impl Display for HelmChartNamespaces {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            HelmChartNamespaces::Custom => "custom",
+            HelmChartNamespaces::Custom(namespace) => namespace,
             HelmChartNamespaces::KubeSystem => "kube-system",
             HelmChartNamespaces::Prometheus => "prometheus",
             HelmChartNamespaces::Logging => "logging",
@@ -298,7 +298,6 @@ pub struct ChartInfo {
     pub name: String,
     pub path: String,
     pub namespace: HelmChartNamespaces,
-    pub custom_namespace: Option<String>,
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
@@ -335,8 +334,7 @@ impl ChartInfo {
         ChartInfo {
             name,
             path,
-            namespace: HelmChartNamespaces::Custom,
-            custom_namespace: Some(custom_namespace),
+            namespace: HelmChartNamespaces::Custom(custom_namespace),
             timeout_in_seconds,
             values_files,
             values,
@@ -350,20 +348,13 @@ impl ChartInfo {
     pub fn new_from_release_name(name: &str, custom_namespace: &str) -> ChartInfo {
         ChartInfo {
             name: name.to_string(),
-            namespace: HelmChartNamespaces::Custom,
-            custom_namespace: Some(custom_namespace.to_string()),
+            namespace: HelmChartNamespaces::Custom(custom_namespace.to_string()),
             ..Default::default()
         }
     }
 
     pub fn get_namespace_string(&self) -> String {
-        match self.namespace {
-            HelmChartNamespaces::Custom => self
-                .custom_namespace
-                .clone()
-                .unwrap_or_else(|| self.namespace.to_string()),
-            _ => self.namespace.to_string(),
-        }
+        self.namespace.to_string()
     }
 
     pub fn generate_vpa_helm_config(vpa_configs: Vec<VpaConfig>) -> String {
@@ -386,7 +377,6 @@ impl Default for ChartInfo {
             name: "undefined".to_string(),
             path: "undefined".to_string(),
             namespace: HelmChartNamespaces::KubeSystem,
-            custom_namespace: None,
             action: Deploy,
             atomic: true,
             force_upgrade: false,
@@ -742,8 +732,7 @@ impl CommonChart {
                 Some(_) => Deploy,
                 None => HelmAction::Destroy,
             },
-            namespace: current_chart.namespace,
-            custom_namespace: current_chart.custom_namespace.clone(),
+            namespace: current_chart.namespace.clone(),
             yaml_files_content: match vpa_config {
                 Some(config) => vec![ChartValuesGenerated::new(
                     chart_name,

@@ -72,7 +72,7 @@ impl ThanosChart {
             ),
             prometheus_configuration,
             storage_class_name,
-            prometheus_namespace,
+            prometheus_namespace: prometheus_namespace.clone(),
             thanos_namespace: prometheus_namespace,
             retention: match retention {
                 Some(retention) => retention,
@@ -160,7 +160,7 @@ impl ToCommonHelmChart for ThanosChart {
             action: self.action.clone(),
             name: ThanosChart::chart_name(),
             path: self.chart_path.to_string(),
-            namespace: self.thanos_namespace,
+            namespace: self.thanos_namespace.clone(),
             values_files,
             values: vec![
                 // query

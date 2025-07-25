@@ -17,6 +17,7 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use crate::infrastructure::models::kubernetes::Kind::EksAnywhere;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use reqwest::StatusCode;
@@ -136,6 +137,36 @@ pub struct NginxIngressChart {
     nginx_default_backend_image_repository: Option<String>,
     nginx_default_backend_image_tag: Option<String>,
     enable_admission_controller: bool,
+    default_ssl_certificate: Option<String>,
+    publish_status_address: Option<String>,
+    replica_count: Option<u8>,
+    metal_lb_load_balancer_ip: Option<String>,
+    external_dns_target: Option<String>,
+}
+
+pub struct NginxOptions {
+    pub nginx_hpa_minimum_replicas: Option<u32>,
+    pub nginx_hpa_maximum_replicas: Option<u32>,
+    pub nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
+    pub namespace: HelmChartNamespaces,
+    pub loadbalancer_size: Option<String>,
+    pub enable_real_ip: bool,
+    pub use_forwarded_headers: bool,
+    pub compute_full_forwarded_for: bool,
+    pub log_format_escaping: LogFormatEscaping,
+    pub is_alb_enabled: bool,
+    pub http_snippet: Option<NginxHttpSnippet>,
+    pub server_snippet: Option<NginxServerSnippet>,
+    pub limit_request_status_code: Option<NginxLimitRequestStatusCode>,
+    pub nginx_controller_custom_http_errors: Option<String>,
+    pub nginx_default_backend_enabled: Option<bool>,
+    pub nginx_default_backend_image_repository: Option<String>,
+    pub nginx_default_backend_image_tag: Option<String>,
+    pub default_ssl_certificate: Option<String>,
+    pub publish_status_address: Option<String>,
+    pub replica_count: Option<u8>,
+    pub metal_lb_load_balancer_ip: Option<String>,
+    pub external_dns_target: Option<String>,
 }
 
 impl NginxIngressChart {
@@ -153,23 +184,7 @@ impl NginxIngressChart {
         cluster_short_id: String,
         kubernetes_kind: KubernetesKind,
         created_cluster_date: DateTime<Utc>,
-        nginx_hpa_minimum_replicas: Option<u32>,
-        nginx_hpa_maximum_replicas: Option<u32>,
-        nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
-        namespace: HelmChartNamespaces,
-        loadbalancer_size: Option<String>,
-        enable_real_ip: bool,
-        use_forwarded_headers: bool,
-        compute_full_forwarded_for: bool,
-        log_format_escaping: LogFormatEscaping,
-        is_alb_enabled: bool,
-        http_snippet: Option<NginxHttpSnippet>,
-        server_snippet: Option<NginxServerSnippet>,
-        limit_request_status_code: Option<NginxLimitRequestStatusCode>,
-        nginx_controller_custom_http_errors: Option<String>,
-        nginx_default_backend_enabled: Option<bool>,
-        nginx_default_backend_image_repository: Option<String>,
-        nginx_default_backend_image_tag: Option<String>,
+        options: NginxOptions,
     ) -> Self {
         NginxIngressChart {
             chart_path: HelmChartPath::new(
@@ -209,24 +224,29 @@ impl NginxIngressChart {
             cluster_long_id,
             cluster_short_id,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
-            nginx_hpa_minimum_replicas,
-            nginx_hpa_maximum_replicas,
-            nginx_hpa_target_cpu_utilization_percentage,
-            namespace,
-            loadbalancer_size,
-            enable_real_ip,
-            use_forwarded_headers,
-            compute_full_forwarded_for,
-            log_format_escaping,
-            is_alb_enabled,
-            http_snippet,
-            server_snippet,
-            limit_request_status_code,
-            nginx_controller_custom_http_errors,
-            nginx_default_backend_enabled,
-            nginx_default_backend_image_repository,
-            nginx_default_backend_image_tag,
+            nginx_hpa_minimum_replicas: options.nginx_hpa_minimum_replicas,
+            nginx_hpa_maximum_replicas: options.nginx_hpa_maximum_replicas,
+            nginx_hpa_target_cpu_utilization_percentage: options.nginx_hpa_target_cpu_utilization_percentage,
+            namespace: options.namespace,
+            loadbalancer_size: options.loadbalancer_size,
+            enable_real_ip: options.enable_real_ip,
+            use_forwarded_headers: options.use_forwarded_headers,
+            compute_full_forwarded_for: options.compute_full_forwarded_for,
+            log_format_escaping: options.log_format_escaping,
+            is_alb_enabled: options.is_alb_enabled,
+            http_snippet: options.http_snippet,
+            server_snippet: options.server_snippet,
+            limit_request_status_code: options.limit_request_status_code,
+            nginx_controller_custom_http_errors: options.nginx_controller_custom_http_errors,
+            nginx_default_backend_enabled: options.nginx_default_backend_enabled,
+            nginx_default_backend_image_repository: options.nginx_default_backend_image_repository,
+            nginx_default_backend_image_tag: options.nginx_default_backend_image_tag,
             enable_admission_controller: Self::enable_admission_controller(&created_cluster_date),
+            default_ssl_certificate: options.default_ssl_certificate,
+            publish_status_address: options.publish_status_address,
+            replica_count: options.replica_count,
+            metal_lb_load_balancer_ip: options.metal_lb_load_balancer_ip,
+            external_dns_target: options.external_dns_target,
         }
     }
 
@@ -539,7 +559,41 @@ defaultBackend:
             }
             Kind::Gcp => {}
             Kind::Azure => {}
-            Kind::OnPremise => {}
+            Kind::OnPremise => {
+                if self.kubernetes_kind == EksAnywhere {
+                    if let Some(value) = &self.default_ssl_certificate {
+                        chart_set_values.push(ChartSetValue {
+                            key: "controller.extraArgs.default-ssl-certificate".to_string(),
+                            value: value.to_string(),
+                        });
+                    }
+                    if let Some(value) = &self.publish_status_address {
+                        chart_set_values.push(ChartSetValue {
+                            key: "controller.extraArgs.publish-status-address".to_string(),
+                            value: value.to_string(),
+                        });
+                    }
+                    if let Some(value) = &self.replica_count {
+                        chart_set_values.push(ChartSetValue {
+                            key: "controller.replicaCount".to_string(),
+                            value: value.to_string(),
+                        });
+                    }
+                    if let Some(value) = &self.metal_lb_load_balancer_ip {
+                        chart_set_values.push(ChartSetValue {
+                            key: "controller.service.annotations.metallb\\.universe\\.tf/loadBalancerIPs".to_string(),
+                            value: value.to_string(),
+                        });
+                    }
+                    if let Some(value) = &self.external_dns_target {
+                        chart_set_values.push(ChartSetValue {
+                            key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/target"
+                                .to_string(),
+                            value: value.to_string(),
+                        });
+                    }
+                }
+            }
         }
         // external dns
         chart_set_values.push(ChartSetValue {
@@ -551,7 +605,7 @@ defaultBackend:
             chart_info: ChartInfo {
                 name: NginxIngressChart::chart_old_name(),
                 path: self.chart_path.to_string(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 // Because of NLB, svc can take some time to start
                 // rolling out the deployment can take a lot of time for users that has a lot of nginx
                 timeout_in_seconds: 60 * 60,
@@ -607,8 +661,8 @@ mod tests {
     use crate::infrastructure::helm_charts::HelmChartResourcesConstraintType;
     use crate::infrastructure::helm_charts::HelmChartType;
     use crate::infrastructure::helm_charts::ToCommonHelmChart;
-    use crate::infrastructure::helm_charts::nginx_ingress_chart::LogFormatEscaping;
     use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
+    use crate::infrastructure::helm_charts::nginx_ingress_chart::{LogFormatEscaping, NginxOptions};
     use crate::infrastructure::helm_charts::{
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
@@ -652,23 +706,30 @@ mod tests {
             "z10000000".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
-            Some(1),
-            Some(10),
-            Some(50),
-            HelmChartNamespaces::NginxIngress,
-            None,
-            true,
-            true,
-            true,
-            LogFormatEscaping::Default,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            NginxOptions {
+                nginx_hpa_minimum_replicas: Some(1),
+                nginx_hpa_maximum_replicas: Some(10),
+                nginx_hpa_target_cpu_utilization_percentage: Some(50),
+                namespace: HelmChartNamespaces::NginxIngress,
+                loadbalancer_size: None,
+                enable_real_ip: true,
+                use_forwarded_headers: true,
+                compute_full_forwarded_for: true,
+                log_format_escaping: LogFormatEscaping::Default,
+                is_alb_enabled: false,
+                http_snippet: None,
+                server_snippet: None,
+                limit_request_status_code: None,
+                nginx_controller_custom_http_errors: None,
+                nginx_default_backend_enabled: None,
+                nginx_default_backend_image_repository: None,
+                nginx_default_backend_image_tag: None,
+                default_ssl_certificate: None,
+                publish_status_address: None,
+                replica_count: None,
+                metal_lb_load_balancer_ip: None,
+                external_dns_target: None,
+            },
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -707,23 +768,30 @@ mod tests {
             "z10000000".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
-            Some(1),
-            Some(10),
-            Some(50),
-            HelmChartNamespaces::NginxIngress,
-            None,
-            true,
-            true,
-            true,
-            LogFormatEscaping::Default,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            NginxOptions {
+                nginx_hpa_minimum_replicas: Some(1),
+                nginx_hpa_maximum_replicas: Some(10),
+                nginx_hpa_target_cpu_utilization_percentage: Some(50),
+                namespace: HelmChartNamespaces::NginxIngress,
+                loadbalancer_size: None,
+                enable_real_ip: true,
+                use_forwarded_headers: true,
+                compute_full_forwarded_for: true,
+                log_format_escaping: LogFormatEscaping::Default,
+                is_alb_enabled: false,
+                http_snippet: None,
+                server_snippet: None,
+                limit_request_status_code: None,
+                nginx_controller_custom_http_errors: None,
+                nginx_default_backend_enabled: None,
+                nginx_default_backend_image_repository: None,
+                nginx_default_backend_image_tag: None,
+                default_ssl_certificate: None,
+                publish_status_address: None,
+                replica_count: None,
+                metal_lb_load_balancer_ip: None,
+                external_dns_target: None,
+            },
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -764,23 +832,30 @@ mod tests {
                 "z10000000".to_string(),
                 KubernetesKind::Eks,
                 Utc::now(),
-                None,
-                None,
-                None,
-                HelmChartNamespaces::NginxIngress,
-                None,
-                true,
-                true,
-                true,
-                log_format_escaping.clone(),
-                false,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
-                None,
+                NginxOptions {
+                    nginx_hpa_minimum_replicas: None,
+                    nginx_hpa_maximum_replicas: None,
+                    nginx_hpa_target_cpu_utilization_percentage: None,
+                    namespace: HelmChartNamespaces::NginxIngress,
+                    loadbalancer_size: None,
+                    enable_real_ip: true,
+                    use_forwarded_headers: true,
+                    compute_full_forwarded_for: true,
+                    log_format_escaping: log_format_escaping.clone(),
+                    is_alb_enabled: false,
+                    http_snippet: None,
+                    server_snippet: None,
+                    limit_request_status_code: None,
+                    nginx_controller_custom_http_errors: None,
+                    nginx_default_backend_enabled: None,
+                    nginx_default_backend_image_repository: None,
+                    nginx_default_backend_image_tag: None,
+                    default_ssl_certificate: None,
+                    publish_status_address: None,
+                    replica_count: None,
+                    metal_lb_load_balancer_ip: None,
+                    external_dns_target: None,
+                },
             );
 
             // execute:
@@ -827,23 +902,30 @@ mod tests {
             "z10000000".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
-            Some(1),
-            Some(10),
-            Some(50),
-            HelmChartNamespaces::NginxIngress,
-            None,
-            true,
-            true,
-            true,
-            LogFormatEscaping::Default,
-            false,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
+            NginxOptions {
+                nginx_hpa_minimum_replicas: Some(1),
+                nginx_hpa_maximum_replicas: Some(10),
+                nginx_hpa_target_cpu_utilization_percentage: Some(50),
+                namespace: HelmChartNamespaces::NginxIngress,
+                loadbalancer_size: None,
+                enable_real_ip: true,
+                use_forwarded_headers: true,
+                compute_full_forwarded_for: true,
+                log_format_escaping: LogFormatEscaping::Default,
+                is_alb_enabled: false,
+                http_snippet: None,
+                server_snippet: None,
+                limit_request_status_code: None,
+                nginx_controller_custom_http_errors: None,
+                nginx_default_backend_enabled: None,
+                nginx_default_backend_image_repository: None,
+                nginx_default_backend_image_tag: None,
+                default_ssl_certificate: None,
+                publish_status_address: None,
+                replica_count: None,
+                metal_lb_load_balancer_ip: None,
+                external_dns_target: None,
+            },
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

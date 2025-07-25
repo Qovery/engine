@@ -816,7 +816,7 @@ pub fn test_db(
 
     let kubernetes_version = match kubernetes_kind {
         KubernetesKind::Aks | KubernetesKind::AksSelfManaged => AZURE_KUBERNETES_VERSION,
-        KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS_KUBERNETES_VERSION,
+        KubernetesKind::Eks | KubernetesKind::EksSelfManaged | KubernetesKind::EksAnywhere => AWS_KUBERNETES_VERSION,
         KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => SCW_KUBERNETES_VERSION,
         KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => GCP_KUBERNETES_VERSION,
         KubernetesKind::OnPremiseSelfManaged => ON_PREMISE_KUBERNETES_VERSION,
@@ -827,23 +827,25 @@ pub fn test_db(
         Some(c) => c,
         None => {
             computed_infra_ctx = match kubernetes_kind {
-                KubernetesKind::Eks | KubernetesKind::EksSelfManaged => AWS::docker_cr_engine(
-                    &context,
-                    logger.clone(),
-                    metrics_registry.clone(),
-                    localisation.as_str(),
-                    KubernetesKind::Eks,
-                    kubernetes_version.clone(),
-                    &cluster_domain,
-                    None,
-                    KUBERNETES_MIN_NODES,
-                    KUBERNETES_MAX_NODES,
-                    CpuArchitecture::AMD64,
-                    EngineLocation::ClientSide,
-                    secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
-                    NodeManager::Default,
-                    vec![],
-                ),
+                KubernetesKind::Eks | KubernetesKind::EksSelfManaged | KubernetesKind::EksAnywhere => {
+                    AWS::docker_cr_engine(
+                        &context,
+                        logger.clone(),
+                        metrics_registry.clone(),
+                        localisation.as_str(),
+                        KubernetesKind::Eks,
+                        kubernetes_version.clone(),
+                        &cluster_domain,
+                        None,
+                        KUBERNETES_MIN_NODES,
+                        KUBERNETES_MAX_NODES,
+                        CpuArchitecture::AMD64,
+                        EngineLocation::ClientSide,
+                        secrets.AWS_TEST_KUBECONFIG_b64.as_ref().map(|s| s.to_string()),
+                        NodeManager::Default,
+                        vec![],
+                    )
+                }
                 KubernetesKind::Aks | KubernetesKind::AksSelfManaged => Azure::docker_cr_engine(
                     &context,
                     logger.clone(),
@@ -1042,7 +1044,8 @@ pub fn test_db(
                 KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
-                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusters ?
+                KubernetesKind::EksAnywhere => todo!(),    // TODO how to test eks-anywhere clusters ?
             };
             &computed_infra_ctx_for_delete
         }
@@ -1232,7 +1235,8 @@ pub fn test_pause_managed_db(
                 KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
-                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusters ?
+                KubernetesKind::EksAnywhere => todo!(), // TODO how to test eks-anywhere clusters ?
             };
             &computed_infra_ctx
         }
@@ -1355,7 +1359,8 @@ pub fn test_pause_managed_db(
                 KubernetesKind::AksSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::GkeSelfManaged => todo!(), // TODO byok integration
                 KubernetesKind::ScwSelfManaged => todo!(), // TODO byok integration
-                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusers ?
+                KubernetesKind::OnPremiseSelfManaged => todo!(), // TODO how to test on-premise clusters ?
+                KubernetesKind::EksAnywhere => todo!(), // TODO how to test eks-anywhere clusters ?
             };
             &computed_infra_ctx_for_delete
         }

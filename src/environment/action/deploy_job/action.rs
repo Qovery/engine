@@ -172,8 +172,7 @@ where
         let chart = ChartInfo {
             name: job.helm_release_name(),
             path: job.workspace_directory().to_string(),
-            namespace: HelmChartNamespaces::Custom,
-            custom_namespace: Some(target.environment.namespace().to_string()),
+            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
             timeout_in_seconds: job.startup_timeout().as_secs() as i64,
             k8s_selector: Some(job.kube_label_selector()),
             ..Default::default()
