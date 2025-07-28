@@ -72,7 +72,7 @@ impl ThanosChart {
             ),
             prometheus_configuration,
             storage_class_name,
-            prometheus_namespace,
+            prometheus_namespace: prometheus_namespace.clone(),
             thanos_namespace: prometheus_namespace,
             retention: match retention {
                 Some(retention) => retention,
@@ -85,53 +85,53 @@ impl ThanosChart {
             query_resources: match query_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
                 },
             },
             query_autoscaling: HelmChartAutoscaling {
                 min_replicas: 2,
                 max_replicas: 5,
-                target_cpu_utilization_percentage: 70,
+                target_cpu_utilization_percentage: 60,
             },
             query_frontend_resources: match query_frontend_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
                 },
             },
             query_frontend_autoscaling: HelmChartAutoscaling {
                 min_replicas: 1,
                 max_replicas: 5,
-                target_cpu_utilization_percentage: 70,
+                target_cpu_utilization_percentage: 60,
             },
             compactor_resources: match compactor_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(4),
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    request_memory: KubernetesMemoryResourceUnit::GibiByte(4),
                 },
             },
             store_gateway_resources: match store_gateway_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(512),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(512),
                 },
             },
             store_gateway_autoscaling: HelmChartAutoscaling {
                 min_replicas: 2,
                 max_replicas: 5,
-                target_cpu_utilization_percentage: 70,
+                target_cpu_utilization_percentage: 60,
             },
             additional_char_path: match karpenter_enabled {
                 true => Some(HelmChartValuesFilePath::new(
@@ -160,7 +160,7 @@ impl ToCommonHelmChart for ThanosChart {
             action: self.action.clone(),
             name: ThanosChart::chart_name(),
             path: self.chart_path.to_string(),
-            namespace: self.thanos_namespace,
+            namespace: self.thanos_namespace.clone(),
             values_files,
             values: vec![
                 // query
@@ -215,7 +215,7 @@ impl ToCommonHelmChart for ThanosChart {
                 // query Frontend
                 ChartSetValue {
                     key: "queryFrontend.replicaCount".to_string(),
-                    value: self.query_frontend_autoscaling.min_replicas.to_string(),
+                    value: "0".to_string(), // disable by default
                 },
                 ChartSetValue {
                     key: "queryFrontend.resources.limits.cpu".to_string(),
@@ -252,7 +252,10 @@ impl ToCommonHelmChart for ThanosChart {
                 ChartSetValue {
                     key: "compactor.concurrency".to_string(),
                     // goroutine per CPU core. Set it to 2x the number of CPU cores, should be fine due to the nature of this job
-                    value: (u32::from(self.compactor_resources.request_cpu.clone()) * 2 / 1000).to_string(),
+                    // value: (u32::from(self.compactor_resources.request_cpu.clone()) * 2 / 1000).to_string(),
+
+                    // The memory seems to be the bottleneck, so test with 1 for the moment
+                    value: "1".to_string(),
                 },
                 ChartSetValue {
                     key: "compactor.retentionResolutionRaw".to_string(),

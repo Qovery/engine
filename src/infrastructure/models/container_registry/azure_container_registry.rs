@@ -320,6 +320,15 @@ impl InteractWithRegistry for AzureContainerRegistry {
     }
 
     fn delete_repository(&self, repository_name: &str) -> Result<(), ContainerRegistryError> {
+        // check if the repository exists
+        if let Err(_e) = self.service.get_registry(
+            self.subscription_id.as_str(),
+            self.resource_group_name.as_str(),
+            repository_name,
+        ) {
+            return Ok(());
+        }
+
         self.service
             .delete_registry(
                 self.subscription_id.as_str(),

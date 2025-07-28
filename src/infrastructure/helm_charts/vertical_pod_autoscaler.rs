@@ -94,7 +94,7 @@ impl ToCommonHelmChart for VpaChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "vertical-pod-autoscaler".to_string(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![

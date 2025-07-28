@@ -64,8 +64,7 @@ where
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
+                namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 timeout_in_seconds: self.startup_timeout().as_secs() as i64,
                 k8s_selector: Some(self.kube_label_selector()),
                 ..Default::default()
@@ -120,8 +119,7 @@ where
             |logger: &EnvProgressLogger| {
                 let chart = ChartInfo {
                     name: self.helm_release_name(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                     action: HelmAction::Destroy,
                     k8s_selector: Some(self.kube_label_selector()),
                     ..Default::default()

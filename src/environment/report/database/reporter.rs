@@ -129,7 +129,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         &self.logger
     }
 
-    fn new_state(&self) -> Self::DeploymentState {
+    fn new_state(&mut self) -> Self::DeploymentState {
         RecapReporterDeploymentState {
             report: "".to_string(),
             timestamp: Instant::now(),
@@ -252,10 +252,10 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
         }
     }
     fn deployment_terminated(
-        &self,
+        self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        last_report: &mut Self::DeploymentState,
-    ) {
+        last_report: Self::DeploymentState,
+    ) -> EnvLogger {
         let error = match result {
             Ok(_) => {
                 self.stop_records(StepStatus::Success);
@@ -266,7 +266,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
                     self.logger
                         .send_success(format!("✅ {} of container database succeeded", self.action));
                 }
-                return;
+                return self.logger;
             }
             Err(err) => err,
         };
@@ -285,7 +285,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
                 .to_string(),
                 None,
             ));
-            return;
+            return self.logger;
         }
 
         // Send error recap
@@ -294,7 +294,7 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
             Err(err) => {
                 self.logger
                     .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
-                return;
+                return self.logger;
             }
         };
         for line in recap_report.trim_end().split('\n').map(str::to_string) {
@@ -314,6 +314,8 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 "#, self.action).trim().to_string(),
             None,
         ));
+
+        self.logger
     }
 }
 

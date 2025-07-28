@@ -91,7 +91,7 @@ impl ToCommonHelmChart for PromtailChart {
             name: PromtailChart::chart_name(),
             reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 1, 0)),
             path: self.chart_path.to_string(),
-            namespace: self.namespace,
+            namespace: self.namespace.clone(),
             values_files,
             values: vec![
                 ChartSetValue {

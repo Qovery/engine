@@ -57,7 +57,7 @@ impl ToCommonHelmChart for KubeStateMetricsChart {
             chart_info: ChartInfo {
                 action: self.action.clone(),
                 name: KubeStateMetricsChart::chart_name(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(4, 23, 0)),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],

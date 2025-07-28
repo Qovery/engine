@@ -21,6 +21,7 @@ use kube::Api;
 use kube::api::{DeleteParams, ListParams};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::time::Duration;
 
 impl<T: CloudProvider> DeploymentAction for TerraformService<T>
@@ -32,8 +33,9 @@ where
 
         let pre_run = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
 
+        let (tx, rx) = mpsc::sync_channel(1);
         let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, false)
+            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, false, tx.clone())
         };
 
         let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
@@ -44,7 +46,7 @@ where
             post_run_success: &post_run,
         };
 
-        execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Create), task)
+        execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Create, rx), task)
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
@@ -64,8 +66,9 @@ where
         let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
+        let (tx, rx) = mpsc::sync_channel(1);
         let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, true)
+            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, true, tx.clone())
         };
 
         let task = DeploymentTaskImpl {
@@ -74,7 +77,7 @@ where
             post_run_success: &post_run,
         };
 
-        execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Delete), task)
+        execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Delete, rx), task)
     }
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
@@ -101,6 +104,7 @@ where
         logger: &EnvProgressLogger,
         state: (),
         uninstall_helm: bool,
+        pod_tx: mpsc::SyncSender<Pod>,
     ) -> Result<(), Box<EngineError>> {
         // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
@@ -109,8 +113,7 @@ where
         let chart = ChartInfo {
             name: self.helm_release_name(),
             path: self.workspace_directory().to_string(),
-            namespace: HelmChartNamespaces::Custom,
-            custom_namespace: Some(target.environment.namespace().to_string()),
+            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
             timeout_in_seconds: self.startup_timeout().as_secs() as i64,
             k8s_selector: Some(self.kube_label_selector()),
             ..Default::default()
@@ -141,8 +144,8 @@ where
             target.kube.client(),
             target.abort,
         ));
-        let pod_name = match pod {
-            Ok(pod) => pod.metadata.name.unwrap_or_default(),
+        let pod = match pod {
+            Ok(pod) => pod,
             Err(crate::environment::action::deploy_job::job::JobRunError::Aborted) => {
                 let _ = block_on(super::deploy_job::job::kill_job(
                     target.kube.client(),
@@ -153,6 +156,8 @@ where
             }
             Err(err) => return Err(Box::new(EngineError::new_job_error(event_details.clone(), err.to_string()))),
         };
+        let pod_name = pod.metadata.name.clone().unwrap_or_default();
+        let _ = pod_tx.send(pod);
         info!("Targeting job pod name: {}", pod_name);
 
         match self.terraform_action {

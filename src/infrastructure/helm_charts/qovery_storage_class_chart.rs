@@ -89,7 +89,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryStorageClassChart::chart_name(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,

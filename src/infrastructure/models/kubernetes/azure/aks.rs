@@ -1,8 +1,8 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::azure::Credentials;
 use crate::errors::EngineError;
+use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EngineEvent, EventMessage, InfrastructureStep};
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -15,6 +15,7 @@ use crate::infrastructure::models::object_storage::azure_object_storage::AzureOS
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::models::CpuArchitecture;
+use crate::log_utils::send_progress_on_long_task_with_message;
 use crate::logger::Logger;
 use crate::services::azure::azure_auth_service::AzureAuthService;
 use crate::services::azure::blob_storage_service::BlobStorageService;
@@ -23,6 +24,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub struct AKS {
@@ -78,23 +80,21 @@ impl AKS {
 
         // check credentials
         // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
-        logger.log(EngineEvent::Info(
+        send_progress_on_long_task_with_message(
+            logger.clone(),
             event_details.clone(),
-            EventMessage::new_from_safe(
-                "Checking Azure credentials, those can take some time to propagate...".to_string(),
-            ),
-        ));
-        if AzureAuthService::login_with_retry(
-            &credentials.client_id,
-            &credentials.client_secret,
-            &credentials.tenant_id,
+            Some("Checking Azure credentials, those can take some time to propagate...".to_string()),
+            || {
+                AzureAuthService::login_with_retry(
+                    &credentials.client_id,
+                    &credentials.client_secret,
+                    &credentials.tenant_id,
+                )
+            },
+            Duration::from_secs(10),
+            Some(Duration::from_secs(60 * 10)), // 10 minutes max
         )
-        .is_err()
-        {
-            return Err(Box::new(EngineError::new_client_invalid_cloud_provider_credentials(
-                event_details,
-            )));
-        }
+        .map_err(|_e| Box::new(EngineError::new_client_invalid_cloud_provider_credentials(event_details)))?;
 
         let short_id = to_short_id(&long_id);
 

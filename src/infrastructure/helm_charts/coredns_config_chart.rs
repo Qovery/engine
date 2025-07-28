@@ -56,7 +56,6 @@ impl CoreDNSConfigChart {
                 name: CoreDNSConfigChart::chart_name(),
                 path: chart_path.to_string(),
                 namespace,
-                custom_namespace: None,
                 action: HelmAction::Deploy,
                 atomic: false,
                 force_upgrade: false,

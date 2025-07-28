@@ -4,7 +4,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::infrastructure::helm_charts::nginx_ingress_chart::NginxIngressChart;
+use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
@@ -74,7 +74,7 @@ pub(super) fn eks_helm_charts(
         CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
         chart_prefix_path,
         &prometheus_internal_url,
-        prometheus_namespace,
+        prometheus_namespace.clone(),
         get_chart_override_fn.clone(),
         chart_config_prerequisites.cluster_long_id.to_string().as_str(),
     )?;
@@ -280,7 +280,7 @@ pub(super) fn eks_helm_charts(
             LokiChart::new(
                 chart_prefix_path,
                 // LokiEncryptionType::ServerSideEncryption,
-                loki_namespace,
+                loki_namespace.clone(),
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .loki_log_retention_in_week,
@@ -331,8 +331,10 @@ pub(super) fn eks_helm_charts(
     let metrics_server = MetricsServerChart::new(
         chart_prefix_path,
         HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartNamespaces::KubeSystem,
         UpdateStrategy::RollingUpdate,
         true,
+        false,
     )
     .to_common_helm_chart()?;
 
@@ -425,70 +427,77 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites.cluster_id.clone(),
         KubernetesKind::Eks,
         chart_config_prerequisites.cluster_creation_date,
-        Some(
-            chart_config_prerequisites
+        NginxOptions {
+            nginx_hpa_minimum_replicas: Some(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_hpa_min_number_instances,
+            ),
+            nginx_hpa_maximum_replicas: Some(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_hpa_max_number_instances,
+            ),
+            nginx_hpa_target_cpu_utilization_percentage: Some(
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_hpa_cpu_utilization_percentage_threshold,
+            ),
+            namespace: HelmChartNamespaces::NginxIngress,
+            loadbalancer_size: None,
+            enable_real_ip: chart_config_prerequisites
                 .cluster_advanced_settings
-                .nginx_hpa_min_number_instances,
-        ),
-        Some(
-            chart_config_prerequisites
+                .nginx_controller_enable_client_ip,
+            use_forwarded_headers: chart_config_prerequisites
                 .cluster_advanced_settings
-                .nginx_hpa_max_number_instances,
-        ),
-        Some(
-            chart_config_prerequisites
+                .nginx_controller_use_forwarded_headers,
+            compute_full_forwarded_for: chart_config_prerequisites
                 .cluster_advanced_settings
-                .nginx_hpa_cpu_utilization_percentage_threshold,
-        ),
-        HelmChartNamespaces::NginxIngress,
-        None,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_enable_client_ip,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_use_forwarded_headers,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_compute_full_forwarded_for,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_log_format_escaping
-            .to_model(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .aws_eks_enable_alb_controller,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_http_snippet
-            .as_ref()
-            .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_server_snippet
-            .as_ref()
-            .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_limit_request_status_code
-            .as_ref()
-            .map(|v| v.to_model().map_err(CommandError::from))
-            .transpose()?,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_controller_custom_http_errors
-            .clone(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_default_backend_enabled,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_default_backend_image_repository
-            .clone(),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .nginx_default_backend_image_tag
-            .clone(),
+                .nginx_controller_compute_full_forwarded_for,
+            log_format_escaping: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_controller_log_format_escaping
+                .to_model(),
+            is_alb_enabled: chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_eks_enable_alb_controller,
+            http_snippet: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_controller_http_snippet
+                .as_ref()
+                .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
+            server_snippet: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_controller_server_snippet
+                .as_ref()
+                .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
+            limit_request_status_code: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_controller_limit_request_status_code
+                .as_ref()
+                .map(|v| v.to_model().map_err(CommandError::from))
+                .transpose()?,
+            nginx_controller_custom_http_errors: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_controller_custom_http_errors
+                .clone(),
+            nginx_default_backend_enabled: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_default_backend_enabled,
+            nginx_default_backend_image_repository: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_default_backend_image_repository
+                .clone(),
+            nginx_default_backend_image_tag: chart_config_prerequisites
+                .cluster_advanced_settings
+                .nginx_default_backend_image_tag
+                .clone(),
+            default_ssl_certificate: None,
+            publish_status_address: None,
+            replica_count: None,
+            metal_lb_load_balancer_ip: None,
+            external_dns_target: None,
+        },
     )
     .to_common_helm_chart()?;
 

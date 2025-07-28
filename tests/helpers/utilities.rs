@@ -890,7 +890,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "ef8df03b56d942424dc4943ffb9d8d69431e72bb".to_string(),
+                app_commit: "df279084ae40c746f152d19f8976d3a49c013ba2".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() =>VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
                     "MYSQL_PORT".to_string() => VariableInfo { value:general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
@@ -910,7 +910,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "f379e5b937c743adf96f9484956260da170bb93c".to_string(),
+                app_commit: "031b827fd642c44fd2fb7736e2bc348be03dc38b".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_db_name), is_secret:false},
                      "PG_HOST".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
@@ -926,7 +926,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "c8dd8b57a4ebafabc860f0b948f881dad5ab632e".to_string(),
+                app_commit: "a94b0ac6760f2b8b24579757bc115cc5a30ea66e".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED && database_username == "default").to_string()), is_secret:false},
                 "REDIS_HOST".to_string()      => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

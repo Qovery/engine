@@ -14,11 +14,12 @@ use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::runtime::block_on;
 use itertools::Itertools;
 use k8s_openapi::api::batch::v1::{CronJob, Job as K8sJob};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
 use kube::Api;
 use kube::api::PostParams;
 use std::path::PathBuf;
 use std::time::Duration;
+
+const DEPLOYMENT_ID_LABEL: &str = "qovery.com/deployment-id";
 
 pub(super) fn run_cronjob<'a, T: CloudProvider>(
     job: &'a Job<T>,
@@ -32,8 +33,7 @@ where
         let chart = ChartInfo {
             name: job.helm_release_name(),
             path: job.workspace_directory().to_string(),
-            namespace: HelmChartNamespaces::Custom,
-            custom_namespace: Some(target.environment.namespace().to_string()),
+            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
             timeout_in_seconds: job.startup_timeout().as_secs() as i64,
             k8s_selector: Some(job.kube_label_selector()),
             ..Default::default()
@@ -82,11 +82,20 @@ where
         // add a suffix in name to avoid conflict with jobs created by cronjob
         // truncate original name to 63 chars minus "-force-trigger" length to avoid k8s name length limit
         let job_name = format!("{}-force-trigger", job.kube_name().chars().take(63 - 14).join("").as_str(),);
+        let mut metadata = job_template.metadata.expect("job_template should have metadata");
+        metadata.name = Some(job_name.clone());
+        metadata
+            .labels
+            .get_or_insert_default()
+            .insert(DEPLOYMENT_ID_LABEL.to_string(), job.deployment_id.clone());
+        job_template
+            .spec
+            .as_mut()
+            .and_then(|s| s.template.metadata.as_mut())
+            .and_then(|m| m.labels.as_mut())
+            .and_then(|labels| labels.insert(DEPLOYMENT_ID_LABEL.to_string(), job.deployment_id.clone()));
         let job_to_start = K8sJob {
-            metadata: ObjectMeta {
-                name: Some(job_name.to_string()),
-                ..job_template.metadata.expect("job_template should have metadata")
-            },
+            metadata,
             spec: job_template.spec,
             status: None,
         };

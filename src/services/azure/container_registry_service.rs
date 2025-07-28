@@ -252,23 +252,33 @@ impl AzureContainerRegistryService {
     ) -> Result<Repository, ContainerRegistryServiceError> {
         self.wait_for_a_slot_in_admission_control(RateLimiterKind::Read, std::time::Duration::from_secs(60))?;
 
-        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
+        let registry_name_sanitized = Self::try_get_sanitized_registry_name(registry_name)?;
 
-        let registry = block_on(
-            self.client
-                .registries_client()
-                .get(subscription_id, resource_group_name, registry_name.to_string())
-                .into_future(),
-        )
-        .map_err(|e| ContainerRegistryServiceError::CannotGetRepository {
-            repository_name: registry_name.to_string(),
-            raw_error_message: e.to_string(),
-        })?;
+        let mut registry: Option<Registry> = None;
+        for reg_name in [registry_name_sanitized, registry_name.to_string()] {
+            if let Ok(r) = block_on(
+                self.client
+                    .registries_client()
+                    .get(subscription_id, resource_group_name, reg_name.to_string())
+                    .into_future(),
+            ) {
+                registry = Some(r);
+                break;
+            }
+        }
 
-        from_azure_container_registry(registry).map_err(|e| ContainerRegistryServiceError::CannotCreateRepository {
-            repository_name: registry_name.to_string(),
-            raw_error_message: e.to_string(),
-        })
+        match registry {
+            Some(r) => {
+                from_azure_container_registry(r).map_err(|e| ContainerRegistryServiceError::CannotCreateRepository {
+                    repository_name: registry_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
+            }
+            None => Err(ContainerRegistryServiceError::CannotGetRepository {
+                repository_name: registry_name.to_string(),
+                raw_error_message: format!("Registry `{registry_name}` not found"),
+            }),
+        }
     }
 
     pub fn create_registry(
@@ -364,19 +374,30 @@ impl AzureContainerRegistryService {
     ) -> Result<(), ContainerRegistryServiceError> {
         self.wait_for_a_slot_in_admission_control(RateLimiterKind::Write, std::time::Duration::from_secs(60))?;
 
-        let registry_name = Self::try_get_sanitized_registry_name(registry_name)?;
-        block_on(
-            self.client
-                .registries_client()
-                .delete(subscription_id, resource_group_name, registry_name.to_string())
-                .send(),
-        )
-        .map_err(|e| ContainerRegistryServiceError::CannotDeleteRepository {
-            repository_name: registry_name.to_string(),
-            raw_error_message: e.to_string(),
-        })?;
+        let registry_name_sanitized = Self::try_get_sanitized_registry_name(registry_name)?;
 
-        Ok(())
+        let mut registry_deleted: bool = false;
+        for reg_name in [registry_name_sanitized, registry_name.to_string()] {
+            if block_on(
+                self.client
+                    .registries_client()
+                    .delete(subscription_id, resource_group_name, reg_name.to_string())
+                    .send(),
+            )
+            .is_ok()
+            {
+                registry_deleted = true;
+                break;
+            }
+        }
+
+        match registry_deleted {
+            true => Ok(()),
+            false => Err(ContainerRegistryServiceError::CannotDeleteRepository {
+                repository_name: registry_name.to_string(),
+                raw_error_message: format!("Registry `{registry_name}` not found or already deleted"),
+            }),
+        }
     }
 
     pub fn get_docker_image(

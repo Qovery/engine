@@ -6,6 +6,8 @@ apiService:
 updateStrategy:
   type: RollingUpdate # set-by-engine-code
 
+args: [] # set-by-engine-code
+
 # set resources
 resources:
   limits:

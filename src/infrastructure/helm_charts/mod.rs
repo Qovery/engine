@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::helm::{CommonChart, HelmChartError, VpaContainerPolicy};
-use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, Kind};
+use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::env;
 use std::fmt::{Display, Formatter};
@@ -300,11 +300,12 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
         }
         HelmChartType::CloudProviderSpecific(provider_kind) => match &helm_chart_location.contains("/common/") {
             false => match provider_kind {
-                KubernetesKind::Eks | Kind::EksSelfManaged => "aws",
-                KubernetesKind::ScwKapsule | Kind::ScwSelfManaged => "scaleway",
-                KubernetesKind::Gke | Kind::GkeSelfManaged => "gcp",
-                KubernetesKind::Aks | Kind::AksSelfManaged => "azure",
-                Kind::OnPremiseSelfManaged => "on-premise",
+                KubernetesKind::Eks | KubernetesKind::EksSelfManaged => "aws",
+                KubernetesKind::ScwKapsule | KubernetesKind::ScwSelfManaged => "scaleway",
+                KubernetesKind::Gke | KubernetesKind::GkeSelfManaged => "gcp",
+                KubernetesKind::Aks | KubernetesKind::AksSelfManaged => "azure",
+                KubernetesKind::OnPremiseSelfManaged => "on-premise",
+                KubernetesKind::EksAnywhere => "eksanywhere",
             },
             true => "undefined-cloud-provider", // There is something weird
         },

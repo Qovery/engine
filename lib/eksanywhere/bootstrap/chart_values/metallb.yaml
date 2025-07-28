@@ -1,0 +1,4 @@
+speaker:
+  enabled: false
+  frr:
+    enabled: false

@@ -8,7 +8,7 @@ use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
-use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
+use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
@@ -43,6 +43,7 @@ use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::models::NodeGroups;
 use crate::io_models::{Action, QoveryIdentifier};
+use crate::log_utils::send_progress_on_long_task_with_message;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
 use crate::services::azure::azure_auth_service::AzureAuthService;
@@ -57,6 +58,7 @@ use rusoto_signature::Region;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
 
@@ -198,6 +200,7 @@ impl<T> EngineRequest<T> {
             kubernetes::Kind::AksSelfManaged => true,
             kubernetes::Kind::ScwSelfManaged => true,
             kubernetes::Kind::OnPremiseSelfManaged => true,
+            kubernetes::Kind::EksAnywhere => true,
         }
     }
 }
@@ -641,6 +644,31 @@ impl KubernetesDto {
                     Err(e) => Err(e),
                 }
             }
+            kubernetes::Kind::EksAnywhere => {
+                let kubeconfig = match self.kubeconfig.clone() {
+                    None => return Err(Box::new(EngineError::new_missing_kubeconfig_error(event_details.clone()))),
+                    Some(value) => value,
+                };
+                match kubernetes::eksanywhere::EksAnywhere::new(
+                    context.clone(),
+                    self.long_id,
+                    self.name.to_string(),
+                    cloud_provider,
+                    self.kind,
+                    self.region.to_string(),
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    serde_json::from_value::<kubernetes::eksanywhere::EksAnywhereOptions>(self.options.clone())
+                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    logger,
+                    self.advanced_settings.clone(),
+                    kubeconfig,
+                    temp_dir,
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 }
@@ -746,16 +774,19 @@ impl ContainerRegistry {
             ContainerRegistry::AzureCr { long_id, name, options } => {
                 // check credentials
                 // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
-                logger.log(EngineEvent::Info(
+                send_progress_on_long_task_with_message(
+                    logger,
                     event_details.clone(),
-                    EventMessage::new_from_safe(
-                        "Checking Azure credentials, those can take some time to propagate...".to_string(),
-                    ),
-                ));
-                AzureAuthService::login_with_retry(
-                    &options.client_id,
-                    &options.client_secret,
-                    &options.azure_tenant_id,
+                    Some("Checking Azure credentials, those can take some time to propagate...".to_string()),
+                    || {
+                        AzureAuthService::login_with_retry(
+                            &options.client_id,
+                            &options.client_secret,
+                            &options.azure_tenant_id,
+                        )
+                    },
+                    Duration::from_secs(10),
+                    Some(Duration::from_secs(60 * 10)), // 10 minutes max
                 )?;
 
                 Ok(container_registry::ContainerRegistry::AzureContainerRegistry(

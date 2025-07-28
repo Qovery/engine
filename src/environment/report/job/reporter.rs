@@ -128,7 +128,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
         &self.logger
     }
 
-    fn new_state(&self) -> Self::DeploymentState {
+    fn new_state(&mut self) -> Self::DeploymentState {
         RecapReporterDeploymentState {
             report: "".to_string(),
             timestamp: Instant::now(),
@@ -253,20 +253,20 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
     }
 
     fn deployment_terminated(
-        &self,
+        self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        last_report: &mut Self::DeploymentState,
-    ) {
+        last_report: Self::DeploymentState,
+    ) -> EnvLogger {
         let error = match result {
             Ok(_) => {
                 self.stop_record(StepStatus::Success);
                 if self.action == Action::Delete && !self.send_final_deleted_status {
-                    return;
+                    return self.logger;
                 }
 
                 self.logger
                     .send_success(format!("✅ {} of {} succeeded", self.action, self.job_type));
-                return;
+                return self.logger;
             }
             Err(err) => err,
         };
@@ -278,7 +278,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
                 format!("🚫 {} has been cancelled.", self.action),
                 None,
             ));
-            return;
+            return self.logger;
         }
         self.stop_record(StepStatus::Error);
 
@@ -288,7 +288,7 @@ impl<T: Send + Sync> DeploymentReporter for JobDeploymentReporter<T> {
             Err(err) => {
                 self.logger
                     .send_progress(format!("Cannot render deployment recap report. Please contact us: {err}"));
-                return;
+                return self.logger;
             }
         };
         for line in recap_report.trim_end().split('\n').map(str::to_string) {
@@ -345,6 +345,8 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
                 None,
             ));
         }
+
+        self.logger
     }
 }
 

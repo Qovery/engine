@@ -32,14 +32,14 @@ pub trait DeploymentReporter: Send + Sync {
     type Logger;
 
     fn logger(&self) -> &Self::Logger;
-    fn new_state(&self) -> Self::DeploymentState;
+    fn new_state(&mut self) -> Self::DeploymentState;
     fn deployment_before_start(&self, state: &mut Self::DeploymentState);
     fn deployment_in_progress(&self, state: &mut Self::DeploymentState);
     fn deployment_terminated(
-        &self,
+        self,
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
-        state: &mut Self::DeploymentState,
-    );
+        state: Self::DeploymentState,
+    ) -> Self::Logger;
     fn report_frequency(&self) -> Duration {
         Duration::from_secs(10)
     }
@@ -133,7 +133,7 @@ where
 // Reporter will not be executed while the task is running the pre_run and post_run_success methods.
 // Only during the run method
 pub fn execute_long_deployment<Log, TaskRet>(
-    deployment_reporter: impl DeploymentReporter<DeploymentResult = TaskRet, Logger = Log>,
+    mut deployment_reporter: impl DeploymentReporter<DeploymentResult = TaskRet, Logger = Log>,
     long_task: impl DeploymentTask<Logger = Log, DeploymentResult = TaskRet>,
 ) -> Result<(), Box<EngineError>> {
     // stop the thread when the blocking task is done
@@ -200,10 +200,10 @@ pub fn execute_long_deployment<Log, TaskRet>(
         }
     };
 
-    deployment_reporter.deployment_terminated(&deployment_result, &mut state);
+    let logger = deployment_reporter.deployment_terminated(&deployment_result, state);
     match deployment_result {
         Ok(ret) => {
-            long_task.post_run_success(deployment_reporter.logger(), ret);
+            long_task.post_run_success(&logger, ret);
             Ok(())
         }
         Err(err) => Err(err),
@@ -245,7 +245,7 @@ mod test {
             &()
         }
 
-        fn new_state(&self) -> Self::DeploymentState {}
+        fn new_state(&mut self) -> Self::DeploymentState {}
 
         fn deployment_before_start(&self, _: &mut Self::DeploymentState) {
             assert!(!self.is_task_started.load(Ordering::SeqCst));
@@ -257,9 +257,9 @@ mod test {
         }
 
         fn deployment_terminated(
-            &self,
+            self,
             _result: &Result<Self::DeploymentResult, Box<EngineError>>,
-            _: &mut Self::DeploymentState,
+            _: Self::DeploymentState,
         ) {
             self.deployment_terminated.store(true, Ordering::SeqCst);
         }

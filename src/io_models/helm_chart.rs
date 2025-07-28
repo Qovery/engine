@@ -282,7 +282,7 @@ impl HelmChart {
             })
             .collect();
         let service: Box<dyn HelmChartService> = match cloud_provider.kubernetes_kind() {
-            kubernetes::Kind::Eks | kubernetes::Kind::EksSelfManaged => {
+            kubernetes::Kind::Eks | kubernetes::Kind::EksSelfManaged | kubernetes::Kind::EksAnywhere => {
                 Box::new(models::helm_chart::HelmChart::<AWS>::new(
                     context,
                     self.long_id,

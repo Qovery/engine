@@ -168,9 +168,9 @@ fn generate_charts_installed_by_qovery(
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
     let prometheus_operator_crds_chart = match helm_action {
-        HelmAction::Deploy => {
-            Some(PrometheusOperatorCrdsChart::new(chart_prefix_path, prometheus_namespace).to_common_helm_chart()?)
-        }
+        HelmAction::Deploy => Some(
+            PrometheusOperatorCrdsChart::new(chart_prefix_path, prometheus_namespace.clone()).to_common_helm_chart()?,
+        ),
         HelmAction::Destroy => None,
     };
 
@@ -180,7 +180,7 @@ fn generate_charts_installed_by_qovery(
         chart_prefix_path,
         provider_config.storage_class(),
         prometheus_internal_url.to_string(),
-        prometheus_namespace,
+        prometheus_namespace.clone(),
         provider_config.prometheus_configuration(),
         get_chart_override_fn.clone(),
         false,
@@ -192,7 +192,7 @@ fn generate_charts_installed_by_qovery(
     let thanos_chart = ThanosChart::new(
         helm_action.clone(),
         chart_prefix_path,
-        prometheus_namespace,
+        prometheus_namespace.clone(),
         None,
         provider_config.prometheus_configuration(),
         provider_config.storage_class(),

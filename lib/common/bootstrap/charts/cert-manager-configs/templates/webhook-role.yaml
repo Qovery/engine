@@ -1,0 +1,26 @@
+{{ if eq .Values.webhookRole.install true }}
+# qovery-webhook-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: {{ .Values.namespace }}
+  name: qovery-webhook-secrets-reader
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: qovery-webhook-secrets-reader
+  namespace: {{ .Values.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: qovery-cert-manager-webhook
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: qovery-webhook-secrets-reader
+  apiGroup: rbac.authorization.k8s.io
+{{ end }}

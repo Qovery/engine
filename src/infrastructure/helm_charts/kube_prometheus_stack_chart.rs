@@ -202,7 +202,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 action: self.action.clone(),
                 name: KubePrometheusStackChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: self.prometheus_namespace,
+                namespace: self.prometheus_namespace.clone(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(67, 3, 1)),
                 // high timeout because on bootstrap, it's one of the biggest dependencies and on upgrade, it can takes time
                 // to upgrade because of the CRD and the number of elements it has to deploy
@@ -403,6 +403,10 @@ mod tests {
                 | Kind::GkeSelfManaged
                 | Kind::ScwSelfManaged
                 | Kind::OnPremiseSelfManaged => {
+                    // TODO (ENG-1986) Not handled yet
+                    PrometheusConfiguration::NotInstalled
+                }
+                Kind::EksAnywhere => {
                     // TODO (ENG-1986) Not handled yet
                     PrometheusConfiguration::NotInstalled
                 }

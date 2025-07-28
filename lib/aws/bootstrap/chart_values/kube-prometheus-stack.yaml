@@ -23,14 +23,15 @@ kube-state-metrics:
       enabled: true
       honorLabels: true
   metricLabelsAllowlist:
-    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id]
+    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id,qovery.com/deployment-id]
     - horizontalpodautoscalers=[qovery.com/service-id]
-    - jobs=[qovery.com/service-id]
+    - jobs=[qovery.com/service-id,qovery.com/deployment-id]
     - cronjobs=[qovery.com/service-id]
     - services=[qovery.com/service-id]
     - deployments=[qovery.com/service-id]
     - statefulsets=[qovery.com/service-id]
     - ingresses=[qovery.com/associated-service-id]
+    - persistentvolumeclaims=[qovery.com/service-id]
   resources:
     limits:
       cpu: 75m
@@ -101,7 +102,7 @@ prometheus:
              signature_version2: "set-by-engine-code" 
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
-    retention: 90d
+    retention: 7d
     retentionSize: "7GB" # prometheus db
     walCompression: true
     externalUrl: set-by-engine-code
@@ -119,10 +120,11 @@ prometheus:
         memory: "8Gi"
       requests:
         cpu: "1"
-        memory: "2Gi"
+        memory: "8Gi"
     replicas: "set-by-engine-code"
 
 prometheusOperator:
+  priorityClassName: qovery-high-priority
   prometheusConfigReloader:
     image:
       registry: public.ecr.aws/r3m4q3r9

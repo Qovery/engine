@@ -26,8 +26,7 @@ where
             let chart = ChartInfo {
                 name: self.helm_release_name(),
                 path: self.workspace_directory().to_string(),
-                namespace: HelmChartNamespaces::Custom,
-                custom_namespace: Some(target.environment.namespace().to_string()),
+                namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 ..Default::default()
             };
 
@@ -84,8 +83,7 @@ where
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 let chart = ChartInfo {
                     name: self.helm_release_name(),
-                    namespace: HelmChartNamespaces::Custom,
-                    custom_namespace: Some(target.environment.namespace().to_string()),
+                    namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                     action: HelmAction::Destroy,
                     ..Default::default()
                 };

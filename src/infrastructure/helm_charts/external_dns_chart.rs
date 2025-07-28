@@ -64,7 +64,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: "externaldns".to_string(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![

@@ -66,7 +66,7 @@ queryFrontend:
       cpu: set-by-engine-code
       memory: set-by-engine-code
   autoscaling:
-    enabled: true
+    enabled: false
     minReplicas: "set-by-engine-code"
     maxReplicas: "set-by-engine-code"
     targetCPU: "set-by-engine-code"
@@ -118,8 +118,8 @@ compactor:
     enabled: true
     schedule: "0 */1 * * *"
     successfulJobsHistoryLimit: "1"
-    failedJobsHistoryLimit: "1"
-    ttlSecondsAfterFinished: "30"
+    failedJobsHistoryLimit: "5"
+    ttlSecondsAfterFinished: "900"
   resources:
     requests:
       cpu: set-by-engine-code

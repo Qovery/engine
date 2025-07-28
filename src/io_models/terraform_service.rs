@@ -240,32 +240,34 @@ impl TerraformService {
         let terraform_credentials_domain = self.get_terraform_credentials_domain()?;
 
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
-            Kind::Eks | Kind::EksSelfManaged => Box::new(models::terraform_service::TerraformService::<AWS>::new(
-                context,
-                self.long_id,
-                self.name,
-                self.kube_name,
-                self.action.to_service_action(),
-                self.cpu_request_in_milli,
-                self.cpu_limit_in_milli,
-                self.ram_request_in_mib,
-                self.ram_limit_in_mib,
-                persistent_storage,
-                build,
-                root_module_path,
-                tf_files_source_domain,
-                self.tf_var_file_paths,
-                self.tf_vars,
-                backend,
-                terraform_action,
-                Duration::from_secs(self.timeout_sec),
-                environment_variables_with_info,
-                self.advanced_settings,
-                |transmitter| context.get_event_details(transmitter),
-                annotations_groups,
-                labels_groups,
-                terraform_credentials_domain,
-            )?),
+            Kind::Eks | Kind::EksSelfManaged | Kind::EksAnywhere => {
+                Box::new(models::terraform_service::TerraformService::<AWS>::new(
+                    context,
+                    self.long_id,
+                    self.name,
+                    self.kube_name,
+                    self.action.to_service_action(),
+                    self.cpu_request_in_milli,
+                    self.cpu_limit_in_milli,
+                    self.ram_request_in_mib,
+                    self.ram_limit_in_mib,
+                    persistent_storage,
+                    build,
+                    root_module_path,
+                    tf_files_source_domain,
+                    self.tf_var_file_paths,
+                    self.tf_vars,
+                    backend,
+                    terraform_action,
+                    Duration::from_secs(self.timeout_sec),
+                    environment_variables_with_info,
+                    self.advanced_settings,
+                    |transmitter| context.get_event_details(transmitter),
+                    annotations_groups,
+                    labels_groups,
+                    terraform_credentials_domain,
+                )?)
+            }
             Kind::ScwKapsule | Kind::ScwSelfManaged => {
                 Box::new(models::terraform_service::TerraformService::<SCW>::new(
                     context,
@@ -584,7 +586,7 @@ RUN ls
 RUN chmod +x entrypoint.sh
 USER app
 
-ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
+ENTRYPOINT ["/usr/bin/dumb-init", "--", "/bin/sh", "/data/entrypoint.sh"]
                     "#,
             self.provider_version
         )
@@ -595,8 +597,6 @@ ENTRYPOINT ["/usr/bin/dumb-init", "-v", "--", "/bin/sh", "/data/entrypoint.sh"]
         r#"# entrypoint.sh
 #!/bin/bash
 set -e
-
-echo "Starting entrypoint.sh"
 
 ROOT_MODULE_PATH=$1
 CMD=$2

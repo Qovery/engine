@@ -24,6 +24,8 @@ impl AwsCoreDnsAddon {
                 KubernetesVersion::V1_29 { .. } => "v1.10.1-eksbuild.7",
                 KubernetesVersion::V1_30 { .. } => "v1.11.3-eksbuild.1",
                 KubernetesVersion::V1_31 { .. } => "v1.11.4-eksbuild.2",
+                KubernetesVersion::V1_32 { .. } => "v1.11.4-eksbuild.2",
+                KubernetesVersion::V1_33 { .. } => "v1.12.2-eksbuild.4",
             }
             .to_string(),
         }
@@ -140,6 +142,26 @@ mod tests {
                     version: "v1.11.4-eksbuild.2".to_string(),
                 },
             },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_32 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.11.4-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_33 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsCoreDnsAddon {
+                    version: "v1.12.2-eksbuild.4".to_string(),
+                },
+            },
         ];
 
         for tc in tests_cases {
@@ -152,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn aws_addon_coredns_new_with_overriden_version() {
+    fn aws_addon_coredns_new_with_overridden_version() {
         // setup:
         let tests_cases = vec!["toto", "v1.8.7-eksbuild.10", "v1.8.7-eksbuild.11"];
 

@@ -102,7 +102,7 @@ impl ToCommonHelmChart for CertManagerChart {
             chart_info: ChartInfo {
                 name: CertManagerChart::chart_name(),
                 path: self.chart_path.to_string(),
-                namespace: self.namespace,
+                namespace: self.namespace.clone(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(1, 4, 4)),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: vec![

@@ -1,0 +1,92 @@
+controller:
+  useComponentLabel: true
+  admissionWebhooks:
+    enabled: false
+  allowSnippetAnnotations: true
+  # enable if you want metrics scrapped by prometheus
+  metrics:
+    enabled: true # set-by-customer
+    serviceMonitor:
+      enabled: false # set-by-customer
+  config:
+    # set global default file size limit to 100m
+    proxy-body-size: 100m
+    # hide Nginx version
+    server-tokens: "false"
+    # required for X-Forwarded-for to work with ALB controller
+    use-proxy-protocol: "false"
+    # enable real IP (client IP)
+    enable-real-ip: "false" # set-by-customer
+    # passes the incoming X-Forwarded-* headers to upstreams
+    use-forwarded-headers: "false" # set-by-customer
+    # append the remote address to the X-Forwarded-For header instead of replacing it
+    compute-full-forwarded-for: "false" # set-by-customer
+    # customize http-snippet
+    # customize log-format / set-by-customer
+    # default format can be found in the template: https://github.com/nginxinc/kubernetes-ingress/blob/v3.5.2/internal/configs/version1/nginx.tmpl#L44
+    # nginx_controller_log_format_upstream can be a json that why we pass it in the value file
+    log-format-escaping-json: "false" # set-by-customer
+    log-format-escaping-none: "false" # set-by-customer
+    limit-req-status-code: "503" # set-by-customer
+  ingressClassResource:
+    # -- Name of the IngressClass
+    name: nginx-qovery
+    # -- Create the IngressClass or not
+    enabled: true
+  # the Ingress Class name to be used by Ingresses (use "nginx-qovery" for Qovery application/container deployments)
+  ingressClass: nginx-qovery
+  extraArgs:
+    default-ssl-certificate: set-by-engine-code
+    publish-status-address: set-by-engine-code
+  updateStrategy:
+    rollingUpdate:
+      # AWS LB is slow to catchup change in the topology, so we go 1 by 1 to not have any downtime
+      maxSurge: 1
+      maxUnavailable: 0
+  # AWS LB is slow to catchup change in the topology, so we go slowly to let AWS catchup change before moving to the next instance
+  # LB healthcheck is 6, and need 2 rounds to consider the instance as (un)healthy. Double the time to be safe
+  readinessProbe:
+    initialDelaySeconds: 30
+  replicaCount: set-by-engine-code
+  # enable autoscaling if you want to scale the number of replicas based on CPU usage
+  autoscaling:
+    enabled: false # set-by-customer
+    minReplicas: 2 # set-by-customer
+    maxReplicas: 25 # set-by-customer
+    targetCPUUtilizationPercentage: 50 # set-by-customer
+  # required if you rely on a load balancer
+  # the controller mirrors the address of this service's endpoints to the load-balancer status of all Ingress objects it satisfies.
+  publishService:
+    enabled: false
+  # set a load balancer if you want your Nginx to be publicly accessible
+  service:
+    enabled: true
+    type: LoadBalancer
+    # loadBalancerIP is deprecated by kube, need to use the annotation
+    #loadBalancerIP:
+    annotations:
+      metallb.universe.tf/loadBalancerIPs: "set-by-engine-code"
+      external-dns.alpha.kubernetes.io/target: "set-by-engine-code"
+      external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+    # POWENS: To be able to keep source IP of user, as we don't have proxy protocol
+    externalTrafficPolicy: "Local"
+    sessionAffinity: ""
+    healthCheckNodePort: 0
+  # force a connection for 30 seconds before shutting down, to avoid exiting too early
+  # and let time to AWS LB to catchup change in the topology
+  # When /wait-shutdown is called, the LB healthcheck /healthz endpoint return an error, but nginx keep processing request
+  lifecycle:
+    preStop:
+      exec:
+        command:
+          - sh
+          - -c
+          - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
+  topologySpreadConstraints:
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: kubernetes.io/hostname
+      maxSkew: 1
+      whenUnsatisfiable: DoNotSchedule
