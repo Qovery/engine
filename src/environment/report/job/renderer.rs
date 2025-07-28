@@ -159,7 +159,8 @@ mod test {
 ┃  |__ Pod app-pod-1 is FAILING
 ┃     |__ 💭 Pod have been killed due to lack of/using too much memory resources
 ┃     |__ 💢 Container app-container-1 crashed 5 times. Last terminated with exit code 132 due to OOMKilled using too much memory at 1970-01-01T00:00:00Z
-┃     |__ 💭 Exit code 132 means the container was immediately terminated by the operating system via SIGKILL signal
+┃     |__ 💭 Exit code 132 means the container was immediately killed by the operating system via SIGKILL signal.
+			The most likely cause is your application running out of memory. Look at your metrics and/or try to increase memory
 ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"#;
 
         for (rendered_line, gold_line) in rendered_report.lines().zip(gold_standard.lines()) {
