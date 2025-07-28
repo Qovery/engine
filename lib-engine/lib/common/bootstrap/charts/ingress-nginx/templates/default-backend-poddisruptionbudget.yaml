@@ -20,6 +20,13 @@ spec:
     matchLabels:
       {{- include "ingress-nginx.selectorLabels" . | nindent 6 }}
       app.kubernetes.io/component: default-backend
+  {{- if and .Values.defaultBackend.minAvailable (not (hasKey .Values.defaultBackend "maxUnavailable")) }}
   minAvailable: {{ .Values.defaultBackend.minAvailable }}
+  {{- else if .Values.defaultBackend.maxUnavailable }}
+  maxUnavailable: {{ .Values.defaultBackend.maxUnavailable }}
+  {{- end }}
+  {{- if .Values.defaultBackend.unhealthyPodEvictionPolicy }}
+  unhealthyPodEvictionPolicy: {{ .Values.defaultBackend.unhealthyPodEvictionPolicy }}
+  {{- end }}
 {{- end }}
 {{- end }}
