@@ -71,5 +71,9 @@ spec:
             echo "Service configured in mutating webhook {{ include "vpa.fullname" . }}-webhook-config is '$WEBHOOK_SERVICE' not '$SERVICE'"
           fi
           exit 1;
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   restartPolicy: Never
 {{- end }}
