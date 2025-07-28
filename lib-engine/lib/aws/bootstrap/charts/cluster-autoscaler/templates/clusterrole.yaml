@@ -111,6 +111,7 @@ rules:
     - csinodes
     - csidrivers
     - csistoragecapacities
+    - volumeattachments
     verbs:
     - watch
     - list
@@ -171,5 +172,8 @@ rules:
     - get
     - patch
     - update
+{{- end }}
+{{- if .Values.rbac.additionalRules }}
+{{ toYaml .Values.rbac.additionalRules | indent 2 }}
 {{- end }}
 {{- end -}}
