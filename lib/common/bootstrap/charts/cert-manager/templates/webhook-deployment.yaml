@@ -43,7 +43,21 @@ spec:
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if and .Values.prometheus.enabled (not (or .Values.prometheus.servicemonitor.enabled .Values.prometheus.podmonitor.enabled)) }}
+      {{- if not .Values.webhook.podAnnotations }}
+      annotations:
+      {{- end }}
+        prometheus.io/path: "/metrics"
+        prometheus.io/scrape: 'true'
+        prometheus.io/port: '9402'
+      {{- end }}
     spec:
+      {{- if not .Values.webhook.serviceAccount.create }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
       serviceAccountName: {{ template "webhook.serviceAccountName" . }}
       {{- if hasKey .Values.webhook "automountServiceAccountToken" }}
       automountServiceAccountToken: {{ .Values.webhook.automountServiceAccountToken }}
@@ -95,6 +109,9 @@ spec:
           {{- with .Values.webhook.extraArgs }}
           {{- toYaml . | nindent 10 }}
           {{- end }}
+          {{- if not .Values.prometheus.enabled }}
+          - --metrics-listen-address=0
+          {{- end }}
           ports:
           - name: https
             protocol: TCP
@@ -112,14 +129,15 @@ spec:
             {{- else }}
             containerPort: 6080
             {{- end }}
+          {{- if .Values.prometheus.enabled }}
+          - containerPort: 9402
+            name: http-metrics
+            protocol: TCP
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /livez
-              {{- if $config.healthzPort }}
-              port: {{ $config.healthzPort }}
-              {{- else }}
-              port: 6080
-              {{- end }}
+              port: healthcheck
               scheme: HTTP
             initialDelaySeconds: {{ .Values.webhook.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.webhook.livenessProbe.periodSeconds }}
@@ -129,11 +147,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /healthz
-              {{- if $config.healthzPort }}
-              port: {{ $config.healthzPort }}
-              {{- else }}
-              port: 6080
-              {{- end }}
+              port: healthcheck
               scheme: HTTP
             initialDelaySeconds: {{ .Values.webhook.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.webhook.readinessProbe.periodSeconds }}
@@ -149,6 +163,9 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          {{- with .Values.webhook.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
           {{- with .Values.webhook.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -165,7 +182,9 @@ spec:
           {{- end }}
       {{- with .Values.webhook.nodeSelector }}
       nodeSelector:
-        {{- toYaml . | nindent 8 }}
+        {{- range $key, $value := . }}
+        {{ $key }}: {{ $value | quote }}
+        {{- end }}
       {{- end }}
       {{- with .Values.webhook.affinity }}
       affinity:
