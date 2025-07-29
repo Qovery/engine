@@ -2,6 +2,7 @@
 
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_job::job::JobRunError;
 use crate::environment::action::deploy_job::job_output::JobOutputSerializationError;
 use crate::environment::action::utils::{
     KubeObjectKind, delete_cached_image, get_last_deployed_image, mirror_image_if_necessary,
@@ -128,6 +129,22 @@ where
         state: TaskContext,
         pod_tx: mpsc::SyncSender<Pod>,
     ) -> Result<(TaskContext, HelmDeployment), Box<EngineError>> {
+        let handle_error = |err: JobRunError| -> Box<EngineError> {
+            match err {
+                JobRunError::Aborted => {
+                    // if cancel/abort has been requested, we want to kill/send a sigterm to the job
+                    // To notify it to terminate
+                    let _ = block_on(super::deploy_job::job::kill_job(
+                        target.kube.client(),
+                        target.environment.namespace(),
+                        self.kube_name(),
+                    ));
+                    Box::new(EngineError::new_task_cancellation_requested(event_details.clone()))
+                }
+                _ => Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())),
+            }
+        };
+
         // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
@@ -153,33 +170,34 @@ where
         helm.on_create(target)?;
 
         let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
+            // to be sure we unstuck the reporter
+            let _ = pod_tx.send(Pod::default());
+
             info!("Removing secret: {:?}", secret_name);
             let _ = delete_backend_config_secret(secret_name, event_details, target);
         });
 
         let job_pod_selector = format!("job-name={}", self.kube_name());
         let max_execution_duration = Duration::from_secs(60) + self.timeout;
-        let pod = block_on(super::deploy_job::job::await_user_job_to_terminate(
+        let pod = block_on(super::deploy_job::job::await_job_pod_to_start(
             self.kube_name(),
             max_execution_duration,
             target.environment.namespace(),
             target.kube.client(),
             target.abort,
-        ));
-        let pod = match pod {
-            Ok(pod) => pod,
-            Err(crate::environment::action::deploy_job::job::JobRunError::Aborted) => {
-                let _ = block_on(super::deploy_job::job::kill_job(
-                    target.kube.client(),
-                    target.environment.namespace(),
-                    self.kube_name(),
-                ));
-                return Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())));
-            }
-            Err(err) => return Err(Box::new(EngineError::new_job_error(event_details.clone(), err.to_string()))),
-        };
-        let pod_name = pod.metadata.name.clone().unwrap_or_default();
+        ))
+        .map_err(handle_error)?;
         let _ = pod_tx.send(pod);
+        let pod = block_on(super::deploy_job::job::await_job_pod_to_terminate(
+            self.kube_name(),
+            max_execution_duration,
+            target.environment.namespace(),
+            target.kube.client(),
+            target.abort,
+        ))
+        .map_err(handle_error)?;
+
+        let pod_name = pod.metadata.name.unwrap_or_default();
         info!("Targeting job pod name: {}", pod_name);
 
         match self.terraform_action {
