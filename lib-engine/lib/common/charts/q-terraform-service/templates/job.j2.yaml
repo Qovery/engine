@@ -21,7 +21,7 @@ metadata:
        {{ value }}
     {%- endfor %}
 spec:
-  backoffLimit: 1
+  backoffLimit: 0
   activeDeadlineSeconds: {{ service.job_max_duration_in_sec }}
   parallelism: 1
   template:
@@ -59,8 +59,7 @@ spec:
                   - {{ value }}
         {%- endfor %}
         {%- endif %}
-      restartPolicy: Never
-      shareProcessNamespace: true
+      restartPolicy: OnFailure
       {%- if service.advanced_settings.security_service_account_name != "" %}
       automountServiceAccountToken: true
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
