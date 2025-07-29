@@ -43,8 +43,8 @@ impl AzureAuthService {
     }
 
     /// Attempts to login to Azure with retries.
-    /// By default, it will retry 10 times with a 5 seconds interval between attempts,
-    /// and will timeout after 10 minutes.
+    /// By default, it will retry 10 times with a 5 seconds interval between failed attempts
+    /// (500 ms after a successful attempt), and will timeout after 10 minutes.
     ///
     /// This is useful for cases where the Azure login might fail due to transient issues,
     /// propagating temporary credentials / passwords seems to take some time on Azure.
@@ -64,11 +64,13 @@ impl AzureAuthService {
             attempts += 1;
             if Self::login(client_id, client_secret, tenant_id).is_ok() {
                 successful_attempt += 1;
+                std::thread::sleep(Duration::from_millis(500));
                 if successful_attempt >= expected_successful_attempts {
                     return Ok(());
                 }
+            } else {
+                std::thread::sleep(Duration::from_secs(5));
             }
-            std::thread::sleep(Duration::from_secs(5));
         }
 
         Err(AzureAuthServiceError::CannotLogin {
