@@ -374,7 +374,7 @@ async fn await_kube_condition<T>(
         },
         _ = execution_deadline => {
             Err(JobRunError::Timeout {
-                    raw_error_message: format!( "Job execution has exceeded the maximum duration of {max_duration:?} seconds" )
+                    raw_error_message: format!("Job execution has exceeded the maximum duration of {max_duration:?} seconds" )
                 }
             )
         },
