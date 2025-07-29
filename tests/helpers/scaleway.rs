@@ -32,7 +32,7 @@ use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
-pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_31 {
+pub const SCW_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
     prefix: None,
     patch: None,
     suffix: None,

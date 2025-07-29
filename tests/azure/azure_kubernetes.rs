@@ -15,7 +15,7 @@ use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 
 #[cfg(any(feature = "test-azure-infra", feature = "test-azure-infra-upgrade",))]
-fn create_and_destroy_eks_cluster(
+fn create_and_destroy_aks_cluster(
     region: String,
     test_type: ClusterTestType,
     vpc_network_mode: VpcQoveryNetworkMode,
@@ -53,9 +53,24 @@ fn create_and_destroy_eks_cluster(
 #[test]
 fn create_and_destroy_aks_cluster_francecentral() {
     let region = AZURE_LOCATION.to_cloud_provider_format().to_string();
-    create_and_destroy_eks_cluster(
+    create_and_destroy_aks_cluster(
         region,
         ClusterTestType::Classic,
+        WithoutNatGateways,
+        function_name!(),
+        NodeManager::Default,
+    );
+}
+
+// only enable this test manually when we want to perform and validate upgrade process
+#[cfg(feature = "test-azure-infra-upgrade")]
+#[named]
+#[test]
+fn create_upgrade_and_destroy_aks_cluster_francecentral() {
+    let region = AZURE_LOCATION.to_cloud_provider_format().to_string();
+    create_and_destroy_aks_cluster(
+        region,
+        ClusterTestType::WithUpgrade,
         WithoutNatGateways,
         function_name!(),
         NodeManager::Default,
