@@ -44,11 +44,18 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-        let pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, &event_details);
+        let pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, event_details.clone());
         let post_run: TerraformPostRun = mk_deploy_post_run(self, target);
 
-        let (tx, rx) = mpsc::sync_channel(1);
-        let run: TerraformRun = mk_deploy_run(self, target, &event_details, tx);
+        let (pod_tx, rx) = mpsc::sync_channel(1);
+        let run: TerraformRun = Box::new(
+            move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                let task_ctx = self
+                    .deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?
+                    .0;
+                Ok(task_ctx)
+            },
+        );
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -77,8 +84,15 @@ where
             Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
         let post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
 
-        let (tx, rx) = mpsc::sync_channel(1);
-        let run: TerraformRun = mk_deploy_run(self, target, &event_details, tx);
+        let (pod_tx, rx) = mpsc::sync_channel(1);
+        let run: TerraformRun = Box::new(
+            move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                let (task, helm) =
+                    self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?;
+                helm.on_delete(target)?;
+                Ok(task)
+            },
+        );
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -112,9 +126,8 @@ where
         event_details: &EventDetails,
         logger: &EnvProgressLogger,
         state: TaskContext,
-        uninstall_helm: bool,
         pod_tx: mpsc::SyncSender<Pod>,
-    ) -> Result<TaskContext, Box<EngineError>> {
+    ) -> Result<(TaskContext, HelmDeployment), Box<EngineError>> {
         // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
@@ -221,12 +234,7 @@ where
             return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
         }
 
-        // delete helm
-        if uninstall_helm {
-            helm.on_delete(target)?;
-        }
-
-        Ok(state)
+        Ok((state, helm))
     }
 }
 
@@ -272,25 +280,9 @@ fn delete_backend_config_secret(
 pub(super) fn mk_deploy_pre_run<'a, T: CloudProvider>(
     terraform: &'a TerraformService<T>,
     target: &'a DeploymentTarget,
-    event_details: &'a EventDetails,
+    event_details: EventDetails,
 ) -> TerraformPreRun<'a> {
     Box::new(move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) })
-}
-
-pub(super) fn mk_deploy_run<'a, T: CloudProvider>(
-    terraform: &'a TerraformService<T>,
-    target: &'a DeploymentTarget,
-    event_details: &'a EventDetails,
-    pod_tx: mpsc::SyncSender<Pod>,
-) -> TerraformRun<'a>
-where
-    TerraformService<T>: ToTeraContext,
-{
-    Box::new(
-        move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
-            terraform.deploy_job_and_execute_cmd(target, event_details, logger, state, false, pod_tx.clone())
-        },
-    )
 }
 
 pub(super) fn mk_deploy_post_run<'a, T: CloudProvider>(
