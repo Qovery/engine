@@ -3,7 +3,13 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job_output::JobOutputSerializationError;
-use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
+use crate::environment::action::utils::{
+    KubeObjectKind, delete_cached_image, get_last_deployed_image, mirror_image_if_necessary,
+};
+use crate::environment::models::job::{ImageSource, Job, JobService};
+use crate::environment::models::terraform_service::{
+    TerraformAction, TerraformFilesSource, TerraformService, TerraformServiceTrait,
+};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
@@ -24,6 +30,13 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
+#[derive(Debug)]
+pub struct TaskContext {}
+pub(super) type TerraformPreRun<'a> = Box<dyn Fn(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a>;
+pub(super) type TerraformPostRun<'a> = Box<dyn Fn(&EnvSuccessLogger, TaskContext) + 'a>;
+pub(super) type TerraformRun<'a> =
+    Box<dyn Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a>;
+
 impl<T: CloudProvider> DeploymentAction for TerraformService<T>
 where
     TerraformService<T>: ToTeraContext,
@@ -31,14 +44,11 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-        let pre_run = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
+        let pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, &event_details);
+        let post_run: TerraformPostRun = mk_deploy_post_run(self, target);
 
         let (tx, rx) = mpsc::sync_channel(1);
-        let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, false, tx.clone())
-        };
-
-        let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
+        let run: TerraformRun = mk_deploy_run(self, target, &event_details, tx);
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -50,11 +60,11 @@ where
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
 
         let command_error = CommandError::new_from_safe_message("Cannot pause a Terraform service".to_string());
         Err(Box::new(EngineError::new_cannot_restart_service(
-            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Restart)),
+            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
             target.environment.namespace(),
             "",
             command_error,
@@ -62,14 +72,13 @@ where
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let pre_run = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
-        let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+        let pre_run: TerraformPreRun =
+            Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
+        let post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
 
         let (tx, rx) = mpsc::sync_channel(1);
-        let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, true, tx.clone())
-        };
+        let run: TerraformRun = mk_deploy_run(self, target, &event_details, tx);
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -102,10 +111,10 @@ where
         target: &DeploymentTarget,
         event_details: &EventDetails,
         logger: &EnvProgressLogger,
-        state: (),
+        state: TaskContext,
         uninstall_helm: bool,
         pod_tx: mpsc::SyncSender<Pod>,
-    ) -> Result<(), Box<EngineError>> {
+    ) -> Result<TaskContext, Box<EngineError>> {
         // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
@@ -217,7 +226,7 @@ where
             helm.on_delete(target)?;
         }
 
-        Ok(())
+        Ok(state)
     }
 }
 
@@ -258,4 +267,38 @@ fn delete_backend_config_secret(
     }
 
     Ok(())
+}
+
+pub(super) fn mk_deploy_pre_run<'a, T: CloudProvider>(
+    terraform: &'a TerraformService<T>,
+    target: &'a DeploymentTarget,
+    event_details: &'a EventDetails,
+) -> TerraformPreRun<'a> {
+    Box::new(move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) })
+}
+
+pub(super) fn mk_deploy_run<'a, T: CloudProvider>(
+    terraform: &'a TerraformService<T>,
+    target: &'a DeploymentTarget,
+    event_details: &'a EventDetails,
+    pod_tx: mpsc::SyncSender<Pod>,
+) -> TerraformRun<'a>
+where
+    TerraformService<T>: ToTeraContext,
+{
+    Box::new(
+        move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+            terraform.deploy_job_and_execute_cmd(target, event_details, logger, state, false, pod_tx.clone())
+        },
+    )
+}
+
+pub(super) fn mk_deploy_post_run<'a, T: CloudProvider>(
+    terraform: &'a TerraformService<T>,
+    target: &'a DeploymentTarget,
+) -> TerraformPostRun<'a>
+where
+    TerraformService<T>: TerraformServiceTrait,
+{
+    Box::new(move |logger: &EnvSuccessLogger, state: TaskContext| {})
 }
