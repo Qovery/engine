@@ -51,7 +51,7 @@ unit-tests:
   tags:
     - bm-7cpu-16gmem-0g
   when: always
-  needs: ['build-and-lint-code']
+  needs: ["build-and-lint-code"]
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
@@ -1113,7 +1113,7 @@ gitlab-release:
   script:
     - curl -s https://get.qovery.com | bash
     - echo 'You can follow the dry-run diff overview at https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1'
-    - ./qovery admin cluster deploy --parallel-run=50 --filters IsProduction=false --execution-mode=on-the-fly --no-confirm
+    - qovery admin cluster deploy --parallel-run=50 --filters IsProduction=false --execution-mode=on-the-fly --no-confirm
   tags:
     - vm-250mcpu-1gmem-0g
   rules:
