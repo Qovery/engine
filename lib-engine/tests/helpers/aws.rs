@@ -30,7 +30,7 @@ use tracing::error;
 use uuid::Uuid;
 
 pub const AWS_REGION_FOR_S3: AwsRegion = AwsRegion::EuWest3;
-pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_31 {
+pub const AWS_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
     prefix: None,
     patch: None,
     suffix: None,
