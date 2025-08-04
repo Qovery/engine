@@ -32,12 +32,27 @@ resource "aws_iam_policy" "loki_s3_policy" {
     "Version": "2012-10-17",
     "Statement": [
         {
+            "Sid": "logsS3Loki",
             "Effect": "Allow",
             "Action": [
-                "s3:*",
-                "kms:*"
+                "s3:Get*",
+                "s3:List*",
+                "s3:PutObject",
+                "s3:DeleteObject"
             ],
-            "Resource": "*"
+            "Resource": [
+                "${aws_s3_bucket.loki_bucket.arn}",
+                "${aws_s3_bucket.loki_bucket.arn}/*"
+            ]
+        },
+        {
+            "Sid": "logsKMSLoki",
+            "Effect": "Allow",
+            "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey"
+            ],
+            "Resource": "${aws_kms_key.s3_logs_kms_encryption.arn}"
         }
     ]
 }
