@@ -1,3 +1,4 @@
+# This file is used to create the s3 bucket for the s3 access logs
 {%- if object_storage_enable_logging %}
 
 resource "aws_iam_role" "iam_eks_loki_logs" {
@@ -34,12 +35,18 @@ resource "aws_iam_policy" "loki_s3_policy_logs" {
     "Version": "2012-10-17",
     "Statement": [
         {
+            "Sid": "accessLogsS3Loki",
             "Effect": "Allow",
             "Action": [
-                "s3:*",
-                "kms:*"
+                "s3:Get*",
+                "s3:List*",
+                "s3:PutObject",
+                "s3:DeleteObject"
             ],
-            "Resource": "*"
+            "Resource": [
+                "${aws_s3_bucket.loki_bucket_logs.arn}",
+                "${aws_s3_bucket.loki_bucket_logs.arn}/*"
+            ]
         }
     ]
 }
