@@ -13,13 +13,14 @@ use k8s_openapi::api::core::v1::Pod;
 use kube::api::LogParams;
 use kube::{Api, ResourceExt};
 use std::future;
+use std::marker::PhantomData;
 use std::sync::{Arc, Mutex, mpsc};
 use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 use tokio::time::timeout;
 use uuid::Uuid;
 
-pub struct TerraformServiceDeploymentReporter {
+pub struct TerraformServiceDeploymentReporter<T> {
     long_id: Uuid,
     logger: EnvLogger,
     metrics_registry: Arc<dyn MetricsRegistry>,
@@ -27,9 +28,10 @@ pub struct TerraformServiceDeploymentReporter {
     namespace: String,
     kube_client: kube::Client,
     pod_recv: Option<Mutex<mpsc::Receiver<Pod>>>,
+    _phantom: PhantomData<T>,
 }
 
-impl TerraformServiceDeploymentReporter {
+impl<T> TerraformServiceDeploymentReporter<T> {
     pub fn new(
         chart: &impl TerraformServiceTrait,
         deployment_target: &DeploymentTarget,
@@ -44,6 +46,7 @@ impl TerraformServiceDeploymentReporter {
             kube_client: deployment_target.kube.client(),
             namespace: deployment_target.environment.namespace().to_string(),
             pod_recv: Some(Mutex::new(pod_recv)),
+            _phantom: Default::default(),
         }
     }
 }
@@ -73,8 +76,8 @@ impl ReporterState {
     }
 }
 
-impl DeploymentReporter for TerraformServiceDeploymentReporter {
-    type DeploymentResult = ();
+impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T> {
+    type DeploymentResult = T;
     type DeploymentState = ReporterState;
     type Logger = EnvLogger;
 
@@ -164,8 +167,7 @@ impl DeploymentReporter for TerraformServiceDeploymentReporter {
             format!("
 ❌ {} of terraform service failed !
 ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️
-Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
-⛑ Can't solve the issue? Please have a look at our forum https://discuss.qovery.com/
+⛑ Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
 ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️
                 ", self.action),
             None,
@@ -179,7 +181,7 @@ Look at the Deployment Status Reports above and use our troubleshooting guide to
     }
 }
 
-impl TerraformServiceDeploymentReporter {
+impl<T> TerraformServiceDeploymentReporter<T> {
     pub(crate) fn stop_record(&self, step_status: StepStatus) {
         self.metrics_registry
             .stop_record(self.long_id, StepName::Deployment, step_status.clone());

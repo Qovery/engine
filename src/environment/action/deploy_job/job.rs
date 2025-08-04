@@ -92,7 +92,7 @@ where
 
     let job_name = job.kube_name();
     let max_execution_duration = Duration::from_secs(60) + job.max_duration * (job.max_nb_restart + 1);
-    let pod = block_on(await_user_job_to_terminate(
+    let pod = block_on(await_job_pod_to_terminate(
         job.kube_name(),
         max_execution_duration,
         target.environment.namespace(),
@@ -262,12 +262,84 @@ pub async fn await_job_to_complete(
     .ok_or_else(|| JobRunError::Unknown(anyhow!("Job not found")))
 }
 
-pub async fn await_user_job_to_terminate(
+pub async fn await_job_pod_to_start(
     job_name: &str,
     max_execution_duration: Duration,
     namespace: &str,
     kube_client: kube::Client,
     abort_handle: impl Abort,
+) -> Result<Pod, JobRunError> {
+    let should_process_pod = |pod: Option<&Pod>| -> bool {
+        let Some(pod) = pod else {
+            return true;
+        };
+
+        if pod.status.as_ref().unwrap().phase.as_deref().unwrap_or("Pending") == "Pending" {
+            return false;
+        }
+
+        true
+    };
+
+    // We want the first one
+    let should_skip_pod = |_: &Pod| false;
+    await_job_pod_to(
+        job_name,
+        max_execution_duration,
+        namespace,
+        kube_client,
+        abort_handle,
+        should_process_pod,
+        should_skip_pod,
+    )
+    .await
+}
+
+pub async fn await_job_pod_to_terminate(
+    job_name: &str,
+    max_execution_duration: Duration,
+    namespace: &str,
+    kube_client: kube::Client,
+    abort_handle: impl Abort,
+) -> Result<Pod, JobRunError> {
+    let should_process_pod = |pod: Option<&Pod>| -> bool {
+        // if the pod is not present anymore, we want to unstuck the loop
+        let Some(pod) = pod else {
+            return true;
+        };
+
+        // We want the job to be half running. Meaning the task/job of the user is terminated,
+        // but our qovery-wait-container-output is still running, waiting for us.
+        if user_job_terminated_exit_code(pod).is_some() {
+            return true;
+        }
+
+        false
+    };
+
+    // user code has not terminated cleanly, restart the loop until the backoff limit is reached
+    let should_skip_pod = |pod: &Pod| user_job_terminated_exit_code(pod) != Some(0);
+
+    await_job_pod_to(
+        job_name,
+        max_execution_duration,
+        namespace,
+        kube_client,
+        abort_handle,
+        should_process_pod,
+        should_skip_pod,
+    )
+    .await
+}
+
+async fn await_job_pod_to(
+    job_name: &str,
+    max_execution_duration: Duration,
+    namespace: &str,
+    kube_client: kube::Client,
+    abort_handle: impl Abort,
+    should_process_pod: impl Fn(Option<&Pod>) -> bool,
+    should_skip_pod: impl Fn(&Pod) -> bool,
 ) -> Result<Pod, JobRunError> {
     let job_api: Api<K8sJob> = Api::namespaced(kube_client.clone(), namespace);
     let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
@@ -291,21 +363,6 @@ pub async fn await_user_job_to_terminate(
         }
 
         if job_is_completed(job).is_some() {
-            return true;
-        }
-
-        false
-    };
-
-    let should_process_pod = |pod: Option<&Pod>| -> bool {
-        // if the pod is not present anymore, we want to unstuck the loop
-        let Some(pod) = pod else {
-            return true;
-        };
-
-        // We want the job to be half running. Meaning the task/job of the user is terminated
-        // but our qovery-wait-container-output is still running, waiting for us.
-        if user_job_terminated_exit_code(pod).is_some() {
             return true;
         }
 
@@ -344,7 +401,7 @@ pub async fn await_user_job_to_terminate(
         let pod = await_kube_condition(
             &mut execution_deadline,
             should_force_cancel,
-            await_condition(pod_api.clone(), &pod_name, should_process_pod),
+            await_condition(pod_api.clone(), &pod_name, &should_process_pod),
             max_execution_duration,
         )
         .await?;
@@ -352,8 +409,7 @@ pub async fn await_user_job_to_terminate(
         // Pod is not present anymore, restart the loop
         let Some(pod) = pod else { continue };
 
-        // user code has not terminated cleanly, restart the loop until backoff limit is reached
-        if user_job_terminated_exit_code(&pod) != Some(0) {
+        if should_skip_pod(&pod) {
             continue;
         }
 
@@ -374,7 +430,7 @@ async fn await_kube_condition<T>(
         },
         _ = execution_deadline => {
             Err(JobRunError::Timeout {
-                    raw_error_message: format!( "Job execution has exceeded the maximum duration of {max_duration:?} seconds" )
+                    raw_error_message: format!("Job execution has exceeded the maximum duration of {max_duration:?} seconds" )
                 }
             )
         },

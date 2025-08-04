@@ -325,17 +325,29 @@ fn replace_qovery_env_variable<'a>(
     mut line: Cow<'a, str>,
     envs: &HashMap<String, VariableInfo>,
 ) -> Result<Cow<'a, str>, anyhow::Error> {
+    const MAX_LOOPS: usize = 100; // Prevent infinite loop in case of malformed input
     const PREFIX: &str = "qovery.env.";
 
     // Loop until we find all occurrences on the same line
+    let mut loops = 0;
     loop {
+        // Prevent infinite loop in case input is malformed especially if it contains initial qovery.env.prefix as value
+        if loops >= MAX_LOOPS {
+            return Err(anyhow!(
+                "Too many loops while trying to replace Qovery env variables in line: {}",
+                line
+            ));
+        }
+
+        loops += 1;
+
         // If no pattern matches, exit the loop to return our result
         let Some(beg_pos) = line.find(PREFIX) else {
             break;
         };
 
         let needle = &line[beg_pos..];
-        // Built-in variable are not allowed because they contains ID in them
+        // Built-in variable are not allowed because they contain ID in them
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
         if needle[PREFIX.len()..].starts_with("QOVERY_") {
             return Err(anyhow!(
@@ -845,6 +857,16 @@ mod tests {
         assert!(ret.is_err());
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("qovery.env.QOVERY_"), &envs);
+        assert!(ret.is_err());
+    }
+
+    #[test]
+    fn test_replace_qovery_env_variables_infinite_loop_in_case_of_variable_reinjection() {
+        let envs = hashmap! {
+            "TOTO".to_string() => VariableInfo { value: "key: qovery.env.TOTO".to_string(), is_secret: false},
+        };
+
+        let ret = replace_qovery_env_variable(Cow::Borrowed("key: qovery.env.TOTO"), &envs);
         assert!(ret.is_err());
     }
 

@@ -6,12 +6,12 @@ charts:
     version: 6.4.16
     comment: https://artifacthub.io/packages/helm/bitnami/metallb
   - name: cert-manager
-    version: v1.15.3
+    version: v1.18.2
     repo_name: jetstack
     comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns
     repo_name: bitnami
-    version: 8.3.8
+    version: 8.9.2
     comment: https://artifacthub.io/packages/helm/bitnami/external-dns
   - name: grafana
     version: 6.16.10
@@ -22,7 +22,7 @@ charts:
       Need to look if we can move them out of this repo
   - name: ingress-nginx
     repo_name: ingress-nginx
-    version: 4.11.5
+    version: 4.13.0
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
@@ -53,14 +53,13 @@ charts:
     version: 0.2.2
     comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
   - name: aws-node-termination-handler
-    repo_name: aws
+    repo_name: oci://public.ecr.aws/aws-ec2/helm
     dest: aws-bootstrap
-    comment: https://github.com/aws/eks-charts/blob/master/stable/aws-node-termination-handler/Chart.yaml#L5
-    version: 0.21.0
+    version: 0.27.1
   - name: cluster-autoscaler
     repo_name: cluster-autoscaler
     dest: aws-bootstrap
-    version: 9.39.0
+    version: 9.48.0
     comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
   - name: aws-load-balancer-controller
     repo_name: aws
@@ -126,7 +125,7 @@ charts:
   - name: vpa
     dest_folder_override: vertical-pod-autoscaler
     repo_name: fairwinds
-    version: 4.7.1
+    version: 4.8.0
   - name: k8s-event-logger
     repo_name: qovery-github
     chart_path: chart

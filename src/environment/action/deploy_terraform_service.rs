@@ -2,8 +2,15 @@
 
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
+use crate::environment::action::deploy_job::job::JobRunError;
 use crate::environment::action::deploy_job::job_output::JobOutputSerializationError;
-use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
+use crate::environment::action::utils::{
+    KubeObjectKind, delete_cached_image, get_last_deployed_image, mirror_image_if_necessary,
+};
+use crate::environment::models::job::{ImageSource, Job, JobService};
+use crate::environment::models::terraform_service::{
+    TerraformAction, TerraformFilesSource, TerraformService, TerraformServiceTrait,
+};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
@@ -24,6 +31,13 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
+#[derive(Debug)]
+pub struct TaskContext {}
+pub(super) type TerraformPreRun<'a> = Box<dyn Fn(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a>;
+pub(super) type TerraformPostRun<'a> = Box<dyn Fn(&EnvSuccessLogger, TaskContext) + 'a>;
+pub(super) type TerraformRun<'a> =
+    Box<dyn Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a>;
+
 impl<T: CloudProvider> DeploymentAction for TerraformService<T>
 where
     TerraformService<T>: ToTeraContext,
@@ -31,14 +45,18 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-        let pre_run = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
+        let pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, event_details.clone());
+        let post_run: TerraformPostRun = mk_deploy_post_run(self, target);
 
-        let (tx, rx) = mpsc::sync_channel(1);
-        let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, false, tx.clone())
-        };
-
-        let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
+        let (pod_tx, rx) = mpsc::sync_channel(1);
+        let run: TerraformRun = Box::new(
+            move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                let task_ctx = self
+                    .deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?
+                    .0;
+                Ok(task_ctx)
+            },
+        );
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -50,11 +68,11 @@ where
     }
 
     fn on_pause(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Restart));
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
 
         let command_error = CommandError::new_from_safe_message("Cannot pause a Terraform service".to_string());
         Err(Box::new(EngineError::new_cannot_restart_service(
-            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Restart)),
+            EventDetails::clone_changing_stage(event_details, Stage::Environment(EnvironmentStep::Pause)),
             target.environment.namespace(),
             "",
             command_error,
@@ -62,14 +80,20 @@ where
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
-        let pre_run = |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> { Ok(()) };
-        let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
-        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
+        let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+        let pre_run: TerraformPreRun =
+            Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
+        let post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
 
-        let (tx, rx) = mpsc::sync_channel(1);
-        let run = |logger: &EnvProgressLogger, state: ()| -> Result<(), Box<EngineError>> {
-            self.deploy_job_and_execute_cmd(target, &event_details, logger, state, true, tx.clone())
-        };
+        let (pod_tx, rx) = mpsc::sync_channel(1);
+        let run: TerraformRun = Box::new(
+            move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                let (task, helm) =
+                    self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?;
+                helm.on_delete(target)?;
+                Ok(task)
+            },
+        );
 
         let task = DeploymentTaskImpl {
             pre_run: &pre_run,
@@ -102,10 +126,25 @@ where
         target: &DeploymentTarget,
         event_details: &EventDetails,
         logger: &EnvProgressLogger,
-        state: (),
-        uninstall_helm: bool,
+        state: TaskContext,
         pod_tx: mpsc::SyncSender<Pod>,
-    ) -> Result<(), Box<EngineError>> {
+    ) -> Result<(TaskContext, HelmDeployment), Box<EngineError>> {
+        let handle_error = |err: JobRunError| -> Box<EngineError> {
+            match err {
+                JobRunError::Aborted => {
+                    // if cancel/abort has been requested, we want to kill/send a sigterm to the job
+                    // To notify it to terminate
+                    let _ = block_on(super::deploy_job::job::kill_job(
+                        target.kube.client(),
+                        target.environment.namespace(),
+                        self.kube_name(),
+                    ));
+                    Box::new(EngineError::new_task_cancellation_requested(event_details.clone()))
+                }
+                _ => Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())),
+            }
+        };
+
         // We first need to delete the old job, because job spec cannot be updated (due to be an immutable resources)
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
@@ -131,33 +170,34 @@ where
         helm.on_create(target)?;
 
         let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
+            // to be sure we unstuck the reporter
+            let _ = pod_tx.send(Pod::default());
+
             info!("Removing secret: {:?}", secret_name);
             let _ = delete_backend_config_secret(secret_name, event_details, target);
         });
 
         let job_pod_selector = format!("job-name={}", self.kube_name());
         let max_execution_duration = Duration::from_secs(60) + self.timeout;
-        let pod = block_on(super::deploy_job::job::await_user_job_to_terminate(
+        let pod = block_on(super::deploy_job::job::await_job_pod_to_start(
             self.kube_name(),
             max_execution_duration,
             target.environment.namespace(),
             target.kube.client(),
             target.abort,
-        ));
-        let pod = match pod {
-            Ok(pod) => pod,
-            Err(crate::environment::action::deploy_job::job::JobRunError::Aborted) => {
-                let _ = block_on(super::deploy_job::job::kill_job(
-                    target.kube.client(),
-                    target.environment.namespace(),
-                    self.kube_name(),
-                ));
-                return Err(Box::new(EngineError::new_task_cancellation_requested(event_details.clone())));
-            }
-            Err(err) => return Err(Box::new(EngineError::new_job_error(event_details.clone(), err.to_string()))),
-        };
-        let pod_name = pod.metadata.name.clone().unwrap_or_default();
+        ))
+        .map_err(handle_error)?;
         let _ = pod_tx.send(pod);
+        let pod = block_on(super::deploy_job::job::await_job_pod_to_terminate(
+            self.kube_name(),
+            max_execution_duration,
+            target.environment.namespace(),
+            target.kube.client(),
+            target.abort,
+        ))
+        .map_err(handle_error)?;
+
+        let pod_name = pod.metadata.name.unwrap_or_default();
         info!("Targeting job pod name: {}", pod_name);
 
         match self.terraform_action {
@@ -212,12 +252,7 @@ where
             return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
         }
 
-        // delete helm
-        if uninstall_helm {
-            helm.on_delete(target)?;
-        }
-
-        Ok(())
+        Ok((state, helm))
     }
 }
 
@@ -258,4 +293,22 @@ fn delete_backend_config_secret(
     }
 
     Ok(())
+}
+
+pub(super) fn mk_deploy_pre_run<'a, T: CloudProvider>(
+    terraform: &'a TerraformService<T>,
+    target: &'a DeploymentTarget,
+    event_details: EventDetails,
+) -> TerraformPreRun<'a> {
+    Box::new(move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) })
+}
+
+pub(super) fn mk_deploy_post_run<'a, T: CloudProvider>(
+    terraform: &'a TerraformService<T>,
+    target: &'a DeploymentTarget,
+) -> TerraformPostRun<'a>
+where
+    TerraformService<T>: TerraformServiceTrait,
+{
+    Box::new(move |logger: &EnvSuccessLogger, state: TaskContext| {})
 }

@@ -136,7 +136,7 @@ impl<T> EngineRequest<T> {
                     event_details.clone(),
                     CommandError::new(
                         "Invalid container registry information".to_string(),
-                        Some(format!("Invalid container registry information: {err:?}")),
+                        Some(format!("Invalid container registry information: {err}")),
                         None,
                     ),
                 )

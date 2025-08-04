@@ -44,4 +44,8 @@ spec:
 
           kubectl -n {{ .Release.Namespace }} describe vpa test-vpa
           kubectl -n {{ .Release.Namespace }} delete vpa test-vpa
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   restartPolicy: Never

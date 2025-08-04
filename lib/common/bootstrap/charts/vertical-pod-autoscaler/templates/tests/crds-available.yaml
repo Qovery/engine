@@ -27,4 +27,8 @@ spec:
         - crd
         - verticalpodautoscalercheckpoints.autoscaling.k8s.io
         - verticalpodautoscalers.autoscaling.k8s.io
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   restartPolicy: Never

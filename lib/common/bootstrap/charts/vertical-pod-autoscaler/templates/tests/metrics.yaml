@@ -26,4 +26,8 @@ spec:
         - get
         - --raw
         - "/apis/metrics.k8s.io/v1beta1/nodes"
+  {{- with .Values.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
   restartPolicy: Never

@@ -99,6 +99,8 @@ spec:
               value: {{ .Values.cordonOnly | quote }}
             - name: TAINT_NODE
               value: {{ .Values.taintNode | quote }}
+            - name: ENABLE_OUT_OF_SERVICE_TAINT
+              value: {{ .Values.enableOutOfServiceTaint | quote }}
             - name: EXCLUDE_FROM_LOAD_BALANCERS
               value: {{ .Values.excludeFromLoadBalancers | quote }}
             - name: DELETE_LOCAL_DATA
@@ -143,6 +145,8 @@ spec:
             {{- end }}
             - name: ENABLE_SPOT_INTERRUPTION_DRAINING
               value: {{ .Values.enableSpotInterruptionDraining | quote }}
+            - name: ENABLE_ASG_LIFECYCLE_DRAINING
+              value: {{ .Values.enableASGLifecycleDraining | quote }}
             - name: ENABLE_SCHEDULED_EVENT_DRAINING
               value: {{ .Values.enableScheduledEventDraining | quote }}
             - name: ENABLE_REBALANCE_MONITORING

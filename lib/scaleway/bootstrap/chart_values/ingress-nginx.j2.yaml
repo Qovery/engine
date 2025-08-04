@@ -13,6 +13,8 @@ controller:
     proxy-body-size: 100m
     # hide Nginx version
     server-tokens: "false"
+    # annotation risk level - needed because of nginx.ingress.kubernetes.io/configuration-snippet in ingress configuration
+    annotations-risk-level: "Critical"
     # required for X-Forwarded-for to work
     use-proxy-protocol: "true"
     # enable real IP (client IP)

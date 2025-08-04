@@ -6,7 +6,7 @@ annotations:
     fingerprint: 1020CF3C033D4F35BAE1C19E1226061C665DF13E
     url: https://cert-manager.io/public-keys/cert-manager-keyring-2021-09-20-1020CF3C033D4F35BAE1C19E1226061C665DF13E.gpg
 apiVersion: v2
-appVersion: v1.15.3
+appVersion: v1.18.2
 description: A Helm chart for cert-manager
 home: https://cert-manager.io
 icon: https://raw.githubusercontent.com/cert-manager/community/4d35a69437d21b76322157e6284be4cd64e6d2b7/logo/logo-small.png
@@ -23,4 +23,4 @@ maintainers:
 name: cert-manager
 sources:
 - https://github.com/cert-manager/cert-manager
-version: v1.15.3
+version: v1.18.2

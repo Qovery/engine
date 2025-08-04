@@ -487,7 +487,9 @@ pub fn exit_code_to_msg(exit_code: i32) -> Option<&'static str> {
         128 => Some("the exit was triggered with an invalid exit code (valid codes are integers between 0-255)"),
         134 => Some("the container aborted itself using the abort() function (SIGABRT)"),
         135 => Some("the container was killed due to an invalid memory access (SIGBUS)"),
-        137 => Some("the container was immediately terminated by the operating system via SIGKILL signal"),
+        137 => Some(
+            "the container was immediately killed by the operating system via SIGKILL signal.\n\t\t\tThe most likely cause is your application running out of memory. Look at your metrics and/or try to increase memory",
+        ),
         139 => {
             Some("the container attempted to access memory that was not assigned to it and was terminated (SIGSEGV)")
         }

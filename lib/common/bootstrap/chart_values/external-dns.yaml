@@ -1,3 +1,7 @@
+global:
+  security:
+    ## @param global.security.allowInsecureImages Allows skipping image verification to use the image from our registry
+    allowInsecureImages: true
 # set the provider to use
 provider: set-by-engine-code
 # keep the config you want to use and remove the others. Configure the provider you want to use.
