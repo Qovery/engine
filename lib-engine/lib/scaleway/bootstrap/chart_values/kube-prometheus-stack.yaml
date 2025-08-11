@@ -74,6 +74,8 @@ kubeStateMetrics:
 
 prometheus:
   enabled: true
+  podDisruptionBudget:
+    enabled: true
   thanosService:
     enabled: true
   thanosServiceMonitor:

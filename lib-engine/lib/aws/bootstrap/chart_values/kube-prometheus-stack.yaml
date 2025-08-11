@@ -77,6 +77,8 @@ kubeStateMetrics:
 
 prometheus:
   enabled: true
+  podDisruptionBudget:
+    enabled: true
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: "set-by-engine-code"
@@ -117,10 +119,10 @@ prometheus:
     resources:
       limits:
         cpu: "4"
-        memory: "8Gi"
+        memory: "4Gi"
       requests:
         cpu: "1"
-        memory: "8Gi"
+        memory: "4Gi"
     replicas: "set-by-engine-code"
 
 prometheusOperator:

@@ -84,6 +84,8 @@ kubeStateMetrics:
 
 prometheus:
   enabled: true
+  podDisruptionBudget:
+    enabled: true
   serviceAccount:
     annotations:
       iam.gke.io/gcp-service-account: "set-by-engine-code"

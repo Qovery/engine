@@ -26,17 +26,17 @@ charts:
     comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
   - name: kube-prometheus-stack
     repo_name: prometheus-community
-    version: 67.3.1
+    version: 75.9.0
     comment: |
       !!! On version upgrade, do not forget to update CRDs !!!
       https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
   - name: prometheus-operator-crds
     repo_name: prometheus-community
-    version: 17.0.2
+    version: 21.0.0
     comment: "!!! On version upgrade, do not forget to update kube-prometheus-stack !!!"
   - name: thanos
     repo_name: bitnami
-    version: 15.12.1
+    version: 17.2.0
     comment: https://artifacthub.io/packages/helm/bitnami/thanos
   - name: kube-state-metrics
     repo_name: prometheus-community

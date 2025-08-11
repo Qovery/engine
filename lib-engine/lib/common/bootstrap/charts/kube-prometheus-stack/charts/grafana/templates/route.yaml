@@ -32,6 +32,9 @@ spec:
     - backendRefs:
         - name: {{ include "grafana.fullname" $ }}
           port: {{ $.Values.service.port }}
+          group: ''
+          kind: Service
+          weight: 1
       {{- with $route.filters }}
       filters:
         {{- toYaml . | nindent 8 }}

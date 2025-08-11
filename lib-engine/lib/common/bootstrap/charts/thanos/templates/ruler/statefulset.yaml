@@ -11,11 +11,20 @@ metadata:
   namespace: {{ include "common.names.namespace" . }}
   labels: {{- include "common.labels.standard" ( dict "customLabels" .Values.commonLabels "context" $ ) | nindent 4 }}
     app.kubernetes.io/component: ruler
-  {{- if .Values.commonAnnotations }}
-  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- if .Values.ruler.statefulsetLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.ruler.statefulsetLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if or .Values.commonAnnotations .Values.ruler.statefulsetAnnotations }}
+  annotations:
+    {{- if .Values.commonAnnotations }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.ruler.statefulsetAnnotations }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.ruler.statefulsetAnnotations "context" $) | nindent 4 }}
+    {{- end }}
   {{- end }}
 spec:
-  {{- if not .Values.ruler.autoscaling.enabled }}
+  {{- if not (or .Values.ruler.autoscaling.enabled .Values.ruler.externalAutoscaler) }}
   replicas: {{ .Values.ruler.replicaCount }}
   {{- end }}
   revisionHistoryLimit: {{ .Values.ruler.revisionHistoryLimit }}
@@ -32,8 +41,11 @@ spec:
     metadata:
       labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
         app.kubernetes.io/component: ruler
-      {{- if or .Values.ruler.podAnnotations (include "thanos.ruler.createConfigmap" .) (include "thanos.createObjstoreSecret" .) }}
+      {{- if or .Values.commonAnnotations .Values.ruler.podAnnotations (include "thanos.ruler.createConfigmap" .) (include "thanos.createObjstoreSecret" .) }}
       annotations:
+        {{- if .Values.commonAnnotations }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 8 }}
+        {{- end }}
         {{- if (include "thanos.createObjstoreSecret" .) }}
         checksum/objstore-configuration: {{ include "thanos.objstoreConfig" . | sha256sum }}
         {{- end }}
@@ -150,7 +162,7 @@ spec:
             - --label=ruler_cluster="{{ .Values.ruler.clusterName }}"
             - --alert.label-drop={{ .Values.ruler.replicaLabel }}
             - --objstore.config-file=/conf/objstore/objstore.yml
-            - --rule-file="{{ .Values.ruler.ruleFile }}"
+            - --rule-file={{ .Values.ruler.ruleFile }}
             {{- range .Values.ruler.queries }}
             - --query={{ . }}
             {{- end }}
@@ -292,12 +304,10 @@ spec:
         - name: data
           emptyDir: {}
   {{- else if and .Values.ruler.persistence.enabled (not .Values.ruler.persistence.existingClaim) }}
-  {{- if semverCompare ">=1.23-0" (include "common.capabilities.kubeVersion" .) -}}
   {{- if .Values.ruler.persistentVolumeClaimRetentionPolicy.enabled }}
   persistentVolumeClaimRetentionPolicy:
     whenDeleted: {{ .Values.ruler.persistentVolumeClaimRetentionPolicy.whenDeleted }}
     whenScaled: {{ .Values.ruler.persistentVolumeClaimRetentionPolicy.whenScaled }}
-  {{- end }}
   {{- end }}
   volumeClaimTemplates:
     - apiVersion: v1
