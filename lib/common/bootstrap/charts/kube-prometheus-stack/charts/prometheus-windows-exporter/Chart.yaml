@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 0.29.2
+appVersion: 0.31.0
 description: A Helm chart for prometheus windows-exporter
 home: https://github.com/prometheus-community/windows_exporter/
 keywords:
@@ -9,9 +9,10 @@ keywords:
 - exporter
 maintainers:
 - email: github@jkroepke.de
-  name: jkroepke
+  name: Jan-Otto Kröpke
+  url: https://github.com/jkroepke
 name: prometheus-windows-exporter
 sources:
 - https://github.com/prometheus-community/windows_exporter/
 type: application
-version: 0.7.1
+version: 0.11.0

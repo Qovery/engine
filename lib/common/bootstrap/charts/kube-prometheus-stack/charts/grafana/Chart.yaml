@@ -6,7 +6,7 @@ annotations:
     - name: Upstream Project
       url: https://github.com/grafana/grafana
 apiVersion: v2
-appVersion: 11.4.0
+appVersion: 12.0.2
 description: The leading tool for querying and visualizing time series and metrics.
 home: https://grafana.com
 icon: https://artifacthub.io/image/b4fed1a7-6c8f-4945-b99d-096efa3e4116
@@ -32,4 +32,4 @@ sources:
 - https://github.com/grafana/grafana
 - https://github.com/grafana/helm-charts
 type: application
-version: 8.8.2
+version: 9.2.10

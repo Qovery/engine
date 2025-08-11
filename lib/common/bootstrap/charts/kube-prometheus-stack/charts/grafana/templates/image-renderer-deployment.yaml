@@ -58,11 +58,9 @@ spec:
       {{- with .Values.imageRenderer.priorityClassName }}
       priorityClassName: {{ . }}
       {{- end }}
-      {{- with .Values.imageRenderer.image.pullSecrets }}
+      {{- if or .Values.imageRenderer.image.pullSecrets .Values.global.imagePullSecrets }}
       imagePullSecrets:
-        {{- range . }}
-        - name: {{ tpl . $root }}
-        {{- end}}
+        {{- include "grafana.imagePullSecrets" (dict "root" $root "imagePullSecrets" .Values.imageRenderer.image.pullSecrets) | nindent 8 }}
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}-image-renderer

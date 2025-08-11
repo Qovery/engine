@@ -19,4 +19,7 @@ spec:
   selector:
     matchLabels:
       {{- include "grafana.selectorLabels" . | nindent 6 }}
+  {{- with .Values.podDisruptionBudget.unhealthyPodEvictionPolicy }}
+  unhealthyPodEvictionPolicy: {{ . }}
+  {{- end }}
 {{- end }}

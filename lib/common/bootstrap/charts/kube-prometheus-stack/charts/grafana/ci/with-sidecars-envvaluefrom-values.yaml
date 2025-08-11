@@ -14,6 +14,21 @@ extraObjects:
       var2: "dmFsdWUy"
 
 sidecar:
+  alerts:
+    enabled: true
+    envValueFrom:
+      VAR1:
+        configMapKeyRef:
+          name: '{{ include "grafana.fullname" . }}-test'
+          key: var1
+      VAR2:
+        secretKeyRef:
+          name: '{{ include "grafana.fullname" . }}-test'
+          key: var2
+      VAR3:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: metadata.namespace
   dashboards:
     enabled: true
     envValueFrom:

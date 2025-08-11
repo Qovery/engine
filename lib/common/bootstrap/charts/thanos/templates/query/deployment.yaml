@@ -15,7 +15,7 @@ metadata:
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.query.autoscaling.enabled }}
+  {{- if not (or .Values.query.autoscaling.enabled .Values.query.externalAutoscaler) }}
   replicas: {{ .Values.query.replicaCount }}
   {{- end }}
   revisionHistoryLimit: {{ .Values.query.revisionHistoryLimit }}
@@ -30,8 +30,11 @@ spec:
     metadata:
       labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
         app.kubernetes.io/component: query
-      {{- if or .Values.query.podAnnotations (include "thanos.query.createSDConfigmap" .) }}
+      {{- if or .Values.commonAnnotations .Values.query.podAnnotations (include "thanos.query.createSDConfigmap" .) }}
       annotations:
+        {{- if .Values.commonAnnotations }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 8 }}
+        {{- end }}
         {{- if (include "thanos.query.createSDConfigmap" .) }}
         checksum/query-sd-configuration: {{ include "thanos.querySDConfigMap" . | sha256sum }}
         {{- end }}

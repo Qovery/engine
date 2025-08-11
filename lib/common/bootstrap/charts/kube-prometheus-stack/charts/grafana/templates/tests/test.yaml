@@ -37,6 +37,10 @@ spec:
       image: "{{ .Values.global.imageRegistry | default .Values.testFramework.image.registry }}/{{ .Values.testFramework.image.repository }}:{{ .Values.testFramework.image.tag }}"
       imagePullPolicy: "{{ .Values.testFramework.imagePullPolicy}}"
       command: ["/opt/bats/bin/bats", "-t", "/tests/run.sh"]
+      {{- with .Values.testFramework.containerSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       volumeMounts:
         - mountPath: /tests
           name: tests

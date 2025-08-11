@@ -15,7 +15,7 @@ metadata:
   annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
   {{- end }}
 spec:
-  {{- if not .Values.receiveDistributor.autoscaling.enabled }}
+  {{- if not (or .Values.receiveDistributor.autoscaling.enabled .Values.receiveDistributor.externalAutoscaler) }}
   replicas: {{ .Values.receiveDistributor.replicaCount }}
   {{- end }}
   revisionHistoryLimit: {{ .Values.receiveDistributor.revisionHistoryLimit }}
@@ -30,8 +30,11 @@ spec:
     metadata:
       labels: {{- include "common.labels.standard" ( dict "customLabels" $podLabels "context" $ ) | nindent 8 }}
         app.kubernetes.io/component: receive-distributor
-      {{- if or .Values.receiveDistributor.podAnnotations (include "thanos.receive.createConfigmap" .) (include "thanos.createObjstoreSecret" .) }}
+      {{- if or .Values.commonAnnotations .Values.receiveDistributor.podAnnotations (include "thanos.receive.createConfigmap" .) (include "thanos.createObjstoreSecret" .) }}
       annotations:
+        {{- if .Values.commonAnnotations }}
+        {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 8 }}
+        {{- end }}
         {{- if (include "thanos.createObjstoreSecret" .) }}
         checksum/objstore-configuration: {{ include "thanos.objstoreConfig" . | sha256sum }}
         {{- end }}

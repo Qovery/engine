@@ -1,5 +1,0 @@
----
-service:
-  labels:
-    foo: bar
-    baz: quux

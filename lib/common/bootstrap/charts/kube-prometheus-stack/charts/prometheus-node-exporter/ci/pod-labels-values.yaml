@@ -1,4 +1,0 @@
----
-podLabels:
-  foo: bar
-  baz: '{{ .Chart.AppVersion }}'
