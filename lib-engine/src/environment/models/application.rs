@@ -453,7 +453,7 @@ where
         };
 
         let probe_timeout = std::cmp::max(readiness_probe_timeout, liveness_probe_timeout);
-        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 10);
+        let startup_timeout = std::cmp::max(probe_timeout /* * 10 rolling restart percent */, 60 * 20);
         Duration::from_secs(startup_timeout as u64)
     }
 
