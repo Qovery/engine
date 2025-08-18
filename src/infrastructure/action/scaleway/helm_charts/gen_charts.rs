@@ -149,7 +149,7 @@ pub fn kapsule_helm_charts(
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 false,
-                chart_config_prerequisites.metrics_parameters.is_some() && metrics_config.advanced_metrics_feature,
+                chart_config_prerequisites.metrics_parameters.is_some(),
             )
             .to_common_helm_chart()?,
         ),
@@ -368,7 +368,7 @@ pub fn kapsule_helm_charts(
         chart_prefix_path,
         true,
         HelmChartNamespaces::Qovery,
-        chart_config_prerequisites.metrics_parameters.is_some() && metrics_config.advanced_metrics_feature,
+        chart_config_prerequisites.metrics_parameters.is_some(),
     )
     .to_common_helm_chart()?;
 
