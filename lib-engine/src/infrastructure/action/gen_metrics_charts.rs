@@ -18,14 +18,8 @@ use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOper
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
 use crate::io_models::metrics::{MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::CustomerHelmChartsOverride;
-use once_cell::sync::Lazy;
-use std::collections::HashSet;
 use std::sync::Arc;
 use url::Url;
-
-// Temporary HashSet for testing purpose
-static CLUSTER_IDS_WITH_ADVANCED_METRICS_FEATURE: Lazy<HashSet<&'static str>> =
-    Lazy::new(|| HashSet::from_iter(["3f50657b-1162-4dde-b706-4d5e937f3c09"].iter().copied()));
 
 pub enum CloudProviderMetricsConfig<'a> {
     Eks(&'a EksChartsConfigPrerequisites),
@@ -108,7 +102,6 @@ pub struct MetricsConfig {
     pub thanos_chart: Option<CommonChart>,
     pub prometheus_adapter_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
-    pub advanced_metrics_feature: bool, // Temporary parameter for testing purpose
 }
 
 pub fn generate_metrics_config(
@@ -150,7 +143,6 @@ pub fn generate_metrics_config(
             thanos_chart: None,
             prometheus_adapter_chart: None,
             metrics_query_url: None,
-            advanced_metrics_feature: false,
         }),
     }
 }
@@ -163,7 +155,7 @@ fn generate_charts_installed_by_qovery(
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
-    cluster_id: &str,
+    _cluster_id: &str,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -229,7 +221,6 @@ fn generate_charts_installed_by_qovery(
             HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
             HelmAction::Destroy => None,
         },
-        advanced_metrics_feature: CLUSTER_IDS_WITH_ADVANCED_METRICS_FEATURE.contains(cluster_id),
     })
 }
 
