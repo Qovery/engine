@@ -34,11 +34,11 @@ kube-state-metrics:
     - persistentvolumeclaims=[qovery.com/service-id]
   resources:
     limits:
-      cpu: 75m
-      memory: 384Mi
+      cpu: 150m
+      memory: 768Mi
     requests:
-      cpu: 75m
-      memory: 384Mi
+      cpu: 150m
+      memory: 768Mi
 
 crds:
   enabled: false
