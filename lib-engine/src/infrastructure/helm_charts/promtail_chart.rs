@@ -35,16 +35,17 @@ impl PromtailChart {
         namespace: HelmChartNamespaces,
         priority_class: PriorityClass,
         karpenter_enabled: bool,
-        metrics_enabled: bool,
+        _metrics_enabled: bool,
     ) -> Self {
         let mut additional_chart_values = vec![];
         if karpenter_enabled {
             add_chart_value(&mut additional_chart_values, chart_prefix_path, "promtail_with_karpenter");
         }
 
-        if metrics_enabled {
-            add_chart_value(&mut additional_chart_values, chart_prefix_path, "promtail_with_prometheus");
-        }
+        // temporary disable
+        // if metrics_enabled {
+        //     add_chart_value(&mut additional_chart_values, chart_prefix_path, "promtail_with_prometheus");
+        // }
 
         PromtailChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
