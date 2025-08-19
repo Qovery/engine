@@ -1,16 +1,14 @@
-
 config:
   snippets:
     pipelineStages:
       - cri: { }
 
-      # If the line is valid JSON, pull `level` or `severity` out of it.
-      # If the line is *not* JSON, the stage is skipped silently
+      # Try to parse JSON: extract level/severity if present.
+      # If not JSON, just skip silently
       - json:
           expressions:
             level: level
             severity: severity
-          on_error: drop
 
       # Promote whatever we found so far to a Loki label
       - labels:
@@ -21,21 +19,14 @@ config:
           stages:
             - regex:
                 expression: '.*(?:level|severity)[=:]\s*"?(?P<level>info)"?.*'
-
             - labels:
                 level:
-
 
       # Promote whatever we found so far to a Loki label
       - labels:
           level:
 
-      # Saves CPU by preventing them from reaching the heavy regex below.
-      - match:
-          selector: '{level="info"}'
-          action: drop
-
-      # Detect error patterns in log content and set level=error
+      # Detect error patterns in raw log text and set level=error
       - match:
           selector: '{level!="info"} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
           stages:
