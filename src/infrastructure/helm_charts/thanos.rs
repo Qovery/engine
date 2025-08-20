@@ -57,6 +57,7 @@ impl ThanosChart {
         compactor_resources: Option<HelmChartResources>,
         store_gateway_resources: Option<HelmChartResources>,
         karpenter_enabled: bool,
+        enable_redundancy: bool,
     ) -> Self {
         Self {
             action,
@@ -92,7 +93,7 @@ impl ThanosChart {
                 },
             },
             query_autoscaling: HelmChartAutoscaling {
-                min_replicas: 2,
+                min_replicas: if enable_redundancy { 2 } else { 1 },
                 max_replicas: 5,
                 target_cpu_utilization_percentage: 60,
             },
@@ -129,7 +130,7 @@ impl ThanosChart {
                 },
             },
             store_gateway_autoscaling: HelmChartAutoscaling {
-                min_replicas: 2,
+                min_replicas: if enable_redundancy { 2 } else { 1 },
                 max_replicas: 5,
                 target_cpu_utilization_percentage: 60,
             },
@@ -450,6 +451,7 @@ mod tests {
             None,
             None,
             false,
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -490,6 +492,7 @@ mod tests {
             None,
             None,
             false,
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -540,6 +543,7 @@ mod tests {
             None,
             None,
             false,
+            true,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

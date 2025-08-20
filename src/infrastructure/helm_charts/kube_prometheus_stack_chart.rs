@@ -60,6 +60,7 @@ pub struct KubePrometheusStackChart {
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     additional_chart_path: Option<HelmChartValuesFilePath>,
+    enable_redundancy: bool,
 }
 
 impl KubePrometheusStackChart {
@@ -73,6 +74,7 @@ impl KubePrometheusStackChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         karpenter_enabled: bool,
+        enable_redundancy: bool,
     ) -> Self {
         KubePrometheusStackChart {
             action,
@@ -101,6 +103,7 @@ impl KubePrometheusStackChart {
                 )),
                 false => None,
             },
+            enable_redundancy,
         }
     }
 
@@ -217,7 +220,19 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     },
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.replicas".to_string(),
-                        value: "2".to_string(),
+                        value: if self.enable_redundancy {
+                            "2".to_string()
+                        } else {
+                            "1".to_string()
+                        },
+                    },
+                    ChartSetValue {
+                        key: "prometheus.podDisruptionBudget.enabled".to_string(),
+                        value: if self.enable_redundancy {
+                            "true".to_string()
+                        } else {
+                            "false".to_string()
+                        },
                     },
                     ChartSetValue {
                         key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName"
@@ -343,6 +358,7 @@ impl ChartInstallationChecker for KubePrometheusStackChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use super::KubePrometheusStackChart;
     use crate::helm::{HelmAction, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{PrometheusConfiguration, StorageClassName};
     use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
@@ -360,8 +376,6 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::{env, fs};
-
-    use super::KubePrometheusStackChart;
 
     fn get_prometheus_chart_override() -> Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>> {
         Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> {
@@ -414,6 +428,7 @@ mod tests {
             get_prometheus_chart_override(),
             false,
             false,
+            true,
         )
     }
 

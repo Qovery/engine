@@ -1,0 +1,36 @@
+storegateway:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "karpenter.sh/capacity-type"
+                operator: "NotIn"
+                values: [ "spot" ]
+{%- if thanos_nodepool_stable %}
+              - key: "karpenter.sh/nodepool"
+                operator: "In"
+                values: [ "stable" ]
+
+  tolerations:
+    - key: "nodepool/stable"
+      operator: "Exists"
+      effect: "NoSchedule"
+{%- endif %}
+
+{%- if thanos_nodepool_stable %}
+query:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "karpenter.sh/nodepool"
+                operator: "In"
+                values: [ "stable" ]
+
+  tolerations:
+    - key: "nodepool/stable"
+      operator: "Exists"
+      effect: "NoSchedule"
+{%- endif %}

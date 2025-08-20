@@ -12,6 +12,7 @@ pub enum MetricsConfiguration {
     MetricsInstalledByQovery {
         // INFO (ENG-1986) ATM this field should be filled only for dedicated Qovery internal clusters
         install_prometheus_adapter: bool,
+        enable_redundancy: Option<bool>,
     },
     AwsS3 {
         region: String,

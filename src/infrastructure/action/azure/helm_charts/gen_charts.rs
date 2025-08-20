@@ -345,6 +345,7 @@ pub(super) fn aks_helm_charts(
                 get_chart_override_fn.clone(),
                 false,
                 false,
+                true,
             )
             .to_common_helm_chart()?,
         )),
