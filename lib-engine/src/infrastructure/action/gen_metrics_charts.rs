@@ -117,6 +117,7 @@ pub fn generate_metrics_config(
     match metrics_configuration {
         Some(MetricsConfiguration::MetricsInstalledByQovery {
             install_prometheus_adapter,
+            enable_redundancy,
         }) => generate_charts_installed_by_qovery(
             HelmAction::Deploy,
             install_prometheus_adapter,
@@ -126,6 +127,7 @@ pub fn generate_metrics_config(
             prometheus_namespace,
             get_chart_override_fn,
             cluster_id,
+            enable_redundancy,
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
@@ -136,6 +138,7 @@ pub fn generate_metrics_config(
             prometheus_namespace,
             get_chart_override_fn,
             cluster_id,
+            None,
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
@@ -156,6 +159,7 @@ fn generate_charts_installed_by_qovery(
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     _cluster_id: &str,
+    enable_redundancy: Option<bool>,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -165,6 +169,8 @@ fn generate_charts_installed_by_qovery(
         ),
         HelmAction::Destroy => None,
     };
+
+    let enable_redundancy = enable_redundancy.unwrap_or(true);
 
     // Kube Prometheus Stack
     let kube_prometheus_stack_chart = KubePrometheusStackChart::new(
@@ -177,6 +183,7 @@ fn generate_charts_installed_by_qovery(
         get_chart_override_fn.clone(),
         false,
         provider_config.is_karpenter_enabled(),
+        enable_redundancy,
     )
     .to_common_helm_chart()?;
 
@@ -193,6 +200,7 @@ fn generate_charts_installed_by_qovery(
         None,
         None,
         provider_config.is_karpenter_enabled(),
+        enable_redundancy,
     )
     .to_common_helm_chart()?;
 
@@ -256,6 +264,7 @@ mod tests {
             prometheus_namespace,
             get_chart_override_fn,
             "none",
+            None,
         );
 
         assert!(result.is_ok());
@@ -288,6 +297,7 @@ mod tests {
             prometheus_namespace,
             get_chart_override_fn,
             "none",
+            None,
         );
 
         assert!(result.is_ok());

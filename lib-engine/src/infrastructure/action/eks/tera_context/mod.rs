@@ -10,6 +10,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
+use crate::io_models::metrics::MetricsConfiguration;
 use crate::io_models::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
 use crate::string::terraform_list_format;
 use chrono::Duration as ChronoDuration;
@@ -526,6 +527,19 @@ pub fn eks_tera_context(
             }
         }),
     );
+
+    // Move thanos pods to the stable node pool when the redundancy is disabled
+    let thanos_on_stable = options.metrics_parameters.as_ref().is_some_and(|mp| {
+        matches!(
+            mp.config,
+            MetricsConfiguration::MetricsInstalledByQovery {
+                enable_redundancy: Some(false),
+                ..
+            }
+        )
+    });
+
+    context.insert("thanos_nodepool_stable", &thanos_on_stable);
 
     Ok(context)
 }

@@ -436,6 +436,7 @@ pub fn get_environment_test_kubernetes(
                         options.metrics_parameters = Some(MetricsParameters {
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                                enable_redundancy: None,
                             },
                         })
                     }
@@ -523,6 +524,7 @@ pub fn get_environment_test_kubernetes(
                         options.metrics_parameters = Some(MetricsParameters {
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                                enable_redundancy: None,
                             },
                         })
                     }
@@ -570,6 +572,7 @@ pub fn get_environment_test_kubernetes(
                         options.metrics_parameters = Some(MetricsParameters {
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
+                                enable_redundancy: None,
                             },
                         })
                     }

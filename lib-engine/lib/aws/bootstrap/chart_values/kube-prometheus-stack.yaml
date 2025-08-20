@@ -78,7 +78,7 @@ kubeStateMetrics:
 prometheus:
   enabled: true
   podDisruptionBudget:
-    enabled: true
+    enabled: "set-by-engine-code"
   serviceAccount:
     annotations:
       eks.amazonaws.com/role-arn: "set-by-engine-code"
