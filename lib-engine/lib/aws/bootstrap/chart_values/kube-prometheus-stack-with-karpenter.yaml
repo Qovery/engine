@@ -15,3 +15,20 @@ prometheus:
       - key: "nodepool/stable"
         operator: "Exists"
         effect: "NoSchedule"
+
+kube-state-metrics:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: "karpenter.sh/nodepool"
+                operator: "In"
+                values: [ "stable" ]
+              - key: "karpenter.sh/capacity-type"
+                operator: "NotIn"
+                values: [ "spot" ]
+  tolerations:
+    - key: "nodepool/stable"
+      operator: "Exists"
+      effect: "NoSchedule"
