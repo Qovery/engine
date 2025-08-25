@@ -9,14 +9,21 @@ image:
   repository: pub-mirror-bitnami-thanos
 global:
   security:
-    allowInsecureImages: true # to be able to yse mirrored image
+    allowInsecureImages: true # to be able to use mirrored image
 
 # Querier/Query: implements Prometheus’s v1 API to aggregate data from the underlying components.
 query:
   enabled: true
   replicaCount: set-by-engine-code
+  extraFlags: #https://thanos.io/v0.39/components/query.md/#flags
+    - --query.max-concurrent=1
+    - --query.max-concurrent-select=1
+    - --query.timeout=1m
+    - --enable-auto-gomemlimit
+    - --auto-gomemlimit.ratio=0.8
+    - --grpc-compression=snappy
   resources:
-    requests:
+    requests:  # query is more cpu bound
       cpu: set-by-engine-code
       memory: set-by-engine-code
     limits:
@@ -141,6 +148,12 @@ compactor:
 storegateway:
   enabled: true
   replicaCount: set-by-engine-code
+  extraFlags: # https://thanos.io/v0.39/components/store.md/#flags
+    - --index-cache-size=512MB
+    - --chunk-pool-size=400MB
+    - --store.enable-index-header-lazy-reader
+    - --store.limits.request-series=1_000_000
+    - --store.limits.request-samples=500_000_000
   useEndpointGroup: true
   autoscaling:
     enabled: true
