@@ -86,10 +86,10 @@ impl ThanosChart {
             query_resources: match query_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
                 },
             },
             query_autoscaling: HelmChartAutoscaling {
@@ -124,9 +124,9 @@ impl ThanosChart {
                 Some(resources) => resources,
                 None => HelmChartResources {
                     limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(512),
+                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(512),
+                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
                 },
             },
             store_gateway_autoscaling: HelmChartAutoscaling {
