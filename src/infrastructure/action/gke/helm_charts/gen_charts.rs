@@ -149,7 +149,7 @@ pub(super) fn gke_helm_charts(
     // Cert Manager chart
     let cert_manager = CertManagerChart::new(
         chart_prefix_path,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        chart_config_prerequisites.metrics_parameters.is_some(),
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
@@ -213,7 +213,7 @@ pub(super) fn gke_helm_charts(
             ),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.ff_metrics_history_enabled,
+        chart_config_prerequisites.metrics_parameters.is_some(),
         get_chart_override_fn.clone(),
         domain.clone(),
         Kind::Gcp,
