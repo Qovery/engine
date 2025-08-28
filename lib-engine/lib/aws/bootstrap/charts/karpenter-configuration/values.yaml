@@ -11,6 +11,8 @@ diskSizeInGib: 0
 capacity_type: []
 explicitSubnetIds: []
 
+amiSelectorTermsAlias: ""
+
 tags:
   ClusterId: ""
   ClusterLongId: ""

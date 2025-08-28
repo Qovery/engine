@@ -51,6 +51,7 @@ pub fn generate_karpenter_charts(
         chart_config_prerequisites.cluster_long_id,
         &chart_config_prerequisites.organization_id,
         chart_config_prerequisites.organization_long_id,
+        chart_config_prerequisites.kubernetes_version.clone(),
         chart_config_prerequisites.region.to_cloud_provider_format(),
         karpenter_parameters,
         chart_config_prerequisites.infra_options.user_provided_network.as_ref(),

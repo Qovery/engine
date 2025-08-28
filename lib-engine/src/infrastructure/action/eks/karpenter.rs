@@ -333,6 +333,7 @@ impl Karpenter {
             cluster_long_id,
             kubernetes.context.organization_short_id(),
             *kubernetes.context.organization_long_id(),
+            kubernetes.version.clone(),
             region.to_cloud_provider_format(),
             karpenter_parameters,
             options.user_provided_network.as_ref(),

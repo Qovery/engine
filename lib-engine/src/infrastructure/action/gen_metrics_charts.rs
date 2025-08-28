@@ -238,10 +238,17 @@ mod tests {
     use crate::environment::models::third_parties::LetsEncryptConfig;
     use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::dns_provider::qoverydns::QoveryDnsConfig;
+    use crate::infrastructure::models::kubernetes::KubernetesVersion;
     use crate::infrastructure::models::kubernetes::aws::Options;
     use crate::io_models::engine_location::EngineLocation;
     use crate::io_models::models::VpcQoveryNetworkMode;
     use std::sync::Arc;
+
+    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
+        prefix: None,
+        patch: None,
+        suffix: None,
+    };
 
     #[test]
     fn test_metrics_query_url_on_deploy() {
@@ -313,6 +320,7 @@ mod tests {
             cluster_long_id: Default::default(),
             cluster_creation_date: Default::default(),
             region: AwsRegion::UsEast1,
+            kubernetes_version: KUBERNETES_VERSION,
             cluster_name: "".to_string(),
             cpu_architectures: vec![],
             cloud_provider: "".to_string(),

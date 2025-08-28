@@ -4,6 +4,8 @@ diskSizeInGib: set-by-engine-code
 capacity_type: set-by-engine-code
 explicitSubnetIds: []
 
+amiSelectorTermsAlias: set-by-engine-code
+
 tags:
   ClusterId: set-by-engine-code
   ClusterLongId: set-by-engine-code
