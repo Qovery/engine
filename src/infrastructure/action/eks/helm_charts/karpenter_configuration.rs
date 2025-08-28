@@ -6,6 +6,7 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::infrastructure::models::kubernetes::aws::UserNetworkConfig;
 use crate::infrastructure::models::kubernetes::karpenter::{
     KarpenterNodePool, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
@@ -24,6 +25,7 @@ pub struct KarpenterConfigurationChart {
     cluster_long_id: String,
     organization_id: String,
     organization_long_id: String,
+    kubernetes_version: KubernetesVersion,
     region: String,
     karpenter_parameters: KarpenterParameters,
     explicit_subnet_ids: Vec<String>,
@@ -40,6 +42,7 @@ impl KarpenterConfigurationChart {
         cluster_long_id: uuid::Uuid,
         organization_id: &str,
         organization_long_id: uuid::Uuid,
+        kubernetes_version: KubernetesVersion,
         region: &str,
         karpenter_parameters: KarpenterParameters,
         user_network_config: Option<&UserNetworkConfig>,
@@ -63,6 +66,7 @@ impl KarpenterConfigurationChart {
             cluster_long_id: cluster_long_id.to_string(),
             organization_id: organization_id.to_string(),
             organization_long_id: organization_long_id.to_string(),
+            kubernetes_version,
             region: region.to_string(),
             karpenter_parameters,
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
@@ -115,6 +119,23 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             ChartSetValue {
                 key: "securityGroupId".to_string(),
                 value: self.security_group_id.clone(),
+            },
+            ChartSetValue {
+                key: "amiSelectorTermsAlias".to_string(),
+                value: match self.kubernetes_version {
+                    KubernetesVersion::V1_23 { .. }
+                    | KubernetesVersion::V1_24 { .. }
+                    | KubernetesVersion::V1_25 { .. }
+                    | KubernetesVersion::V1_26 { .. }
+                    | KubernetesVersion::V1_27 { .. }
+                    | KubernetesVersion::V1_28 { .. }
+                    | KubernetesVersion::V1_29 { .. }
+                    | KubernetesVersion::V1_30 { .. }
+                    | KubernetesVersion::V1_31 { .. }
+                    | KubernetesVersion::V1_32 { .. } => "al2@latest",
+                    KubernetesVersion::V1_33 { .. } => "al2023@latest",
+                }
+                .to_string(),
             },
             ChartSetValue {
                 key: "diskSizeInGib".to_string(),
@@ -306,21 +327,28 @@ mod tests {
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
-    use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
         KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
         KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
         KarpenterStableNodePoolOverride,
     };
+    use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
     use crate::io_models::models::CpuArchitecture::ARM64;
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+
+    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
+        prefix: None,
+        patch: None,
+        suffix: None,
+    };
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn karpenter_configuration_chart_directory_exists_test() {
         // setup:
         let chart = create_chart(
+            KUBERNETES_VERSION,
             true,
             KarpenterNodePool {
                 requirements: vec![],
@@ -357,6 +385,7 @@ mod tests {
     fn karpenter_configuration_chart_values_file_exists_test() {
         // setup:
         let chart = create_chart(
+            KUBERNETES_VERSION,
             true,
             KarpenterNodePool {
                 requirements: vec![],
@@ -394,6 +423,7 @@ mod tests {
     fn karpenter_configuration_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
         let chart = create_chart(
+            KUBERNETES_VERSION,
             false,
             KarpenterNodePool {
                 requirements: vec![],
@@ -569,7 +599,7 @@ mod tests {
             let has_default_node_pool_limits = test_case.qovery_node_pools.default_override.is_some();
             let has_stable_node_pool_limits = test_case.qovery_node_pools.stable_override.limits.is_some();
 
-            let yaml = generate_chart_yaml(with_spot, test_case.qovery_node_pools);
+            let yaml = generate_chart_yaml(KUBERNETES_VERSION, with_spot, test_case.qovery_node_pools);
 
             (test_case.verify_fn)(&yaml, with_spot, has_default_node_pool_limits, has_stable_node_pool_limits);
         }
@@ -639,7 +669,11 @@ mod tests {
         metadata: Metadata,
     }
 
-    fn create_chart(with_spot: bool, qovery_node_pools: KarpenterNodePool) -> KarpenterConfigurationChart {
+    fn create_chart(
+        kubernetes_version: KubernetesVersion,
+        with_spot: bool,
+        qovery_node_pools: KarpenterNodePool,
+    ) -> KarpenterConfigurationChart {
         KarpenterConfigurationChart::new(
             None,
             "whatever".to_string(),
@@ -649,6 +683,7 @@ mod tests {
             Uuid::new_v4(),
             "organization_id",
             Uuid::new_v4(),
+            kubernetes_version,
             "region",
             KarpenterParameters {
                 spot_enabled: with_spot,
@@ -662,9 +697,13 @@ mod tests {
         )
     }
 
-    fn generate_chart_yaml(with_spot: bool, qovery_node_pools: KarpenterNodePool) -> String {
+    fn generate_chart_yaml(
+        kubernetes_version: KubernetesVersion,
+        with_spot: bool,
+        qovery_node_pools: KarpenterNodePool,
+    ) -> String {
         // setup:
-        let chart = create_chart(with_spot, qovery_node_pools);
+        let chart = create_chart(kubernetes_version, with_spot, qovery_node_pools);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(

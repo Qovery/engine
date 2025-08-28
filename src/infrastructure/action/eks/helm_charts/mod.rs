@@ -2,9 +2,9 @@ use chrono::{DateTime, Utc};
 
 use crate::helm::HelmChart;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
-use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
+use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion};
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::models::CpuArchitecture;
 
@@ -56,6 +56,7 @@ pub struct EksChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     pub alb_controller_already_deployed: bool,
     pub kubernetes_version_upgrade_requested: bool,
+    pub kubernetes_version: KubernetesVersion,
     // qovery options form json input
     pub infra_options: Options,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -119,6 +120,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             cluster_id: cluster.short_id().to_string(),
             cluster_long_id: cluster.long_id,
             region: cluster.region.clone(),
+            kubernetes_version: cluster.version.clone(),
             cluster_name: cluster.cluster_name(),
             cpu_architectures: cluster.cpu_architectures(),
             cloud_provider: "aws".to_string(),
