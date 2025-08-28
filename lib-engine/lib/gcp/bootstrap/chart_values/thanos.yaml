@@ -189,7 +189,7 @@ storegateway:
             - key: app.kubernetes.io/name
               operator: In
               values:
-              - thanos-query
+              - thanos-storegateway
           topologyKey: kubernetes.io/hostname
       preferredDuringSchedulingIgnoredDuringExecution:
         - weight: 100
