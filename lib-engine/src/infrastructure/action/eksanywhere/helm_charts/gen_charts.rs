@@ -230,6 +230,7 @@ pub(super) fn eks_anywhere_helm_charts(
             default_ssl_certificate: Some(
                 chart_config_prerequisites
                     .infra_options
+                    .infrastructure_charts_parameters
                     .nginx_chart_overrides
                     .default_ssl_certificate
                     .clone(),
@@ -237,6 +238,7 @@ pub(super) fn eks_anywhere_helm_charts(
             publish_status_address: Some(
                 chart_config_prerequisites
                     .infra_options
+                    .infrastructure_charts_parameters
                     .nginx_chart_overrides
                     .publish_status_address
                     .clone(),
@@ -244,12 +246,14 @@ pub(super) fn eks_anywhere_helm_charts(
             replica_count: Some(
                 chart_config_prerequisites
                     .infra_options
+                    .infrastructure_charts_parameters
                     .nginx_chart_overrides
                     .replica_count,
             ),
             metal_lb_load_balancer_ip: Some(
                 chart_config_prerequisites
                     .infra_options
+                    .infrastructure_charts_parameters
                     .nginx_chart_overrides
                     .annotation_metal_lb_load_balancer_ips
                     .clone(),
@@ -257,6 +261,7 @@ pub(super) fn eks_anywhere_helm_charts(
             external_dns_target: Some(
                 chart_config_prerequisites
                     .infra_options
+                    .infrastructure_charts_parameters
                     .nginx_chart_overrides
                     .annotation_external_dns_kubernetes_target
                     .clone(),
@@ -323,6 +328,7 @@ pub(super) fn eks_anywhere_helm_charts(
         HelmChartNamespaces::Qovery,
         chart_config_prerequisites
             .infra_options
+            .infrastructure_charts_parameters
             .metal_lb_chart_overrides
             .ip_address_pools
             .clone(),
