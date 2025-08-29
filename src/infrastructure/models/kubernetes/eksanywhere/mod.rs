@@ -83,20 +83,12 @@ impl EksAnywhere {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-pub struct CertManagerParameters {
-    pub kubernetes_namespace: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct EksAnywhereOptions {
     pub qovery_grpc_url: String,
     pub qovery_engine_url: String,
     pub metrics_parameters: Option<MetricsParameters>,
     pub jwt_token: String,
-    pub metal_lb_chart_overrides: MetalLbChartOverrides,
-    pub nginx_chart_overrides: NginxChartOverrides,
-    // TODO (QOV-882) To be removed once test is OK on target POWENS cluster (cert-manager should be already installed)
-    pub cert_manager_parameters: CertManagerParameters,
+    pub infrastructure_charts_parameters: InfrastructureChartsParameters,
     pub tls_email_report: String,
 }
 
@@ -106,9 +98,7 @@ impl EksAnywhereOptions {
         qovery_engine_url: String,
         metrics_parameters: Option<MetricsParameters>,
         jwt_token: String,
-        metal_lb_chart_overrides: MetalLbChartOverrides,
-        nginx_chart_overrides: NginxChartOverrides,
-        cert_manager_parameters: CertManagerParameters,
+        infrastructure_charts_parameters: InfrastructureChartsParameters,
         tls_email_report: String,
     ) -> Self {
         EksAnywhereOptions {
@@ -116,12 +106,22 @@ impl EksAnywhereOptions {
             qovery_engine_url,
             metrics_parameters,
             jwt_token,
-            metal_lb_chart_overrides,
-            nginx_chart_overrides,
-            cert_manager_parameters,
+            infrastructure_charts_parameters,
             tls_email_report,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct InfrastructureChartsParameters {
+    pub metal_lb_chart_overrides: MetalLbChartOverrides,
+    pub nginx_chart_overrides: NginxChartOverrides,
+    pub cert_manager_parameters: CertManagerParameters,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct CertManagerParameters {
+    pub kubernetes_namespace: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
