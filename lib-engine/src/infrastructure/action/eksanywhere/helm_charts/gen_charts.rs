@@ -231,7 +231,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 chart_config_prerequisites
                     .infra_options
                     .infrastructure_charts_parameters
-                    .nginx_chart_overrides
+                    .nginx_parameters
                     .default_ssl_certificate
                     .clone(),
             ),
@@ -239,7 +239,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 chart_config_prerequisites
                     .infra_options
                     .infrastructure_charts_parameters
-                    .nginx_chart_overrides
+                    .nginx_parameters
                     .publish_status_address
                     .clone(),
             ),
@@ -247,14 +247,14 @@ pub(super) fn eks_anywhere_helm_charts(
                 chart_config_prerequisites
                     .infra_options
                     .infrastructure_charts_parameters
-                    .nginx_chart_overrides
+                    .nginx_parameters
                     .replica_count,
             ),
             metal_lb_load_balancer_ip: Some(
                 chart_config_prerequisites
                     .infra_options
                     .infrastructure_charts_parameters
-                    .nginx_chart_overrides
+                    .nginx_parameters
                     .annotation_metal_lb_load_balancer_ips
                     .clone(),
             ),
@@ -262,7 +262,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 chart_config_prerequisites
                     .infra_options
                     .infrastructure_charts_parameters
-                    .nginx_chart_overrides
+                    .nginx_parameters
                     .annotation_external_dns_kubernetes_target
                     .clone(),
             ),
@@ -329,7 +329,7 @@ pub(super) fn eks_anywhere_helm_charts(
         chart_config_prerequisites
             .infra_options
             .infrastructure_charts_parameters
-            .metal_lb_chart_overrides
+            .metal_lb_parameters
             .ip_address_pools
             .clone(),
     )
