@@ -114,8 +114,8 @@ impl EksAnywhereOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct InfrastructureChartsParameters {
-    pub metal_lb_chart_overrides: MetalLbChartOverrides,
-    pub nginx_chart_overrides: NginxChartOverrides,
+    pub metal_lb_parameters: MetalLbChartOverrides,
+    pub nginx_parameters: NginxChartOverrides,
     pub cert_manager_parameters: CertManagerParameters,
 }
 
