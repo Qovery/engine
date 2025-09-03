@@ -2930,6 +2930,10 @@ impl InstanceType for AzureInstancesType {
         )
     }
 
+    fn is_gpu_instance(&self) -> bool {
+        todo!()
+    }
+
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,

@@ -144,6 +144,11 @@ charts:
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
     version: 1.5.1
+  - name: nvidia-device-plugin
+    dest: aws-bootstrap
+    repo_name: nvidia
+    version: 0.17.1
+    comment: https://github.com/NVIDIA/k8s-device-plugin
 
 repos:
   - name: stable
@@ -182,6 +187,8 @@ repos:
     url: https://charts.deliveryhero.io/
   - name: external-dns
     url: https://kubernetes-sigs.github.io/external-dns/
+  - name: nvidia
+    url: https://nvidia.github.io/k8s-device-plugin/
   - name: qovery-github
     type: git
     url: https://github.com/Qovery/k8s-event-logger.git

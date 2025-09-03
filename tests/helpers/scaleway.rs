@@ -23,6 +23,7 @@ use qovery_engine::infrastructure::models::container_registry::scaleway_containe
 use qovery_engine::infrastructure::models::container_registry::{ContainerRegistry, InteractWithRegistry};
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
+use qovery_engine::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;
@@ -209,8 +210,9 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
     }
 
     fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+        let instance = ScwInstancesType::DEV1_L;
         let node_type = match cpu_archi {
-            CpuArchitecture::AMD64 => "dev1-l".to_string(),
+            CpuArchitecture::AMD64 => instance.to_string(),
             CpuArchitecture::ARM64 => panic!("ARM64 not managed"),
         };
 

@@ -6,6 +6,8 @@ explicitSubnetIds: []
 
 amiSelectorTermsAlias: set-by-engine-code
 
+kubernetesVersion: set-by-engine-code
+
 tags:
   ClusterId: set-by-engine-code
   ClusterLongId: set-by-engine-code

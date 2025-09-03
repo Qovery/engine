@@ -1,0 +1,14 @@
+apiVersion: v2
+appVersion: 0.17.1
+dependencies:
+- alias: nfd
+  condition: nfd.enabled,gfd.enabled
+  name: node-feature-discovery
+  repository: https://kubernetes-sigs.github.io/node-feature-discovery/charts
+  version: 0.15.3
+description: A Helm chart for the nvidia-device-plugin on Kubernetes
+home: https://github.com/NVIDIA/k8s-device-plugin
+kubeVersion: '>= 1.10.0-0'
+name: nvidia-device-plugin
+type: application
+version: 0.17.1

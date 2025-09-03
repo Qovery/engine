@@ -1,0 +1,15 @@
+nameOverride: ""
+fullnameOverride: ""
+
+nfd:
+    enabled: false
+gfd:
+    enabled: false
+
+tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  - key: nodepool/gpu
+    operator: Exists
+    effect: NoSchedule

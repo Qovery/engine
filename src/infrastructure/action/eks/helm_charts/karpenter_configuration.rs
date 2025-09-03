@@ -146,6 +146,10 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 value: self.eks_ec2_ami.ami_selector_terms_alias().to_string(),
             },
             ChartSetValue {
+                key: "kubernetesVersion".to_string(),
+                value: self.kubernetes_version.to_string(),
+            },
+            ChartSetValue {
                 key: "diskSizeInGib".to_string(),
                 value: format!("{}Gi", self.karpenter_parameters.disk_size_in_gib),
             },
@@ -249,6 +253,87 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             });
         }
 
+        // GPU node pool
+        match &self.karpenter_parameters.qovery_node_pools.gpu_override {
+            Some(gpu_pool_override) => {
+                values.push(ChartSetValue {
+                    key: "gpuNodePool.enable".to_string(),
+                    value: true.to_string(),
+                });
+
+                // Requirements
+                if let Some(requirements) = &gpu_pool_override.requirements {
+                    requirements.iter().enumerate().for_each(|(index, requirement)| {
+                        let prefix = format!("gpuNodePool.requirements[{index}]");
+
+                        let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
+                            // The nodepool support only lowercase value for arch
+                            requirement.values.iter().map(|value| value.to_lowercase()).join(",")
+                        } else {
+                            requirement.values.join(",")
+                        };
+
+                        values.push(ChartSetValue {
+                            key: format!("{prefix}.key"),
+                            value: requirement.key.to_k8s_label(),
+                        });
+                        values.push(ChartSetValue {
+                            key: format!("{prefix}.operator"),
+                            value: requirement
+                                .operator
+                                .as_ref()
+                                .unwrap_or(&KarpenterRequirementOperator::In)
+                                .to_string(),
+                        });
+                        values.push(ChartSetValue {
+                            key: format!("{prefix}.values"),
+                            value: format!("{{{formated_values}}}"),
+                        });
+                    });
+                }
+
+                // Node pool consolidation
+                gpu_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
+                    let prefix = format!("gpuNodePool.consolidation.budgets[{index}]");
+
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.nodes"),
+                        value: it.nodes.to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.reasons"),
+                        value: it.reasons.to_helm_format_string().to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.duration"),
+                        value: it.get_karpenter_budget_duration_as_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.schedule"),
+                        value: it.schedule.to_string(),
+                    });
+                });
+
+                // Node pool limits
+                if let Some(limits) = &gpu_pool_override.limits {
+                    values.push(ChartSetValue {
+                        key: "gpuNodePool.limits.maxCpu".to_string(),
+                        value: limits.max_cpu.to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: "gpuNodePool.limits.maxMemory".to_string(),
+                        value: limits.max_memory.to_string(),
+                    });
+                }
+            }
+            None => {
+                values.push(ChartSetValue {
+                    key: "gpuNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+        }
+
         // Default node pool limits
         if let Some(Some(default_node_pool_limits)) = self
             .karpenter_parameters
@@ -337,10 +422,10 @@ mod tests {
     };
     use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
     use crate::infrastructure::models::kubernetes::karpenter::{
-        KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
-        KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
-        KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
-        KarpenterStableNodePoolOverride,
+        KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
+        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
+        KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
+        KarpenterRequirementOperator, KarpenterStableNodePoolOverride,
     };
     use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
     use crate::io_models::models::CpuArchitecture::ARM64;
@@ -366,6 +451,7 @@ mod tests {
                     limits: None,
                 },
                 default_override: None,
+                gpu_override: None,
             },
         );
 
@@ -403,6 +489,7 @@ mod tests {
                     limits: None,
                 },
                 default_override: None,
+                gpu_override: None,
             },
         );
 
@@ -441,6 +528,7 @@ mod tests {
                     limits: None,
                 },
                 default_override: None,
+                gpu_override: None,
             },
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -495,6 +583,7 @@ mod tests {
                         limits: None,
                     },
                     default_override: None,
+                    gpu_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -523,6 +612,7 @@ mod tests {
                         limits: None,
                     },
                     default_override: None,
+                    gpu_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -559,6 +649,7 @@ mod tests {
                         }),
                     },
                     default_override: None,
+                    gpu_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -596,6 +687,16 @@ mod tests {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
                         }),
+                    }),
+                    gpu_override: Some(KarpenterGpuNodePoolOverride {
+                        budgets: vec![KarpenterNodePoolDisruptionBudget {
+                            nodes: "0".to_string(),
+                            reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                            duration: duration_str::parse("2h").unwrap(),
+                            schedule: "0 1 * * 3".to_string(),
+                        }],
+                        limits: None,
+                        requirements: None,
                     }),
                 },
                 verify_fn: verify_custom_node_pools,

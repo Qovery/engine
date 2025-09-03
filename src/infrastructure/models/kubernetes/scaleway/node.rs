@@ -253,6 +253,21 @@ impl InstanceType for ScwInstancesType {
         false
     }
 
+    fn is_gpu_instance(&self) -> bool {
+        matches!(
+            self,
+            ScwInstancesType::GPU_3070_S
+                | ScwInstancesType::H100_1_80G
+                | ScwInstancesType::H100_1_M
+                | ScwInstancesType::H100_SXM_2_80G
+                | ScwInstancesType::L40S_1_48G
+                | ScwInstancesType::L40S_2_48G
+                | ScwInstancesType::L4_1_24G
+                | ScwInstancesType::L4_2_24G
+                | ScwInstancesType::L4_4_24G
+        )
+    }
+
     fn is_instance_cluster_allowed(&self) -> bool {
         matches!(
             self,
