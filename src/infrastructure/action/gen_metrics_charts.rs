@@ -10,6 +10,7 @@ use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisite
 use crate::infrastructure::action::gke::helm_charts::GkeChartsConfigPrerequisites;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
+use crate::infrastructure::helm_charts::beyla_chart::BeylaChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
     KubePrometheusStackChart, PrometheusConfiguration,
 };
@@ -93,6 +94,24 @@ impl CloudProviderMetricsConfig<'_> {
             CloudProviderMetricsConfig::Gke(_) => "http://thanos-query.qovery.svc.cluster.local:9090".to_string(),
         }
     }
+
+    pub fn is_cilium_compatible(&self) -> bool {
+        match self {
+            Self::Eks(_) => false,
+            Self::Gke(_) => true,
+            Self::Kapsule(_) => true,
+            Self::Aks(_) => true,
+        }
+    }
+
+    pub fn cluster_name(&self) -> String {
+        match self {
+            Self::Eks(cfg) => cfg.cluster_name.clone(),
+            Self::Gke(cfg) => cfg.cluster_name.clone(),
+            Self::Kapsule(cfg) => cfg.cluster_name.clone(),
+            Self::Aks(cfg) => cfg.cluster_name.clone(),
+        }
+    }
 }
 
 #[derive(Default)]
@@ -101,6 +120,7 @@ pub struct MetricsConfig {
     pub kube_prometheus_stack_chart: Option<CommonChart>,
     pub thanos_chart: Option<CommonChart>,
     pub prometheus_adapter_chart: Option<CommonChart>,
+    pub beyla_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
 }
 
@@ -110,14 +130,15 @@ pub fn generate_metrics_config(
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
-    cluster_id: &str,
 ) -> Result<MetricsConfig, CommandError> {
     let metrics_configuration = provider_config.metrics_parameters().map(|it| it.config.clone());
+    let cluster_name = provider_config.cluster_name();
 
     match metrics_configuration {
         Some(MetricsConfiguration::MetricsInstalledByQovery {
             install_prometheus_adapter,
             enable_redundancy,
+            beyla_config,
         }) => generate_charts_installed_by_qovery(
             HelmAction::Deploy,
             install_prometheus_adapter,
@@ -126,25 +147,28 @@ pub fn generate_metrics_config(
             prometheus_internal_url,
             prometheus_namespace,
             get_chart_override_fn,
-            cluster_id,
+            &cluster_name,
             enable_redundancy,
+            beyla_config.is_some_and(|config| config.enabled),
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
-            false, // we force a desinstall for prometheus adapter
+            false, // we force an uninstallation for prometheus adapter
             chart_prefix_path,
             provider_config,
             prometheus_internal_url,
             prometheus_namespace,
             get_chart_override_fn,
-            cluster_id,
+            &cluster_name,
             None,
+            false,
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
             kube_prometheus_stack_chart: None,
             thanos_chart: None,
             prometheus_adapter_chart: None,
+            beyla_chart: None,
             metrics_query_url: None,
         }),
     }
@@ -158,8 +182,9 @@ fn generate_charts_installed_by_qovery(
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
     get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
-    _cluster_id: &str,
+    cluster_name: &str,
     enable_redundancy: Option<bool>,
+    install_beyla: bool,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -213,18 +238,34 @@ fn generate_charts_installed_by_qovery(
         prometheus_adapter_helm_action,
         chart_prefix_path,
         prometheus_internal_url.to_string(),
-        prometheus_namespace,
+        prometheus_namespace.clone(),
         get_chart_override_fn.clone(),
         true,
         provider_config.is_karpenter_enabled(),
     )
     .to_common_helm_chart()?;
 
+    // Grafana Beyla. only for EKS.
+    let beyla_chart = if !provider_config.is_cilium_compatible() {
+        let action = if install_beyla {
+            HelmAction::Deploy
+        } else {
+            HelmAction::Destroy
+        };
+        Some(
+            BeylaChart::new(action, chart_prefix_path, HelmChartNamespaces::Qovery, cluster_name)
+                .to_common_helm_chart()?,
+        )
+    } else {
+        None
+    };
+
     Ok(MetricsConfig {
         prometheus_operator_crds_chart,
         kube_prometheus_stack_chart: Some(kube_prometheus_stack_chart),
         thanos_chart: Some(thanos_chart),
         prometheus_adapter_chart: Some(prometheus_adapter_chart),
+        beyla_chart,
         metrics_query_url: match helm_action {
             HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
             HelmAction::Destroy => None,
@@ -270,8 +311,9 @@ mod tests {
             prometheus_internal_url,
             prometheus_namespace,
             get_chart_override_fn,
-            "none",
+            "cluster-name",
             None,
+            true,
         );
 
         assert!(result.is_ok());
@@ -303,8 +345,9 @@ mod tests {
             prometheus_internal_url,
             prometheus_namespace,
             get_chart_override_fn,
-            "none",
+            "cluster-name",
             None,
+            true,
         );
 
         assert!(result.is_ok());

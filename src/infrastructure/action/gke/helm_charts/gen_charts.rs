@@ -53,7 +53,6 @@ pub(super) fn gke_helm_charts(
         &prometheus_internal_url,
         prometheus_namespace,
         get_chart_override_fn.clone(),
-        chart_config_prerequisites.cluster_long_id.to_string().as_str(),
     )?;
 
     // Qovery storage class

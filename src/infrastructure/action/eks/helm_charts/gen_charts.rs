@@ -76,7 +76,6 @@ pub(super) fn eks_helm_charts(
         &prometheus_internal_url,
         prometheus_namespace.clone(),
         get_chart_override_fn.clone(),
-        chart_config_prerequisites.cluster_long_id.to_string().as_str(),
     )?;
 
     // Qovery storage class
@@ -728,6 +727,9 @@ pub(super) fn eks_helm_charts(
     }
     if let Some(thanos_chart) = metrics_config.thanos_chart {
         level_5.push(Box::new(thanos_chart));
+    }
+    if let Some(beyla_chart) = metrics_config.beyla_chart {
+        level_5.push(Box::new(beyla_chart));
     }
     if let Some(prometheus_adapter_chart) = metrics_config.prometheus_adapter_chart {
         level_5.push(Box::new(prometheus_adapter_chart));

@@ -1,0 +1,75 @@
+preset: application
+
+prometheus_export:
+  enabled: true
+
+
+env:
+  OTEL_EBPF_KUBE_CLUSTER_NAME: "set-by-engine-code"
+
+config:
+  create: true
+  data:
+    # reduce route cardinality (e.g. /user/123 → /user/:id)
+    routes:
+      unmatched: heuristic
+
+    # explicit Prometheus metrics exporter
+    prometheus_export:
+      port: 9090
+      path: /metrics
+
+    # enable Kubernetes metadata (usually true by default)
+    attributes:
+      kubernetes:
+        enable: true
+
+    # limit the instrumentation scope
+    discovery:
+      instrument:
+        - k8s_pod_labels:
+            "qovery.com/service-type": "container"
+        - k8s_pod_labels:
+            "qovery.com/service-type": "application"
+      exclude_instrument:
+        - k8s_namespace: "{kube-*,monitoring,observability}"
+        - k8s_owner_name: "{prometheus*,grafana-agent*,loki*,tempo*,jaeger*}"
+
+    # expose Beyla’s own internal metrics
+    internal_metrics:
+      prometheus:
+        port: 6060
+        path: /metrics
+
+internal_metrics:
+  enabled: true
+
+service:
+  enabled: true
+  type: ClusterIP
+
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack
+  jobLabel: beyla
+  metrics:
+    endpoint:
+      interval: 15s
+  internalMetrics:
+    endpoint:
+      interval: 30s
+
+priorityClassName: system-node-critical
+
+tolerations:
+  - operator: Exists
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: eks.amazonaws.com/compute-type
+              operator: NotIn
+              values: ["fargate"]

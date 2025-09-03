@@ -437,6 +437,7 @@ pub fn get_environment_test_kubernetes(
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
                                 enable_redundancy: None,
+                                beyla_config: None,
                             },
                         })
                     }
@@ -525,6 +526,7 @@ pub fn get_environment_test_kubernetes(
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
                                 enable_redundancy: None,
+                                beyla_config: None,
                             },
                         })
                     }
@@ -573,6 +575,7 @@ pub fn get_environment_test_kubernetes(
                             config: MetricsInstalledByQovery {
                                 install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
                                 enable_redundancy: None,
+                                beyla_config: None,
                             },
                         })
                     }

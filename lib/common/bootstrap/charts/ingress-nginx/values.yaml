@@ -492,7 +492,7 @@ controller:
       labels: {}
     # -- Annotations to be added to the external controller service. See `controller.service.internal.annotations` for annotations to be added to the internal controller service.
     annotations: {}
-    # -- Labels to be added to both controller services
+    # -- Labels to be added to both controller services.
     labels: {}
     # -- Type of the external controller service.
     # Ref: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types

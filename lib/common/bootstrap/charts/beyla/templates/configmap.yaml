@@ -1,0 +1,35 @@
+{{- if not .Values.config.skipConfigMapCheck }}
+{{- if and (not .Values.config.create) (eq .Values.config.name "") }}
+  {{- fail "if .Values.config.name is not set, then .Values.config.create should be set to true to use default configuration" }}
+{{- end }}
+{{- end }}
+{{- if and (.Values.config.create) (eq .Values.config.name "") }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" . }}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: config
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  beyla-config.yml: |
+    {{- if eq .Values.preset "network" }}
+    {{- if not .Values.config.data.network }}
+    network:
+      enable: true
+    {{- end }}
+    {{- end }}
+    {{- if eq .Values.preset "application" }}
+    {{- if not .Values.config.data.discovery }}
+    discovery:
+      instrument:
+        - k8s_namespace: "*"
+    {{- end }}
+    {{- end }}
+  {{- toYaml .Values.config.data | nindent 4}}
+{{- end }}
