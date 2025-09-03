@@ -13,6 +13,7 @@ pub enum MetricsConfiguration {
         // INFO (ENG-1986) ATM this field should be filled only for dedicated Qovery internal clusters
         install_prometheus_adapter: bool,
         enable_redundancy: Option<bool>,
+        beyla_config: Option<BeylaConfig>,
     },
     AwsS3 {
         region: String,
@@ -20,4 +21,10 @@ pub enum MetricsConfiguration {
         aws_iam_prometheus_role_arn: String,
         endpoint: String,
     },
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub struct BeylaConfig {
+    pub enabled: bool,
 }

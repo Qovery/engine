@@ -1,0 +1,43 @@
+{{- if and .Values.service.enabled .Values.serviceMonitor.enabled .Values.config.data.prometheus_export }}
+{{- $root := . }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metrics
+    {{- with .Values.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.serviceMonitor.annotations }}
+  annotations:
+    {{- tpl (toYaml . | nindent 4) $root }}
+  {{- end }}
+spec:
+  endpoints:
+    {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+    - port: {{ .Values.service.portName }}
+      path: {{ .Values.config.data.prometheus_export.path }}
+      scheme: http 
+      {{- with .Values.serviceMonitor.endpoint }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+    {{- end }}
+    {{- if (and (or (.Values.service.internalMetrics.targetPort) (.Values.config.data.internal_metrics)) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
+    - port: {{ .Values.service.internalMetrics.portName }}
+      path: {{ .Values.config.data.internal_metrics.prometheus.path }}
+      scheme: http 
+      {{- with .Values.serviceMonitor.internalMetrics.endpoint }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+    {{- end }}
+  jobLabel: {{ .Values.serviceMonitor.jobLabel | default (include "beyla.fullname" .) }}
+  selector:
+    matchLabels:
+      {{- include "beyla.labels" . | nindent 6 }}
+      {{- with .Values.service.labels }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+{{- end }}

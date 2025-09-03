@@ -1,0 +1,23 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+rules:
+  - apiGroups: [ "apps" ]
+    resources: [ "replicasets" ]
+    verbs: [ "list", "watch" ]
+  - apiGroups: [ "" ]
+    resources: [ "pods", "services", "nodes" ]
+    verbs: [ "list", "watch", "get" ]
+  {{- with .Values.rbac.extraClusterRoleRules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end}}
+{{- end }}

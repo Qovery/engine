@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "beyla.fullname" . }}
+  namespace: {{ include "beyla.namespace" .}}
+  labels:
+    {{- include "beyla.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workload
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "beyla.selectorLabels" . | nindent 6 }}
+  {{- with .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "beyla.labels" . | nindent 8 }}
+        app.kubernetes.io/component: workload
+    spec:
+     {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "beyla.serviceAccountName" . }}
+     {{- end }}
+      {{- if eq .Values.preset "application" }}
+      hostPID: true
+      {{- end }}
+      {{- if or (eq .Values.preset "network") .Values.config.data.network .Values.contextPropagation.enabled }}
+      hostNetwork: true
+      dnsPolicy: {{ .Values.dnsPolicy }}
+      {{- end }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      containers:
+        - name: beyla
+          image: {{ .Values.global.image.registry | default .Values.image.registry }}/{{ .Values.image.repository }}{{ include "beyla.imageId" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+          {{- if .Values.privileged }}
+          {{- with .Values.securityContext }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- else }}
+            runAsUser: 0
+            readOnlyRootFilesystem: true
+            capabilities:
+              add:
+                - BPF
+                - SYS_PTRACE
+                - NET_RAW
+                - CHECKPOINT_RESTORE
+                - DAC_READ_SEARCH
+                - PERFMON
+              {{- if .Values.contextPropagation.enabled }}
+                - NET_ADMIN
+              {{- end }}
+              {{- with .Values.extraCapabilities }}
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+              drop:
+                - ALL
+          {{- end }}
+          ports:
+          {{- if or (.Values.service.targetPort) (.Values.config.data.prometheus_export) }}
+          - name: {{ .Values.service.portName }}
+            containerPort: {{ .Values.service.targetPort | default .Values.config.data.prometheus_export.port }}
+            protocol: TCP
+          {{- end }}
+          {{- if (and (or (.Values.service.internalMetrics.targetPort) ((and .Values.config.data.internal_metrics .Values.config.data.internal_metrics.prometheus))) (not (eq .Values.config.data.prometheus_export.port .Values.config.data.internal_metrics.prometheus.port))) }}
+          - name: {{ .Values.service.internalMetrics.portName }}
+            containerPort: {{ .Values.service.internalMetrics.targetPort | default .Values.config.data.internal_metrics.prometheus.port }}
+            protocol: TCP
+          {{- end }}
+          {{- if .Values.config.data.profile_port }}
+          - name: profile
+            containerPort: {{ .Values.config.data.profile_port }}
+            protocol: TCP
+          {{- end }}
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: BEYLA_CONFIG_PATH
+              value: "/etc/beyla/config/beyla-config.yml"
+          {{- if and .Values.k8sCache.replicas (gt (int .Values.k8sCache.replicas) 0) }}
+            - name: BEYLA_KUBE_META_CACHE_ADDRESS
+              value: {{ .Values.k8sCache.service.name }}:{{ .Values.k8sCache.service.port }}
+          {{- end }}
+          {{- range $key, $value := .Values.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+          {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
+          {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+          {{- end }}
+          volumeMounts:
+            - mountPath: /etc/beyla/config
+              name: beyla-config
+          {{- if .Values.contextPropagation.enabled }}
+            - mountPath: /sys/fs/cgroup
+              name: cgroup
+          {{- end }}
+          {{- with .Values.volumeMounts }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- if .Values.global.image.pullSecrets }}
+        {{- toYaml .Values.global.image.pullSecrets | nindent 8 }}
+        {{- else }}
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- tpl (toYaml .) $ | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: {{ default (include "beyla.fullname" .) .Values.config.name }}
+      {{- if .Values.contextPropagation.enabled }}
+        - name: cgroup
+          hostPath:
+            path: /sys/fs/cgroup
+      {{- end }}
+      {{- with .Values.volumes }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

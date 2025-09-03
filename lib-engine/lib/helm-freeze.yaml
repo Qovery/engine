@@ -80,6 +80,10 @@ charts:
     repo_name: grafana
     version: 6.17.0
     comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
+  - name: beyla
+    repo_name: grafana
+    version: 1.9.2
+    comment: https://github.com/grafana/beyla/
   - name: mongodb
     repo_name: bitnami
     version: 13.13.1
