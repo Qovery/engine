@@ -34,6 +34,7 @@ pub mod gen_karpenter_charts;
 pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;
+pub mod nvidia_gpu_k8s_device_plugin_chart;
 
 #[derive(Clone)]
 pub struct EksChartsConfigPrerequisites {

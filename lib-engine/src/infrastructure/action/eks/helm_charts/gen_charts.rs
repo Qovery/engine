@@ -2,6 +2,7 @@ use crate::helm::{
     ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass,
     UpdateStrategy, VpaContainerPolicy, get_engine_helm_action_from_location,
 };
+use crate::infrastructure::action::eks::helm_charts::nvidia_gpu_k8s_device_plugin_chart::NvidiaGpuK8sDevicePluginChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
@@ -757,6 +758,15 @@ pub(super) fn eks_helm_charts(
         level_1.push(Box::new(karpenter_charts.karpenter_chart));
 
         level_2.push(Box::new(karpenter_charts.karpenter_configuration_chart));
+
+        if let Some(karpenter_parameters) = &chart_config_prerequisites.karpenter_parameters
+            && karpenter_parameters.qovery_node_pools.gpu_override.is_some()
+        {
+            // GPU Nvidia plugin for EKS nodes
+            level_4.push(Box::new(
+                NvidiaGpuK8sDevicePluginChart::new(chart_prefix_path).to_common_helm_chart()?,
+            ));
+        }
     } else {
         level_5.push(Box::new(coredns_config));
     }

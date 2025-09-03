@@ -22,9 +22,10 @@ pub struct KarpenterNodePool {
     pub requirements: Vec<KarpenterNodePoolRequirement>,
     pub stable_override: KarpenterStableNodePoolOverride,
     pub default_override: Option<KarpenterDefaultNodePoolOverride>,
+    pub gpu_override: Option<KarpenterGpuNodePoolOverride>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterNodePoolRequirement {
     pub key: KarpenterNodePoolRequirementKey,
     pub values: Vec<String>,
@@ -95,6 +96,13 @@ impl fmt::Display for KarpenterRequirementOperator {
 pub struct KarpenterStableNodePoolOverride {
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterGpuNodePoolOverride {
+    pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
+    pub limits: Option<KarpenterNodePoolLimits>,
+    pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

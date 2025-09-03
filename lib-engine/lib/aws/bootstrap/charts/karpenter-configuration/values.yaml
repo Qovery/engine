@@ -7,11 +7,14 @@ clusterName: ""
 securityGroupId: ""
 
 diskSizeInGib: 0
+# Optional: Custom disk size for GPU nodes
+gpuDiskSizeInGib: 100
 
 capacity_type: []
 explicitSubnetIds: []
 
 amiSelectorTermsAlias: ""
+kubernetesVersion: ""
 
 tags:
   ClusterId: ""
@@ -34,3 +37,12 @@ defaultNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
+gpuNodePool:
+  enable: false
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+

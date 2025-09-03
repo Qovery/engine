@@ -1,0 +1,39 @@
+{{- if .Values.gpuNodePool.enable }}
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: gpu
+spec:
+  amiFamily: AL2
+  metadataOptions:
+    httpPutResponseHopLimit: 2
+  amiSelectorTerms:
+    - name: "amazon-eks-gpu-node-{{ .Values.kubernetesVersion }}*"
+      requirements:
+        - key: karpenter.k8s.aws/instance-gpu-count
+          operator: Exists
+  role: "KarpenterNodeRole-{{ .Values.clusterName }}"
+  subnetSelectorTerms:
+    {{- if .Values.explicitSubnetIds }}
+    {{- range .Values.explicitSubnetIds }}
+    - id: {{ . | quote }}
+    {{- end }}
+    {{- else }}
+    - tags:
+        karpenter.sh/discovery: "{{ .Values.clusterName }}"
+    {{- end }}
+  securityGroupSelectorTerms:
+    - id: {{ .Values.securityGroupId | quote }}
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: "{{ .Values.gpuDiskSizeInGib }}G"
+        volumeType: gp3
+        encrypted: true
+        deleteOnTermination: true
+  tags:
+    {{- range $key, $value := .Values.tags }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+    NodeType: "GPU"
+{{- end }}

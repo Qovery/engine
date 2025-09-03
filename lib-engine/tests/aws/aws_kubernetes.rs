@@ -12,9 +12,9 @@ use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::infrastructure::models::kubernetes::karpenter::{
-    KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
-    KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
-    KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
+    KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
+    KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
+    KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
     KarpenterStableNodePoolOverride,
 };
 use qovery_engine::io_models::models::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
@@ -276,6 +276,96 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
             }),
+            gpu_override: None,
+        },
+    };
+    create_and_destroy_eks_cluster(
+        region,
+        ClusterTestType::Classic,
+        WithoutNatGateways,
+        function_name!(),
+        NodeManager::Karpenter {
+            config: karpenter_parameters,
+        },
+        vec![],
+    );
+}
+
+#[cfg(feature = "test-aws-infra-karpenter")]
+#[named]
+#[test]
+fn create_and_destroy_eks_cluster_karpenter_with_gpu_node_pool_in_eu_west_3() {
+    let region = "eu-west-3".to_string();
+    let karpenter_parameters = KarpenterParameters {
+        spot_enabled: true,
+        max_node_drain_time_in_secs: None,
+        disk_size_in_gib: 50,
+        default_service_architecture: CpuArchitecture::AMD64,
+        qovery_node_pools: KarpenterNodePool {
+            requirements: vec![
+                KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::InstanceFamily,
+                    values: vec!["t2".to_string(), "t3".to_string(), "t3a".to_string()],
+                    operator: Some(KarpenterRequirementOperator::In),
+                },
+                KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::InstanceSize,
+                    values: vec!["large".to_string()],
+                    operator: Some(KarpenterRequirementOperator::In),
+                },
+                KarpenterNodePoolRequirement {
+                    key: KarpenterNodePoolRequirementKey::Arch,
+                    values: vec!["AMD64".to_string()],
+                    operator: Some(KarpenterRequirementOperator::In),
+                },
+            ],
+            stable_override: KarpenterStableNodePoolOverride {
+                budgets: vec![KarpenterNodePoolDisruptionBudget {
+                    nodes: "0".to_string(),
+                    reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                    duration: duration_str::parse("24h").unwrap(),
+                    schedule: "0 0 * * *".to_string(),
+                }],
+                limits: Some(KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                }),
+            },
+            gpu_override: Some(KarpenterGpuNodePoolOverride {
+                requirements: Some(vec![
+                    KarpenterNodePoolRequirement {
+                        key: KarpenterNodePoolRequirementKey::InstanceFamily,
+                        values: vec!["g4dn".to_string(), "g5".to_string()],
+                        operator: Some(KarpenterRequirementOperator::In),
+                    },
+                    KarpenterNodePoolRequirement {
+                        key: KarpenterNodePoolRequirementKey::InstanceSize,
+                        values: vec!["xlarge".to_string(), "2xlarge".to_string()],
+                        operator: Some(KarpenterRequirementOperator::In),
+                    },
+                    KarpenterNodePoolRequirement {
+                        key: KarpenterNodePoolRequirementKey::Arch,
+                        values: vec!["AMD64".to_string()],
+                        operator: Some(KarpenterRequirementOperator::In),
+                    },
+                ]),
+                budgets: vec![KarpenterNodePoolDisruptionBudget {
+                    nodes: "0".to_string(),
+                    reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                    duration: duration_str::parse("24h").unwrap(),
+                    schedule: "0 0 * * *".to_string(),
+                }],
+                limits: Some(KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                }),
+            }),
+            default_override: Some(KarpenterDefaultNodePoolOverride {
+                limits: Some(KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
+                }),
+            }),
         },
     };
     create_and_destroy_eks_cluster(
@@ -331,6 +421,7 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
             }),
+            gpu_override: None,
         },
     };
     create_and_destroy_eks_cluster(
@@ -384,6 +475,7 @@ fn create_upgrade_and_destroy_eks_cluster_karpenter_with_nat_gw_in_eu_west_3() {
                 limits: None,
             },
             default_override: None,
+            gpu_override: None,
         },
     };
     create_and_destroy_eks_cluster(

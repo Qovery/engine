@@ -1,0 +1,18 @@
+---
+{{- $options := (include "nvidia-device-plugin.options" . | fromJson) }}
+{{- if or $options.hasConfigMap ( and .Values.gfd.enabled .Values.nfd.enableNodeFeatureApi ) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "nvidia-device-plugin.fullname" . }}-role-binding
+  labels:
+    {{- include "nvidia-device-plugin.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "nvidia-device-plugin.fullname" . }}-service-account
+    namespace: {{ include "nvidia-device-plugin.namespace" . }}
+roleRef:
+  kind: ClusterRole
+  name: {{ include "nvidia-device-plugin.fullname" . }}-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
