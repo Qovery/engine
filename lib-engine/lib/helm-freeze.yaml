@@ -1,7 +1,7 @@
 charts:
   - name: metallb
     repo_name: bitnami
-    dest_folder_override: metal-lb 
+    dest_folder_override: metallb
     dest: eksanywhere-bootstrap
     version: 6.4.16
     comment: https://artifacthub.io/packages/helm/bitnami/metallb
