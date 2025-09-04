@@ -9,6 +9,9 @@ controller:
     default-ssl-certificate: "qovery/letsencrypt-acme-qovery-cert"
   publishService:
     enabled: true
+  config:
+    # annotation risk level - needed because of nginx.ingress.kubernetes.io/configuration-snippet in ingress configuration
+    annotations-risk-level: "Critical"
   service:
     enabled: true
     annotations:
