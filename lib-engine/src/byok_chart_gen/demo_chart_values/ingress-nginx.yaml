@@ -2,6 +2,8 @@ fullnameOverride: ingress-nginx
 controller:
   useComponentLabel: true
   allowSnippetAnnotations: true
+  # annotation risk level - needed because of nginx.ingress.kubernetes.io/configuration-snippet in ingress configuration
+  annotations-risk-level: "Critical"
   ingressClassResource:
     name: nginx-qovery
     enabled: true
