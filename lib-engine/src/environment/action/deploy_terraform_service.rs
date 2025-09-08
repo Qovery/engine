@@ -187,6 +187,9 @@ where
             target.abort,
         ))
         .map_err(handle_error)?;
+        // pod is available: as of today, we consider the status can be set to Executing
+        logger.switch_to_executing_step();
+
         let _ = pod_tx.send(pod);
         let pod = block_on(super::deploy_job::job::await_job_pod_to_terminate(
             self.kube_name(),

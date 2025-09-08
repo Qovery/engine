@@ -60,6 +60,7 @@ pub struct ReporterState {
 impl ReporterState {
     fn terraform_output_stream_mut(&mut self) -> &mut BoxStream<'static, Result<String, std::io::Error>> {
         self.log_lines.get_or_insert_with(|| {
+            // Wait for the pod sent by deployer thread
             let pod = self.pod_recv.recv().unwrap_or_default();
             let log_params = LogParams {
                 follow: true,
@@ -110,6 +111,8 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
 
     fn deployment_in_progress(&self, reporter_state: &mut Self::DeploymentState) {
         let logs_stream = reporter_state.terraform_output_stream_mut();
+        // here reporter has received the pod event so we consider the execution started
+        self.logger.switch_to_executing();
         let mut ctx = Context::from_waker(Waker::noop());
         // To not block the thread we loop until we have some line to log
         // if nothing available yet, we return/yield to check if the task is not terminated
