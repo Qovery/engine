@@ -337,7 +337,7 @@ mod tests {
     use crate::io_models::models::CpuArchitecture::ARM64;
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
-    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
+    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
         prefix: None,
         patch: None,
         suffix: None,
