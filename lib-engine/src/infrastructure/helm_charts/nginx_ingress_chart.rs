@@ -129,7 +129,6 @@ pub struct NginxIngressChart {
     compute_full_forwarded_for: bool,
     log_format_escaping: LogFormatEscaping,
     is_alb_enabled: bool,
-    http_snippet: Option<NginxHttpSnippet>,
     server_snippet: Option<NginxServerSnippet>,
     limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     nginx_controller_custom_http_errors: Option<String>,
@@ -155,7 +154,6 @@ pub struct NginxOptions {
     pub compute_full_forwarded_for: bool,
     pub log_format_escaping: LogFormatEscaping,
     pub is_alb_enabled: bool,
-    pub http_snippet: Option<NginxHttpSnippet>,
     pub server_snippet: Option<NginxServerSnippet>,
     pub limit_request_status_code: Option<NginxLimitRequestStatusCode>,
     pub nginx_controller_custom_http_errors: Option<String>,
@@ -234,7 +232,6 @@ impl NginxIngressChart {
             compute_full_forwarded_for: options.compute_full_forwarded_for,
             log_format_escaping: options.log_format_escaping,
             is_alb_enabled: options.is_alb_enabled,
-            http_snippet: options.http_snippet,
             server_snippet: options.server_snippet,
             limit_request_status_code: options.limit_request_status_code,
             nginx_controller_custom_http_errors: options.nginx_controller_custom_http_errors,
@@ -397,12 +394,6 @@ defaultBackend:
             chart_set_values_string.push(ChartSetValue {
                 key: "controller.config.limit-req-status-code".to_string(),
                 value: value.as_u16().to_string(),
-            })
-        }
-        if let Some(value) = &self.http_snippet {
-            chart_set_values_string.push(ChartSetValue {
-                key: "controller.config.http-snippet".to_string(),
-                value: value.get_snippet_value().to_string(),
             })
         }
         if let Some(value) = &self.server_snippet {
@@ -717,7 +708,6 @@ mod tests {
                 compute_full_forwarded_for: true,
                 log_format_escaping: LogFormatEscaping::Default,
                 is_alb_enabled: false,
-                http_snippet: None,
                 server_snippet: None,
                 limit_request_status_code: None,
                 nginx_controller_custom_http_errors: None,
@@ -779,7 +769,6 @@ mod tests {
                 compute_full_forwarded_for: true,
                 log_format_escaping: LogFormatEscaping::Default,
                 is_alb_enabled: false,
-                http_snippet: None,
                 server_snippet: None,
                 limit_request_status_code: None,
                 nginx_controller_custom_http_errors: None,
@@ -843,7 +832,6 @@ mod tests {
                     compute_full_forwarded_for: true,
                     log_format_escaping: log_format_escaping.clone(),
                     is_alb_enabled: false,
-                    http_snippet: None,
                     server_snippet: None,
                     limit_request_status_code: None,
                     nginx_controller_custom_http_errors: None,
@@ -913,7 +901,6 @@ mod tests {
                 compute_full_forwarded_for: true,
                 log_format_escaping: LogFormatEscaping::Default,
                 is_alb_enabled: false,
-                http_snippet: None,
                 server_snippet: None,
                 limit_request_status_code: None,
                 nginx_controller_custom_http_errors: None,

@@ -22,9 +22,12 @@ controller:
     # append the remote address to the X-Forwarded-For header instead of replacing it
     compute-full-forwarded-for: "false" # set-by-engine-code
     # customize http-snippet
-    {%- if nginx_controller_http_snippet %}
     http-snippet: |
-      {{ nginx_controller_http_snippet | indent(prefix="        ") }}
+        # Qovery: declare variables with safe defaults
+        map $host $qovery_com_associated_service_id  { default ""; }
+        map $host $qovery_com_environment_id         { default ""; }
+    {%- if nginx_controller_http_snippet %}
+        {{ nginx_controller_http_snippet | indent(prefix="        ") }}
     {%- endif %}
     {%- if nginx_controller_server_snippet %}
     server-snippet: |
@@ -37,7 +40,7 @@ controller:
     log-format-upstream: >
       {{ nginx_controller_log_format_upstream }}
     {%- endif %}
-    log-format-escaping-json: "false" # set-by-engine-code
+    log-format-escaping-json: "true"
     log-format-escaping-none: "false" # set-by-engine-code
     limit-req-status-code: "503" # set-by-engine-code
     # Compression configuration (enabled by default)

@@ -327,5 +327,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         &cluster.advanced_settings().nginx_controller_enable_compression,
     );
 
+    context.insert("prometheus_enabled", &cluster.options.metrics_parameters.is_some());
+
     Ok(context)
 }

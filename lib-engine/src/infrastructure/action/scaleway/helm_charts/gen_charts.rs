@@ -149,14 +149,13 @@ pub fn kapsule_helm_charts(
         true => Some(
             PromtailChart::new(
                 chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
+                HelmChartDirectoryLocation::CloudProviderFolder,
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
                 true,
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 false,
-                chart_config_prerequisites.metrics_parameters.is_some(),
             )
             .to_common_helm_chart()?,
         ),
@@ -330,11 +329,6 @@ pub fn kapsule_helm_charts(
                 .nginx_controller_log_format_escaping
                 .to_model(),
             is_alb_enabled: false, // AWS only
-            http_snippet: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_http_snippet
-                .as_ref()
-                .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
             server_snippet: chart_config_prerequisites
                 .cluster_advanced_settings
                 .nginx_controller_server_snippet
