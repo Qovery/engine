@@ -1,0 +1,94 @@
+# remove if you don't want to use a custom image
+image:
+  registry: set-by-engine-code
+  repository: set-by-engine-code
+
+# It's mandatory to get this class to ensure paused infra will behave properly on restore
+priorityClassName: system-node-critical
+
+config:
+  clients:
+    # set loki URL: *promtailLokiUrl or set a custom URL
+    - url: set-by-engine-code
+
+  snippets:
+    pipelineStages:
+      - cri: { }
+
+      - match:
+          selector: '{namespace="nginx-ingress", container="controller"}'
+          stages:
+            - json:
+                expressions:
+                  qovery_com_associated_service_id: qovery_com_associated_service_id
+                  qovery_com_environment_id: qovery_com_environment_id
+            - labels:
+                qovery_com_associated_service_id: null
+                qovery_com_environment_id: null
+
+      # Try to parse JSON: extract level/severity if present.
+      # If not JSON, just skip silently
+      - json:
+          expressions:
+            level: level
+            severity: severity
+
+      # Promote whatever we found so far to a Loki label
+      - labels:
+          level:
+
+      - match:
+          selector: '{level=""}'
+          stages:
+            - regex:
+                expression: '.*(?:level|severity)[=:]\s*"?(?P<level>info)"?.*'
+            - labels:
+                level:
+
+      # Promote whatever we found so far to a Loki label
+      - labels:
+          level:
+
+      # Detect error patterns in raw log text and set level=error
+      - match:
+          selector: '{level!="info"} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
+          stages:
+            - static_labels:
+                level: error
+
+      {%- if prometheus_enabled == true %}
+      #  Count all logs labeled as errors (from JSON or pattern matching)
+      - match:
+          selector: '{level="error"}'
+          stages:
+            - metrics:
+                q_log_errors_total:
+                  type: Counter
+                  description: "Lines classified as error"
+                  config:
+                    match_all: true
+                    action: inc
+
+      {%- endif %}
+
+    extraRelabelConfigs:
+      # required this config in order for the cluster agent to retrieve the log of the service
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id|qovery_com_deployment_id)
+
+# set resources
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+{%- if prometheus_enabled == true %}
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels:
+    release: prometheus
+{%- endif %}

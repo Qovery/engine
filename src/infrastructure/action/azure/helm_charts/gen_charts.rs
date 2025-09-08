@@ -239,11 +239,6 @@ pub(super) fn aks_helm_charts(
             is_alb_enabled: chart_config_prerequisites
                 .cluster_advanced_settings
                 .aws_eks_enable_alb_controller,
-            http_snippet: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_http_snippet
-                .as_ref()
-                .map(|nginx_controller_http_snippet_io| nginx_controller_http_snippet_io.to_model()),
             server_snippet: chart_config_prerequisites
                 .cluster_advanced_settings
                 .nginx_controller_server_snippet
@@ -319,14 +314,13 @@ pub(super) fn aks_helm_charts(
         true => Some(Box::new(
             PromtailChart::new(
                 chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
+                HelmChartDirectoryLocation::CloudProviderFolder,
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
                 true,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
                 false,
-                false, // Metrics is not implemented for Azure
             )
             .to_common_helm_chart()?,
         )),

@@ -533,6 +533,8 @@ pub fn eks_tera_context(
         }),
     );
 
+    context.insert("prometheus_enabled", &options.metrics_parameters.is_some());
+
     // Move thanos pods to the stable node pool when the redundancy is disabled
     let thanos_on_stable = options.metrics_parameters.as_ref().is_some_and(|mp| {
         matches!(

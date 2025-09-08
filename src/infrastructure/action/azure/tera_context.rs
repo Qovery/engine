@@ -194,5 +194,7 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
     // Loki
     context.insert("loki_namespace", HelmChartNamespaces::Qovery.to_string().as_str());
 
+    context.insert("prometheus_enabled", &"false");
+
     Ok(context)
 }

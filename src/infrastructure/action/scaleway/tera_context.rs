@@ -232,6 +232,8 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         &cluster.advanced_settings().nginx_controller_enable_compression,
     );
 
+    context.insert("prometheus_enabled", &cluster.options.metrics_parameters.is_some());
+
     Ok(context)
 }
 
