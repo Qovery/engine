@@ -285,7 +285,7 @@ mod tests {
     use crate::io_models::models::VpcQoveryNetworkMode;
     use std::sync::Arc;
 
-    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_32 {
+    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
         prefix: None,
         patch: None,
         suffix: None,
