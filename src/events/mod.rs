@@ -427,6 +427,8 @@ pub enum EnvironmentStep {
     Cancelled,
     /// Deploy: deploy an environment (application to kubernetes).
     Deploy,
+    /// Executing: executing a terraform service after job creation.
+    Executing,
     /// Deployed: env has been deployed.
     Deployed,
     /// DeployError: Terminal error on deploying an environment/service.
@@ -489,6 +491,7 @@ impl Display for EnvironmentStep {
             match &self {
                 EnvironmentStep::Build => "build",
                 EnvironmentStep::Deploy => "deploy",
+                EnvironmentStep::Executing => "executing",
                 EnvironmentStep::Delete => "delete",
                 EnvironmentStep::Pause => "pause",
                 EnvironmentStep::LoadConfiguration => "load-configuration",
@@ -670,7 +673,7 @@ impl EventDetails {
             },
             Stage::Environment(step) => match step {
                 EnvironmentStep::Build | EnvironmentStep::Built => Stage::Environment(EnvironmentStep::BuiltError),
-                EnvironmentStep::Deploy | EnvironmentStep::Deployed => {
+                EnvironmentStep::Deploy | EnvironmentStep::Executing | EnvironmentStep::Deployed => {
                     Stage::Environment(EnvironmentStep::DeployedError)
                 }
                 EnvironmentStep::Pause | EnvironmentStep::Paused => Stage::Environment(EnvironmentStep::PausedError),

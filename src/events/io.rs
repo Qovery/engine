@@ -186,6 +186,7 @@ pub enum EnvironmentStep {
     Cancel,
     Cancelled,
     Deploy,
+    Executing,
     Deployed,
     DeployedError,
     Pause,
@@ -217,6 +218,7 @@ impl From<events::EnvironmentStep> for EnvironmentStep {
         match step {
             events::EnvironmentStep::Build => EnvironmentStep::Build,
             events::EnvironmentStep::Deploy => EnvironmentStep::Deploy,
+            events::EnvironmentStep::Executing => EnvironmentStep::Executing,
             events::EnvironmentStep::Delete => EnvironmentStep::Delete,
             events::EnvironmentStep::Pause => EnvironmentStep::Pause,
             events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,

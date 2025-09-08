@@ -3,19 +3,20 @@ use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, St
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::logger::Logger;
 use std::sync::Arc;
-
-use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput, TerraformServiceOutput};
 #[cfg(feature = "env-logger-check")]
 use std::sync::atomic::AtomicUsize;
-#[cfg(feature = "env-logger-check")]
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use crate::events::EnvironmentStep::{DatabaseOutput, JobOutput, TerraformServiceOutput};
 
 pub struct EnvLogger {
     logger: Arc<Box<dyn Logger>>,
     event_details_progress: EventDetails,
+    event_details_progress_executing: EventDetails,
     event_details_success: EventDetails,
     #[cfg(feature = "env-logger-check")]
     state: AtomicUsize,
+    executing: AtomicBool,
 }
 
 impl EnvLogger {
@@ -29,15 +30,25 @@ impl EnvLogger {
             _ => panic!("Invalid environment step for logger"),
         };
         let event_details_progress = service.get_event_details(Stage::Environment(progress_step));
+        let event_details_progress_executing = EventDetails::clone_changing_stage(
+            event_details_progress.clone(),
+            Stage::Environment(EnvironmentStep::Executing),
+        );
         let event_details_success = service.get_event_details(Stage::Environment(success_step));
 
         EnvLogger {
             logger,
             event_details_progress,
+            event_details_progress_executing,
             event_details_success,
+            executing: AtomicBool::new(false),
             #[cfg(feature = "env-logger-check")]
             state: AtomicUsize::new(LoggerState::Progress as usize),
         }
+    }
+
+    pub fn switch_to_executing(&self) {
+        self.executing.store(true, Ordering::Release);
     }
 
     pub fn send_progress(&self, msg: String) {
@@ -48,11 +59,14 @@ impl EnvLogger {
                 "cannot send progress while a final state has been reached"
             );
         }
+        let event_details = if self.executing.load(Ordering::Acquire) {
+            self.event_details_progress_executing.clone()
+        } else {
+            self.event_details_progress.clone()
+        };
 
-        self.logger.log(EngineEvent::Info(
-            self.event_details_progress.clone(),
-            EventMessage::new_from_safe(msg),
-        ));
+        self.logger
+            .log(EngineEvent::Info(event_details, EventMessage::new_from_safe(msg)));
     }
 
     pub fn send_recap(&self, msg: String) {
@@ -79,10 +93,13 @@ impl EnvLogger {
             );
         }
 
-        self.logger.log(EngineEvent::Warning(
-            self.event_details_progress.clone(),
-            EventMessage::new_from_safe(msg),
-        ));
+        let details = if self.executing.load(Ordering::Acquire) {
+            self.event_details_progress_executing.clone()
+        } else {
+            self.event_details_progress.clone()
+        };
+        self.logger
+            .log(EngineEvent::Warning(details, EventMessage::new_from_safe(msg)));
     }
 
     pub fn log(&self, engine_event: EngineEvent) {
@@ -187,6 +204,10 @@ impl EnvProgressLogger<'_> {
 
     pub fn core_configuration_for_terraform_service(&self, msg: String, json: String) {
         self.logger.send_core_configuration_for_terraform_service(msg, json)
+    }
+
+    pub fn switch_to_executing_step(&self) {
+        self.logger.switch_to_executing();
     }
 }
 
