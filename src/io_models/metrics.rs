@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
@@ -14,6 +15,7 @@ pub enum MetricsConfiguration {
         install_prometheus_adapter: bool,
         enable_redundancy: Option<bool>,
         beyla_config: Option<BeylaConfig>,
+        alert_config: Option<AlertConfig>,
     },
     AwsS3 {
         region: String,
@@ -27,4 +29,13 @@ pub enum MetricsConfiguration {
 #[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
 pub struct BeylaConfig {
     pub enabled: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub struct AlertConfig {
+    pub enabled: bool,
+    pub default_rule_labels: Option<HashMap<String, String>>,
+    pub spec_config_secret: Option<String>,
+    pub spec_external_url: Option<String>,
 }

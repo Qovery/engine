@@ -17,7 +17,7 @@ use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
 use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
-use crate::io_models::metrics::{MetricsConfiguration, MetricsParameters};
+use crate::io_models::metrics::{AlertConfig, MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::CustomerHelmChartsOverride;
 use std::sync::Arc;
 use url::Url;
@@ -139,6 +139,7 @@ pub fn generate_metrics_config(
             install_prometheus_adapter,
             enable_redundancy,
             beyla_config,
+            alert_config,
         }) => generate_charts_installed_by_qovery(
             HelmAction::Deploy,
             install_prometheus_adapter,
@@ -150,6 +151,7 @@ pub fn generate_metrics_config(
             &cluster_name,
             enable_redundancy,
             beyla_config.is_some_and(|config| config.enabled),
+            alert_config,
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
@@ -162,6 +164,7 @@ pub fn generate_metrics_config(
             &cluster_name,
             None,
             false,
+            None,
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
@@ -185,6 +188,7 @@ fn generate_charts_installed_by_qovery(
     cluster_name: &str,
     enable_redundancy: Option<bool>,
     install_beyla: bool,
+    alert_config: Option<AlertConfig>,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -209,6 +213,7 @@ fn generate_charts_installed_by_qovery(
         false,
         provider_config.is_karpenter_enabled(),
         enable_redundancy,
+        alert_config,
     )
     .to_common_helm_chart()?;
 
@@ -314,6 +319,7 @@ mod tests {
             "cluster-name",
             None,
             true,
+            None,
         );
 
         assert!(result.is_ok());
@@ -348,6 +354,7 @@ mod tests {
             "cluster-name",
             None,
             true,
+            None,
         );
 
         assert!(result.is_ok());
