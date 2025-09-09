@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -11,9 +9,11 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use crate::io_models::metrics::AlertConfig;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
+use std::sync::Arc;
 
 pub type StorageClassName = String;
 
@@ -61,6 +61,7 @@ pub struct KubePrometheusStackChart {
     enable_vpa: bool,
     additional_chart_path: Option<HelmChartValuesFilePath>,
     enable_redundancy: bool,
+    alert_config: Option<AlertConfig>,
 }
 
 impl KubePrometheusStackChart {
@@ -75,6 +76,7 @@ impl KubePrometheusStackChart {
         enable_vpa: bool,
         karpenter_enabled: bool,
         enable_redundancy: bool,
+        alert_config: Option<AlertConfig>,
     ) -> Self {
         KubePrometheusStackChart {
             action,
@@ -104,6 +106,7 @@ impl KubePrometheusStackChart {
                 false => None,
             },
             enable_redundancy,
+            alert_config,
         }
     }
 
@@ -200,6 +203,104 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
             ],
         };
 
+        let mut values = vec![
+            // we should not enable CRDs because we are using the prometheus-operator-crds chart
+            ChartSetValue {
+                key: "crds.enabled".to_string(),
+                value: false.to_string(),
+            },
+            ChartSetValue {
+                key: "prometheus.prometheusSpec.replicas".to_string(),
+                value: if self.enable_redundancy {
+                    "2".to_string()
+                } else {
+                    "1".to_string()
+                },
+            },
+            ChartSetValue {
+                key: "prometheus.podDisruptionBudget.enabled".to_string(),
+                value: if self.enable_redundancy {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                },
+            },
+            ChartSetValue {
+                key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName".to_string(),
+                value: self.storage_class_name.to_string(),
+            },
+            ChartSetValue {
+                key: "prometheus.prometheusSpec.externalUrl".to_string(),
+                value: self.prometheus_internal_url.clone(),
+            },
+            ChartSetValue {
+                key: "prometheus-node-exporter.priorityClassName".to_string(),
+                value: QoveryPriorityClass::HighPriority.to_string(),
+            },
+            ChartSetValue {
+                key: "prometheus.thanosService.enabled".to_string(),
+                value: "true".to_string(),
+            },
+            ChartSetValue {
+                key: "prometheus.thanosService.enabled".to_string(),
+                value: "true".to_string(),
+            },
+            ChartSetValue {
+                key: "prometheus.thanosService.enabled".to_string(),
+                value: "true".to_string(),
+            },
+            ChartSetValue {
+                key: "alertmanager.enabled".to_string(),
+                value: self
+                    .alert_config
+                    .as_ref()
+                    .map(|config| config.enabled.to_string())
+                    .unwrap_or("false".to_string())
+                    .to_string(),
+            },
+            ChartSetValue {
+                key: "defaultRules.rules.alertmanager".to_string(),
+                value: self
+                    .alert_config
+                    .as_ref()
+                    .map(|config| config.enabled.to_string())
+                    .unwrap_or("false".to_string())
+                    .to_string(),
+            },
+        ];
+
+        if let Some(alert_config) = self.alert_config.as_ref()
+            && alert_config.enabled
+            && let Some(spec_config_secret) = &alert_config.spec_config_secret
+        {
+            values.push(ChartSetValue {
+                key: "alertmanager.alertmanagerSpec.configSecret".to_string(),
+                value: spec_config_secret.clone(),
+            })
+        }
+
+        if let Some(alert_config) = self.alert_config.as_ref()
+            && alert_config.enabled
+            && let Some(external_url) = &alert_config.spec_external_url
+        {
+            values.push(ChartSetValue {
+                key: "alertmanager.alertmanagerSpec.externalUrl".to_string(),
+                value: external_url.clone(),
+            })
+        }
+
+        if let Some(alert_config) = self.alert_config.as_ref()
+            && alert_config.enabled
+            && let Some(default_rule_labels) = &alert_config.default_rule_labels
+        {
+            default_rule_labels.iter().for_each(|label| {
+                values.push(ChartSetValue {
+                    key: format!("defaultRules.labels.{}", label.0),
+                    value: label.1.clone(),
+                })
+            })
+        }
+
         let mut common_chart = CommonChart {
             chart_info: ChartInfo {
                 action: self.action.clone(),
@@ -212,46 +313,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 timeout_in_seconds: 480,
                 // To check for upgrades: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
                 values_files,
-                values: vec![
-                    // we should not enable CRDs because we are using the prometheus-operator-crds chart
-                    ChartSetValue {
-                        key: "crds.enabled".to_string(),
-                        value: false.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "prometheus.prometheusSpec.replicas".to_string(),
-                        value: if self.enable_redundancy {
-                            "2".to_string()
-                        } else {
-                            "1".to_string()
-                        },
-                    },
-                    ChartSetValue {
-                        key: "prometheus.podDisruptionBudget.enabled".to_string(),
-                        value: if self.enable_redundancy {
-                            "true".to_string()
-                        } else {
-                            "false".to_string()
-                        },
-                    },
-                    ChartSetValue {
-                        key: "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName"
-                            .to_string(),
-                        value: self.storage_class_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "prometheus.prometheusSpec.externalUrl".to_string(),
-                        value: self.prometheus_internal_url.clone(),
-                    },
-                    ChartSetValue {
-                        key: "prometheus-node-exporter.priorityClassName".to_string(),
-                        value: QoveryPriorityClass::HighPriority.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "prometheus.thanosService.enabled".to_string(),
-                        value: "true".to_string(),
-                    },
-                ],
+                values,
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
@@ -429,6 +491,7 @@ mod tests {
             false,
             false,
             true,
+            None,
         )
     }
 

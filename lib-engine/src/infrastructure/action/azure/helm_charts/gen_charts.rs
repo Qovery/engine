@@ -346,6 +346,7 @@ pub(super) fn aks_helm_charts(
                 false,
                 false,
                 true,
+                None,
             )
             .to_common_helm_chart()?,
         )),

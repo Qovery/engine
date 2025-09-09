@@ -1,7 +1,7 @@
 defaultRules:
   create: true
   rules:
-    alertmanager: false
+    alertmanager: "set-by-engine-code"
     etcd: false
     configReloaders: true
     kubeApiserverAvailability: false
@@ -44,7 +44,9 @@ crds:
   enabled: false
 
 alertmanager:
-  enabled: false
+  enabled: "set-by-engine-code"
+  alertmanagerSpec:
+    replicas: 2
 
 grafana:
   enabled: false
