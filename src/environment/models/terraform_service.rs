@@ -312,6 +312,10 @@ impl<T: CloudProvider> TerraformService<T> {
                 args.extend(var_args);
                 args
             }
+            TerraformAction::TerraformUnlockState => {
+                let args = vec![base_path, "unlock_state".to_string(), String::new()];
+                args
+            }
         }
     }
 }
@@ -442,6 +446,7 @@ pub enum TerraformAction {
     TerraformPlanAndApply,
     TerraformApplyFromPlan { execution_id: String },
     TerraformDestroy,
+    TerraformUnlockState,
 }
 
 pub struct TerraformBackendConfig(String);

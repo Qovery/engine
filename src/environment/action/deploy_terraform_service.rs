@@ -204,7 +204,9 @@ where
         info!("Targeting job pod name: {}", pod_name);
 
         match self.terraform_action {
-            TerraformAction::TerraformPlanOnly { execution_id: _ } | TerraformAction::TerraformDestroy => {}
+            TerraformAction::TerraformPlanOnly { execution_id: _ }
+            | TerraformAction::TerraformDestroy
+            | TerraformAction::TerraformUnlockState => {}
             TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
                 match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(
                     target.kube.client(),

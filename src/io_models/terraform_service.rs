@@ -122,6 +122,7 @@ pub enum TerraformActionCommand {
     PlanAndApply,
     ApplyFromPlan,
     Destroy,
+    UnlockState,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -439,6 +440,7 @@ impl TerraformService {
                     execution_id: plan_execution_id?,
                 }
             }
+            TerraformActionCommand::UnlockState => models::terraform_service::TerraformAction::TerraformUnlockState,
         };
 
         Ok(action)
@@ -573,7 +575,7 @@ impl TerraformService {
 RUN <<EOF
 set -e
 apk update
-apk add dumb-init rsync
+apk add dumb-init rsync jq
 adduser -D -u 1000 app
 mkdir /data
 chown -R app:app /data
@@ -627,6 +629,18 @@ run_terraform_init() {
     | awk '{print} /Terraform has been successfully initialized!/ {exit}'
 }
 
+attempt_force_unlock() {
+  log "attempting to force-unlock terraform state (if locked)"
+  # Try to read lock ID from state; support various structures
+  LOCK_ID=$(terraform state pull 2>/dev/null | jq -r 'try .lock.Info.ID // .lock.ID // .LockID // empty')
+  if [ -n "$LOCK_ID" ] && [ "$LOCK_ID" != "null" ]; then
+    log "terraform force-unlock -force $LOCK_ID"
+    terraform force-unlock -force "$LOCK_ID" || true
+  else
+    log "no lock id found; skipping force-unlock"
+  fi
+}
+
 case "$CMD" in
     "apply")
         run_terraform_init
@@ -656,6 +670,10 @@ case "$CMD" in
     "destroy")
         log "terraform destroy"
         terraform destroy -auto-approve -input=false "$@"
+        ;;
+    "unlock_state")
+        run_terraform_init
+        attempt_force_unlock
         ;;
     *)
         echo "Command not handled by entrypoint.sh: '\$CMD'"
