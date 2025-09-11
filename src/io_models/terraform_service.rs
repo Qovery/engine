@@ -632,14 +632,23 @@ run_terraform_init() {
 }
 
 attempt_force_unlock() {
-  log "attempting to force-unlock terraform state (if locked)"
-  # Try to read lock ID from state; support various structures
-  LOCK_ID=$(terraform state pull 2>/dev/null | jq -r 'try .lock.Info.ID // .lock.ID // .LockID // empty')
-  if [ -n "$LOCK_ID" ] && [ "$LOCK_ID" != "null" ]; then
-    log "terraform force-unlock -force $LOCK_ID"
-    terraform force-unlock -force "$LOCK_ID" || true
+  # Try to detect if state is locked by attempting a plan operation
+  LOCK_OUTPUT=$(terraform plan 2>&1)
+  PLAN_EXIT_CODE=$?
+
+  if [ $PLAN_EXIT_CODE -ne 0 ] && echo "$LOCK_OUTPUT" | grep -q "Error acquiring the state lock"; then
+    # Extract lock ID from the error message
+    LOCK_ID=$(echo "$LOCK_OUTPUT" | grep -oP 'ID: \K[a-f0-9-]+' | head -1)
+
+    if [ -n "$LOCK_ID" ]; then
+      log "found lock ID: $LOCK_ID"
+      log "terraform force-unlock -force $LOCK_ID"
+      terraform force-unlock -force "$LOCK_ID" || true
+    else
+      log "lock detected but could not extract lock ID"
+    fi
   else
-    log "no lock id found; skipping force-unlock"
+    log "no lock detected or terraform plan succeeded"
   fi
 }
 
