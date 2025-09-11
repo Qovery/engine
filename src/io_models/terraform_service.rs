@@ -122,7 +122,7 @@ pub enum TerraformActionCommand {
     PlanAndApply,
     ApplyFromPlan,
     Destroy,
-    UnlockState,
+    ForceUnlockState,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -440,7 +440,9 @@ impl TerraformService {
                     execution_id: plan_execution_id?,
                 }
             }
-            TerraformActionCommand::UnlockState => models::terraform_service::TerraformAction::TerraformUnlockState,
+            TerraformActionCommand::ForceUnlockState => {
+                models::terraform_service::TerraformAction::TerraformUnlockState
+            }
         };
 
         Ok(action)
