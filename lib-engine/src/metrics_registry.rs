@@ -17,6 +17,7 @@ pub enum StepName {
     MirrorImage,
     DeploymentQueueing,
     Deployment,
+    Executing,
 }
 
 impl Display for StepName {
@@ -31,6 +32,7 @@ impl Display for StepName {
             StepName::MirrorImage => "MirrorImage".to_string(),
             StepName::DeploymentQueueing => "DeploymentQueueing".to_string(),
             StepName::Deployment => "Deployment".to_string(),
+            StepName::Executing => "Executing".to_string(),
         };
         write!(f, "{str}")
     }
