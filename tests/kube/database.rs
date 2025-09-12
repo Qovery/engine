@@ -15,6 +15,7 @@ use qovery_engine::infrastructure::models::cloud_provider::service::{DatabaseTyp
 use qovery_engine::io_models::Action;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::{DatabaseOptions, DiskIOPS};
+use qovery_engine::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use qovery_engine::kubers_utils::kube_get_resources_by_selector;
 use qovery_engine::runtime::block_on;
 use std::str::FromStr;
@@ -61,10 +62,10 @@ fn should_increase_db_storage_size() {
             resized_db.created_at,
             &resized_db.fqdn,
             &resized_db.fqdn_id,
-            resized_db.cpu_request_in_milli,
-            resized_db.cpu_limit_in_milli,
-            resized_db.ram_request_in_mib,
-            resized_db.ram_limit_in_mib,
+            KubernetesCpuResourceUnit::MilliCpu(resized_db.cpu_request_in_milli),
+            KubernetesCpuResourceUnit::MilliCpu(resized_db.cpu_limit_in_milli),
+            KubernetesMemoryResourceUnit::MebiByte(resized_db.ram_request_in_mib),
+            KubernetesMemoryResourceUnit::MebiByte(resized_db.ram_limit_in_mib),
             resized_db.disk_size_in_gib,
             None,
             resized_db.publicly_accessible,

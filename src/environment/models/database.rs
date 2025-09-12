@@ -16,6 +16,7 @@ use crate::infrastructure::models::cloud_provider::service::{
 };
 use crate::infrastructure::models::cloud_provider::{DeploymentTarget, Kind, service};
 use crate::infrastructure::models::kubernetes;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::io_models::annotations_group::{Annotation, AnnotationsGroup};
 use crate::io_models::context::Context;
 use crate::io_models::database::DatabaseOptions;
@@ -167,10 +168,10 @@ pub struct Database<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> {
     pub(crate) created_at: DateTime<Utc>,
     pub(crate) fqdn: String,
     pub(crate) fqdn_id: String,
-    pub(crate) cpu_request_in_milli: KubernetesCpuResourceUnit,
-    pub(crate) cpu_limit_in_milli: KubernetesCpuResourceUnit,
-    pub(crate) ram_request_in_mib: KubernetesMemoryResourceUnit,
-    pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
+    pub(crate) cpu_request: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit: KubernetesCpuResourceUnit,
+    pub(crate) ram_request: KubernetesMemoryResourceUnit,
+    pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) total_disk_size_in_gb: u32,
     pub(crate) database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
     pub(crate) publicly_accessible: bool,
@@ -194,11 +195,11 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
         created_at: DateTime<Utc>,
         fqdn: &str,
         fqdn_id: &str,
-        cpu_request_in_milli: u32,
-        cpu_limit_in_milli: u32,
-        ram_request_in_mib: u32,
-        ram_limit_in_mib: u32,
-        total_disk_size_in_gb: u32,
+        cpu_request: KubernetesCpuResourceUnit,
+        cpu_limit: KubernetesCpuResourceUnit,
+        ram_request: KubernetesMemoryResourceUnit,
+        ram_limit: KubernetesMemoryResourceUnit,
+        total_disk_size_in_gb: u32, // TODO(benjaminch): introduce a Kubernetes Volume Size resource unit
         database_instance_type: Option<Box<dyn DatabaseInstanceType>>,
         publicly_accessible: bool,
         private_port: u16,
@@ -224,25 +225,25 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
 
         // Check memory settings only for container databases, as managed db are using an instance type
         if M::is_container() {
-            if cpu_request_in_milli > cpu_limit_in_milli {
+            if cpu_request.to_millicpu() > cpu_limit.to_millicpu() {
                 return Err(DatabaseError::InvalidConfig(
                     "cpu_request_in_milli must be less or equal to cpu_limit_in_milli".to_string(),
                 ));
             }
 
-            if cpu_request_in_milli == 0 {
+            if cpu_request.to_millicpu() == 0 {
                 return Err(DatabaseError::InvalidConfig(
                     "cpu_request_in_milli must be greater than 0".to_string(),
                 ));
             }
 
-            if ram_request_in_mib > ram_limit_in_mib {
+            if ram_request.to_mebibyte() > ram_limit.to_mebibyte() {
                 return Err(DatabaseError::InvalidConfig(
                     "ram_request_in_mib must be less or equal to ram_limit_in_mib".to_string(),
                 ));
             }
 
-            if ram_request_in_mib == 0 {
+            if ram_request.to_mebibyte() == 0 {
                 return Err(DatabaseError::InvalidConfig(
                     "ram_request_in_mib must be greater than 0".to_string(),
                 ));
@@ -263,10 +264,10 @@ impl<C: CloudProvider, M: DatabaseMode, T: DatabaseType<C, M>> Database<C, M, T>
             created_at,
             fqdn: fqdn.to_string(),
             fqdn_id: fqdn_id.to_string(),
-            cpu_request_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
-            cpu_limit_in_milli: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
-            ram_request_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
-            ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
+            cpu_request,
+            cpu_limit,
+            ram_request,
+            ram_limit,
             total_disk_size_in_gb,
             database_instance_type,
             publicly_accessible,
@@ -453,10 +454,10 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
         }
         context.insert("database_disk_type", &options.database_disk_type);
-        context.insert("cpu_request_in_milli", &self.cpu_request_in_milli.to_string());
-        context.insert("cpu_limit_in_milli", &self.cpu_limit_in_milli.to_string());
-        context.insert("ram_request_in_mib", &self.ram_request_in_mib.to_string());
-        context.insert("ram_limit_in_mib", &self.ram_limit_in_mib.to_string());
+        context.insert("cpu_request_in_milli", &self.cpu_request.to_string());
+        context.insert("cpu_limit_in_milli", &self.cpu_limit.to_string());
+        context.insert("ram_request_in_mib", &self.ram_request.to_string());
+        context.insert("ram_limit_in_mib", &self.ram_limit.to_string());
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
         context.insert("publicly_accessible", &container_database_publicly_accessible);
