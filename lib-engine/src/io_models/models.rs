@@ -233,6 +233,14 @@ pub enum KubernetesCpuResourceUnit {
     MilliCpu(u32),
 }
 
+impl KubernetesCpuResourceUnit {
+    pub fn to_millicpu(&self) -> u32 {
+        match self {
+            KubernetesCpuResourceUnit::MilliCpu(v) => *v,
+        }
+    }
+}
+
 impl From<KubernetesCpuResourceUnit> for u32 {
     fn from(value: KubernetesCpuResourceUnit) -> u32 {
         match value {
@@ -289,10 +297,21 @@ pub enum KubernetesMemoryResourceUnit {
     MebiByte(u32),
     /// MegaByte: 1 Megabyte (M) = (1000)^2 bytes = 1,000,000 bytes.
     MegaByte(u32),
-    /// GibiByte: 1 Gibibyte (Gi) = 2^30 bytes bytes = 1,073,741,824 bytes.
+    /// GibiByte: 1 Gibibyte (Gi) = 2^30 bytes = 1,073,741,824 bytes.
     GibiByte(u32),
     /// GigaByte: 1 Gigabyte (G) = 10^9 bytes = 1,000,000,000 bytes
     GigaByte(u32),
+}
+
+impl KubernetesMemoryResourceUnit {
+    pub fn to_mebibyte(&self) -> u32 {
+        match self {
+            KubernetesMemoryResourceUnit::MebiByte(v) => *v,
+            KubernetesMemoryResourceUnit::MegaByte(v) => (*v as f64 / 1.049).ceil() as u32,
+            KubernetesMemoryResourceUnit::GibiByte(v) => *v * 1024,
+            KubernetesMemoryResourceUnit::GigaByte(v) => (*v as f64 * 0.954).ceil() as u32,
+        }
+    }
 }
 
 impl Display for KubernetesMemoryResourceUnit {
