@@ -4,11 +4,11 @@ kind: EC2NodeClass
 metadata:
   name: gpu
 spec:
-  amiFamily: AL2
+  amiFamily: AL2023
   metadataOptions:
     httpPutResponseHopLimit: 2
   amiSelectorTerms:
-    - name: "amazon-eks-gpu-node-{{ .Values.kubernetesVersion }}*"
+    - name: "amazon-eks-node-al2023-*-nvidia-{{ .Values.kubernetesVersion }}*"
       requirements:
         - key: karpenter.k8s.aws/instance-gpu-count
           operator: Exists
@@ -27,7 +27,7 @@ spec:
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
-        volumeSize: "{{ .Values.gpuDiskSizeInGib }}G"
+        volumeSize: "{{ .Values.gpuNodePool.diskSizeInGib }}G"
         volumeType: gp3
         encrypted: true
         deleteOnTermination: true
