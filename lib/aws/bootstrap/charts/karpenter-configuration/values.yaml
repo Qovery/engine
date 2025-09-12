@@ -7,8 +7,6 @@ clusterName: ""
 securityGroupId: ""
 
 diskSizeInGib: 0
-# Optional: Custom disk size for GPU nodes
-gpuDiskSizeInGib: 100
 
 capacity_type: []
 explicitSubnetIds: []
@@ -45,4 +43,4 @@ gpuNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
-
+  diskSizeInGib: 100

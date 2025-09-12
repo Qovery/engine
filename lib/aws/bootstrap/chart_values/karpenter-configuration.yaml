@@ -17,3 +17,14 @@ tags:
 
 global_node_pools:
   requirements: []
+
+# GPUs
+gpuNodePool:
+  enable: set-by-engine-code
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+  diskSizeInGib: 100
