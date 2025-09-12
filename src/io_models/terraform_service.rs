@@ -577,7 +577,7 @@ impl TerraformService {
 RUN <<EOF
 set -e
 apk update
-apk add dumb-init rsync jq
+apk add dumb-init rsync
 adduser -D -u 1000 app
 mkdir /data
 chown -R app:app /data
@@ -633,22 +633,15 @@ run_terraform_init() {
 
 attempt_force_unlock() {
   # Try to detect if state is locked by attempting a plan operation
-  LOCK_OUTPUT=$(terraform plan 2>&1)
-  PLAN_EXIT_CODE=$?
-
-  if [ $PLAN_EXIT_CODE -ne 0 ] && echo "$LOCK_OUTPUT" | grep -q "Error acquiring the state lock"; then
-    # Extract lock ID from the error message
-    LOCK_ID=$(echo "$LOCK_OUTPUT" | grep -oP 'ID: \K[a-f0-9-]+' | head -1)
-
-    if [ -n "$LOCK_ID" ]; then
-      log "found lock ID: $LOCK_ID"
-      log "terraform force-unlock -force $LOCK_ID"
-      terraform force-unlock -force "$LOCK_ID" || true
-    else
-      log "lock detected but could not extract lock ID"
-    fi
+  LOCK_OUTPUT=$(terraform plan -input=false 2>&1 || true)
+  # Extract lock ID from the error message
+  LOCK_ID=$(echo "$LOCK_OUTPUT" | grep -oE 'ID:[[:space:]]*[0-9a-fA-F-]{36}' | sed 's/ID:[[:space:]]*//' | head -1)
+  if [ -n "$LOCK_ID" ]; then
+    log "found lock ID: $LOCK_ID"
+    log "terraform force-unlock -force $LOCK_ID"
+    terraform force-unlock -force "$LOCK_ID" || true
   else
-    log "no lock detected or terraform plan succeeded"
+    log "could not extract lock ID"
   fi
 }
 
