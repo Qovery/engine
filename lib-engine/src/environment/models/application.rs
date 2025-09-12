@@ -75,6 +75,7 @@ pub struct Application<T: CloudProvider> {
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) should_delete_shared_registry: bool,
+    pub(crate) deployment_id: String,
 }
 
 // Here we define the common behavior among all providers
@@ -150,6 +151,11 @@ impl<T: CloudProvider> Application<T> {
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
             should_delete_shared_registry,
+            deployment_id: context
+                .execution_id()
+                .rsplit_once('-')
+                .map(|s| s.0.to_string())
+                .unwrap_or_default(),
         })
     }
 
@@ -258,6 +264,7 @@ impl<T: CloudProvider> Application<T> {
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
+            deployment_id: self.deployment_id.clone(),
         }
     }
 

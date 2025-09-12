@@ -77,6 +77,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) lib_root_directory: String,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
+    pub(crate) deployment_id: String,
 }
 
 pub fn get_mirror_repository_name(
@@ -191,6 +192,11 @@ impl<T: CloudProvider> Container<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
+            deployment_id: context
+                .execution_id()
+                .rsplit_once('-')
+                .map(|s| s.0.to_string())
+                .unwrap_or_default(),
         })
     }
 
@@ -326,6 +332,7 @@ impl<T: CloudProvider> Container<T> {
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
+            deployment_id: self.deployment_id.clone(),
         }
     }
 
@@ -568,6 +575,7 @@ pub(crate) struct ContainerTeraContext {
     pub(crate) loadbalancer_l4_annotations: Vec<(String, String)>,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
+    pub(crate) deployment_id: String,
 }
 
 pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
