@@ -696,7 +696,23 @@ mod tests {
                             schedule: "0 1 * * 3".to_string(),
                         }],
                         limits: None,
-                        requirements: None,
+                        requirements: Some(vec![
+                            KarpenterNodePoolRequirement {
+                                key: KarpenterNodePoolRequirementKey::InstanceCategory,
+                                operator: Some(KarpenterRequirementOperator::In),
+                                values: vec!["c".to_string()],
+                            },
+                            KarpenterNodePoolRequirement {
+                                key: KarpenterNodePoolRequirementKey::Arch,
+                                operator: Some(KarpenterRequirementOperator::In),
+                                values: vec!["AMD64".to_string()],
+                            },
+                            KarpenterNodePoolRequirement {
+                                key: KarpenterNodePoolRequirementKey::CapacityType,
+                                operator: Some(KarpenterRequirementOperator::In),
+                                values: vec!["on-demand".to_string()],
+                            },
+                        ]),
                     }),
                 },
                 verify_fn: verify_custom_node_pools,
@@ -708,10 +724,17 @@ mod tests {
             let with_spot = test_case.with_spot;
             let has_default_node_pool_limits = test_case.qovery_node_pools.default_override.is_some();
             let has_stable_node_pool_limits = test_case.qovery_node_pools.stable_override.limits.is_some();
+            let has_gpu_node_pool = test_case.qovery_node_pools.gpu_override.is_some();
 
             let yaml = generate_chart_yaml(KUBERNETES_VERSION, with_spot, test_case.qovery_node_pools);
 
-            (test_case.verify_fn)(&yaml, with_spot, has_default_node_pool_limits, has_stable_node_pool_limits);
+            (test_case.verify_fn)(
+                &yaml,
+                with_spot,
+                has_default_node_pool_limits,
+                has_stable_node_pool_limits,
+                has_gpu_node_pool,
+            );
         }
     }
 
@@ -719,7 +742,7 @@ mod tests {
     struct TestCase {
         with_spot: bool,
         qovery_node_pools: KarpenterNodePool,
-        verify_fn: fn(&str, bool, bool, bool),
+        verify_fn: fn(&str, bool, bool, bool, bool),
     }
 
     #[derive(Debug, Deserialize)]
@@ -842,6 +865,7 @@ mod tests {
         with_spot: bool,
         has_default_node_pool_limits: bool,
         has_stable_node_pool_limits: bool,
+        has_gpu_node_pool: bool,
     ) {
         let deserializer = serde_yaml::Deserializer::from_str(yaml);
 
@@ -853,14 +877,21 @@ mod tests {
             .filter_map(Result::ok)
             .collect();
 
-        assert_eq!(node_pools.len(), 2, "Expected exactly 2 node pools");
+        let expected_node_pool_count = if has_gpu_node_pool { 3 } else { 2 };
+        assert_eq!(
+            node_pools.len(),
+            expected_node_pool_count,
+            "Expected exactly {expected_node_pool_count} node pools"
+        );
         assert_eq!(
             node_pools
                 .iter()
                 .map(|node_pool| node_pool.metadata.name.clone())
                 .collect_vec(),
-            vec!["default".to_string(), "stable".to_string()],
-            "Expected default and stable"
+            match has_gpu_node_pool {
+                true => vec!["gpu".to_string(), "default".to_string(), "stable".to_string(),],
+                false => vec!["default".to_string(), "stable".to_string()],
+            },
         );
         for node_pool in node_pools {
             assert_eq!(node_pool.kind, "NodePool");
