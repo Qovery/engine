@@ -540,6 +540,27 @@ aws-whole-enchilada:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
   when: manual
 
+aws-whole-enchilada-gpu:
+  stage: tests
+  extends: [.needs-docker, .with-artifacts]
+  retry: 1
+  timeout: 4 hours
+  script:
+    - ./helper.sh aws_whole_enchilada_gpu
+  dependencies:
+    - build-and-lint-code
+  tags:
+    - vm-3cpu-12gmem-0g
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  when: manual
+
 scw-infra:
   stage: tests
   extends: [.needs-docker, .with-artifacts]

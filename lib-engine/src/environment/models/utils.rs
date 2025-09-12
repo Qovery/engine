@@ -1,3 +1,4 @@
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
 use crate::io_models::models::CpuArchitecture;
 use std::collections::BTreeMap;
@@ -33,14 +34,15 @@ pub fn need_target_stable_node_pool(
         && (service_explicitely_targets_stable || min_instances == 1 || is_stateful_set)
 }
 
-pub fn target_stable_node_pool(
+pub fn target_karpenter_node_pool(
+    karpenter_node_pool_to_target: KarpenterNodePoolType,
     deployment_affinity_node_required: &mut BTreeMap<String, String>,
     tolerations: &mut BTreeMap<String, String>,
     is_stateful_set: bool,
 ) {
     deployment_affinity_node_required
         .entry("karpenter.sh/nodepool".to_string())
-        .or_insert_with(|| "stable".to_string());
+        .or_insert_with(|| karpenter_node_pool_to_target.to_string());
 
     if is_stateful_set {
         deployment_affinity_node_required
@@ -49,7 +51,7 @@ pub fn target_stable_node_pool(
     }
 
     tolerations
-        .entry("nodepool/stable".to_string())
+        .entry(format!("nodepool/{karpenter_node_pool_to_target}"))
         .or_insert_with(|| "NoSchedule".to_string());
 }
 

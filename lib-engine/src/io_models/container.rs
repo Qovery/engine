@@ -19,7 +19,7 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::{PortIo, Storage, to_environment_variable};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
@@ -410,6 +410,8 @@ pub struct Container {
     pub cpu_limit_in_milli: u32,
     pub ram_request_in_mib: u32,
     pub ram_limit_in_mib: u32,
+    pub gpu_request: Option<u32>,
+    pub gpu_limit: Option<u32>,
     pub min_instances: u32,
     pub max_instances: u32,
     pub public_domain: String,
@@ -483,6 +485,8 @@ impl Container {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
@@ -514,6 +518,8 @@ impl Container {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
@@ -545,6 +551,8 @@ impl Container {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
@@ -576,6 +584,8 @@ impl Container {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
@@ -607,6 +617,8 @@ impl Container {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,

@@ -583,6 +583,9 @@ all_managed_services)
 aws_whole_enchilada)
   run_tests test-aws-whole-enchilada $commit_id 20
   ;;
+aws_whole_enchilada_gpu)
+  run_tests test-aws-whole-enchilada-gpu $commit_id 20
+  ;;
 aws_ec2_whole_enchilada)
   run_tests test-aws-whole-enchilada $commit_id 20
   ;;

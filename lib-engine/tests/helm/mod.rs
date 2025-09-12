@@ -368,6 +368,8 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         KubernetesCpuResourceUnit::MilliCpu(2),
         KubernetesMemoryResourceUnit::MebiByte(3),
         KubernetesMemoryResourceUnit::MebiByte(3),
+        None,
+        None,
         true,
     )
     .unwrap()
@@ -397,6 +399,8 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         KubernetesCpuResourceUnit::MilliCpu(2),
         KubernetesMemoryResourceUnit::MebiByte(3),
         KubernetesMemoryResourceUnit::MebiByte(4),
+        None,
+        None,
         5,
         6,
         format!("{}.{}", service_id, "example.com"),
@@ -659,6 +663,8 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         KubernetesCpuResourceUnit::MilliCpu(5),
         KubernetesMemoryResourceUnit::MebiByte(6),
         KubernetesMemoryResourceUnit::MebiByte(7),
+        None,
+        None,
         vec![test_env_var()],
         btreeset![test_mounted_file()],
         JobAdvancedSettings {

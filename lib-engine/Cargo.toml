@@ -224,11 +224,13 @@ test-all-infra-upgrade = [
 ]
 
 test-aws-whole-enchilada = []
+test-aws-whole-enchilada-gpu = []
 test-azure-whole-enchilada = []
 test-scw-whole-enchilada = []
 test-gcp-whole-enchilada = []
 test-all-whole-enchilada = [
     "test-aws-whole-enchilada",
+    "test-aws-whole-enchilada-gpu",
     "test-azure-whole-enchilada",
     "test-scw-whole-enchilada",
     "test-gcp-whole-enchilada",
@@ -240,6 +242,7 @@ test-aws-all = [
     "test-aws-managed-services",
     "test-aws-self-hosted",
     "test-aws-whole-enchilada",
+    "test-aws-whole-enchilada-gpu",
 ]
 test-azure-all = [
     "test-azure-infra",

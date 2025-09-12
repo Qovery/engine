@@ -147,6 +147,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_limit_in_milli: 250,
                 ram_request_in_mib: 250,
                 ram_limit_in_mib: 250,
+                gpu_request: None,
+                gpu_limit: None,
                 min_instances: 1,
                 max_instances: 1,
                 public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
@@ -285,6 +287,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_limit_in_milli: 100,
                 ram_request_in_mib: 256,
                 ram_limit_in_mib: 256,
+                gpu_request: None,
+                gpu_limit: None,
                 min_instances: 1,
                 max_instances: 1,
                 advanced_settings: Default::default(),
@@ -317,6 +321,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 cpu_limit_in_milli: 250,
                 ram_request_in_mib: 250,
                 ram_limit_in_mib: 250,
+                gpu_request: None,
+                gpu_limit: None,
                 action: Action::Create,
                 schedule: JobSchedule::Cron {
                     schedule: "*/30 * * * *".to_string(), // <- every 30 minutes

@@ -16,7 +16,8 @@ use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile,
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+    MountedFile,
 };
 use crate::utilities::to_short_id;
 use serde::Serialize;
@@ -55,6 +56,8 @@ pub struct Job<T: CloudProvider> {
     pub(crate) cpu_limit_in_milli: KubernetesCpuResourceUnit,
     pub(crate) ram_request_in_mib: KubernetesMemoryResourceUnit,
     pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
+    pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
+    pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
     pub(crate) mounted_files: BTreeSet<MountedFile>,
     pub(crate) advanced_settings: JobAdvancedSettings,
@@ -89,6 +92,8 @@ impl<T: CloudProvider> Job<T> {
         cpu_limit_in_milli: KubernetesCpuResourceUnit,
         ram_request_in_mib: KubernetesMemoryResourceUnit,
         ram_limit_in_mib: KubernetesMemoryResourceUnit,
+        gpu_request: Option<KubernetesGpuResourceUnit>,
+        gpu_limit: Option<KubernetesGpuResourceUnit>,
         environment_variables: Vec<EnvironmentVariable>,
         mounted_files: BTreeSet<MountedFile>,
         advanced_settings: JobAdvancedSettings,
@@ -134,6 +139,8 @@ impl<T: CloudProvider> Job<T> {
             cpu_limit_in_milli,
             ram_request_in_mib,
             ram_limit_in_mib,
+            gpu_request,
+            gpu_limit,
             environment_variables,
             mounted_files,
             advanced_settings,
@@ -233,6 +240,8 @@ impl<T: CloudProvider> Job<T> {
                 cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
                 ram_request_in_mib: self.ram_request_in_mib.to_string(),
                 ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
+                gpu_request: self.gpu_request.map(u32::from),
+                gpu_limit: self.gpu_limit.map(u32::from),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration.as_secs(),
@@ -491,6 +500,8 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) cpu_limit_in_milli: String,
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
+    pub(crate) gpu_request: Option<u32>,
+    pub(crate) gpu_limit: Option<u32>,
     pub(crate) default_port: Option<u16>,
     pub(crate) max_nb_restart: u32,
     pub(crate) max_duration_in_sec: u64,

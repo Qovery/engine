@@ -104,6 +104,8 @@ fn should_increase_app_storage_size() {
             KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_limit_in_milli),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_request_in_mib),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_limit_in_mib),
+            None,
+            None,
             true,
         )
         .expect("Unable to create application");

@@ -493,7 +493,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             node_affinity.insert(node_affinity_key.to_string(), value.to_string());
         }
         if kubernetes.kind() == kubernetes::Kind::Eks && kubernetes.is_karpenter_enabled() {
-            utils::target_stable_node_pool(&mut node_affinity, &mut toleration, true);
+            utils::target_karpenter_node_pool(KarpenterNodePoolType::Stable, &mut node_affinity, &mut toleration, true);
         }
 
         context.insert("toleration", &toleration);
