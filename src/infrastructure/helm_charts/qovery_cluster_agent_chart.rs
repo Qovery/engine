@@ -12,6 +12,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use url::Url;
+use uuid::{Uuid, uuid};
 
 pub struct QoveryClusterAgentChart {
     chart_prefix_path: Option<String>,
@@ -29,6 +30,9 @@ pub struct QoveryClusterAgentChart {
     karpenter_enabled: bool,
     metrics_query_url: Option<String>,
 }
+
+// temporary lust for testing
+pub const AUTHORIZED_CLUSTER_SLICE: &[Uuid] = &[uuid!("3f50657b-1162-4dde-b706-4d5e937f3c09")];
 
 impl QoveryClusterAgentChart {
     pub fn new(
@@ -162,6 +166,12 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
                         value: self.chart_resources.request_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "admissionController.deploymentIdInjection.enabled".to_string(),
+                        value: AUTHORIZED_CLUSTER_SLICE
+                            .contains(&self.cluster_id.to_uuid())
+                            .to_string(),
                     },
                 ],
                 ..Default::default()
