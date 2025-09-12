@@ -20,7 +20,9 @@ use crate::io_models::application::{GitCredentials, to_environment_variable};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{
+    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
@@ -174,6 +176,8 @@ pub struct Job {
     pub cpu_limit_in_milli: u32,
     pub ram_request_in_mib: u32,
     pub ram_limit_in_mib: u32,
+    pub gpu_request: Option<u32>,
+    pub gpu_limit: Option<u32>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     #[serde(default = "default_environment_vars_with_info")]
@@ -439,6 +443,8 @@ impl Job {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -472,6 +478,8 @@ impl Job {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -505,6 +513,8 @@ impl Job {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -538,6 +548,8 @@ impl Job {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
                 self.mounted_files
                     .iter()
@@ -571,6 +583,8 @@ impl Job {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
                 self.mounted_files
                     .iter()

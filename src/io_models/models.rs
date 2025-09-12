@@ -359,6 +359,17 @@ impl FromStr for KubernetesMemoryResourceUnit {
     }
 }
 
+/// Represents Kubernetes GPU resource unit
+/// https://kubernetes.io/docs/tasks/manage-gpus/scheduling-gpus/
+#[derive(Serialize, Deserialize, Copy, Clone, Debug, Eq, PartialEq)]
+pub struct KubernetesGpuResourceUnit(pub u32);
+
+impl From<KubernetesGpuResourceUnit> for u32 {
+    fn from(value: KubernetesGpuResourceUnit) -> u32 {
+        value.0
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CustomerHelmChartsOverride {
     pub chart_name: String,

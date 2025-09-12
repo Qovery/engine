@@ -610,6 +610,8 @@ fn gcp_gke_deploy_container_with_router() {
             cpu_limit_in_milli: 250,
             ram_request_in_mib: 250,
             ram_limit_in_mib: 250,
+            gpu_request: None,
+            gpu_limit: None,
             min_instances: 1,
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),

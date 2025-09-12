@@ -5,8 +5,25 @@ use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
 use serde_with::DisplayFromStr;
 use std::fmt;
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
+
+pub enum KarpenterNodePoolType {
+    Stable,
+    Default,
+    Gpu,
+}
+
+impl Display for KarpenterNodePoolType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let output = match self {
+            KarpenterNodePoolType::Stable => "stable",
+            KarpenterNodePoolType::Default => "default",
+            KarpenterNodePoolType::Gpu => "gpu",
+        };
+        write!(f, "{output}")
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarpenterParameters {

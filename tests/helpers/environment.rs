@@ -24,6 +24,7 @@ pub fn working_environment(
     test_domain: &str,
     with_router: bool,
     with_sticky: bool,
+    with_gpu: bool,
     git_url_override: Option<&str>,
 ) -> EnvironmentRequest {
     let application_id = QoveryIdentifier::new_random();
@@ -81,6 +82,14 @@ pub fn working_environment(
             cpu_limit_in_milli: 500,
             ram_request_in_mib: 512,
             ram_limit_in_mib: 512,
+            gpu_request: match with_gpu {
+                true => Some(1),
+                false => None,
+            },
+            gpu_limit: match with_gpu {
+                true => Some(1),
+                false => None,
+            },
             min_instances: 1,
             max_instances: 1,
             readiness_probe: Some(Probe {
@@ -143,15 +152,19 @@ pub fn working_environment(
 }
 
 pub fn working_minimal_environment_with_custom_git_url(context: &Context, git_url: &str) -> EnvironmentRequest {
-    working_environment(context, "", false, false, Some(git_url))
+    working_environment(context, "", false, false, false, Some(git_url))
 }
 
 pub fn working_minimal_environment(context: &Context) -> EnvironmentRequest {
-    working_environment(context, "", false, false, None)
+    working_environment(context, "", false, false, false, None)
+}
+
+pub fn working_minimal_environment_with_gpu(context: &Context) -> EnvironmentRequest {
+    working_environment(context, "", false, false, true, None)
 }
 
 pub fn working_minimal_environment_with_router(context: &Context, test_domain: &str) -> EnvironmentRequest {
-    working_environment(context, test_domain, true, false, None)
+    working_environment(context, test_domain, true, false, false, None)
 }
 
 pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
@@ -159,7 +172,7 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     mounted_file: &MountedFile,
     storage_class: &str,
 ) -> EnvironmentRequest {
-    let mut environment = working_environment(context, "", false, false, None);
+    let mut environment = working_environment(context, "", false, false, false, None);
 
     let mut application = environment
         .applications
@@ -324,6 +337,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 cpu_limit_in_milli: 100,
                 ram_request_in_mib: 256,
                 ram_limit_in_mib: 256,
+                gpu_request: None,
+                gpu_limit: None,
                 min_instances: 1,
                 max_instances: 1,
                 advanced_settings: Default::default(),
@@ -395,6 +410,8 @@ pub fn environment_2_app_2_routers_1_psql(
                 cpu_limit_in_milli: 100,
                 ram_request_in_mib: 256,
                 ram_limit_in_mib: 256,
+                gpu_request: None,
+                gpu_limit: None,
                 min_instances: 1,
                 max_instances: 1,
                 advanced_settings: Default::default(),
@@ -467,7 +484,7 @@ pub fn environment_2_app_2_routers_1_psql(
 }
 
 pub fn non_working_environment(context: &Context) -> EnvironmentRequest {
-    let mut environment = working_environment(context, "", false, false, None);
+    let mut environment = working_environment(context, "", false, false, false, None);
     environment.applications = environment
         .applications
         .into_iter()
@@ -534,6 +551,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             min_instances: 1,
             max_instances: 1,
             advanced_settings: Default::default(),
@@ -651,6 +670,8 @@ pub fn environment_only_http_server(
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             min_instances: 1,
             max_instances: 1,
             advanced_settings: settings,

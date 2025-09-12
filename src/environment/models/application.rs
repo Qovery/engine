@@ -31,7 +31,7 @@ use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
     EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
-    KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
+    KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::runtime::block_on;
@@ -54,10 +54,12 @@ pub struct Application<T: CloudProvider> {
     pub(crate) kube_name: String,
     pub(crate) public_domain: String,
     pub(crate) ports: Vec<Port>,
-    pub(crate) cpu_request_in_milli: KubernetesCpuResourceUnit,
-    pub(crate) cpu_limit_in_milli: KubernetesCpuResourceUnit,
-    pub(crate) ram_request_in_mib: KubernetesMemoryResourceUnit,
-    pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
+    pub(crate) cpu_request: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit: KubernetesCpuResourceUnit,
+    pub(crate) ram_request: KubernetesMemoryResourceUnit,
+    pub(crate) ram_limit: KubernetesMemoryResourceUnit,
+    pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
+    pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
     pub(crate) min_instances: u32,
     pub(crate) max_instances: u32,
     pub(crate) build: Build,
@@ -103,10 +105,12 @@ impl<T: CloudProvider> Application<T> {
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
-        cpu_request_in_milli: KubernetesCpuResourceUnit,
-        cpu_limit_in_milli: KubernetesCpuResourceUnit,
-        ram_request_in_mib: KubernetesMemoryResourceUnit,
-        ram_limit_in_mib: KubernetesMemoryResourceUnit,
+        cpu_request: KubernetesCpuResourceUnit,
+        cpu_limit: KubernetesCpuResourceUnit,
+        ram_request: KubernetesMemoryResourceUnit,
+        ram_limit: KubernetesMemoryResourceUnit,
+        gpu_request: Option<KubernetesGpuResourceUnit>,
+        gpu_limit: Option<KubernetesGpuResourceUnit>,
         should_delete_shared_registry: bool,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
@@ -130,10 +134,12 @@ impl<T: CloudProvider> Application<T> {
             kube_name,
             public_domain,
             ports,
-            cpu_request_in_milli,
-            cpu_limit_in_milli,
-            ram_request_in_mib,
-            ram_limit_in_mib,
+            cpu_request,
+            cpu_limit,
+            ram_request,
+            ram_limit,
+            gpu_request,
+            gpu_limit,
             min_instances,
             max_instances,
             build,
@@ -181,17 +187,28 @@ impl<T: CloudProvider> Application<T> {
 
         let mut tolerations = BTreeMap::<String, String>::new();
         let is_stateful_set = !self.storages.is_empty();
-        let service_explicitely_targets_stable_nodepool = matches!(self
+        let is_gpu = self.gpu_request.is_some() || self.gpu_limit.is_some();
+        match is_gpu {
+            true => utils::target_karpenter_node_pool(
+                KarpenterNodePoolType::Gpu,
+                &mut deployment_affinity_node_required,
+                &mut tolerations,
+                is_stateful_set,
+            ),
+            false => {
+                let service_explicitely_targets_stable_nodepool = matches!(self
             .advanced_settings
             .deployment_affinity_node_required
             .get("karpenter.sh/nodepool"), Some(v) if v.to_lowercase() == "stable");
-        if utils::need_target_stable_node_pool(
-            kubernetes,
-            self.min_instances,
-            is_stateful_set,
-            service_explicitely_targets_stable_nodepool,
-        ) {
-            utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations, is_stateful_set);
+                if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set, service_explicitely_targets_stable_nodepool) {
+                    utils::target_karpenter_node_pool(
+                        KarpenterNodePoolType::Stable,
+                        &mut deployment_affinity_node_required,
+                        &mut tolerations,
+                        is_stateful_set,
+                    );
+                }
+            }
         }
 
         let mut advanced_settings = self.advanced_settings.clone();
@@ -216,10 +233,12 @@ impl<T: CloudProvider> Application<T> {
                 version: self.version(),
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
-                cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
-                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
-                ram_request_in_mib: self.ram_request_in_mib.to_string(),
-                ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
+                cpu_request_in_milli: self.cpu_request.to_string(),
+                cpu_limit_in_milli: self.cpu_limit.to_string(),
+                ram_request_in_mib: self.ram_request.to_string(),
+                ram_limit_in_mib: self.ram_limit.to_string(),
+                gpu_request: self.gpu_request.map(u32::from),
+                gpu_limit: self.gpu_limit.map(u32::from),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -427,6 +446,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
 
 use crate::environment::models::port::Port;
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use tera::Context as TeraContext;
 
 impl<T: CloudProvider> ToTeraContext for Application<T> {

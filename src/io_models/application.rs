@@ -31,7 +31,8 @@ use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, StorageClass,
+    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
+    KubernetesMemoryResourceUnit, StorageClass,
 };
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
@@ -349,6 +350,8 @@ pub struct Application {
     pub cpu_limit_in_milli: u32,
     pub ram_request_in_mib: u32,
     pub ram_limit_in_mib: u32,
+    pub gpu_request: Option<u32>,
+    pub gpu_limit: Option<u32>,
     pub min_instances: u32,
     pub max_instances: u32,
     pub storage: Vec<Storage>,
@@ -438,6 +441,8 @@ impl Application {
                     KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                     KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                     KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                    self.gpu_request.map(KubernetesGpuResourceUnit),
+                    self.gpu_limit.map(KubernetesGpuResourceUnit),
                     self.should_delete_shared_registry,
                 )?))
             }
@@ -471,6 +476,8 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
@@ -503,6 +510,8 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
@@ -535,6 +544,8 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
@@ -567,6 +578,8 @@ impl Application {
                 KubernetesCpuResourceUnit::MilliCpu(self.cpu_limit_in_milli),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_request_in_mib),
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
+                self.gpu_request.map(KubernetesGpuResourceUnit),
+                self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
             )?)),
         }
