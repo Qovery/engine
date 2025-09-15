@@ -164,7 +164,7 @@ impl<T: CloudProvider> TerraformService<T> {
     }
 
     pub fn helm_release_name(&self) -> String {
-        format!("tf-service-{}", self.long_id)
+        self.kube_name.clone()
     }
 
     pub fn startup_timeout(&self) -> Duration {
