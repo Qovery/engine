@@ -464,16 +464,17 @@ impl TerraformService {
                 .collect::<Result<Vec<_>, _>>()?,
             TerraformBackendType::Kubernetes => vec![
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(
-                    "namespace=\"{environment_kube_name}\""
+                    r#"namespace="{environment_kube_name}""#
                 ))
                 .map_err(TerraformServiceError::InvalidConfig)?,
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(
-                    "secret_suffix=\"{}\"",
+                    r#"secret_suffix="{}""#,
                     self.long_id
                 ))
                 .map_err(TerraformServiceError::InvalidConfig)?,
                 models::terraform_service::TerraformBackendConfig::from_str(
-                    &format!("labels={{\"qovery.com/service-id\": \"{}\", \"qovery.com/service-type\": \"terraform-service\", \"qovery.com/environment-id\": \"{}\" }}", self.long_id, environment_kube_name),
+                    &format!(r#"labels={{"qovery.com/service-id": "{}", "qovery.com/service-type": "terraform-service", "qovery.com/environment-id": "{environment_kube_name}" }}"#
+                        , self.long_id),
                 )
                 .map_err(TerraformServiceError::InvalidConfig)?,
             ],
@@ -585,7 +586,6 @@ EOF
 
 WORKDIR /data
 COPY . .
-RUN ls
 
 RUN chmod +x entrypoint.sh
 USER app
