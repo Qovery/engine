@@ -55,10 +55,14 @@ pub struct ReporterState {
     pod_api: Api<Pod>,
     pod_recv: mpsc::Receiver<Pod>,
     log_lines: Option<BoxStream<'static, Result<String, std::io::Error>>>,
+    metrics_registry: Arc<dyn MetricsRegistry>,
 }
 
 impl ReporterState {
-    fn terraform_output_stream_mut(&mut self) -> &mut BoxStream<'static, Result<String, std::io::Error>> {
+    fn terraform_output_stream_mut(
+        &mut self,
+        mut long_id_opt: Option<Uuid>,
+    ) -> &mut BoxStream<'static, Result<String, std::io::Error>> {
         self.log_lines.get_or_insert_with(|| {
             // Wait for the pod sent by deployer thread
             let pod = self.pod_recv.recv().unwrap_or_default();
@@ -66,7 +70,12 @@ impl ReporterState {
                 follow: true,
                 ..Default::default()
             };
-
+            if let Some(long_id) = long_id_opt.take() {
+                self.metrics_registry
+                    .stop_record(long_id, StepName::Deployment, StepStatus::Success);
+                self.metrics_registry
+                    .start_record(long_id, StepLabel::Service, StepName::Executing);
+            }
             block_on(self.pod_api.log_stream(&pod.name_any(), &log_params))
                 .map(|s| s.lines().boxed())
                 .unwrap_or_else(|err| {
@@ -96,6 +105,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
                 .take()
                 .and_then(|m| m.into_inner().ok())
                 .expect("pod_recv is already taken"),
+            metrics_registry: self.metrics_registry.clone(),
         }
     }
 
@@ -110,7 +120,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
     }
 
     fn deployment_in_progress(&self, reporter_state: &mut Self::DeploymentState) {
-        let logs_stream = reporter_state.terraform_output_stream_mut();
+        let logs_stream = reporter_state.terraform_output_stream_mut(Some(self.long_id));
         // here reporter has received the pod event so we consider the execution started
         self.logger.switch_to_executing();
         let mut ctx = Context::from_waker(Waker::noop());
@@ -130,7 +140,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
         mut reporter_state: Self::DeploymentState,
     ) -> EnvLogger {
         // Consume all the remaining logs of the terraform output
-        block_on(reporter_state.terraform_output_stream_mut().for_each(|line| {
+        block_on(reporter_state.terraform_output_stream_mut(None).for_each(|line| {
             if let Ok(line) = line {
                 self.logger.send_progress(line);
             }
@@ -188,6 +198,8 @@ impl<T> TerraformServiceDeploymentReporter<T> {
     pub(crate) fn stop_record(&self, step_status: StepStatus) {
         self.metrics_registry
             .stop_record(self.long_id, StepName::Deployment, step_status.clone());
+        self.metrics_registry
+            .stop_record(self.long_id, StepName::Executing, step_status.clone());
         self.metrics_registry
             .stop_record(self.long_id, StepName::Total, step_status);
     }
