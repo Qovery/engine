@@ -535,7 +535,7 @@ impl Docker {
             if registry_port == 443 {
                 registry_host.to_string()
             } else {
-                format!("{}:{}", registry_host, registry_port,)
+                format!("{registry_host}:{registry_port}")
             }
         };
 
