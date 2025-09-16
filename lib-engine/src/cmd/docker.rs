@@ -528,11 +528,17 @@ impl Docker {
             .password()
             .and_then(|password| urlencoding::decode(password).ok())
             .unwrap_or_default();
-        let registry_host = format!(
-            "{}:{}",
-            registry.host_str().unwrap_or_default(),
-            registry.port_or_known_default().unwrap_or(443)
-        );
+
+        let registry_host = {
+            let registry_port = registry.port_or_known_default().unwrap_or(443);
+            let registry_host = registry.host_str().unwrap_or_default();
+            if registry_port == 443 {
+                registry_host.to_string()
+            } else {
+                format!("{}:{}", registry_host, registry_port,)
+            }
+        };
+
         let args = vec![
             "--config",
             self.config_path.path().to_str().unwrap_or(""),
