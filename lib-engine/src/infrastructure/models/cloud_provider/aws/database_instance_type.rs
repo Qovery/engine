@@ -214,6 +214,7 @@ pub enum AwsDatabaseInstanceType {
     DB_R8G_8XLARGE,
     DB_R8G_LARGE,
     DB_R8G_XLARGE,
+    DB_SERVERLESS,
     DB_T3_2XLARGE,
     DB_T3_LARGE,
     DB_T3_MEDIUM,
@@ -456,6 +457,7 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R8G_8XLARGE => "db.r8g.8xlarge",
             AwsDatabaseInstanceType::DB_R8G_LARGE => "db.r8g.large",
             AwsDatabaseInstanceType::DB_R8G_XLARGE => "db.r8g.xlarge",
+            AwsDatabaseInstanceType::DB_SERVERLESS => "db.serverless",
             AwsDatabaseInstanceType::DB_T3_2XLARGE => "db.t3.2xlarge",
             AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
             AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
@@ -695,6 +697,7 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R8G_8XLARGE => true,
             AwsDatabaseInstanceType::DB_R8G_LARGE => true,
             AwsDatabaseInstanceType::DB_R8G_XLARGE => true,
+            AwsDatabaseInstanceType::DB_SERVERLESS => true,
             AwsDatabaseInstanceType::DB_T3_2XLARGE => true,
             AwsDatabaseInstanceType::DB_T3_LARGE => true,
             AwsDatabaseInstanceType::DB_T3_MEDIUM => true,
@@ -1998,6 +2001,9 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::DB_R8G_XLARGE,
             DatabaseType::PostgreSQL
         ) | (
+            AwsDatabaseInstanceType::DB_SERVERLESS,
+            DatabaseType::MongoDB
+        ) | (
             AwsDatabaseInstanceType::DB_T3_2XLARGE,
             DatabaseType::MySQL
         ) | (
@@ -2396,6 +2402,7 @@ impl FromStr for AwsDatabaseInstanceType {
             "db.r8g.8xlarge" => Ok(AwsDatabaseInstanceType::DB_R8G_8XLARGE),
             "db.r8g.large" => Ok(AwsDatabaseInstanceType::DB_R8G_LARGE),
             "db.r8g.xlarge" => Ok(AwsDatabaseInstanceType::DB_R8G_XLARGE),
+            "db.serverless" => Ok(AwsDatabaseInstanceType::DB_SERVERLESS),
             "db.t3.2xlarge" => Ok(AwsDatabaseInstanceType::DB_T3_2XLARGE),
             "db.t3.large" => Ok(AwsDatabaseInstanceType::DB_T3_LARGE),
             "db.t3.medium" => Ok(AwsDatabaseInstanceType::DB_T3_MEDIUM),
@@ -2661,6 +2668,7 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R8G_8XLARGE => "db.r8g.8xlarge",
                     AwsDatabaseInstanceType::DB_R8G_LARGE => "db.r8g.large",
                     AwsDatabaseInstanceType::DB_R8G_XLARGE => "db.r8g.xlarge",
+                    AwsDatabaseInstanceType::DB_SERVERLESS => "db.serverless",
                     AwsDatabaseInstanceType::DB_T3_2XLARGE => "db.t3.2xlarge",
                     AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
@@ -2907,6 +2915,7 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R8G_8XLARGE => "db.r8g.8xlarge",
                     AwsDatabaseInstanceType::DB_R8G_LARGE => "db.r8g.large",
                     AwsDatabaseInstanceType::DB_R8G_XLARGE => "db.r8g.xlarge",
+                    AwsDatabaseInstanceType::DB_SERVERLESS => "db.serverless",
                     AwsDatabaseInstanceType::DB_T3_2XLARGE => "db.t3.2xlarge",
                     AwsDatabaseInstanceType::DB_T3_LARGE => "db.t3.large",
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => "db.t3.medium",
@@ -3177,6 +3186,7 @@ mod tests {
                     AwsDatabaseInstanceType::DB_R8G_8XLARGE => true,
                     AwsDatabaseInstanceType::DB_R8G_LARGE => true,
                     AwsDatabaseInstanceType::DB_R8G_XLARGE => true,
+                    AwsDatabaseInstanceType::DB_SERVERLESS => true,
                     AwsDatabaseInstanceType::DB_T3_2XLARGE => true,
                     AwsDatabaseInstanceType::DB_T3_LARGE => true,
                     AwsDatabaseInstanceType::DB_T3_MEDIUM => true,
@@ -3643,6 +3653,7 @@ mod tests {
                         | (AwsDatabaseInstanceType::DB_R8G_LARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_R8G_XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_R8G_XLARGE, DatabaseType::PostgreSQL)
+                        | (AwsDatabaseInstanceType::DB_SERVERLESS, DatabaseType::MongoDB)
                         | (AwsDatabaseInstanceType::DB_T3_2XLARGE, DatabaseType::MySQL)
                         | (AwsDatabaseInstanceType::DB_T3_2XLARGE, DatabaseType::PostgreSQL)
                         | (AwsDatabaseInstanceType::DB_T3_LARGE, DatabaseType::MySQL)
