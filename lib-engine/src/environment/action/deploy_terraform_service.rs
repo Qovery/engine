@@ -14,7 +14,7 @@ use crate::environment::models::terraform_service::{
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
-use crate::environment::report::{DeploymentTaskImpl, DeploymentTaskMut, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskMut, DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};

@@ -11,7 +11,7 @@ use crate::environment::models::database::{
 };
 use crate::environment::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
 use crate::environment::report::database::reporter::DatabaseDeploymentReporter;
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, Tag};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
@@ -565,7 +565,7 @@ where
 
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Create),
-            DeploymentTaskImpl {
+            DeploymentTaskRef {
                 pre_run: &pre_run,
                 run: &run,
                 post_run_success: &post_run,
@@ -802,7 +802,7 @@ where
 
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Create),
-            DeploymentTaskImpl {
+            DeploymentTaskRef {
                 pre_run: &pre_run,
                 run: &run,
                 post_run_success: &post_run,

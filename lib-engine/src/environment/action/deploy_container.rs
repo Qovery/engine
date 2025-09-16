@@ -4,7 +4,7 @@ use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::models::container::{Container, ContainerService, get_container_with_invalid_storage_size};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::application::reporter::ApplicationDeploymentReporter;
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
@@ -144,7 +144,7 @@ where
         // At last we deploy our container
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Create),
-            DeploymentTaskImpl {
+            DeploymentTaskRef {
                 pre_run: &pre_task,
                 run: &long_task,
                 post_run_success: &post_task,
@@ -272,7 +272,7 @@ where
         // Trigger deployment
         execute_long_deployment(
             ApplicationDeploymentReporter::new_for_container(self, target, Action::Delete),
-            DeploymentTaskImpl {
+            DeploymentTaskRef {
                 pre_run: &pre_task,
                 run: &long_task,
                 post_run_success: &post_task,

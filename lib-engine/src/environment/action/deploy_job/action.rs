@@ -8,7 +8,7 @@ use crate::environment::models::job::{ImageSource, Job, JobService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::job::reporter::JobDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
@@ -38,7 +38,7 @@ where
                 let pre_run = mk_deploy_pre_run(self, target, &event_details);
                 let post_run = mk_deploy_post_run(self, target);
                 let run = mk_deploy_job_run(self, target, &event_details);
-                let task = DeploymentTaskImpl {
+                let task = DeploymentTaskRef {
                     pre_run: &pre_run,
                     run: &run,
                     post_run_success: &post_run,
@@ -48,7 +48,7 @@ where
             }
             JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = run_cronjob(self, target, &event_details);
-                let task = DeploymentTaskImpl {
+                let task = DeploymentTaskRef {
                     pre_run: &pre_run,
                     run: &run,
                     post_run_success: &post_run,
@@ -70,7 +70,7 @@ where
         match self.schedule() {
             JobSchedule::Cron { .. } => {
                 let (pre_run, run, post_run) = delete_job(self, target, &event_details);
-                let task = DeploymentTaskImpl {
+                let task = DeploymentTaskRef {
                     pre_run: &pre_run,
                     run: &run,
                     post_run_success: &post_run,
@@ -82,7 +82,7 @@ where
                 let pre_run = mk_deploy_pre_run(self, target, event_details);
                 let post_run = mk_deploy_post_run(self, target);
                 let run = mk_deploy_job_run(self, target, event_details);
-                let task = DeploymentTaskImpl {
+                let task = DeploymentTaskRef {
                     pre_run: &pre_run,
                     run: &run,
                     post_run_success: &post_run,
@@ -107,7 +107,7 @@ where
                 let pre_run = mk_deploy_pre_run(self, target, event_details);
                 let post_run = mk_deploy_post_run(self, target);
                 let run = mk_deploy_job_run(self, target, event_details);
-                let task = DeploymentTaskImpl {
+                let task = DeploymentTaskRef {
                     pre_run: &pre_run,
                     run: &run,
                     post_run_success: &post_run,
@@ -124,7 +124,7 @@ where
         }?;
 
         let (pre_run, run, post_run) = delete_job(self, target, &event_details);
-        let task = DeploymentTaskImpl {
+        let task = DeploymentTaskRef {
             pre_run: &pre_run,
             run: &run,
             post_run_success: &post_run,

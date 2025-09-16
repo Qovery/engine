@@ -9,7 +9,7 @@ use crate::environment::models::helm_chart::{HelmChart, HelmChartSource, HelmVal
 use crate::environment::models::types::CloudProvider;
 use crate::environment::report::helm_chart::reporter::HelmChartDeploymentReporter;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartError};
@@ -95,7 +95,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
         let post_run = |_logger: &EnvSuccessLogger, _state: ()| {};
 
-        let task = DeploymentTaskImpl {
+        let task = DeploymentTaskRef {
             pre_run: &pre_run,
             run: &run,
             post_run_success: &post_run,
