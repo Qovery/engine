@@ -528,11 +528,16 @@ impl Docker {
             .password()
             .and_then(|password| urlencoding::decode(password).ok())
             .unwrap_or_default();
+        let registry_host = format!(
+            "{}:{}",
+            registry.host_str().unwrap_or_default(),
+            registry.port_or_known_default().unwrap_or(443)
+        );
         let args = vec![
             "--config",
             self.config_path.path().to_str().unwrap_or(""),
             "login",
-            registry.host_str().unwrap_or_default(),
+            &registry_host,
             "-u",
             &username,
             "-p",
