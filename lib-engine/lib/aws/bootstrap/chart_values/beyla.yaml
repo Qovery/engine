@@ -12,10 +12,12 @@ config:
   data:
     # reduce route cardinality (e.g. /user/123 → /user/:id)
     routes:
-      unmatched: heuristic
+      unmatched: ignore
 
     # explicit Prometheus metrics exporter
     prometheus_export:
+      buckets:
+        duration_histogram: [ 0.01, 0.05, 0.2, 1, 5 ]
       port: 9090
       path: /metrics
 
@@ -53,13 +55,27 @@ serviceMonitor:
   additionalLabels:
     release: kube-prometheus-stack
   jobLabel: beyla
-  metrics:
-    endpoint:
-      interval: 15s
+  endpoint:
+    interval: 30s
+    sampleLimit: 20000
+    metricRelabelings:
+      - action: keep
+        sourceLabels: [ __name__ ]
+        regex: 'http_server_request_duration_seconds_(bucket|sum|count)|http_server_(request|response)_body_size_bytes_(sum|count)'
+
+      - action: keep
+        sourceLabels: [ http_request_method ]
+        regex: '(GET|POST|PUT|DELETE)|^$'
+
+      - action: labelkeep
+        regex: (__name__|job|instance|k8s_namespace_name|k8s_container_name|http_request_method|http_response_status_code|le)
   internalMetrics:
     endpoint:
       interval: 30s
-
+      sampleLimit: 5000
+      metricRelabelings:
+        - action: labelkeep
+          regex: (__name__|job|instance|k8s_container_name|http_response_status_code|http_request_method|http_route|le|k8s_namespace_name|service_name|service_namespace|server_address|server_port|k8s_deployment_name|k8s_kind)
 priorityClassName: system-node-critical
 
 tolerations:
