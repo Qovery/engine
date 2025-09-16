@@ -45,8 +45,8 @@ pub trait DeploymentReporter: Send + Sync {
     }
 }
 
-// This object represent a complex deployment task that is supposed to be long running and used with a reporter.
-// We split pre_run and run, in order to allow the reporter to not be executed/log while the pre_run is running.
+// This object represents a complex deployment task supposed to be long-running and used with a reporter.
+// We split pre_run and run, to allow the reporter to not be executed/log while the pre_run is running.
 // Reporter will log/only be executed when the task is executing the run method.
 pub trait DeploymentTask {
     type Logger;
@@ -61,7 +61,7 @@ pub trait DeploymentTask {
     fn post_run_success(&mut self, logger: &Self::Logger, state: Self::DeploymentResult);
 }
 
-pub struct DeploymentTaskImpl<'a, Pre, Run, Post, Ret>
+pub struct DeploymentTaskRef<'a, Pre, Run, Post, Ret>
 where
     Pre: FnMut(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
     Run: FnMut(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
@@ -72,7 +72,7 @@ where
     pub post_run_success: &'a Post,
 }
 
-impl<Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskImpl<'_, Pre, Run, Post, Ret>
+impl<Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskRef<'_, Pre, Run, Post, Ret>
 where
     Pre: Fn(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
     Run: Fn(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,

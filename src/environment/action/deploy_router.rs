@@ -4,7 +4,7 @@ use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::models::router::Router;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::router::reporter::RouterDeploymentReporter;
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, Stage};
 use crate::helm::{ChartInfo, HelmAction, HelmChartNamespaces};
@@ -62,7 +62,7 @@ where
 
         execute_long_deployment(
             RouterDeploymentReporter::new(self, target, Action::Create),
-            DeploymentTaskImpl {
+            DeploymentTaskRef {
                 pre_run: &pre_run,
                 run: &run,
                 post_run_success: &empty_post_run,
