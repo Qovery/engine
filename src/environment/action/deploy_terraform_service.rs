@@ -14,7 +14,7 @@ use crate::environment::models::terraform_service::{
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
-use crate::environment::report::{DeploymentTaskImpl, execute_long_deployment};
+use crate::environment::report::{DeploymentTaskImpl, DeploymentTaskMut, execute_long_deployment};
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
@@ -33,10 +33,10 @@ use std::time::Duration;
 
 #[derive(Debug)]
 pub struct TaskContext {}
-pub(super) type TerraformPreRun<'a> = Box<dyn Fn(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a>;
-pub(super) type TerraformPostRun<'a> = Box<dyn Fn(&EnvSuccessLogger, TaskContext) + 'a>;
+pub(super) type TerraformPreRun<'a> = Box<dyn FnMut(&EnvProgressLogger) -> Result<TaskContext, Box<EngineError>> + 'a>;
+pub(super) type TerraformPostRun<'a> = Box<dyn FnMut(&EnvSuccessLogger, TaskContext) + 'a>;
 pub(super) type TerraformRun<'a> =
-    Box<dyn Fn(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a>;
+    Box<dyn FnMut(&EnvProgressLogger, TaskContext) -> Result<TaskContext, Box<EngineError>> + 'a>;
 
 impl<T: CloudProvider> DeploymentAction for TerraformService<T>
 where
@@ -45,23 +45,24 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
-        let pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, event_details.clone());
-        let post_run: TerraformPostRun = mk_deploy_post_run(self, target);
+        let mut pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, event_details.clone());
+        let mut post_run: TerraformPostRun = mk_deploy_post_run(self, target);
 
         let (pod_tx, rx) = mpsc::sync_channel(1);
-        let run: TerraformRun = Box::new(
+        let mut pod_tx = Some(pod_tx);
+        let mut run: TerraformRun = Box::new(
             move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
                 let task_ctx = self
-                    .deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?
+                    .deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?
                     .0;
                 Ok(task_ctx)
             },
         );
 
-        let task = DeploymentTaskImpl {
-            pre_run: &pre_run,
-            run: &run,
-            post_run_success: &post_run,
+        let task = DeploymentTaskMut {
+            pre_run: &mut pre_run,
+            run: &mut run,
+            post_run_success: &mut post_run,
         };
 
         execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Create, rx), task)
@@ -81,24 +82,25 @@ where
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
-        let pre_run: TerraformPreRun =
+        let mut pre_run: TerraformPreRun =
             Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
-        let post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
+        let mut post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
 
         let (pod_tx, rx) = mpsc::sync_channel(1);
-        let run: TerraformRun = Box::new(
+        let mut pod_tx = Some(pod_tx);
+        let mut run: TerraformRun = Box::new(
             move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
                 let (task, helm) =
-                    self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.clone())?;
+                    self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?;
                 helm.on_delete(target)?;
                 Ok(task)
             },
         );
 
-        let task = DeploymentTaskImpl {
-            pre_run: &pre_run,
-            run: &run,
-            post_run_success: &post_run,
+        let task = DeploymentTaskMut {
+            pre_run: &mut pre_run,
+            run: &mut run,
+            post_run_success: &mut post_run,
         };
 
         execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Delete, rx), task)
@@ -127,7 +129,7 @@ where
         event_details: &EventDetails,
         logger: &EnvProgressLogger,
         state: TaskContext,
-        pod_tx: mpsc::SyncSender<Pod>,
+        pod_tx: Option<mpsc::SyncSender<Pod>>,
     ) -> Result<(TaskContext, HelmDeployment), Box<EngineError>> {
         let handle_error = |err: JobRunError| -> Box<EngineError> {
             match err {
@@ -170,9 +172,6 @@ where
         helm.on_create(target)?;
 
         let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
-            // to be sure we unstuck the reporter
-            let _ = pod_tx.send(Pod::default());
-
             info!("Removing secret: {:?}", secret_name);
             let _ = delete_backend_config_secret(secret_name, event_details, target);
         });
@@ -190,7 +189,7 @@ where
         // pod is available: as of today, we consider the status can be set to Executing
         logger.switch_to_executing_step();
 
-        let _ = pod_tx.send(pod);
+        let _ = pod_tx.map(|tx| tx.send(pod));
         let pod = block_on(super::deploy_job::job::await_job_pod_to_terminate(
             self.kube_name(),
             max_execution_duration,

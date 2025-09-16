@@ -52,20 +52,20 @@ pub trait DeploymentTask {
     type Logger;
     type DeploymentResult;
 
-    fn pre_run(&self, logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>>;
+    fn pre_run(&mut self, logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>>;
     fn run(
-        &self,
+        &mut self,
         logger: &Self::Logger,
         state: Self::DeploymentResult,
     ) -> Result<Self::DeploymentResult, Box<EngineError>>;
-    fn post_run_success(&self, logger: &Self::Logger, state: Self::DeploymentResult);
+    fn post_run_success(&mut self, logger: &Self::Logger, state: Self::DeploymentResult);
 }
 
 pub struct DeploymentTaskImpl<'a, Pre, Run, Post, Ret>
 where
-    Pre: Fn(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
-    Run: Fn(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
-    Post: Fn(&EnvSuccessLogger, Ret),
+    Pre: FnMut(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
+    Run: FnMut(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
+    Post: FnMut(&EnvSuccessLogger, Ret),
 {
     pub pre_run: &'a Pre,
     pub run: &'a Run,
@@ -81,13 +81,13 @@ where
     type Logger = EnvLogger;
     type DeploymentResult = Ret;
 
-    fn pre_run(&self, logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
+    fn pre_run(&mut self, logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
         let progress_logger = EnvProgressLogger::new(logger);
         (self.pre_run)(&progress_logger)
     }
 
     fn run(
-        &self,
+        &mut self,
         logger: &Self::Logger,
         state: Self::DeploymentResult,
     ) -> Result<Self::DeploymentResult, Box<EngineError>> {
@@ -95,7 +95,47 @@ where
         (self.run)(&progress_logger, state)
     }
 
-    fn post_run_success(&self, logger: &Self::Logger, state: Self::DeploymentResult) {
+    fn post_run_success(&mut self, logger: &Self::Logger, state: Self::DeploymentResult) {
+        let success_logger = EnvSuccessLogger::new(logger);
+        (self.post_run_success)(&success_logger, state)
+    }
+}
+
+pub struct DeploymentTaskMut<'a, Pre, Run, Post, Ret>
+where
+    Pre: FnMut(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
+    Run: FnMut(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
+    Post: FnMut(&EnvSuccessLogger, Ret),
+{
+    pub pre_run: &'a mut Pre,
+    pub run: &'a mut Run,
+    pub post_run_success: &'a mut Post,
+}
+
+impl<Pre, Run, Post, Ret> DeploymentTask for DeploymentTaskMut<'_, Pre, Run, Post, Ret>
+where
+    Pre: FnMut(&EnvProgressLogger) -> Result<Ret, Box<EngineError>>,
+    Run: FnMut(&EnvProgressLogger, Ret) -> Result<Ret, Box<EngineError>>,
+    Post: FnMut(&EnvSuccessLogger, Ret),
+{
+    type Logger = EnvLogger;
+    type DeploymentResult = Ret;
+
+    fn pre_run(&mut self, logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
+        let progress_logger = EnvProgressLogger::new(logger);
+        (self.pre_run)(&progress_logger)
+    }
+
+    fn run(
+        &mut self,
+        logger: &Self::Logger,
+        state: Self::DeploymentResult,
+    ) -> Result<Self::DeploymentResult, Box<EngineError>> {
+        let progress_logger = EnvProgressLogger::new(logger);
+        (self.run)(&progress_logger, state)
+    }
+
+    fn post_run_success(&mut self, logger: &Self::Logger, state: Self::DeploymentResult) {
         let success_logger = EnvSuccessLogger::new(logger);
         (self.post_run_success)(&success_logger, state)
     }
@@ -104,17 +144,17 @@ where
 // Blanket impl helper to create a deployment task from a closure
 impl<T> DeploymentTask for T
 where
-    T: Fn(&EnvProgressLogger) -> Result<(), Box<EngineError>>,
+    T: FnMut(&EnvProgressLogger) -> Result<(), Box<EngineError>>,
 {
     type Logger = EnvLogger;
     type DeploymentResult = ();
 
-    fn pre_run(&self, _logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
+    fn pre_run(&mut self, _logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
         Ok(())
     }
 
     fn run(
-        &self,
+        &mut self,
         logger: &Self::Logger,
         state: Self::DeploymentResult,
     ) -> Result<Self::DeploymentResult, Box<EngineError>> {
@@ -125,7 +165,7 @@ where
         }
     }
 
-    fn post_run_success(&self, _logger: &Self::Logger, _state: Self::DeploymentResult) {}
+    fn post_run_success(&mut self, _logger: &Self::Logger, _state: Self::DeploymentResult) {}
 }
 
 // Function that take a deployment reporter and a deployment task and execute/synchronize them together
@@ -134,7 +174,7 @@ where
 // Only during the run method
 pub fn execute_long_deployment<Log, TaskRet>(
     mut deployment_reporter: impl DeploymentReporter<DeploymentResult = TaskRet, Logger = Log>,
-    long_task: impl DeploymentTask<Logger = Log, DeploymentResult = TaskRet>,
+    mut long_task: impl DeploymentTask<Logger = Log, DeploymentResult = TaskRet>,
 ) -> Result<(), Box<EngineError>> {
     // stop the thread when the blocking task is done
     let (tx, rx) = mpsc::channel();
@@ -281,7 +321,7 @@ mod test {
         type Logger = ();
         type DeploymentResult = u32;
 
-        fn pre_run(&self, _logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
+        fn pre_run(&mut self, _logger: &Self::Logger) -> Result<Self::DeploymentResult, Box<EngineError>> {
             self.pre_run.store(true, Ordering::SeqCst);
             if self.prerun_should_fail {
                 Err(Box::new(EngineError::new_unsupported_region(
@@ -302,7 +342,7 @@ mod test {
         }
 
         fn run(
-            &self,
+            &mut self,
             _logger: &Self::Logger,
             state: Self::DeploymentResult,
         ) -> Result<Self::DeploymentResult, Box<EngineError>> {
@@ -312,7 +352,7 @@ mod test {
             Ok(2)
         }
 
-        fn post_run_success(&self, _logger: &Self::Logger, state: Self::DeploymentResult) {
+        fn post_run_success(&mut self, _logger: &Self::Logger, state: Self::DeploymentResult) {
             self.post_run.store(true, Ordering::SeqCst);
             assert_eq!(state, 2);
         }
