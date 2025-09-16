@@ -48,8 +48,14 @@ where
         let mut pre_run: TerraformPreRun = mk_deploy_pre_run(self, target, event_details.clone());
         let mut post_run: TerraformPostRun = mk_deploy_post_run(self, target);
 
-        let (pod_tx, rx) = mpsc::sync_channel(1);
-        let mut pod_tx = Some(pod_tx);
+        let (mut pod_tx, rx) = {
+            let (tx, rx) = mpsc::sync_channel(1);
+            // we put it into an optional to be able to take the value out of the closure
+            // Effectively, it simulates a FnOnce(). This allow for the receiver to be notified when pod_tx is dropped.
+            // So the reporter can be unstuck
+            (Some(tx), rx)
+        };
+
         let mut run: TerraformRun = Box::new(
             move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
                 let task_ctx = self
@@ -86,8 +92,13 @@ where
             Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
         let mut post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
 
-        let (pod_tx, rx) = mpsc::sync_channel(1);
-        let mut pod_tx = Some(pod_tx);
+        let (mut pod_tx, rx) = {
+            let (tx, rx) = mpsc::sync_channel(1);
+            // we put it into an optional to be able to take the value out of the closure
+            // Effectively, it simulates a FnOnce(). This allow for the receiver to be notified when pod_tx is dropped.
+            // So the reporter can be unstuck
+            (Some(tx), rx)
+        };
         let mut run: TerraformRun = Box::new(
             move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
                 let (task, helm) =
