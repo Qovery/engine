@@ -1448,14 +1448,22 @@ pub async fn kube_create_namespace_if_not_exists(
         status: None,
     };
 
-    // create namespace
-    if let Err(e) = ns_api.create(&PostParams::default(), &namespace).await {
-        match e {
+    // create namespace with retry in case of error
+    // with GCP clusters, we had some issue with namespace creation calls that were failing
+    // retry if we have such error
+    for attempt in 0..3 {
+        match ns_api.create(&PostParams::default(), &namespace).await {
+            Ok(_) => break,
             // namespace already exists
-            Error::Api(api_err) if api_err.code == 409 => {}
-            _ => return Err(e),
+            Err(Error::Api(api_err)) if api_err.code == 409 => break,
+            // retry on error
+            Err(Error::Api(_)) if attempt < 2 => {
+                tokio::time::sleep(Duration::from_secs(attempt + 1)).await;
+                continue;
+            }
+            Err(e) => return Err(e),
         }
-    };
+    }
 
     // We patch the labels to make sure they are up to date
     let patch_labels = json!({
