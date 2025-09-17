@@ -6,7 +6,6 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use kube::Client;
-use semver::Version;
 
 pub struct BeylaChart {
     action: HelmAction,
@@ -59,7 +58,7 @@ impl ToCommonHelmChart for BeylaChart {
                 action: self.action.clone(),
                 name: "beyla".to_string(),
                 path: self.chart_path.to_string(),
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
+                reinstall_chart_if_installed_version_is_below_than: None,
                 namespace: self.beyla_namespace.clone(),
                 values_files,
                 values: vec![
