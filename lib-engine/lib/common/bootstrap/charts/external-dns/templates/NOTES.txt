@@ -1,17 +1,18 @@
-CHART NAME: {{ .Chart.Name }}
-CHART VERSION: {{ .Chart.Version }}
-APP VERSION: {{ .Chart.AppVersion }}
+***********************************************************************
+* External DNS                                                        *
+***********************************************************************
+  Chart version: {{ .Chart.Version }}
+  App version:   {{ .Chart.AppVersion }}
+  Image tag:     {{ include "external-dns.image" . }}
+***********************************************************************
 
-Did you know there are enterprise versions of the Bitnami catalog? For enhanced secure software supply chain features, unlimited pulls from Docker, LTS support, or application customization, see Bitnami Premium or Tanzu Application Catalog. See https://www.arrow.com/globalecs/na/vendors/bitnami for more information.
+{{- if eq (typeOf .Values.provider) "string" }}
+🚧 DEPRECATIONS 🚧
 
-** Please be patient while the chart is being deployed **
+The following features, functions, or methods are deprecated and no longer recommended for use.
 
-To verify that external-dns has started, run:
-
-  kubectl --namespace={{ include "common.names.namespace" . }} get pods -l "app.kubernetes.io/name={{ include "common.names.name" . }},app.kubernetes.io/instance={{ include "common.names.namespace" . }}"
-
-{{ include "external-dns.validateValues" . }}
-{{ include "external-dns.checkRollingTags" . }}
-{{- include "common.warnings.resources" (dict "sections" (list "") "context" $) }}
-{{- include "common.warnings.modifiedImages" (dict "images" (list .Values.image) "context" $) }}
-{{- include "common.errors.insecureImages" (dict "images" (list .Values.image) "context" $) }}
+{{/* The deprecation message for legacy 'provider: name'. */}}
+{{- if eq (typeOf .Values.provider) "string" -}}
+❗❗❗ DEPRECATED ❗❗❗ The legacy 'provider: <name>' configuration is in use. Support will be removed in future releases.
+{{- end -}}
+{{- end }}

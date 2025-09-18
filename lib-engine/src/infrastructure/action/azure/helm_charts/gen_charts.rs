@@ -11,7 +11,7 @@ use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConf
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
-use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
     KubePrometheusStackChart, PrometheusConfiguration,
@@ -70,6 +70,14 @@ pub(super) fn aks_helm_charts(
     let q_priority_class_chart = QoveryPriorityClassChart::new(
         chart_prefix_path,
         HashSet::from_iter(vec![QoveryPriorityClass::StandardPriority, QoveryPriorityClass::HighPriority]),
+        HelmChartNamespaces::Qovery,
+    )
+    .to_common_helm_chart()?;
+
+    // External DNS Secret
+    let external_dns_secret = ExternalDNSSecretChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
         HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
@@ -451,7 +459,7 @@ pub(super) fn aks_helm_charts(
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
-    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![];
+    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_secret))];
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {
         level_7.push(Some(Box::new(qovery_webhook)));
     }

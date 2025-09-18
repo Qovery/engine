@@ -1,30 +1,31 @@
 annotations:
-  category: DeveloperTools
-  images: |
-    - name: external-dns
-      image: docker.io/bitnami/external-dns:0.18.0-debian-12-r1
-  licenses: Apache-2.0
-  tanzuCategory: clusterUtility
+  artifacthub.io/changes: |-
+    - kind: added
+      description: "Add option to configure annotationFilter via dedicated chart value."
+    - kind: changed
+      description: "Grant discovery.k8s.io/endpointslices permission only when using service source."
+    - kind: changed
+      description: "Update ExternalDNS OCI image version to v0.19.0."
 apiVersion: v2
-appVersion: 0.18.0
-dependencies:
-- name: common
-  repository: oci://registry-1.docker.io/bitnamicharts
-  tags:
-  - bitnami-common
-  version: 2.x.x
-description: ExternalDNS is a Kubernetes addon that configures public DNS servers
-  with information about exposed Kubernetes services to make them discoverable.
-home: https://bitnami.com
-icon: https://dyltqmyl993wv.cloudfront.net/assets/stacks/external-dns/img/external-dns-stack-220x234.png
+appVersion: 0.19.0
+description: ExternalDNS synchronizes exposed Kubernetes Services and Ingresses with
+  DNS providers.
+home: https://github.com/kubernetes-sigs/external-dns/
+icon: https://github.com/kubernetes-sigs/external-dns/raw/master/docs/img/external-dns.png
 keywords:
+- kubernetes
+- k8s
+- externaldns
 - external-dns
-- network
 - dns
+- service
+- ingress
+- gateway
 maintainers:
-- name: Broadcom, Inc. All Rights Reserved.
-  url: https://github.com/bitnami/charts
+- email: steve.hipwell@gmail.com
+  name: stevehipwell
 name: external-dns
 sources:
-- https://github.com/bitnami/charts/tree/main/bitnami/external-dns
-version: 8.9.2
+- https://github.com/kubernetes-sigs/external-dns/
+type: application
+version: 1.19.0
