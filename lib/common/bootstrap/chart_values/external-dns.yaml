@@ -1,31 +1,12 @@
-global:
-  security:
-    ## @param global.security.allowInsecureImages Allows skipping image verification to use the image from our registry
-    allowInsecureImages: true
-# set the provider to use
-provider: set-by-engine-code
-# keep the config you want to use and remove the others. Configure the provider you want to use.
-cloudflare:
-  apiToken: set-by-engine-code
-  email: set-by-engine-code
-  proxied: set-by-engine-code
-pdns:
-  # Qovery DNS: apiUrl: *qoveryDnsUrl
-  apiUrl: set-by-engine-code
-  # Qovery DNS: apiPort: "443"
-  apiPort: set-by-engine-code
-  # Qovery DNS: apiKey: "443"
-  apiKey: set-by-engine-code
-
 # We have only 1 instance of external-dns, so creating pdb benefits nothing and may create unnecessary constraints
 # i.e: Karpenter will take them into account
 pdb:
   create: false
 
 # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
-annotationFilter: external-dns.alpha.kubernetes.io/exclude notin (true)
+annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)"
 # set domainFilters to the domain you want to manage: [*domain]
-domainFilters: set-by-engine-code
+domainFilters: []
 
 triggerLoopOnEvent: true
 policy: sync
@@ -43,8 +24,20 @@ updateStrategy:
 
 # remove if you don't want to use a custom image
 image:
-  registry: set-by-engine-code
-  repository: set-by-engine-code
+  repository: public.ecr.aws/r3m4q3r9/pub-mirror-external-dns
+
+# set the provider to use
+provider: set-by-engine-code
+
+# dynamically populated by engine code based on provider
+# For PDNS: pdns-server and pdns-api-key will be set
+# For Cloudflare: cloudflare-proxied will be set
+extraArgs: {} #set-by-engine-code
+
+# env variables are dynamically set by engine code based on provider
+# For PDNS: PDNS_API_KEY will be set
+# For Cloudflare: CF_API_TOKEN, CF_API_KEY, CF_API_EMAIL will be set
+env: [] #set-by-engine-code
 
 # set resources
 resources:

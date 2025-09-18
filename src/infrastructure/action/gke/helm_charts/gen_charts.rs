@@ -7,7 +7,7 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
@@ -75,6 +75,14 @@ pub(super) fn gke_helm_charts(
         chart_prefix_path,
         HashSet::from_iter(vec![QoveryPriorityClass::StandardPriority, QoveryPriorityClass::HighPriority]), // Cannot use node critical priority class on GKE autopilot
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
+    )
+    .to_common_helm_chart()?;
+
+    // External DNS Secret
+    let external_dns_secret = ExternalDNSSecretChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
@@ -375,7 +383,8 @@ pub(super) fn gke_helm_charts(
     ];
     let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
-    let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
+    let level_4: Vec<Option<Box<dyn HelmChart>>> =
+        vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
     let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![

@@ -36,7 +36,7 @@ use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::gener
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::grafana_chart::{
     CloudWatchConfig, GrafanaAdminUser, GrafanaChart, GrafanaDatasources,
 };
@@ -236,6 +236,14 @@ pub(super) fn eks_helm_charts(
             && chart_config_prerequisites
                 .cluster_advanced_settings
                 .aws_eks_enable_alb_controller,
+    )
+    .to_common_helm_chart()?;
+
+    // External DNS Secret
+    let external_dns_secret = ExternalDNSSecretChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -691,7 +699,7 @@ pub(super) fn eks_helm_charts(
 
     let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let mut level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler)];
+    let mut level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler), Box::new(external_dns_secret)];
 
     if let Some(qovery_webhook) = qovery_cert_manager_webhook {
         level_7.push(Box::new(qovery_webhook));

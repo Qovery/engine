@@ -10,9 +10,9 @@ charts:
     repo_name: jetstack
     comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns
-    repo_name: bitnami
-    version: 8.9.2
-    comment: https://artifacthub.io/packages/helm/bitnami/external-dns
+    repo_name: external-dns
+    version: 1.19.0
+    comment: https://github.com/kubernetes-sigs/external-dns/charts/external-dns
   - name: grafana
     version: 6.16.10
     repo_name: grafana
@@ -180,6 +180,8 @@ repos:
     url: https://charts.fairwinds.com/stable
   - name: deliveryhero
     url: https://charts.deliveryhero.io/
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
   - name: qovery-github
     type: git
     url: https://github.com/Qovery/k8s-event-logger.git

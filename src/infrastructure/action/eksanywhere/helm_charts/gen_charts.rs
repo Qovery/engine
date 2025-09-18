@@ -22,7 +22,7 @@ use crate::infrastructure::action::eksanywhere::helm_charts::EksAnywhereChartsCo
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_chart::MetalLbChart;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_config_chart::MetalLbConfigChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::loki_chart::{LokiChart, LokiObjectBucketConfiguration};
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
@@ -51,6 +51,14 @@ pub(super) fn eks_anywhere_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         false,
+    )
+    .to_common_helm_chart()?;
+
+    // External DNS Secret
+    let external_dns_secret = ExternalDNSSecretChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;
 
@@ -397,7 +405,8 @@ pub(super) fn eks_anywhere_helm_charts(
     }
 
     let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![];
-    let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![qovery_cert_manager_webhook];
+    let level_5: Vec<Option<Box<dyn HelmChart>>> =
+        vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
 
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metrics_server)), Some(Box::new(external_dns))];
     let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metal_lb))];

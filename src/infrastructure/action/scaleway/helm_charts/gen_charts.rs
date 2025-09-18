@@ -26,7 +26,7 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
-use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSChart;
+use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
@@ -118,6 +118,14 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::KubeSystem,
         false,
+    )
+    .to_common_helm_chart()?;
+
+    // External DNS Secret
+    let external_dns_secret = ExternalDNSSecretChart::new(
+        chart_prefix_path,
+        chart_config_prerequisites.dns_provider_config.clone(),
+        HelmChartNamespaces::KubeSystem,
     )
     .to_common_helm_chart()?;
 
@@ -545,9 +553,9 @@ pub fn kapsule_helm_charts(
     let level_3: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let level_4: Vec<Box<dyn HelmChart>> = if let Some(qovery_webhook) = qovery_cert_manager_webhook {
-        vec![Box::new(qovery_webhook)]
+        vec![Box::new(qovery_webhook), Box::new(external_dns_secret)]
     } else {
-        vec![]
+        vec![Box::new(external_dns_secret)]
     };
 
     let level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(external_dns)];
