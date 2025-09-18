@@ -38,9 +38,17 @@ resource "aws_eks_node_group" "eks_cluster_workers_{{ loop.index }}" {
   {%- endif %}
   instance_types   = ["{{ eks_worker_node.instance_type }}"]
   {% if eks_worker_node.instance_architecture == "ARM64" -%}
+  {% if eks_ec2_ami_use_bottlerocket %}
+  ami_type         = "BOTTLEROCKET_ARM_64"
+  {%- else -%}
   ami_type         = "AL2023_ARM_64_STANDARD"
+  {%- endif %}
+  {%- else -%}
+  {% if eks_ec2_ami_use_bottlerocket %}
+  ami_type         = "BOTTLEROCKET_x86_64"
   {%- else -%}
   ami_type         = "AL2023_x86_64_STANDARD"
+  {%- endif %}
   {%- endif %}
 
   tags = merge(

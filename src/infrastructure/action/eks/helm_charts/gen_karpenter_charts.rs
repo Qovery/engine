@@ -55,6 +55,10 @@ pub fn generate_karpenter_charts(
         chart_config_prerequisites.region.to_cloud_provider_format(),
         karpenter_parameters,
         chart_config_prerequisites.infra_options.user_provided_network.as_ref(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_ec2_ami
+            .to_model(),
         chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
     )
     .to_common_helm_chart()?;

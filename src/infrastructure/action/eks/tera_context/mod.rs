@@ -3,6 +3,7 @@ use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, InfrastructureStep, Stage};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProvider;
@@ -355,6 +356,10 @@ pub fn eks_tera_context(
     context.insert("kubernetes_cluster_long_id", kubernetes.context().cluster_long_id());
     context.insert("eks_region_cluster_id", region_cluster_id.as_str());
     context.insert("eks_worker_nodes", &node_groups);
+    context.insert(
+        "eks_ec2_ami_use_bottlerocket",
+        &(kubernetes.advanced_settings.aws_eks_ec2_ami.to_model() == Ec2Ami::Bottlerocket),
+    );
     context.insert("ec2_zone_a_subnet_blocks_private", &ec2_zone_a_subnet_blocks_private);
     context.insert("ec2_zone_b_subnet_blocks_private", &ec2_zone_b_subnet_blocks_private);
     context.insert("ec2_zone_c_subnet_blocks_private", &ec2_zone_c_subnet_blocks_private);

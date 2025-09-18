@@ -14,6 +14,7 @@ use crate::infrastructure::models::cloud_provider::{
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 
 pub mod database_instance_type;
+pub mod ec2_ami;
 pub mod regions;
 
 #[derive(Debug, Clone)]

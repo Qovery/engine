@@ -337,6 +337,7 @@ impl Karpenter {
             region.to_cloud_provider_format(),
             karpenter_parameters,
             options.user_provided_network.as_ref(),
+            kubernetes.advanced_settings().aws_eks_ec2_ami.to_model(),
             kubernetes.advanced_settings().pleco_resources_ttl,
         )
         .to_common_helm_chart()
