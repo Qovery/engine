@@ -8,11 +8,11 @@ ARG VAULT_VERSION="1.13.0-1"
 ARG HELM_DIFF_VERSION="v3.11.0"
 # If you update docker version, please also update the docker in docker version
 # within the engine chart
-ARG DOCKER_VERSION="5:27.1.1-1~debian.12~bookworm"
-ARG BUILDX_VERSION="0.16.1-1~debian.12~bookworm"
+ARG DOCKER_VERSION="5:28.4.0-1~debian.13~trixie"
+ARG BUILDX_VERSION="0.27.0-1~debian.13~trixie"
 ARG PACK_VERSION="0.35.1"
 ARG CONTAINERD_VERSION="1.7.19-1"
-ARG SKOPEO_VERSION=1.9.3+ds1-1+b10
+ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG KUBENT_VERSION=0.7.3
 
 ARG BIN_DEST_FOLDER="/binaries"
@@ -191,7 +191,7 @@ EOF
 #  ENGINE FINAL IMAGE 
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim AS run
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-trixie-slim AS run
 
 ARG BIN_DEST_FOLDER
 
@@ -217,12 +217,12 @@ ARG KUBENT_VERSION
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
   curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
-  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
+  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
   curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
   curl https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg && \
   curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list && \
   echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
@@ -288,7 +288,7 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 #  stripped down
 #
 ###########################################
-FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-bookworm-slim AS run-slim
+FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-trixie-slim AS run-slim
 
 ARG BIN_DEST_FOLDER
 
@@ -309,10 +309,10 @@ ARG KUBENT_VERSION
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
   curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker.gpg  && \
-  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
+  curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.33/deb/Release.key | gpg --dearmor -o /usr/share/keyrings/kubernetes.gpg && \
   curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor -o /usr/share/keyrings/helm.gpg && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list && \
-  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.27/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/kubernetes.gpg] https://pkgs.k8s.io/core:/stable:/v1.33/deb/ /" | tee -a /etc/apt/sources.list.d/kubernetes.list && \
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | tee /etc/apt/sources.list.d/helm-stable-debian.list && \
   apt-get update && \
   apt-get dist-upgrade -y && \
