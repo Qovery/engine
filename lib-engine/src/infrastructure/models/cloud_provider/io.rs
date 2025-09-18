@@ -5,6 +5,7 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     NginxServerSnippet as NginxServerSnippetModel,
 };
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
+use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2AmiModel;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
@@ -32,6 +33,10 @@ fn default_registry_mirroring_mode() -> RegistryMirroringMode {
 
 fn default_nginx_controller_log_format_escaping() -> LogFormatEscaping {
     LogFormatEscaping::Default
+}
+
+fn default_aws_eks_ec2_ami() -> Ec2Ami {
+    Ec2Ami::AmazonLinux2023
 }
 
 #[derive(Deserialize, Serialize)]
@@ -148,6 +153,23 @@ impl NginxLimitRequestStatusCode {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub enum Ec2Ami {
+    AmazonLinux2,
+    AmazonLinux2023,
+    Bottlerocket,
+}
+
+impl Ec2Ami {
+    pub fn to_model(&self) -> Ec2AmiModel {
+        match self {
+            Ec2Ami::AmazonLinux2 => Ec2AmiModel::AmazonLinux2,
+            Ec2Ami::AmazonLinux2023 => Ec2AmiModel::AmazonLinux2023,
+            Ec2Ami::Bottlerocket => Ec2AmiModel::Bottlerocket,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -169,6 +191,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_iam_user_mapper_sso_role_arn: Option<String>,
     #[serde(alias = "aws.eks.ec2.metadata_imds")]
     pub aws_eks_ec2_metadata_imds: AwsEc2MetadataImds,
+    #[serde(alias = "aws.eks.ec2.ami", default = "default_aws_eks_ec2_ami")]
+    pub aws_eks_ec2_ami: Ec2Ami,
     #[serde(alias = "aws.vpc.enable_s3_flow_logs")]
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
@@ -288,6 +312,7 @@ impl Default for ClusterAdvancedSettings {
             aws_iam_user_mapper_sso_role_arn: None,
             cloud_provider_container_registry_tags: HashMap::new(),
             aws_eks_ec2_metadata_imds: AwsEc2MetadataImds::Optional,
+            aws_eks_ec2_ami: Ec2Ami::AmazonLinux2023,
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
             aws_eks_enable_alb_controller: false,

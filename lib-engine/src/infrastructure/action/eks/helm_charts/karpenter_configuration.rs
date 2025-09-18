@@ -6,6 +6,7 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::infrastructure::models::kubernetes::aws::UserNetworkConfig;
 use crate::infrastructure::models::kubernetes::karpenter::{
@@ -25,10 +26,10 @@ pub struct KarpenterConfigurationChart {
     cluster_long_id: String,
     organization_id: String,
     organization_long_id: String,
-    kubernetes_version: KubernetesVersion,
     region: String,
     karpenter_parameters: KarpenterParameters,
     explicit_subnet_ids: Vec<String>,
+    eks_ec2_ami: Ec2Ami,
     pleco_resources_ttl: i32,
 }
 
@@ -46,6 +47,7 @@ impl KarpenterConfigurationChart {
         region: &str,
         karpenter_parameters: KarpenterParameters,
         user_network_config: Option<&UserNetworkConfig>,
+        eks_ec2_ami: Ec2Ami,
         pleco_resources_ttl: i32,
     ) -> Self {
         KarpenterConfigurationChart {
@@ -66,7 +68,6 @@ impl KarpenterConfigurationChart {
             cluster_long_id: cluster_long_id.to_string(),
             organization_id: organization_id.to_string(),
             organization_long_id: organization_long_id.to_string(),
-            kubernetes_version,
             region: region.to_string(),
             karpenter_parameters,
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
@@ -81,6 +82,26 @@ impl KarpenterConfigurationChart {
                 .collect_vec()
             } else {
                 vec![]
+            },
+            // TODO(benjaminch): once 1.33 is fully released, we can remove this override
+            eks_ec2_ami: match eks_ec2_ami {
+                Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
+                Ec2Ami::Bottlerocket => Ec2Ami::Bottlerocket,
+                // Just making sure not to swicth to AmazonLinux2023 for earlier k8s versions avoiding node replacement
+                // AL2023 is the new default
+                Ec2Ami::AmazonLinux2023 => match kubernetes_version {
+                    KubernetesVersion::V1_23 { .. }
+                    | KubernetesVersion::V1_24 { .. }
+                    | KubernetesVersion::V1_25 { .. }
+                    | KubernetesVersion::V1_26 { .. }
+                    | KubernetesVersion::V1_27 { .. }
+                    | KubernetesVersion::V1_28 { .. }
+                    | KubernetesVersion::V1_29 { .. }
+                    | KubernetesVersion::V1_30 { .. }
+                    | KubernetesVersion::V1_31 { .. }
+                    | KubernetesVersion::V1_32 { .. } => Ec2Ami::AmazonLinux2,
+                    KubernetesVersion::V1_33 { .. } => Ec2Ami::AmazonLinux2023,
+                },
             },
             pleco_resources_ttl,
         }
@@ -122,20 +143,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
             ChartSetValue {
                 key: "amiSelectorTermsAlias".to_string(),
-                value: match self.kubernetes_version {
-                    KubernetesVersion::V1_23 { .. }
-                    | KubernetesVersion::V1_24 { .. }
-                    | KubernetesVersion::V1_25 { .. }
-                    | KubernetesVersion::V1_26 { .. }
-                    | KubernetesVersion::V1_27 { .. }
-                    | KubernetesVersion::V1_28 { .. }
-                    | KubernetesVersion::V1_29 { .. }
-                    | KubernetesVersion::V1_30 { .. }
-                    | KubernetesVersion::V1_31 { .. }
-                    | KubernetesVersion::V1_32 { .. } => "al2@latest",
-                    KubernetesVersion::V1_33 { .. } => "al2023@latest",
-                }
-                .to_string(),
+                value: self.eks_ec2_ami.ami_selector_terms_alias().to_string(),
             },
             ChartSetValue {
                 key: "diskSizeInGib".to_string(),
@@ -327,6 +335,7 @@ mod tests {
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
     use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterNodePool, KarpenterNodePoolDisruptionBudget,
         KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
@@ -693,6 +702,7 @@ mod tests {
                 qovery_node_pools,
             },
             None,
+            Ec2Ami::AmazonLinux2023,
             0,
         )
     }
