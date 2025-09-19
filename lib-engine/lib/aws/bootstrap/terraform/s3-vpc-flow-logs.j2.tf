@@ -17,6 +17,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs_lifecycle" {
   rule {
     id = "on_delete_rule"
 
+    filter {
+      prefix = ""
+    }
+
     expiration {
       days = var.vpc_flow_logs_retention_days
     }

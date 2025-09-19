@@ -144,6 +144,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
   bucket = aws_s3_bucket.loki_bucket.id
   rule {
     id = "on_delete_rule"
+    
+    filter {
+      prefix = ""
+    }
 
     expiration {
       days = 1
@@ -164,6 +168,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
   rule {
     id = "CleanLokiLogVersions"
     status = "Enabled"
+    
+    filter {
+      prefix = ""
+    }
 
     noncurrent_version_expiration {
       noncurrent_days = 3
