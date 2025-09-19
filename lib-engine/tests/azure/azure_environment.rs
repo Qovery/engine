@@ -2001,7 +2001,6 @@ fn azure_aks_deploy_terraform_service() {
             terraform_action,
             backend: TerraformBackend {
                 backend_type: TerraformBackendType::Kubernetes,
-                configs: vec![],
             },
             timeout_sec: 300,
             environment_vars_with_infos: Default::default(),

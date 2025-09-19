@@ -96,7 +96,6 @@ pub enum TerraformProvider {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TerraformBackend {
     pub backend_type: TerraformBackendType,
-    pub configs: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -453,15 +452,7 @@ impl TerraformService {
         environment_kube_name: &str,
     ) -> Result<models::terraform_service::TerraformBackend, TerraformServiceError> {
         let configs = match self.backend.backend_type {
-            TerraformBackendType::DefinedInTerraformFile => self
-                .backend
-                .configs
-                .iter()
-                .map(|config| {
-                    models::terraform_service::TerraformBackendConfig::from_str(config)
-                        .map_err(TerraformServiceError::InvalidConfig)
-                })
-                .collect::<Result<Vec<_>, _>>()?,
+            TerraformBackendType::DefinedInTerraformFile => vec![],
             TerraformBackendType::Kubernetes => vec![
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(
                     r#"namespace="{environment_kube_name}""#
