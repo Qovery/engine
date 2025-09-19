@@ -639,8 +639,8 @@ attempt_force_unlock() {
 case "$CMD" in
     "apply")
         run_terraform_init
-        log "terraform validate -no-tests"
-        terraform validate -no-tests
+        log "terraform validate"
+        terraform validate
         log "terraform apply -input=false -auto-approve"
         terraform apply -input=false -auto-approve "$@"
         log "terraform output"
@@ -648,15 +648,15 @@ case "$CMD" in
         ;;
     "plan_only")
         run_terraform_init
-        log  "terraform validate -no-tests"
-        terraform validate -no-tests
+        log  "terraform validate"
+        terraform validate
         log "terraform plan"
         terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@"
         ;;
     "apply_from_plan")
         run_terraform_init
-        log "terraform validate -no-tests"
-        terraform validate -no-tests
+        log "terraform validate"
+        terraform validate
         log "terraform apply -input=false"
         terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
         log "terraform output"
