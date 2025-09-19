@@ -7,12 +7,27 @@ loki:
         kvstore:
           store: inmemory
         replication_factor: 1
-  schema_config:
+  schemaConfig:
     configs:
+      # set the schema for the index (2020 version can be deleted on a fresh install)
       - from: 2020-05-15
         store: boltdb-shipper
-        object_store: filesystem
+        object_store: set-by-engine-code
         schema: v11
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2022-01-11
+        store: boltdb-shipper
+        object_store: set-by-engine-code
+        schema: v12
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2025-10-14
+        store: tsdb
+        object_store: set-by-engine-code
+        schema: v13
         index:
           prefix: index_
           period: 24h

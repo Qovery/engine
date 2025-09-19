@@ -2,12 +2,8 @@
 kubectlImage:
   registry: set-by-engine-code
   repository: set-by-engine-code
-
-tableManager:
-  retention_deletes_enabled: set-by-engine-code # qovery setting
-  retention_period: set-by-engine-code # qovery setting
 loki:
-  podLabels: { }
+  podLabels: {}
   # remove if you don't want to use a custom image
   image:
     registry: set-by-engine-code
@@ -44,8 +40,9 @@ loki:
     reject_old_samples: true
     reject_old_samples_max_age: 168h
     max_concurrent_tail_requests: 100
-    split_queries_by_interval: 15m
+    split_queries_by_interval: 0 # Best performance on single pod
     max_query_lookback: 12w
+    retention_period: set-by-engine-code
   compactor:
     working_directory: /data/retention
     # configure storage provider for the compactor
@@ -54,20 +51,37 @@ loki:
     retention_enabled: set-by-engine-code
     retention_delete_delay: 2h
     retention_delete_worker_count: 150
-  schema_config:
+  query_scheduler:
+    # the TSDB index dispatches many more, but each individually smaller, requests.
+    # We increase the pending request queue sizes to compensate.
+    max_outstanding_requests_per_tenant: 32768
+  querier:
+    # Each `querier` component process runs a number of parallel workers to process queries simultaneously.
+    # You may want to adjust this up or down depending on your resource usage
+    # (more available cpu and memory can tolerate higher values and vice versa),
+    # but we find the most success running at around `16` with tsdb
+    max_concurrent: 16
+  schemaConfig:
     configs:
       # set the schema for the index (2020 version can be deleted on a fresh install)
       - from: 2020-05-15
         store: boltdb-shipper
-        object_store: s3
+        object_store: set-by-engine-code
         schema: v11
         index:
           prefix: index_
           period: 24h
-      - from: 2023-06-01
+      - from: 2022-01-11
         store: boltdb-shipper
-        object_store: s3
+        object_store: set-by-engine-code
         schema: v12
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2025-10-14
+        store: tsdb
+        object_store: set-by-engine-code
+        schema: v13
         index:
           prefix: index_
           period: 24h
@@ -99,6 +113,10 @@ loki:
       shared_store: set-by-engine-code
       resync_interval: 5s
       cache_location: /data/loki/boltdb-cache
+    tsdb_shipper:
+      active_index_directory: /data/loki/tsdb-index
+      shared_store: set-by-engine-code
+      cache_location: /data/loki/tsdb-cache
     azure:
       account_name: set-by-engine-code
       container_name: set-by-engine-code
@@ -140,9 +158,9 @@ singleBinary:
     enabled: false
   extraVolumes:
     - name: data
-      emptyDir: { }
+      emptyDir: {}
     - name: storage
-      emptyDir: { }
+      emptyDir: {}
   extraVolumeMounts:
     - name: data
       mountPath: /data
@@ -154,5 +172,5 @@ singleBinary:
 
 serviceAccount:
   name: null
-  labels: { }
-  annotations: { }
+  labels: {}
+  annotations: {}

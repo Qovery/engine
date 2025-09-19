@@ -205,15 +205,9 @@ impl ToCommonHelmChart for LokiChart {
                         key: "loki.compactor.retention_enabled".to_string(),
                         value: "true".to_string(),
                     },
-                    // Table manager
-                    // todo(pmavro): ensure there is no better options to handle retention:
-                    // https://github.com/grafana/loki/issues/9207, chart is manually overriden
+                    // Logs retention period, table manager will be removed in the future (only used for boltdb-shipper)
                     ChartSetValue {
-                        key: "tableManager.retention_deletes_enabled".to_string(),
-                        value: "true".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "tableManager.retention_period".to_string(),
+                        key: "loki.limits_config.retention_period".to_string(),
                         value: format!("{}w", self.loki_log_retention_in_weeks), // (default 12 week)
                     },
                     // resources limits
@@ -254,15 +248,26 @@ impl ToCommonHelmChart for LokiChart {
                         .to_string(),
                     },
                     ChartSetValue {
-                        key: "loki.compactor.shared_store".to_string(),
+                        key: "loki.storage_config.tsdb_shipper.shared_store".to_string(),
                         value: match &self.loki_object_bucket_configuration {
-                            LokiObjectBucketConfiguration::S3(_) => "aws",
+                            LokiObjectBucketConfiguration::S3(_) => "s3",
                             LokiObjectBucketConfiguration::GCS(_) => "gcs",
                             LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
                             LokiObjectBucketConfiguration::Local => "filesystem",
                         }
                         .to_string(),
                     },
+                    ChartSetValue {
+                        key: "loki.compactor.shared_store".to_string(),
+                        value: match &self.loki_object_bucket_configuration {
+                            LokiObjectBucketConfiguration::S3(_) => "s3",
+                            LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                            LokiObjectBucketConfiguration::Local => "filesystem",
+                        }
+                        .to_string(),
+                    },
+                    // Schema configuration object_store settings
                     ChartSetValue {
                         key: "loki.storage.bucketNames.chunks".to_string(),
                         value: bucket_name.to_string(),
@@ -382,6 +387,29 @@ impl ToCommonHelmChart for LokiChart {
                 false => None,
             },
         };
+
+        // Add schema configuration object_store settings
+        let object_store_value = match &self.loki_object_bucket_configuration {
+            LokiObjectBucketConfiguration::S3(_) => "s3",
+            LokiObjectBucketConfiguration::GCS(_) => "gcs",
+            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+            LokiObjectBucketConfiguration::Local => "filesystem",
+        };
+
+        common_chart.chart_info.values.extend([
+            ChartSetValue {
+                key: "loki.schemaConfig.configs[0].object_store".to_string(),
+                value: object_store_value.to_string(),
+            },
+            ChartSetValue {
+                key: "loki.schemaConfig.configs[1].object_store".to_string(),
+                value: object_store_value.to_string(),
+            },
+            ChartSetValue {
+                key: "loki.schemaConfig.configs[2].object_store".to_string(),
+                value: object_store_value.to_string(),
+            },
+        ]);
 
         // Specific Azure blob storage configuration
         if let LokiObjectBucketConfiguration::BlobStorage(_azure_blob_storage_config) =
