@@ -3560,7 +3560,6 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             terraform_action,
             backend: TerraformBackend {
                 backend_type: TerraformBackendType::Kubernetes,
-                configs: vec![],
             },
             timeout_sec: 300,
             environment_vars_with_infos: Default::default(),
@@ -3717,7 +3716,6 @@ fn build_and_deploy_terraform_service_in_apply_mode_on_aws_eks() {
             terraform_action,
             backend: TerraformBackend {
                 backend_type: TerraformBackendType::Kubernetes,
-                configs: vec![],
             },
             timeout_sec: 300,
             environment_vars_with_infos: btreemap! {
