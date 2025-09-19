@@ -77,7 +77,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
             },
             ChartSetValue {
                 key: "txtPrefix".to_string(),
-                value: format!("qvy-{}-", self.cluster_id),
+                value: "qvy-".to_string(),
             },
         ];
 
