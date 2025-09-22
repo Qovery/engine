@@ -522,6 +522,8 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             });
             modified_environment.applications.push(application);
         }
@@ -622,6 +624,8 @@ fn gcp_gke_deploy_container_with_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -633,6 +637,8 @@ fn gcp_gke_deploy_container_with_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {

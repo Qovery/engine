@@ -175,6 +175,8 @@ fn test_port() -> Port {
         service_name: None,
         namespace: None,
         additional_service: None,
+        path: None,
+        path_rewrite: None,
     }
 }
 

@@ -160,6 +160,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }],
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Tcp { host: None },
@@ -257,6 +259,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }],
                 readiness_probe: Some(Probe {
                     r#type: ProbeType::Http {

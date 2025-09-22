@@ -54,6 +54,9 @@ impl Protocol {
     pub fn is_layer4(&self) -> bool {
         matches!(self, Protocol::TCP | Protocol::UDP)
     }
+    pub fn is_http_layer(&self) -> bool {
+        matches!(self, Protocol::HTTP | Protocol::GRPC)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -67,6 +70,13 @@ pub struct Port {
     pub service_name: Option<String>,
     pub namespace: Option<String>,
     pub additional_service: Option<AdditionalService>,
+
+    // Override the default matching path. It makes sense only for HTTP and GRPC protocols
+    #[serde(default)]
+    pub path: Option<String>,
+    // Rewrite the path. It makes sense only for HTTP and GRPC protocols
+    #[serde(default)]
+    pub path_rewrite: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]

@@ -353,6 +353,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }];
                 app.readiness_probe = Some(Probe {
                     r#type: ProbeType::Tcp { host: None },

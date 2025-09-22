@@ -493,6 +493,8 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             });
             modified_environment.applications.push(application);
         }
@@ -1666,6 +1668,8 @@ fn deploy_container_with_no_router_on_scw() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1677,6 +1681,8 @@ fn deploy_container_with_no_router_on_scw() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -1810,6 +1816,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1821,6 +1829,8 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             storages: vec![],
@@ -1972,6 +1982,8 @@ fn deploy_container_with_router_on_scw() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1983,6 +1995,8 @@ fn deploy_container_with_router_on_scw() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             storages: vec![],
@@ -2760,6 +2774,8 @@ fn deploy_container_with_tcp_public_port() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2771,6 +2787,8 @@ fn deploy_container_with_tcp_public_port() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2782,6 +2800,8 @@ fn deploy_container_with_tcp_public_port() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {

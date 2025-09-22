@@ -343,7 +343,8 @@ fn to_host_data_template(
     if ports.is_empty() {
         return HashMap::new();
     }
-
+    let to_port_path = |port: &Port| -> String { port.path.as_deref().unwrap_or("/").to_string() };
+    let to_path_rewrite = |port: &Port| -> Option<String> { port.path_rewrite.clone() };
     let ports_by_namespace = get_ports_by_namespace(ports);
 
     let mut hosts_per_namespace: HashMap<String, Vec<HostDataTemplate>> =
@@ -351,9 +352,9 @@ fn to_host_data_template(
     for (namespace, ports) in &ports_by_namespace {
         let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
 
-        // Special case for wildcard domains, were we want to create only 2 routes
+        // Special case for wildcard domains, where we want to create only 2 routes
         // 1 for the wildcard domain and 1 for the default domain (*.mydomain.com and mydomain.com)
-        // It impose that there is only 1 public port, as else we cant route to the correct service
+        // It imposes that there is only 1 public port, as else we cant route to the correct service
         let (wildcards_domains, custom_domains): (Vec<&CustomDomain>, Vec<&CustomDomain>) =
             custom_domains.iter().partition(|cd| cd.is_wildcard());
         for wildcard_domain in &wildcards_domains {
@@ -362,6 +363,8 @@ fn to_host_data_template(
                     domain_name: format!("{}.{}", port.name, wildcard_domain.domain_without_wildcard()),
                     service_name: get_service_name(port, service_name),
                     service_port: port.port,
+                    path: to_port_path(port),
+                    path_rewrite: to_path_rewrite(port),
                 });
             }
 
@@ -373,11 +376,15 @@ fn to_host_data_template(
                 domain_name: wildcard_domain.domain.clone(),
                 service_name: get_service_name(port, service_name),
                 service_port: port.port,
+                path: to_port_path(port),
+                path_rewrite: to_path_rewrite(port),
             });
             hosts.push(HostDataTemplate {
                 domain_name: wildcard_domain.domain_without_wildcard().to_string(),
                 service_name: get_service_name(port, service_name),
                 service_port: port.port,
+                path: to_port_path(port),
+                path_rewrite: to_path_rewrite(port),
             });
         }
 
@@ -388,6 +395,8 @@ fn to_host_data_template(
                 domain_name: format!("{}-{}", port.name, default_domain),
                 service_name: get_service_name(port, service_name),
                 service_port: port.port,
+                path: to_port_path(port),
+                path_rewrite: to_path_rewrite(port),
             });
 
             if port.is_default {
@@ -395,6 +404,8 @@ fn to_host_data_template(
                     domain_name: default_domain.to_string(),
                     service_name: get_service_name(port, service_name),
                     service_port: port.port,
+                    path: to_port_path(port),
+                    path_rewrite: to_path_rewrite(port),
                 });
             }
 
@@ -410,6 +421,8 @@ fn to_host_data_template(
                     domain_name: format!("{}{}{}", port.name, separator, custom_domain.domain),
                     service_name: get_service_name(port, service_name),
                     service_port: port.port,
+                    path: to_port_path(port),
+                    path_rewrite: to_path_rewrite(port),
                 });
 
                 if port.is_default {
@@ -417,6 +430,8 @@ fn to_host_data_template(
                         domain_name: custom_domain.domain.clone(),
                         service_name: get_service_name(port, service_name),
                         service_port: port.port,
+                        path: to_port_path(port),
+                        path_rewrite: to_path_rewrite(port),
                     });
                 }
             }
@@ -647,6 +662,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let ports = vec![&port];
 
@@ -665,6 +682,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let ports = vec![&port, &port2];
 
@@ -697,6 +716,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let ports = vec![&port, &port2];
 
@@ -722,6 +743,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let port_grpc = Port {
             long_id: Default::default(),
@@ -733,6 +756,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -750,26 +775,36 @@ mod tests {
             domain_name: "cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "*.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
 
         // If the port is not the default one, there should not be default and wildcard route/host
@@ -782,11 +817,15 @@ mod tests {
             domain_name: "grpc-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
 
         // we mix both wildcard and non wildcard domains
@@ -821,51 +860,71 @@ mod tests {
             domain_name: "grpc-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "*.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "super.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.super.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.super.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
     }
 
@@ -881,6 +940,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "toto.cluster.com".to_string(),
@@ -898,6 +959,8 @@ mod tests {
             domain_name: "http-toto.cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
 
         let namespace = "namespace2";
@@ -909,6 +972,58 @@ mod tests {
             domain_name: "http.toto.cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
+        }));
+    }
+
+    #[test]
+    pub fn test_ingress_host_template_with_path_rewrite() {
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http-1".to_string(),
+            publicly_accessible: true,
+            port: 80,
+            is_default: false,
+            protocol: Protocol::HTTP,
+            service_name: None,
+            namespace: None,
+            additional_service: None,
+            path: None,
+            path_rewrite: None,
+        };
+        let port_http_with_path_rewrite = Port {
+            long_id: Default::default(),
+            name: "http-2".to_string(),
+            publicly_accessible: true,
+            port: 8080,
+            is_default: false,
+            protocol: Protocol::HTTP,
+            service_name: None,
+            namespace: None,
+            additional_service: None,
+            path: Some("/toto".to_string()),
+            path_rewrite: Some("/titi".to_string()),
+        };
+
+        let namespace = "env_namespace";
+        let ret = to_host_data_template(
+            "srv",
+            &[&port_http, &port_http_with_path_rewrite],
+            "cluster.com",
+            &[],
+            "cluster.com",
+            namespace,
+        );
+        assert_eq!(ret.len(), 1);
+        let host_data = ret.get(namespace).unwrap();
+        assert_eq!(host_data.len(), 2);
+        assert!(host_data.contains(&HostDataTemplate {
+            domain_name: "http-2-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+            path: "/toto".to_string(),
+            path_rewrite: Some("/titi".to_string()),
         }));
     }
 
@@ -924,6 +1039,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let port_http_with_service_name = Port {
             long_id: Default::default(),
@@ -935,6 +1052,8 @@ mod tests {
             service_name: Some("service1".to_string()),
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -959,21 +1078,29 @@ mod tests {
             domain_name: "http-1.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-1-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2.toto.mydomain.com".to_string(),
             service_name: "service1".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2-cluster.com".to_string(),
             service_name: "service1".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
     }
 
@@ -989,6 +1116,8 @@ mod tests {
             service_name: None,
             namespace: None,
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let port_http_with_service_name = Port {
             long_id: Default::default(),
@@ -1000,6 +1129,8 @@ mod tests {
             service_name: Some("service1".to_string()),
             namespace: Some("namespace1".to_string()),
             additional_service: None,
+            path: None,
+            path_rewrite: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -1024,11 +1155,15 @@ mod tests {
             domain_name: "http-1.toto.mydomain.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-1-cluster.com".to_string(),
             service_name: "srv".to_string(),
             service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         let host_data = ret.get("namespace1").unwrap();
         assert_eq!(host_data.len(), 2);
@@ -1036,11 +1171,15 @@ mod tests {
             domain_name: "http-2.toto.mydomain.com".to_string(),
             service_name: "service1".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2-cluster.com".to_string(),
             service_name: "service1".to_string(),
             service_port: 8080,
+            path: "/".to_string(),
+            path_rewrite: None,
         }));
     }
 
@@ -1058,6 +1197,8 @@ mod tests {
             additional_service: Some(crate::io_models::application::AdditionalService {
                 selectors: btreemap![ "a".to_string() => "b".to_string()],
             }),
+            path: None,
+            path_rewrite: None,
         };
 
         let ret = to_additional_services(vec![&port_http]);
