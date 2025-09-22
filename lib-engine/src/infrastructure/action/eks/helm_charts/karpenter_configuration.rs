@@ -28,6 +28,7 @@ pub struct KarpenterConfigurationChart {
     organization_long_id: String,
     region: String,
     karpenter_parameters: KarpenterParameters,
+    kubernetes_version: KubernetesVersion,
     explicit_subnet_ids: Vec<String>,
     eks_ec2_ami: Ec2Ami,
     pleco_resources_ttl: i32,
@@ -69,6 +70,7 @@ impl KarpenterConfigurationChart {
             organization_id: organization_id.to_string(),
             organization_long_id: organization_long_id.to_string(),
             region: region.to_string(),
+            kubernetes_version: kubernetes_version.clone(),
             karpenter_parameters,
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
                 [
@@ -87,7 +89,7 @@ impl KarpenterConfigurationChart {
             eks_ec2_ami: match eks_ec2_ami {
                 Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
                 Ec2Ami::Bottlerocket => Ec2Ami::Bottlerocket,
-                // Just making sure not to swicth to AmazonLinux2023 for earlier k8s versions avoiding node replacement
+                // Just making sure not to switch to AmazonLinux2023 for earlier k8s versions avoiding node replacement
                 // AL2023 is the new default
                 Ec2Ami::AmazonLinux2023 => match kubernetes_version {
                     KubernetesVersion::V1_23 { .. }
@@ -144,6 +146,12 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             ChartSetValue {
                 key: "amiSelectorTermsAlias".to_string(),
                 value: self.eks_ec2_ami.ami_selector_terms_alias().to_string(),
+            },
+            ChartSetValue {
+                key: "gpuAmiSelectorTermsName".to_string(),
+                value: self
+                    .eks_ec2_ami
+                    .ami_selector_terms_name(&self.kubernetes_version, None, true),
             },
             ChartSetValue {
                 key: "kubernetesVersion".to_string(),

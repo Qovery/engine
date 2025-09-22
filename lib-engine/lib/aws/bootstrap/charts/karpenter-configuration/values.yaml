@@ -12,6 +12,7 @@ capacity_type: []
 explicitSubnetIds: []
 
 amiSelectorTermsAlias: ""
+gpuAmiSelectorTermsName: ""
 kubernetesVersion: ""
 
 tags:

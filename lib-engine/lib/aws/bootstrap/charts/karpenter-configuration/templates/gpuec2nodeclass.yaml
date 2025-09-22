@@ -8,7 +8,7 @@ spec:
   metadataOptions:
     httpPutResponseHopLimit: 2
   amiSelectorTerms:
-    - name: "amazon-eks-node-al2023-*-nvidia-{{ .Values.kubernetesVersion }}*"
+    - name: "{{ .Values.gpuAmiSelectorTermsName }}"
       requirements:
         - key: karpenter.k8s.aws/instance-gpu-count
           operator: Exists
