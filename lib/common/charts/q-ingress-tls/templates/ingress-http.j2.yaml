@@ -1,5 +1,6 @@
 {% for namespace_key, http_hosts in http_hosts_per_namespace %}
 {%- if http_hosts|length >= 1  %}
+{%- set path_rewrite = http_hosts|map(attribute="path_rewrite")|first %}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -25,6 +26,10 @@ metadata:
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {%- if path_rewrite != "" %}
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
+    {%- endif %}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
@@ -124,8 +129,8 @@ spec:
     - host: "{{ host.domain_name }}"
       http:
         paths:
-        - path: "/"
-          pathType: Prefix
+        - path: "{{ host.path }}"
+          pathType: ImplementationSpecific
           backend:
             service:
               name: "{{ host.service_name }}"

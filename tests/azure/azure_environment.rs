@@ -547,6 +547,8 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             });
             modified_environment.applications.push(application);
         }
@@ -661,6 +663,8 @@ fn azure_aks_deploy_container_with_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -672,6 +676,8 @@ fn azure_aks_deploy_container_with_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -849,6 +855,8 @@ fn azure_aks_deploy_container_with_storages() {
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             }],
             readiness_probe: Some(Probe {
                 r#type: ProbeType::Tcp { host: None },
@@ -1010,6 +1018,8 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1021,6 +1031,8 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -1178,6 +1190,8 @@ fn azure_aks_deploy_container_without_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -1189,6 +1203,8 @@ fn azure_aks_deploy_container_without_router() {
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
             readiness_probe: Some(Probe {
@@ -2791,6 +2807,8 @@ fn azure_aks_deploy_helm_chart_with_router() {
                     namespace: None,
                     service_name: Some("inner-namespace-service1".to_string()),
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
                 Port {
                     long_id: Uuid::new_v4(),
@@ -2802,6 +2820,8 @@ fn azure_aks_deploy_helm_chart_with_router() {
                     namespace: Some(extra_namespace.clone()),
                     service_name: Some("outside-namespace-service2".to_string()),
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 },
             ],
         }];

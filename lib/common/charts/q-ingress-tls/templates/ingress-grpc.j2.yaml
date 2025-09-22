@@ -1,5 +1,6 @@
 {% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
 {%- if grpc_hosts|length >= 1  %}
+{%- set path_rewrite = grpc_hosts|map(attribute="path_rewrite")|first %}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -27,6 +28,10 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
+    {%- if path_rewrite != "" %}
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
+    {%- endif %}
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
     {%- if advanced_settings.network_ingress_sticky_session_enable == true %}
     # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
@@ -117,8 +122,8 @@ spec:
     - host: "{{ host.domain_name }}"
       http:
         paths:
-        - path: "/"
-          pathType: Prefix
+        - path: "{{ host.path }}"
+          pathType: ImplementationSpecific
           backend:
             service:
               name: "{{ host.service_name }}"

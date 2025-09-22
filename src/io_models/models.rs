@@ -105,6 +105,8 @@ pub struct HostDataTemplate {
     pub domain_name: String,
     pub service_name: String,
     pub service_port: u16,
+    pub path: String,
+    pub path_rewrite: Option<String>,
 }
 
 pub struct Route {

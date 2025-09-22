@@ -265,6 +265,8 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }],
                 cpu_request_in_milli: 100,
                 cpu_limit_in_milli: 100,
@@ -333,6 +335,8 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }],
                 cpu_request_in_milli: 100,
                 cpu_limit_in_milli: 100,
@@ -405,6 +409,8 @@ pub fn environment_3_apps_3_databases(
                     service_name: None,
                     namespace: None,
                     additional_service: None,
+                    path: None,
+                    path_rewrite: None,
                 }],
                 cpu_request_in_milli: 100,
                 cpu_limit_in_milli: 100,
@@ -796,6 +802,8 @@ pub fn test_db(
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             }];
             app.dockerfile_path = match db_kind {
                 // to be able to support outdated container image versions, we jump to a higher version
@@ -1478,6 +1486,8 @@ pub fn test_db_on_upgrade(
                 service_name: None,
                 namespace: None,
                 additional_service: None,
+                path: None,
+                path_rewrite: None,
             }];
             app.dockerfile_path = Some(format!("Dockerfile-{version}"));
             app.environment_vars_with_infos = db_infos.app_env_vars.clone();
