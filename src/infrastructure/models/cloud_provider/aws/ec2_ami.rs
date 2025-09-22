@@ -1,3 +1,4 @@
+use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::io_models::models::CpuArchitecture;
 use std::fmt::{Display, Formatter};
 
@@ -25,6 +26,42 @@ impl Ec2Ami {
             Ec2Ami::AmazonLinux2 => "al2@latest",
             Ec2Ami::AmazonLinux2023 => "al2023@latest",
             Ec2Ami::Bottlerocket => "bottlerocket@latest",
+        }
+    }
+
+    pub fn ami_selector_terms_name(
+        &self,
+        kubernetes_versions: &KubernetesVersion,
+        arch: Option<CpuArchitecture>,
+        gpu: bool,
+    ) -> String {
+        let flavor = match gpu {
+            true => "nvidia",
+            false => "standard",
+        };
+
+        match (self, arch) {
+            (Ec2Ami::AmazonLinux2, None) => format!("amazon-eks-node-*-{flavor}-{kubernetes_versions}*"),
+            (Ec2Ami::AmazonLinux2, Some(CpuArchitecture::AMD64)) => {
+                format!("amazon-eks-node-x86_64-{flavor}-{kubernetes_versions}*")
+            }
+            (Ec2Ami::AmazonLinux2, Some(CpuArchitecture::ARM64)) => {
+                format!("amazon-eks-node-arm64-{flavor}-{kubernetes_versions}*")
+            }
+            (Ec2Ami::AmazonLinux2023, None) => format!("amazon-eks-node-al2023-*-{flavor}-{kubernetes_versions}*"),
+            (Ec2Ami::AmazonLinux2023, Some(CpuArchitecture::AMD64)) => {
+                format!("amazon-eks-node-al2023-x86_64-{flavor}-{kubernetes_versions}*")
+            }
+            (Ec2Ami::AmazonLinux2023, Some(CpuArchitecture::ARM64)) => {
+                format!("amazon-eks-node-al2023-arm64-{flavor}-{kubernetes_versions}*")
+            }
+            (Ec2Ami::Bottlerocket, None) => format!("bottlerocket-aws-k8s-{kubernetes_versions}-{flavor}-*"),
+            (Ec2Ami::Bottlerocket, Some(CpuArchitecture::AMD64)) => {
+                format!("bottlerocket-aws-k8s-{kubernetes_versions}-{flavor}-x86_64-*")
+            }
+            (Ec2Ami::Bottlerocket, Some(CpuArchitecture::ARM64)) => {
+                format!("bottlerocket-aws-k8s-{kubernetes_versions}-{flavor}-aarch64-*")
+            }
         }
     }
 }
@@ -81,5 +118,53 @@ mod tests {
 
         let ami = Ec2Ami::Bottlerocket;
         assert_eq!(ami.to_string(), "Bottlerocket");
+    }
+
+    const K8S_TEST_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
+        prefix: None,
+        patch: None,
+        suffix: None,
+    };
+
+    #[test]
+    fn test_ami_selector_terms_name_amazon_linux2_none_arch_standard() {
+        let ami = Ec2Ami::AmazonLinux2;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, None, false);
+        assert_eq!(result, "amazon-eks-node-*-standard-1.33*");
+    }
+
+    #[test]
+    fn test_ami_selector_terms_name_amazon_linux2_x86_64_nvidia() {
+        let ami = Ec2Ami::AmazonLinux2;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, Some(CpuArchitecture::AMD64), true);
+        assert_eq!(result, "amazon-eks-node-x86_64-nvidia-1.33*");
+    }
+
+    #[test]
+    fn test_ami_selector_terms_name_amazon_linux2023_arm64_standard() {
+        let ami = Ec2Ami::AmazonLinux2023;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, Some(CpuArchitecture::ARM64), false);
+        assert_eq!(result, "amazon-eks-node-al2023-arm64-standard-1.33*");
+    }
+
+    #[test]
+    fn test_ami_selector_terms_name_bottlerocket_none_arch_nvidia() {
+        let ami = Ec2Ami::Bottlerocket;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, None, true);
+        assert_eq!(result, "bottlerocket-aws-k8s-1.33-nvidia-*");
+    }
+
+    #[test]
+    fn test_ami_selector_terms_name_bottlerocket_x86_64_standard() {
+        let ami = Ec2Ami::Bottlerocket;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, Some(CpuArchitecture::AMD64), false);
+        assert_eq!(result, "bottlerocket-aws-k8s-1.33-standard-x86_64-*");
+    }
+
+    #[test]
+    fn test_ami_selector_terms_name_bottlerocket_arm64_nvidia() {
+        let ami = Ec2Ami::Bottlerocket;
+        let result = ami.ami_selector_terms_name(&K8S_TEST_VERSION, Some(CpuArchitecture::ARM64), true);
+        assert_eq!(result, "bottlerocket-aws-k8s-1.33-nvidia-aarch64-*");
     }
 }
