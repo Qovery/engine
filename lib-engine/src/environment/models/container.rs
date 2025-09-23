@@ -97,7 +97,7 @@ pub fn to_public_l4_ports<'a>(
     public_domain: &str,
 ) -> Option<PublicL4Ports> {
     let ports: Vec<Port> = ports
-        .filter(|p| p.publicly_accessible && p.protocol == protocol)
+        .filter(|p| p.is_public() && p.protocol.protocol() == protocol)
         .cloned()
         .collect();
     if ports.is_empty() {
@@ -217,7 +217,7 @@ impl<T: CloudProvider> Container<T> {
     }
 
     fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
-        self.ports.iter().filter(|port| port.publicly_accessible)
+        self.ports.iter().filter(|port| port.is_public())
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {

@@ -279,12 +279,12 @@ impl<T: CloudProvider> Router<T> {
 
         let http_ports: Vec<&Port> = ports
             .iter()
-            .filter(|port| port.protocol == Protocol::HTTP)
+            .filter(|port| port.protocol.protocol() == Protocol::HTTP)
             .cloned()
             .collect();
         let grpc_ports: Vec<&Port> = ports
             .iter()
-            .filter(|port| port.protocol == Protocol::GRPC)
+            .filter(|port| port.protocol.protocol() == Protocol::GRPC)
             .cloned()
             .collect();
         let cluster_domain = target.dns_provider.domain().to_string();
@@ -344,8 +344,8 @@ fn to_host_data_template(
     if ports.is_empty() {
         return HashMap::new();
     }
-    let to_port_path = |port: &Port| -> String { port.path.as_deref().unwrap_or("/").to_string() };
-    let to_path_rewrite = |port: &Port| -> Option<String> { port.path_rewrite.clone() };
+    let to_port_path = |port: &Port| -> String { port.public_path().expect("port should be public here").to_string() };
+    let to_path_rewrite = |port: &Port| -> Option<String> { port.public_path_rewrite().map(|p| p.to_string()) };
     let ports_by_namespace = get_ports_by_namespace(ports);
 
     let mut hosts_per_namespace: HashMap<String, Vec<HostDataTemplate>> =
