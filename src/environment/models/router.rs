@@ -618,8 +618,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::to_additional_services;
+    use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{generate_certificate_alternative_names, to_host_data_template};
-    use crate::io_models::application::{PortIo, Protocol};
+
     use crate::io_models::models::{
         CustomDomain, CustomDomainDataTemplate, HostDataTemplate, KubeService, KubeServicePort,
     };
@@ -648,23 +649,25 @@ mod tests {
             },
         ];
 
-        let ports: Vec<&PortIo> = vec![];
+        let ports: Vec<&Port> = vec![];
 
         let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
         assert_eq!(certificate_names.len(), 0);
 
-        let port = PortIo {
+        let port = Port {
             long_id: Default::default(),
             name: "http".to_string(),
-            publicly_accessible: true,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
             port: 80,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
         };
         let ports = vec![&port];
 
@@ -673,18 +676,20 @@ mod tests {
         assert_eq!(certificate_names.len(), 1);
         assert_eq!(certificate_names[0].domain, "toto.com");
 
-        let port2 = PortIo {
+        let port2 = Port {
             long_id: Default::default(),
             name: "grpc".to_string(),
-            publicly_accessible: true,
             port: 8080,
             is_default: false,
-            protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
         let ports = vec![&port, &port2];
 
@@ -707,18 +712,20 @@ mod tests {
             generate_certificate: true,
             use_cdn: true,
         }];
-        let port2 = PortIo {
+        let port2 = Port {
             long_id: Default::default(),
             name: "grpc".to_string(),
-            publicly_accessible: true,
+            protocol: PortProtocol::GRPC {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
             port: 8080,
             is_default: false,
-            protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
         };
         let ports = vec![&port, &port2];
 
@@ -734,31 +741,35 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_wildcard() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http".to_string(),
-            publicly_accessible: true,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
             port: 80,
             is_default: true,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
         };
-        let port_grpc = PortIo {
+        let port_grpc = Port {
             long_id: Default::default(),
             name: "grpc".to_string(),
-            publicly_accessible: true,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
             port: 8080,
             is_default: false,
-            protocol: Protocol::GRPC,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -931,18 +942,20 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_custom_domain_managed_by_cluster() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http".to_string(),
-            publicly_accessible: true,
             port: 80,
             is_default: true,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
         let custom_domains = vec![CustomDomain {
             domain: "toto.cluster.com".to_string(),
@@ -980,31 +993,35 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_path_rewrite() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http-1".to_string(),
-            publicly_accessible: true,
             port: 80,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
-        let port_http_with_path_rewrite = PortIo {
+        let port_http_with_path_rewrite = Port {
             long_id: Default::default(),
             name: "http-2".to_string(),
-            publicly_accessible: true,
             port: 8080,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: Some("/toto".to_string()),
-            path_rewrite: Some("/titi".to_string()),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/toto".to_string(),
+                    path_rewrite: Some("/titi".to_string()),
+                }),
+            },
         };
 
         let namespace = "env_namespace";
@@ -1030,31 +1047,35 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_service_name_defined_in_port() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http-1".to_string(),
-            publicly_accessible: true,
             port: 80,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
-        let port_http_with_service_name = PortIo {
+        let port_http_with_service_name = Port {
             long_id: Default::default(),
             name: "http-2".to_string(),
-            publicly_accessible: true,
             port: 8080,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: Some("service1".to_string()),
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -1107,31 +1128,35 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_service_name_and_namespace_defined_in_port() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http-1".to_string(),
-            publicly_accessible: true,
             port: 80,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: None,
             namespace: None,
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
-        let port_http_with_service_name = PortIo {
+        let port_http_with_service_name = Port {
             long_id: Default::default(),
             name: "http-2".to_string(),
-            publicly_accessible: true,
             port: 8080,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: Some("service1".to_string()),
             namespace: Some("namespace1".to_string()),
             additional_service: None,
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -1186,20 +1211,22 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_additional_service_defined_in_port() {
-        let port_http = PortIo {
+        let port_http = Port {
             long_id: Default::default(),
             name: "http-1".to_string(),
-            publicly_accessible: true,
             port: 80,
             is_default: false,
-            protocol: Protocol::HTTP,
             service_name: Some("a service".to_string()),
             namespace: Some("a namespace".to_string()),
             additional_service: Some(crate::io_models::application::AdditionalService {
                 selectors: btreemap![ "a".to_string() => "b".to_string()],
             }),
-            path: None,
-            path_rewrite: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
         };
 
         let ret = to_additional_services(vec![&port_http]);
