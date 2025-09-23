@@ -12,7 +12,9 @@ use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{
+    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::io_models::terraform_service::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
@@ -55,6 +57,8 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) cpu_limit: KubernetesCpuResourceUnit,
     pub(crate) ram_request: KubernetesMemoryResourceUnit,
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
+    pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
+    pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
     pub(crate) persistent_storage: PersistentStorage,
     pub(crate) environment_variables: HashMap<String, VariableInfo>,
     pub(crate) extra_action_arguments: BTreeMap<String, Vec<String>>,
@@ -73,10 +77,12 @@ impl<T: CloudProvider> TerraformService<T> {
         name: String,
         kube_name: String,
         action: Action,
-        cpu_request_in_milli: u32,
-        cpu_limit_in_milli: u32,
-        ram_request_in_mib: u32,
-        ram_limit_in_mib: u32,
+        cpu_request: KubernetesCpuResourceUnit,
+        cpu_limit: KubernetesCpuResourceUnit,
+        ram_request: KubernetesMemoryResourceUnit,
+        ram_limit: KubernetesMemoryResourceUnit,
+        gpu_request: Option<KubernetesGpuResourceUnit>,
+        gpu_limit: Option<KubernetesGpuResourceUnit>,
         persistent_storage: PersistentStorage,
         build: Build,
         root_module_path: PathBuf,
@@ -125,10 +131,12 @@ impl<T: CloudProvider> TerraformService<T> {
             backend,
             terraform_action,
             timeout,
-            cpu_request: KubernetesCpuResourceUnit::MilliCpu(cpu_request_in_milli),
-            cpu_limit: KubernetesCpuResourceUnit::MilliCpu(cpu_limit_in_milli),
-            ram_request: KubernetesMemoryResourceUnit::MebiByte(ram_request_in_mib),
-            ram_limit: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
+            cpu_request,
+            cpu_limit,
+            ram_request,
+            ram_limit,
+            gpu_request,
+            gpu_limit,
             persistent_storage,
             environment_variables,
             extra_action_arguments,
@@ -245,6 +253,8 @@ impl<T: CloudProvider> TerraformService<T> {
                 cpu_limit_in_milli: self.cpu_limit.to_string(),
                 ram_request_in_mib: self.ram_request.to_string(),
                 ram_limit_in_mib: self.ram_limit.to_string(),
+                gpu_request: self.gpu_request.map(u32::from),
+                gpu_limit: self.gpu_limit.map(u32::from),
                 // max_nb_restart: self.max_nb_restart,
                 // max_duration_in_sec: self.max_duration.as_secs(),
                 persistence_size_in_gib: self.persistent_storage.size_in_gib.to_string(),
@@ -514,6 +524,8 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) cpu_limit_in_milli: String,
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
+    pub(crate) gpu_request: Option<u32>,
+    pub(crate) gpu_limit: Option<u32>,
     pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
     pub(crate) entrypoint: String,
     pub(crate) command_args: Vec<String>,

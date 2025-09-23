@@ -3581,6 +3581,8 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             persistent_storage: PersistentStorage {
                 storage_class: "aws-ebs-gp2-0".to_string(),
                 size_in_gib: 1,
@@ -3738,6 +3740,8 @@ fn build_and_deploy_terraform_service_in_apply_mode_on_aws_eks() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             persistent_storage: PersistentStorage {
                 storage_class: "aws-ebs-gp2-0".to_string(),
                 size_in_gib: 1,

@@ -742,6 +742,8 @@ fn gcp_gke_deploy_terraform_service() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             persistent_storage: PersistentStorage {
                 storage_class: "gcp-pd-ssd".to_string(),
                 size_in_gib: 1,
