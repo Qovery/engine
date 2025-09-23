@@ -20,7 +20,7 @@ use qovery_engine::infrastructure::models::cloud_provider::azure::locations::Azu
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
-use qovery_engine::io_models::application::{Port, Protocol, Storage};
+use qovery_engine::io_models::application::{PortIo, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{HelmChart, HelmChartSource, HelmRawValues, HelmValueSource};
@@ -537,7 +537,7 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
         }
 
         for mut application in environment.applications.into_iter() {
-            application.ports.push(Port {
+            application.ports.push(PortIo {
                 long_id: Uuid::new_v4(),
                 port: 5050,
                 is_default: false,
@@ -653,7 +653,7 @@ fn azure_aks_deploy_container_with_router() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
@@ -666,7 +666,7 @@ fn azure_aks_deploy_container_with_router() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -845,7 +845,7 @@ fn azure_aks_deploy_container_with_storages() {
             min_instances: 1,
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
-            ports: vec![Port {
+            ports: vec![PortIo {
                 long_id: Uuid::new_v4(),
                 port: 8080,
                 is_default: true,
@@ -1008,7 +1008,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -1021,7 +1021,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -1180,7 +1180,7 @@ fn azure_aks_deploy_container_without_router() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
@@ -1193,7 +1193,7 @@ fn azure_aks_deploy_container_without_router() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -2797,7 +2797,7 @@ fn azure_aks_deploy_helm_chart_with_router() {
             environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
@@ -2810,7 +2810,7 @@ fn azure_aks_deploy_helm_chart_with_router() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,

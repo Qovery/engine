@@ -17,6 +17,7 @@ use crate::environment::models::application::{ApplicationError, ApplicationServi
 use crate::environment::models::aws::AwsAppExtraSettings;
 use crate::environment::models::azure::AzureAppExtraSettings;
 use crate::environment::models::gcp::GcpAppExtraSettings;
+use crate::environment::models::port::Port;
 use crate::environment::models::scaleway::ScwAppExtraSettings;
 use crate::environment::models::selfmanaged::OnPremiseAppExtraSettings;
 use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
@@ -60,7 +61,7 @@ impl Protocol {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Port {
+pub struct PortIo {
     pub long_id: Uuid,
     pub port: u16,
     pub is_default: bool,
@@ -77,6 +78,12 @@ pub struct Port {
     // Rewrite the path. It makes sense only for HTTP and GRPC protocols
     #[serde(default)]
     pub path_rewrite: Option<String>,
+}
+
+impl PortIo {
+    pub fn to_port_domain(&self) -> Port {
+        Port::from(self.clone())
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -338,7 +345,7 @@ pub struct Application {
     #[serde(default = "default_root_path_value")]
     pub root_path: String,
     pub public_domain: String,
-    pub ports: Vec<Port>,
+    pub ports: Vec<PortIo>,
     pub cpu_request_in_milli: u32,
     pub cpu_limit_in_milli: u32,
     pub ram_request_in_mib: u32,
@@ -409,7 +416,7 @@ impl Application {
                     self.name.as_str(),
                     self.kube_name,
                     self.public_domain,
-                    self.ports,
+                    self.ports.iter().map(PortIo::to_port_domain).collect(),
                     self.min_instances,
                     self.max_instances,
                     build,
@@ -442,7 +449,7 @@ impl Application {
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.min_instances,
                 self.max_instances,
                 build,
@@ -474,7 +481,7 @@ impl Application {
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.min_instances,
                 self.max_instances,
                 build,
@@ -506,7 +513,7 @@ impl Application {
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.min_instances,
                 self.max_instances,
                 build,
@@ -538,7 +545,7 @@ impl Application {
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.min_instances,
                 self.max_instances,
                 build,

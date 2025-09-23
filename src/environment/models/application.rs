@@ -25,8 +25,8 @@ use crate::infrastructure::models::cloud_provider::service::{
     Action, Service, ServiceType, get_service_statefulset_name_and_volumes,
 };
 use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::application::ApplicationAdvancedSettings;
 use crate::io_models::application::Protocol::{TCP, UDP};
-use crate::io_models::application::{ApplicationAdvancedSettings, Port};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
@@ -416,6 +416,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use crate::environment::models::port::Port;
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use tera::Context as TeraContext;
 

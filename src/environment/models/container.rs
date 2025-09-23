@@ -27,8 +27,8 @@ use crate::infrastructure::models::cloud_provider::service::{
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
+use crate::io_models::application::Protocol;
 use crate::io_models::application::Protocol::{TCP, UDP};
-use crate::io_models::application::{Port, Protocol};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -443,6 +443,7 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use crate::environment::models::port::Port;
 use tera::Context as TeraContext;
 
 impl<T: CloudProvider> ToTeraContext for Container<T> {

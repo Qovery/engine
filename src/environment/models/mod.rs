@@ -13,6 +13,7 @@ pub mod helm_chart;
 pub mod job;
 pub mod kubernetes;
 mod labels_group;
+pub mod port;
 pub mod probe;
 pub mod registry_image_source;
 pub mod router;

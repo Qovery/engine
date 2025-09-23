@@ -13,7 +13,7 @@ use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRe
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
 use qovery_engine::io_models::application::Protocol::HTTP;
-use qovery_engine::io_models::application::{Port, Protocol};
+use qovery_engine::io_models::application::{PortIo, Protocol};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
@@ -512,7 +512,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
         }
 
         for mut application in environment.applications.into_iter() {
-            application.ports.push(Port {
+            application.ports.push(PortIo {
                 long_id: Uuid::new_v4(),
                 port: 5050,
                 is_default: false,
@@ -614,7 +614,7 @@ fn gcp_gke_deploy_container_with_router() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
@@ -627,7 +627,7 @@ fn gcp_gke_deploy_container_with_router() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,

@@ -1,6 +1,7 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
+use crate::environment::models::port::Port;
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::types::ToTeraContext;
 use crate::errors::EngineError;
@@ -9,7 +10,7 @@ use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType, default_tera_context};
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{Port, Protocol};
+use crate::io_models::application::Protocol;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
@@ -618,7 +619,7 @@ where
 mod tests {
     use super::to_additional_services;
     use crate::environment::models::router::{generate_certificate_alternative_names, to_host_data_template};
-    use crate::io_models::application::{Port, Protocol};
+    use crate::io_models::application::{PortIo, Protocol};
     use crate::io_models::models::{
         CustomDomain, CustomDomainDataTemplate, HostDataTemplate, KubeService, KubeServicePort,
     };
@@ -647,12 +648,12 @@ mod tests {
             },
         ];
 
-        let ports: Vec<&Port> = vec![];
+        let ports: Vec<&PortIo> = vec![];
 
         let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
         assert_eq!(certificate_names.len(), 0);
 
-        let port = Port {
+        let port = PortIo {
             long_id: Default::default(),
             name: "http".to_string(),
             publicly_accessible: true,
@@ -672,7 +673,7 @@ mod tests {
         assert_eq!(certificate_names.len(), 1);
         assert_eq!(certificate_names[0].domain, "toto.com");
 
-        let port2 = Port {
+        let port2 = PortIo {
             long_id: Default::default(),
             name: "grpc".to_string(),
             publicly_accessible: true,
@@ -706,7 +707,7 @@ mod tests {
             generate_certificate: true,
             use_cdn: true,
         }];
-        let port2 = Port {
+        let port2 = PortIo {
             long_id: Default::default(),
             name: "grpc".to_string(),
             publicly_accessible: true,
@@ -733,7 +734,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_wildcard() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http".to_string(),
             publicly_accessible: true,
@@ -746,7 +747,7 @@ mod tests {
             path: None,
             path_rewrite: None,
         };
-        let port_grpc = Port {
+        let port_grpc = PortIo {
             long_id: Default::default(),
             name: "grpc".to_string(),
             publicly_accessible: true,
@@ -930,7 +931,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_custom_domain_managed_by_cluster() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http".to_string(),
             publicly_accessible: true,
@@ -979,7 +980,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_path_rewrite() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http-1".to_string(),
             publicly_accessible: true,
@@ -992,7 +993,7 @@ mod tests {
             path: None,
             path_rewrite: None,
         };
-        let port_http_with_path_rewrite = Port {
+        let port_http_with_path_rewrite = PortIo {
             long_id: Default::default(),
             name: "http-2".to_string(),
             publicly_accessible: true,
@@ -1029,7 +1030,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_service_name_defined_in_port() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http-1".to_string(),
             publicly_accessible: true,
@@ -1042,7 +1043,7 @@ mod tests {
             path: None,
             path_rewrite: None,
         };
-        let port_http_with_service_name = Port {
+        let port_http_with_service_name = PortIo {
             long_id: Default::default(),
             name: "http-2".to_string(),
             publicly_accessible: true,
@@ -1106,7 +1107,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_service_name_and_namespace_defined_in_port() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http-1".to_string(),
             publicly_accessible: true,
@@ -1119,7 +1120,7 @@ mod tests {
             path: None,
             path_rewrite: None,
         };
-        let port_http_with_service_name = Port {
+        let port_http_with_service_name = PortIo {
             long_id: Default::default(),
             name: "http-2".to_string(),
             publicly_accessible: true,
@@ -1185,7 +1186,7 @@ mod tests {
 
     #[test]
     pub fn test_ingress_host_template_with_additional_service_defined_in_port() {
-        let port_http = Port {
+        let port_http = PortIo {
             long_id: Default::default(),
             name: "http-1".to_string(),
             publicly_accessible: true,

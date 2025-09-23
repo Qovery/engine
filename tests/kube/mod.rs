@@ -8,7 +8,7 @@ use chrono::Utc;
 use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::Kind::Aws;
-use qovery_engine::io_models::application::{Application, Port, Protocol, Storage};
+use qovery_engine::io_models::application::{Application, PortIo, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -150,7 +150,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 min_instances: 1,
                 max_instances: 1,
                 public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -249,7 +249,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 environment_vars_with_infos: BTreeMap::default(),
                 branch: "basic-app-deploy".to_string(),
                 public_domain: format!("{}.{}", application_id, infra_ctx.dns_provider().domain()),
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 80,
                     is_default: true,

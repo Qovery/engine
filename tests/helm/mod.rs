@@ -10,6 +10,7 @@ use qovery_engine::environment::models::container::Container;
 use qovery_engine::environment::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
 use qovery_engine::environment::models::environment::Environment;
 use qovery_engine::environment::models::job::{ImageSource, Job};
+use qovery_engine::environment::models::port::Port;
 use qovery_engine::environment::models::probe::{Probe, ProbeType};
 use qovery_engine::environment::models::registry_image_source::RegistryImageSource;
 use qovery_engine::environment::models::router::{Router, RouterAdvancedSettings};
@@ -29,7 +30,7 @@ use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, Deplo
 use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
 use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
-use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Port, Protocol};
+use qovery_engine::io_models::application::{ApplicationAdvancedSettings, Protocol};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions, DiskIOPS};
 use qovery_engine::io_models::engine_location::EngineLocation;

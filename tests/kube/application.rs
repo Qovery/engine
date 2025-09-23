@@ -14,6 +14,7 @@ use qovery_engine::environment::models::types::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
+use qovery_engine::io_models::application::PortIo;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
@@ -78,7 +79,7 @@ fn should_increase_app_storage_size() {
             resized_app.name.as_str(),
             resized_app.name.clone(),
             resized_app.public_domain.clone(),
-            resized_app.ports.clone(),
+            resized_app.ports.iter().map(PortIo::to_port_domain).collect(),
             resized_app.min_instances,
             resized_app.max_instances,
             resized_app.to_build(

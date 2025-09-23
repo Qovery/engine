@@ -16,7 +16,7 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, azure_container_registry};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{Port, Storage, to_environment_variable};
+use crate::io_models::application::{PortIo, Storage, to_environment_variable};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -413,7 +413,7 @@ pub struct Container {
     pub min_instances: u32,
     pub max_instances: u32,
     pub public_domain: String,
-    pub ports: Vec<Port>,
+    pub ports: Vec<PortIo>,
     pub storages: Vec<Storage>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
@@ -486,7 +486,7 @@ impl Container {
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
@@ -517,7 +517,7 @@ impl Container {
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
@@ -548,7 +548,7 @@ impl Container {
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
@@ -579,7 +579,7 @@ impl Container {
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files
@@ -610,7 +610,7 @@ impl Container {
                 self.min_instances,
                 self.max_instances,
                 self.public_domain,
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
                 self.mounted_files

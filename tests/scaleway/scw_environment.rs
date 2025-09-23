@@ -10,7 +10,7 @@ use crate::helpers::utilities::{get_pvc, is_pod_restarted_env};
 use ::function_name::named;
 use bstr::ByteSlice;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Port, Protocol, Storage};
+use qovery_engine::io_models::application::{PortIo, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::Engine;
@@ -483,7 +483,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         }
 
         for mut application in environment.applications.into_iter() {
-            application.ports.push(Port {
+            application.ports.push(PortIo {
                 long_id: Uuid::new_v4(),
                 port: 5050,
                 is_default: false,
@@ -1658,7 +1658,7 @@ fn deploy_container_with_no_router_on_scw() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     name: "http".to_string(),
@@ -1671,7 +1671,7 @@ fn deploy_container_with_no_router_on_scw() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     name: "grpc".to_string(),
@@ -1806,7 +1806,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     name: "http".to_string(),
@@ -1819,7 +1819,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     name: "grpc".to_string(),
@@ -1972,7 +1972,7 @@ fn deploy_container_with_router_on_scw() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     name: "http".to_string(),
@@ -1985,7 +1985,7 @@ fn deploy_container_with_router_on_scw() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     name: "grpc".to_string(),
@@ -2764,7 +2764,7 @@ fn deploy_container_with_tcp_public_port() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 443,
                     is_default: true,
@@ -2777,7 +2777,7 @@ fn deploy_container_with_tcp_public_port() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 5432,
                     is_default: false,
@@ -2790,7 +2790,7 @@ fn deploy_container_with_tcp_public_port() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: false,
