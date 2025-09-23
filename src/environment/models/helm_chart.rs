@@ -125,7 +125,7 @@ impl<T: CloudProvider> HelmChart<T> {
     }
 
     fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
-        self.ports.iter().filter(|port| port.publicly_accessible)
+        self.ports.iter().filter(|port| port.is_public())
     }
 
     pub fn helm_selector(&self) -> Option<String> {

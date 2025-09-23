@@ -168,7 +168,7 @@ impl<T: CloudProvider> Application<T> {
     }
 
     fn public_ports(&self) -> impl Iterator<Item = &Port> + '_ {
-        self.ports.iter().filter(|port| port.publicly_accessible)
+        self.ports.iter().filter(|port| port.is_public())
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
