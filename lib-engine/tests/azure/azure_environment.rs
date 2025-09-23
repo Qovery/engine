@@ -2010,6 +2010,8 @@ fn azure_aks_deploy_terraform_service() {
             cpu_limit_in_milli: 100,
             ram_request_in_mib: 256,
             ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
             persistent_storage: PersistentStorage {
                 storage_class: AzureStorageType::StandardSSDZRS.to_k8s_storage_class(),
                 size_in_gib: 1,
