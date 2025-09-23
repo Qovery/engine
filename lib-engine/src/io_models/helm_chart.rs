@@ -12,7 +12,7 @@ use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::kubernetes;
-use crate::io_models::application::{GitCredentials, Port};
+use crate::io_models::application::{GitCredentials, PortIo};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
@@ -192,7 +192,7 @@ pub struct HelmChart {
     #[serde(default = "default_environment_vars_with_info")]
     pub environment_vars_with_infos: BTreeMap<String, VariableInfo>,
     pub advanced_settings: HelmChartAdvancedSettings,
-    pub ports: Vec<Port>,
+    pub ports: Vec<PortIo>,
 }
 
 impl HelmChart {
@@ -306,7 +306,7 @@ impl HelmChart {
                     self.advanced_settings,
                     AwsAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
-                    self.ports,
+                    self.ports.iter().map(PortIo::to_port_domain).collect(),
                 )?)
             }
             kubernetes::Kind::ScwKapsule | kubernetes::Kind::ScwSelfManaged => {
@@ -333,7 +333,7 @@ impl HelmChart {
                     self.advanced_settings,
                     ScwAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
-                    self.ports,
+                    self.ports.iter().map(PortIo::to_port_domain).collect(),
                 )?)
             }
             kubernetes::Kind::Gke | kubernetes::Kind::GkeSelfManaged => {
@@ -360,7 +360,7 @@ impl HelmChart {
                     self.advanced_settings,
                     GcpAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
-                    self.ports,
+                    self.ports.iter().map(PortIo::to_port_domain).collect(),
                 )?)
             }
             kubernetes::Kind::Aks | kubernetes::Kind::AksSelfManaged => {
@@ -387,7 +387,7 @@ impl HelmChart {
                     self.advanced_settings,
                     AzureAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
-                    self.ports,
+                    self.ports.iter().map(PortIo::to_port_domain).collect(),
                 )?)
             }
             kubernetes::Kind::OnPremiseSelfManaged => Box::new(models::helm_chart::HelmChart::<OnPremise>::new(
@@ -413,7 +413,7 @@ impl HelmChart {
                 self.advanced_settings,
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),
-                self.ports,
+                self.ports.iter().map(PortIo::to_port_domain).collect(),
             )?),
         };
 

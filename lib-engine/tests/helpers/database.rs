@@ -20,7 +20,7 @@ use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use qovery_engine::io_models::engine_location::EngineLocation;
 
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
-use qovery_engine::io_models::application::{Application, Port, Protocol};
+use qovery_engine::io_models::application::{Application, PortIo, Protocol};
 use qovery_engine::io_models::context::{CloneForTest, Context};
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
@@ -255,7 +255,7 @@ pub fn environment_3_apps_3_databases(
                 },
                 mounted_files: vec![],
                 public_domain: format!("{app_id}.example.com"),
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -325,7 +325,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_PASSWORD".to_string() => VariableInfo {value:general_purpose::STANDARD.encode(database_password.clone()), is_secret: false },
                 },
                 mounted_files: vec![],
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -399,7 +399,7 @@ pub fn environment_3_apps_3_databases(
                 },
                 mounted_files: vec![],
                 public_domain: format!("{app_id}.example.com"),
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -792,7 +792,7 @@ pub fn test_db(
             app.name = app_name.to_string();
             app.branch.clone_from(&branch);
             app.commit_id.clone_from(&db_infos.app_commit);
-            app.ports = vec![Port {
+            app.ports = vec![PortIo {
                 long_id: Default::default(),
                 port: 1234,
                 is_default: true,
@@ -1476,7 +1476,7 @@ pub fn test_db_on_upgrade(
             app.name = to_short_id(&app_id);
             app.branch.clone_from(&app_name);
             app.commit_id.clone_from(&db_infos.app_commit);
-            app.ports = vec![Port {
+            app.ports = vec![PortIo {
                 long_id: Default::default(),
                 port: 1234,
                 is_default: true,

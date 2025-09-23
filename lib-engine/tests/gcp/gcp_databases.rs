@@ -16,7 +16,7 @@ use function_name::named;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::cloud_provider::{Kind as ProviderKind, Kind};
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
-use qovery_engine::io_models::application::{Port, Protocol};
+use qovery_engine::io_models::application::{PortIo, Protocol};
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::database::DatabaseMode::{CONTAINER, MANAGED};
 use qovery_engine::io_models::database::{Database, DatabaseKind, DatabaseMode};
@@ -343,7 +343,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             .map(|mut app| {
                 app.branch.clone_from(&app_name);
                 app.commit_id = "5990752647af11ef21c3d46a51abbde3da1ab351".to_string();
-                app.ports = vec![Port {
+                app.ports = vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     name: "p1234".to_string(),

@@ -4,7 +4,7 @@ use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, Port, Protocol};
+use qovery_engine::io_models::application::{Application, ApplicationAdvancedSettings, PortIo, Protocol};
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;
 use qovery_engine::io_models::database::{Database, DatabaseKind};
@@ -65,7 +65,7 @@ pub fn working_environment(
             environment_vars_with_infos: BTreeMap::default(),
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
-            ports: vec![Port {
+            ports: vec![PortIo {
                 long_id: Default::default(),
                 port: 80,
                 is_default: true,
@@ -309,7 +309,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
                 mounted_files: vec![],
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -381,7 +381,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 },
                 mounted_files: vec![],
                 public_domain: format!("{application_id2}.{test_domain}"),
-                ports: vec![Port {
+                ports: vec![PortIo {
                     long_id: Default::default(),
                     port: 1234,
                     is_default: true,
@@ -521,7 +521,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             mounted_files: vec![],
             branch: "echo-app".to_string(),
             public_domain: format!("{application_id}.{test_domain}"),
-            ports: vec![Port {
+            ports: vec![PortIo {
                 long_id: Default::default(),
                 port: 5678,
                 is_default: true,
@@ -639,7 +639,7 @@ pub fn environment_only_http_server(
             mounted_files: vec![],
             branch: "main".to_string(),
             public_domain: format!("{application_id}.{test_domain}"),
-            ports: vec![Port {
+            ports: vec![PortIo {
                 long_id: Default::default(),
                 port: 80,
                 is_default: true,

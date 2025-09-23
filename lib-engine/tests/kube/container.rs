@@ -15,6 +15,7 @@ use qovery_engine::environment::models::types::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
 use qovery_engine::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
+use qovery_engine::io_models::application::PortIo;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, Storage,
@@ -93,7 +94,7 @@ fn should_increase_container_storage_size() {
             resized_container.min_instances,
             resized_container.max_instances,
             resized_container.public_domain.clone(),
-            resized_container.ports.clone(),
+            resized_container.ports.iter().map(PortIo::to_port_domain).collect(),
             storages,
             envs,
             BTreeSet::default(),

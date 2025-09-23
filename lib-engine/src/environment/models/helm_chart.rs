@@ -1,9 +1,9 @@
 use crate::environment::action::DeploymentAction;
+use crate::environment::models::port::Port;
 use crate::environment::models::types::CloudProvider;
 use crate::events::{EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::{Build, Credentials, SshKey};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
-use crate::io_models::application::Port;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmRawValues};

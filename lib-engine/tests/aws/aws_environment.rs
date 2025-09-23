@@ -13,7 +13,7 @@ use kube::api::{DeleteParams, ListParams};
 use kube::{Api, ResourceExt};
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
-use qovery_engine::io_models::application::{Port, Protocol, Storage};
+use qovery_engine::io_models::application::{PortIo, Protocol, Storage};
 
 use crate::helpers::kubernetes::TargetCluster;
 use base64::Engine;
@@ -656,7 +656,7 @@ fn deploy_a_working_environment_with_custom_domain_and_disable_check_on_custom_d
         }
 
         for mut application in environment.applications.into_iter() {
-            application.ports.push(Port {
+            application.ports.push(PortIo {
                 long_id: Uuid::new_v4(),
                 port: 5050,
                 is_default: false,
@@ -1646,7 +1646,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -1659,7 +1659,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -1879,7 +1879,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -1892,7 +1892,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -2021,7 +2021,7 @@ fn deploy_container_with_storages_on_aws_eks() {
             min_instances: 1,
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
-            ports: vec![Port {
+            ports: vec![PortIo {
                 long_id: Uuid::new_v4(),
                 port: 8080,
                 is_default: true,
@@ -2172,7 +2172,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -2185,7 +2185,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -2337,7 +2337,7 @@ fn deploy_container_with_router_on_aws_eks() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 80,
                     is_default: true,
@@ -2350,7 +2350,7 @@ fn deploy_container_with_router_on_aws_eks() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -3331,7 +3331,7 @@ fn test_restart_deployment() {
             max_instances: 2,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -3344,7 +3344,7 @@ fn test_restart_deployment() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -3482,7 +3482,7 @@ fn test_restart_statefulset() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: true,
@@ -3495,7 +3495,7 @@ fn test_restart_statefulset() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8081,
                     is_default: false,
@@ -4236,7 +4236,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             max_instances: 1,
             public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: tcp_port,
                     is_default: true,
@@ -4249,7 +4249,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 5432,
                     is_default: false,
@@ -4262,7 +4262,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: udp_port,
                     is_default: false,
@@ -4890,7 +4890,7 @@ fn deploy_helm_chart_with_router() {
             environment_vars_with_infos: btreemap! { "TOTO".to_string() => VariableInfo {value: "Salut".to_string(), is_secret: false} },
             advanced_settings: Default::default(),
             ports: vec![
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
@@ -4903,7 +4903,7 @@ fn deploy_helm_chart_with_router() {
                     path: None,
                     path_rewrite: None,
                 },
-                Port {
+                PortIo {
                     long_id: Uuid::new_v4(),
                     port: 8080,
                     is_default: false,
