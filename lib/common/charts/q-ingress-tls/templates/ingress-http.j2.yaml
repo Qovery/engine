@@ -95,6 +95,8 @@ metadata:
       send_timeout "{{ advanced_settings.network_ingress_send_timeout_seconds }}s";
       keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
       keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
+      set $qovery_com_environment_id "{{ environment_long_id }}";
+      set $qovery_com_associated_service_id "{{ associated_service_long_id }}";
 
       {%- if advanced_settings.network_ingress_add_headers %}
       {%- for key, value in advanced_settings.network_ingress_add_headers %}

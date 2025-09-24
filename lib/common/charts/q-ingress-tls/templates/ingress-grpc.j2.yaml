@@ -88,6 +88,8 @@ metadata:
 
     {%- if advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
     nginx.ingress.kubernetes.io/configuration-snippet: |
+      set $qovery_com_environment_id "{{ environment_long_id }}";
+      set $qovery_com_associated_service_id "{{ associated_service_long_id }}";
       {%- if nginx_ingress_controller_configuration_snippet %}
       {{ nginx_ingress_controller_configuration_snippet | indent(prefix="      ") }}
       {%- endif %}
