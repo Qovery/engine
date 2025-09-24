@@ -471,8 +471,8 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
-use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::environment::models::port::Port;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use tera::Context as TeraContext;
 
 impl<T: CloudProvider> ToTeraContext for Container<T> {
