@@ -1437,7 +1437,9 @@ pub async fn kube_create_namespace_if_not_exists(
     namespace_name: &str,
     labels: BTreeMap<String, String>,
 ) -> Result<(), Error> {
-    let ns_api = Api::all(kube.clone());
+    let ns_api: Api<Namespace> = Api::all(kube.clone());
+
+    // Target namespace object (reused for create)
     let namespace = Namespace {
         metadata: ObjectMeta {
             name: Some(namespace_name.to_string()),
@@ -1448,33 +1450,44 @@ pub async fn kube_create_namespace_if_not_exists(
         status: None,
     };
 
-    // create namespace with retry in case of error
-    // with GCP clusters, we had some issue with namespace creation calls that were failing
-    // retry if we have such error
-    for attempt in 0..3 {
-        match ns_api.create(&PostParams::default(), &namespace).await {
-            Ok(_) => break,
-            // namespace already exists
-            Err(Error::Api(api_err)) if api_err.code == 409 => break,
-            // retry on error
-            Err(Error::Api(_)) if attempt < 2 => {
-                tokio::time::sleep(Duration::from_secs(attempt + 1)).await;
-                continue;
+    // 1) Try GET first: most common case (namespace already exists)
+    match ns_api.get(namespace_name).await {
+        Ok(existing) => {
+            // Patch labels only if they differ (idempotent)
+            if existing.metadata.labels.as_ref() != Some(&labels) {
+                let patch = json!({ "metadata": { "labels": labels }});
+                ns_api
+                    .patch(namespace_name, &PatchParams::default(), &Patch::Merge(&patch))
+                    .await?;
             }
-            Err(e) => return Err(e),
+            return Ok(());
+        }
+        Err(Error::Api(api_err)) if api_err.code == 404 => {
+            // Namespace does not exist → will try CREATE with retry
+        }
+        Err(e) => {
+            // Any other GET error (network, auth, etc.)
+            return Err(e);
         }
     }
 
-    // We patch the labels to make sure they are up to date
-    let patch_labels = json!({
-        "metadata": {
-            "labels": labels
+    // 2) CREATE with exponential backoff
+    const MAX_ATTEMPTS: u32 = 5; // 1 attempt + 4 retries
+    for attempt in 0..MAX_ATTEMPTS {
+        match ns_api.create(&PostParams::default(), &namespace).await {
+            Ok(_) => break,                                           // Created
+            Err(Error::Api(api_err)) if api_err.code == 409 => break, // Already exists
+            Err(e) => {
+                if attempt + 1 == MAX_ATTEMPTS {
+                    return Err(e);
+                }
+                // Backoff: 1s, 2s, 4s, 8s...
+                let base = 2u64.pow(attempt);
+                tokio::time::sleep(Duration::from_secs(base)).await;
+                continue;
+            }
         }
-    });
-    ns_api
-        .patch(namespace_name, &PatchParams::default(), &Patch::Merge(patch_labels))
-        .await?;
-
+    }
     Ok(())
 }
 
