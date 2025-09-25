@@ -841,7 +841,7 @@ pub fn test_mongodb_configuration(
 fn mongodb_disk_resize() {
     test_deploy_an_environment_with_db_and_resize_disk(
         DatabaseKind::Mongodb,
-        "4.4",
+        "8.0",
         function_name!(),
         KubernetesKind::Eks,
     )
@@ -849,6 +849,7 @@ fn mongodb_disk_resize() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.2"]
 #[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, KubernetesKind::Eks, false);
@@ -857,13 +858,14 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
+#[ignore = "Bitnami support dropped for MongoDB 4.2"]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.4"]
 #[test]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, false);
@@ -871,14 +873,15 @@ fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.4"]
 #[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 5.0"]
 #[test]
 fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
@@ -886,14 +889,15 @@ fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 5.0"]
 #[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v5_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 6.0"]
 #[test]
 fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
@@ -901,8 +905,8 @@ fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 6.0"]
 #[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
@@ -1167,6 +1171,7 @@ fn redis_disk_resize() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for Redis 5.0"]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, false);
@@ -1174,8 +1179,8 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for Redis 5.0"]
 #[test]
-#[ignore = "Save up AWS quotas `RulesPerSecurityGroupLimitExceeded: The maximum number of rules per security group has been reached.`. Testing public only on latest version."]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
