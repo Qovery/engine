@@ -837,6 +837,7 @@ fn test_mongodb_configuration(version: &str, test_name: &str, database_mode: Dat
 // development environment
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.2"]
 #[test]
 fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, false);
@@ -844,46 +845,47 @@ fn private_mongodb_v4_2_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.2"]
 #[test]
-#[ignore]
 fn public_mongodb_v4_2_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.2", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.4"]
 #[test]
-#[ignore]
 fn private_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 4.4"]
 #[test]
-#[ignore]
 fn public_mongodb_v4_4_deploy_a_working_dev_environment() {
     test_mongodb_configuration("4.4", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 5.0"]
 #[test]
-#[ignore]
 fn private_mongodb_v5_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("5.0", function_name!(), CONTAINER, false);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 5.0"]
 #[test]
-#[ignore]
 fn public_mongodb_v5_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("5.0", function_name!(), CONTAINER, true);
 }
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 6.0"]
 #[test]
 fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, false);
@@ -891,6 +893,7 @@ fn private_mongodb_v6_0_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for MongoDB 6.0"]
 #[test]
 fn public_mongodb_v6_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("6.0", function_name!(), CONTAINER, true);
@@ -1075,6 +1078,7 @@ fn test_redis_configuration(version: &str, test_name: &str, database_mode: Datab
 // Redis self-hosted environment
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for Redis 5.0"]
 #[test]
 fn private_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, false);
@@ -1082,8 +1086,8 @@ fn private_redis_v5_deploy_a_working_dev_environment() {
 
 #[cfg(feature = "test-scw-self-hosted")]
 #[named]
+#[ignore = "Bitnami support dropped for Redis 5.0"]
 #[test]
-#[ignore]
 fn public_redis_v5_deploy_a_working_dev_environment() {
     test_redis_configuration("5.0", function_name!(), CONTAINER, true);
 }

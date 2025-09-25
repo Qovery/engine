@@ -205,7 +205,7 @@ pub fn environment_3_apps_3_databases(
     let database_uri_mongo = format!(
         "mongodb://{database_username_mongo}:{database_password_mongo}@{database_host_mongo}:{database_port_mongo}/{database_db_name_mongo}"
     );
-    let version_mongo = "4.4";
+    let version_mongo = "8.0";
 
     // pSQL 1 management part
     let fqdn = get_svc_name(DatabaseKind::Postgresql, provider_kind.clone()).to_string();
