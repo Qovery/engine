@@ -3,6 +3,7 @@ use serde_derive::Serialize;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type")]
 pub enum PortProtocol {
     TCP { public: bool },
     UDP { public: bool },

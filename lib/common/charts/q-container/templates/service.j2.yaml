@@ -23,7 +23,7 @@ spec:
   type: ClusterIP
   ports:
     {%- for port in service.ports %}
-    - protocol: {% if port.protocol == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
+    - protocol: {% if port.protocol.type == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
       name: "p{{ port.port }}"
       port: {{ port.port }}
       targetPort: {{ port.port }}
@@ -64,7 +64,7 @@ spec:
   externalTrafficPolicy: Local
   ports:
     {%- for port in l4_ports.ports %}
-    - protocol: {{ port.protocol }}
+    - protocol: {{ port.protocol.type }}
       name: "p{{ port.port }}"
       port: {{ port.port }}
       targetPort: {{ port.port }}
