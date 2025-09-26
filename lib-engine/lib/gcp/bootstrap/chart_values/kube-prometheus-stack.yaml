@@ -177,3 +177,54 @@ prometheus-node-exporter:
   prometheus:
     monitor:
       enabled: false
+
+additionalPrometheusRules:
+  - name: nginx.rules
+    groups:
+      - name: nginx-quantiles
+        interval: 30s
+        rules:
+          - record: nginx:request_duration:rate5m
+            expr: sum by (le, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m]))
+          - record: nginx:request_p50:5m
+            expr: histogram_quantile(0.5, nginx:request_duration:rate5m)
+          - record: nginx:request_p95:5m
+            expr: histogram_quantile(0.95, nginx:request_duration:rate5m)
+          - record: nginx:request_p99:5m
+            expr: histogram_quantile(0.99, nginx:request_duration:rate5m)
+
+  - name: nginx.core
+    groups:
+      - name: nginx-requests-rates
+        interval: 30s
+        rules:
+          - record: nginx:req_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_status
+            expr: sum by (ingress, status) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_path_status
+            expr: sum by (ingress, path, status) (rate(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-requests-increase
+        interval: 5m
+        rules:
+          - record: nginx:req_inc:5m
+            expr: sum by (ingress) (increase(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_inc:5m_by_status
+            expr: sum by (ingress, status) (increase(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-sizes
+        interval: 30s
+        rules:
+          - record: nginx:req_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_request_size_sum[5m]))
+          - record: nginx:resp_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_response_size_sum[5m]))
+
+          - record: nginx:req_size_avg_bytes:5m
+            expr: nginx:req_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
+          - record: nginx:resp_size_avg_bytes:5m
+            expr: nginx:resp_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
