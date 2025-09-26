@@ -32,7 +32,10 @@ pub struct QoveryClusterAgentChart {
 }
 
 // temporary lust for testing
-pub const AUTHORIZED_CLUSTER_SLICE: &[Uuid] = &[uuid!("3f50657b-1162-4dde-b706-4d5e937f3c09")];
+pub const AUTHORIZED_ORGANIZATION_SLICE: &[Uuid] = &[
+    uuid!("460616f0-94da-4d35-b631-6fa4ed08eb9a"), // QOVERY TEST AWS
+    uuid!("3d542888-3d2c-474a-b1ad-712556db66da"), // Q SANDBOX
+];
 
 impl QoveryClusterAgentChart {
     pub fn new(
@@ -169,8 +172,8 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     },
                     ChartSetValue {
                         key: "admissionController.deploymentIdInjection.enabled".to_string(),
-                        value: AUTHORIZED_CLUSTER_SLICE
-                            .contains(&self.cluster_id.to_uuid())
+                        value: AUTHORIZED_ORGANIZATION_SLICE
+                            .contains(&self.organization_id.to_uuid())
                             .to_string(),
                     },
                 ],
