@@ -1,16 +1,69 @@
 # Here is the gitlab CI config for the Qovery Engine
 # You can find the kind of instance you can set per job here: https://www.notion.so/qovery/Gitlab-CI-f50907ac7a6b4990a973222250e92111
 image: public.ecr.aws/r3m4q3r9/qovery-ci:engine-2025-07-23T14-29-18
+
 variables:
   GIT_SUBMODULE_STRATEGY: recursive
-  DOCKER_HOST: tcp://localhost:2375
-  DOCKER_BUILDKIT: 1
-  DOCKER_TLS_CERTDIR: ""
   WORKSPACE_ROOT_DIR: $CI_PROJECT_DIR
   GIT_DEPTH: 10
+  # Make Cargo cache paths predictable inside the project workspace
+  CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
 
-services:
-  - docker:dind
+default:
+  interruptible: true
+  retry:
+    max: 1
+    when:
+      - runner_system_failure
+      - api_failure
+
+# ------------ Templates (DRY) ------------ #
+
+# Start Docker-in-Docker only when needed
+.needs-docker:
+  services: [docker:dind]
+  variables:
+    DOCKER_HOST: tcp://localhost:2375
+    DOCKER_BUILDKIT: "1"
+    DOCKER_TLS_CERTDIR: ""
+    AWS_EC2_METADATA_DISABLED: "true"
+
+# Reusable Cargo cache for Rust builds/tests
+.cargo-cache:
+  cache: []
+#  cache:
+#    key: cargo-${CI_COMMIT_REF_SLUG}
+#    paths:
+#      - target/
+#      - .cargo/.crates.toml
+#      - .cargo/.crates2.json
+#      - .cargo/bin/
+#      - .cargo/registry/index/
+#      - .cargo/registry/cache/
+#      - .cargo/git/db/
+
+# Reusable artifacts (JUnit + useful logs)
+.with-artifacts:
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
+    paths:
+      - $CI_PROJECT_DIR/gitlab-log-utilities
+      - $CI_PROJECT_DIR/.qovery-workspace
+    expire_in: 2 weeks
+
+# Factorized buildx init/login/teardown + dind
+.buildx:
+  extends: [.needs-docker]
+  before_script:
+    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 30 ${IMAGE_ARCH}
+    - ci_helper docker_login_public_prod_ecr
+    - ci_helper docker_login_private_prod_ecr
+  after_script:
+    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
+
+# ----------------------------------------- #
 
 stages:
   - build-and-lint
@@ -29,6 +82,7 @@ stages:
 
 build-and-lint-code:
   stage: build-and-lint
+  extends: [.cargo-cache]
   retry: 0
   script:
     - ./helper.sh cargo_version
@@ -41,10 +95,10 @@ build-and-lint-code:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
-  interruptible: true
 
 unit-tests:
   stage: build-and-lint
+  extends: [.cargo-cache, .with-artifacts]
   retry: 0
   script:
     - ./helper.sh unit_tests
@@ -55,18 +109,10 @@ unit-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
 
 build-engine-ci-image:
   stage: build-and-lint
+  extends: [.needs-docker]
   retry: 0
   before_script:
     - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 4 20
@@ -81,7 +127,6 @@ build-engine-ci-image:
       --push .
   tags:
     - vm-1cpu-1gmem-0g
-  interruptible: true
   when: manual
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -89,18 +134,13 @@ build-engine-ci-image:
 
 release-image:
   stage: build-and-lint
+  extends: [.buildx]
   retry: 0
-  before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 30 ${IMAGE_ARCH}
-    - ci_helper docker_login_public_prod_ecr
-    - ci_helper docker_login_private_prod_ecr
-  after_script:
-    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx build --platform=linux/${IMAGE_ARCH}
-      --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
-      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-'${IMAGE_ARCH}
+      --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-${IMAGE_ARCH}"
+      --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-${IMAGE_ARCH}"
       --target=run
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}
       --build-arg CI_SCCACHE_REDIS_ENDPOINT=${CI_SCCACHE_REDIS_ENDPOINT}
@@ -112,7 +152,6 @@ release-image:
       - IMAGE_ARCH: [amd64, arm64]
   tags:
     - vm-1cpu-1gmem-0g
-  interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
@@ -123,18 +162,13 @@ release-image:
 
 release-image-slim:
   stage: build-and-lint
+  extends: [.buildx]
   retry: 0
-  before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 8 30 ${IMAGE_ARCH}
-    - ci_helper docker_login_public_prod_ecr
-    - ci_helper docker_login_private_prod_ecr
-  after_script:
-    - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx build --platform=linux/${IMAGE_ARCH}
-      --cache-from 'type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
-      --cache-to 'type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-'${IMAGE_ARCH}
+      --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-${IMAGE_ARCH}"
+      --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-${IMAGE_ARCH}"
       --target=run-slim
       --build-arg CI_SCCACHE_REDIS_ENDPOINT=${CI_SCCACHE_REDIS_ENDPOINT}
       --build-arg CI_SCCACHE_REDIS_PASSWORD=${CI_SCCACHE_REDIS_PASSWORD}
@@ -142,12 +176,9 @@ release-image-slim:
       --push .
   parallel:
     matrix:
-      - IMAGE_ARCH:
-          - amd64
-          - arm64
+      - IMAGE_ARCH: [amd64, arm64]
   tags:
     - vm-1cpu-1gmem-0g
-  interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
@@ -155,22 +186,6 @@ release-image-slim:
     - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
       when: always
       allow_failure: false
-
-#gitguardian:
-#  stage: build-and-lint
-#  image: gitguardian/ggshield:latest
-#  retry: 0
-#  when: always
-#  only:
-#    - merge_requests
-#    - main
-#  before_script:
-#    - git config --global --add safe.directory $CI_PROJECT_DIR
-#  script: ggshield secret scan ci
-#  interruptible: true
-#  # BM machine because ggshield does not support ARM64
-#  tags:
-#    - bm-250mcpu-1gmem-0g
 
 #################
 # MINIMAL TESTS #
@@ -184,13 +199,13 @@ check-pr-labels-is-set:
   when: always
   tags:
     - vm-250mcpu-1gmem-0g
-  interruptible: true
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
 
 azure-minimal-tests:
   stage: minimal-tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -203,18 +218,10 @@ azure-minimal-tests:
     - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
 
 scw-minimal-tests:
   stage: minimal-tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -227,19 +234,11 @@ scw-minimal-tests:
     - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
   allow_failure: true # SCW issues with registry
 
 aws-minimal-tests:
   stage: minimal-tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -252,18 +251,10 @@ aws-minimal-tests:
     - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
 
 gcp-minimal-tests:
   stage: minimal-tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -276,18 +267,10 @@ gcp-minimal-tests:
     - vm-3cpu-12gmem-0g
   dependencies:
     - build-and-lint-code
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 1 week
-  interruptible: true
 
 infra-without-cloud-providers:
   stage: minimal-tests
+  extends: [.needs-docker, .with-artifacts]
   before_script:
     - ci_helper await_docker_socket
   script:
@@ -298,15 +281,6 @@ infra-without-cloud-providers:
     - build-and-lint-code
   tags:
     - bm-7cpu-20gmem-0g
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
   retry: 2 # because of docker rate exceeded error
 
 #########
@@ -315,6 +289,7 @@ infra-without-cloud-providers:
 
 azure-infra:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   script:
@@ -330,18 +305,10 @@ azure-infra:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 azure-infra-upgrade:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   when: manual
@@ -358,18 +325,10 @@ azure-infra-upgrade:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 azure-managed-services:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -385,18 +344,10 @@ azure-managed-services:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 azure-self-hosted:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -412,18 +363,10 @@ azure-self-hosted:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 azure-whole-enchilada:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -440,19 +383,11 @@ azure-whole-enchilada:
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
   when: manual
 
 aws-infra:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   script:
@@ -468,18 +403,10 @@ aws-infra:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-infra-arm:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   script:
@@ -495,18 +422,10 @@ aws-infra-arm:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-infra-karpenter:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   script:
@@ -522,18 +441,10 @@ aws-infra-karpenter:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-infra-nat-gateway:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   script:
@@ -549,18 +460,10 @@ aws-infra-nat-gateway:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-infra-upgrade:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 0
   timeout: 4 hours
   when: manual
@@ -577,18 +480,10 @@ aws-infra-upgrade:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-managed-services:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -604,18 +499,10 @@ aws-managed-services:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-self-hosted:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -631,18 +518,10 @@ aws-self-hosted:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 aws-whole-enchilada:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -659,45 +538,11 @@ aws-whole-enchilada:
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
   when: manual
-
-#aws-ec2-whole-enchilada:
-#  stage: tests
-#  retry: 0
-#  timeout: 4 hours
-#  script:
-#    - ./helper.sh aws_ec2_whole_enchilada
-#  dependencies:
-#    - build-and-lint-code
-#  tags:
-#    - vm-2cpu-4gmem-0g
-#  only:
-#    refs:
-#      - merge_requests
-#    variables:
-#      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-#      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-#  artifacts:
-#    when: always
-#    reports:
-#      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-#    paths:
-#      - $CI_PROJECT_DIR/gitlab-log-utilities
-#      - $CI_PROJECT_DIR/.qovery-workspace
-#    expire_in: 2 week
-#  interruptible: true
 
 scw-infra:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -713,18 +558,10 @@ scw-infra:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 scw-infra-upgrade:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -741,18 +578,10 @@ scw-infra-upgrade:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 scw-managed-services:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -768,18 +597,11 @@ scw-managed-services:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
+  allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
 
 scw-self-hosted:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -795,19 +617,11 @@ scw-self-hosted:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-  allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
+  allow_failure: true # SCW issues with registry
 
 scw-whole-enchilada:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -824,20 +638,12 @@ scw-whole-enchilada:
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
-  allow_failure: true # SCW issues with registry
+  allow_failure: true
   when: manual
 
 gcp-infra:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -853,18 +659,10 @@ gcp-infra:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 gcp-infra-upgrade:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -881,18 +679,10 @@ gcp-infra-upgrade:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 gcp-managed-services:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   script:
@@ -908,18 +698,10 @@ gcp-managed-services:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 gcp-self-hosted:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -935,18 +717,10 @@ gcp-self-hosted:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
 
 gcp-whole-enchilada:
   stage: tests
+  extends: [.needs-docker, .with-artifacts]
   retry: 1
   timeout: 4 hours
   script:
@@ -963,15 +737,6 @@ gcp-whole-enchilada:
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
   when: manual
 
 ####################
@@ -980,6 +745,7 @@ gcp-whole-enchilada:
 
 quarantine:
   stage: tests-quarantine
+  extends: [.needs-docker, .with-artifacts]
   retry: 2
   timeout: 4 hours
   script:
@@ -995,15 +761,6 @@ quarantine:
       - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Quarantine/
-  artifacts:
-    when: always
-    reports:
-      junit: $CI_PROJECT_DIR/target/nextest/default/junit.xml
-    paths:
-      - $CI_PROJECT_DIR/gitlab-log-utilities
-      - $CI_PROJECT_DIR/.qovery-workspace
-    expire_in: 2 week
-  interruptible: true
   allow_failure: true
 
 ###########
@@ -1012,6 +769,7 @@ quarantine:
 
 create-multi-arch-image:
   stage: build-final
+  extends: [.needs-docker]
   retry: 1
   before_script:
     - ci_helper docker_login_public_prod_ecr
@@ -1026,9 +784,11 @@ create-multi-arch-image:
 
 docker-tag:
   stage: release-tag
+  extends: [.needs-docker]
+  resource_group: docker-tag-${CI_COMMIT_TAG}
   retry: 0
   before_script:
-    - ci_helper init_buildkit_builder $(echo "${CI_JOB_NAME}" |  tr -d ' []:') 4 20 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 4 20 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
@@ -1039,7 +799,6 @@ docker-tag:
     - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}-slim
   tags:
     - vm-1cpu-1gmem-0g
-  interruptible: true
   rules:
     - if: $CI_COMMIT_TAG
       when: always
@@ -1051,7 +810,6 @@ gitlab-release:
   variables:
     GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
     GIT_DEPTH: 0
-  # patch versions based on tags and use goreleaser to perform a release
   script:
     - ./helper.sh update_engine_version
     - unset GITHUB_TOKEN ; goreleaser release --skip=validate --clean
@@ -1081,6 +839,7 @@ gitlab-release:
       when: manual
 
 .deploy-qovery-infra-engines:
+  extends: [.needs-docker]
   retry: 0
   needs:
     - gitlab-release
@@ -1107,6 +866,7 @@ gitlab-release:
 
 2-dry-run-deploy-dev-clusters:
   stage: deploy-staging
+  extends: [.needs-docker]
   retry: 0
   needs:
     - gitlab-release
@@ -1135,6 +895,8 @@ gitlab-release:
 
 3-update_qovery_chart:
   stage: deploy-prod
+  extends: [.needs-docker]
+  resource_group: chart-release
   retry: 1
   needs:
     - gitlab-release
@@ -1148,6 +910,7 @@ gitlab-release:
 
 4-deploy-qovery-env-engines:
   stage: deploy-prod
+  extends: [.needs-docker]
   retry: 0
   variables:
     CHANNEL: prod
