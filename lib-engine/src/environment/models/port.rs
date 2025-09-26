@@ -41,6 +41,8 @@ pub struct Port {
 }
 
 impl Port {
+    pub const DEFAULT_PUBLIC_PATH: &'static str = "/";
+
     pub fn is_public(&self) -> bool {
         match &self.protocol {
             PortProtocol::TCP { public } | PortProtocol::UDP { public } => *public,
@@ -68,7 +70,7 @@ impl Port {
 impl From<PortIo> for Port {
     fn from(value: PortIo) -> Self {
         let public_config = if value.publicly_accessible {
-            let path = value.path.unwrap_or("/".to_string());
+            let path = value.path.unwrap_or(Self::DEFAULT_PUBLIC_PATH.to_string());
             let path_rewrite = value.path_rewrite.clone();
             let public_port_config = HttpPublicPortConfig { path, path_rewrite };
             Some(public_port_config)

@@ -28,8 +28,10 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
+    {%- if grpc_hosts_has_regex_path %}
+    nginx.ingress.kubernetes.io/use-regex: "{{ grpc_hosts_has_regex_path }}"
+    {%- endif %}
     {%- if path_rewrite != "" %}
-    nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
     {%- endif %}
     nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"

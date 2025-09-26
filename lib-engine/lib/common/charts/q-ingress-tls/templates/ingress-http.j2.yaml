@@ -26,8 +26,10 @@ metadata:
     external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {%- if http_hosts_has_regex_path %}
+    nginx.ingress.kubernetes.io/use-regex: "{{ http_hosts_has_regex_path }}"
+    {%- endif %}
     {%- if path_rewrite != "" %}
-    nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
     {%- endif %}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"

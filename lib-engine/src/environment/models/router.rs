@@ -307,8 +307,18 @@ impl<T: CloudProvider> Router<T> {
 
         let qovery_additional_services = to_additional_services(ports);
 
+        let http_hosts_has_regex_path = http_hosts_per_namespace
+            .values()
+            .flatten()
+            .any(|host| host.path != Port::DEFAULT_PUBLIC_PATH);
+        let grpc_hosts_has_regex_path = grpc_hosts_per_namespace
+            .values()
+            .flatten()
+            .any(|host| host.path != Port::DEFAULT_PUBLIC_PATH);
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
+        context.insert("http_hosts_has_regex_path", &http_hosts_has_regex_path);
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
+        context.insert("grpc_hosts_has_regex_path", &grpc_hosts_has_regex_path);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
         context.insert("qovery_additional_services", &qovery_additional_services);
 
