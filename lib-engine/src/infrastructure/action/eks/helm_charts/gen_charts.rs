@@ -733,6 +733,9 @@ pub(super) fn eks_helm_charts(
     if let Some(beyla_chart) = metrics_config.beyla_chart {
         level_5.push(Box::new(beyla_chart));
     }
+    if let Some(alert_config_chart) = metrics_config.alert_config_chart {
+        level_5.push(Box::new(alert_config_chart));
+    }
     if let Some(prometheus_adapter_chart) = metrics_config.prometheus_adapter_chart {
         level_5.push(Box::new(prometheus_adapter_chart));
     }
