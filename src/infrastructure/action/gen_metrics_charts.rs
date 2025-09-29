@@ -10,6 +10,7 @@ use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisite
 use crate::infrastructure::action::gke::helm_charts::GkeChartsConfigPrerequisites;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
+use crate::infrastructure::helm_charts::alert_config_chart::AlertConfigChart;
 use crate::infrastructure::helm_charts::beyla_chart::BeylaChart;
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
     KubePrometheusStackChart, PrometheusConfiguration,
@@ -17,7 +18,7 @@ use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
 use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
-use crate::io_models::metrics::{AlertConfig, MetricsConfiguration, MetricsParameters};
+use crate::io_models::metrics::{AlertManagerConfig, MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::CustomerHelmChartsOverride;
 use std::sync::Arc;
 use url::Url;
@@ -121,6 +122,7 @@ pub struct MetricsConfig {
     pub thanos_chart: Option<CommonChart>,
     pub prometheus_adapter_chart: Option<CommonChart>,
     pub beyla_chart: Option<CommonChart>,
+    pub alert_config_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
 }
 
@@ -172,6 +174,7 @@ pub fn generate_metrics_config(
             thanos_chart: None,
             prometheus_adapter_chart: None,
             beyla_chart: None,
+            alert_config_chart: None,
             metrics_query_url: None,
         }),
     }
@@ -188,7 +191,7 @@ fn generate_charts_installed_by_qovery(
     cluster_name: &str,
     enable_redundancy: Option<bool>,
     install_beyla: bool,
-    alert_config: Option<AlertConfig>,
+    alert_config: Option<AlertManagerConfig>,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -213,7 +216,7 @@ fn generate_charts_installed_by_qovery(
         false,
         provider_config.is_karpenter_enabled(),
         enable_redundancy,
-        alert_config,
+        alert_config.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -265,12 +268,23 @@ fn generate_charts_installed_by_qovery(
         None
     };
 
+    // Alert Config
+    let alert_config_chart = AlertConfigChart::new(
+        helm_action.clone(),
+        prometheus_namespace.clone(),
+        chart_prefix_path,
+        cluster_name,
+        alert_config,
+    )
+    .to_common_helm_chart()?;
+
     Ok(MetricsConfig {
         prometheus_operator_crds_chart,
         kube_prometheus_stack_chart: Some(kube_prometheus_stack_chart),
         thanos_chart: Some(thanos_chart),
         prometheus_adapter_chart: Some(prometheus_adapter_chart),
         beyla_chart,
+        alert_config_chart: Some(alert_config_chart),
         metrics_query_url: match helm_action {
             HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
             HelmAction::Destroy => None,

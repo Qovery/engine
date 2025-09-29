@@ -1,0 +1,40 @@
+{{- $root := . -}}
+{{- if $root.Values.receivers }}
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: {{ $root.Values.alertManagerConfigName | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $root.Values.namespace | default $root.Release.Namespace }}
+  labels:
+    alertmanager: main
+spec:
+  route:
+    receiver: blackhole
+    routes:
+{{- range $i, $rcv := $root.Values.receivers }}
+      - matchers:
+          - name: {{ $rcv.name }}
+            value: "true"
+            matchType: "="
+        receiver: {{ $rcv.name }}
+        continue: true
+{{- end }}
+  receivers:
+    - name: blackhole
+{{- range $i, $rcv := $root.Values.receivers }}
+{{- $rcvName := $rcv.name }}
+{{- $rcvSafe := regexReplaceAll "[^a-z0-9-]" (lower $rcvName) "-" }}
+{{- $secret := $rcv.id | trunc 63 | trimSuffix "-" }}
+    - name: {{ $rcvName }}
+    {{- if $rcv.slack }}
+      slackConfigs:
+        - channel: {{ $rcv.slack.channel }}
+          title: "Alert: {{`{{ .GroupLabels.alertname }}`}}"
+          text: "{{`{{ range .Alerts }}{{ .Annotations.description }}{{ end }}`}}"
+          sendResolved: {{ default true $rcv.slack.sendResolved }}
+          apiURL:
+            name: {{ $secret }}
+            key: "url"
+    {{- end }}
+{{- end }}
+{{- end }}

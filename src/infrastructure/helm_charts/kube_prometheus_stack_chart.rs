@@ -9,7 +9,7 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
-use crate::io_models::metrics::AlertConfig;
+use crate::io_models::metrics::AlertManagerConfig;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
@@ -61,7 +61,7 @@ pub struct KubePrometheusStackChart {
     enable_vpa: bool,
     additional_chart_path: Option<HelmChartValuesFilePath>,
     enable_redundancy: bool,
-    alert_config: Option<AlertConfig>,
+    alert_config: Option<AlertManagerConfig>,
 }
 
 impl KubePrometheusStackChart {
@@ -76,7 +76,7 @@ impl KubePrometheusStackChart {
         enable_vpa: bool,
         karpenter_enabled: bool,
         enable_redundancy: bool,
-        alert_config: Option<AlertConfig>,
+        alert_config: Option<AlertManagerConfig>,
     ) -> Self {
         KubePrometheusStackChart {
             action,
@@ -268,6 +268,16 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     .to_string(),
             },
         ];
+
+        if let Some(alert_config) = self.alert_config.as_ref()
+            && alert_config.enabled
+            && let Some(config_name) = alert_config.config_name.as_ref()
+        {
+            values.push(ChartSetValue {
+                key: "alertmanager.alertmanagerSpec.alertmanagerConfiguration.name".to_string(),
+                value: config_name.clone(),
+            })
+        }
 
         if let Some(alert_config) = self.alert_config.as_ref()
             && alert_config.enabled

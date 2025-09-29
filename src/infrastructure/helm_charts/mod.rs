@@ -8,6 +8,7 @@ use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use time::Duration;
 
+pub mod alert_config_chart;
 pub mod beyla_chart;
 pub mod cert_manager_chart;
 pub mod cert_manager_config_chart;
