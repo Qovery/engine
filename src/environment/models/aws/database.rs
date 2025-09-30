@@ -358,7 +358,23 @@ where
             context.insert("database_instance_type", i.to_cloud_provider_format().as_str());
         }
         context.insert("database_disk_type", &options.database_disk_type);
-        context.insert("database_disk_iops", &options.database_disk_iops.value());
+
+        match options.database_disk_type.as_str() {
+            "gp3" => {
+                // AWS RDS specific:
+                // - IOPS/throughput cannot be specified when storage < 400 GiB.
+                // - Minimal IOPS for GP3 is 3000
+                if matches!(options.database_disk_iops, crate::io_models::database::DiskIOPS::Provisioned(i) if i > 3000)
+                    && options.disk_size_in_gib >= 400
+                {
+                    context.insert("database_disk_iops", &options.database_disk_iops.value());
+                }
+            }
+            _ => {
+                // including "gp2" variant, added for compatibility with current behavior
+                context.insert("database_disk_iops", &options.database_disk_iops.value());
+            }
+        }
         context.insert("encrypt_disk", &options.encrypt_disk);
         context.insert("database_fqdn", &options.host.as_str());
         context.insert("database_id", &self.id());
