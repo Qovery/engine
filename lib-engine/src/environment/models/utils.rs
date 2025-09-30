@@ -22,8 +22,15 @@ pub fn add_arch_to_deployment_affinity_node(
     deployment_affinity_node_required
 }
 
-pub fn need_target_stable_node_pool(kubernetes: &dyn Kubernetes, min_instances: u32, is_stateful_set: bool) -> bool {
-    kubernetes.kind() == Kind::Eks && kubernetes.is_karpenter_enabled() && (min_instances == 1 || is_stateful_set)
+pub fn need_target_stable_node_pool(
+    kubernetes: &dyn Kubernetes,
+    min_instances: u32,
+    is_stateful_set: bool,
+    service_explicitely_targets_stable: bool,
+) -> bool {
+    kubernetes.kind() == Kind::Eks
+        && kubernetes.is_karpenter_enabled()
+        && (service_explicitely_targets_stable || min_instances == 1 || is_stateful_set)
 }
 
 pub fn target_stable_node_pool(
@@ -48,7 +55,8 @@ pub fn target_stable_node_pool(
 
 #[cfg(test)]
 mod tests {
-    use crate::environment::models::utils::add_arch_to_deployment_affinity_node;
+    use crate::environment::models::utils::{add_arch_to_deployment_affinity_node, need_target_stable_node_pool};
+    use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
     use crate::io_models::models::CpuArchitecture;
     use std::collections::BTreeMap;
 
@@ -103,5 +111,160 @@ mod tests {
         let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"value".to_string()));
+    }
+
+    struct MockKubernetes {
+        kind: Kind,
+        karpenter_enabled: bool,
+    }
+
+    impl Kubernetes for MockKubernetes {
+        fn kind(&self) -> Kind {
+            self.kind
+        }
+
+        fn is_karpenter_enabled(&self) -> bool {
+            self.karpenter_enabled
+        }
+
+        fn context(&self) -> &crate::io_models::context::Context {
+            todo!()
+        }
+
+        fn short_id(&self) -> &str {
+            todo!()
+        }
+
+        fn long_id(&self) -> &uuid::Uuid {
+            todo!()
+        }
+
+        fn name(&self) -> &str {
+            todo!()
+        }
+
+        fn version(&self) -> crate::infrastructure::models::kubernetes::KubernetesVersion {
+            todo!()
+        }
+
+        fn region(&self) -> &str {
+            todo!()
+        }
+
+        fn zones(&self) -> Option<Vec<&str>> {
+            todo!()
+        }
+
+        fn logger(&self) -> &dyn crate::logger::Logger {
+            todo!()
+        }
+
+        fn is_network_managed_by_user(&self) -> bool {
+            todo!()
+        }
+
+        fn cpu_architectures(&self) -> Vec<CpuArchitecture> {
+            todo!()
+        }
+
+        fn temp_dir(&self) -> &std::path::Path {
+            todo!()
+        }
+
+        fn advanced_settings(&self) -> &crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings {
+            todo!()
+        }
+
+        fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
+            todo!()
+        }
+
+        fn as_infra_actions(&self) -> &dyn crate::infrastructure::action::InfrastructureAction {
+            todo!()
+        }
+    }
+
+    struct TestCase {
+        kind: Kind,
+        karpenter_enabled: bool,
+        min_instances: u32,
+        is_stateful_set: bool,
+        explicit_target_stable_node_pool: bool,
+        expected: bool,
+        name: &'static str,
+    }
+
+    #[test]
+    fn test_need_target_stable_node_pool_cases() {
+        let cases = [
+            TestCase {
+                kind: Kind::Eks,
+                karpenter_enabled: true,
+                min_instances: 2,
+                is_stateful_set: false,
+                explicit_target_stable_node_pool: true,
+                expected: true,
+                name: "eks + karpenter + explicit_target",
+            },
+            TestCase {
+                kind: Kind::Eks,
+                karpenter_enabled: true,
+                min_instances: 1,
+                is_stateful_set: false,
+                explicit_target_stable_node_pool: false,
+                expected: true,
+                name: "eks + karpenter + min_instances=1",
+            },
+            TestCase {
+                kind: Kind::Eks,
+                karpenter_enabled: true,
+                min_instances: 2,
+                is_stateful_set: true,
+                explicit_target_stable_node_pool: false,
+                expected: true,
+                name: "eks + karpenter + stateful_set",
+            },
+            TestCase {
+                kind: Kind::Eks,
+                karpenter_enabled: true,
+                min_instances: 2,
+                is_stateful_set: false,
+                explicit_target_stable_node_pool: false,
+                expected: false,
+                name: "eks + karpenter + no conditions",
+            },
+            TestCase {
+                kind: Kind::Gke,
+                karpenter_enabled: true,
+                min_instances: 1,
+                is_stateful_set: true,
+                explicit_target_stable_node_pool: true,
+                expected: false,
+                name: "not eks",
+            },
+            TestCase {
+                kind: Kind::Eks,
+                karpenter_enabled: false,
+                min_instances: 1,
+                is_stateful_set: true,
+                explicit_target_stable_node_pool: true,
+                expected: false,
+                name: "eks + no karpenter",
+            },
+        ];
+
+        for case in cases.iter() {
+            let kube = MockKubernetes {
+                kind: case.kind,
+                karpenter_enabled: case.karpenter_enabled,
+            };
+            let result = need_target_stable_node_pool(
+                &kube,
+                case.min_instances,
+                case.is_stateful_set,
+                case.explicit_target_stable_node_pool,
+            );
+            assert_eq!(case.expected, result, "failed test: {}", case.name);
+        }
     }
 }

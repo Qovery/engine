@@ -181,7 +181,16 @@ impl<T: CloudProvider> Application<T> {
 
         let mut tolerations = BTreeMap::<String, String>::new();
         let is_stateful_set = !self.storages.is_empty();
-        if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set) {
+        let service_explicitely_targets_stable_nodepool = matches!(self
+            .advanced_settings
+            .deployment_affinity_node_required
+            .get("karpenter.sh/nodepool"), Some(v) if v.to_lowercase() == "stable");
+        if utils::need_target_stable_node_pool(
+            kubernetes,
+            self.min_instances,
+            is_stateful_set,
+            service_explicitely_targets_stable_nodepool,
+        ) {
             utils::target_stable_node_pool(&mut deployment_affinity_node_required, &mut tolerations, is_stateful_set);
         }
 
