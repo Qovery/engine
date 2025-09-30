@@ -47,8 +47,6 @@ alertmanager:
   enabled: "set-by-engine-code"
   alertmanagerSpec:
     replicas: 2
-    alertmanagerConfiguration:
-      name: "set-by-engine-code"
 
 grafana:
   enabled: false
