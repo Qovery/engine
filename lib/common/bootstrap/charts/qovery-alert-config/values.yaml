@@ -5,7 +5,7 @@ labels:
   release: kube-prometheus-stack
 
 
-receivers: set-by-engine
+receivers:
 #  - long_id: "00000-0000-0000-0000-000000000000"
 #    name: slack-ch1
 #    slack:
