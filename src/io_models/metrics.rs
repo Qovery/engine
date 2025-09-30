@@ -64,7 +64,9 @@ pub struct AlertManagerConfig {
     pub default_rule_labels: Option<HashMap<String, String>>,
     pub spec_config_secret: Option<String>,
     pub spec_external_url: Option<String>,
+    #[serde(default)]
     pub receivers: Vec<AlertConfigReceiver>,
+    #[serde(default)]
     pub alerts: Vec<AlertConfigAlert>,
     pub config_name: Option<String>,
 }
