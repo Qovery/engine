@@ -22,6 +22,7 @@ use chrono::{DateTime, TimeZone, Utc};
 use tera::Context as TeraContext;
 use url::Url;
 
+const DEFAULT_GP3_DATABASE_DISK_IOPS: i32 = 3000;
 /////////////////////////////////////////////////////////////////
 // CONTAINER
 impl DatabaseType<AWS, Container> for PostgresSQL {
@@ -368,6 +369,8 @@ where
                     && options.disk_size_in_gib >= 400
                 {
                     context.insert("database_disk_iops", &options.database_disk_iops.value());
+                } else {
+                    context.insert("database_disk_iops", &DEFAULT_GP3_DATABASE_DISK_IOPS);
                 }
             }
             _ => {
