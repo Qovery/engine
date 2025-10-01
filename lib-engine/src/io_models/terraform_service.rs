@@ -694,8 +694,6 @@ terraform {{
     }
 
     fn build_extra_files(&self, root_module_path: &str) -> Result<Vec<GitRepositoryExtraFile>, TerraformServiceError> {
-        let (_, backend_file_path) =
-            normalize_root_and_dockerfile_path(root_module_path, &Some("backend_qovery.tf".to_string()));
         let (_, entry_point_file_path) = normalize_root_and_dockerfile_path("/", &Some("entrypoint.sh".to_string()));
 
         let mut extra_files = vec![GitRepositoryExtraFile {
@@ -705,9 +703,13 @@ terraform {{
         }];
 
         if let Some(backend_block) = self.get_backend_block() {
+            let (_, backend_file_path) =
+                normalize_root_and_dockerfile_path(root_module_path, &Some("backend.tf".to_string()));
+            let backend_file_path = backend_file_path
+                .ok_or_else(|| TerraformServiceError::InvalidConfig("Backend path is not defined".to_string()))?;
+
             extra_files.push(GitRepositoryExtraFile {
-                path: backend_file_path
-                    .ok_or_else(|| TerraformServiceError::InvalidConfig("Backend path is not defined".to_string()))?,
+                path: backend_file_path,
                 content: backend_block.to_string(),
             });
         }
