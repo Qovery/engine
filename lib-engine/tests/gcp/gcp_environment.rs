@@ -25,6 +25,7 @@ use qovery_engine::io_models::terraform_service::{
 };
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use tracing::Level;
 use tracing::log::warn;
@@ -764,6 +765,7 @@ fn gcp_gke_deploy_terraform_service() {
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
             terraform_credentials: None,
+            extra_action_arguments: BTreeMap::new(),
         }
     }
 
