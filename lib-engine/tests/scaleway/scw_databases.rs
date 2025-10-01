@@ -398,7 +398,6 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
                     protocol: Protocol::HTTP,
                     service_name: None,
                     namespace: None,
-                    additional_service: None,
                     path: None,
                     path_rewrite: None,
                 }];

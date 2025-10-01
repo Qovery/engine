@@ -521,7 +521,6 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
                 protocol: Protocol::GRPC,
                 service_name: None,
                 namespace: None,
-                additional_service: None,
                 path: None,
                 path_rewrite: None,
             });
@@ -623,7 +622,6 @@ fn gcp_gke_deploy_container_with_router() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
-                    additional_service: None,
                     path: None,
                     path_rewrite: None,
                 },
@@ -636,7 +634,6 @@ fn gcp_gke_deploy_container_with_router() {
                     protocol: HTTP,
                     service_name: None,
                     namespace: None,
-                    additional_service: None,
                     path: None,
                     path_rewrite: None,
                 },
