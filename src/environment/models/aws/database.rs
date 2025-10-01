@@ -365,8 +365,9 @@ where
                 // AWS RDS specific:
                 // - IOPS/throughput cannot be specified when storage < 400 GiB.
                 // - Minimal IOPS for GP3 is 3000
-                if matches!(options.database_disk_iops, crate::io_models::database::DiskIOPS::Provisioned(i) if i > 3000)
-                    && options.disk_size_in_gib >= 400
+                if options.disk_size_in_gib < 400 {
+                    context.insert("skip_database_disk_iops", &true);
+                } else if matches!(options.database_disk_iops, crate::io_models::database::DiskIOPS::Provisioned(i) if i > 3000)
                 {
                     context.insert("database_disk_iops", &options.database_disk_iops.value());
                 } else {

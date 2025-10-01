@@ -66,11 +66,13 @@ resource "aws_db_instance" "mysql_instance" {
   {%- else %}
   allocated_storage = var.disk_size
   storage_type = var.storage_type
-  iops = var.disk_iops
   username = var.username
   engine_version = var.mysql_version
   engine = "mysql"
   ca_cert_identifier = "rds-ca-rsa2048-g1"
+  {%- if not skip_database_disk_iops %}
+  iops = var.disk_iops
+  {%- endif %}
   {%- endif %}
 
   # Network
