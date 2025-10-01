@@ -52,11 +52,13 @@ resource "aws_db_instance" "postgresql_instance" {
   allocated_storage = var.disk_size
   db_name = var.database_name
   storage_type = var.storage_type
-  iops = var.disk_iops
   username = var.username
   engine_version = var.postgresql_version
   engine = "postgres"
   ca_cert_identifier = "rds-ca-rsa2048-g1"
+  {%- if not skip_database_disk_iops %}
+  iops = var.disk_iops
+  {%- endif %}
   {%- endif %}
 
   # Network
