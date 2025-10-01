@@ -3582,6 +3582,7 @@ fn build_and_deploy_terraform_service_on_aws_eks() {
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
             terraform_credentials: None,
+            extra_action_arguments: BTreeMap::new(),
         }
     }
 
@@ -3740,6 +3741,7 @@ fn build_and_deploy_terraform_service_in_apply_mode_on_aws_eks() {
             labels_group_ids: btreeset! { labels_group_id },
             shared_image_feature_enabled: false,
             terraform_credentials: None,
+            extra_action_arguments: Default::default(),
         }
     }
 

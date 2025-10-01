@@ -174,8 +174,10 @@ pub struct TerraformService {
 
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
-
     pub terraform_credentials: Option<TerraformCredentials>,
+    // key is the name of the terraform action I.e: apply. Value is the list of extra arguments for this action
+    #[serde(default)]
+    pub extra_action_arguments: BTreeMap<String, Vec<String>>,
 }
 
 impl TerraformService {
@@ -261,6 +263,7 @@ impl TerraformService {
                     terraform_action,
                     Duration::from_secs(self.timeout_sec),
                     environment_variables_with_info,
+                    self.extra_action_arguments,
                     self.advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
@@ -289,6 +292,7 @@ impl TerraformService {
                     terraform_action,
                     Duration::from_secs(self.timeout_sec),
                     environment_variables_with_info,
+                    self.extra_action_arguments,
                     self.advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
                     annotations_groups,
@@ -316,6 +320,7 @@ impl TerraformService {
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
+                self.extra_action_arguments,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
@@ -342,6 +347,7 @@ impl TerraformService {
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
+                self.extra_action_arguments,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
@@ -368,6 +374,7 @@ impl TerraformService {
                 terraform_action,
                 Duration::from_secs(self.timeout_sec),
                 environment_variables_with_info,
+                self.extra_action_arguments,
                 self.advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
@@ -565,7 +572,8 @@ impl TerraformService {
     fn get_docker_file(&self) -> String {
         // TODO TF remove from here, use a mirror of  hashicorp/terraform, customize version, path, parameter of terraform init,
         format!(
-            r#"FROM hashicorp/terraform:{}
+            r#"
+FROM hashicorp/terraform:{}
 RUN <<EOF
 set -e
 apk update
@@ -576,20 +584,20 @@ chown -R app:app /data
 EOF
 
 WORKDIR /data
-COPY . .
+COPY --chown=app:app . .
 
 RUN chmod +x entrypoint.sh
 USER app
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--", "/bin/sh", "/data/entrypoint.sh"]
-                    "#,
+"#,
             self.provider_version
         )
     }
 
     fn get_entry_point_sh(&self) -> String {
         // TODO TF remove from here
-        r#"# entrypoint.sh
+        r#"
 #!/bin/bash
 set -e
 
@@ -617,7 +625,7 @@ log() {
 
 
 run_terraform_init() {
-  log "terraform init"
+  log "terraform init $TF_CLI_ARGS_init"
   terraform init -backend-config="/backend-config/config" 2>&1 \
     | awk '{print} /Terraform has been successfully initialized!/ {exit}'
 }
@@ -639,7 +647,7 @@ attempt_force_unlock() {
 case "$CMD" in
     "apply")
         run_terraform_init
-        log "terraform validate"
+        log "terraform validate $TF_CLI_ARGS_validate"
         terraform validate
         log "terraform apply -input=false -auto-approve"
         terraform apply -input=false -auto-approve "$@"
@@ -648,22 +656,22 @@ case "$CMD" in
         ;;
     "plan_only")
         run_terraform_init
-        log  "terraform validate"
+        log "terraform validate $TF_CLI_ARGS_validate"
         terraform validate
-        log "terraform plan"
+        log "terraform plan $TF_CLI_ARGS_plan"
         terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@"
         ;;
     "apply_from_plan")
         run_terraform_init
-        log "terraform validate"
+        log "terraform validate $TF_CLI_ARGS_validate"
         terraform validate
-        log "terraform apply -input=false"
+        log "terraform apply $TF_CLI_ARGS_apply"
         terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
-        log "terraform output"
+        log "terraform output $TF_CLI_ARGS_output"
         terraform output -json > /qovery-output/qovery-output.json
         ;;
     "destroy")
-        log "terraform destroy"
+        log "terraform destroy $TF_CLI_ARGS_destroy"
         terraform destroy -auto-approve -input=false "$@"
         ;;
     "unlock_state")

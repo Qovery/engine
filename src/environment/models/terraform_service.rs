@@ -18,8 +18,9 @@ use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use base64::Engine;
 use base64::engine::general_purpose;
+use itertools::Itertools;
 use serde_derive::Serialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -56,6 +57,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) persistent_storage: PersistentStorage,
     pub(crate) environment_variables: HashMap<String, VariableInfo>,
+    pub(crate) extra_action_arguments: BTreeMap<String, Vec<String>>,
     pub(crate) advanced_settings: TerraformServiceAdvancedSettings,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
@@ -85,6 +87,7 @@ impl<T: CloudProvider> TerraformService<T> {
         terraform_action: TerraformAction,
         timeout: Duration,
         environment_variables: HashMap<String, VariableInfo>,
+        extra_action_arguments: BTreeMap<String, Vec<String>>,
         advanced_settings: TerraformServiceAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
@@ -128,6 +131,7 @@ impl<T: CloudProvider> TerraformService<T> {
             ram_limit: KubernetesMemoryResourceUnit::MebiByte(ram_limit_in_mib),
             persistent_storage,
             environment_variables,
+            extra_action_arguments,
             advanced_settings,
             annotations_group: AnnotationsGroupTeraContext::new(annotations_groups),
             labels_group: LabelsGroupTeraContext::new(labels_groups),
@@ -392,14 +396,26 @@ impl<T: CloudProvider> Service for TerraformService<T> {
     }
 
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
-        self.environment_variables
+        let env_vars = self
+            .environment_variables
             .iter()
             .map(|(key, variable_infos)| EnvironmentVariable {
                 key: key.clone(),
                 value: variable_infos.value.clone(),
                 is_secret: variable_infos.is_secret,
-            })
-            .collect()
+            });
+
+        // https://developer.hashicorp.com/terraform/cli/config/environment-variables#tf_cli_args-and-tf_cli_args_name
+        let extra_actions = self
+            .extra_action_arguments
+            .iter()
+            .map(|(key, vals)| EnvironmentVariable {
+                key: format!("TF_CLI_ARGS_{key}"),
+                value: base64::engine::general_purpose::STANDARD.encode(vals.iter().join(" ")),
+                is_secret: false,
+            });
+
+        env_vars.chain(extra_actions).collect()
     }
 }
 
