@@ -70,7 +70,6 @@ pub struct PortIo {
     pub protocol: Protocol,
     pub service_name: Option<String>,
     pub namespace: Option<String>,
-    pub additional_service: Option<AdditionalService>,
 
     // Override the default matching path. It makes sense only for HTTP and GRPC protocols
     #[serde(default)]

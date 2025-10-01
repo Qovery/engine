@@ -1,4 +1,4 @@
-use crate::io_models::application::{AdditionalService, PortIo, Protocol};
+use crate::io_models::application::{PortIo, Protocol};
 use serde_derive::Serialize;
 use uuid::Uuid;
 
@@ -37,7 +37,6 @@ pub struct Port {
     pub protocol: PortProtocol,
     pub service_name: Option<String>,
     pub namespace: Option<String>,
-    pub additional_service: Option<AdditionalService>,
 }
 
 impl Port {
@@ -97,7 +96,6 @@ impl From<PortIo> for Port {
             protocol,
             service_name: value.service_name,
             namespace: value.namespace,
-            additional_service: value.additional_service,
         }
     }
 }

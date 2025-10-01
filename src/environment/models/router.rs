@@ -13,9 +13,7 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{
-    CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, KubeService, KubeServicePort, Route,
-};
+use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, Route};
 use crate::utilities::to_short_id;
 use std::collections::HashMap;
 use std::iter;
@@ -305,8 +303,6 @@ impl<T: CloudProvider> Router<T> {
             environment.namespace(),
         );
 
-        let qovery_additional_services = to_additional_services(ports);
-
         let http_hosts_has_regex_path = http_hosts_per_namespace
             .values()
             .flatten()
@@ -320,7 +316,6 @@ impl<T: CloudProvider> Router<T> {
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
         context.insert("grpc_hosts_has_regex_path", &grpc_hosts_has_regex_path);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
-        context.insert("qovery_additional_services", &qovery_additional_services);
 
         context.insert("annotations_group", &self.annotations_group);
         context.insert("labels_group", &self.labels_group);
@@ -457,24 +452,6 @@ fn to_host_data_template(
         );
     }
     hosts_per_namespace
-}
-
-fn to_additional_services(ports: Vec<&Port>) -> Vec<KubeService> {
-    ports
-        .into_iter()
-        .filter_map(|port| {
-            port.additional_service.as_ref().map(|additional_service| KubeService {
-                namespace_key: port.namespace.clone(),
-                name: port.service_name.clone().unwrap_or_default(),
-                ports: vec![KubeServicePort {
-                    port: port.port,
-                    target_port: port.port,
-                    protocol: "TCP".to_string(),
-                }],
-                selectors: additional_service.selectors.clone(),
-            })
-        })
-        .collect()
 }
 
 fn get_ports_by_namespace(ports: &[&Port]) -> HashMap<Option<String>, Vec<Port>> {
@@ -627,14 +604,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::to_additional_services;
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{generate_certificate_alternative_names, to_host_data_template};
 
-    use crate::io_models::models::{
-        CustomDomain, CustomDomainDataTemplate, HostDataTemplate, KubeService, KubeServicePort,
-    };
-    use maplit::btreemap;
+    use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate};
 
     #[test]
     pub fn test_certificate_alternative_names() {
@@ -677,7 +650,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
         };
         let ports = vec![&port];
 
@@ -693,7 +665,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -735,7 +706,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
         };
         let ports = vec![&port, &port2];
 
@@ -764,7 +734,6 @@ mod tests {
             is_default: true,
             service_name: None,
             namespace: None,
-            additional_service: None,
         };
         let port_grpc = Port {
             long_id: Default::default(),
@@ -779,7 +748,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
         };
         let custom_domains = vec![CustomDomain {
             domain: "*.toto.mydomain.com".to_string(),
@@ -959,7 +927,6 @@ mod tests {
             is_default: true,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1010,7 +977,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1025,7 +991,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/toto".to_string(),
@@ -1064,7 +1029,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1079,7 +1043,6 @@ mod tests {
             is_default: false,
             service_name: Some("service1".to_string()),
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1145,7 +1108,6 @@ mod tests {
             is_default: false,
             service_name: None,
             namespace: None,
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1160,7 +1122,6 @@ mod tests {
             is_default: false,
             service_name: Some("service1".to_string()),
             namespace: Some("namespace1".to_string()),
-            additional_service: None,
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/".to_string(),
@@ -1216,40 +1177,6 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
-        }));
-    }
-
-    #[test]
-    pub fn test_ingress_host_template_with_additional_service_defined_in_port() {
-        let port_http = Port {
-            long_id: Default::default(),
-            name: "http-1".to_string(),
-            port: 80,
-            is_default: false,
-            service_name: Some("a service".to_string()),
-            namespace: Some("a namespace".to_string()),
-            additional_service: Some(crate::io_models::application::AdditionalService {
-                selectors: btreemap![ "a".to_string() => "b".to_string()],
-            }),
-            protocol: PortProtocol::HTTP {
-                public: Some(HttpPublicPortConfig {
-                    path: "/".to_string(),
-                    path_rewrite: None,
-                }),
-            },
-        };
-
-        let ret = to_additional_services(vec![&port_http]);
-        assert_eq!(ret.len(), 1);
-        assert!(ret.contains(&KubeService {
-            namespace_key: Some("a namespace".to_string()),
-            name: "a service".to_string(),
-            ports: vec![KubeServicePort {
-                port: 80,
-                target_port: 80,
-                protocol: "TCP".to_string(),
-            }],
-            selectors: btreemap![ "a".to_string() => "b".to_string()],
         }));
     }
 }
