@@ -11,10 +11,15 @@ resource "aws_eks_addon" "aws_coredns" {
 
   tags = local.tags_eks
 
-  {% if enable_karpenter and bootstrap_on_fargate %}
-  depends_on = [
-    aws_eks_fargate_profile.core-dns
-  ]
-  {% endif %}
+  # CoreDNS configuration to run on infrastructure nodes
+  configuration_values = jsonencode({
+    tolerations = [
+      {
+        key    = "node.qovery.com/infrastructure"
+        value  = "true"
+        effect = "NoSchedule"
+      }
+    ]
+  })
 }
 {% endif %}
