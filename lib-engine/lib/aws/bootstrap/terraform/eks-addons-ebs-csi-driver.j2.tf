@@ -4,17 +4,27 @@ resource "aws_eks_addon" "aws_ebs_csi_driver" {
   service_account_role_arn = aws_iam_role.ebs_csi_irsa_role.arn
 
   # Pick the recommended version for the k8s version or override if set
-  addon_version            = "{{ eks_addon_ebs_csi.version }}"
+  addon_version               = "{{ eks_addon_ebs_csi.version }}"
   resolve_conflicts_on_update = "OVERWRITE"
   resolve_conflicts_on_create = "OVERWRITE"
 
-  tags                     = local.tags_eks
+  tags = local.tags_eks
 
-{% if enable_karpenter and bootstrap_on_fargate %}
-  depends_on = [
-    aws_eks_fargate_profile.ebs_csi
-  ]
-{% endif %}
+  # EBS CSI driver configuration to run on infrastructure nodes
+  configuration_values = jsonencode({
+    controller = {
+      tolerations = [
+        {
+          key    = "node.qovery.com/infrastructure"
+          value  = "true"
+          effect = "NoSchedule"
+        }
+      ]
+    }
+    node = {
+      tolerateAllTaints = true
+    }
+  })
 }
 
 resource "aws_iam_role" "ebs_csi_irsa_role" {
