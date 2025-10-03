@@ -9,4 +9,5 @@ mod gcp;
 mod helm;
 pub mod helpers;
 mod kube;
+mod promtail;
 mod scaleway;
