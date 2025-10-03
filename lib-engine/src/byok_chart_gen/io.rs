@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::Path};
 
-use crate::byok_chart_gen::values_dot_yaml::{BuildContainer, QoveryEngine};
+use crate::byok_chart_gen::values_dot_yaml::{AzureServices, BuildContainer, QoveryEngine};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -148,6 +148,9 @@ impl ValuesFile {
                 scaleway: ScalewayServices {
                     qovery_storage_class: ServiceEnabled { enabled: false },
                 },
+                azure: AzureServices {
+                    qovery_storage_class: ServiceEnabled { enabled: false },
+                },
                 aws: AwsServices {
                     qovery_storage_class: ServiceEnabled { enabled: false },
                     aws_ebs_csi_driver: ServiceEnabled { enabled: false },
@@ -234,6 +237,7 @@ impl ValuesFile {
             qovery_storage_class_aws: None,
             qovery_storage_class_gcp: None,
             qovery_storage_class_scaleway: None,
+            qovery_storage_class_azure: None,
             metrics_server: Some(ChartConfig { override_chart: None }),
         }
     }
@@ -274,6 +278,9 @@ impl ValuesFile {
         value.aws_load_balancer_controller = None;
 
         value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+        value.services.azure = AzureServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
 
@@ -320,7 +327,9 @@ impl ValuesFile {
         value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
-
+        value.services.azure = AzureServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
         value.services.gcp = GcpServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
         };
@@ -358,12 +367,60 @@ impl ValuesFile {
         value.services.scaleway = ScalewayServices {
             qovery_storage_class: ServiceEnabled { enabled: true },
         };
+        value.services.azure = AzureServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
         value.services.aws = AwsServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
             aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
 
+        value.services.gcp = GcpServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+
+        value.services.qovery.qovery_engine = ServiceEnabled { enabled: true };
+        value
+    }
+
+    pub fn new_azure() -> ValuesFile {
+        let mut value = Self::new_minimal();
+
+        value.services.ingress.ingress_nginx.enabled = true;
+        value.ingress_nginx.override_chart = Some(SupportedCharts::IngressNginx.to_string());
+
+        value.services.dns.external_dns.enabled = true;
+        value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
+
+        value.services.logging.promtail.enabled = true;
+        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.loki.enabled = true;
+        value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
+
+        value.services.certificates.cert_manager.enabled = true;
+        value.cert_manager.override_chart = Some(SupportedCharts::CertManager.to_string());
+
+        value.services.certificates.cert_manager_qovery_webhook.enabled = true;
+        value.cert_manager_qovery_webhook.override_chart = Some(SupportedCharts::CertManagerQoveryWebhook.to_string());
+
+        value.services.certificates.cert_manager_configs.enabled = true;
+        value.cert_manager_configs.override_chart = Some(SupportedCharts::CertManagerConfigs.to_string());
+
+        value.services.observability.metrics_server = None;
+        value.metrics_server = None;
+
+        value.services.azure = AzureServices {
+            qovery_storage_class: ServiceEnabled { enabled: true },
+        };
+        value.services.scaleway = ScalewayServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
+        value.services.aws = AwsServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+            aws_ebs_csi_driver: ServiceEnabled { enabled: false },
+            aws_load_balancer_controller: ServiceEnabled { enabled: false },
+        };
         value.services.gcp = GcpServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };
@@ -407,7 +464,9 @@ impl ValuesFile {
             aws_ebs_csi_driver: ServiceEnabled { enabled: false },
             aws_load_balancer_controller: ServiceEnabled { enabled: false },
         };
-
+        value.services.azure = AzureServices {
+            qovery_storage_class: ServiceEnabled { enabled: false },
+        };
         value.services.gcp = GcpServices {
             qovery_storage_class: ServiceEnabled { enabled: false },
         };

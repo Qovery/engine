@@ -25,6 +25,8 @@ pub enum ChartCategory {
     Gcp,
     #[display("scaleway")]
     Scaleway,
+    #[display("azure")]
+    Azure,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -59,6 +61,12 @@ pub struct ValuesFile {
         skip_serializing_if = "Option::is_none"
     )]
     pub qovery_storage_class_scaleway: Option<ChartConfig>,
+    #[serde(
+        rename = "q-storageclass-azure",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub qovery_storage_class_azure: Option<ChartConfig>,
     #[serde(rename = "metrics-server", skip_serializing_if = "Option::is_none")]
     pub metrics_server: Option<ChartConfig>,
     #[serde(rename = "aws-load-balancer-controller", skip_serializing_if = "Option::is_none")]
@@ -165,6 +173,7 @@ pub struct ServicesEnabler {
     pub aws: AwsServices,
     pub gcp: GcpServices,
     pub scaleway: ScalewayServices,
+    pub azure: AzureServices,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -232,6 +241,12 @@ pub struct GcpServices {
 #[derive(Serialize, Deserialize)]
 pub struct ScalewayServices {
     #[serde(rename = "q-storageclass-scaleway")]
+    pub qovery_storage_class: ServiceEnabled,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AzureServices {
+    #[serde(rename = "q-storageclass-azure")]
     pub qovery_storage_class: ServiceEnabled,
 }
 
