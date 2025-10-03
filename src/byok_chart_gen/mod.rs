@@ -85,6 +85,8 @@ pub enum ChartSourcePath {
     GcpBootstrapCharts,
     #[display("lib/scaleway/bootstrap/charts")]
     ScalewayBootstrapCharts,
+    #[display("lib/azure/bootstrap/charts")]
+    AzureBootstrapCharts,
 }
 
 #[derive(Clone, Display, PartialEq, Eq, Ord, PartialOrd, Debug)]
@@ -98,6 +100,8 @@ pub enum ValuesSourcePath {
     GcpBootstrapChartValues,
     #[display("lib/scaleway/bootstrap/chart_values")]
     ScalewayBootstrapChartValues,
+    #[display("lib/azure/bootstrap/chart_values")]
+    AzureBootstrapChartValues,
     #[display("lib/self-managed/demo_chart_values")]
     DemoChartValues,
 }
@@ -110,6 +114,8 @@ pub enum SupportedCharts {
     QoveryGcpStorageClass,
     #[display("q-storageclass-scaleway")]
     QoveryScalewayStorageClass,
+    #[display("q-storageclass-azure")]
+    QoveryAzureStorageClass,
     #[display("aws-load-balancer-controller")]
     AlbController,
     #[display("ingress-nginx")]
@@ -199,20 +205,34 @@ mod tests {
                     };
 
                     let override_values = fs::read_to_string(file).unwrap();
-                    let override_values = if chart.name == SupportedCharts::IngressNginx {
-                        let mut tera = Tera::default();
-                        match tera.add_raw_template("self-managed-template-nginx", &override_values) {
-                            Ok(_) => {}
-                            Err(_) => return override_values,
+                    let override_values = match chart.name {
+                        SupportedCharts::Promtail => {
+                            let mut tera = Tera::default();
+                            match tera.add_raw_template("self-managed-template-promtail", &override_values) {
+                                Ok(_) => {}
+                                Err(_) => return override_values,
+                            }
+
+                            let mut context = Context::new();
+                            context.insert("prometheus_enabled", &false);
+
+                            tera.render("self-managed-template-promtail", &context)
+                                .unwrap_or(override_values)
                         }
+                        SupportedCharts::IngressNginx => {
+                            let mut tera = Tera::default();
+                            match tera.add_raw_template("self-managed-template-nginx", &override_values) {
+                                Ok(_) => {}
+                                Err(_) => return override_values,
+                            }
 
-                        let mut context = Context::new();
-                        context.insert("enable_karpenter", &false);
+                            let mut context = Context::new();
+                            context.insert("enable_karpenter", &false);
 
-                        tera.render("self-managed-template-nginx", &context)
-                            .unwrap_or(override_values)
-                    } else {
-                        override_values
+                            tera.render("self-managed-template-nginx", &context)
+                                .unwrap_or(override_values)
+                        }
+                        _ => override_values,
                     };
 
                     let replace_values = override_values
@@ -364,7 +384,7 @@ mod tests {
                 name: SupportedCharts::Promtail,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Loki,
@@ -549,7 +569,7 @@ mod tests {
                 name: SupportedCharts::Promtail,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Loki,
@@ -715,7 +735,7 @@ mod tests {
                 name: SupportedCharts::Promtail,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
-                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+                values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
             },
             ChartMeta {
                 name: SupportedCharts::Loki,
@@ -853,6 +873,172 @@ mod tests {
             ValuesFile::new_scaleway(),
             "values-demo-scaleway.yaml".to_string(),
             scaleway_qovery_chart_demo.clone(),
+            prefix.clone(),
+        );
+
+        // Azure
+        let mut azure_qovery_chart = minimal_qovery_chart.clone();
+        azure_qovery_chart.charts_source_path = vec![
+            ChartMeta {
+                name: SupportedCharts::QoveryAzureStorageClass,
+                category: ChartCategory::Azure,
+                source_path: ChartSourcePath::AzureBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::Dns,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Promtail,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Loki,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+        ];
+        generate_config_file(
+            ValuesFile::new_azure(),
+            "values-azure.yaml".to_string(),
+            azure_qovery_chart.clone(),
+            prefix.clone(),
+        );
+
+        // Azure demo
+        let mut azure_qovery_chart_demo = minimal_qovery_chart.clone();
+        azure_qovery_chart_demo.charts_source_path = vec![
+            ChartMeta {
+                name: SupportedCharts::QoveryAzureStorageClass,
+                category: ChartCategory::Azure,
+                source_path: ChartSourcePath::AzureBootstrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::IngressNginx,
+                category: ChartCategory::Ingress,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::ExternalDNS,
+                category: ChartCategory::Dns,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Promtail,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::Loki,
+                category: ChartCategory::Logging,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerConfigs,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManager,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::CertManagerQoveryWebhook,
+                category: ChartCategory::Certificates,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryClusterAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: Some(ValuesSourcePath::DemoChartValues),
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::PriorityClass,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryEngine,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+        ];
+        generate_config_file(
+            ValuesFile::new_azure(),
+            "values-demo-azure.yaml".to_string(),
+            azure_qovery_chart_demo.clone(),
             prefix.clone(),
         );
 
