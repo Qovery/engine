@@ -6,7 +6,7 @@ clusterName: ""
 
 securityGroupId: ""
 
-diskSizeInGib: 0
+diskSize: 0Gi
 
 capacity_type: []
 explicitSubnetIds: []
@@ -44,4 +44,4 @@ gpuNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
-  diskSizeInGib: 100
+  diskSize: 100Gi

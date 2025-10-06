@@ -8,6 +8,7 @@ use ::function_name::named;
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+use qovery_engine::infrastructure::models::disk_size::DiskSize;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 use qovery_engine::infrastructure::models::kubernetes::karpenter::{
     KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
@@ -264,7 +265,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                 config: KarpenterParameters {
                     spot_enabled: true,
                     max_node_drain_time_in_secs: None,
-                    disk_size_in_gib: 50,
+                    disk_size: DiskSize::Gib(50),
                     default_service_architecture: CpuArchitecture::AMD64,
                     qovery_node_pools: KarpenterNodePool {
                         requirements: vec![
@@ -297,6 +298,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             }),
                         },
                         gpu_override: Some(KarpenterGpuNodePoolOverride {
+                            disk_size: DiskSize::Gib(100),
                             requirements: Some(vec![
                                 KarpenterNodePoolRequirement {
                                     key: KarpenterNodePoolRequirementKey::InstanceFamily,

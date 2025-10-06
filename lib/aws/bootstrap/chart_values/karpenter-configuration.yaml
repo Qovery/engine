@@ -1,6 +1,6 @@
 clusterName: set-by-engine-code
 securityGroupId: set-by-engine-code
-diskSizeInGib: set-by-engine-code
+diskSize: set-by-engine-code
 capacity_type: set-by-engine-code
 explicitSubnetIds: []
 
@@ -28,4 +28,4 @@ gpuNodePool:
   limits:
     maxCpu: ""
     maxMemory: ""
-  diskSizeInGib: 100
+  diskSize: set-by-engine-code
