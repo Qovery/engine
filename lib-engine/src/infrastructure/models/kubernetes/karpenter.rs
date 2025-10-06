@@ -1,4 +1,5 @@
 use crate::environment::models::domain::ToHelmString;
+use crate::infrastructure::models::disk_size::DiskSize;
 use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use duration_str::deserialize_duration;
 use itertools::Itertools;
@@ -29,7 +30,8 @@ impl Display for KarpenterNodePoolType {
 pub struct KarpenterParameters {
     pub spot_enabled: bool,
     pub max_node_drain_time_in_secs: Option<i32>,
-    pub disk_size_in_gib: i32,
+    #[serde(default)]
+    pub disk_size: DiskSize,
     pub default_service_architecture: CpuArchitecture,
     pub qovery_node_pools: KarpenterNodePool,
 }
@@ -120,6 +122,7 @@ pub struct KarpenterGpuNodePoolOverride {
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
+    pub disk_size: DiskSize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

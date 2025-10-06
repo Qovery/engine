@@ -158,8 +158,8 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 value: self.kubernetes_version.to_string(),
             },
             ChartSetValue {
-                key: "diskSizeInGib".to_string(),
-                value: format!("{}Gi", self.karpenter_parameters.disk_size_in_gib),
+                key: "diskSize".to_string(),
+                value: self.karpenter_parameters.disk_size.to_gib_string(),
             },
             ChartSetValue {
                 key: "tags.ClusterId".to_string(),
@@ -333,6 +333,12 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                         value: limits.max_memory.to_string(),
                     });
                 }
+
+                // Disk size
+                values.push(ChartSetValue {
+                    key: "gpuNodePool.diskSize".to_string(),
+                    value: gpu_pool_override.disk_size.to_gib_string(),
+                });
             }
             None => {
                 values.push(ChartSetValue {
@@ -429,6 +435,7 @@ mod tests {
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
+    use crate::infrastructure::models::disk_size::DiskSize;
     use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
         KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
@@ -704,6 +711,7 @@ mod tests {
                             schedule: "0 1 * * 3".to_string(),
                         }],
                         limits: None,
+                        disk_size: DiskSize::Gib(100),
                         requirements: Some(vec![
                             KarpenterNodePoolRequirement {
                                 key: KarpenterNodePoolRequirementKey::InstanceCategory,
@@ -829,7 +837,7 @@ mod tests {
             KarpenterParameters {
                 spot_enabled: with_spot,
                 max_node_drain_time_in_secs: None,
-                disk_size_in_gib: 50,
+                disk_size: DiskSize::Gib(50),
                 default_service_architecture: ARM64,
                 qovery_node_pools,
             },

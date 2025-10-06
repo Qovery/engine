@@ -27,7 +27,7 @@ spec:
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
-        volumeSize: "{{ .Values.gpuNodePool.diskSizeInGib }}G"
+        volumeSize: "{{ .Values.gpuNodePool.diskSize }}"
         volumeType: gp3
         encrypted: true
         deleteOnTermination: true

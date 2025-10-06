@@ -200,7 +200,12 @@ impl<T: CloudProvider> Application<T> {
             .advanced_settings
             .deployment_affinity_node_required
             .get("karpenter.sh/nodepool"), Some(v) if v.to_lowercase() == "stable");
-                if utils::need_target_stable_node_pool(kubernetes, self.min_instances, is_stateful_set, service_explicitely_targets_stable_nodepool) {
+                if utils::need_target_stable_node_pool(
+                    kubernetes,
+                    self.min_instances,
+                    is_stateful_set,
+                    service_explicitely_targets_stable_nodepool,
+                ) {
                     utils::target_karpenter_node_pool(
                         KarpenterNodePoolType::Stable,
                         &mut deployment_affinity_node_required,
