@@ -216,6 +216,7 @@ where
         match self.terraform_action {
             TerraformAction::TerraformPlanOnly { execution_id: _ }
             | TerraformAction::TerraformDestroy
+            | TerraformAction::TerraformInit
             | TerraformAction::TerraformUnlockState => {}
             TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
                 match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(

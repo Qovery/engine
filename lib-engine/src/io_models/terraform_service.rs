@@ -122,6 +122,7 @@ pub enum TerraformActionCommand {
     ApplyFromPlan,
     Destroy,
     ForceUnlockState,
+    Init, // Used to migrate the state of the user with init -migrate-state -force-copy
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -449,6 +450,7 @@ impl TerraformService {
             TerraformActionCommand::ForceUnlockState => {
                 models::terraform_service::TerraformAction::TerraformUnlockState
             }
+            TerraformActionCommand::Init => models::terraform_service::TerraformAction::TerraformInit,
         };
 
         Ok(action)
@@ -645,6 +647,9 @@ attempt_force_unlock() {
 }
 
 case "$CMD" in
+    "init")
+        run_terraform_init
+        ;;
     "apply")
         run_terraform_init
         log "terraform validate $TF_CLI_ARGS_validate"
