@@ -161,14 +161,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
             self.stop_record(StepStatus::Cancel);
             self.logger.send_error(EngineError::new_engine_error(
                 *error.clone(),
-                format!(
-                    r#"
-                🚫 {} has been cancelled.
-                "#,
-                    self.action
-                )
-                .trim()
-                .to_string(),
+                format!(r#"🚫 {} has been cancelled."#, self.action).trim().to_string(),
                 None,
             ));
             return self.logger;
@@ -177,12 +170,7 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
         self.logger.send_error(*error.clone());
         self.logger.send_error(EngineError::new_engine_error(
             *error.clone(),
-            format!("
-❌ {} of terraform service failed !
-⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️ ⬇️
-⛑ Look at the Deployment Status Reports above and use our troubleshooting guide to fix it https://hub.qovery.com/docs/using-qovery/troubleshoot/
-⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️ ⬆️
-                ", self.action),
+            format!("❌ {} of terraform service failed !", self.action),
             None,
         ));
 
