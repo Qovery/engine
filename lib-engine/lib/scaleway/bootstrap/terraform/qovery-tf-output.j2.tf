@@ -18,3 +18,15 @@ output "cluster_id" {
 output "private_network_id" {
   value = scaleway_vpc_private_network.private_network.id
 }
+
+{% if create_private_network and enable_public_gateway_nat %}
+output "egress_public_ip" {
+  description = "Static public IP used for outbound"
+  value       = scaleway_vpc_public_gateway_ip.pgw_ip.address
+}
+
+output "public_gateway_id" {
+  value = scaleway_vpc_public_gateway.pgw.id
+}
+
+{% endif %}

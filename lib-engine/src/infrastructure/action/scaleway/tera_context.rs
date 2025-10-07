@@ -7,10 +7,13 @@ use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
+use crate::infrastructure::models::kubernetes::scaleway::public_gateway_type::PublicGatewayType;
 use crate::io_models::context::Features;
+use crate::io_models::models::VpcQoveryNetworkMode;
 use crate::string::terraform_list_format;
 use reqwest::header;
 use serde_derive::{Deserialize, Serialize};
+use std::str::FromStr;
 use tera::Context as TeraContext;
 
 impl ToInfraTeraContext for Kapsule {
@@ -206,6 +209,28 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
         create_private_network = true;
     }
     context.insert("create_private_network", &create_private_network);
+
+    // Network
+    // NatGateway
+    if let Some(VpcQoveryNetworkMode::WithNatGateways { nat_gateway_parameters }) =
+        &cluster.options.vpc_qovery_network_mode
+    {
+        context.insert("enable_public_gateway_nat", &true);
+        if let Some(scw_vpc_gateway_type) = &nat_gateway_parameters
+            .as_ref()
+            .and_then(|params| params.vpc_gateway_type.as_ref())
+            // defaulting to small if not set
+            .or(Some(&PublicGatewayType::Small.to_terraform_format_string()))
+        {
+            let scw_vpc_gateway_type =
+                PublicGatewayType::from_str(&scw_vpc_gateway_type.to_lowercase()).map_err(|_e| {
+                    EngineError::new_scaleway_invalid_gateway_type(event_details, scw_vpc_gateway_type.to_string())
+                })?;
+            context.insert("public_gateway_type", &scw_vpc_gateway_type.to_terraform_format_string());
+        }
+    } else {
+        context.insert("enable_public_gateway_nat", &false);
+    }
 
     if let Some(nginx_controller_log_format_upstream) =
         &cluster.advanced_settings().nginx_controller_log_format_upstream

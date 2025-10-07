@@ -1,9 +1,3 @@
-{% if create_private_network %}
-resource "scaleway_vpc_private_network" "private_network" {
-  name = "private_network_${var.kubernetes_cluster_id}"
-  tags = local.tags_ks_list
-}
-{% endif %}
 resource "scaleway_k8s_cluster" "kubernetes_cluster"  {
   name    = var.kubernetes_cluster_name
   type    = var.scaleway_ks_type

@@ -12,7 +12,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::io_models::models::{CpuArchitecture, NodeGroups};
+use crate::io_models::models::{CpuArchitecture, NodeGroups, VpcQoveryNetworkMode};
 use crate::logger::Logger;
 
 use crate::environment::models::domain::ToTerraformString;
@@ -81,6 +81,8 @@ pub struct KapsuleOptions {
     // Scaleway
     #[serde(default)]
     pub scaleway_kubernetes_type: KapsuleClusterType,
+    #[serde(default)]
+    pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
 
     // Other
     pub tls_email_report: String,
@@ -102,6 +104,7 @@ impl KapsuleOptions {
         tls_email_report: String,
         scaleway_kubernetes_type: KapsuleClusterType,
         metrics_parameters: Option<MetricsParameters>,
+        vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
     ) -> KapsuleOptions {
         KapsuleOptions {
             qovery_api_url,
@@ -116,6 +119,7 @@ impl KapsuleOptions {
             tls_email_report,
             scaleway_kubernetes_type,
             metrics_parameters,
+            vpc_qovery_network_mode,
         }
     }
 }

@@ -580,6 +580,25 @@ scw-infra:
       - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
+scw-infra-nat-gateway:
+  stage: tests
+  extends: [.needs-docker, .with-artifacts]
+  retry: 1
+  timeout: 4 hours
+  script:
+    - ./helper.sh scw_infra_nat_gateway
+  tags:
+    - vm-3cpu-12gmem-0g
+  dependencies:
+    - build-and-lint-code
+  only:
+    refs:
+      - merge_requests
+    variables:
+      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
+      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
+      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+
 scw-infra-upgrade:
   stage: tests
   extends: [.needs-docker, .with-artifacts]

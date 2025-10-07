@@ -628,6 +628,9 @@ aws_ec2_infra_upgrade)
 scw_infra)
   run_tests test-scw-infra $commit_id 20
   ;;
+scw_infra_nat_gateway)
+  run_tests test-scw-infra-nat-gateway $commit_id 20
+  ;;
 scw_infra_upgrade)
   run_tests test-scw-infra-upgrade $commit_id 20
   ;;
