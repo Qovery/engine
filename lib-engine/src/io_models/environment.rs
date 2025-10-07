@@ -18,7 +18,7 @@ use crate::io_models::helm_chart::HelmChart;
 use crate::io_models::job::Job;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::router::Router;
-use crate::io_models::terraform_service::TerraformService;
+use crate::io_models::terraform::TerraformService;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::utilities::base64_replace_comma_to_new_line;
 use itertools::Itertools;
