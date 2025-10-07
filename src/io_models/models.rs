@@ -1,7 +1,8 @@
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
@@ -113,10 +114,74 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct NatGatewayParameters {
+    pub enable_static_ip: bool,
+    pub vpc_gateway_type: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
 pub enum VpcQoveryNetworkMode {
-    WithNatGateways,
     WithoutNatGateways,
+    WithNatGateways {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        nat_gateway_parameters: Option<NatGatewayParameters>,
+    },
+}
+
+impl Display for VpcQoveryNetworkMode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                VpcQoveryNetworkMode::WithoutNatGateways => "WithoutNatGateways".to_string(),
+                VpcQoveryNetworkMode::WithNatGateways { .. } => "WithNatGateways".to_string(),
+            }
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for VpcQoveryNetworkMode {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+
+        match value {
+            Value::String(s) => match s.as_str() {
+                "WithoutNatGateways" => Ok(VpcQoveryNetworkMode::WithoutNatGateways),
+                "WithNatGateways" => Ok(VpcQoveryNetworkMode::WithNatGateways {
+                    nat_gateway_parameters: None,
+                }),
+                _ => Err(serde::de::Error::custom(format!("Unknown VpcQoveryNetworkMode: {s}"))),
+            },
+            Value::Object(map) => {
+                let type_field = map
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .ok_or_else(|| serde::de::Error::custom("Missing 'type' field"))?;
+
+                if type_field == "WithNatGateways" {
+                    // Handle nat_gateway_parameters being null, missing, or an object
+                    let params = match map.get("nat_gateway_parameters") {
+                        None => None,
+                        Some(Value::Null) => None,
+                        Some(v) => Some(serde_json::from_value(v.clone()).map_err(serde::de::Error::custom)?),
+                    };
+
+                    Ok(VpcQoveryNetworkMode::WithNatGateways {
+                        nat_gateway_parameters: params,
+                    })
+                } else {
+                    Err(serde::de::Error::custom(format!("Unknown type: {type_field}",)))
+                }
+            }
+            _ => Err(serde::de::Error::custom("Expected string or object for VpcQoveryNetworkMode")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,11 +191,6 @@ pub struct VpcCustomRoutingTable {
     target: String,
 }
 
-impl fmt::Display for VpcQoveryNetworkMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CpuLimits {
     pub cpu_request: String, // TODO(benjaminch): Replace String by KubernetesCpuResourceUnit to leverage conversion and type
@@ -392,7 +452,7 @@ impl CustomerHelmChartsOverride {
 
 #[cfg(test)]
 mod tests {
-    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode};
     use serde::Deserialize;
     use serde_derive::Serialize;
     use serde_with::DisplayFromStr;
@@ -600,5 +660,210 @@ mod tests {
                 cpu_in_m: KubernetesCpuResourceUnit::MilliCpu(1000),
             }
         );
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_string_without_nat_gateways() {
+        // setup
+        let json = r#""WithoutNatGateways""#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), VpcQoveryNetworkMode::WithoutNatGateways);
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_string_with_nat_gateways() {
+        // setup
+        let json = r#""WithNatGateways""#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            VpcQoveryNetworkMode::WithNatGateways {
+                nat_gateway_parameters: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_string_invalid() {
+        // setup
+        let json = r#""InvalidVariant""#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Unknown VpcQoveryNetworkMode"));
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_no_params() {
+        // setup
+        let json = r#"{"type": "WithNatGateways"}"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            VpcQoveryNetworkMode::WithNatGateways {
+                nat_gateway_parameters: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_null_params() {
+        // setup
+        let json = r#"{"type": "WithNatGateways", "nat_gateway_parameters": null}"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            VpcQoveryNetworkMode::WithNatGateways {
+                nat_gateway_parameters: None
+            }
+        );
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_with_params() {
+        // setup
+        let json = r#"{
+            "type": "WithNatGateways",
+            "nat_gateway_parameters": {
+                "enable_static_ip": true,
+                "vpc_gateway_type": "VPC-GW-S"
+            }
+        }"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        let network_mode = result.unwrap();
+        match network_mode {
+            VpcQoveryNetworkMode::WithNatGateways { nat_gateway_parameters } => {
+                assert!(nat_gateway_parameters.is_some());
+                let params = nat_gateway_parameters.unwrap();
+                assert!(params.enable_static_ip);
+                assert!(params.vpc_gateway_type.is_some());
+            }
+            _ => panic!("Expected WithNatGateways variant"),
+        }
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_with_params_no_static_ip() {
+        // setup
+        let json = r#"{
+            "type": "WithNatGateways",
+            "nat_gateway_parameters": {
+                "enable_static_ip": false
+            }
+        }"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_ok());
+        let network_mode = result.unwrap();
+        match network_mode {
+            VpcQoveryNetworkMode::WithNatGateways { nat_gateway_parameters } => {
+                assert!(nat_gateway_parameters.is_some());
+                let params = nat_gateway_parameters.unwrap();
+                assert!(!params.enable_static_ip);
+                assert!(params.vpc_gateway_type.is_none());
+            }
+            _ => panic!("Expected WithNatGateways variant"),
+        }
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_missing_type_field() {
+        // setup
+        let json = r#"{"nat_gateway_parameters": null}"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Missing 'type' field"));
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_object_invalid_type() {
+        // setup
+        let json = r#"{"type": "InvalidType"}"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Unknown type"));
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_invalid_type() {
+        // setup
+        let json = r#"123"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Expected string or object for VpcQoveryNetworkMode"));
+    }
+
+    #[test]
+    fn test_vpc_qovery_network_mode_deserialize_from_array() {
+        // setup
+        let json = r#"["WithNatGateways"]"#;
+
+        // execute
+        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+
+        // verify
+        assert!(result.is_err());
+        let error_message = result.unwrap_err().to_string();
+        assert!(error_message.contains("Expected string or object for VpcQoveryNetworkMode"));
+    }
+
+    #[test]
+    fn test_vpc_network_mode_to_string() {
+        // setup
+        let without_nat = VpcQoveryNetworkMode::WithoutNatGateways;
+        let with_nat = VpcQoveryNetworkMode::WithNatGateways {
+            nat_gateway_parameters: None,
+        };
+
+        // execute & verify
+        assert_eq!(without_nat.to_string(), "WithoutNatGateways");
+        assert_eq!(with_nat.to_string(), "WithNatGateways");
     }
 }

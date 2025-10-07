@@ -201,6 +201,7 @@ test-aws-infra-arm = []
 test-aws-infra-nat-gateway = []
 test-azure-infra = []
 test-scw-infra = []
+test-scw-infra-nat-gateway = []
 test-gcp-infra = []
 test-all-infra = [
     "test-aws-infra",
@@ -209,6 +210,7 @@ test-all-infra = [
     "test-aws-infra-nat-gateway",
     "test-azure-infra",
     "test-scw-infra",
+    "test-scw-infra-nat-gateway",
     "test-gcp-infra",
 ]
 

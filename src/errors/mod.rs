@@ -13,11 +13,13 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 
 use crate::cmd::{command, terraform};
 use crate::environment::models::database::DatabaseError;
+use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::router::RouterError;
 use crate::environment::models::types::VersionsNumber;
 use crate::events::{EventDetails, Stage};
 use crate::infrastructure::models::cloud_provider::io::InputError;
 use crate::infrastructure::models::kubernetes::KubernetesError;
+use crate::infrastructure::models::kubernetes::scaleway::public_gateway_type::PublicGatewayType;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::services::kubernetes_api_deprecation_service::KubernetesDeprecationServiceError;
 use aws_sdk_docdb::error::SdkError as DocdbSdkError;
@@ -36,6 +38,7 @@ use kube::error::Error as KubeError;
 use serde::de::DeserializeOwned;
 use std::fmt::{Debug, Display, Formatter};
 use std::io::Error;
+use strum::IntoEnumIterator;
 use thiserror::Error;
 use url::Url;
 use uuid::Uuid;
@@ -1141,7 +1144,9 @@ pub enum Tag {
     /// RouterBasicAuthEnvVarNotFound: represents an error with a router not able to find value of basic auth env variable
     RouterBasicAuthEnvVarNotFound,
     /// CannotFetchScalewayPrivateNetworks: (only during migration VPC) We need to fetch the private networks to identify already existing clusters with no private network
-    CannotFetchScalewayPrivateNetworks,
+    ScalewayCannotFetchPrivateNetworks,
+    /// ScalewayInvalidNatGatewayType: Invalid NAT Gateway type provided
+    ScalewayInvalidNatGatewayType,
     /// K8sCannotGetNodes: represents an error where we are not able to get nodes.
     K8sCannotGetNodes,
     /// K8sCannotGetPDBs: represents an error where we are not able to get PDBs.
@@ -4742,11 +4747,31 @@ impl EngineError {
     pub fn new_scaleway_cannot_fetch_private_networks(event_details: EventDetails, raw_error: String) -> EngineError {
         EngineError::new(
             event_details,
-            Tag::CannotFetchScalewayPrivateNetworks,
+            Tag::ScalewayCannotFetchPrivateNetworks,
             format!("Impossible to fetch your cluster private networks: {raw_error}"),
             None,
             None,
             Some("Please check your credentials".to_string()),
+        )
+    }
+
+    pub fn new_scaleway_invalid_gateway_type(
+        event_details: EventDetails,
+        raw_public_natgateway_type: String,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::ScalewayInvalidNatGatewayType,
+            format!("Invalid Scaleway Public Gateway type `{raw_public_natgateway_type}`"),
+            None,
+            None,
+            Some(format!(
+                "Supported Scaleway Public Gateway types: {}",
+                PublicGatewayType::iter()
+                    .map(|t| t.to_terraform_format_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
         )
     }
 

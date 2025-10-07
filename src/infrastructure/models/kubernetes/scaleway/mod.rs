@@ -1,5 +1,6 @@
 pub mod kapsule;
 pub mod node;
+pub mod public_gateway_type;
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum ScwStorageType {

@@ -56,6 +56,14 @@ variable "scaleway_secret_key" {
   sensitive   = true
 }
 
+{% if create_private_network and enable_public_gateway_nat %}
+variable "public_gateway_type" {
+  description = "Public Gateway size (e.g. VPC-GW-S, VPC-GW-M...)"
+  type        = string
+  default     = "{{ public_gateway_type }}"
+}
+{% endif %}
+
 # Kubernetes
 
 variable "kubernetes_cluster_long_id" {

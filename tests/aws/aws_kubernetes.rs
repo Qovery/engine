@@ -20,7 +20,8 @@ use qovery_engine::infrastructure::models::kubernetes::karpenter::{
 };
 use qovery_engine::io_models::models::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
 use qovery_engine::io_models::models::{
-    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode,
+    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters,
+    VpcQoveryNetworkMode,
 };
 use qovery_engine::utilities::to_short_id;
 
@@ -130,7 +131,12 @@ fn create_and_destroy_eks_cluster_with_nat_gw_in_us_east_2() {
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::Classic,
-        WithNatGateways,
+        WithNatGateways {
+            nat_gateway_parameters: Some(NatGatewayParameters {
+                enable_static_ip: true,
+                ..Default::default()
+            }),
+        },
         function_name!(),
         NodeManager::Default,
         vec![],
@@ -430,7 +436,12 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
     create_and_destroy_eks_cluster(
         region,
         ClusterTestType::WithPause,
-        WithNatGateways,
+        WithNatGateways {
+            nat_gateway_parameters: Some(NatGatewayParameters {
+                enable_static_ip: true,
+                ..Default::default()
+            }),
+        },
         function_name!(),
         NodeManager::Karpenter {
             config: karpenter_parameters,
