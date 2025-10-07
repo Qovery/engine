@@ -588,124 +588,13 @@ impl TerraformService {
     }
 
     fn get_docker_file(&self) -> String {
-        // TODO TF remove from here, use a mirror of  hashicorp/terraform, customize version, path, parameter of terraform init,
-        format!(
-            r#"
-FROM hashicorp/terraform:{}
-RUN <<EOF
-set -e
-apk update
-apk add dumb-init rsync
-adduser -D -u 1000 app
-mkdir /data
-chown -R app:app /data
-EOF
-
-WORKDIR /data
-COPY --chown=app:app . .
-
-RUN chmod +x entrypoint.sh
-USER app
-
-ENTRYPOINT ["/usr/bin/dumb-init", "--", "/bin/sh", "/data/entrypoint.sh"]
-"#,
-            self.provider_version
-        )
+        let dockerfile = include_str!("resources/terraform.dockerfile");
+        dockerfile.replace("{{provider_version}}", &self.provider_version)
     }
 
-    fn get_entry_point_sh(&self) -> String {
-        // TODO TF remove from here
-        r#"
-#!/bin/bash
-set -e
-
-ROOT_MODULE_PATH=$1
-CMD=$2
-PLAN_NAME=$3
-shift 3
-
-mkdir -p /persistent-volume/terraform-work
-mkdir -p /persistent-volume/terraform-plan-output
-
-rsync -a --delete \
-          --exclude='entrypoint.sh' \
-          --exclude='Dockerfile.qovery' \
-          --exclude='.terraform' \
-          --exclude='.terraform.lock.hcl' \
-          --exclude='.-tf.plan' \
-          /data/ /persistent-volume/terraform-work
-
-cd /persistent-volume/terraform-work/$ROOT_MODULE_PATH
-
-log() {
-  echo -e "\n[==> TERRAFORM]: $1\n"
-}
-
-
-run_terraform_init() {
-  log "terraform init $TF_CLI_ARGS_init"
-  terraform init -backend-config="/backend-config/config" 2>&1 \
-    | awk '{print} /Terraform has been successfully initialized!/ {exit}'
-}
-
-attempt_force_unlock() {
-  # Try to detect if state is locked by attempting a plan operation
-  LOCK_OUTPUT=$(terraform plan -input=false 2>&1 || true)
-  # Extract lock ID from the error message
-  LOCK_ID=$(echo "$LOCK_OUTPUT" | grep -oE 'ID:[[:space:]]*[0-9a-fA-F-]{36}' | sed 's/ID:[[:space:]]*//' | head -1)
-  if [ -n "$LOCK_ID" ]; then
-    log "found lock ID: $LOCK_ID"
-    log "terraform force-unlock -force $LOCK_ID"
-    terraform force-unlock -force "$LOCK_ID" || true
-  else
-    log "could not extract lock ID"
-  fi
-}
-
-case "$CMD" in
-    "init")
-        run_terraform_init
-        ;;
-    "apply")
-        run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform apply -input=false -auto-approve"
-        terraform apply -input=false -auto-approve "$@"
-        log "terraform output"
-        terraform output -json > /qovery-output/qovery-output.json
-        ;;
-    "plan_only")
-        run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform plan $TF_CLI_ARGS_plan"
-        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan "$@"
-        ;;
-    "apply_from_plan")
-        run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform apply $TF_CLI_ARGS_apply"
-        terraform apply -input=false /persistent-volume/terraform-plan-output/${PLAN_NAME}-tf.plan
-        log "terraform output $TF_CLI_ARGS_output"
-        terraform output -json > /qovery-output/qovery-output.json
-        ;;
-    "destroy")
-        log "terraform destroy $TF_CLI_ARGS_destroy"
-        terraform destroy -auto-approve -input=false "$@"
-        ;;
-    "unlock_state")
-        run_terraform_init
-        attempt_force_unlock
-        ;;
-    *)
-        echo "Command not handled by entrypoint.sh: '\$CMD'"
-        exit 1
-        ;;
-esac
-            "#
-        .to_string()
+    fn get_entry_point_sh(&self) -> &str {
+        let entry_point_sh = include_str!("resources/entrypoint.sh");
+        entry_point_sh
     }
 
     fn get_backend_block(&self) -> Option<String> {
@@ -728,7 +617,7 @@ terraform {{
         let mut extra_files = vec![GitRepositoryExtraFile {
             path: entry_point_file_path
                 .ok_or_else(|| TerraformServiceError::InvalidConfig("entrypoint.sh path is not defined".to_string()))?,
-            content: self.get_entry_point_sh(),
+            content: self.get_entry_point_sh().to_string(),
         }];
 
         if let Some(backend_block) = self.get_backend_block() {

@@ -15,7 +15,7 @@ use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
-use crate::io_models::terraform_service::TerraformServiceAdvancedSettings;
+use crate::io_models::terraform::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use base64::Engine;

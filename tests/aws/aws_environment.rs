@@ -31,7 +31,7 @@ use qovery_engine::io_models::job::{ContainerRegistries, Job, JobSchedule, JobSo
 use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
-use qovery_engine::io_models::terraform_service::{
+use qovery_engine::io_models::terraform::{
     PersistentStorage, TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType,
     TerraformFilesSource, TerraformProvider, TerraformService,
 };
