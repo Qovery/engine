@@ -6,7 +6,7 @@ certManager:
 
 image:
   repository: public.ecr.aws/r3m4q3r9/cert-manager-webhook-qovery
-  tag: "f49b03d8"
+  tag: "84a4b276"
   pullPolicy: IfNotPresent
 
 imagePullSecrets:
