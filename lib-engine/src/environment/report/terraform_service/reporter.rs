@@ -28,6 +28,7 @@ pub struct TerraformServiceDeploymentReporter<T> {
     namespace: String,
     kube_client: kube::Client,
     pod_recv: Option<Mutex<mpsc::Receiver<Pod>>>,
+    skip_terraform_job_execution: bool,
     _phantom: PhantomData<T>,
 }
 
@@ -46,6 +47,27 @@ impl<T> TerraformServiceDeploymentReporter<T> {
             kube_client: deployment_target.kube.client(),
             namespace: deployment_target.environment.namespace().to_string(),
             pod_recv: Some(Mutex::new(pod_recv)),
+            skip_terraform_job_execution: false,
+            _phantom: Default::default(),
+        }
+    }
+
+    pub fn new_with_skip_terraform_job_execution(
+        chart: &impl TerraformServiceTrait,
+        deployment_target: &DeploymentTarget,
+        action: Action,
+        pod_recv: mpsc::Receiver<Pod>,
+        skip_terraform_job_execution: bool,
+    ) -> Self {
+        Self {
+            long_id: *chart.long_id(),
+            logger: deployment_target.env_logger(chart, action.to_environment_step()),
+            metrics_registry: deployment_target.metrics_registry.clone(),
+            action,
+            kube_client: deployment_target.kube.client(),
+            namespace: deployment_target.environment.namespace().to_string(),
+            pod_recv: Some(Mutex::new(pod_recv)),
+            skip_terraform_job_execution,
             _phantom: Default::default(),
         }
     }
@@ -120,6 +142,14 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
     }
 
     fn deployment_in_progress(&self, reporter_state: &mut Self::DeploymentState) {
+        if self.skip_terraform_job_execution {
+            // When skipping terraform job execution, no pod is created, so we just report progress without waiting for logs
+            self.logger.send_progress(
+                "Skipping terraform job execution - performing cleanup without terraform execution".to_string(),
+            );
+            return;
+        }
+
         let logs_stream = reporter_state.terraform_output_stream_mut(Some(self.long_id));
         // here reporter has received the pod event so we consider the execution started
         self.logger.switch_to_executing();
@@ -139,13 +169,15 @@ impl<T: Send + Sync> DeploymentReporter for TerraformServiceDeploymentReporter<T
         result: &Result<Self::DeploymentResult, Box<EngineError>>,
         mut reporter_state: Self::DeploymentState,
     ) -> EnvLogger {
-        // Consume all the remaining logs of the terraform output
-        block_on(reporter_state.terraform_output_stream_mut(None).for_each(|line| {
-            if let Ok(line) = line {
-                self.logger.send_progress(line);
-            }
-            future::ready(())
-        }));
+        // Consume all the remaining logs of the terraform output only if we're not skipping terraform job execution
+        if !self.skip_terraform_job_execution {
+            block_on(reporter_state.terraform_output_stream_mut(None).for_each(|line| {
+                if let Ok(line) = line {
+                    self.logger.send_progress(line);
+                }
+                future::ready(())
+            }));
+        }
 
         let error = match result {
             Ok(_) => {
