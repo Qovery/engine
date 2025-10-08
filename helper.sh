@@ -185,7 +185,7 @@ autoscaler.maxReplicas="50",\
 autoscaler.minReplicas="1",\
 autoscaler.averageValue="0.5",\
 engineResources.limits.cpu="1",\
-engineResources.limits.memory="1Gi",\
+engineResources.limits.memory="2Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="1Gi"
 }
