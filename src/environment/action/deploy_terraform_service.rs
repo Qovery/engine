@@ -87,7 +87,11 @@ where
     }
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
+        // If the TerraformAction is Noop, we should delete terraform service related resources (job, helm, etc) without triggering terraform destroy
+        let skip_terraform_destroy = matches!(self.terraform_action, TerraformAction::TerraformNoop);
+
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
+
         let mut pre_run: TerraformPreRun =
             Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
         let mut post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {});
@@ -99,14 +103,30 @@ where
             // So the reporter can be unstuck
             (Some(tx), rx)
         };
-        let mut run: TerraformRun = Box::new(
-            move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
-                let (task, helm) =
-                    self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?;
-                helm.on_delete(target)?;
-                Ok(task)
-            },
-        );
+
+        let mut run: TerraformRun = if skip_terraform_destroy {
+            // For skip_terraform_destroy case: only cleanup job and helm without terraform execution
+            Box::new(
+                move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                    let helm = self.delete_job_and_cleanup(target, &event_details)?;
+                    // Uninstall helm release
+                    helm.on_delete(target)?;
+                    // Drop the sender to signal no pod will be sent
+                    drop(pod_tx.take());
+                    Ok(state)
+                },
+            )
+        } else {
+            // For normal case: deploy job and execute terraform destroy
+            Box::new(
+                move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+                    let (task, helm) =
+                        self.deploy_job_and_execute_cmd(target, &event_details, logger, state, pod_tx.take())?;
+                    helm.on_delete(target)?;
+                    Ok(task)
+                },
+            )
+        };
 
         let task = DeploymentTaskMut {
             pre_run: &mut pre_run,
@@ -114,7 +134,16 @@ where
             post_run_success: &mut post_run,
         };
 
-        execute_long_deployment(TerraformServiceDeploymentReporter::new(self, target, Action::Delete, rx), task)
+        execute_long_deployment(
+            TerraformServiceDeploymentReporter::new_with_skip_terraform_job_execution(
+                self,
+                target,
+                Action::Delete,
+                rx,
+                skip_terraform_destroy,
+            ),
+            task,
+        )
     }
 
     fn on_restart(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
@@ -134,6 +163,26 @@ impl<T: CloudProvider> TerraformService<T>
 where
     TerraformService<T>: ToTeraContext,
 {
+    fn delete_job_and_cleanup(
+        &self,
+        target: &DeploymentTarget,
+        event_details: &EventDetails,
+    ) -> Result<HelmDeployment, Box<EngineError>> {
+        // Ensure old job is deleted if exists
+        delete_old_job_if_exist(self.kube_name(), event_details, target)?;
+
+        // Prepare HelmDeployment to uninstall
+        let helm = self.helm_deployment(target, event_details)?;
+
+        // Cleanup backend config secret
+        let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
+            info!("Removing secret: {:?}", secret_name);
+            let _ = delete_backend_config_secret(secret_name, event_details, target);
+        });
+
+        Ok(helm)
+    }
+
     fn deploy_job_and_execute_cmd(
         &self,
         target: &DeploymentTarget,
@@ -162,22 +211,7 @@ where
         // But we can't uninstall the helm chart as we need to keep the persistent volume.
         delete_old_job_if_exist(self.kube_name(), event_details, target)?;
 
-        let chart = ChartInfo {
-            name: self.helm_release_name(),
-            path: self.workspace_directory().to_string(),
-            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
-            timeout_in_seconds: self.startup_timeout().as_secs() as i64,
-            k8s_selector: Some(self.kube_label_selector()),
-            ..Default::default()
-        };
-
-        let helm = HelmDeployment::new(
-            event_details.clone(),
-            self.to_tera_context(target)?,
-            PathBuf::from(self.helm_chart_dir()),
-            None,
-            chart,
-        );
+        let helm = self.helm_deployment(target, event_details)?;
 
         // create job
         helm.on_create(target)?;
@@ -217,7 +251,8 @@ where
             TerraformAction::TerraformPlanOnly { execution_id: _ }
             | TerraformAction::TerraformDestroy
             | TerraformAction::TerraformInit
-            | TerraformAction::TerraformUnlockState => {}
+            | TerraformAction::TerraformUnlockState
+            | TerraformAction::TerraformNoop => {}
             TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
                 match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(
                     target.kube.client(),
@@ -269,6 +304,32 @@ where
         }
 
         Ok((state, helm))
+    }
+
+    fn helm_deployment(
+        &self,
+        target: &DeploymentTarget,
+        event_details: &EventDetails,
+    ) -> Result<HelmDeployment, Box<EngineError>> {
+        let chart = self.build_chart(target);
+        Ok(HelmDeployment::new(
+            event_details.clone(),
+            self.to_tera_context(target)?,
+            PathBuf::from(self.helm_chart_dir()),
+            None,
+            chart,
+        ))
+    }
+
+    fn build_chart(&self, target: &DeploymentTarget) -> ChartInfo {
+        ChartInfo {
+            name: self.helm_release_name(),
+            path: self.workspace_directory().to_string(),
+            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+            timeout_in_seconds: self.startup_timeout().as_secs() as i64,
+            k8s_selector: Some(self.kube_label_selector()),
+            ..Default::default()
+        }
     }
 }
 

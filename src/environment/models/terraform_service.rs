@@ -324,6 +324,10 @@ impl<T: CloudProvider> TerraformService<T> {
                 let args = vec![base_path, "init".to_string(), String::new()];
                 args
             }
+            TerraformAction::TerraformNoop => {
+                // No command args needed since it's a noop
+                vec![]
+            }
         }
     }
 }
@@ -468,6 +472,7 @@ pub enum TerraformAction {
     TerraformDestroy,
     TerraformUnlockState,
     TerraformInit,
+    TerraformNoop,
 }
 
 pub struct TerraformBackendConfig(String);

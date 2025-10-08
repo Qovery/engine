@@ -123,6 +123,7 @@ pub enum TerraformActionCommand {
     Destroy,
     ForceUnlockState,
     Init, // Used to migrate the state of the user with init -migrate-state -force-copy
+    Noop,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -451,6 +452,7 @@ impl TerraformService {
                 models::terraform_service::TerraformAction::TerraformUnlockState
             }
             TerraformActionCommand::Init => models::terraform_service::TerraformAction::TerraformInit,
+            TerraformActionCommand::Noop => models::terraform_service::TerraformAction::TerraformNoop,
         };
 
         Ok(action)
