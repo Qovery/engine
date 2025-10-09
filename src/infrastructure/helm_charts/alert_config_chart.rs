@@ -8,6 +8,12 @@ use crate::infrastructure::helm_charts::{
 use crate::io_models::metrics::{AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig};
 use crate::utilities::to_short_id;
 use kube::Client;
+use uuid::Uuid;
+
+const ALERT_RECEIVER_PREFIX_K8S: &str = "qovery-alert-receiver";
+const ALERT_RECEIVER_PREFIX_LABEL: &str = "qovery_alert_receiver";
+const ALERT_PREFIX: &str = "qovery-alert";
+const DEFAULT_ALERT_MANAGER_CONFIG_NAME: &str = "qovery-alert-manager-config";
 
 pub struct AlertConfigChart {
     action: HelmAction,
@@ -59,19 +65,21 @@ impl ToCommonHelmChart for AlertConfigChart {
         if let Some(alert_config) = &self.alert_config
             && alert_config.enabled
         {
-            if let Some(config_name) = &alert_config.config_name {
-                values.push(ChartSetValue {
-                    key: "alertManagerConfigName".to_string(),
-                    value: config_name.clone(),
-                })
-            }
+            values.push(ChartSetValue {
+                key: "alertManagerConfigName".to_string(),
+                value: alert_config
+                    .config_name
+                    .as_deref()
+                    .unwrap_or(DEFAULT_ALERT_MANAGER_CONFIG_NAME)
+                    .to_string(),
+            });
 
             for (index, receiver) in alert_config.receivers.iter().enumerate() {
                 values.extend(build_receiver_values(index, receiver));
             }
-            for (index, alert) in alert_config.alerts.iter().enumerate() {
-                let alert_values = build_alert_values(index, alert);
 
+            for (index, alert) in alert_config.alerts.iter().enumerate() {
+                let alert_values = build_alert_values(index, alert, &self.prometheus_namespace);
                 values.extend(alert_values.values);
                 values_string.extend(alert_values.values_string);
             }
@@ -98,6 +106,18 @@ impl ToCommonHelmChart for AlertConfigChart {
     }
 }
 
+fn format_receiver_id_k8s(long_id: &Uuid) -> String {
+    format!("{}-{}", ALERT_RECEIVER_PREFIX_K8S, to_short_id(long_id))
+}
+
+fn format_receiver_id_label(long_id: &Uuid) -> String {
+    format!("{}_{}", ALERT_RECEIVER_PREFIX_LABEL, to_short_id(long_id))
+}
+
+fn format_alert_id(long_id: &Uuid) -> String {
+    format!("{}-{}", ALERT_PREFIX, to_short_id(long_id))
+}
+
 fn build_receiver_values(index: usize, receiver: &AlertConfigReceiver) -> Vec<ChartSetValue> {
     match receiver {
         AlertConfigReceiver::SlackConfig {
@@ -108,7 +128,11 @@ fn build_receiver_values(index: usize, receiver: &AlertConfigReceiver) -> Vec<Ch
         } => vec![
             ChartSetValue {
                 key: format!("receivers[{index}].id"),
-                value: format!("qovery-alert-receiver-{}", to_short_id(long_id)),
+                value: format_receiver_id_k8s(long_id),
+            },
+            ChartSetValue {
+                key: format!("receivers[{index}].matcher_label"),
+                value: format_receiver_id_label(long_id),
             },
             ChartSetValue {
                 key: format!("receivers[{index}].name"),
@@ -132,14 +156,20 @@ struct AlertChartValues {
     values_string: Vec<ChartSetValue>,
 }
 
-fn build_alert_values(index: usize, alert: &AlertConfigAlert) -> AlertChartValues {
-    let mut values = Vec::with_capacity(5);
-    let mut values_string = Vec::with_capacity(alert.labels.len());
+fn build_alert_values(index: usize, alert: &AlertConfigAlert, namespace: &HelmChartNamespaces) -> AlertChartValues {
+    let base_values_count = 5;
+    let optional_annotations_count = [&alert.summary, &alert.description, &alert.runbook_url]
+        .iter()
+        .filter(|opt| opt.is_some())
+        .count();
+
+    let mut values = Vec::with_capacity(base_values_count + optional_annotations_count);
+    let mut values_string = Vec::with_capacity(alert.labels.len() + alert.receivers.len());
 
     values.extend([
         ChartSetValue {
             key: format!("alerts[{index}].long_id"),
-            value: format!("qovery-alert-{}", to_short_id(&alert.long_id)),
+            value: format_alert_id(&alert.long_id),
         },
         ChartSetValue {
             key: format!("alerts[{index}].name"),
@@ -151,7 +181,11 @@ fn build_alert_values(index: usize, alert: &AlertConfigAlert) -> AlertChartValue
         },
         ChartSetValue {
             key: format!("alerts[{index}].for"),
-            value: alert.r#for.clone(),
+            value: format!("{}m", alert.for_duration_minutes),
+        },
+        ChartSetValue {
+            key: format!("alerts[{index}].labels.namespace"),
+            value: namespace.to_string(),
         },
     ]);
 
@@ -180,6 +214,13 @@ fn build_alert_values(index: usize, alert: &AlertConfigAlert) -> AlertChartValue
         key: format!("alerts[{index}].labels.{key}"),
         value: value.clone(),
     }));
+
+    for receiver_id in &alert.receivers {
+        values_string.push(ChartSetValue {
+            key: format!("alerts[{index}].labels.{}", format_receiver_id_label(receiver_id)),
+            value: "true".to_string(),
+        });
+    }
 
     AlertChartValues { values, values_string }
 }
