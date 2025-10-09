@@ -185,9 +185,9 @@ autoscaler.maxReplicas="50",\
 autoscaler.minReplicas="1",\
 autoscaler.averageValue="0.5",\
 engineResources.limits.cpu="1",\
-engineResources.limits.memory="2Gi",\
+engineResources.limits.memory="4Gi",\
 engineResources.requests.cpu="300m",\
-engineResources.requests.memory="2Gi"
+engineResources.requests.memory="3Gi"
 }
 
 function deploy_engines_environment_static_ip() { ## Release GA to prod
