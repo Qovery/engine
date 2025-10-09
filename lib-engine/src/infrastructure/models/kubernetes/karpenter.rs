@@ -31,6 +31,7 @@ pub struct KarpenterParameters {
     pub spot_enabled: bool,
     pub max_node_drain_time_in_secs: Option<i32>,
     #[serde(default)]
+    #[serde(alias = "disk_size_in_gib")]
     pub disk_size: DiskSize,
     pub default_service_architecture: CpuArchitecture,
     pub qovery_node_pools: KarpenterNodePool,
@@ -122,6 +123,8 @@ pub struct KarpenterGpuNodePoolOverride {
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
+    #[serde(default)]
+    #[serde(alias = "disk_size_in_gib")]
     pub disk_size: DiskSize,
 }
 
