@@ -9,20 +9,20 @@ metadata:
     alertmanager: main
 spec:
   route:
-    receiver: blackhole
+    receiver: default
     routes:
 {{- range $i, $rcv := $root.Values.receivers }}
       - matchers:
-          - name: {{ $rcv.name }}
+          - name: {{ $rcv.matcher_label }}
             value: "true"
             matchType: "="
-        receiver: {{ $rcv.name }}
+        receiver: {{ $rcv.id }}
         continue: true
 {{- end }}
   receivers:
-    - name: blackhole
+    - name: default
 {{- range $i, $rcv := $root.Values.receivers }}
-{{- $rcvName := $rcv.name }}
+{{- $rcvName := $rcv.id }}
 {{- $rcvSafe := regexReplaceAll "[^a-z0-9-]" (lower $rcvName) "-" }}
 {{- $secret := $rcv.id | trunc 63 | trimSuffix "-" }}
     - name: {{ $rcvName }}
