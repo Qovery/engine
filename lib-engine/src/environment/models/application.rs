@@ -187,7 +187,8 @@ impl<T: CloudProvider> Application<T> {
 
         let mut tolerations = BTreeMap::<String, String>::new();
         let is_stateful_set = !self.storages.is_empty();
-        let is_gpu = self.gpu_request.is_some() || self.gpu_limit.is_some();
+        let is_gpu = (self.gpu_request.is_some_and(|v| v.to_gpu_count() > 0))
+            || (self.gpu_limit.is_some_and(|v| v.to_gpu_count() > 0));
         match is_gpu {
             true => utils::target_karpenter_node_pool(
                 KarpenterNodePoolType::Gpu,
