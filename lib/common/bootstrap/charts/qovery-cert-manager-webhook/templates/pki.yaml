@@ -30,6 +30,8 @@ metadata:
 spec:
   secretName: {{ include "qovery-webhook.rootCACertificate" . }}
   duration: {{ .Values.pki.caDuration }}
+  privateKey:
+    rotationPolicy: Never
   issuerRef:
     name: {{ include "qovery-webhook.selfSignedIssuer" . }}
   commonName: "ca.qovery-webhook.cert-manager"
@@ -68,6 +70,8 @@ metadata:
 spec:
   secretName: {{ include "qovery-webhook.servingCertificate" . }}
   duration: {{ .Values.pki.servingCertificateDuration }}
+  privateKey:
+    rotationPolicy: Never
   issuerRef:
     name: {{ include "qovery-webhook.rootCAIssuer" . }}
   dnsNames:

@@ -48,9 +48,6 @@ spec:
             {{ end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
-              containerPort: 8080
-              protocol: TCP
             - name: https
               containerPort: 8080
               protocol: TCP

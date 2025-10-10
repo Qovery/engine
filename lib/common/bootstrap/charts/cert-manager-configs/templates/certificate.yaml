@@ -5,6 +5,8 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   secretName: letsencrypt-acme-qovery-cert
+  privateKey:
+    rotationPolicy: Never
   issuerRef:
     name: letsencrypt-qovery
     kind: ClusterIssuer
