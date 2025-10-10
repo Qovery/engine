@@ -364,6 +364,12 @@ impl FromStr for KubernetesMemoryResourceUnit {
 #[derive(Serialize, Deserialize, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct KubernetesGpuResourceUnit(pub u32);
 
+impl KubernetesGpuResourceUnit {
+    pub fn to_gpu_count(&self) -> u32 {
+        self.0
+    }
+}
+
 impl From<KubernetesGpuResourceUnit> for u32 {
     fn from(value: KubernetesGpuResourceUnit) -> u32 {
         value.0
