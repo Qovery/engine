@@ -12,7 +12,6 @@ use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use url::Url;
-use uuid::{Uuid, uuid};
 
 pub struct QoveryClusterAgentChart {
     chart_prefix_path: Option<String>,
@@ -30,12 +29,6 @@ pub struct QoveryClusterAgentChart {
     karpenter_enabled: bool,
     metrics_query_url: Option<String>,
 }
-
-// temporary lust for testing
-pub const AUTHORIZED_ORGANIZATION_SLICE: &[Uuid] = &[
-    uuid!("460616f0-94da-4d35-b631-6fa4ed08eb9a"), // QOVERY TEST AWS
-    uuid!("3d542888-3d2c-474a-b1ad-712556db66da"), // Q SANDBOX
-];
 
 impl QoveryClusterAgentChart {
     pub fn new(
@@ -172,9 +165,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                     },
                     ChartSetValue {
                         key: "admissionController.deploymentIdInjection.enabled".to_string(),
-                        value: AUTHORIZED_ORGANIZATION_SLICE
-                            .contains(&self.organization_id.to_uuid())
-                            .to_string(),
+                        value: true.to_string(),
                     },
                 ],
                 ..Default::default()
