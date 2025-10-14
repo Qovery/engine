@@ -333,6 +333,8 @@ pub(super) fn gke_helm_charts(
         true,
         false,
         metrics_config.metrics_query_url,
+        metrics_config.prometheus_service_url,
+        metrics_config.alert_manager_service_url,
     )
     .to_common_helm_chart()?;
 

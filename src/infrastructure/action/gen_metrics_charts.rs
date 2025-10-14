@@ -87,13 +87,29 @@ impl CloudProviderMetricsConfig<'_> {
         }
     }
 
-    pub fn metrics_query_url_for_qovery_installation(&self) -> String {
+    fn metrics_namespace(&self) -> &str {
         match self {
+            CloudProviderMetricsConfig::Gke(_) => "qovery",
             CloudProviderMetricsConfig::Eks(_)
             | CloudProviderMetricsConfig::Kapsule(_)
-            | CloudProviderMetricsConfig::Aks(_) => "http://thanos-query.prometheus.svc.cluster.local:9090".to_string(),
-            CloudProviderMetricsConfig::Gke(_) => "http://thanos-query.qovery.svc.cluster.local:9090".to_string(),
+            | CloudProviderMetricsConfig::Aks(_) => "prometheus",
         }
+    }
+
+    fn build_metrics_url(&self, service: &str, port: u16) -> String {
+        format!("http://{}.{}.svc.cluster.local:{}", service, self.metrics_namespace(), port)
+    }
+
+    pub fn metrics_query_url_for_qovery_installation(&self) -> String {
+        self.build_metrics_url("thanos-query", 9090)
+    }
+
+    pub fn metrics_prometheus_url_for_qovery_installation(&self) -> String {
+        self.build_metrics_url("prometheus-operated", 9090)
+    }
+
+    pub fn metrics_alert_manager_url_for_qovery_installation(&self) -> String {
+        self.build_metrics_url("alertmanager-operated", 9093)
     }
 
     pub fn is_cilium_compatible(&self) -> bool {
@@ -124,6 +140,8 @@ pub struct MetricsConfig {
     pub beyla_chart: Option<CommonChart>,
     pub alert_config_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
+    pub prometheus_service_url: Option<String>,
+    pub alert_manager_service_url: Option<String>,
 }
 
 pub fn generate_metrics_config(
@@ -176,6 +194,8 @@ pub fn generate_metrics_config(
             beyla_chart: None,
             alert_config_chart: None,
             metrics_query_url: None,
+            prometheus_service_url: None,
+            alert_manager_service_url: None,
         }),
     }
 }
@@ -289,6 +309,14 @@ fn generate_charts_installed_by_qovery(
             HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
             HelmAction::Destroy => None,
         },
+        prometheus_service_url: match helm_action {
+            HelmAction::Deploy => Some(provider_config.metrics_prometheus_url_for_qovery_installation()),
+            HelmAction::Destroy => None,
+        },
+        alert_manager_service_url: match helm_action {
+            HelmAction::Deploy => Some(provider_config.metrics_alert_manager_url_for_qovery_installation()),
+            HelmAction::Destroy => None,
+        },
     })
 }
 
@@ -300,9 +328,11 @@ mod tests {
     use crate::infrastructure::models::dns_provider::qoverydns::QoveryDnsConfig;
     use crate::infrastructure::models::kubernetes::KubernetesVersion;
     use crate::infrastructure::models::kubernetes::aws::Options;
+    use crate::infrastructure::models::kubernetes::gcp::VpcMode;
     use crate::io_models::engine_location::EngineLocation;
     use crate::io_models::models::VpcQoveryNetworkMode;
     use std::sync::Arc;
+    use time::Time;
 
     const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
         prefix: None,
@@ -374,6 +404,96 @@ mod tests {
         assert!(result.is_ok());
         let config = result.unwrap();
         assert_eq!(config.metrics_query_url, None);
+    }
+
+    #[test]
+    fn test_metrics_urls_for_eks() {
+        let config = create_eks_chart_config();
+        let provider_config = CloudProviderMetricsConfig::Eks(&config);
+
+        assert_eq!(
+            provider_config.metrics_query_url_for_qovery_installation(),
+            "http://thanos-query.prometheus.svc.cluster.local:9090"
+        );
+        assert_eq!(
+            provider_config.metrics_prometheus_url_for_qovery_installation(),
+            "http://prometheus-operated.prometheus.svc.cluster.local:9090"
+        );
+        assert_eq!(
+            provider_config.metrics_alert_manager_url_for_qovery_installation(),
+            "http://alertmanager-operated.prometheus.svc.cluster.local:9093"
+        );
+    }
+
+    #[test]
+    fn test_metrics_urls_for_gke() {
+        let config = create_gke_chart_config();
+        let provider_config = CloudProviderMetricsConfig::Gke(&config);
+
+        assert_eq!(
+            provider_config.metrics_query_url_for_qovery_installation(),
+            "http://thanos-query.qovery.svc.cluster.local:9090"
+        );
+        assert_eq!(
+            provider_config.metrics_prometheus_url_for_qovery_installation(),
+            "http://prometheus-operated.qovery.svc.cluster.local:9090"
+        );
+        assert_eq!(
+            provider_config.metrics_alert_manager_url_for_qovery_installation(),
+            "http://alertmanager-operated.qovery.svc.cluster.local:9093"
+        );
+    }
+
+    fn create_gke_chart_config() -> GkeChartsConfigPrerequisites {
+        use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
+
+        GkeChartsConfigPrerequisites {
+            organization_id: "".to_string(),
+            organization_long_id: Default::default(),
+            cluster_id: "".to_string(),
+            cluster_long_id: Default::default(),
+            cluster_name: "".to_string(),
+            cluster_creation_date: Default::default(),
+            ff_log_history_enabled: false,
+            managed_dns_helm_format: "".to_string(),
+            managed_dns_root_domain_helm_format: "".to_string(),
+            lets_encrypt_config: LetsEncryptConfig::new("a".to_string(), true),
+            dns_provider_config: crate::infrastructure::models::dns_provider::DnsProviderConfiguration::QoveryDns(
+                QoveryDnsConfig {
+                    api_url: Url::parse("http://test.com").unwrap(),
+                    api_key: "".to_string(),
+                    api_url_scheme_and_domain: "".to_string(),
+                    api_url_port: "".to_string(),
+                },
+            ),
+            loki_logging_service_account_email: "".to_string(),
+            logs_bucket_name: "".to_string(),
+            metrics_parameters: None,
+            infra_options: GkeOptions {
+                qovery_api_url: "".to_string(),
+                qovery_grpc_url: "".to_string(),
+                qovery_engine_url: "".to_string(),
+                jwt_token: "".to_string(),
+                qovery_ssh_key: "".to_string(),
+                user_ssh_keys: vec![],
+                grafana_admin_user: "".to_string(),
+                grafana_admin_password: "".to_string(),
+                qovery_engine_location: EngineLocation::ClientSide,
+                vpc_mode: VpcMode::Automatic {
+                    custom_cluster_ipv4_cidr_block: None,
+                    custom_services_ipv4_cidr_block: None,
+                },
+                vpc_qovery_network_mode: None,
+                cluster_maintenance_start_time: Time::MIDNIGHT,
+                cluster_maintenance_end_time: None,
+                tls_email_report: "".to_string(),
+                metrics_parameters: None,
+            },
+            cluster_advanced_settings: Default::default(),
+            customer_helm_charts_override: None,
+            thanos_service_account_email: "".to_string(),
+            prometheus_bucket_name: "".to_string(),
+        }
     }
 
     fn create_eks_chart_config() -> EksChartsConfigPrerequisites {

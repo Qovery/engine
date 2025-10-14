@@ -296,6 +296,8 @@ pub(super) fn eks_anywhere_helm_charts(
         true,
         false,
         None,
+        None,
+        None,
     )
     .to_common_helm_chart()?;
 
