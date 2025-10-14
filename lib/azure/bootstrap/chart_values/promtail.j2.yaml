@@ -15,6 +15,7 @@ config:
     pipelineStages:
       - cri: { }
 
+      # SPECIAL: Special nginx-ingress enrichment
       - match:
           selector: '{namespace="nginx-ingress", container="controller"}'
           stages:
@@ -26,32 +27,75 @@ config:
                 qovery_com_associated_service_id: null
                 qovery_com_environment_id: null
 
-      # Try to parse JSON: extract level/severity if present.
-      # If not JSON, just skip silently
+      # STAGE 1: Extract log level from JSON-structured logs
+      # First attempt: extract 'level' field from JSON
+      # Then publish as label (may be empty if 'level' field doesn't exist)
+      # Fallback: if level is empty, retry JSON extraction mapping 'severity' field to 'level'
+      # (silently fails if JSON is malformed or 'severity' field doesn't exist)
       - json:
           expressions:
             level: level
-            severity: severity
+          drop_malformed_json: false
 
-      # Promote whatever we found so far to a Loki label
       - labels:
-          level:
+          level: null
 
       - match:
           selector: '{level=""}'
           stages:
-            - regex:
-                expression: '.*(?:level|severity)[=:]\s*"?(?P<level>info)"?.*'
-            - labels:
-                level:
+            - json:
+                expressions:
+                  level: severity
+                drop_malformed_json: false
+            - labels: { level: null }
 
-      # Promote whatever we found so far to a Loki label
-      - labels:
-          level:
 
-      # Detect error patterns in raw log text and set level=error
+      # STAGE 2: Extract from structured text format (Rust tracing, Go logs)
+      # ONLY if level is still empty
+      # Pattern: TIMESTAMP LEVEL
+      # Example: 2025-10-03T05:36:41.932735355Z INFO ...
       - match:
-          selector: '{level!="info"} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
+          selector: '{level=""}'
+          stages:
+            - regex:
+                expression: '^\s*(?:\d{9,}\s+)?\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?(?:\s+\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?)?\s+(?P<level>TRACE|DEBUG|INFO|WARN(?:ING)?|ERROR|CRIT(?:ICAL)?|FATAL|PANIC)\b'
+            - labels: { level: null }
+
+      # STAGE 3: Extract from key=value or key:value patterns
+      # ONLY if level is still empty
+      # Matches: level=INFO, level:WARN, severity=error, etc.
+      - match:
+          selector: '{level=""}'
+          stages:
+            - regex:
+                expression: '(?i)\b(?:level|severity)[:=]\s*"?(?P<level>trace|debug|info|warn(?:ing)?|error|crit(?:ical)?|fatal|panic)"?'
+            - labels: { level: null }
+
+      # STAGE 4: Normalize all captured levels to lowercase
+      {% raw %}
+      - template:
+          source: level
+          template: '{{ if .Value }}{{ ToLower .Value }}{{ end }}'
+      {% endraw %}
+
+      - replace:
+          source: level
+          expression: '^(warning)$'
+          replace: 'warn'
+
+      - replace:
+          source: level
+          expression: '^(err)$'
+          replace: 'error'
+
+      # STAGE 5: Publish level label
+      - labels:
+          level: null
+
+      # STAGE 6: Last resort - detect error keywords in log text
+      # ONLY if level is STILL empty
+      - match:
+          selector: '{level=""} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
           stages:
             - static_labels:
                 level: error
