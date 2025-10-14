@@ -37,8 +37,9 @@ spec:
     consolidationPolicy: WhenEmpty # Better not to break long GPU jobs running
     consolidateAfter: 30s
     budgets:
-      # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
-      - nodes: 10%
+      # By default, we allow to remove all nodes at once to limit costs.
+      # If not set, defaults to 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
+      - nodes: 100%
       # The consolidation budgets injected below contain:
       # - either a forbidden rule for Underutilized when the user hasn't configured any disruption period
       # - or some custom forbidden rules which are the complementary of what they configured on core side
