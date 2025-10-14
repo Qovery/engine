@@ -238,6 +238,17 @@ fn ensure_docker_image() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn assert_level_for(
+    fixture: &PromtailTestFixture,
+    log: &str,
+    expected: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let got = fixture.extract_level(log)?;
+    let exp = expected.map(|s| s.to_string());
+    assert_eq!(got, exp, "Log:\n{log}\nExpected: {exp:?}\nGot: {got:?}");
+    Ok(())
+}
+
 #[cfg(feature = "test-aws-minimal")]
 mod tests {
     use super::*;
@@ -255,6 +266,24 @@ mod tests {
             level,
             Some("info".to_string()),
             "Rust INFO log should be classified as 'info', not '{level:?}'",
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_real_world_info_log_from_user() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        let log = r#"1760420291544	2025-10-14T05:38:11.544Z	2025-10-14T05:38:11.544280435Z  INFO ThreadId(389) deploymnt_mngr{execution_id: "43ec27bd-6299-45d5-a497-fc2ef12e50c1-1760419802"}:infrastructure_t"
+
+        let level = fixture.extract_level(log)?;
+
+        assert_eq!(
+            level,
+            Some("info".to_string()),
+            "Real-world INFO line should be classified as 'info', not {level:?}"
         );
 
         Ok(())
@@ -503,6 +532,149 @@ mod tests {
             );
         }
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_go_logfmt_key_value() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        assert_level_for(&fixture, r#"ts=2025-10-14T05:38:11Z level=error msg="db down""#, Some("error"))?;
+        assert_level_for(
+            &fixture,
+            r#"time="2025-10-14T05:38:11Z" level=WARNING msg="slow request""#,
+            Some("warn"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_go_json_levels() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // JSON with "level"
+        assert_level_for(&fixture, r#"{"level":"info","msg":"start"}"#, Some("info"))?;
+        // JSON with "severity"
+        assert_level_for(&fixture, r#"{"severity":"ERROR","msg":"boom"}"#, Some("error"))?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_rust_timestamp_level_simple() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Rust tracing format: ISO timestamp + LEVEL
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z INFO ThreadId(1) app::svc: started"#,
+            Some("info"),
+        )?;
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z ERROR ThreadId(1) app::svc: failed"#,
+            Some("error"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_rust_leading_integer_and_double_timestamp() -> Result<(), Box<dyn std::error::Error>> {
+        // Real-world Rust line with leading integer + double timestamp
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        let log = r#"1760420291544    2025-10-14T05:38:11.544Z    2025-10-14T05:38:11.544280435Z  INFO ThreadId(389) deploymnt_mngr: msg"#;
+        assert_level_for(&fixture, log, Some("info"))?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_java_iso_and_non_iso() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Java ISO 8601 timestamp → detected
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z INFO  [main] c.example.App - Started"#,
+            Some("info"),
+        )?;
+        // Java non-ISO (yyyy-MM-dd HH:mm:ss,SSS) → not matched by current regex (expected None)
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14 05:38:11,544 INFO  [main] c.example.App - Started"#,
+            None,
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_kotlin_iso_and_keyvalue() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Kotlin / Logback ISO + LEVEL
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z DEBUG [DefaultDispatcher-worker-1] com.example.Service - ping"#,
+            Some("debug"),
+        )?;
+        // Kotlin with severity=error (key=value)
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z [DefaultDispatcher-worker-1] severity=error msg="boom""#,
+            Some("error"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_edge_false_positives_and_normalization() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // ERR / EROR → normalized to "error"
+        assert_level_for(&fixture, r#"2025-10-14T05:38:11.544Z ERR svc: issue"#, Some("error"))?;
+        assert_level_for(&fixture, r#"2025-10-14T05:38:11.544Z EROR svc: issue"#, Some("error"))?;
+        // WARNING → normalized to "warn"
+        assert_level_for(&fixture, r#"2025-10-14T05:38:11.544Z WARNING svc: noisy"#, Some("warn"))?;
+        // "error" inside a field but explicit INFO level → remains info
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11.544Z INFO error_count=0 last_error_at=null status=ok"#,
+            Some("info"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_last_resort_only_when_level_empty() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Contains the word "error" but explicit INFO level → stays "info"
+        assert_level_for(
+            &fixture,
+            r#"2025-10-14T05:38:11Z INFO user="bob" note="has error word""#,
+            Some("info"),
+        )?;
+        // No explicit level + keyword "exception" → last-resort sets "error"
+        assert_level_for(&fixture, r#"just a line with exception thrown"#, Some("error"))?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_malformed_json_and_noise_lines() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Malformed JSON → no crash, no level detected
+        assert_level_for(&fixture, r#"{ "level": "info", "msg": "oops", "#, None)?;
+        // Random line without any level → None
+        assert_level_for(&fixture, r#"totally random line without level"#, None)?;
         Ok(())
     }
 }
