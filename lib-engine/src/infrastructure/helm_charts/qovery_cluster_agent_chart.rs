@@ -28,6 +28,8 @@ pub struct QoveryClusterAgentChart {
     enable_vpa: bool,
     karpenter_enabled: bool,
     metrics_query_url: Option<String>,
+    prometheus_service_url: Option<String>,
+    alert_manager_service_url: Option<String>,
 }
 
 impl QoveryClusterAgentChart {
@@ -44,6 +46,8 @@ impl QoveryClusterAgentChart {
         enable_vpa: bool,
         karpenter_enabled: bool,
         metrics_query_url: Option<String>,
+        prometheus_service_url: Option<String>,
+        alert_manager_service_url: Option<String>,
     ) -> Self {
         Self {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -76,6 +80,8 @@ impl QoveryClusterAgentChart {
             enable_vpa,
             karpenter_enabled,
             metrics_query_url,
+            prometheus_service_url,
+            alert_manager_service_url,
         }
     }
 
@@ -93,6 +99,76 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
             Some(url) => (true, url.to_string()),
         };
 
+        let mut values = vec![
+            ChartSetValue {
+                key: "image.tag".to_string(),
+                value: self.chart_image_version_tag.to_string(),
+            },
+            ChartSetValue {
+                key: "rolloutStrategy".to_string(),
+                value: self.update_strategy.to_string(),
+            },
+            ChartSetValue {
+                key: "environmentVariables.GRPC_SERVER".to_string(),
+                value: self.grpc_url.to_string(),
+            },
+            ChartSetValue {
+                key: "environmentVariables.LOKI_URL".to_string(),
+                value: match &self.loki_url {
+                    // If log history is enabled, add the loki url to the values
+                    Some(loki_url) => loki_url.to_string(),
+                    None => "".to_string(), // empty value is handled by the chart
+                },
+            },
+            ChartSetValue {
+                key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
+                value: self.cluster_jwt_token.to_string(),
+            },
+            ChartSetValue {
+                key: "environmentVariables.CLUSTER_ID".to_string(),
+                value: self.cluster_id.to_string(),
+            },
+            ChartSetValue {
+                key: "environmentVariables.ORGANIZATION_ID".to_string(),
+                value: self.organization_id.to_string(),
+            },
+            ChartSetValue {
+                key: "environmentVariables.CLUSTER_METRICS_QUERY_URL".to_string(),
+                value: metrics_url,
+            },
+            // Resources
+            ChartSetValue {
+                key: "resources.limits.cpu".to_string(),
+                value: self.chart_resources.limit_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.limits.memory".to_string(),
+                value: self.chart_resources.limit_memory.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.requests.cpu".to_string(),
+                value: self.chart_resources.request_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.requests.memory".to_string(),
+                value: self.chart_resources.request_memory.to_string(),
+            },
+            ChartSetValue {
+                key: "admissionController.deploymentIdInjection.enabled".to_string(),
+                value: true.to_string(),
+            },
+        ];
+
+        // Add optional metrics URLs if configured
+        values.extend(self.prometheus_service_url.as_ref().map(|url| ChartSetValue {
+            key: "environmentVariables.PROMETHEUS_URL".to_string(),
+            value: url.clone(),
+        }));
+        values.extend(self.alert_manager_service_url.as_ref().map(|url| ChartSetValue {
+            key: "environmentVariables.ALERT_MANAGER_URL".to_string(),
+            value: url.clone(),
+        }));
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryClusterAgentChart::chart_name(),
@@ -109,65 +185,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                         value: format!("{metrics_enabled}"),
                     },
                 ],
-                values: vec![
-                    ChartSetValue {
-                        key: "image.tag".to_string(),
-                        value: self.chart_image_version_tag.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "rolloutStrategy".to_string(),
-                        value: self.update_strategy.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.GRPC_SERVER".to_string(),
-                        value: self.grpc_url.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.LOKI_URL".to_string(),
-                        value: match &self.loki_url {
-                            // If log history is enabled, add the loki url to the values
-                            Some(loki_url) => loki_url.to_string(),
-                            None => "".to_string(), // empty value is handled by the chart
-                        },
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.CLUSTER_JWT_TOKEN".to_string(),
-                        value: self.cluster_jwt_token.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.CLUSTER_ID".to_string(),
-                        value: self.cluster_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.ORGANIZATION_ID".to_string(),
-                        value: self.organization_id.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "environmentVariables.CLUSTER_METRICS_QUERY_URL".to_string(),
-                        value: metrics_url,
-                    },
-                    // Resources
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "admissionController.deploymentIdInjection.enabled".to_string(),
-                        value: true.to_string(),
-                    },
-                ],
+                values,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryClusterAgentChartChecker::new())),
@@ -249,6 +267,8 @@ mod tests {
             false,
             false,
             None,
+            None,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -284,6 +304,8 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             false,
             true,
+            None,
+            None,
             None,
         );
 

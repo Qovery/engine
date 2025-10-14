@@ -527,6 +527,8 @@ pub(super) fn eks_helm_charts(
         true,
         chart_config_prerequisites.karpenter_parameters.is_some(),
         metrics_config.metrics_query_url,
+        metrics_config.prometheus_service_url,
+        metrics_config.alert_manager_service_url,
     )
     .to_common_helm_chart()?;
 
