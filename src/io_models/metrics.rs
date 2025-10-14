@@ -71,3 +71,113 @@ pub struct AlertManagerConfig {
     pub alerts: Vec<AlertConfigAlert>,
     pub config_name: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::io_models::metrics::{AlertConfigReceiver, MetricsConfiguration, MetricsParameters};
+    use std::collections::HashMap;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_metrics_configs_deserialization() {
+        let data = r#"{
+        "config": {
+          "metrics_installed_by_qovery": {
+            "install_prometheus_adapter": false,
+            "enable_redundancy": true,
+            "beyla_config": {
+              "enabled": true
+            },
+            "alert_config": {
+              "enabled":true,
+              "default_rule_labels":{"A":"B"},
+              "spec_config_secret":"configSecret",
+              "spec_external_url":"externalUrl",
+              "receivers":
+              [
+                 {
+                    "slack_config":
+                    {
+                        "long_id":"4f50657b-1162-4dde-b706-4d5e937f3c09",
+                        "name":"receiver 1",
+                        "api_url":"url1",
+                        "channel":"channel 1"
+                    }
+                }
+              ],
+              "alerts":
+              [
+                {
+                  "long_id":"4f50657b-1162-4dde-b706-4d5e937f3c01",
+                  "name":"alert 1",
+                  "expr":"expr 1",
+                  "for_duration_minutes": 5,
+                  "labels":{"label 1":"v1"},
+                  "summary":"summary 1",
+                  "description":"description 1",
+                  "runbook_url":"runbookUrl 1"
+                }
+              ],
+              "config_name":"config Name"
+            }
+          }
+        }
+      }"#
+        .to_string();
+
+        let metrics_parameters: MetricsParameters = serde_json::from_str(data.as_str()).unwrap();
+        let MetricsConfiguration::MetricsInstalledByQovery {
+            install_prometheus_adapter,
+            enable_redundancy,
+            beyla_config,
+            alert_config,
+        } = metrics_parameters.config
+        else {
+            panic!("Expected MetricsInstalledByQovery variant");
+        };
+
+        // Check basic fields
+        assert!(!install_prometheus_adapter);
+        assert_eq!(enable_redundancy, Some(true));
+
+        // Check beyla config
+        let beyla = beyla_config.expect("beyla_config should be present");
+        assert!(beyla.enabled);
+
+        // Check alert config
+        let alert_cfg = alert_config.expect("alert_config should be present");
+        assert!(alert_cfg.enabled);
+        assert_eq!(
+            alert_cfg.default_rule_labels,
+            Some(HashMap::from([("A".to_string(), "B".to_string())]))
+        );
+        assert_eq!(alert_cfg.spec_config_secret, Some("configSecret".to_string()));
+        assert_eq!(alert_cfg.spec_external_url, Some("externalUrl".to_string()));
+        assert_eq!(alert_cfg.config_name, Some("config Name".to_string()));
+
+        // Check receivers
+        assert_eq!(alert_cfg.receivers.len(), 1);
+        let AlertConfigReceiver::SlackConfig {
+            long_id,
+            name,
+            api_url,
+            channel,
+        } = &alert_cfg.receivers[0];
+        assert_eq!(*long_id, Uuid::parse_str("4f50657b-1162-4dde-b706-4d5e937f3c09").unwrap());
+        assert_eq!(name, "receiver 1");
+        assert_eq!(api_url, "url1");
+        assert_eq!(channel, "channel 1");
+
+        // Check alerts
+        assert_eq!(alert_cfg.alerts.len(), 1);
+        let alert = &alert_cfg.alerts[0];
+        assert_eq!(alert.long_id, Uuid::parse_str("4f50657b-1162-4dde-b706-4d5e937f3c01").unwrap());
+        assert_eq!(alert.name, "alert 1");
+        assert_eq!(alert.expr, "expr 1");
+        assert_eq!(alert.for_duration_minutes, 5);
+        assert_eq!(alert.labels, HashMap::from([("label 1".to_string(), "v1".to_string())]));
+        assert_eq!(alert.summary, Some("summary 1".to_string()));
+        assert_eq!(alert.description, Some("description 1".to_string()));
+        assert_eq!(alert.runbook_url, Some("runbookUrl 1".to_string()));
+    }
+}
