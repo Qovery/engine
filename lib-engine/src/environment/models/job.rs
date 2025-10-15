@@ -11,6 +11,7 @@ use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType};
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
+use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
@@ -22,7 +23,7 @@ use crate::io_models::models::{
 use crate::utilities::to_short_id;
 use serde::Serialize;
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -184,10 +185,24 @@ impl<T: CloudProvider> Job<T> {
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
-        let deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
+        let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
         );
+
+        let mut tolerations = BTreeMap::<String, String>::new();
+        let is_stateful_set = false;
+        let is_gpu = (self.gpu_request.is_some_and(|v| v.to_gpu_count() > 0))
+            || (self.gpu_limit.is_some_and(|v| v.to_gpu_count() > 0));
+        if is_gpu {
+            utils::target_karpenter_node_pool(
+                KarpenterNodePoolType::Gpu,
+                &mut deployment_affinity_node_required,
+                &mut tolerations,
+                is_stateful_set,
+            );
+        }
+
         let mut advanced_settings = self.advanced_settings.clone();
         advanced_settings.deployment_affinity_node_required = deployment_affinity_node_required;
 
@@ -257,6 +272,7 @@ impl<T: CloudProvider> Job<T> {
                 readiness_probe: self.readiness_probe.clone(),
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings,
+                tolerations,
             },
             registry: match &self.image_source {
                 ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
@@ -511,6 +527,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) readiness_probe: Option<Probe>,
     pub(crate) liveness_probe: Option<Probe>,
     pub(crate) advanced_settings: JobAdvancedSettings,
+    pub(crate) tolerations: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
