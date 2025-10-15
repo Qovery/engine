@@ -120,6 +120,7 @@ pub struct KarpenterStableNodePoolOverride {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterGpuNodePoolOverride {
+    pub spot_enabled: bool,
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,

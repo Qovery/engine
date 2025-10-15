@@ -10,8 +10,7 @@ use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::infrastructure::models::kubernetes::aws::UserNetworkConfig;
 use crate::infrastructure::models::kubernetes::karpenter::{
-    KarpenterNodePool, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
-    KarpenterRequirementOperator,
+    KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
 };
 use itertools::Itertools;
 use kube::Client;
@@ -115,9 +114,9 @@ impl KarpenterConfigurationChart {
 
     fn enrich_karpenter_requirements(
         spot_enabled: bool,
-        qovery_node_pools: KarpenterNodePool,
+        node_pool_requirements: Vec<KarpenterNodePoolRequirement>,
     ) -> Vec<KarpenterNodePoolRequirement> {
-        let mut requirements = qovery_node_pools.requirements;
+        let mut requirements = node_pool_requirements;
         requirements.push(KarpenterNodePoolRequirement {
             key: KarpenterNodePoolRequirementKey::CapacityType,
             operator: Some(KarpenterRequirementOperator::In),
@@ -192,7 +191,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
 
         let karpenter_node_pools_requirements = Self::enrich_karpenter_requirements(
             self.karpenter_parameters.spot_enabled,
-            self.karpenter_parameters.qovery_node_pools.clone(),
+            self.karpenter_parameters.qovery_node_pools.requirements.clone(),
         );
 
         karpenter_node_pools_requirements
@@ -270,35 +269,37 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 });
 
                 // Requirements
-                if let Some(requirements) = &gpu_pool_override.requirements {
-                    requirements.iter().enumerate().for_each(|(index, requirement)| {
-                        let prefix = format!("gpuNodePool.requirements[{index}]");
+                let requirements = Self::enrich_karpenter_requirements(
+                    self.karpenter_parameters.spot_enabled,
+                    gpu_pool_override.requirements.as_ref().unwrap_or(&vec![]).clone(),
+                );
+                requirements.iter().enumerate().for_each(|(index, requirement)| {
+                    let prefix = format!("gpuNodePool.requirements[{index}]");
 
-                        let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
-                            // The nodepool support only lowercase value for arch
-                            requirement.values.iter().map(|value| value.to_lowercase()).join(",")
-                        } else {
-                            requirement.values.join(",")
-                        };
+                    let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
+                        // The nodepool support only lowercase value for arch
+                        requirement.values.iter().map(|value| value.to_lowercase()).join(",")
+                    } else {
+                        requirement.values.join(",")
+                    };
 
-                        values.push(ChartSetValue {
-                            key: format!("{prefix}.key"),
-                            value: requirement.key.to_k8s_label(),
-                        });
-                        values.push(ChartSetValue {
-                            key: format!("{prefix}.operator"),
-                            value: requirement
-                                .operator
-                                .as_ref()
-                                .unwrap_or(&KarpenterRequirementOperator::In)
-                                .to_string(),
-                        });
-                        values.push(ChartSetValue {
-                            key: format!("{prefix}.values"),
-                            value: format!("{{{formated_values}}}"),
-                        });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.key"),
+                        value: requirement.key.to_k8s_label(),
                     });
-                }
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.operator"),
+                        value: requirement
+                            .operator
+                            .as_ref()
+                            .unwrap_or(&KarpenterRequirementOperator::In)
+                            .to_string(),
+                    });
+                    values.push(ChartSetValue {
+                        key: format!("{prefix}.values"),
+                        value: format!("{{{formated_values}}}"),
+                    });
+                });
 
                 // Node pool consolidation
                 gpu_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
@@ -704,6 +705,7 @@ mod tests {
                         }),
                     }),
                     gpu_override: Some(KarpenterGpuNodePoolOverride {
+                        spot_enabled: true,
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
