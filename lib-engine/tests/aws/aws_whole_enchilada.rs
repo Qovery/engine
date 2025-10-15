@@ -298,6 +298,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             }),
                         },
                         gpu_override: Some(KarpenterGpuNodePoolOverride {
+                            spot_enabled: true,
                             disk_size: DiskSize::Gib(100),
                             requirements: Some(vec![
                                 KarpenterNodePoolRequirement {
