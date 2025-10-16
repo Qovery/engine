@@ -164,7 +164,7 @@ pub(super) fn eks_helm_charts(
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
         HelmChartResourcesConstraintType::ChartDefault,
-        true,
+        false,
         HelmChartNamespaces::KubeSystem,
         false,
         get_chart_override_fn.clone(),
