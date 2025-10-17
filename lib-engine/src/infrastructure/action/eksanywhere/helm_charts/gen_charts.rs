@@ -51,6 +51,7 @@ pub(super) fn eks_anywhere_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         false,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -73,6 +74,7 @@ pub(super) fn eks_anywhere_helm_charts(
         UpdateStrategy::RollingUpdate,
         true,
         HelmChartNamespaces::Qovery,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -119,8 +121,14 @@ pub(super) fn eks_anywhere_helm_charts(
     };
 
     // K8s Event Logger
-    let k8s_event_logger =
-        K8sEventLoggerChart::new(chart_prefix_path, true, HelmChartNamespaces::Qovery, false).to_common_helm_chart()?;
+    let k8s_event_logger = K8sEventLoggerChart::new(
+        chart_prefix_path,
+        true,
+        HelmChartNamespaces::Qovery,
+        false,
+        get_chart_override_fn.clone(),
+    )
+    .to_common_helm_chart()?;
 
     // Metrics server
     let metrics_server = MetricsServerChart::new(
@@ -130,6 +138,7 @@ pub(super) fn eks_anywhere_helm_charts(
         UpdateStrategy::RollingUpdate,
         true,
         true, // needs to support specific param (args: - --kubelet-insecure-tls)
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -298,6 +307,7 @@ pub(super) fn eks_anywhere_helm_charts(
         None,
         None,
         None,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -385,6 +395,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 false, // <- VPA not activated
                 HelmChartNamespaces::Qovery,
                 true, // <- wont be deployed if already exists
+                get_chart_override_fn.clone(),
             )
             .to_common_helm_chart()?,
         )),

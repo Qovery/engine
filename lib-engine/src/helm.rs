@@ -21,7 +21,7 @@ use crate::cmd::command::CommandKiller;
 use crate::environment::action::deploy_helm::default_helm_timeout;
 use crate::events::EventDetails;
 use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use retry::OperationResult;
 use retry::delay::Fixed;
 use std::fs;
@@ -146,6 +146,7 @@ pub enum PriorityClass {
 pub struct VpaConfig {
     pub target_ref: VpaTargetRef,
     pub container_policy: VpaContainerPolicy,
+    pub customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
 }
 
 #[derive(Clone, Debug)]
@@ -218,16 +219,6 @@ impl VpaContainerPolicy {
     }
 }
 
-impl VpaConfig {
-    pub fn new(target_ref: VpaTargetRef, container_policy: VpaContainerPolicy) -> Self {
-        // TODO(benjaminch): make it a try_new and return an error if memory to cpu ratio is not in the [1, 6.5] range
-        VpaConfig {
-            target_ref,
-            container_policy,
-        }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct VpaConfigHelmChart {
@@ -242,31 +233,108 @@ pub struct VpaConfigHelmChart {
     pub controlled_resources: Vec<VpaControllerResources>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VpaConfigHelmChartOverride {
+    pub min_allowed_cpu: Option<String>,
+    pub min_allowed_memory: Option<String>,
+    pub max_allowed_cpu: Option<String>,
+    pub max_allowed_memory: Option<String>,
+}
+
 impl VpaConfigHelmChart {
-    pub fn new(vpa_config: VpaConfig) -> Self {
+    pub fn new(
+        target_ref_name: String,
+        target_ref_api_version: String,
+        target_ref_kind: VpaTargetRefKind,
+        container_name: String,
+        min_allowed_cpu: Option<String>,
+        min_allowed_memory: Option<String>,
+        max_allowed_cpu: Option<String>,
+        max_allowed_memory: Option<String>,
+    ) -> Self {
+        // Compute controlled resources based on provided min & max
         let mut controlled_resources = Vec::with_capacity(2);
-        if vpa_config.container_policy.min_allowed_cpu.is_some()
-            || vpa_config.container_policy.max_allowed_cpu.is_some()
-        {
+        if min_allowed_cpu.is_some() || max_allowed_cpu.is_some() {
             controlled_resources.push(VpaControllerResources::Cpu);
         }
-        if vpa_config.container_policy.min_allowed_memory.is_some()
-            || vpa_config.container_policy.max_allowed_memory.is_some()
-        {
+        if min_allowed_memory.is_some() || max_allowed_memory.is_some() {
             controlled_resources.push(VpaControllerResources::Memory);
         }
 
         VpaConfigHelmChart {
-            target_ref_name: vpa_config.target_ref.name,
-            target_ref_api_version: vpa_config.target_ref.api_version.to_string(),
-            target_ref_kind: vpa_config.target_ref.kind,
-            container_name: vpa_config.container_policy.name,
-            min_allowed_cpu: vpa_config.container_policy.min_allowed_cpu.map(|x| x.to_string()),
-            min_allowed_memory: vpa_config.container_policy.min_allowed_memory.map(|x| x.to_string()),
-            max_allowed_cpu: vpa_config.container_policy.max_allowed_cpu.map(|x| x.to_string()),
-            max_allowed_memory: vpa_config.container_policy.max_allowed_memory.map(|x| x.to_string()),
+            target_ref_name,
+            target_ref_api_version,
+            target_ref_kind,
+            container_name,
+            min_allowed_cpu,
+            min_allowed_memory,
+            max_allowed_cpu,
+            max_allowed_memory,
             controlled_resources,
         }
+    }
+
+    pub fn new_from_vpa_config(vpa_config: VpaConfig) -> Self {
+        let vpa_config_helm_chart = VpaConfigHelmChart::new(
+            vpa_config.target_ref.name,
+            vpa_config.target_ref.api_version.to_string(),
+            vpa_config.target_ref.kind,
+            vpa_config.container_policy.name,
+            vpa_config.container_policy.min_allowed_cpu.map(|x| x.to_string()),
+            vpa_config.container_policy.min_allowed_memory.map(|x| x.to_string()),
+            vpa_config.container_policy.max_allowed_cpu.map(|x| x.to_string()),
+            vpa_config.container_policy.max_allowed_memory.map(|x| x.to_string()),
+        );
+
+        // Apply override vpa configuration if present
+        match vpa_config.customer_helm_chart_override {
+            None => vpa_config_helm_chart,
+            Some(override_config) => Self::apply_vpa_config_override(vpa_config_helm_chart, override_config),
+        }
+    }
+
+    fn apply_vpa_config_override(
+        vpa_config_helm_chart: VpaConfigHelmChart,
+        customer_helm_chart_override: CustomerHelmChartsOverride,
+    ) -> VpaConfigHelmChart {
+        let override_config =
+            match serde_yaml::from_str::<VpaConfigHelmChartOverride>(&customer_helm_chart_override.chart_values).ok() {
+                None => {
+                    // Do not block the deployment if the override config is invalid, only an error log is printed
+                    error!(
+                        "Error while parsing VPA override config: {}",
+                        customer_helm_chart_override.chart_values
+                    );
+                    return vpa_config_helm_chart;
+                }
+                Some(override_config) => override_config,
+            };
+
+        // Apply overrides
+        let min_allowed_cpu = override_config
+            .min_allowed_cpu
+            .or(vpa_config_helm_chart.min_allowed_cpu);
+        let max_allowed_cpu = override_config
+            .max_allowed_cpu
+            .or(vpa_config_helm_chart.max_allowed_cpu);
+        let min_allowed_memory = override_config
+            .min_allowed_memory
+            .or(vpa_config_helm_chart.min_allowed_memory);
+        let max_allowed_memory = override_config
+            .max_allowed_memory
+            .or(vpa_config_helm_chart.max_allowed_memory);
+
+        VpaConfigHelmChart::new(
+            vpa_config_helm_chart.target_ref_name,
+            vpa_config_helm_chart.target_ref_api_version,
+            vpa_config_helm_chart.target_ref_kind,
+            vpa_config_helm_chart.container_name,
+            min_allowed_cpu,
+            min_allowed_memory,
+            max_allowed_cpu,
+            max_allowed_memory,
+        )
     }
 }
 
@@ -360,7 +428,7 @@ impl ChartInfo {
     pub fn generate_vpa_helm_config(vpa_configs: Vec<VpaConfig>) -> String {
         let vpa_helm_config = vpa_configs
             .iter()
-            .map(|x| VpaConfigHelmChart::new(x.clone()))
+            .map(|x| VpaConfigHelmChart::new_from_vpa_config(x.clone()))
             .collect::<Vec<VpaConfigHelmChart>>();
 
         format!(
@@ -968,7 +1036,10 @@ pub fn get_engine_helm_action_from_location(location: &EngineLocation) -> HelmAc
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::{CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaTargetRefApiVersion, VpaTargetRefKind};
+    use crate::helm::{
+        CommonChart, CommonChartVpa, VpaConfigHelmChart, VpaControllerResources, VpaTargetRefApiVersion,
+        VpaTargetRefKind,
+    };
     use crate::io_models::models::KubernetesCpuResourceUnit;
     use crate::io_models::models::KubernetesMemoryResourceUnit;
 
@@ -989,6 +1060,7 @@ mod tests {
                 max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
                 max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
             },
+            customer_helm_chart_override: None,
         };
 
         // install
@@ -1010,7 +1082,7 @@ mod tests {
         assert_eq!(vpa_chart.action, super::HelmAction::Destroy);
 
         // check vpa all resources are deployed
-        let vpa_config_all_resources = VpaConfigHelmChart::new(vpa_config);
+        let vpa_config_all_resources = VpaConfigHelmChart::new_from_vpa_config(vpa_config);
         assert_eq!(format!("{:?}", vpa_config_all_resources.controlled_resources), "[Cpu, Memory]");
 
         // only vpa cpu set
@@ -1027,8 +1099,9 @@ mod tests {
                 max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
                 max_allowed_memory: None,
             },
+            customer_helm_chart_override: None,
         };
-        let vpa_config = VpaConfigHelmChart::new(vpa_config_no_mem);
+        let vpa_config = VpaConfigHelmChart::new_from_vpa_config(vpa_config_no_mem);
         assert_eq!(format!("{:?}", vpa_config.controlled_resources), "[Cpu]");
 
         // only vpa memory set
@@ -1045,8 +1118,135 @@ mod tests {
                 max_allowed_cpu: None,
                 max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
             },
+            customer_helm_chart_override: None,
         };
-        let vpa_config = VpaConfigHelmChart::new(vpa_config_no_cpu);
+        let vpa_config = VpaConfigHelmChart::new_from_vpa_config(vpa_config_no_cpu);
         assert_eq!(format!("{:?}", vpa_config.controlled_resources), "[Memory]");
+    }
+
+    #[test]
+    fn should_override_config_correctly() {
+        use crate::io_models::models::CustomerHelmChartsOverride;
+
+        // Create base VPA config
+        let base_vpa_config = VpaConfig {
+            target_ref: VpaTargetRef {
+                api_version: VpaTargetRefApiVersion::AppsV1,
+                kind: VpaTargetRefKind::Deployment,
+                name: "test-deployment".to_string(),
+            },
+            container_policy: VpaContainerPolicy {
+                name: "test-container".to_string(),
+                min_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                min_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(512)),
+            },
+            customer_helm_chart_override: Some(CustomerHelmChartsOverride {
+                chart_name: "test-chart".to_string(),
+                chart_values: r#"
+minAllowedCpu: "200m"
+maxAllowedCpu: "2000m"
+minAllowedMemory: "256Mi"
+maxAllowedMemory: "1Gi"
+"#
+                .to_string(),
+            }),
+        };
+
+        // Generate helm chart config with override
+        let result = VpaConfigHelmChart::new_from_vpa_config(base_vpa_config);
+
+        // Assert overridden values
+        assert_eq!(result.min_allowed_cpu, Some("200m".to_string()));
+        assert_eq!(result.max_allowed_cpu, Some("2000m".to_string()));
+        assert_eq!(result.min_allowed_memory, Some("256Mi".to_string()));
+        assert_eq!(result.max_allowed_memory, Some("1Gi".to_string()));
+
+        // Assert controlled resources are correctly computed
+        assert_eq!(result.controlled_resources.len(), 2);
+        assert!(matches!(result.controlled_resources[0], VpaControllerResources::Cpu));
+        assert!(matches!(result.controlled_resources[1], VpaControllerResources::Memory));
+
+        // Assert non-overridden fields remain unchanged
+        assert_eq!(result.target_ref_name, "test-deployment");
+        assert_eq!(result.container_name, "test-container");
+    }
+
+    #[test]
+    fn should_override_config_partially() {
+        use crate::io_models::models::CustomerHelmChartsOverride;
+
+        // Test cases:
+        // - override_yaml
+        // - minAllowedCpu
+        // - maxAllowedCpu
+        // - minAllowedMemory
+        // - maxAllowedMemory
+        let test_cases = vec![
+            (
+                "minAllowedCpu: \"200m\"\n",
+                Some("200m".to_string()),
+                Some("1000m".to_string()),
+                Some("128Mi".to_string()),
+                Some("512Mi".to_string()),
+            ),
+            (
+                "maxAllowedCpu: \"2000m\"\n",
+                Some("100m".to_string()),
+                Some("2000m".to_string()),
+                Some("128Mi".to_string()),
+                Some("512Mi".to_string()),
+            ),
+            (
+                "minAllowedMemory: \"256Mi\"\n",
+                Some("100m".to_string()),
+                Some("1000m".to_string()),
+                Some("256Mi".to_string()),
+                Some("512Mi".to_string()),
+            ),
+            (
+                "maxAllowedMemory: \"1Gi\"\n",
+                Some("100m".to_string()),
+                Some("1000m".to_string()),
+                Some("128Mi".to_string()),
+                Some("1Gi".to_string()),
+            ),
+        ];
+
+        for (override_yaml, expected_min_cpu, expected_max_cpu, expected_min_mem, expected_max_mem) in test_cases {
+            let base_vpa_config = VpaConfig {
+                target_ref: VpaTargetRef {
+                    api_version: VpaTargetRefApiVersion::AppsV1,
+                    kind: VpaTargetRefKind::Deployment,
+                    name: "test-deployment".to_string(),
+                },
+                container_policy: VpaContainerPolicy {
+                    name: "test-container".to_string(),
+                    min_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    min_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                    max_allowed_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                    max_allowed_memory: Some(KubernetesMemoryResourceUnit::MebiByte(512)),
+                },
+                customer_helm_chart_override: Some(CustomerHelmChartsOverride {
+                    chart_name: "test-chart".to_string(),
+                    chart_values: override_yaml.to_string(),
+                }),
+            };
+
+            let result = VpaConfigHelmChart::new_from_vpa_config(base_vpa_config);
+
+            // Assert that only the intended field was overridden, others remain as original
+            assert_eq!(result.min_allowed_cpu, expected_min_cpu, "Failed for override: {override_yaml}");
+            assert_eq!(result.max_allowed_cpu, expected_max_cpu, "Failed for override: {override_yaml}");
+            assert_eq!(
+                result.min_allowed_memory, expected_min_mem,
+                "Failed for override: {override_yaml}"
+            );
+            assert_eq!(
+                result.max_allowed_memory, expected_max_mem,
+                "Failed for override: {override_yaml}"
+            );
+        }
     }
 }

@@ -118,6 +118,7 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::KubeSystem,
         false,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -140,6 +141,7 @@ pub fn kapsule_helm_charts(
         UpdateStrategy::RollingUpdate,
         true,
         HelmChartNamespaces::KubeSystem,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -370,6 +372,7 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         chart_config_prerequisites.metrics_parameters.is_some(),
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -399,6 +402,7 @@ pub fn kapsule_helm_charts(
         metrics_config.metrics_query_url,
         metrics_config.prometheus_service_url,
         metrics_config.alert_manager_service_url,
+        get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -532,6 +536,7 @@ pub fn kapsule_helm_charts(
                 false, // <- VPA not activated
                 HelmChartNamespaces::KubeSystem,
                 true, // <- wont be deployed if already exists
+                get_chart_override_fn.clone(),
             )
             .to_common_helm_chart()?,
         ),

@@ -9,8 +9,10 @@ use crate::infrastructure::helm_charts::{
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::io_models::QoveryIdentifier;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::ops::Add;
+use std::sync::Arc;
 use url::Url;
 
 pub struct QoveryClusterAgentChart {
@@ -30,6 +32,7 @@ pub struct QoveryClusterAgentChart {
     metrics_query_url: Option<String>,
     prometheus_service_url: Option<String>,
     alert_manager_service_url: Option<String>,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl QoveryClusterAgentChart {
@@ -48,6 +51,7 @@ impl QoveryClusterAgentChart {
         metrics_query_url: Option<String>,
         prometheus_service_url: Option<String>,
         alert_manager_service_url: Option<String>,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> Self {
         Self {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -82,6 +86,7 @@ impl QoveryClusterAgentChart {
             metrics_query_url,
             prometheus_service_url,
             alert_manager_service_url,
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
         }
     }
 
@@ -205,6 +210,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,
@@ -247,7 +253,9 @@ mod tests {
         HelmChartResourcesConstraintType, HelmChartType, get_helm_path_kubernetes_provider_sub_folder_name,
     };
     use crate::io_models::QoveryIdentifier;
+    use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
     use url::Url;
 
     /// Makes sure chart directory containing all YAML files exists.
@@ -269,6 +277,7 @@ mod tests {
             None,
             None,
             None,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -307,6 +316,7 @@ mod tests {
             None,
             None,
             None,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");

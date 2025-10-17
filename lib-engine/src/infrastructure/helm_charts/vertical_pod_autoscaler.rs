@@ -5,11 +5,13 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartCRDsPath, HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use std::ops::Add;
+use std::sync::Arc;
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
 use crate::cmd::helm_utils::CRDSUpdate;
 use crate::errors::CommandError;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
 
@@ -24,6 +26,9 @@ pub struct VpaChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     skip_if_already_installed: bool,
+    customer_helm_chart_vertical_pod_autoscaler_vpa_admission_controller_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vertical_pod_autoscaler_vpa_recommender_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vertical_pod_autoscaler_vpa_updater_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl VpaChart {
@@ -35,6 +40,7 @@ impl VpaChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         skip_if_already_installed: bool,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> VpaChart {
         let chart_path = HelmChartPath::new(
             chart_prefix_path,
@@ -81,6 +87,15 @@ impl VpaChart {
             enable_vpa,
             namespace,
             skip_if_already_installed,
+            customer_helm_chart_vertical_pod_autoscaler_vpa_admission_controller_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-vertical-pod-autoscaler-vpa-admission-controller"),
+            ),
+            customer_helm_chart_vertical_pod_autoscaler_vpa_recommender_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-vertical-pod-autoscaler-vpa-recommender"),
+            ),
+            customer_helm_chart_vertical_pod_autoscaler_vpa_updater_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-vertical-pod-autoscaler-vpa-updater"),
+            ),
         }
     }
 
@@ -176,6 +191,9 @@ impl ToCommonHelmChart for VpaChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vertical_pod_autoscaler_vpa_admission_controller_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -190,6 +208,9 @@ impl ToCommonHelmChart for VpaChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vertical_pod_autoscaler_vpa_recommender_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -204,6 +225,9 @@ impl ToCommonHelmChart for VpaChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vertical_pod_autoscaler_vpa_updater_override
+                                .clone(),
                         },
                     ],
                 )),
@@ -248,7 +272,9 @@ mod tests {
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -262,6 +288,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -293,6 +320,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -328,6 +356,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
