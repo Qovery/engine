@@ -5,7 +5,9 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use std::ops::Add;
+use std::sync::Arc;
 
 pub struct K8sEventLoggerChart {
     chart_prefix_path: Option<String>,
@@ -14,6 +16,7 @@ pub struct K8sEventLoggerChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     additional_chart_values: Vec<HelmChartValuesFilePath>,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl K8sEventLoggerChart {
@@ -22,6 +25,7 @@ impl K8sEventLoggerChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         metrics_enabled: bool,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> K8sEventLoggerChart {
         let mut additional_chart_values = vec![];
 
@@ -48,6 +52,7 @@ impl K8sEventLoggerChart {
             enable_vpa,
             namespace,
             additional_chart_values,
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
         }
     }
 
@@ -88,6 +93,7 @@ impl ToCommonHelmChart for K8sEventLoggerChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(32)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,

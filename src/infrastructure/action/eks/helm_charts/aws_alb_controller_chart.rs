@@ -108,31 +108,33 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                 HelmChartVpaType::Disabled => None,
                 HelmChartVpaType::EnabledWithChartDefault => Some(CommonChartVpa::new(
                     self.chart_prefix_path.clone().unwrap_or(".".to_string()),
-                    vec![VpaConfig::new(
-                        VpaTargetRef::new(
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
                             VpaTargetRefApiVersion::AppsV1,
                             VpaTargetRefKind::Deployment,
                             "aws-load-balancer-controller".to_string(),
                         ),
-                        VpaContainerPolicy::new(
+                        container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
                             Some(KubernetesCpuResourceUnit::MilliCpu(128)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                         ),
-                    )],
+                        customer_helm_chart_override: None,
+                    }],
                 )),
                 HelmChartVpaType::EnabledWithConstraints(custom_vpa_config) => Some(CommonChartVpa::new(
                     self.chart_prefix_path.clone().unwrap_or(".".to_string()),
-                    vec![VpaConfig::new(
-                        VpaTargetRef::new(
+                    vec![VpaConfig {
+                        target_ref: VpaTargetRef::new(
                             VpaTargetRefApiVersion::AppsV1,
                             VpaTargetRefKind::Deployment,
                             "aws-load-balancer-controller".to_string(),
                         ),
-                        custom_vpa_config.clone(),
-                    )],
+                        container_policy: custom_vpa_config.clone(),
+                        customer_helm_chart_override: None,
+                    }],
                 )),
             },
             chart_installation_checker: None,

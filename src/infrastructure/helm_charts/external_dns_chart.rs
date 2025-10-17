@@ -8,8 +8,10 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::ops::Add;
+use std::sync::Arc;
 
 pub struct ExternalDNSChart {
     chart_prefix_path: Option<String>,
@@ -21,6 +23,7 @@ pub struct ExternalDNSChart {
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl ExternalDNSChart {
@@ -32,6 +35,7 @@ impl ExternalDNSChart {
         update_strategy: UpdateStrategy,
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -51,6 +55,7 @@ impl ExternalDNSChart {
             update_strategy,
             enable_vpa,
             namespace,
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
         }
     }
 
@@ -215,6 +220,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(50)),
                             Some(KubernetesMemoryResourceUnit::MebiByte(200)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,
@@ -382,7 +388,9 @@ mod tests {
     };
     use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
     use crate::infrastructure::models::dns_provider::cloudflare::CloudflareDnsConfig;
+    use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -400,6 +408,7 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             false,
             HelmChartNamespaces::KubeSystem,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -435,6 +444,7 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             false,
             HelmChartNamespaces::KubeSystem,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -474,6 +484,7 @@ mod tests {
             UpdateStrategy::RollingUpdate,
             false,
             HelmChartNamespaces::KubeSystem,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 

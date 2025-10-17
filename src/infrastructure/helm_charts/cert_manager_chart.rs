@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -25,6 +26,10 @@ pub struct CertManagerChart {
     ca_injector_resources: HelmChartResources,
     update_strategy: UpdateStrategy,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_cert_manager_vpa_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_cert_manager_cainjector_vpa_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_cert_manager_webhook_vpa_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_qovery_cert_manager_webhook_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     leader_election_namespace: HelmChartNamespaces,
@@ -85,6 +90,18 @@ impl CertManagerChart {
             ff_metrics_history_enabled,
             update_strategy,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            customer_helm_chart_cert_manager_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-cert-manager"),
+            ),
+            customer_helm_chart_cert_manager_cainjector_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-cert-manager-cainjector"),
+            ),
+            customer_helm_chart_cert_manager_webhook_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-cert-manager-webhook"),
+            ),
+            customer_helm_chart_qovery_cert_manager_webhook_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-qovery-cert-manager-webhook"),
+            ),
             enable_vpa,
             namespace,
             leader_election_namespace,
@@ -203,6 +220,7 @@ impl ToCommonHelmChart for CertManagerChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(192)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(3)),
                             ),
+                            customer_helm_chart_override: self.customer_helm_chart_cert_manager_vpa_override.clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -217,6 +235,9 @@ impl ToCommonHelmChart for CertManagerChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(192)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(3)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_cert_manager_cainjector_vpa_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -231,6 +252,9 @@ impl ToCommonHelmChart for CertManagerChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                                 Some(KubernetesMemoryResourceUnit::MebiByte(512)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_cert_manager_webhook_vpa_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -245,6 +269,9 @@ impl ToCommonHelmChart for CertManagerChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                                 Some(KubernetesMemoryResourceUnit::MebiByte(512)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_qovery_cert_manager_webhook_vpa_override
+                                .clone(),
                         },
                     ],
                 )),

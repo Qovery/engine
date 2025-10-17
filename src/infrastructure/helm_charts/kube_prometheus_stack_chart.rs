@@ -13,6 +13,7 @@ use crate::io_models::metrics::AlertManagerConfig;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
+use std::ops::Add;
 use std::sync::Arc;
 
 pub type StorageClassName = String;
@@ -58,6 +59,12 @@ pub struct KubePrometheusStackChart {
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_kube_prometheus_stack_operator_vpa_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_kube_state_metrics_vpa_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_kube_prometheus_stack_prometheus_node_exporter_vpa_override:
+        Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_prometheus_kube_prometheus_stack_prometheus_vpa_override:
+        Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     additional_chart_path: Option<HelmChartValuesFilePath>,
     enable_redundancy: bool,
@@ -96,6 +103,18 @@ impl KubePrometheusStackChart {
             prometheus_internal_url,
             prometheus_namespace,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            customer_helm_chart_vpa_kube_prometheus_stack_operator_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-kube-prometheus-stack-operator"),
+            ),
+            customer_helm_chart_vpa_kube_state_metrics_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-kube-state-metrics"),
+            ),
+            customer_helm_chart_vpa_kube_prometheus_stack_prometheus_node_exporter_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-kube-prometheus-stack-prometheus-node-exporter"),
+            ),
+            customer_helm_chart_vpa_prometheus_kube_prometheus_stack_prometheus_vpa_override: customer_helm_chart_fn(
+                Self::chart_name().add(".vpa-prometheus-kube-prometheus-stack-prometheus"),
+            ),
             enable_vpa,
             additional_chart_path: match karpenter_enabled {
                 true => Some(HelmChartValuesFilePath::new(
@@ -348,6 +367,9 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(384)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(4)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vpa_kube_prometheus_stack_operator_vpa_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -362,6 +384,9 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vpa_kube_state_metrics_vpa_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -376,6 +401,9 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                                 Some(KubernetesMemoryResourceUnit::MebiByte(16)),
                                 Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vpa_kube_prometheus_stack_prometheus_node_exporter_vpa_override
+                                .clone(),
                         },
                         VpaConfig {
                             target_ref: VpaTargetRef::new(
@@ -390,6 +418,9 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                                 Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                                 Some(KubernetesMemoryResourceUnit::GibiByte(8)),
                             ),
+                            customer_helm_chart_override: self
+                                .customer_helm_chart_vpa_prometheus_kube_prometheus_stack_prometheus_vpa_override
+                                .clone(),
                         },
                     ],
                 )),

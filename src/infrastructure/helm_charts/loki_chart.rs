@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -63,6 +64,7 @@ pub struct LokiChart {
     loki_log_retention_in_weeks: u32,
     loki_object_bucket_configuration: LokiObjectBucketConfiguration,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     vpa_min_mcpu: Option<u32>,
     chart_resources: HelmChartResources,
@@ -107,6 +109,7 @@ impl LokiChart {
             loki_log_retention_in_weeks,
             loki_object_bucket_configuration,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             enable_vpa,
             vpa_min_mcpu,
             chart_resources: match chart_resources {
@@ -382,6 +385,7 @@ impl ToCommonHelmChart for LokiChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(512)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(4)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,

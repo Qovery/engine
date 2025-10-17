@@ -8,8 +8,10 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::ops::Add;
+use std::sync::Arc;
 
 pub struct MetricsServerChart {
     chart_prefix_path: Option<String>,
@@ -20,6 +22,7 @@ pub struct MetricsServerChart {
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
     allow_insecure_tls: bool,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
 }
 
 impl MetricsServerChart {
@@ -30,6 +33,7 @@ impl MetricsServerChart {
         update_strategy: UpdateStrategy,
         enable_vpa: bool,
         allow_insecure_tls: bool,
+        customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
     ) -> MetricsServerChart {
         MetricsServerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -52,6 +56,7 @@ impl MetricsServerChart {
                     request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
                 },
             },
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             namespace,
             update_strategy,
             enable_vpa,
@@ -113,6 +118,7 @@ impl ToCommonHelmChart for MetricsServerChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,
@@ -164,7 +170,9 @@ mod tests {
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
+    use std::sync::Arc;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -177,6 +185,7 @@ mod tests {
             UpdateStrategy::Recreate,
             false,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -207,6 +216,7 @@ mod tests {
             UpdateStrategy::Recreate,
             false,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -241,6 +251,7 @@ mod tests {
             UpdateStrategy::Recreate,
             false,
             false,
+            Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

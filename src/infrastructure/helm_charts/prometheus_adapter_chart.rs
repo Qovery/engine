@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -20,6 +21,7 @@ pub struct PrometheusAdapterChart {
     prometheus_internal_url: String,
     prometheus_namespace: HelmChartNamespaces,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     additional_char_path: Option<HelmChartValuesFilePath>,
 }
@@ -50,6 +52,7 @@ impl PrometheusAdapterChart {
             prometheus_internal_url: prometheus_url,
             prometheus_namespace,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             enable_vpa,
             additional_char_path: match karpenter_enabled {
                 true => Some(HelmChartValuesFilePath::new(
@@ -108,6 +111,7 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(64)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,

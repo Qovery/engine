@@ -1,3 +1,4 @@
+use std::ops::Add;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -19,6 +20,7 @@ pub struct PromtailChart {
     chart_values_path: HelmChartValuesFilePath,
     loki_kube_dns_name: String,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
+    customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     priority_class: PriorityClass,
@@ -55,6 +57,7 @@ impl PromtailChart {
             ),
             loki_kube_dns_name,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
+            customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             enable_vpa,
             namespace,
             priority_class,
@@ -144,6 +147,7 @@ impl ToCommonHelmChart for PromtailChart {
                             Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(3)),
                         ),
+                        customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
                 )),
                 false => None,
