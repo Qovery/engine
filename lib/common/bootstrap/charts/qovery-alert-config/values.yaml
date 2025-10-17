@@ -12,14 +12,20 @@ receivers:
 #      channel: "#alerts-ch1"
 #      webhookURL: "https://hooks.slack.com/services/YYYYY/YYYYY/YYYYYYYYY"
 
-alerts:
-#  - long_id: "00000-0000-0000-0000-000000000000"
-#    name: HighMemory
-#    expr: "container_memory_working_set_bytes{container=\"app-zc5ae9983-gaffotron\"}> 80"
-#    for: "5m"
-#    labels:
-#      slack_ch1: "true"
-#    annotations:
-#      summary: "High Memory usage detected"
-#      description: "Memory usage is {{ $value }}% on instance {{ $labels.instance }}"
-#      runbook_url: "https://wiki.company.com/runbooks/high-cpu"
+targets:
+#  - id: "qovery-alert-target-abc123"
+#    target_id: "00000-0000-0000-0000-000000000001"
+#    target_type: "APPLICATION"
+#    namespace: "prometheus"
+#    alerts:
+#      - long_id: "qovery-alert-xyz789"
+#        alert_long_id: "00000-0000-0000-0000-000000000002"
+#        name: HighMemory
+#        expr: "container_memory_working_set_bytes{container=\"app-zc5ae9983-gaffotron\"}> 80"
+#        for: "5m"
+#        labels:
+#          slack_ch1: "true"
+#        annotations:
+#          summary: "High Memory usage detected"
+#          description: "Memory usage is {{ $value }}% on instance {{ $labels.instance }}"
+#          runbook_url: "https://wiki.company.com/runbooks/high-cpu"

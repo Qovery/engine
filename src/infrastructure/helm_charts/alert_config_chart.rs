@@ -5,9 +5,11 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::io_models::metrics::{AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig};
+use crate::io_models::metrics::{AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig, AlertTarget};
 use crate::utilities::to_short_id;
+use itertools::Itertools;
 use kube::Client;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 const ALERT_RECEIVER_PREFIX_K8S: &str = "qovery-alert-receiver";
@@ -78,10 +80,12 @@ impl ToCommonHelmChart for AlertConfigChart {
                 values.extend(build_receiver_values(index, receiver));
             }
 
-            for (index, alert) in alert_config.alerts.iter().enumerate() {
-                let alert_values = build_alert_values(index, alert, &self.prometheus_namespace);
-                values.extend(alert_values.values);
-                values_string.extend(alert_values.values_string);
+            let alerts_by_target = group_alerts_by_target(&alert_config.alerts);
+
+            for (index, (target, target_alerts)) in alerts_by_target.iter().enumerate() {
+                let target_values = build_target_values(index, target, target_alerts, &self.prometheus_namespace);
+                values.extend(target_values.values);
+                values_string.extend(target_values.values_string);
             }
         } else {
             action = HelmAction::Destroy;
@@ -116,6 +120,15 @@ fn format_receiver_id_label(long_id: &Uuid) -> String {
 
 fn format_alert_id(long_id: &Uuid) -> String {
     format!("{}-{}", ALERT_PREFIX, to_short_id(long_id))
+}
+
+fn format_target_id(target: &AlertTarget) -> String {
+    let type_suffix = format!("{:?}", target.r#type).to_lowercase();
+    format!("{}-{}-{}", ALERT_PREFIX, type_suffix, to_short_id(&target.id))
+}
+
+fn group_alerts_by_target(alerts: &[AlertConfigAlert]) -> HashMap<&AlertTarget, Vec<&AlertConfigAlert>> {
+    alerts.iter().into_group_map_by(|alert| &alert.target)
 }
 
 fn build_receiver_values(index: usize, receiver: &AlertConfigReceiver) -> Vec<ChartSetValue> {
@@ -156,70 +169,93 @@ struct AlertChartValues {
     values_string: Vec<ChartSetValue>,
 }
 
-fn build_alert_values(index: usize, alert: &AlertConfigAlert, namespace: &HelmChartNamespaces) -> AlertChartValues {
-    let base_values_count = 5;
-    let optional_annotations_count = [&alert.summary, &alert.description, &alert.runbook_url]
-        .iter()
-        .filter(|opt| opt.is_some())
-        .count();
-
-    let mut values = Vec::with_capacity(base_values_count + optional_annotations_count);
-    let mut values_string = Vec::with_capacity(alert.labels.len() + alert.receivers.len());
+fn build_target_values(
+    target_index: usize,
+    target: &AlertTarget,
+    alerts: &[&AlertConfigAlert],
+    namespace: &HelmChartNamespaces,
+) -> AlertChartValues {
+    let mut values = Vec::new();
+    let mut values_string = Vec::new();
+    let target_prefix = format!("targets[{target_index}]");
 
     values.extend([
         ChartSetValue {
-            key: format!("alerts[{index}].long_id"),
-            value: format_alert_id(&alert.long_id),
+            key: format!("{target_prefix}.id"),
+            value: format_target_id(target),
         },
         ChartSetValue {
-            key: format!("alerts[{index}].name"),
-            value: alert.name.clone(),
+            key: format!("{target_prefix}.target_id"),
+            value: target.id.to_string(),
         },
         ChartSetValue {
-            key: format!("alerts[{index}].expr"),
-            value: alert.expr.clone(),
+            key: format!("{target_prefix}.target_type"),
+            value: format!("{:?}", target.r#type),
         },
         ChartSetValue {
-            key: format!("alerts[{index}].for"),
-            value: format!("{}m", alert.for_duration_minutes),
-        },
-        ChartSetValue {
-            key: format!("alerts[{index}].labels.namespace"),
+            key: format!("{target_prefix}.namespace"),
             value: namespace.to_string(),
         },
     ]);
 
-    if let Some(summary) = &alert.summary {
-        values.push(ChartSetValue {
-            key: format!("alerts[{index}].annotations.summary"),
-            value: summary.clone(),
-        })
-    }
+    for (alert_index, alert) in alerts.iter().enumerate() {
+        let alert_prefix = format!("{target_prefix}.alerts[{alert_index}]");
 
-    if let Some(description) = &alert.description {
-        values.push(ChartSetValue {
-            key: format!("alerts[{index}].annotations.description"),
-            value: description.clone(),
-        })
-    }
+        values.extend([
+            ChartSetValue {
+                key: format!("{alert_prefix}.long_id"),
+                value: format_alert_id(&alert.long_id),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.alert_long_id"),
+                value: alert.long_id.to_string(),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.name"),
+                value: alert.name.clone(),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.expr"),
+                value: alert.expr.clone(),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.for"),
+                value: format!("{}m", alert.for_duration_minutes),
+            },
+        ]);
 
-    if let Some(runbook_url) = &alert.runbook_url {
-        values.push(ChartSetValue {
-            key: format!("alerts[{index}].annotations.runbook_url"),
-            value: runbook_url.clone(),
-        })
-    }
+        if let Some(summary) = &alert.summary {
+            values.push(ChartSetValue {
+                key: format!("{alert_prefix}.annotations.summary"),
+                value: summary.clone(),
+            })
+        }
 
-    values_string.extend(alert.labels.iter().map(|(key, value)| ChartSetValue {
-        key: format!("alerts[{index}].labels.{key}"),
-        value: value.clone(),
-    }));
+        if let Some(description) = &alert.description {
+            values.push(ChartSetValue {
+                key: format!("{alert_prefix}.annotations.description"),
+                value: description.clone(),
+            })
+        }
 
-    for receiver_id in &alert.receivers {
-        values_string.push(ChartSetValue {
-            key: format!("alerts[{index}].labels.{}", format_receiver_id_label(receiver_id)),
-            value: "true".to_string(),
-        });
+        if let Some(runbook_url) = &alert.runbook_url {
+            values.push(ChartSetValue {
+                key: format!("{alert_prefix}.annotations.runbook_url"),
+                value: runbook_url.clone(),
+            })
+        }
+
+        values_string.extend(alert.labels.iter().map(|(key, value)| ChartSetValue {
+            key: format!("{alert_prefix}.labels.{key}"),
+            value: value.clone(),
+        }));
+
+        for receiver_id in &alert.receivers {
+            values_string.push(ChartSetValue {
+                key: format!("{alert_prefix}.labels.{}", format_receiver_id_label(receiver_id)),
+                value: "true".to_string(),
+            });
+        }
     }
 
     AlertChartValues { values, values_string }
@@ -389,5 +425,379 @@ mod tests {
                 missing_fields.unwrap_or_default().join(",")
             );
         }
+    }
+
+    #[test]
+    fn test_group_alerts_by_target() {
+        use crate::io_models::metrics::{AlertConfigAlert, AlertTarget, AlertTargetType};
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        // Create two different targets
+        let target1 = AlertTarget {
+            id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            r#type: AlertTargetType::Application,
+        };
+        let target2 = AlertTarget {
+            id: Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap(),
+            r#type: AlertTargetType::Container,
+        };
+
+        // Create alerts for target1
+        let alert1 = AlertConfigAlert {
+            long_id: Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(),
+            name: "Alert1".to_string(),
+            expr: "expr1".to_string(),
+            for_duration_minutes: 5,
+            labels: HashMap::new(),
+            summary: None,
+            description: None,
+            runbook_url: None,
+            receivers: vec![],
+            target: target1.clone(),
+        };
+
+        let alert2 = AlertConfigAlert {
+            long_id: Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(),
+            name: "Alert2".to_string(),
+            expr: "expr2".to_string(),
+            for_duration_minutes: 10,
+            labels: HashMap::new(),
+            summary: None,
+            description: None,
+            runbook_url: None,
+            receivers: vec![],
+            target: target1.clone(),
+        };
+
+        // Create alert for target2
+        let alert3 = AlertConfigAlert {
+            long_id: Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap(),
+            name: "Alert3".to_string(),
+            expr: "expr3".to_string(),
+            for_duration_minutes: 15,
+            labels: HashMap::new(),
+            summary: None,
+            description: None,
+            runbook_url: None,
+            receivers: vec![],
+            target: target2.clone(),
+        };
+
+        let alerts = vec![alert1, alert2, alert3];
+
+        // Execute
+        let grouped = super::group_alerts_by_target(&alerts);
+
+        // Verify
+        assert_eq!(grouped.len(), 2, "Should have 2 different targets");
+        assert_eq!(grouped.get(&target1).unwrap().len(), 2, "Target1 should have 2 alerts");
+        assert_eq!(grouped.get(&target2).unwrap().len(), 1, "Target2 should have 1 alert");
+    }
+
+    #[test]
+    fn test_build_target_values() {
+        use crate::io_models::metrics::{AlertConfigAlert, AlertTarget, AlertTargetType};
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        let target = AlertTarget {
+            id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            r#type: AlertTargetType::Application,
+        };
+
+        let receiver_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999").unwrap();
+
+        let mut labels = HashMap::new();
+        labels.insert("env".to_string(), "prod".to_string());
+
+        let alert = AlertConfigAlert {
+            long_id: Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(),
+            name: "TestAlert".to_string(),
+            expr: "up == 0".to_string(),
+            for_duration_minutes: 5,
+            labels: labels.clone(),
+            summary: Some("Service is down".to_string()),
+            description: Some("The service has been down for 5 minutes".to_string()),
+            runbook_url: Some("https://runbook.example.com".to_string()),
+            receivers: vec![receiver_id],
+            target: target.clone(),
+        };
+
+        let alerts = vec![&alert];
+
+        // Execute
+        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus);
+
+        // Verify target values
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].id" && v.value.contains("application")),
+            "Should contain target id with type"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].target_id" && v.value == "11111111-1111-1111-1111-111111111111"),
+            "Should contain target UUID"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].target_type" && v.value == "Application"),
+            "Should contain target type"
+        );
+
+        // Verify alert values
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].name" && v.value == "TestAlert"),
+            "Should contain alert name"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].alert_long_id"
+                    && v.value == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+            "Should contain alert long UUID"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].expr" && v.value == "up == 0"),
+            "Should contain alert expression"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].for" && v.value == "5m"),
+            "Should contain alert duration"
+        );
+
+        // Verify annotations
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.summary" && v.value == "Service is down"),
+            "Should contain summary annotation"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.description"),
+            "Should contain description annotation"
+        );
+        assert!(
+            result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.runbook_url"),
+            "Should contain runbook_url annotation"
+        );
+
+        // Verify labels
+        assert!(
+            result
+                .values_string
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].labels.env" && v.value == "prod"),
+            "Should contain custom label"
+        );
+
+        // Verify receiver label
+        assert!(
+            result
+                .values_string
+                .iter()
+                .any(|v| v.key.contains("qovery_alert_receiver") && v.value == "true"),
+            "Should contain receiver label"
+        );
+    }
+
+    #[test]
+    fn test_integration_complete_alert_config() {
+        use crate::io_models::metrics::{
+            AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig, AlertTarget, AlertTargetType,
+        };
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        // Create receiver
+        let receiver_id = Uuid::parse_str("fa370bf5-d8a0-46fb-9066-e092cf5a37f1").unwrap();
+        let receiver = AlertConfigReceiver::SlackConfig {
+            long_id: receiver_id,
+            name: "TestSlackReceiver".to_string(),
+            api_url: "https://hooks.slack.com/test".to_string(),
+            channel: "#alerts".to_string(),
+        };
+
+        // Create target
+        let target = AlertTarget {
+            id: Uuid::parse_str("3f50657b-1162-4dde-b706-4d5e937f3c09").unwrap(),
+            r#type: AlertTargetType::KubernetesProvider,
+        };
+
+        // Create alert
+        let alert = AlertConfigAlert {
+            long_id: Uuid::parse_str("89bf371f-1162-4dde-b706-4d5e937f3c01").unwrap(),
+            name: "TestAlert1".to_string(),
+            expr: "vector(1) > 0".to_string(),
+            for_duration_minutes: 5,
+            labels: HashMap::new(),
+            summary: Some("CPU usage is too high".to_string()),
+            description: Some("This is for a test".to_string()),
+            runbook_url: None,
+            receivers: vec![receiver_id],
+            target: target.clone(),
+        };
+
+        let alert_config = AlertManagerConfig {
+            enabled: true,
+            default_rule_labels: None,
+            spec_config_secret: None,
+            spec_external_url: None,
+            receivers: vec![receiver],
+            alerts: vec![alert],
+            config_name: Some("test-config".to_string()),
+        };
+
+        // Execute
+        let chart = AlertConfigChart::new(
+            HelmAction::Deploy,
+            HelmChartNamespaces::Prometheus,
+            None,
+            "test-cluster",
+            Some(alert_config),
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // Verify
+        assert_eq!(common_chart.chart_info.action, HelmAction::Deploy);
+        assert!(!common_chart.chart_info.values.is_empty(), "Should have values");
+
+        // Verify receiver values
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].name" && v.value == "TestSlackReceiver"),
+            "Should contain receiver name"
+        );
+
+        // Verify target and alert values
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key.starts_with("targets[0]")),
+            "Should contain target values"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key.contains("alerts[0]")),
+            "Should contain alert values"
+        );
+    }
+
+    #[test]
+    fn test_edge_case_no_alerts() {
+        let alert_config = AlertManagerConfig {
+            enabled: true,
+            default_rule_labels: None,
+            spec_config_secret: None,
+            spec_external_url: None,
+            receivers: vec![],
+            alerts: vec![],
+            config_name: None,
+        };
+
+        let chart = AlertConfigChart::new(
+            HelmAction::Deploy,
+            HelmChartNamespaces::Prometheus,
+            None,
+            "test-cluster",
+            Some(alert_config),
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // Should still work with no alerts
+        assert_eq!(common_chart.chart_info.action, HelmAction::Deploy);
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "alertManagerConfigName"),
+            "Should still set alertManagerConfigName"
+        );
+    }
+
+    #[test]
+    fn test_edge_case_alert_without_optional_fields() {
+        use crate::io_models::metrics::{AlertConfigAlert, AlertTarget, AlertTargetType};
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        let target = AlertTarget {
+            id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
+            r#type: AlertTargetType::Application,
+        };
+
+        let alert = AlertConfigAlert {
+            long_id: Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(),
+            name: "MinimalAlert".to_string(),
+            expr: "up == 0".to_string(),
+            for_duration_minutes: 5,
+            labels: HashMap::new(),
+            summary: None,
+            description: None,
+            runbook_url: None,
+            receivers: vec![],
+            target: target.clone(),
+        };
+
+        let alerts = vec![&alert];
+        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus);
+
+        // Should not have annotation keys if values are None
+        assert!(
+            !result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.summary"),
+            "Should not have summary annotation when None"
+        );
+        assert!(
+            !result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.description"),
+            "Should not have description annotation when None"
+        );
+        assert!(
+            !result
+                .values
+                .iter()
+                .any(|v| v.key == "targets[0].alerts[0].annotations.runbook_url"),
+            "Should not have runbook_url annotation when None"
+        );
     }
 }
