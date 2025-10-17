@@ -1,38 +1,43 @@
 {{- $root := . -}}
 {{- $ns := $root.Values.namespace | default $root.Release.Namespace -}}
-{{- range $i, $a := $root.Values.alerts }}
+{{- range $i, $target := $root.Values.targets }}
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  name: {{ regexReplaceAll "[^a-z0-9-]" (lower $a.long_id) "-" | trunc 63 | trimSuffix "-" }}
+  name: {{ regexReplaceAll "[^a-z0-9-]" (lower $target.id) "-" | trunc 63 | trimSuffix "-" }}
   namespace: {{ $ns }}
   labels:
     release: kube-prometheus-stack
     alertmanager: main
+    app.kubernetes.io/managed-by: qovery-alert-config
+    target_id: {{ $target.target_id | quote }}
+    target_type: {{ $target.target_type | quote }}
     {{- with $root.Values.extraLabels }}
 {{ toYaml . | nindent 4 }}
     {{- end }}
 spec:
   groups:
-    - name: {{ default $root.Values.groupName "default.rules" }}
-    {{- if or $a.interval $root.Values.interval }}
-      interval: {{ default $a.interval $root.Values.interval }}
+    - name: {{ default $root.Values.groupName (printf "%s.rules" $target.target_type) }}
+    {{- if $root.Values.interval }}
+      interval: {{ $root.Values.interval }}
     {{- end }}
       rules:
+      {{- range $j, $a := $target.alerts }}
         - alert: {{ $a.name }}
           expr: {{ $a.expr | quote }}
         {{- if $a.for }}
           for: {{ $a.for }}
         {{- end }}
-        {{- if or $root.Values.commonLabels $a.labels }}
           labels:
+            qovery_alert_long_id: {{ $a.alert_long_id | quote }}
+            target_id: {{ $target.target_id | quote }}
+            target_type: {{ $target.target_type | quote }}
           {{- with $root.Values.commonLabels }}
 {{ toYaml . | nindent 12 }}
           {{- end }}
           {{- with $a.labels }}
 {{ toYaml . | nindent 12 }}
           {{- end }}
-        {{- end }}
         {{- if or $root.Values.commonAnnotations $a.annotations }}
           annotations:
           {{- with $root.Values.commonAnnotations }}
@@ -42,5 +47,6 @@ spec:
 {{ toYaml . | nindent 12 }}
           {{- end }}
         {{- end }}
+      {{- end }}
 ---
 {{- end }}

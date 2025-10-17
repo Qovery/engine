@@ -43,6 +43,26 @@ pub enum AlertConfigReceiver {
     },
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(rename_all(serialize = "SCREAMING_SNAKE_CASE", deserialize = "SCREAMING_SNAKE_CASE"))]
+pub enum AlertTargetType {
+    KubernetesProvider,
+    Environment,
+    Application,
+    Container,
+    Job,
+    Cronjob,
+    Helm,
+    Terraform,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Hash)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub struct AlertTarget {
+    pub id: Uuid,
+    pub r#type: AlertTargetType,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
 pub struct AlertConfigAlert {
@@ -56,6 +76,7 @@ pub struct AlertConfigAlert {
     pub runbook_url: Option<String>,
     #[serde(default)]
     pub receivers: Vec<Uuid>,
+    pub target: AlertTarget,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -74,7 +95,7 @@ pub struct AlertManagerConfig {
 
 #[cfg(test)]
 mod tests {
-    use crate::io_models::metrics::{AlertConfigReceiver, MetricsConfiguration, MetricsParameters};
+    use crate::io_models::metrics::{AlertConfigReceiver, AlertTargetType, MetricsConfiguration, MetricsParameters};
     use std::collections::HashMap;
     use uuid::Uuid;
 
@@ -115,7 +136,11 @@ mod tests {
                   "labels":{"label 1":"v1"},
                   "summary":"summary 1",
                   "description":"description 1",
-                  "runbook_url":"runbookUrl 1"
+                  "runbook_url":"runbookUrl 1",
+                  "target": {
+                    "id":"4f50657b-1162-4dde-b706-4d5e937f3c02",
+                    "type":"APPLICATION"
+                  }
                 }
               ],
               "config_name":"config Name"
@@ -179,5 +204,10 @@ mod tests {
         assert_eq!(alert.summary, Some("summary 1".to_string()));
         assert_eq!(alert.description, Some("description 1".to_string()));
         assert_eq!(alert.runbook_url, Some("runbookUrl 1".to_string()));
+        assert_eq!(
+            alert.target.id,
+            Uuid::parse_str("4f50657b-1162-4dde-b706-4d5e937f3c02").unwrap()
+        );
+        assert_eq!(alert.target.r#type, AlertTargetType::Application);
     }
 }
