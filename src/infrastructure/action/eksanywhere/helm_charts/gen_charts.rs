@@ -90,7 +90,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
-                true,
+                false,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Default,
                 false,

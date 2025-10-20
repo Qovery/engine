@@ -144,7 +144,7 @@ pub(super) fn gke_helm_charts(
                 HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
                 loki_kube_dns_name,
                 get_chart_override_fn.clone(),
-                true,
+                false,
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
                 false,
