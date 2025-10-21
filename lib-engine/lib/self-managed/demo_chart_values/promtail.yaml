@@ -21,3 +21,10 @@ defaultVolumeMounts:
     readOnly: true
   - mountPath: /run/promtail
     name: run
+
+# for daemonsets, use rolling update with maxUnavailable 35%
+# it prevents promtail from timeout when updating large clusters (with a lot of nodes)
+updateStrategy:
+  rollingUpdate:
+    maxUnavailable: 35%
+    maxSurge: 0
