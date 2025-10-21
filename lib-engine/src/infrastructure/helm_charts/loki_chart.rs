@@ -116,7 +116,7 @@ impl LokiChart {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
                     request_cpu: KubernetesCpuResourceUnit::MilliCpu(300),
                     request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(8000),
                     limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
@@ -380,10 +380,10 @@ impl ToCommonHelmChart for LokiChart {
                         ),
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(self.vpa_min_mcpu.unwrap_or(200))),
-                            Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(512)),
-                            Some(KubernetesMemoryResourceUnit::GibiByte(4)),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(self.vpa_min_mcpu.unwrap_or(300))),
+                            Some(KubernetesCpuResourceUnit::MilliCpu(2000)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                            Some(KubernetesMemoryResourceUnit::GibiByte(8)),
                         ),
                         customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
                     }],
