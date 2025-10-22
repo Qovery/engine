@@ -1,4 +1,5 @@
 use std::ops::Add;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -6,8 +7,9 @@ use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmAction, HelmChartError,
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
+use crate::infrastructure::action::metrics_resource_profile::{PrometheusAdapterResources, ResourceProfile};
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
@@ -24,6 +26,7 @@ pub struct PrometheusAdapterChart {
     customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     additional_char_path: Option<HelmChartValuesFilePath>,
+    resources: HelmChartResources,
 }
 
 impl PrometheusAdapterChart {
@@ -35,7 +38,17 @@ impl PrometheusAdapterChart {
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         karpenter_enabled: bool,
+        resource_profile: ResourceProfile,
     ) -> Self {
+        // Convert ResourceProfile to HelmChartResources
+        let adapter_res = PrometheusAdapterResources::get(resource_profile);
+        let resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_request).unwrap(),
+        };
+
         PrometheusAdapterChart {
             action,
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -62,6 +75,7 @@ impl PrometheusAdapterChart {
                 )),
                 false => None,
             },
+            resources,
         }
     }
 
@@ -85,10 +99,28 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(3, 3, 1)),
                 namespace: self.prometheus_namespace.clone(),
                 values_files,
-                values: vec![ChartSetValue {
-                    key: "prometheus.url".to_string(),
-                    value: self.prometheus_internal_url.clone(),
-                }],
+                values: vec![
+                    ChartSetValue {
+                        key: "prometheus.url".to_string(),
+                        value: self.prometheus_internal_url.clone(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.cpu".to_string(),
+                        value: self.resources.request_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.limits.cpu".to_string(),
+                        value: self.resources.limit_cpu.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.requests.memory".to_string(),
+                        value: self.resources.request_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "resources.limits.memory".to_string(),
+                        value: self.resources.limit_memory.to_string(),
+                    },
+                ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
@@ -171,6 +203,7 @@ mod tests {
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn kube_prometheus_stack_chart_directory_exists_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = PrometheusAdapterChart::new(
             HelmAction::Deploy,
@@ -180,6 +213,7 @@ mod tests {
             get_prometheus_adapter_chart_override(),
             false,
             false,
+            ResourceProfile::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -202,6 +236,7 @@ mod tests {
     /// Makes sure chart values file exists.
     #[test]
     fn kube_prometheus_stack_chart_values_file_exists_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = PrometheusAdapterChart::new(
             HelmAction::Deploy,
@@ -211,6 +246,7 @@ mod tests {
             get_prometheus_adapter_chart_override(),
             false,
             false,
+            ResourceProfile::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -237,6 +273,7 @@ mod tests {
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn kube_prometheus_stack_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = PrometheusAdapterChart::new(
             HelmAction::Deploy,
@@ -246,6 +283,7 @@ mod tests {
             get_prometheus_adapter_chart_override(),
             false,
             false,
+            ResourceProfile::default(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

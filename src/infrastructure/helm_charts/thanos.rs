@@ -1,4 +1,5 @@
 use derive_more::Display;
+use std::str::FromStr;
 
 use super::{
     HelmChartAutoscaling, HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath,
@@ -6,6 +7,9 @@ use super::{
 };
 use crate::environment::models::ToCloudProviderFormat;
 use crate::helm::HelmAction;
+use crate::infrastructure::action::metrics_resource_profile::{
+    ResourceProfile, ThanosCompactorResources, ThanosQueryResources, ThanosStoreResources,
+};
 use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 use crate::{
     helm::{ChartInfo, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces},
@@ -58,6 +62,7 @@ impl ThanosChart {
         store_gateway_resources: Option<HelmChartResources>,
         karpenter_enabled: bool,
         enable_redundancy: bool,
+        resource_profile: ResourceProfile,
     ) -> Self {
         Self {
             action,
@@ -85,12 +90,15 @@ impl ThanosChart {
             },
             query_resources: match query_resources {
                 Some(resources) => resources,
-                None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                },
+                None => {
+                    let resources = ThanosQueryResources::get(resource_profile);
+                    HelmChartResources {
+                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
+                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
+                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
+                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                    }
+                }
             },
             query_autoscaling: HelmChartAutoscaling {
                 min_replicas: if enable_redundancy { 2 } else { 1 },
@@ -113,21 +121,27 @@ impl ThanosChart {
             },
             compactor_resources: match compactor_resources {
                 Some(resources) => resources,
-                None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(4),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(2000),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(4),
-                },
+                None => {
+                    let resources = ThanosCompactorResources::get(resource_profile);
+                    HelmChartResources {
+                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
+                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
+                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
+                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                    }
+                }
             },
             store_gateway_resources: match store_gateway_resources {
                 Some(resources) => resources,
-                None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                },
+                None => {
+                    let resources = ThanosStoreResources::get(resource_profile);
+                    HelmChartResources {
+                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
+                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
+                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
+                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                    }
+                }
             },
             store_gateway_autoscaling: HelmChartAutoscaling {
                 min_replicas: if enable_redundancy { 2 } else { 1 },
@@ -433,6 +447,7 @@ mod tests {
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn thanos_chart_directory_exists_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = ThanosChart::new(
             HelmAction::Deploy,
@@ -452,6 +467,7 @@ mod tests {
             None,
             false,
             true,
+            ResourceProfile::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -474,6 +490,7 @@ mod tests {
     /// Makes sure chart values file exists.
     #[test]
     fn kube_state_metrics_chart_values_file_exists_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = ThanosChart::new(
             HelmAction::Deploy,
@@ -493,6 +510,7 @@ mod tests {
             None,
             false,
             true,
+            ResourceProfile::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -525,6 +543,7 @@ mod tests {
     /// All values should be declared / set in values file unless it needs to be injected via rust code.
     #[test]
     fn thanos_chart_rust_overridden_values_exists_in_values_yaml_test() {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         // setup:
         let chart = ThanosChart::new(
             HelmAction::Deploy,
@@ -544,6 +563,7 @@ mod tests {
             None,
             false,
             true,
+            ResourceProfile::default(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

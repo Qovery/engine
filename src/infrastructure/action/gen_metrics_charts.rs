@@ -8,6 +8,7 @@ use crate::helm::{CommonChart, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
 use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
 use crate::infrastructure::action::gke::helm_charts::GkeChartsConfigPrerequisites;
+use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
 use crate::infrastructure::action::scaleway::helm_charts::KapsuleChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::helm_charts::alert_config_chart::AlertConfigChart;
@@ -160,6 +161,7 @@ pub fn generate_metrics_config(
             enable_redundancy,
             beyla_config,
             alert_config,
+            resource_profile,
         }) => generate_charts_installed_by_qovery(
             HelmAction::Deploy,
             install_prometheus_adapter,
@@ -172,6 +174,7 @@ pub fn generate_metrics_config(
             enable_redundancy,
             beyla_config.is_some_and(|config| config.enabled),
             alert_config,
+            resource_profile,
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
@@ -185,6 +188,7 @@ pub fn generate_metrics_config(
             None,
             false,
             None,
+            ResourceProfile::default(), // Use default profile for destroy action
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
@@ -212,6 +216,7 @@ fn generate_charts_installed_by_qovery(
     enable_redundancy: Option<bool>,
     install_beyla: bool,
     alert_config: Option<AlertManagerConfig>,
+    resource_profile: ResourceProfile,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -237,6 +242,7 @@ fn generate_charts_installed_by_qovery(
         provider_config.is_karpenter_enabled(),
         enable_redundancy,
         alert_config.clone(),
+        resource_profile,
     )
     .to_common_helm_chart()?;
 
@@ -254,6 +260,7 @@ fn generate_charts_installed_by_qovery(
         None,
         provider_config.is_karpenter_enabled(),
         enable_redundancy,
+        resource_profile,
     )
     .to_common_helm_chart()?;
 
@@ -270,6 +277,7 @@ fn generate_charts_installed_by_qovery(
         get_chart_override_fn.clone(),
         true,
         provider_config.is_karpenter_enabled(),
+        resource_profile,
     )
     .to_common_helm_chart()?;
 
@@ -364,6 +372,7 @@ mod tests {
             None,
             true,
             None,
+            ResourceProfile::default(),
         );
 
         assert!(result.is_ok());
@@ -399,6 +408,7 @@ mod tests {
             None,
             true,
             None,
+            ResourceProfile::default(),
         );
 
         assert!(result.is_ok());

@@ -31,6 +31,7 @@ use qovery_engine::metrics_registry::MetricsRegistry;
 use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS, azure_nodes_groups};
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
 use qovery_engine::environment::models::abort::AbortStatus;
+use qovery_engine::infrastructure::action::metrics_resource_profile::ResourceProfile;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider;
 use qovery_engine::infrastructure::models::cloud_provider::azure::Azure;
@@ -439,6 +440,7 @@ pub fn get_environment_test_kubernetes(
                                 enable_redundancy: None,
                                 beyla_config: None,
                                 alert_config: None,
+                                resource_profile: ResourceProfile::default(),
                             },
                         })
                     }
@@ -529,6 +531,7 @@ pub fn get_environment_test_kubernetes(
                                 enable_redundancy: None,
                                 beyla_config: None,
                                 alert_config: None,
+                                resource_profile: ResourceProfile::default(),
                             },
                         })
                     }
@@ -579,6 +582,7 @@ pub fn get_environment_test_kubernetes(
                                 enable_redundancy: None,
                                 beyla_config: None,
                                 alert_config: None,
+                                resource_profile: ResourceProfile::default(),
                             },
                         })
                     }

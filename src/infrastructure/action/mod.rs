@@ -9,6 +9,7 @@ mod gen_metrics_charts;
 mod gke;
 pub(super) mod kubeconfig_helper;
 mod kubectl_utils;
+pub mod metrics_resource_profile;
 mod scaleway;
 mod self_managed;
 mod utils;

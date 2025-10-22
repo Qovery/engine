@@ -71,17 +71,21 @@ prometheus:
               storage: "50Gi"
     resources:
       limits:
-        cpu: 1000m
-        memory: 8Gi
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+    replicas: set-by-engine-code
 
 prometheusOperator:
   resources:
     limits:
-      cpu: "1"
-      memory: "1Gi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: "200m"
-      memory: "1Gi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
   tls:
     enabled: false
   admissionWebhooks:
@@ -91,11 +95,11 @@ prometheus-node-exporter:
   priorityClassName: set-by-engine-code
   resources:
     limits:
-      cpu: "20m"
-      memory: "32Mi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: "10m"
-      memory: "32Mi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
   prometheus:
     monitor:
       enabled: false

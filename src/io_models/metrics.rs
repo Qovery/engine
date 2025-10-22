@@ -1,3 +1,4 @@
+use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -17,6 +18,8 @@ pub enum MetricsConfiguration {
         enable_redundancy: Option<bool>,
         beyla_config: Option<BeylaConfig>,
         alert_config: Option<AlertManagerConfig>,
+        #[serde(default)]
+        resource_profile: ResourceProfile,
     },
     AwsS3 {
         region: String,
@@ -95,6 +98,7 @@ pub struct AlertManagerConfig {
 
 #[cfg(test)]
 mod tests {
+    use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
     use crate::io_models::metrics::{AlertConfigReceiver, AlertTargetType, MetricsConfiguration, MetricsParameters};
     use std::collections::HashMap;
     use uuid::Uuid;
@@ -109,6 +113,7 @@ mod tests {
             "beyla_config": {
               "enabled": true
             },
+            "resource_profile": "HIGH",
             "alert_config": {
               "enabled":true,
               "default_rule_labels":{"A":"B"},
@@ -156,6 +161,7 @@ mod tests {
             enable_redundancy,
             beyla_config,
             alert_config,
+            resource_profile,
         } = metrics_parameters.config
         else {
             panic!("Expected MetricsInstalledByQovery variant");
@@ -164,6 +170,7 @@ mod tests {
         // Check basic fields
         assert!(!install_prometheus_adapter);
         assert_eq!(enable_redundancy, Some(true));
+        assert_eq!(resource_profile, ResourceProfile::High);
 
         // Check beyla config
         let beyla = beyla_config.expect("beyla_config should be present");

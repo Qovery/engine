@@ -34,11 +34,11 @@ kube-state-metrics:
     - persistentvolumeclaims=[qovery.com/service-id]
   resources:
     limits:
-      cpu: 150m
-      memory: 768Mi
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: 150m
-      memory: 768Mi
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
 
 crds:
   enabled: false
@@ -47,6 +47,13 @@ alertmanager:
   enabled: "set-by-engine-code"
   alertmanagerSpec:
     replicas: 2
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
 
 grafana:
   enabled: false
@@ -120,12 +127,12 @@ prometheus:
               storage: "8Gi"
     resources:
       limits:
-        cpu: "4"
-        memory: "4Gi"
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
       requests:
-        cpu: "1"
-        memory: "4Gi"
-    replicas: "set-by-engine-code"
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+    replicas: set-by-engine-code
 
 prometheusOperator:
   priorityClassName: qovery-high-priority
@@ -141,11 +148,11 @@ prometheusOperator:
     repository: pub-mirror-prometheus-operator
   resources:
     limits:
-      cpu: "1"
-      memory: "1Gi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: "200m"
-      memory: "1Gi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
   tls:
     enabled: false
   admissionWebhooks:
@@ -158,11 +165,11 @@ prometheus-node-exporter:
   priorityClassName: set-by-engine-code
   resources:
     limits:
-      cpu: "20m"
-      memory: "32Mi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
     requests:
-      cpu: "10m"
-      memory: "32Mi"
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
   prometheus:
     monitor:
       enabled: false
