@@ -5,8 +5,12 @@ use crate::helm::{
     HelmChartNamespaces, QoveryPriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
     VpaTargetRefKind,
 };
+use crate::infrastructure::action::metrics_resource_profile::{
+    AlertManagerResources, KubeStateMetricsResources, PrometheusNodeExporterResources, PrometheusOperatorResources,
+    PrometheusResources, ResourceProfile,
+};
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::metrics::AlertManagerConfig;
@@ -14,6 +18,7 @@ use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResource
 use kube::Client;
 use semver::Version;
 use std::ops::Add;
+use std::str::FromStr;
 use std::sync::Arc;
 
 pub type StorageClassName = String;
@@ -69,9 +74,36 @@ pub struct KubePrometheusStackChart {
     additional_chart_path: Option<HelmChartValuesFilePath>,
     enable_redundancy: bool,
     alert_config: Option<AlertManagerConfig>,
+    prometheus_resources: HelmChartResources,
+    prometheus_node_exporter_resources: HelmChartResources,
+    prometheus_operator_resources: HelmChartResources,
+    kube_state_metrics_resources: HelmChartResources,
+    alertmanager_resources: HelmChartResources,
 }
 
 impl KubePrometheusStackChart {
+    /// Helper function to generate ChartSetValue entries for a given resource configuration
+    fn generate_resource_chart_values(prefix: &str, resources: &HelmChartResources) -> Vec<ChartSetValue> {
+        vec![
+            ChartSetValue {
+                key: format!("{prefix}.resources.requests.cpu"),
+                value: resources.request_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: format!("{prefix}.resources.limits.cpu"),
+                value: resources.limit_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: format!("{prefix}.resources.requests.memory"),
+                value: resources.request_memory.to_string(),
+            },
+            ChartSetValue {
+                key: format!("{prefix}.resources.limits.memory"),
+                value: resources.limit_memory.to_string(),
+            },
+        ]
+    }
+
     pub fn new(
         action: HelmAction,
         chart_prefix_path: Option<&str>,
@@ -84,7 +116,50 @@ impl KubePrometheusStackChart {
         karpenter_enabled: bool,
         enable_redundancy: bool,
         alert_config: Option<AlertManagerConfig>,
+        resource_profile: ResourceProfile,
     ) -> Self {
+        // Convert ResourceProfile to HelmChartResources
+        let prometheus_res = PrometheusResources::get(resource_profile);
+        let prometheus_resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_request).unwrap(),
+        };
+
+        let prometheus_node_exporter_res = PrometheusNodeExporterResources::get(resource_profile);
+        let prometheus_node_exporter_resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_request)
+                .unwrap(),
+        };
+
+        let prometheus_operator_res = PrometheusOperatorResources::get(resource_profile);
+        let prometheus_operator_resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_request).unwrap(),
+        };
+
+        let kube_state_metrics_res = KubeStateMetricsResources::get(resource_profile);
+        let kube_state_metrics_resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_request).unwrap(),
+        };
+
+        let alertmanager_res = AlertManagerResources::get(resource_profile);
+        let alertmanager_resources = HelmChartResources {
+            limit_cpu: KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_limit).unwrap(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_limit).unwrap(),
+            request_cpu: KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_request).unwrap(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_request).unwrap(),
+        };
+
         KubePrometheusStackChart {
             action,
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -126,6 +201,11 @@ impl KubePrometheusStackChart {
             },
             enable_redundancy,
             alert_config,
+            prometheus_resources,
+            prometheus_node_exporter_resources,
+            prometheus_operator_resources,
+            kube_state_metrics_resources,
+            alertmanager_resources,
         }
     }
 
@@ -287,6 +367,28 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     .to_string(),
             },
         ];
+
+        // Add resource configurations for all components
+        values.extend(Self::generate_resource_chart_values(
+            "prometheus.prometheusSpec",
+            &self.prometheus_resources,
+        ));
+        values.extend(Self::generate_resource_chart_values(
+            "prometheus-node-exporter",
+            &self.prometheus_node_exporter_resources,
+        ));
+        values.extend(Self::generate_resource_chart_values(
+            "prometheusOperator",
+            &self.prometheus_operator_resources,
+        ));
+        values.extend(Self::generate_resource_chart_values(
+            "kube-state-metrics",
+            &self.kube_state_metrics_resources,
+        ));
+        values.extend(Self::generate_resource_chart_values(
+            "alertmanager.alertmanagerSpec",
+            &self.alertmanager_resources,
+        ));
 
         if let Some(alert_config) = self.alert_config.as_ref()
             && alert_config.enabled
@@ -490,6 +592,7 @@ mod tests {
     }
 
     fn create_kube_prometheus_stack_chart(provider_kind: Kind) -> KubePrometheusStackChart {
+        use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
         KubePrometheusStackChart::new(
             HelmAction::Deploy,
             None,
@@ -533,6 +636,7 @@ mod tests {
             false,
             true,
             None,
+            ResourceProfile::default(),
         )
     }
 

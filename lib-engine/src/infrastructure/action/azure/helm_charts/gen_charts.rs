@@ -344,7 +344,7 @@ pub(super) fn aks_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match metrics_configuration.as_ref() {
-        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(Box::new(
+        Some(MetricsConfiguration::MetricsInstalledByQovery { resource_profile, .. }) => Some(Box::new(
             KubePrometheusStackChart::new(
                 HelmAction::Deploy,
                 chart_prefix_path,
@@ -357,6 +357,7 @@ pub(super) fn aks_helm_charts(
                 false,
                 true,
                 None,
+                *resource_profile,
             )
             .to_common_helm_chart()?,
         )),
