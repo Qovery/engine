@@ -32,6 +32,7 @@ spec:
             qovery_alert_long_id: {{ $a.alert_long_id | quote }}
             target_id: {{ $target.target_id | quote }}
             target_type: {{ $target.target_type | quote }}
+            namespace: {{ $target.namespace | quote }}
           {{- with $root.Values.commonLabels }}
 {{ toYaml . | nindent 12 }}
           {{- end }}
