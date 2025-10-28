@@ -131,4 +131,7 @@ pub struct AwsEksQoveryTerraformOutput {
     pub cluster_oidc_issuer: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub cluster_vpc_id: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
 }

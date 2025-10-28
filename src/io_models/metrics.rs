@@ -20,6 +20,8 @@ pub enum MetricsConfiguration {
         alert_config: Option<AlertManagerConfig>,
         #[serde(default)]
         resource_profile: ResourceProfile,
+        #[serde(default)]
+        cloudwatch_exporter_config: CloudWatchExporterConfig,
     },
     AwsS3 {
         region: String,
@@ -96,6 +98,13 @@ pub struct AlertManagerConfig {
     pub config_name: Option<String>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all(serialize = "snake_case", deserialize = "snake_case"))]
+pub struct CloudWatchExporterConfig {
+    #[serde(default)]
+    pub enabled: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
@@ -162,6 +171,7 @@ mod tests {
             beyla_config,
             alert_config,
             resource_profile,
+            cloudwatch_exporter_config,
         } = metrics_parameters.config
         else {
             panic!("Expected MetricsInstalledByQovery variant");
@@ -216,5 +226,8 @@ mod tests {
             Uuid::parse_str("4f50657b-1162-4dde-b706-4d5e937f3c02").unwrap()
         );
         assert_eq!(alert.target.r#type, AlertTargetType::Application);
+
+        // Check cloudwatch_exporter_config
+        assert!(!cloudwatch_exporter_config.enabled);
     }
 }

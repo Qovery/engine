@@ -31,6 +31,7 @@ pub mod qovery_shell_agent_chart;
 pub mod qovery_storage_class_chart;
 pub mod thanos;
 pub mod vertical_pod_autoscaler;
+pub mod yace_chart;
 
 pub enum HelmChartTimeout {
     /// Let helm chart defines what it wants

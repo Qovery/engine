@@ -76,6 +76,7 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_security_group_id: String,
     pub aws_iam_alb_controller_arn: String,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+    pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
 }
 
 pub struct EksHelmsDeployment<'a> {
@@ -157,6 +158,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             aws_iam_eks_prometheus_role_arn: self.terraform_output.aws_iam_eks_prometheus_role_arn.clone(),
             aws_s3_prometheus_bucket_name: self.terraform_output.aws_s3_prometheus_bucket_name.clone(),
             cluster_creation_date: cluster.created_at,
+            aws_iam_cloudwatch_exporter_role_arn: self.terraform_output.aws_iam_cloudwatch_exporter_role_arn.clone(),
         }
     }
 

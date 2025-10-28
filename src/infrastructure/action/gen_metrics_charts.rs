@@ -19,10 +19,28 @@ use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
 use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdapterChart;
 use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
-use crate::io_models::metrics::{AlertManagerConfig, MetricsConfiguration, MetricsParameters};
+use crate::infrastructure::helm_charts::yace_chart::YaceChart;
+use crate::io_models::metrics::{
+    AlertManagerConfig, CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters,
+};
 use crate::io_models::models::CustomerHelmChartsOverride;
 use std::sync::Arc;
 use url::Url;
+
+/// Type alias for the chart override function to reduce verbosity
+pub type ChartOverrideFn = Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>;
+
+/// Macro to reduce boilerplate when accessing a field from all CloudProviderMetricsConfig variants
+macro_rules! access_field_from_all_configs {
+    ($self:ident, $field:ident) => {
+        match $self {
+            CloudProviderMetricsConfig::Eks(cfg) => &cfg.$field,
+            CloudProviderMetricsConfig::Gke(cfg) => &cfg.$field,
+            CloudProviderMetricsConfig::Kapsule(cfg) => &cfg.$field,
+            CloudProviderMetricsConfig::Aks(cfg) => &cfg.$field,
+        }
+    };
+}
 
 pub enum CloudProviderMetricsConfig<'a> {
     Eks(&'a EksChartsConfigPrerequisites),
@@ -80,12 +98,7 @@ impl CloudProviderMetricsConfig<'_> {
     }
 
     pub fn metrics_parameters(&self) -> Option<&MetricsParameters> {
-        match self {
-            Self::Eks(cfg) => cfg.metrics_parameters.as_ref(),
-            Self::Gke(cfg) => cfg.metrics_parameters.as_ref(),
-            Self::Kapsule(cfg) => cfg.metrics_parameters.as_ref(),
-            Self::Aks(cfg) => cfg.metrics_parameters.as_ref(),
-        }
+        access_field_from_all_configs!(self, metrics_parameters).as_ref()
     }
 
     fn metrics_namespace(&self) -> &str {
@@ -123,11 +136,56 @@ impl CloudProviderMetricsConfig<'_> {
     }
 
     pub fn cluster_name(&self) -> String {
-        match self {
-            Self::Eks(cfg) => cfg.cluster_name.clone(),
-            Self::Gke(cfg) => cfg.cluster_name.clone(),
-            Self::Kapsule(cfg) => cfg.cluster_name.clone(),
-            Self::Aks(cfg) => cfg.cluster_name.clone(),
+        access_field_from_all_configs!(self, cluster_name).clone()
+    }
+
+    /// Create YACE chart for AWS CloudWatch metrics export (EKS only)
+    pub fn create_yace_chart(
+        &self,
+        chart_prefix_path: Option<&str>,
+        cloudwatch_exporter_config: &CloudWatchExporterConfig,
+    ) -> Option<CommonChart> {
+        if let Self::Eks(eks_config) = self {
+            let action = if cloudwatch_exporter_config.enabled {
+                HelmAction::Deploy
+            } else {
+                HelmAction::Destroy
+            };
+
+            YaceChart::new(
+                action,
+                chart_prefix_path,
+                HelmChartNamespaces::Qovery,
+                eks_config.aws_iam_cloudwatch_exporter_role_arn.clone(),
+                eks_config.region.to_cloud_provider_format().to_string(),
+                eks_config.cluster_id.to_string(),
+            )
+            .to_common_helm_chart()
+            .ok()
+        } else {
+            None
+        }
+    }
+
+    /// Create Beyla chart for eBPF-based observability (non-Cilium providers only)
+    pub fn create_beyla_chart(
+        &self,
+        chart_prefix_path: Option<&str>,
+        cluster_name: &str,
+        install_beyla: bool,
+    ) -> Option<CommonChart> {
+        if !self.is_cilium_compatible() {
+            let action = if install_beyla {
+                HelmAction::Deploy
+            } else {
+                HelmAction::Destroy
+            };
+
+            BeylaChart::new(action, chart_prefix_path, HelmChartNamespaces::Qovery, cluster_name)
+                .to_common_helm_chart()
+                .ok()
+        } else {
+            None
         }
     }
 }
@@ -140,6 +198,7 @@ pub struct MetricsConfig {
     pub prometheus_adapter_chart: Option<CommonChart>,
     pub beyla_chart: Option<CommonChart>,
     pub alert_config_chart: Option<CommonChart>,
+    pub yace_chart: Option<CommonChart>,
     pub metrics_query_url: Option<String>,
     pub prometheus_service_url: Option<String>,
     pub alert_manager_service_url: Option<String>,
@@ -150,7 +209,7 @@ pub fn generate_metrics_config(
     chart_prefix_path: Option<&str>,
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
-    get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+    get_chart_override_fn: ChartOverrideFn,
 ) -> Result<MetricsConfig, CommandError> {
     let metrics_configuration = provider_config.metrics_parameters().map(|it| it.config.clone());
     let cluster_name = provider_config.cluster_name();
@@ -162,6 +221,7 @@ pub fn generate_metrics_config(
             beyla_config,
             alert_config,
             resource_profile,
+            cloudwatch_exporter_config,
         }) => generate_charts_installed_by_qovery(
             HelmAction::Deploy,
             install_prometheus_adapter,
@@ -175,6 +235,7 @@ pub fn generate_metrics_config(
             beyla_config.is_some_and(|config| config.enabled),
             alert_config,
             resource_profile,
+            cloudwatch_exporter_config,
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
@@ -189,6 +250,7 @@ pub fn generate_metrics_config(
             false,
             None,
             ResourceProfile::default(), // Use default profile for destroy action
+            CloudWatchExporterConfig::default(),
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
@@ -197,6 +259,7 @@ pub fn generate_metrics_config(
             prometheus_adapter_chart: None,
             beyla_chart: None,
             alert_config_chart: None,
+            yace_chart: None,
             metrics_query_url: None,
             prometheus_service_url: None,
             alert_manager_service_url: None,
@@ -211,12 +274,13 @@ fn generate_charts_installed_by_qovery(
     provider_config: CloudProviderMetricsConfig,
     prometheus_internal_url: &str,
     prometheus_namespace: HelmChartNamespaces,
-    get_chart_override_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+    get_chart_override_fn: ChartOverrideFn,
     cluster_name: &str,
     enable_redundancy: Option<bool>,
     install_beyla: bool,
     alert_config: Option<AlertManagerConfig>,
     resource_profile: ResourceProfile,
+    cloudwatch_exporter_config: CloudWatchExporterConfig,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -282,19 +346,7 @@ fn generate_charts_installed_by_qovery(
     .to_common_helm_chart()?;
 
     // Grafana Beyla. only for EKS.
-    let beyla_chart = if !provider_config.is_cilium_compatible() {
-        let action = if install_beyla {
-            HelmAction::Deploy
-        } else {
-            HelmAction::Destroy
-        };
-        Some(
-            BeylaChart::new(action, chart_prefix_path, HelmChartNamespaces::Qovery, cluster_name)
-                .to_common_helm_chart()?,
-        )
-    } else {
-        None
-    };
+    let beyla_chart = provider_config.create_beyla_chart(chart_prefix_path, cluster_name, install_beyla);
 
     // Alert Config
     let alert_config_chart = AlertConfigChart::new(
@@ -306,6 +358,19 @@ fn generate_charts_installed_by_qovery(
     )
     .to_common_helm_chart()?;
 
+    // YACE (AWS Cloud Watch exporter)
+    let yace_chart = provider_config.create_yace_chart(chart_prefix_path, &cloudwatch_exporter_config);
+
+    // Generate service URLs only on Deploy, not on Destroy
+    let (metrics_query_url, prometheus_service_url, alert_manager_service_url) = match helm_action {
+        HelmAction::Deploy => (
+            Some(provider_config.metrics_query_url_for_qovery_installation()),
+            Some(provider_config.metrics_prometheus_url_for_qovery_installation()),
+            Some(provider_config.metrics_alert_manager_url_for_qovery_installation()),
+        ),
+        HelmAction::Destroy => (None, None, None),
+    };
+
     Ok(MetricsConfig {
         prometheus_operator_crds_chart,
         kube_prometheus_stack_chart: Some(kube_prometheus_stack_chart),
@@ -313,18 +378,10 @@ fn generate_charts_installed_by_qovery(
         prometheus_adapter_chart: Some(prometheus_adapter_chart),
         beyla_chart,
         alert_config_chart: Some(alert_config_chart),
-        metrics_query_url: match helm_action {
-            HelmAction::Deploy => Some(provider_config.metrics_query_url_for_qovery_installation()),
-            HelmAction::Destroy => None,
-        },
-        prometheus_service_url: match helm_action {
-            HelmAction::Deploy => Some(provider_config.metrics_prometheus_url_for_qovery_installation()),
-            HelmAction::Destroy => None,
-        },
-        alert_manager_service_url: match helm_action {
-            HelmAction::Deploy => Some(provider_config.metrics_alert_manager_url_for_qovery_installation()),
-            HelmAction::Destroy => None,
-        },
+        yace_chart,
+        metrics_query_url,
+        prometheus_service_url,
+        alert_manager_service_url,
     })
 }
 
@@ -373,6 +430,7 @@ mod tests {
             true,
             None,
             ResourceProfile::default(),
+            CloudWatchExporterConfig::default(),
         );
 
         assert!(result.is_ok());
@@ -409,6 +467,7 @@ mod tests {
             true,
             None,
             ResourceProfile::default(),
+            CloudWatchExporterConfig::default(),
         );
 
         assert!(result.is_ok());
@@ -454,40 +513,43 @@ mod tests {
         );
     }
 
+    /// Helper to create a minimal QoveryDns configuration for tests
+    fn create_test_dns_config() -> crate::infrastructure::models::dns_provider::DnsProviderConfiguration {
+        crate::infrastructure::models::dns_provider::DnsProviderConfiguration::QoveryDns(QoveryDnsConfig {
+            api_url: Url::parse("http://test.com").unwrap(),
+            api_key: String::new(),
+            api_url_scheme_and_domain: String::new(),
+            api_url_port: String::new(),
+        })
+    }
+
     fn create_gke_chart_config() -> GkeChartsConfigPrerequisites {
         use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
 
         GkeChartsConfigPrerequisites {
-            organization_id: "".to_string(),
+            organization_id: String::new(),
             organization_long_id: Default::default(),
-            cluster_id: "".to_string(),
+            cluster_id: String::new(),
             cluster_long_id: Default::default(),
-            cluster_name: "".to_string(),
+            cluster_name: String::new(),
             cluster_creation_date: Default::default(),
             ff_log_history_enabled: false,
-            managed_dns_helm_format: "".to_string(),
-            managed_dns_root_domain_helm_format: "".to_string(),
+            managed_dns_helm_format: String::new(),
+            managed_dns_root_domain_helm_format: String::new(),
             lets_encrypt_config: LetsEncryptConfig::new("a".to_string(), true),
-            dns_provider_config: crate::infrastructure::models::dns_provider::DnsProviderConfiguration::QoveryDns(
-                QoveryDnsConfig {
-                    api_url: Url::parse("http://test.com").unwrap(),
-                    api_key: "".to_string(),
-                    api_url_scheme_and_domain: "".to_string(),
-                    api_url_port: "".to_string(),
-                },
-            ),
-            loki_logging_service_account_email: "".to_string(),
-            logs_bucket_name: "".to_string(),
+            dns_provider_config: create_test_dns_config(),
+            loki_logging_service_account_email: String::new(),
+            logs_bucket_name: String::new(),
             metrics_parameters: None,
             infra_options: GkeOptions {
-                qovery_api_url: "".to_string(),
-                qovery_grpc_url: "".to_string(),
-                qovery_engine_url: "".to_string(),
-                jwt_token: "".to_string(),
-                qovery_ssh_key: "".to_string(),
+                qovery_api_url: String::new(),
+                qovery_grpc_url: String::new(),
+                qovery_engine_url: String::new(),
+                jwt_token: String::new(),
+                qovery_ssh_key: String::new(),
                 user_ssh_keys: vec![],
-                grafana_admin_user: "".to_string(),
-                grafana_admin_password: "".to_string(),
+                grafana_admin_user: String::new(),
+                grafana_admin_password: String::new(),
                 qovery_engine_location: EngineLocation::ClientSide,
                 vpc_mode: VpcMode::Automatic {
                     custom_cluster_ipv4_cidr_block: None,
@@ -496,46 +558,41 @@ mod tests {
                 vpc_qovery_network_mode: None,
                 cluster_maintenance_start_time: Time::MIDNIGHT,
                 cluster_maintenance_end_time: None,
-                tls_email_report: "".to_string(),
+                tls_email_report: String::new(),
                 metrics_parameters: None,
             },
             cluster_advanced_settings: Default::default(),
             customer_helm_charts_override: None,
-            thanos_service_account_email: "".to_string(),
-            prometheus_bucket_name: "".to_string(),
+            thanos_service_account_email: String::new(),
+            prometheus_bucket_name: String::new(),
         }
     }
 
     fn create_eks_chart_config() -> EksChartsConfigPrerequisites {
         EksChartsConfigPrerequisites {
-            organization_id: "".to_string(),
+            organization_id: String::new(),
             organization_long_id: Default::default(),
-            cluster_id: "".to_string(),
+            cluster_id: String::new(),
             cluster_long_id: Default::default(),
             cluster_creation_date: Default::default(),
             region: AwsRegion::UsEast1,
             kubernetes_version: KUBERNETES_VERSION,
-            cluster_name: "".to_string(),
+            cluster_name: String::new(),
             cpu_architectures: vec![],
-            cloud_provider: "".to_string(),
+            cloud_provider: String::new(),
             qovery_engine_location: EngineLocation::ClientSide,
             ff_log_history_enabled: false,
             ff_grafana_enabled: false,
-            managed_dns_helm_format: "".to_string(),
-            managed_dns_resolvers_terraform_format: "".to_string(),
-            managed_dns_root_domain_helm_format: "".to_string(),
+            managed_dns_helm_format: String::new(),
+            managed_dns_resolvers_terraform_format: String::new(),
+            managed_dns_root_domain_helm_format: String::new(),
             lets_encrypt_config: LetsEncryptConfig::new("a".to_string(), true),
-            dns_provider_config: crate::infrastructure::models::dns_provider::DnsProviderConfiguration::QoveryDns(
-                QoveryDnsConfig {
-                    api_url: Url::parse("http://test.com").unwrap(),
-                    api_key: "".to_string(),
-                    api_url_scheme_and_domain: "".to_string(),
-                    api_url_port: "".to_string(),
-                },
-            ),
+            dns_provider_config: create_test_dns_config(),
             alb_controller_already_deployed: false,
             kubernetes_version_upgrade_requested: false,
             infra_options: Options {
+                vpc_qovery_network_mode: VpcQoveryNetworkMode::WithNatGateways,
+                qovery_engine_location: EngineLocation::ClientSide,
                 ec2_zone_a_subnet_blocks: vec![],
                 ec2_zone_b_subnet_blocks: vec![],
                 ec2_zone_c_subnet_blocks: vec![],
@@ -555,24 +612,22 @@ mod tests {
                 fargate_profile_zone_b_subnet_blocks: vec![],
                 fargate_profile_zone_c_subnet_blocks: vec![],
                 eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: vec![],
-                vpc_qovery_network_mode: VpcQoveryNetworkMode::WithNatGateways,
-                vpc_cidr_block: "".to_string(),
-                eks_cidr_subnet: "".to_string(),
-                ec2_cidr_subnet: "".to_string(),
+                vpc_cidr_block: String::new(),
+                eks_cidr_subnet: String::new(),
+                ec2_cidr_subnet: String::new(),
                 vpc_custom_routing_table: vec![],
-                rds_cidr_subnet: "".to_string(),
-                documentdb_cidr_subnet: "".to_string(),
-                elasticache_cidr_subnet: "".to_string(),
-                qovery_api_url: "".to_string(),
-                qovery_grpc_url: "".to_string(),
-                qovery_engine_url: "".to_string(),
-                jwt_token: "".to_string(),
-                qovery_engine_location: EngineLocation::ClientSide,
-                grafana_admin_user: "".to_string(),
-                grafana_admin_password: "".to_string(),
-                qovery_ssh_key: "".to_string(),
+                rds_cidr_subnet: String::new(),
+                documentdb_cidr_subnet: String::new(),
+                elasticache_cidr_subnet: String::new(),
+                qovery_api_url: String::new(),
+                qovery_grpc_url: String::new(),
+                qovery_engine_url: String::new(),
+                jwt_token: String::new(),
+                grafana_admin_user: String::new(),
+                grafana_admin_password: String::new(),
+                qovery_ssh_key: String::new(),
                 user_ssh_keys: vec![],
-                tls_email_report: "".to_string(),
+                tls_email_report: String::new(),
                 user_provided_network: None,
                 aws_addon_cni_version_override: None,
                 aws_addon_kube_proxy_version_override: None,
@@ -585,19 +640,20 @@ mod tests {
             cluster_advanced_settings: Default::default(),
             is_karpenter_enabled: false,
             karpenter_parameters: None,
-            aws_iam_eks_user_mapper_role_arn: "".to_string(),
-            aws_iam_cluster_autoscaler_role_arn: "".to_string(),
-            aws_iam_cloudwatch_role_arn: "".to_string(),
-            aws_iam_loki_role_arn: "".to_string(),
-            aws_s3_loki_bucket_name: "".to_string(),
-            loki_storage_config_aws_s3: "".to_string(),
+            aws_iam_eks_user_mapper_role_arn: String::new(),
+            aws_iam_cluster_autoscaler_role_arn: String::new(),
+            aws_iam_cloudwatch_role_arn: String::new(),
+            aws_iam_loki_role_arn: String::new(),
+            aws_s3_loki_bucket_name: String::new(),
+            loki_storage_config_aws_s3: String::new(),
             metrics_parameters: None,
-            aws_iam_eks_prometheus_role_arn: "".to_string(),
-            aws_s3_prometheus_bucket_name: "".to_string(),
-            karpenter_controller_aws_role_arn: "".to_string(),
-            cluster_security_group_id: "".to_string(),
-            aws_iam_alb_controller_arn: "".to_string(),
+            aws_iam_eks_prometheus_role_arn: String::new(),
+            aws_s3_prometheus_bucket_name: String::new(),
+            karpenter_controller_aws_role_arn: String::new(),
+            cluster_security_group_id: String::new(),
+            aws_iam_alb_controller_arn: String::new(),
             customer_helm_charts_override: None,
+            aws_iam_cloudwatch_exporter_role_arn: None,
         }
     }
 }

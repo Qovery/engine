@@ -84,6 +84,10 @@ charts:
     repo_name: grafana
     version: 1.9.2
     comment: https://github.com/grafana/beyla/
+  - name: prometheus-yet-another-cloudwatch-exporter
+    repo_name: prometheus-community
+    dest: aws-bootstrap
+    version: 0.40.2
   - name: mongodb
     repo_name: bitnami
     version: 13.13.1
