@@ -779,6 +779,9 @@ impl Docker {
 
         // Hack
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
+        // https://github.com/docker/buildx/issues/2668
+        // The root cause seems to be a race condition: Kubernetes marks the node “Ready” before its CSR is signed,
+        // so buildx’s connection attempt fails with a TLS error instead of retrying gracefully
         let mut nb_retry = 3;
         let started_at = std::time::Instant::now();
 
@@ -786,7 +789,7 @@ impl Docker {
             let mut transient_error = false;
             let ret = {
                 let mut stderr_output = |line: String| {
-                    if line.contains("ERROR: listing workers for Build")
+                    if line.contains("listing workers for Build")
                         || line.contains("use of closed network connection")
                         || line.contains("i/o timeout")
                     {
