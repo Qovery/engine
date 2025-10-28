@@ -20,7 +20,7 @@ pub enum MetricsConfiguration {
         alert_config: Option<AlertManagerConfig>,
         #[serde(default)]
         resource_profile: ResourceProfile,
-        #[serde(default)]
+        #[serde(default, rename = "cloud_watch_exporter_config")]
         cloudwatch_exporter_config: CloudWatchExporterConfig,
     },
     AwsS3 {
