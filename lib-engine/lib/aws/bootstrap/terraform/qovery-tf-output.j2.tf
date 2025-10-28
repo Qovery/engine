@@ -15,6 +15,9 @@ output "cluster_arn" { value = aws_eks_cluster.eks_cluster.arn } // or _long_id
 output "cluster_id" { value = aws_eks_cluster.eks_cluster.id }
 output "cluster_oidc_issuer" { value = try(aws_eks_cluster.eks_cluster.identity[0].oidc[0].issuer, null) }
 output "cluster_vpc_id" { value = try(aws_eks_cluster.eks_cluster.vpc_config[0].vpc_id, null) }
+{% if enable_cloudwatch_exporter -%}
+output "aws_iam_cloudwatch_exporter_role_arn" { value = aws_iam_role.cloudwatch_exporter.arn }
+{% endif -%}
 output "kubeconfig" {
   sensitive = true
   depends_on = [aws_eks_cluster.eks_cluster]

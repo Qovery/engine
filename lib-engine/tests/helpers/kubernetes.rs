@@ -441,6 +441,7 @@ pub fn get_environment_test_kubernetes(
                                 beyla_config: None,
                                 alert_config: None,
                                 resource_profile: ResourceProfile::default(),
+                                cloudwatch_exporter_config: Default::default(),
                             },
                         })
                     }
@@ -532,6 +533,7 @@ pub fn get_environment_test_kubernetes(
                                 beyla_config: None,
                                 alert_config: None,
                                 resource_profile: ResourceProfile::default(),
+                                cloudwatch_exporter_config: Default::default(),
                             },
                         })
                     }
@@ -583,6 +585,7 @@ pub fn get_environment_test_kubernetes(
                                 beyla_config: None,
                                 alert_config: None,
                                 resource_profile: ResourceProfile::default(),
+                                cloudwatch_exporter_config: Default::default(),
                             },
                         })
                     }

@@ -11,7 +11,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
-use crate::io_models::metrics::MetricsConfiguration;
+use crate::io_models::metrics::{MetricsConfiguration, MetricsParameters};
 use crate::io_models::models::{NodeGroupsWithDesiredState, VpcQoveryNetworkMode};
 use crate::string::terraform_list_format;
 use chrono::Duration as ChronoDuration;
@@ -533,20 +533,12 @@ pub fn eks_tera_context(
         }),
     );
 
-    context.insert("prometheus_enabled", &options.metrics_parameters.is_some());
+    // Observability
 
-    // Move thanos pods to the stable node pool when the redundancy is disabled
-    let thanos_on_stable = options.metrics_parameters.as_ref().is_some_and(|mp| {
-        matches!(
-            mp.config,
-            MetricsConfiguration::MetricsInstalledByQovery {
-                enable_redundancy: Some(false),
-                ..
-            }
-        )
-    });
-
-    context.insert("thanos_nodepool_stable", &thanos_on_stable);
+    let obs_config = compute_observability_config(&options.metrics_parameters);
+    context.insert("prometheus_enabled", &obs_config.prometheus_enabled);
+    context.insert("thanos_nodepool_stable", &obs_config.thanos_on_stable);
+    context.insert("enable_cloudwatch_exporter", &obs_config.enable_cloudwatch_exporter);
 
     Ok(context)
 }
@@ -590,10 +582,47 @@ fn check_odd_subnets(
     Ok(subnet_block.len() / 2)
 }
 
+#[derive(Debug, PartialEq)]
+struct ObservabilityConfig {
+    prometheus_enabled: bool,
+    thanos_on_stable: bool,
+    enable_cloudwatch_exporter: bool,
+}
+
+fn compute_observability_config(metrics_parameters: &Option<MetricsParameters>) -> ObservabilityConfig {
+    let prometheus_enabled = metrics_parameters.is_some();
+
+    let (thanos_on_stable, enable_cloudwatch_exporter) = metrics_parameters
+        .as_ref()
+        .and_then(|mp| match &mp.config {
+            MetricsConfiguration::MetricsInstalledByQovery {
+                enable_redundancy,
+                cloudwatch_exporter_config,
+                ..
+            } => {
+                // Move thanos pods to the stable node pool when the redundancy is disabled
+                let thanos_on_stable = matches!(enable_redundancy, Some(false));
+                let cloudwatch = cloudwatch_exporter_config.enabled;
+                Some((thanos_on_stable, cloudwatch))
+            }
+            _ => None,
+        })
+        .unwrap_or((false, false));
+
+    ObservabilityConfig {
+        prometheus_enabled,
+        thanos_on_stable,
+        enable_cloudwatch_exporter,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::generate_public_access_cidrs;
+    use crate::infrastructure::action::eks::tera_context::{ObservabilityConfig, compute_observability_config};
+    use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
     use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+    use crate::io_models::metrics::{CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters};
 
     #[test]
     fn test_public_access_cidrs_with_any_parameters_set() {
@@ -683,6 +712,168 @@ mod tests {
                 "1.1.1.3/32".to_string(),
                 "1.1.1.4/32".to_string()
             ]
+        );
+    }
+
+    #[test]
+    fn test_observability_config_when_no_metrics_parameters() {
+        let result = compute_observability_config(&None);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: false,
+                thanos_on_stable: false,
+                enable_cloudwatch_exporter: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_with_redundancy_enabled() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::MetricsInstalledByQovery {
+                install_prometheus_adapter: false,
+                enable_redundancy: Some(true),
+                beyla_config: None,
+                alert_config: None,
+                resource_profile: ResourceProfile::default(),
+                cloudwatch_exporter_config: CloudWatchExporterConfig::default(),
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: false,
+                enable_cloudwatch_exporter: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_with_redundancy_disabled() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::MetricsInstalledByQovery {
+                install_prometheus_adapter: false,
+                enable_redundancy: Some(false),
+                beyla_config: None,
+                alert_config: None,
+                resource_profile: ResourceProfile::default(),
+                cloudwatch_exporter_config: CloudWatchExporterConfig::default(),
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: true,
+                enable_cloudwatch_exporter: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_with_cloudwatch_enabled() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::MetricsInstalledByQovery {
+                install_prometheus_adapter: false,
+                enable_redundancy: None,
+                beyla_config: None,
+                alert_config: None,
+                resource_profile: ResourceProfile::default(),
+                cloudwatch_exporter_config: CloudWatchExporterConfig { enabled: true },
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: false,
+                enable_cloudwatch_exporter: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_with_cloudwatch_disabled() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::MetricsInstalledByQovery {
+                install_prometheus_adapter: false,
+                enable_redundancy: None,
+                beyla_config: None,
+                alert_config: None,
+                resource_profile: ResourceProfile::default(),
+                cloudwatch_exporter_config: CloudWatchExporterConfig { enabled: false },
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: false,
+                enable_cloudwatch_exporter: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_with_aws_s3_metrics() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::AwsS3 {
+                region: "eu-west-3".to_string(),
+                bucket_name: "my-bucket".to_string(),
+                aws_iam_prometheus_role_arn: "arn:aws:iam::123456789:role/prometheus".to_string(),
+                endpoint: "https://s3.eu-west-3.amazonaws.com".to_string(),
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: false,
+                enable_cloudwatch_exporter: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_observability_config_full_config() {
+        let metrics = Some(MetricsParameters {
+            config: MetricsConfiguration::MetricsInstalledByQovery {
+                install_prometheus_adapter: true,
+                enable_redundancy: Some(false),
+                beyla_config: None,
+                alert_config: None,
+                resource_profile: ResourceProfile::default(),
+                cloudwatch_exporter_config: CloudWatchExporterConfig { enabled: true },
+            },
+        });
+
+        let result = compute_observability_config(&metrics);
+
+        assert_eq!(
+            result,
+            ObservabilityConfig {
+                prometheus_enabled: true,
+                thanos_on_stable: true,
+                enable_cloudwatch_exporter: true,
+            }
         );
     }
 }
