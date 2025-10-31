@@ -63,6 +63,12 @@ discovery:
       - key: cluster_id
         value: {}
     metrics:
+      - name: MaximumUsedTransactionIDs
+        statistics:
+          - Average
+          - Maximum
+        period: 300
+        length: 600
       - name: CPUUtilization
         statistics:
           - Average
@@ -72,7 +78,6 @@ discovery:
       - name: DatabaseConnections
         statistics:
           - Average
-          - Maximum
         period: 300
         length: 600
       - name: FreeableMemory
@@ -175,7 +180,7 @@ impl ToCommonHelmChart for YaceChart {
                 values: vec![
                     ChartSetValue {
                         key: "serviceMonitor.interval".to_string(),
-                        value: "5m".to_string(),
+                        value: "30s".to_string(),
                     },
                     ChartSetValue {
                         key: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn".to_string(),
