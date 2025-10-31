@@ -11,3 +11,4 @@ pub mod helpers;
 mod kube;
 mod promtail;
 mod scaleway;
+mod services;

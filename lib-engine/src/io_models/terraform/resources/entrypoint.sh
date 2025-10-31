@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+TF_COMMAND={{terraform_command}}
 ROOT_MODULE_PATH=$1
 CMD=$2
 PLAN_NAME=$3
@@ -20,25 +21,25 @@ rsync -a --delete \
 cd /persistent-volume/terraform-work/"$ROOT_MODULE_PATH"
 
 log() {
-  echo -e "\n[==> TERRAFORM]: $1\n"
+  echo -e "\n[==> ${TF_COMMAND}]: $1\n"
 }
 
 
 run_terraform_init() {
-  log "terraform init $TF_CLI_ARGS_init"
-  terraform init -backend-config="/backend-config/config" 2>&1 \
-    | awk '{print} /Terraform has been successfully initialized!/ {exit}'
+  log "${TF_COMMAND} init $TF_CLI_ARGS_init"
+  ${TF_COMMAND} init -backend-config="/backend-config/config" 2>&1 \
+    | awk '{print} /has been successfully initialized!/ {exit}'
 }
 
 attempt_force_unlock() {
   # Try to detect if state is locked by attempting a plan operation
-  LOCK_OUTPUT=$(terraform plan -input=false 2>&1 || true)
+  LOCK_OUTPUT=$(${TF_COMMAND} plan -input=false 2>&1 || true)
   # Extract lock ID from the error message
   LOCK_ID=$(echo "$LOCK_OUTPUT" | grep -oE 'ID:[[:space:]]*[0-9a-fA-F-]{36}' | sed 's/ID:[[:space:]]*//' | head -1)
   if [ -n "$LOCK_ID" ]; then
     log "found lock ID: $LOCK_ID"
-    log "terraform force-unlock -force $LOCK_ID"
-    terraform force-unlock -force "$LOCK_ID" || true
+    log "${TF_COMMAND} force-unlock -force $LOCK_ID"
+    ${TF_COMMAND} force-unlock -force "$LOCK_ID" || true
   else
     log "could not extract lock ID"
   fi
@@ -50,32 +51,32 @@ case "$CMD" in
         ;;
     "apply")
         run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform apply -input=false -auto-approve"
-        terraform apply -input=false -auto-approve "$@"
-        log "terraform output"
-        terraform output -json > /qovery-output/qovery-output.json
+        log "${TF_COMMAND} validate $TF_CLI_ARGS_validate"
+        ${TF_COMMAND} validate
+        log "${TF_COMMAND} apply -input=false -auto-approve"
+        ${TF_COMMAND} apply -input=false -auto-approve "$@"
+        log "${TF_COMMAND} output"
+        ${TF_COMMAND} output -json > /qovery-output/qovery-output.json
         ;;
     "plan_only")
         run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform plan $TF_CLI_ARGS_plan"
-        terraform plan -input=false -out=/persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan "$@"
+        log "${TF_COMMAND} validate $TF_CLI_ARGS_validate"
+        ${TF_COMMAND} validate
+        log "${TF_COMMAND} plan $TF_CLI_ARGS_plan"
+        ${TF_COMMAND} plan -input=false -out=/persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan "$@"
         ;;
     "apply_from_plan")
         run_terraform_init
-        log "terraform validate $TF_CLI_ARGS_validate"
-        terraform validate
-        log "terraform apply $TF_CLI_ARGS_apply"
-        terraform apply -input=false /persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan
-        log "terraform output $TF_CLI_ARGS_output"
-        terraform output -json > /qovery-output/qovery-output.json
+        log "${TF_COMMAND} validate $TF_CLI_ARGS_validate"
+        ${TF_COMMAND} validate
+        log "${TF_COMMAND} apply $TF_CLI_ARGS_apply"
+        ${TF_COMMAND} apply -input=false /persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan
+        log "${TF_COMMAND} output $TF_CLI_ARGS_output"
+        ${TF_COMMAND} output -json > /qovery-output/qovery-output.json
         ;;
     "destroy")
-        log "terraform destroy $TF_CLI_ARGS_destroy"
-        terraform destroy -auto-approve -input=false "$@"
+        log "${TF_COMMAND} destroy $TF_CLI_ARGS_destroy"
+        ${TF_COMMAND} destroy -auto-approve -input=false "$@"
         ;;
     "unlock_state")
         run_terraform_init
