@@ -10,6 +10,8 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -61,6 +63,25 @@ impl ExternalDNSChart {
 
     fn chart_name() -> String {
         "external-dns".to_string()
+    }
+
+    /// Generate a checksum string from the DNS provider secret values.
+    /// This checksum is used as a pod annotation to trigger restarts when secrets change.
+    /// Uses DefaultHasher to prevent credential exposure in pod metadata.
+    fn get_secret_checksum(&self) -> String {
+        let mut hasher = DefaultHasher::new();
+        match &self.dns_provider_configuration {
+            DnsProviderConfiguration::Cloudflare(config) => {
+                "cloudflare".hash(&mut hasher);
+                config.cloudflare_email.hash(&mut hasher);
+                config.cloudflare_api_token.hash(&mut hasher);
+            }
+            DnsProviderConfiguration::QoveryDns(config) => {
+                "pdns".hash(&mut hasher);
+                config.api_key.hash(&mut hasher);
+            }
+        }
+        format!("{:x}", hasher.finish())
     }
 }
 
@@ -192,6 +213,12 @@ impl ToCommonHelmChart for ExternalDNSChart {
                 ]);
             }
         }
+
+        // Add pod annotation with secret checksum to trigger restart when secrets change
+        values.push(ChartSetValue {
+            key: "podAnnotations.qovery\\.com/external-dns-secret-checksum".to_string(),
+            value: self.get_secret_checksum(),
+        });
 
         Ok(CommonChart {
             chart_info: ChartInfo {

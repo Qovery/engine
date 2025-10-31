@@ -39,6 +39,10 @@ extraArgs: {} #set-by-engine-code
 # For Cloudflare: CF_API_TOKEN, CF_API_KEY, CF_API_EMAIL will be set
 env: [] #set-by-engine-code
 
+# SHA-256 checksum of DNS provider secrets to trigger pod restarts when secrets change
+podAnnotations:
+  qovery.com/external-dns-secret-checksum: set-by-engine-code
+
 # set resources
 resources:
   limits:
