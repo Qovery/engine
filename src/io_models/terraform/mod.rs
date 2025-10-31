@@ -92,7 +92,7 @@ pub enum TerraformFilesSource {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformProvider {
     Terraform,
-    // OpenTofu
+    OpenTofu,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
@@ -588,13 +588,20 @@ impl TerraformService {
     }
 
     fn get_docker_file(&self) -> String {
-        let dockerfile = include_str!("resources/terraform.dockerfile");
+        let dockerfile = match &self.provider {
+            TerraformProvider::Terraform => include_str!("resources/terraform.dockerfile"),
+            TerraformProvider::OpenTofu => include_str!("resources/opentofu.dockerfile"),
+        };
+
         dockerfile.replace("{{provider_version}}", &self.provider_version)
     }
 
-    fn get_entry_point_sh(&self) -> &str {
+    fn get_entry_point_sh(&self) -> String {
         let entry_point_sh = include_str!("resources/entrypoint.sh");
-        entry_point_sh
+        match self.provider {
+            TerraformProvider::Terraform => entry_point_sh.replace("{{terraform_command}}", "terraform"),
+            TerraformProvider::OpenTofu => entry_point_sh.replace("{{terraform_command}}", "tofu"),
+        }
     }
 
     fn get_backend_block(&self) -> Option<String> {
@@ -617,7 +624,7 @@ terraform {{
         let mut extra_files = vec![GitRepositoryExtraFile {
             path: entry_point_file_path
                 .ok_or_else(|| TerraformServiceError::InvalidConfig("entrypoint.sh path is not defined".to_string()))?,
-            content: self.get_entry_point_sh().to_string(),
+            content: self.get_entry_point_sh(),
         }];
 
         if let Some(backend_block) = self.get_backend_block() {
