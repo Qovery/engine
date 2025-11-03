@@ -1,128 +1,19 @@
-use crate::helpers;
-use crate::helpers::aws::aws_infra_config;
-use crate::helpers::azure::azure_infra_config;
 use crate::helpers::common::Infrastructure;
-use crate::helpers::gcp::gcp_infra_config;
-use crate::helpers::kubernetes::TargetCluster;
-use crate::helpers::scaleway::scw_infra_config;
-use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, logger, metrics_registry};
+use crate::helpers::utilities::engine_run_test;
+use crate::services::utilities::{
+    CloudProvider, TestInfra, create_default_test_annotations, create_default_test_labels,
+};
 use function_name::named;
-use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::io_models::Action;
-use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
-use qovery_engine::io_models::context::{CloneForTest, Context};
-use qovery_engine::io_models::labels_group::{Label, LabelsGroup};
 use qovery_engine::io_models::terraform::{
     PersistentStorage, TerraformAction, TerraformActionCommand, TerraformBackend, TerraformBackendType,
     TerraformFilesSource, TerraformProvider, TerraformService,
 };
 use qovery_engine::io_models::variable_utils::VariableInfo;
-use qovery_engine::logger::Logger;
-use qovery_engine::metrics_registry::MetricsRegistry;
 use std::collections::BTreeMap;
 use tracing::{Level, span};
 use url::Url;
 use uuid::Uuid;
-
-// Enum to represent different cloud providers for testing
-#[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-enum CloudProvider {
-    Aws,
-    Scaleway,
-    Gcp,
-    Azure,
-}
-
-impl CloudProvider {
-    // Create context for the given cloud provider
-    fn create_context(&self, secrets: &FuncTestsSecrets) -> Context {
-        match self {
-            CloudProvider::Aws => context_for_resource(
-                secrets
-                    .AWS_TEST_ORGANIZATION_LONG_ID
-                    .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
-                secrets
-                    .AWS_TEST_CLUSTER_LONG_ID
-                    .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
-            ),
-            CloudProvider::Scaleway => context_for_resource(
-                secrets
-                    .SCALEWAY_TEST_ORGANIZATION_LONG_ID
-                    .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
-                secrets
-                    .SCALEWAY_TEST_CLUSTER_LONG_ID
-                    .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
-            ),
-            CloudProvider::Gcp => context_for_resource(
-                secrets
-                    .GCP_TEST_ORGANIZATION_LONG_ID
-                    .expect("GCP_TEST_ORGANIZATION_LONG_ID is not set"),
-                secrets
-                    .GCP_TEST_CLUSTER_LONG_ID
-                    .expect("GCP_TEST_CLUSTER_LONG_ID is not set"),
-            ),
-            CloudProvider::Azure => context_for_resource(
-                secrets
-                    .AZURE_TEST_ORGANIZATION_LONG_ID
-                    .expect("AZURE_TEST_ORGANIZATION_LONG_ID is not set"),
-                secrets
-                    .AZURE_TEST_CLUSTER_LONG_ID
-                    .expect("AZURE_TEST_CLUSTER_LONG_ID is not set"),
-            ),
-        }
-    }
-
-    // Create target cluster for the given cloud provider
-    fn create_target_cluster(&self, secrets: &FuncTestsSecrets) -> TargetCluster {
-        match self {
-            CloudProvider::Aws => TargetCluster::MutualizedTestCluster {
-                kubeconfig: secrets
-                    .AWS_TEST_KUBECONFIG_b64
-                    .as_ref()
-                    .expect("AWS_TEST_KUBECONFIG_b64 is not set")
-                    .clone(),
-            },
-            CloudProvider::Scaleway => TargetCluster::MutualizedTestCluster {
-                kubeconfig: secrets
-                    .SCALEWAY_TEST_KUBECONFIG_b64
-                    .as_ref()
-                    .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
-                    .clone(),
-            },
-            CloudProvider::Gcp => TargetCluster::MutualizedTestCluster {
-                kubeconfig: secrets
-                    .GCP_TEST_KUBECONFIG_b64
-                    .as_ref()
-                    .expect("GCP_TEST_KUBECONFIG_b64 is not set")
-                    .clone(),
-            },
-            CloudProvider::Azure => TargetCluster::MutualizedTestCluster {
-                kubeconfig: secrets
-                    .AZURE_TEST_KUBECONFIG_b64
-                    .as_ref()
-                    .expect("AZURE_TEST_KUBECONFIG_b64 is not set")
-                    .clone(),
-            },
-        }
-    }
-
-    // Create infrastructure context for the given cloud provider
-    fn create_infra_context(
-        &self,
-        target_cluster: &TargetCluster,
-        context: &Context,
-        logger: Box<dyn Logger>,
-        metrics_registry: Box<dyn MetricsRegistry>,
-    ) -> InfrastructureContext {
-        match self {
-            CloudProvider::Aws => aws_infra_config(target_cluster, context, logger, metrics_registry),
-            CloudProvider::Scaleway => scw_infra_config(target_cluster, context, logger, metrics_registry),
-            CloudProvider::Gcp => gcp_infra_config(target_cluster, context, logger, metrics_registry),
-            CloudProvider::Azure => azure_infra_config(target_cluster, context, logger, metrics_registry),
-        }
-    }
-}
 
 // Helper struct to build TerraformService test instances with common defaults
 struct TerraformServiceTestBuilder {
@@ -212,42 +103,6 @@ impl TerraformServiceTestBuilder {
     }
 }
 
-// Creates default test annotations
-fn create_default_test_annotations() -> (Uuid, AnnotationsGroup) {
-    let id = Uuid::new_v4();
-    let group = AnnotationsGroup {
-        annotations: vec![
-            Annotation {
-                key: "annot_key".to_string(),
-                value: "annot_value".to_string(),
-            },
-            Annotation {
-                key: "annot_key2".to_string(),
-                value: "true".to_string(),
-            },
-        ],
-        scopes: vec![
-            AnnotationsGroupScope::Jobs,
-            AnnotationsGroupScope::Pods,
-            AnnotationsGroupScope::Secrets,
-        ],
-    };
-    (id, group)
-}
-
-// Creates default test labels
-fn create_default_test_labels() -> (Uuid, LabelsGroup) {
-    let id = Uuid::new_v4();
-    let group = LabelsGroup {
-        labels: vec![Label {
-            key: "label_key".to_string(),
-            value: "label_value".to_string(),
-            propagate_to_cloud_provider: false,
-        }],
-    };
-    (id, group)
-}
-
 // Runs a terraform service lifecycle test with the given builder and deploy actions
 fn run_terraform_lifecycle_test(
     cloud_provider: CloudProvider,
@@ -255,31 +110,8 @@ fn run_terraform_lifecycle_test(
     deploy_actions: Vec<TerraformActionCommand>,
     execution_id: Uuid,
 ) {
-    let logger_instance = logger();
-    let metrics_registry_instance = metrics_registry();
-    let secrets = FuncTestsSecrets::new();
-
-    // Setup infrastructure for the specified cloud provider
-    let context = cloud_provider.create_context(&secrets);
-    let target_cluster = cloud_provider.create_target_cluster(&secrets);
-    let infra_ctx = cloud_provider.create_infra_context(
-        &target_cluster,
-        &context,
-        logger_instance.clone(),
-        metrics_registry_instance.clone(),
-    );
-
-    // Setup infrastructure for delete operation
-    let context_for_delete = context.clone_not_same_execution_id();
-    let infra_ctx_for_delete = cloud_provider.create_infra_context(
-        &target_cluster,
-        &context_for_delete,
-        logger_instance.clone(),
-        metrics_registry_instance.clone(),
-    );
-
-    let mut environment = helpers::environment::working_minimal_environment(&context);
-    environment.applications = vec![];
+    let infra = TestInfra::new(cloud_provider);
+    let mut environment = infra.create_environment();
 
     let (annotations_group_id, annotations_group) = create_default_test_annotations();
     let (labels_group_id, labels_group) = create_default_test_labels();
@@ -297,7 +129,7 @@ fn run_terraform_lifecycle_test(
             annotations_group_id,
             labels_group_id,
         )];
-        assert!(environment.deploy_environment(&environment, &infra_ctx).is_ok());
+        assert!(environment.deploy_environment(&environment, &infra.infra_ctx).is_ok());
     }
 
     // Destroy phase
@@ -313,7 +145,7 @@ fn run_terraform_lifecycle_test(
     )];
     assert!(
         environment_for_delete
-            .delete_environment(&environment_for_delete, &infra_ctx_for_delete)
+            .delete_environment(&environment_for_delete, &infra.infra_ctx_for_delete)
             .is_ok()
     );
 }
