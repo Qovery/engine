@@ -1,6 +1,6 @@
 pub mod locations;
 
-use crate::constants::{GCP_CREDENTIALS, GCP_PROJECT, GCP_REGION};
+use crate::constants::{GCP_CLOUDSDK_CONFIG, GCP_CREDENTIALS, GCP_PROJECT, GCP_REGION};
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
@@ -56,6 +56,7 @@ impl CloudProvider for Google {
             (GCP_CREDENTIALS, self.json_credentials_raw_json.as_str()),
             (GCP_PROJECT, self.json_credentials.project_id.as_str()),
             (GCP_REGION, self.region.to_cloud_provider_format()),
+            (GCP_CLOUDSDK_CONFIG, self.json_credentials.cloudsdk_config().1),
         ]
     }
 

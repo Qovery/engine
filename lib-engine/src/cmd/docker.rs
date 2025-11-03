@@ -466,6 +466,7 @@ impl Docker {
         registry: &Url,
         google_client_email: &str,
         google_creds: &str,
+        envs: &[(&str, &str)],
     ) -> Result<(), DockerError> {
         // Save creds to file as CLI cannot ingest it otherwise ...
         let Ok(tmp_dir) = TempDir::with_prefix("gcp-credentials-") else {
@@ -499,7 +500,7 @@ impl Docker {
                 google_client_email,
                 format!("--key-file={gcp_credentials_file_path}").as_str(),
             ],
-            &[],
+            envs,
         )
         .exec()
         .map_err(|_e| DockerError::InvalidConfig {

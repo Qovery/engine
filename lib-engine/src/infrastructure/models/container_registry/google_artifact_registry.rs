@@ -56,7 +56,12 @@ impl GoogleArtifactRegistry {
 
         if context
             .docker
-            .login_artifact_registry(&registry, credentials.client_email.as_str(), &secret_token)
+            .login_artifact_registry(
+                &registry,
+                credentials.client_email.as_str(),
+                &secret_token,
+                &[credentials.cloudsdk_config()],
+            )
             .is_err()
         {
             return Err(ContainerRegistryError::InvalidCredentials);

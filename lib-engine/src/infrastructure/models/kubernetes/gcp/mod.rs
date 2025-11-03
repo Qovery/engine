@@ -211,12 +211,11 @@ impl Gke {
             Transmitter::Kubernetes(long_id, name.to_string()),
         );
 
-        let creds = cloud_provider
-            .downcast_ref()
+        let gcp_cloud_provider = cloud_provider.downcast_ref();
+        let cloud_provider = gcp_cloud_provider
             .as_gcp()
-            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not GCP")))?
-            .json_credentials
-            .clone();
+            .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not GCP")))?;
+        let creds = cloud_provider.json_credentials.clone();
         let object_storage_service_client = retry::retry(Fixed::from(Duration::from_secs(20)).take(3), || {
             match ObjectStorageService::new(
                 creds.clone(),
@@ -303,7 +302,7 @@ impl Gke {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
-        if let Err(e) = GoogleAuthService::activate_service_account(self.credentials.clone()) {
+        if let Err(e) = GoogleAuthService::activate_service_account(&self.credentials) {
             error!("Cannot activate service account: {}", e);
             // TODO(ENG-1803): introduce an EngineError for it and handle it properly
         }
