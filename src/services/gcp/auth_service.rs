@@ -18,7 +18,7 @@ pub enum AuthServiceError {
 pub struct GoogleAuthService {}
 
 impl GoogleAuthService {
-    pub fn activate_service_account(google_credentials: JsonCredentials) -> Result<(), AuthServiceError> {
+    pub fn activate_service_account(google_credentials: &JsonCredentials) -> Result<(), AuthServiceError> {
         let dir = tempdir().map_err(|e| AuthServiceError::CannotActivateServiceAccount {
             service_account_email: google_credentials.client_email.clone(),
             raw_error_message: format!("Cannot create temp directory for google credentials, error: {e}"),
@@ -53,7 +53,7 @@ impl GoogleAuthService {
                 &google_credentials.client_email,
                 format!("--key-file={}", file_path.to_str().unwrap_or_default()).as_str(),
             ],
-            &[],
+            &[google_credentials.cloudsdk_config()],
         )
         .exec()
         {

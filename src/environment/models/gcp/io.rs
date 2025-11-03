@@ -2,6 +2,7 @@ use crate::environment::models::gcp::{
     JsonCredentials as GkeJsonCredentials, JsonCredentialsType as GkeJsonCredentialsType,
 };
 use serde_derive::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
@@ -56,6 +57,7 @@ impl TryFrom<JsonCredentials> for GkeJsonCredentials {
     fn try_from(value: JsonCredentials) -> Result<Self, Self::Error> {
         Ok(GkeJsonCredentials {
             r#type: GkeJsonCredentialsType::from(value.r#type),
+            cloudsdk_config_path: PathBuf::from("/tmp/").join(format!("gcloud-{}", value.client_id)),
             client_email: value.client_email,
             client_id: value.client_id,
             private_key: value.private_key,

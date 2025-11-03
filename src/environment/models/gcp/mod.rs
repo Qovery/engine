@@ -4,9 +4,11 @@ mod job;
 mod router;
 mod terraform_service;
 
+use crate::constants::GCP_CLOUDSDK_CONFIG;
 use crate::environment::models::types::{CloudProvider, GCP};
 use crate::infrastructure::models::cloud_provider::Kind;
 use std::fmt::{Display, Formatter};
+use std::path::PathBuf;
 use thiserror::Error;
 use url::Url;
 
@@ -43,6 +45,12 @@ pub struct JsonCredentials {
     pub client_x509_cert_url: Url,
     pub project_id: String,
     pub universe_domain: String,
+    pub cloudsdk_config_path: PathBuf,
+}
+impl JsonCredentials {
+    pub fn cloudsdk_config(&self) -> (&str, &str) {
+        (GCP_CLOUDSDK_CONFIG, self.cloudsdk_config_path.to_str().unwrap_or_default())
+    }
 }
 
 // https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/gce-pd-csi-driver

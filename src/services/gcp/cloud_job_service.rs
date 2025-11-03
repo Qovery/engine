@@ -26,18 +26,22 @@ pub struct CloudJob {
 
 // TODO(ENG-1809): this service implementation needs to be done using rust SDK for GCP
 pub struct CloudJobService {
+    credentials: JsonCredentials,
     is_ready: bool,
 }
 
 impl CloudJobService {
     pub fn new(google_credentials: JsonCredentials) -> Result<Self, CloudJobServiceError> {
         // Not optimized, but will be removed once using rust SDK for GCP, prevent from having to inject this service in all services above
-        if let Err(e) = GoogleAuthService::activate_service_account(google_credentials) {
+        if let Err(e) = GoogleAuthService::activate_service_account(&google_credentials) {
             return Err(CloudJobServiceError::CannotInitializeCloudJobService {
                 raw_error_message: e.to_string(),
             });
         }
-        Ok(CloudJobService { is_ready: true })
+        Ok(CloudJobService {
+            credentials: google_credentials,
+            is_ready: true,
+        })
     }
 
     pub fn is_ready(&self) -> Result<(), CloudJobServiceError> {
@@ -104,7 +108,7 @@ impl CloudJobService {
             .filter(|&x| !x.is_empty())
             .collect::<Vec<&str>>()
             .as_slice(),
-            &[],
+            &[self.credentials.cloudsdk_config()],
         )
         .exec()
         {
