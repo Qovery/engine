@@ -27,7 +27,7 @@ spec:
     - deviceName: /dev/xvda
       ebs:
         volumeSize: {{ .Values.diskSize }}
-        volumeType: gp2
+        volumeType: {{ .Values.storageClass }}
         encrypted: true
         deleteOnTermination: true
 

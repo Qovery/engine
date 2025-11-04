@@ -12,7 +12,7 @@ use crate::helpers::kubernetes::{
 };
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker, generate_id};
 use qovery_engine::engine_task::qovery_api::FakeQoveryApi;
-use qovery_engine::environment::models::scaleway::{ScwStorageType, ScwZone};
+use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::build_platform::Build;
 use qovery_engine::infrastructure::models::cloud_provider::scaleway::Scaleway;
@@ -22,6 +22,7 @@ use qovery_engine::infrastructure::models::container_registry::errors::Container
 use qovery_engine::infrastructure::models::container_registry::scaleway_container_registry::ScalewayCR;
 use qovery_engine::infrastructure::models::container_registry::{ContainerRegistry, InteractWithRegistry};
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
+use qovery_engine::infrastructure::models::kubernetes::scaleway::ScwStorageType;
 use qovery_engine::infrastructure::models::kubernetes::scaleway::kapsule::{KapsuleClusterType, KapsuleOptions};
 use qovery_engine::infrastructure::models::kubernetes::scaleway::node::ScwInstancesType;
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};

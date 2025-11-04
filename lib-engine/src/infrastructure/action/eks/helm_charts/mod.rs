@@ -6,7 +6,7 @@ use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion};
 use crate::io_models::engine_location::EngineLocation;
-use crate::io_models::models::CpuArchitecture;
+use crate::io_models::models::{CpuArchitecture, StorageClass};
 
 use crate::errors::EngineError;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
@@ -77,6 +77,7 @@ pub struct EksChartsConfigPrerequisites {
     pub aws_iam_alb_controller_arn: String,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
+    pub kubernetes_storage_class_fast_ssd: StorageClass,
 }
 
 pub struct EksHelmsDeployment<'a> {
@@ -152,6 +153,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             cluster_security_group_id: self.terraform_output.cluster_security_group_id.clone(),
             alb_controller_already_deployed: self.alb_already_deployed,
             kubernetes_version_upgrade_requested: self.kubernetes_version_upgrade_requested,
+            kubernetes_storage_class_fast_ssd: cluster.advanced_settings.k8s_storage_class_fast_ssd.to_model(),
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
             customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
             metrics_parameters: cluster.options.metrics_parameters.clone(),

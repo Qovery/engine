@@ -1,15 +1,18 @@
 pub mod eks;
 pub mod node;
 
+use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::kubernetes::ProviderOptions;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
+use crate::io_models::database::DiskIOPS;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
-use crate::io_models::models::{VpcCustomRoutingTable, VpcQoveryNetworkMode};
+use crate::io_models::models::{StorageClass, VpcCustomRoutingTable, VpcQoveryNetworkMode};
 use serde::{Deserialize, Serialize};
+use std::fmt::{Display, Formatter};
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,4 +137,99 @@ fn aws_zones(
     }
 
     Ok(aws_zones)
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AwsStorageType {
+    GP2,
+    GP3,
+    // GP3 { disk_iops: DiskIOPS }, <= Not supported yet, but to be added in the future including IOPS
+}
+
+impl ToCloudProviderFormat for AwsStorageType {
+    fn to_cloud_provider_format(&self) -> &str {
+        match self {
+            AwsStorageType::GP2 => "gp2",
+            AwsStorageType::GP3 => "gp3",
+        }
+    }
+}
+
+impl Display for AwsStorageType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AwsStorageType::GP2 => write!(f, "GP2"),
+            AwsStorageType::GP3 => write!(f, "GP3"),
+        }
+    }
+}
+
+impl TryFrom<StorageClass> for AwsStorageType {
+    type Error = String;
+
+    fn try_from(value: StorageClass) -> Result<Self, Self::Error> {
+        match value.to_string().as_str() {
+            "aws-ebs-gp2-0" => Ok(AwsStorageType::GP2),
+            "aws-ebs-gp3-0" => Ok(AwsStorageType::GP3),
+            _ => Err(format!("Unsupported AWS storage class: {value}")),
+        }
+    }
+}
+
+impl AwsStorageType {
+    pub fn to_k8s_storage_class(&self) -> String {
+        match self {
+            AwsStorageType::GP2 => "aws-ebs-gp2-0",
+            AwsStorageType::GP3 => "aws-ebs-gp3-0",
+        }
+        .to_string()
+    }
+
+    pub fn get_disk_iops(&self) -> DiskIOPS {
+        match self {
+            AwsStorageType::GP2 => DiskIOPS::Default,
+            AwsStorageType::GP3 => DiskIOPS::Default,
+            // AwsStorageType::GP3 { disk_iops } => *disk_iops, <= Not supported yet, but to be added in the future including IOPS
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aws_storage_type_to_cloud_provider_format() {
+        assert_eq!(AwsStorageType::GP2.to_cloud_provider_format(), "gp2");
+        assert_eq!(AwsStorageType::GP3.to_cloud_provider_format(), "gp3");
+    }
+
+    #[test]
+    fn test_aws_storage_type_display_fmt() {
+        assert_eq!(format!("{}", AwsStorageType::GP2), "GP2");
+        assert_eq!(format!("{}", AwsStorageType::GP3), "GP3");
+    }
+
+    #[test]
+    fn test_aws_storage_type_to_k8s_storage_class() {
+        assert_eq!(AwsStorageType::GP2.to_k8s_storage_class(), "aws-ebs-gp2-0");
+        assert_eq!(AwsStorageType::GP3.to_k8s_storage_class(), "aws-ebs-gp3-0");
+    }
+
+    #[test]
+    fn test_aws_storage_type_get_disk_iops() {
+        assert_eq!(AwsStorageType::GP2.get_disk_iops(), DiskIOPS::Default);
+        assert_eq!(AwsStorageType::GP3.get_disk_iops(), DiskIOPS::Default);
+    }
+
+    #[test]
+    fn test_aws_storage_type_try_from_storage_class() {
+        let gp2 = StorageClass("aws-ebs-gp2-0".to_string());
+        let gp3 = StorageClass("aws-ebs-gp3-0".to_string());
+        let unknown = StorageClass("unknown-storage-class".to_string());
+
+        assert_eq!(AwsStorageType::try_from(gp2).unwrap(), AwsStorageType::GP2);
+        assert_eq!(AwsStorageType::try_from(gp3).unwrap(), AwsStorageType::GP3);
+        assert!(AwsStorageType::try_from(unknown).is_err());
+    }
 }

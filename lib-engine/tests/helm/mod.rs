@@ -5,7 +5,7 @@ use base64::engine::general_purpose;
 use chrono::Utc;
 use qovery_engine::environment::models::abort::AbortStatus;
 use qovery_engine::environment::models::application::Application;
-use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings, AwsStorageType};
+use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsRouterExtraSettings};
 use qovery_engine::environment::models::container::Container;
 use qovery_engine::environment::models::database::{Container as ContainerDB, Database, Managed, PostgresSQL};
 use qovery_engine::environment::models::environment::Environment;
@@ -27,6 +27,7 @@ use qovery_engine::infrastructure::models::cloud_provider::aws::{
 use qovery_engine::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings, RegistryMirroringMode};
 use qovery_engine::infrastructure::models::cloud_provider::service::{Action, Service};
 use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, DeploymentTarget};
+use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
 use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};

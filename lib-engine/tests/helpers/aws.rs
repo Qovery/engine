@@ -8,7 +8,6 @@ use crate::helpers::kubernetes::{
 };
 use crate::helpers::utilities::{FuncTestsSecrets, build_platform_local_docker};
 use qovery_engine::environment::models::ToCloudProviderFormat;
-use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::aws::database_instance_type::AwsDatabaseInstanceType;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
@@ -17,7 +16,7 @@ use qovery_engine::infrastructure::models::cloud_provider::{CloudProvider, Terra
 use qovery_engine::infrastructure::models::container_registry::ContainerRegistry;
 use qovery_engine::infrastructure::models::container_registry::ecr::ECR;
 use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
-use qovery_engine::infrastructure::models::kubernetes::aws::Options;
+use qovery_engine::infrastructure::models::kubernetes::aws::{AwsStorageType, Options};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::context::Context;

@@ -15,8 +15,8 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::Kubernetes;
-use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, Options};
 use crate::io_models::models::{KubernetesClusterAction, NodeGroups};
 use crate::runtime::block_on;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
@@ -338,6 +338,21 @@ impl Karpenter {
             karpenter_parameters,
             options.user_provided_network.as_ref(),
             kubernetes.advanced_settings().aws_eks_ec2_ami.to_model(),
+            AwsStorageType::try_from(kubernetes.advanced_settings.k8s_storage_class_fast_ssd.to_model()).map_err(
+                |e| {
+                    Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                        event_details.clone(),
+                        CommandError::new(
+                            format!(
+                                "Unknown AWS Storage type `{}`",
+                                kubernetes.advanced_settings.k8s_storage_class_fast_ssd
+                            ),
+                            Some(e.to_string()),
+                            None,
+                        ),
+                    ))
+                },
+            )?,
             kubernetes.advanced_settings().pleco_resources_ttl,
         )
         .to_common_helm_chart()

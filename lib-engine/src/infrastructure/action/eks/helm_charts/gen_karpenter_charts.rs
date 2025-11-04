@@ -6,6 +6,7 @@ use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
+use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
 
 pub struct KarpenterCharts {
     pub karpenter_chart: CommonChart,
@@ -59,6 +60,14 @@ pub fn generate_karpenter_charts(
             .cluster_advanced_settings
             .aws_eks_ec2_ami
             .to_model(),
+        AwsStorageType::try_from(chart_config_prerequisites.kubernetes_storage_class_fast_ssd.clone()).map_err(
+            |_e| {
+                CommandError::new_from_safe_message(format!(
+                    "Unknown AWS Storage type `{}`",
+                    chart_config_prerequisites.kubernetes_storage_class_fast_ssd
+                ))
+            },
+        )?,
         chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
     )
     .to_common_helm_chart()?;

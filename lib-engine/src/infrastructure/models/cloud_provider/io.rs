@@ -13,6 +13,7 @@ use base64::engine::general_purpose;
 use reqwest::StatusCode;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt::Display;
 use std::str;
 use std::time::Duration;
 use thiserror::Error;
@@ -71,6 +72,12 @@ pub enum AwsEc2MetadataImds {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct StorageClass(String);
+
+impl Display for StorageClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 impl StorageClass {
     pub fn to_model(&self) -> StorageClassModel {

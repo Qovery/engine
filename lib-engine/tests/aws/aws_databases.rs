@@ -12,9 +12,9 @@ use crate::helpers::utilities::{generate_id, get_svc_name, is_pod_restarted_env}
 use ::function_name::named;
 use base64::Engine;
 use base64::engine::general_purpose;
-use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::io_models::Action;
 use qovery_engine::io_models::application::{PortIo, Protocol};
 use qovery_engine::io_models::context::CloneForTest;

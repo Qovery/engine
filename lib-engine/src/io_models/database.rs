@@ -928,7 +928,7 @@ impl DatabaseKind {
     }
 }
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DiskIOPS {
     Default,
     Provisioned(u32),
