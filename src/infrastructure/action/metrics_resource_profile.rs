@@ -147,9 +147,9 @@ pub struct PrometheusAdapterResources;
 impl PrometheusAdapterResources {
     pub fn get(profile: ResourceProfile) -> ResourceConfig {
         match profile {
-            ResourceProfile::Low => ResourceConfig::new("50m", "100m", "128Mi", "256Mi"),
-            ResourceProfile::Normal => ResourceConfig::new("100m", "200m", "256Mi", "512Mi"),
-            ResourceProfile::High => ResourceConfig::new("200m", "500m", "512Mi", "1Gi"),
+            ResourceProfile::Low => ResourceConfig::new("250m", "250m", "384Mi", "384Mi"),
+            ResourceProfile::Normal => ResourceConfig::new("250m", "250m", "384Mi", "384Mi"),
+            ResourceProfile::High => ResourceConfig::new("400m", "400m", "512Mi", "512Mi"),
         }
     }
 }
@@ -225,10 +225,10 @@ mod tests {
     #[test]
     fn test_prometheus_adapter_resources_all_profiles() {
         let low = PrometheusAdapterResources::get(ResourceProfile::Low);
-        assert_eq!(low.memory_request, "128Mi");
+        assert_eq!(low.memory_request, "384Mi");
 
         let normal = PrometheusAdapterResources::get(ResourceProfile::Normal);
-        assert_eq!(normal.memory_request, "256Mi");
+        assert_eq!(normal.memory_request, "384Mi");
 
         let high = PrometheusAdapterResources::get(ResourceProfile::High);
         assert_eq!(high.memory_request, "512Mi");
