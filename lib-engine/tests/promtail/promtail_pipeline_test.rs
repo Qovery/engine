@@ -677,4 +677,18 @@ mod tests {
         assert_level_for(&fixture, r#"totally random line without level"#, None)?;
         Ok(())
     }
+
+    #[test]
+    fn test_with_ansi_codes() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        // Format with ANSI codes
+        let log = "\u{001b}[2m2025-11-03T16:02:48.121420126Z\u{001b}[0m \u{001b}[32m INFO\u{001b}[0m              tokio deploymnt_mngr: message: test";
+        let level = fixture.extract_level(log)?;
+
+        assert_eq!(level, Some("info".to_string()), "ANSI format should work! Got: {level:?}");
+
+        Ok(())
+    }
 }

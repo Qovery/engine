@@ -9,8 +9,8 @@ podDisruptionBudget:
 
 resources:
   limits:
-    cpu: 250m
-    memory: 384Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
   requests:
-    cpu: 250m
-    memory: 384Mi
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
