@@ -1,8 +1,4 @@
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::aws::AwsStorageType;
-use crate::environment::models::azure::AzureStorageType;
-use crate::environment::models::gcp::GcpStorageType;
-use crate::environment::models::scaleway::ScwStorageType;
 use crate::errors::CommandError;
 use crate::helm::{CommonChart, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
@@ -20,6 +16,10 @@ use crate::infrastructure::helm_charts::prometheus_adapter_chart::PrometheusAdap
 use crate::infrastructure::helm_charts::prometheus_operator_crds::PrometheusOperatorCrdsChart;
 use crate::infrastructure::helm_charts::thanos::ThanosChart;
 use crate::infrastructure::helm_charts::yace_chart::YaceChart;
+use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
+use crate::infrastructure::models::kubernetes::azure::AzureStorageType;
+use crate::infrastructure::models::kubernetes::gcp::GcpStorageType;
+use crate::infrastructure::models::kubernetes::scaleway::ScwStorageType;
 use crate::io_models::metrics::{
     AlertManagerConfig, CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters,
 };
@@ -395,7 +395,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::aws::Options;
     use crate::infrastructure::models::kubernetes::gcp::VpcMode;
     use crate::io_models::engine_location::EngineLocation;
-    use crate::io_models::models::VpcQoveryNetworkMode;
+    use crate::io_models::models::{StorageClass, VpcQoveryNetworkMode};
     use std::sync::Arc;
     use time::Time;
 
@@ -654,6 +654,7 @@ mod tests {
             aws_iam_alb_controller_arn: String::new(),
             customer_helm_charts_override: None,
             aws_iam_cloudwatch_exporter_role_arn: None,
+            kubernetes_storage_class_fast_ssd: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
         }
     }
 }

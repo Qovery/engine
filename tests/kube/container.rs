@@ -8,13 +8,14 @@ use function_name::named;
 use k8s_openapi::api::core::v1::PersistentVolumeClaim;
 use qovery_engine::environment::action::update_pvcs;
 use qovery_engine::environment::models::abort::AbortStatus;
-use qovery_engine::environment::models::aws::{AwsAppExtraSettings, AwsStorageType};
+use qovery_engine::environment::models::aws::AwsAppExtraSettings;
 use qovery_engine::environment::models::container::{Container, get_container_with_invalid_storage_size};
 use qovery_engine::environment::models::registry_image_source::RegistryImageSource;
 use qovery_engine::environment::models::types::AWS;
 use qovery_engine::infrastructure::models::cloud_provider::DeploymentTarget;
 use qovery_engine::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
+use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::io_models::application::PortIo;
 use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::models::{

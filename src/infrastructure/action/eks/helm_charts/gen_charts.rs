@@ -23,7 +23,6 @@ use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::aws::AwsStorageType;
 use crate::environment::models::domain::Domain;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
@@ -48,6 +47,7 @@ use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
+use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
 use crate::io_models::QoveryIdentifier;
 use chrono::Duration;
 use std::collections::HashSet;

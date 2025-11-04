@@ -5,9 +5,9 @@ use crate::helpers::utilities::{
     FuncTestsSecrets, context_for_resource, generate_id, get_svc_name, logger, metrics_registry,
 };
 use chrono::Utc;
-use qovery_engine::environment::models::aws::AwsStorageType;
 use qovery_engine::infrastructure::infrastructure_context::InfrastructureContext;
 use qovery_engine::infrastructure::models::cloud_provider::Kind::Aws;
+use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::io_models::application::{Application, PortIo, Protocol, Storage};
 use qovery_engine::io_models::container::{Container, Registry};
 use qovery_engine::io_models::database::DatabaseMode::CONTAINER;

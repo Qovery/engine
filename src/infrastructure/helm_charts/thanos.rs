@@ -431,7 +431,6 @@ impl ToCommonHelmChart for ThanosChart {
 
 #[cfg(test)]
 mod tests {
-    use crate::environment::models::aws::AwsStorageType;
     use crate::helm::{HelmAction, HelmChartNamespaces};
     use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::PrometheusConfiguration;
 
@@ -442,6 +441,7 @@ mod tests {
     };
     use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
     use crate::infrastructure::models::kubernetes::Kind;
+    use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.

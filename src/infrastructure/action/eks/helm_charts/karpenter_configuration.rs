@@ -1,3 +1,4 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::domain::ToHelmString;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -8,7 +9,7 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::kubernetes::KubernetesVersion;
-use crate::infrastructure::models::kubernetes::aws::UserNetworkConfig;
+use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
 use crate::infrastructure::models::kubernetes::karpenter::{
     KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
 };
@@ -30,6 +31,7 @@ pub struct KarpenterConfigurationChart {
     kubernetes_version: KubernetesVersion,
     explicit_subnet_ids: Vec<String>,
     eks_ec2_ami: Ec2Ami,
+    aws_storage_type: AwsStorageType,
     pleco_resources_ttl: i32,
 }
 
@@ -48,6 +50,7 @@ impl KarpenterConfigurationChart {
         karpenter_parameters: KarpenterParameters,
         user_network_config: Option<&UserNetworkConfig>,
         eks_ec2_ami: Ec2Ami,
+        aws_storage_type: AwsStorageType,
         pleco_resources_ttl: i32,
     ) -> Self {
         KarpenterConfigurationChart {
@@ -104,6 +107,7 @@ impl KarpenterConfigurationChart {
                     KubernetesVersion::V1_33 { .. } => Ec2Ami::AmazonLinux2023,
                 },
             },
+            aws_storage_type,
             pleco_resources_ttl,
         }
     }
@@ -159,6 +163,10 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             ChartSetValue {
                 key: "diskSize".to_string(),
                 value: self.karpenter_parameters.disk_size.to_gib_string(),
+            },
+            ChartSetValue {
+                key: "storageClass".to_string(),
+                value: self.aws_storage_type.to_cloud_provider_format().to_string(),
             },
             ChartSetValue {
                 key: "tags.ClusterId".to_string(),
@@ -437,6 +445,7 @@ mod tests {
     };
     use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
     use crate::infrastructure::models::disk_size::DiskSize;
+    use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
     use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
         KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
@@ -845,6 +854,7 @@ mod tests {
             },
             None,
             Ec2Ami::AmazonLinux2023,
+            AwsStorageType::GP3,
             0,
         )
     }

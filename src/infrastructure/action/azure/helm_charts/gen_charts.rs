@@ -1,6 +1,5 @@
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
-use crate::environment::models::gcp::GcpStorageType;
 use crate::errors::CommandError;
 use crate::helm::{
     CommonChart, HelmAction, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy,
@@ -35,6 +34,7 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::{Kind as CloudProviderKind, Kind};
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use crate::infrastructure::models::kubernetes::gcp::GcpStorageType;
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::metrics::MetricsConfiguration;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
