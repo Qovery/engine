@@ -28,7 +28,6 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::{Kind as CloudProviderKind, Kind};
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
-use crate::infrastructure::models::kubernetes::gcp::GcpStorageType;
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
