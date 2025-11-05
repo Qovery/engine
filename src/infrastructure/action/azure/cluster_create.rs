@@ -125,7 +125,7 @@ fn create_object_storage(
     event_details: EventDetails,
 ) -> Result<(), Box<EngineError>> {
     logger.info("Create Qovery managed blob container.");
-    for bucket_name in &[&cluster.logs_bucket_name()] {
+    for bucket_name in &[&cluster.logs_bucket_name(), &cluster.thanos_bucket_name()] {
         match cluster.blob_storage.bucket_exists(storage_account, bucket_name) {
             true => {
                 // bucket already exists, just update it, do nothing since update bucket is not yet available via SDK

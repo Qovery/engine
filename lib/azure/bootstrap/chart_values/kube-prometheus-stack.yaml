@@ -1,7 +1,7 @@
 defaultRules:
   create: true
   rules:
-    alertmanager: false
+    alertmanager: "set-by-engine-code"
     etcd: false
     configReloaders: true
     kubeApiserverAvailability: false
@@ -14,11 +14,46 @@ defaultRules:
     nodeExporterRecording: false
     windows: false
 
+kube-state-metrics:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-kube-state-metrics
+  prometheus:
+    monitor:
+      enabled: true
+      honorLabels: true
+  metricLabelsAllowlist:
+    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id,qovery.com/deployment-id]
+    - horizontalpodautoscalers=[qovery.com/service-id]
+    - jobs=[qovery.com/service-id,qovery.com/deployment-id]
+    - cronjobs=[qovery.com/service-id]
+    - services=[qovery.com/service-id]
+    - deployments=[qovery.com/service-id]
+    - statefulsets=[qovery.com/service-id]
+    - ingresses=[qovery.com/associated-service-id]
+    - persistentvolumeclaims=[qovery.com/service-id]
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
 crds:
   enabled: false
 
 alertmanager:
-  enabled: false
+  enabled: "set-by-engine-code"
+  alertmanagerSpec:
+    replicas: 2
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
 
 nodeExporter:
   enabled: false # ToDo: check this
@@ -41,7 +76,12 @@ kubeEtcd:
 
 kubelet:
   serviceMonitor:
-    resource: true
+    ## Disable scrapping from resource service, because it's already handled by cAvisor service, as per the official doc:
+    ## Enable scraping /metrics/resource from kubelet's service
+    ## This is disabled by default because container metrics are already exposed by cAdvisor
+    resource: false
+    # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
+    resourcePath: "/metrics/resource"
 
 kubeScheduler:
   enabled: false
@@ -50,15 +90,30 @@ kubeProxy:
   enabled: false
 
 kubeStateMetrics:
-  enabled: false
+  enabled: true
 
 prometheus:
   enabled: true
   prometheusSpec:
+    podMetadata:
+      labels:
+        azure.workload.identity/use: "true"
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus
+    # Replica label to be used by thanos
+    replicaExternalLabelName: "replica"
+    thanos:
+      objectStorageConfig:
+         secret:
+           type: AZURE
+           config:
+             storage_account: "set-by-engine-code"
+             container: "set-by-engine-code"
     serviceMonitorSelectorNilUsesHelmValues: false
     podMonitorSelectorNilUsesHelmValues: false
-    retention: 90d
-    retentionSize: "40GB"
+    retention: 7d
+    retentionSize: "7GB" # prometheus db
     walCompression: true
     externalUrl: set-by-engine-code
     storageSpec:
@@ -68,7 +123,7 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              storage: "50Gi"
+              storage: "8Gi"
     resources:
       limits:
         cpu: set-by-engine-code
@@ -79,6 +134,17 @@ prometheus:
     replicas: set-by-engine-code
 
 prometheusOperator:
+  priorityClassName: qovery-high-priority
+  prometheusConfigReloader:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus-config-reloader
+  thanosImage:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-thanos
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-operator
   resources:
     limits:
       cpu: set-by-engine-code
@@ -103,3 +169,54 @@ prometheus-node-exporter:
   prometheus:
     monitor:
       enabled: false
+
+additionalPrometheusRules:
+  - name: nginx.rules
+    groups:
+      - name: nginx-quantiles
+        interval: 30s
+        rules:
+          - record: nginx:request_duration:rate5m
+            expr: sum by (le, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m]))
+          - record: nginx:request_p50:5m
+            expr: histogram_quantile(0.5, nginx:request_duration:rate5m)
+          - record: nginx:request_p95:5m
+            expr: histogram_quantile(0.95, nginx:request_duration:rate5m)
+          - record: nginx:request_p99:5m
+            expr: histogram_quantile(0.99, nginx:request_duration:rate5m)
+
+  - name: nginx.core
+    groups:
+      - name: nginx-requests-rates
+        interval: 30s
+        rules:
+          - record: nginx:req_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_status
+            expr: sum by (ingress, status) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_path_status
+            expr: sum by (ingress, path, status) (rate(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-requests-increase
+        interval: 5m
+        rules:
+          - record: nginx:req_inc:5m
+            expr: sum by (ingress) (increase(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_inc:5m_by_status
+            expr: sum by (ingress, status) (increase(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-sizes
+        interval: 30s
+        rules:
+          - record: nginx:req_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_request_size_sum[5m]))
+          - record: nginx:resp_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_response_size_sum[5m]))
+
+          - record: nginx:req_size_avg_bytes:5m
+            expr: nginx:req_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
+          - record: nginx:resp_size_avg_bytes:5m
+            expr: nginx:resp_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)

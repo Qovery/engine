@@ -384,7 +384,30 @@ impl ToCommonHelmChart for ThanosChart {
                     )
                 })
             }
-            PrometheusConfiguration::AzureBlobContainer => {}
+            PrometheusConfiguration::AzureBlobContainer {
+                thanos_client_id,
+                thanos_storage_account,
+                thanos_container_name,
+            } => {
+                chart_info.values.push(ChartSetValue {
+                    key: r"storegateway.serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
+                    value: thanos_client_id.clone(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: r"compactor.serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
+                    value: thanos_client_id.clone(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: r"bucketweb.serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
+                    value: thanos_client_id.clone(),
+                });
+                chart_info.values_string.push(ChartSetValue {
+                    key: "objstoreConfig".to_string(),
+                    value: format!(
+                        "type: AZURE\nconfig:\n  storage_account: {thanos_storage_account}\n  container: {thanos_container_name}",
+                    ),
+                });
+            }
             PrometheusConfiguration::ScalewayObjectStorage {
                 bucket_name,
                 region,

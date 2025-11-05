@@ -50,7 +50,11 @@ pub enum PrometheusConfiguration {
         thanos_service_account_email: String,
         bucket_name: String,
     },
-    AzureBlobContainer,
+    AzureBlobContainer {
+        thanos_client_id: String,
+        thanos_storage_account: String,
+        thanos_container_name: String,
+    },
     NotInstalled,
 }
 
@@ -257,7 +261,25 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                     },
                 ]
             }
-            PrometheusConfiguration::AzureBlobContainer => vec![],
+            PrometheusConfiguration::AzureBlobContainer {
+                thanos_client_id,
+                thanos_storage_account,
+                thanos_container_name,
+            } => vec![
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.storage_account"
+                        .to_string(),
+                    value: thanos_storage_account,
+                },
+                ChartSetValue {
+                    key: "prometheus.prometheusSpec.thanos.objectStorageConfig.secret.config.container".to_string(),
+                    value: thanos_container_name,
+                },
+                ChartSetValue {
+                    key: r"prometheus.serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
+                    value: thanos_client_id.clone(),
+                },
+            ],
             PrometheusConfiguration::NotInstalled => vec![],
             PrometheusConfiguration::ScalewayObjectStorage {
                 bucket_name,
@@ -617,7 +639,11 @@ mod tests {
                     thanos_service_account_email: "whatever".to_string(),
                     bucket_name: "whatever".to_string(),
                 },
-                Kind::Aks => PrometheusConfiguration::AzureBlobContainer,
+                Kind::Aks => PrometheusConfiguration::AzureBlobContainer {
+                    thanos_client_id: "whatever".to_string(),
+                    thanos_storage_account: "whatever".to_string(),
+                    thanos_container_name: "whatever".to_string(),
+                },
                 Kind::AksSelfManaged
                 | Kind::EksSelfManaged
                 | Kind::GkeSelfManaged

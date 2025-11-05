@@ -26,3 +26,13 @@ output "cluster_id" {
 output "cluster_oidc_issuer" {
     value = try(azurerm_kubernetes_cluster.primary.oidc_issuer_url, null)
 }
+
+{% if prometheus_enabled %}
+output "thanos_client_id" {
+    value = try(azurerm_user_assigned_identity.thanos_msi.client_id, null)
+}
+
+output "thanos_storage_account" {
+    value = try(azurerm_storage_account.main_storage.name, null)
+}
+{%  endif %}

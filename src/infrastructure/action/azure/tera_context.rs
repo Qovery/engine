@@ -194,7 +194,10 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
     // Loki
     context.insert("loki_namespace", HelmChartNamespaces::Qovery.to_string().as_str());
 
-    context.insert("prometheus_enabled", &"false");
+    context.insert("prometheus_enabled", &cluster.options.metrics_parameters.is_some());
+
+    // thanos
+    context.insert("object_storage_thanos", &cluster.thanos_bucket_name());
 
     Ok(context)
 }
