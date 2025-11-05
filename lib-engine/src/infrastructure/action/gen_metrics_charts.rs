@@ -75,7 +75,11 @@ impl CloudProviderMetricsConfig<'_> {
                 access_key: cfg.access_key.clone(),
                 secret_key: cfg.secret_key.clone(),
             },
-            Self::Aks(_cfg) => PrometheusConfiguration::AzureBlobContainer {},
+            Self::Aks(cfg) => PrometheusConfiguration::AzureBlobContainer {
+                thanos_client_id: cfg.thanos_client_id.clone(),
+                thanos_storage_account: cfg.thanos_storage_account.clone(),
+                thanos_container_name: cfg.thanos_container_name.clone(),
+            },
         }
     }
 
@@ -93,7 +97,7 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Eks(cfg) => cfg.is_karpenter_enabled,
             Self::Gke(_) => false,
             Self::Kapsule(_) => false,
-            Self::Aks(_) => true,
+            Self::Aks(_) => false,
         }
     }
 
@@ -103,10 +107,8 @@ impl CloudProviderMetricsConfig<'_> {
 
     fn metrics_namespace(&self) -> &str {
         match self {
-            CloudProviderMetricsConfig::Gke(_) => "qovery",
-            CloudProviderMetricsConfig::Eks(_)
-            | CloudProviderMetricsConfig::Kapsule(_)
-            | CloudProviderMetricsConfig::Aks(_) => "prometheus",
+            CloudProviderMetricsConfig::Gke(_) | CloudProviderMetricsConfig::Aks(_) => "qovery",
+            CloudProviderMetricsConfig::Eks(_) | CloudProviderMetricsConfig::Kapsule(_) => "prometheus",
         }
     }
 

@@ -45,6 +45,10 @@ pub struct AksChartsConfigPrerequisites {
     pub infra_options: AksOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+
+    pub thanos_client_id: String,
+    pub thanos_storage_account: String,
+    pub thanos_container_name: String,
 }
 
 impl AksChartsConfigPrerequisites {
@@ -71,6 +75,9 @@ impl AksChartsConfigPrerequisites {
         infra_options: AksOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
+        thanos_client_id: String,
+        thanos_storage_account: String,
+        thanos_container_name: String,
     ) -> Self {
         Self {
             organization_id,
@@ -95,6 +102,9 @@ impl AksChartsConfigPrerequisites {
             infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
+            thanos_client_id,
+            thanos_storage_account,
+            thanos_container_name,
         }
     }
 }
@@ -156,6 +166,15 @@ impl HelmInfraResources for AksHelmsDeployment<'_> {
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.cluster.customer_helm_charts_override.clone(),
+            self.terraform_output
+                .thanos_client_id
+                .clone()
+                .unwrap_or("undefined".to_string()),
+            self.terraform_output
+                .thanos_storage_account
+                .clone()
+                .unwrap_or("undefined".to_string()),
+            self.cluster.thanos_bucket_name(),
         )
     }
 

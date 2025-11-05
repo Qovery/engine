@@ -73,4 +73,10 @@ pub struct AksQoveryTerraformOutput {
     pub cluster_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub cluster_oidc_issuer: String,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub thanos_client_id: Option<String>,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub thanos_storage_account: Option<String>,
 }

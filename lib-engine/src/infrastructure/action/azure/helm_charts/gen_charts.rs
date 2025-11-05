@@ -1,9 +1,7 @@
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
-use crate::helm::{
-    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy,
-};
+use crate::helm::{CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass, UpdateStrategy};
 use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
@@ -12,10 +10,6 @@ use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerCo
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
-use crate::infrastructure::helm_charts::kube_prometheus_stack_chart::{
-    KubePrometheusStackChart, PrometheusConfiguration,
-};
-use crate::infrastructure::helm_charts::kube_state_metrics::KubeStateMetricsChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     BlobStorageLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
@@ -36,7 +30,6 @@ use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::kubernetes::gcp::GcpStorageType;
 use crate::io_models::QoveryIdentifier;
-use crate::io_models::metrics::MetricsConfiguration;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
 use time::Duration;
@@ -334,51 +327,8 @@ pub(super) fn aks_helm_charts(
         )),
     };
 
-    // Metrics configuration option to know if we enable prometheus / thanos / service monitors
-    let metrics_configuration = chart_config_prerequisites
-        .metrics_parameters
-        .as_ref()
-        .map(|it| it.config.clone());
-
-    // Kube prometheus stack
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
-    let kube_prometheus_stack: Option<Box<dyn HelmChart>> = match metrics_configuration.as_ref() {
-        Some(MetricsConfiguration::MetricsInstalledByQovery { resource_profile, .. }) => Some(Box::new(
-            KubePrometheusStackChart::new(
-                HelmAction::Deploy,
-                chart_prefix_path,
-                GcpStorageType::Balanced.to_k8s_storage_class(),
-                prometheus_internal_url.to_string(),
-                prometheus_namespace.clone(),
-                PrometheusConfiguration::AzureBlobContainer,
-                get_chart_override_fn.clone(),
-                false,
-                false,
-                true,
-                None,
-                *resource_profile,
-            )
-            .to_common_helm_chart()?,
-        )),
-        Some(_) | None => None,
-    };
-
-    // Kube state metrics
-    let kube_state_metrics: Option<Box<dyn HelmChart>> = match metrics_configuration.as_ref() {
-        Some(MetricsConfiguration::MetricsInstalledByQovery { .. }) => Some(Box::new(
-            KubeStateMetricsChart::new(
-                HelmAction::Deploy,
-                chart_prefix_path,
-                HelmChartNamespaces::Qovery,
-                true,
-                get_chart_override_fn.clone(),
-            )
-            .to_common_helm_chart()?,
-        )),
-        Some(_) | None => None,
-    };
-
     let metrics_config = generate_metrics_config(
         CloudProviderMetricsConfig::Aks(chart_config_prerequisites),
         chart_prefix_path,
@@ -439,7 +389,7 @@ pub(super) fn aks_helm_charts(
 
     // chart deployment order matters!!!
     // Helm chart deployment order
-    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let mut level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         Some(Box::new(coredns_config)),
@@ -462,8 +412,8 @@ pub(super) fn aks_helm_charts(
             .to_common_helm_chart()?,
         )),
     ];
-    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, kube_state_metrics, promtail, kube_prometheus_stack];
-    let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
+    let mut level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, promtail];
+    let mut level_4: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
     let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![];
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_secret))];
@@ -480,6 +430,17 @@ pub(super) fn aks_helm_charts(
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(cert_manager_config)),
     ];
+
+    // Obs
+    if let Some(prometheus_operator_crds_chart) = metrics_config.prometheus_operator_crds_chart {
+        level_1.push(Some(Box::new(prometheus_operator_crds_chart)));
+    }
+    if let Some(kube_prometheus_stack_chart) = metrics_config.kube_prometheus_stack_chart {
+        level_3.push(Some(Box::new(kube_prometheus_stack_chart)));
+    }
+    if let Some(thanos_chart) = metrics_config.thanos_chart {
+        level_4.push(Some(Box::new(thanos_chart)));
+    }
 
     Ok(vec![
         level_1.into_iter().flatten().collect(),

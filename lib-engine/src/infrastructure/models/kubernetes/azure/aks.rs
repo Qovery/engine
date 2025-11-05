@@ -142,6 +142,10 @@ impl AKS {
     pub fn logs_bucket_name(&self) -> String {
         format!("qovery-logs-{}", self.id)
     }
+
+    pub fn thanos_bucket_name(&self) -> String {
+        format!("qovery-thanos-{}", self.id)
+    }
 }
 
 impl Kubernetes for AKS {
