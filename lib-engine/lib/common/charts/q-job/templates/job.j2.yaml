@@ -89,9 +89,9 @@ spec:
         - name: output
           emptyDir: {}
         {%- for mounted_file in mounted_files %}
-        - name: {{ mounted_file.id }}-{{ service.short_id }}
+        - name: {{ mounted_file.long_id }}
           secret:
-            secretName: {{ mounted_file.id }}-{{ service.short_id }}
+            secretName: {{ mounted_file.long_id }}
         {%- endfor %}
       initContainers:
         - name: qovery-wait-container-output
@@ -130,7 +130,7 @@ spec:
             {%- for mounted_file in mounted_files %}
             - mountPath: "{{ mounted_file.mount_path }}"
               subPath: content
-              name: {{ mounted_file.id }}-{{ service.short_id }}
+              name: {{ mounted_file.long_id }}
               readOnly: true
             {%- endfor %}
           env:

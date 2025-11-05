@@ -24,7 +24,6 @@ pub struct EnvironmentVariableDataTemplate {
 
 #[derive(Serialize, Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct MountedFile {
-    pub id: String,
     pub long_id: Uuid,
     pub mount_path: String,
     pub file_content_b64: String,

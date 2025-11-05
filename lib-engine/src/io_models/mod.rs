@@ -144,7 +144,6 @@ impl Display for Action {
 
 #[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MountedFile {
-    pub id: String,
     pub long_id: Uuid,
     pub mount_path: String,
     pub file_content_b64: String,
@@ -153,7 +152,6 @@ pub struct MountedFile {
 impl MountedFile {
     pub fn to_domain(&self) -> models::MountedFile {
         models::MountedFile {
-            id: self.id.to_string(),
             long_id: self.long_id,
             mount_path: self.mount_path.to_string(),
             file_content_b64: self.file_content_b64.to_string(),

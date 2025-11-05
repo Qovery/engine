@@ -649,7 +649,6 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
-            id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
             file_content_b64: general_purpose::STANDARD.encode("I exist !"),
@@ -672,18 +671,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         assert!(ret.is_ok());
 
         // check if secret exists
-        let service_id = QoveryIdentifier::new(
-            environment
-                .applications
-                .first()
-                .expect("there must be at least one application in environment")
-                .long_id,
-        )
-        .short()
-        .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx.mk_kube_client().expect("kube client is not set").client(),
-            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+            format!("metadata.name={}", &mounted_file.long_id).as_str(),
         )
         .expect("unable to find secret for selector");
         assert!(!config_maps.is_empty());
@@ -1761,7 +1751,6 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
-            id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist".to_string(),
             file_content_b64: general_purpose::STANDARD.encode("I exist !"),
@@ -1865,18 +1854,9 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         assert!(ret.is_ok());
 
         // check if secret exists
-        let service_id = QoveryIdentifier::new(
-            environment
-                .containers
-                .first()
-                .expect("there must be at least one container in environment")
-                .long_id,
-        )
-        .short()
-        .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx.mk_kube_client().expect("kube client is not set").client(),
-            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+            format!("metadata.name={}", &mounted_file.long_id).as_str(),
         )
         .expect("unable to find secret for selector");
         assert!(!config_maps.is_empty());
@@ -2580,7 +2560,6 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
-            id: mounted_file_identifier.short().to_string(),
             long_id: mounted_file_identifier.to_uuid(),
             mount_path: "/this-file-should-exist.json".to_string(),
             file_content_b64: general_purpose::STANDARD
@@ -2664,18 +2643,9 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         assert!(ret.is_ok());
 
         // check if secret exists
-        let service_id = QoveryIdentifier::new(
-            environment
-                .jobs
-                .first()
-                .expect("there must be at least one job in environment")
-                .long_id,
-        )
-        .short()
-        .to_string();
         let config_maps = kubectl_get_secret(
             infra_ctx.mk_kube_client().expect("kube client is not set").client(),
-            format!("metadata.name={}-{}", &mounted_file.id, service_id).as_str(),
+            format!("metadata.name={}", &mounted_file.long_id).as_str(),
         )
         .expect("unable to find secret for selector");
         assert!(!config_maps.is_empty());

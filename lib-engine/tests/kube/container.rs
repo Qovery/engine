@@ -215,7 +215,6 @@ fn should_have_mounted_files_as_volume() {
         // setup mounted file for this app
         let mounted_file_id = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
-            id: mounted_file_id.short().to_string(),
             long_id: mounted_file_id.to_uuid(),
             mount_path: "/tmp/app.config.json".to_string(),
             file_content_b64: general_purpose::STANDARD.encode(r#"{"name": "config"}"#),
@@ -249,6 +248,7 @@ fn should_have_mounted_files_as_volume() {
         statefulset.name = statefulset_id.short().to_string();
         statefulset.kube_name.clone_from(&statefulset.name);
         statefulset.long_id = statefulset_id.to_uuid();
+        statefulset.mounted_files[0].long_id = QoveryIdentifier::new_random().to_uuid();
         let storage_id = QoveryIdentifier::new_random();
         statefulset.storages = vec![qovery_engine::io_models::application::Storage {
             id: storage_id.short().to_string(),
