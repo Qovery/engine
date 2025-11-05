@@ -206,7 +206,6 @@ fn test_env_var() -> EnvironmentVariable {
 fn test_mounted_file() -> MountedFile {
     let mounted_file_identifier = QoveryIdentifier::new_random();
     MountedFile {
-        id: mounted_file_identifier.short().to_string(),
         long_id: mounted_file_identifier.to_uuid(),
         mount_path: "/etc/mounted_file.json".to_string(),
         file_content_b64: general_purpose::STANDARD.encode(r#"{"mounted_file_key": "hello"}"#),

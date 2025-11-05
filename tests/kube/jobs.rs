@@ -37,7 +37,6 @@ fn should_have_mounted_files_as_volume() {
         // setup mounted file for this app
         let mounted_file_id = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
-            id: mounted_file_id.short().to_string(),
             long_id: mounted_file_id.to_uuid(),
             mount_path: "/tmp/app.config.json".to_string(),
             file_content_b64: general_purpose::STANDARD.encode(r#"{"name": "config"}"#),
