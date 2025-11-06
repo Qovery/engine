@@ -37,7 +37,6 @@ pub fn bootstrap_eks_cluster(
         &[],
         &kubernetes.options,
         cluster_upgrade_timeout_in_min,
-        true,
         &kubernetes.advanced_settings,
         kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
     )?;

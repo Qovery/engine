@@ -36,14 +36,6 @@ pub struct Options {
     pub elasticache_zone_a_subnet_blocks: Vec<String>,
     pub elasticache_zone_b_subnet_blocks: Vec<String>,
     pub elasticache_zone_c_subnet_blocks: Vec<String>,
-    #[serde(default)] // TODO: remove default
-    pub fargate_profile_zone_a_subnet_blocks: Vec<String>,
-    #[serde(default)] // TODO: remove default
-    pub fargate_profile_zone_b_subnet_blocks: Vec<String>,
-    #[serde(default)] // TODO: remove default
-    pub fargate_profile_zone_c_subnet_blocks: Vec<String>,
-    #[serde(default)] // TODO: remove default
-    pub eks_zone_a_nat_gw_for_fargate_subnet_blocks_public: Vec<String>,
     pub vpc_qovery_network_mode: VpcQoveryNetworkMode,
     pub vpc_cidr_block: String,
     pub eks_cidr_subnet: String,

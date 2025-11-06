@@ -209,28 +209,6 @@ pub fn get_nodegroup_autoscaling_config_from_aws(
     Ok(scaling_config)
 }
 
-pub fn node_group_is_running(
-    kubernetes: &dyn Kubernetes,
-    event_details: &EventDetails,
-    node_group: &NodeGroups,
-    eks_client: Option<EksClient>,
-) -> Result<Option<i32>, Box<EngineError>> {
-    let client = match eks_client {
-        Some(client) => client,
-        None => return Ok(None),
-    };
-
-    let current_nodes =
-        get_nodegroup_autoscaling_config_from_aws(event_details.clone(), kubernetes, node_group.clone(), client)?;
-    match current_nodes {
-        Some(config) => match config.desired_size {
-            Some(n) => Ok(Some(n as i32)),
-            None => Ok(None),
-        },
-        None => Ok(None),
-    }
-}
-
 pub async fn delete_eks_nodegroups(
     aws_conn: SdkConfig,
     cluster_name: String,

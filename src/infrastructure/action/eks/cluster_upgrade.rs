@@ -59,7 +59,6 @@ pub fn upgrade_eks_cluster(
         &nodes_groups,
         &kubernetes.options,
         cluster_upgrade_timeout_in_min,
-        false,
         &kubernetes.advanced_settings,
         kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
     )?;

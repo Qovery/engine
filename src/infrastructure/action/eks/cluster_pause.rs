@@ -61,7 +61,6 @@ pub fn pause_eks_cluster(
         &node_groups_with_desired_states,
         &kubernetes.options,
         cluster_upgrade_timeout_in_min,
-        false,
         kubernetes.advanced_settings(),
         kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
     )?;
