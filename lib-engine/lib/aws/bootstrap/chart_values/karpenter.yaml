@@ -49,3 +49,6 @@ affinity:
 
 podLabels:
   admission.datadoghq.com/enabled: "false"
+
+additionalLabels:
+  qovery.com/managed: "true"

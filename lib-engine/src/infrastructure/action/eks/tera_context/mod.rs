@@ -30,7 +30,6 @@ pub fn eks_tera_context(
     node_groups: &[NodeGroupsWithDesiredState],
     options: &Options,
     eks_upgrade_timeout_in_min: ChronoDuration,
-    bootstrap_on_fargate: bool,
     advanced_settings: &ClusterAdvancedSettings,
     qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
 ) -> Result<TeraContext, Box<EngineError>> {
@@ -197,24 +196,6 @@ pub fn eks_tera_context(
     let elasticache_zone_b_subnet_blocks = format_ips(&options.elasticache_zone_b_subnet_blocks);
     let elasticache_zone_c_subnet_blocks = format_ips(&options.elasticache_zone_c_subnet_blocks);
 
-    let fargate_profile_zone_a_subnet_blocks = match options.fargate_profile_zone_a_subnet_blocks.is_empty() {
-        true => format_ips(&vec!["10.0.166.0/24".to_string()]),
-        false => format_ips(&options.fargate_profile_zone_a_subnet_blocks),
-    };
-    let fargate_profile_zone_b_subnet_blocks = match options.fargate_profile_zone_b_subnet_blocks.is_empty() {
-        true => format_ips(&vec!["10.0.168.0/24".to_string()]),
-        false => format_ips(&options.fargate_profile_zone_b_subnet_blocks),
-    };
-    let fargate_profile_zone_c_subnet_blocks = match options.fargate_profile_zone_c_subnet_blocks.is_empty() {
-        true => format_ips(&vec!["10.0.170.0/24".to_string()]),
-        false => format_ips(&options.fargate_profile_zone_c_subnet_blocks),
-    };
-    let eks_zone_a_nat_gw_for_fargate_subnet_blocks_public =
-        match options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public.is_empty() {
-            true => format_ips(&vec!["10.0.132.0/22".to_string()]),
-            false => format_ips(&options.eks_zone_a_nat_gw_for_fargate_subnet_blocks_public),
-        };
-
     let region_cluster_id = format!("{}-{}", kubernetes.region(), kubernetes.short_id());
     let vpc_cidr_block = options.vpc_cidr_block.clone();
     let cloudwatch_eks_log_group = format!("/aws/eks/{}/cluster", kubernetes.cluster_name());
@@ -295,14 +276,6 @@ pub fn eks_tera_context(
 
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
-    context.insert("bootstrap_on_fargate", &bootstrap_on_fargate);
-    context.insert("fargate_profile_zone_a_subnet_blocks", &fargate_profile_zone_a_subnet_blocks);
-    context.insert("fargate_profile_zone_b_subnet_blocks", &fargate_profile_zone_b_subnet_blocks);
-    context.insert("fargate_profile_zone_c_subnet_blocks", &fargate_profile_zone_c_subnet_blocks);
-    context.insert(
-        "eks_zone_a_nat_gw_for_fargate_subnet_blocks_public",
-        &eks_zone_a_nat_gw_for_fargate_subnet_blocks_public,
-    );
 
     // AWS S3 tfstate storage
     context.insert(

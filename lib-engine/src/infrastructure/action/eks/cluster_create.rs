@@ -9,8 +9,11 @@ use crate::infrastructure::action::eks::custom_vpc::patch_kube_proxy_for_aws_use
 use crate::infrastructure::action::eks::helm_charts::EksHelmsDeployment;
 use crate::infrastructure::action::eks::karpenter::Karpenter;
 use crate::infrastructure::action::eks::karpenter::node_groups_when_karpenter_is_enabled;
+use crate::infrastructure::action::eks::karpenter_migration::{
+    deploy_karpenter_nodegroup, should_deploy_karpenter_nodegroup,
+};
 use crate::infrastructure::action::eks::nodegroup::{
-    NodeGroupsDeletionType, delete_eks_nodegroups, node_group_is_running, should_update_desired_nodes,
+    NodeGroupsDeletionType, delete_eks_nodegroups, should_update_desired_nodes,
 };
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
@@ -25,7 +28,6 @@ use crate::services::kube_client::SelectK8sResourceBy;
 use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
-use rusoto_eks::EksClient;
 use std::path::PathBuf;
 
 pub fn create_eks_cluster(
@@ -97,9 +99,6 @@ pub fn create_eks_cluster(
             &node_groups_with_desired_states,
             &kubernetes.options,
             cluster_upgrade_timeout_in_min,
-            // if it is the first install we must keep fargate profile for add-ons/user-mapper, until we have karpenter installed (during helm deployments)
-            // After karpenter is installed, we can remove the fargate profile for add-ons/user-mapper.
-            infra_ctx.kubernetes().is_karpenter_enabled() && infra_ctx.context().is_first_cluster_deployment(),
             &kubernetes.advanced_settings,
             kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
         )?;
@@ -160,6 +159,15 @@ pub fn create_eks_cluster(
         }
     }
 
+    // Deploy Karpenter nodegroup and install Karpenter charts if migration is enabled
+    logger.info("Checking if Karpenter migration should run...");
+    if should_deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger) {
+        logger.info("🔄 Karpenter Fargate to Nodegroup migration enabled");
+        let _karpenter_tf_output = deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger)?;
+    } else {
+        logger.info("⏭️  Skipping Karpenter migration (not required)");
+    }
+
     // apply to generate tf_qovery_config.json
     let (eks_tf_output, tera_context) = terraform_apply()?;
     update_cluster_outputs(kubernetes, &eks_tf_output)?;
@@ -203,66 +211,6 @@ pub fn create_eks_cluster(
     );
 
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
-    clean_karpenter_installation(kubernetes, infra_ctx, &logger, event_details.clone(), aws_eks_client)?;
-
-    Ok(())
-}
-
-// after Karpenter is deployed, we can remove the node groups
-// after Karpenter is deployed, we can remove fargate profile for add-ons
-// TODO: remove the node groups part of the function once every cluster has Karpenter enabled.
-fn clean_karpenter_installation(
-    kubernetes: &EKS,
-    infra_ctx: &InfrastructureContext,
-    logger: &impl InfraLogger,
-    event_details: EventDetails,
-    aws_eks_client: Option<EksClient>,
-) -> Result<(), Box<EngineError>> {
-    if !kubernetes.is_karpenter_enabled() {
-        return Ok(());
-    }
-
-    if kubernetes.context.is_dry_run_deploy() {
-        logger.warn("👻 Dry run mode enabled. Skipping Karpenter cleanup");
-        return Ok(());
-    }
-
-    let has_node_group_running = kubernetes.nodes_groups.iter().any(|ng| {
-        matches!(
-            node_group_is_running(kubernetes, &event_details, ng, aws_eks_client.clone()),
-            Ok(Some(_v))
-        )
-    });
-
-    if !has_node_group_running && !kubernetes.context().is_first_cluster_deployment() {
-        return Ok(());
-    }
-
-    // generate terraform files and copy them into temp dir
-    let tera_context = eks_tera_context(
-        kubernetes,
-        infra_ctx.cloud_provider(),
-        infra_ctx.dns_provider(),
-        kubernetes.zones.as_slice(),
-        &[],
-        &kubernetes.options,
-        AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
-        false,
-        &kubernetes.advanced_settings,
-        kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
-    )?;
-
-    logger.info(format!("Deploying {} cluster.", kubernetes.kind()));
-    let tf_action = TerraformInfraResources::new(
-        tera_context.clone(),
-        kubernetes.template_directory.join("terraform"),
-        kubernetes.temp_dir().join("terraform_karpenter_cleanup"),
-        event_details.clone(),
-        envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
-        infra_ctx.context().is_dry_run_deploy(),
-    );
-
-    let _: AwsEksQoveryTerraformOutput = tf_action.create(logger)?;
 
     Ok(())
 }
@@ -366,7 +314,6 @@ fn restore_access_to_eks(
         &[],
         &kubernetes.options,
         AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
-        false,
         &kubernetes.advanced_settings,
         kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
     )?;

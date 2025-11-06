@@ -6,6 +6,7 @@ mod cluster_upgrade;
 mod custom_vpc;
 pub(crate) mod helm_charts;
 mod karpenter;
+mod karpenter_migration;
 mod nodegroup;
 mod sdk;
 mod tera_context;

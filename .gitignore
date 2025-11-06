@@ -22,5 +22,6 @@ bin_versions
 .vscode/
 .env
 firedbg/
+CLAUDE.md
 
 dist/

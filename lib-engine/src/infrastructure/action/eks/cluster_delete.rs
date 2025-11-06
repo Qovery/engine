@@ -88,7 +88,6 @@ pub fn delete_eks_cluster(
         &node_groups,
         options,
         cluster_upgrade_timeout_in_min,
-        false,
         advanced_settings,
         qovery_allowed_public_access_cidrs,
     )?;
