@@ -82,6 +82,7 @@ pub struct AlertConfigAlert {
     #[serde(default)]
     pub receivers: Vec<Uuid>,
     pub target: AlertTarget,
+    pub version_tag: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -154,7 +155,8 @@ mod tests {
                   "target": {
                     "id":"4f50657b-1162-4dde-b706-4d5e937f3c02",
                     "type":"APPLICATION"
-                  }
+                  },
+                  "version_tag": "2025-10-24T12:34:18.232424Z"
                 }
               ],
               "config_name":"config Name"
@@ -226,6 +228,7 @@ mod tests {
             Uuid::parse_str("4f50657b-1162-4dde-b706-4d5e937f3c02").unwrap()
         );
         assert_eq!(alert.target.r#type, AlertTargetType::Application);
+        assert_eq!(alert.version_tag, Some("2025-10-24T12:34:18.232424Z".to_string()));
 
         // Check cloudwatch_exporter_config
         assert!(!cloudwatch_exporter_config.enabled);

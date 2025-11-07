@@ -222,6 +222,14 @@ fn build_target_values(
                 key: format!("{alert_prefix}.for"),
                 value: format!("{}m", alert.for_duration_minutes),
             },
+            ChartSetValue {
+                key: format!("{alert_prefix}.version"),
+                value: alert
+                    .version_tag
+                    .as_ref()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "undefined".to_string()),
+            },
         ]);
 
         if let Some(summary) = &alert.summary {
@@ -455,6 +463,7 @@ mod tests {
             runbook_url: None,
             receivers: vec![],
             target: target1.clone(),
+            version_tag: Some("1".to_string()),
         };
 
         let alert2 = AlertConfigAlert {
@@ -468,6 +477,7 @@ mod tests {
             runbook_url: None,
             receivers: vec![],
             target: target1.clone(),
+            version_tag: Some("1".to_string()),
         };
 
         // Create alert for target2
@@ -482,6 +492,7 @@ mod tests {
             runbook_url: None,
             receivers: vec![],
             target: target2.clone(),
+            version_tag: Some("2".to_string()),
         };
 
         let alerts = vec![alert1, alert2, alert3];
@@ -522,6 +533,7 @@ mod tests {
             runbook_url: Some("https://runbook.example.com".to_string()),
             receivers: vec![receiver_id],
             target: target.clone(),
+            version_tag: Some("1".to_string()),
         };
 
         let alerts = vec![&alert];
@@ -660,6 +672,7 @@ mod tests {
             runbook_url: None,
             receivers: vec![receiver_id],
             target: target.clone(),
+            version_tag: Some("1".to_string()),
         };
 
         let alert_config = AlertManagerConfig {
@@ -772,6 +785,7 @@ mod tests {
             runbook_url: None,
             receivers: vec![],
             target: target.clone(),
+            version_tag: Some("1".to_string()),
         };
 
         let alerts = vec![&alert];
