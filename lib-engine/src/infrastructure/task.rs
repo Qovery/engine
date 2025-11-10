@@ -1,5 +1,4 @@
 use crate::cmd::docker::Docker;
-use crate::engine_task;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus};
@@ -12,6 +11,7 @@ use crate::io_models::{Action, QoveryIdentifier};
 use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::MetricsRegistry;
+use crate::{engine_task, hack};
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
 use tokio::sync::broadcast;
@@ -168,6 +168,7 @@ impl Task for InfrastructureTask {
             EventMessage::new("Qovery Engine has started the infrastructure deployment".to_string(), None),
         ));
         let guard = scopeguard::guard((), |_| {
+            hack::remove_gke_gcloud_auth_plugin_cache();
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(InfrastructureStep::Terminated),
                 EventMessage::new("Qovery Engine has terminated the infrastructure deployment".to_string(), None),
