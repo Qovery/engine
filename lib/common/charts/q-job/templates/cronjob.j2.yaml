@@ -104,9 +104,9 @@ spec:
           {%- endif %}
           volumes:
             {%- for mounted_file in mounted_files %}
-            - name: {{ mounted_file.long_id }}
+            - name: {{ mounted_file.kube_name }}
               secret:
-                secretName: {{ mounted_file.long_id }}
+                secretName: {{ mounted_file.kube_name }}
             {%- endfor %}
           containers:
             - name: {{ service.name }}
@@ -125,7 +125,7 @@ spec:
                 {%- for mounted_file in mounted_files %}
                 - mountPath: "{{ mounted_file.mount_path }}"
                   subPath: content
-                  name: {{ mounted_file.long_id }}
+                  name: {{ mounted_file.kube_name }}
                   readOnly: true
                 {%- endfor %}
               env:

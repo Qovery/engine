@@ -145,6 +145,7 @@ impl Display for Action {
 #[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MountedFile {
     pub long_id: Uuid,
+    pub kube_name: String,
     pub mount_path: String,
     pub file_content_b64: String,
 }
@@ -153,6 +154,7 @@ impl MountedFile {
     pub fn to_domain(&self) -> models::MountedFile {
         models::MountedFile {
             long_id: self.long_id,
+            kube_name: self.kube_name.clone(),
             mount_path: self.mount_path.to_string(),
             file_content_b64: self.file_content_b64.to_string(),
         }
