@@ -1,5 +1,4 @@
 use crate::cmd::docker::Docker;
-use crate::engine_task;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::action::deploy_environment::EnvironmentDeployment;
@@ -21,6 +20,7 @@ use crate::io_models::engine_request::{CloudProviderOptions, EnvironmentEngineRe
 use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
+use crate::{engine_task, hack};
 use base64::Engine;
 use itertools::Itertools;
 use std::cmp::{max, min};
@@ -491,6 +491,7 @@ impl Task for EnvironmentTask {
             EventMessage::new("🚀 Qovery Engine starts to execute the deployment".to_string(), None),
         ));
         let guard = scopeguard::guard((), |_| {
+            hack::remove_gke_gcloud_auth_plugin_cache();
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(EnvironmentStep::Terminated),
                 EventMessage::new("Qovery Engine has terminated the deployment".to_string(), None),

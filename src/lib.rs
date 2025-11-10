@@ -17,6 +17,7 @@ pub mod events;
 pub mod fs;
 pub use cmd::git::git_initialize_opts;
 pub mod environment;
+mod hack;
 pub mod helm;
 pub mod infrastructure;
 pub mod io_models;
