@@ -216,6 +216,7 @@ fn should_have_mounted_files_as_volume() {
         let mounted_file_id = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_id.to_uuid(),
+            kube_name: mounted_file_id.to_string(),
             mount_path: "/tmp/app.config.json".to_string(),
             file_content_b64: general_purpose::STANDARD.encode(r#"{"name": "config"}"#),
         };

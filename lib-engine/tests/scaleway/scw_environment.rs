@@ -650,6 +650,7 @@ fn scaleway_kapsule_deploy_a_working_environment_with_mounted_files_as_volume() 
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_identifier.to_uuid(),
+            kube_name: mounted_file_identifier.to_string(),
             mount_path: "/this-file-should-exist".to_string(),
             file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
@@ -1752,6 +1753,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_identifier.to_uuid(),
+            kube_name: mounted_file_identifier.to_string(),
             mount_path: "/this-file-should-exist".to_string(),
             file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };
@@ -2561,6 +2563,7 @@ fn build_and_deploy_job_on_scw_kapsule_with_mounted_files() {
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_identifier.to_uuid(),
+            kube_name: mounted_file_identifier.to_string(),
             mount_path: "/this-file-should-exist.json".to_string(),
             file_content_b64: general_purpose::STANDARD
                 .encode("{\"foo\": {\"value\": \"bar\", \"sensitive\": true}, \"foo_2\": {\"value\": \"bar_2\"}}"),

@@ -963,6 +963,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
         let mounted_file_identifier = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_identifier.to_uuid(),
+            kube_name: mounted_file_identifier.to_string(),
             mount_path: "/this-file-should-exist".to_string(),
             file_content_b64: general_purpose::STANDARD.encode("I exist !"),
         };

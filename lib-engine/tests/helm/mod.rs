@@ -207,6 +207,7 @@ fn test_mounted_file() -> MountedFile {
     let mounted_file_identifier = QoveryIdentifier::new_random();
     MountedFile {
         long_id: mounted_file_identifier.to_uuid(),
+        kube_name: mounted_file_identifier.to_uuid().to_string(),
         mount_path: "/etc/mounted_file.json".to_string(),
         file_content_b64: general_purpose::STANDARD.encode(r#"{"mounted_file_key": "hello"}"#),
     }

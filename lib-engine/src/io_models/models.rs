@@ -26,6 +26,7 @@ pub struct EnvironmentVariableDataTemplate {
 #[derive(Serialize, Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub struct MountedFile {
     pub long_id: Uuid,
+    pub kube_name: String,
     pub mount_path: String,
     pub file_content_b64: String,
 }
