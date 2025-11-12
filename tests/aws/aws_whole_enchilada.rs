@@ -17,9 +17,7 @@ use qovery_engine::infrastructure::models::kubernetes::karpenter::{
     KarpenterStableNodePoolOverride,
 };
 use qovery_engine::io_models::models::VpcQoveryNetworkMode::WithNatGateways;
-use qovery_engine::io_models::models::{
-    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters,
-};
+use qovery_engine::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use qovery_engine::utilities::to_short_id;
 use std::str::FromStr;
 
@@ -65,12 +63,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::Classic,
             &ClusterDomain::Custom { domain: cluster_domain },
-            Some(WithNatGateways {
-                nat_gateway_parameters: Some(NatGatewayParameters {
-                    enable_static_ip: true,
-                    ..Default::default()
-                }),
-            }),
+            Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
@@ -167,12 +160,7 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithPause,
             &ClusterDomain::Custom { domain: cluster_domain },
-            Some(WithNatGateways {
-                nat_gateway_parameters: Some(NatGatewayParameters {
-                    enable_static_ip: true,
-                    ..Default::default()
-                }),
-            }),
+            Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
@@ -221,12 +209,7 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithUpgrade,
             &ClusterDomain::Custom { domain: cluster_domain },
-            Some(WithNatGateways {
-                nat_gateway_parameters: Some(NatGatewayParameters {
-                    enable_static_ip: true,
-                    ..Default::default()
-                }),
-            }),
+            Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
@@ -275,12 +258,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
             Some(aws_zones.iter().map(|z| z.to_cloud_provider_format()).collect()),
             ClusterTestType::WithUpgrade,
             &ClusterDomain::Custom { domain: cluster_domain },
-            Some(WithNatGateways {
-                nat_gateway_parameters: Some(NatGatewayParameters {
-                    enable_static_ip: true,
-                    ..Default::default()
-                }),
-            }),
+            Some(WithNatGateways),
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Karpenter {

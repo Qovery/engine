@@ -139,7 +139,7 @@ pub fn eks_tera_context(
     );
 
     match options.vpc_qovery_network_mode {
-        VpcQoveryNetworkMode::WithNatGateways { .. } => {
+        VpcQoveryNetworkMode::WithNatGateways => {
             let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &eks_zone_a_subnet_blocks_private)?;
             let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &eks_zone_b_subnet_blocks_private)?;
             let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &eks_zone_c_subnet_blocks_private)?;
@@ -163,7 +163,7 @@ pub fn eks_tera_context(
     let mut ec2_zone_c_subnet_blocks_private = format_ips(&options.ec2_zone_c_subnet_blocks);
 
     match options.vpc_qovery_network_mode {
-        VpcQoveryNetworkMode::WithNatGateways { .. } => {
+        VpcQoveryNetworkMode::WithNatGateways => {
             let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &ec2_zone_a_subnet_blocks_private)?;
             let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &ec2_zone_b_subnet_blocks_private)?;
             let max_subnet_zone_c = check_odd_subnets(event_details, "c", &ec2_zone_c_subnet_blocks_private)?;

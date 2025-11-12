@@ -8,7 +8,7 @@ use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
-use qovery_engine::io_models::models::{CpuArchitecture, NatGatewayParameters, VpcQoveryNetworkMode};
+use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::utilities::to_short_id;
 
 #[cfg(any(feature = "test-gcp-infra", feature = "test-gcp-infra-upgrade"))]
@@ -62,12 +62,7 @@ fn create_and_destroy_gke_cluster_with_nat_gateway_in_europe_west_12() {
         region,
         ClusterTestType::Classic,
         function_name!(),
-        Some(VpcQoveryNetworkMode::WithNatGateways {
-            nat_gateway_parameters: Some(NatGatewayParameters {
-                enable_static_ip: true,
-                ..Default::default()
-            }),
-        }),
+        Some(VpcQoveryNetworkMode::WithNatGateways),
     );
 }
 

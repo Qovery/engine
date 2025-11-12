@@ -156,6 +156,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             logger.clone(),
             localisation,
             vpc_network_mode,
+            None,
             min_nodes,
             max_nodes,
             CpuArchitecture::AMD64,
@@ -252,6 +253,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
             KapsuleClusterType::Kapsule,
             None,
             vpc_network_mode,
+            None,
         )
     }
 }

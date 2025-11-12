@@ -50,7 +50,6 @@ pub enum Tag {
     CannotExecuteK8sApiCustomMetrics,
     CannotExecuteK8sVersion,
     ScalewayCannotFetchPrivateNetworks,
-    ScalewayInvalidNatGatewayType,
     CannotFindRequiredBinary,
     CannotGetAnyAvailableVPC,
     CannotGetCluster,
@@ -499,7 +498,6 @@ impl From<errors::Tag> for Tag {
             }
             errors::Tag::RouterBasicAuthEnvVarNotFound => Tag::RouterBasicAuthEnvVarNotFound,
             errors::Tag::ScalewayCannotFetchPrivateNetworks => Tag::ScalewayCannotFetchPrivateNetworks,
-            errors::Tag::ScalewayInvalidNatGatewayType => Tag::ScalewayInvalidNatGatewayType,
             errors::Tag::CannotWriteToFile => Tag::CannotWriteToFile,
             errors::Tag::CannotCreateHelmAdmissionControllerConfigMap => {
                 Tag::CannotCreateHelmAdmissionControllerConfigMap

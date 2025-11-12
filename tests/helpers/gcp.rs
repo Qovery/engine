@@ -199,6 +199,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             logger.clone(),
             localisation,
             vpc_network_mode,
+            None,
             min_nodes,
             max_nodes,
             cpu_archi,

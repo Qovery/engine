@@ -1,14 +1,14 @@
+use crate::environment::models::domain::ToTerraformString;
+use crate::helm::ChartValuesGenerated;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
 use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
-
-use crate::helm::ChartValuesGenerated;
 
 #[derive(Serialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub struct EnvironmentVariable {
@@ -115,20 +115,10 @@ pub struct Route {
     pub service_long_id: Uuid,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct NatGatewayParameters {
-    pub enable_static_ip: bool,
-    pub vpc_gateway_type: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum VpcQoveryNetworkMode {
     WithoutNatGateways,
-    WithNatGateways {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        nat_gateway_parameters: Option<NatGatewayParameters>,
-    },
+    WithNatGateways,
 }
 
 impl Display for VpcQoveryNetworkMode {
@@ -138,51 +128,36 @@ impl Display for VpcQoveryNetworkMode {
             "{}",
             match self {
                 VpcQoveryNetworkMode::WithoutNatGateways => "WithoutNatGateways".to_string(),
-                VpcQoveryNetworkMode::WithNatGateways { .. } => "WithNatGateways".to_string(),
+                VpcQoveryNetworkMode::WithNatGateways => "WithNatGateways".to_string(),
             }
         )
     }
 }
 
-impl<'de> Deserialize<'de> for VpcQoveryNetworkMode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = Value::deserialize(deserializer)?;
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[serde(tag = "provider", content = "type")]
+#[serde(rename_all = "lowercase")]
+pub enum NatGatewayType {
+    Scaleway(ScalewayPublicGatewayType),
+}
 
-        match value {
-            Value::String(s) => match s.as_str() {
-                "WithoutNatGateways" => Ok(VpcQoveryNetworkMode::WithoutNatGateways),
-                "WithNatGateways" => Ok(VpcQoveryNetworkMode::WithNatGateways {
-                    nat_gateway_parameters: None,
-                }),
-                _ => Err(serde::de::Error::custom(format!("Unknown VpcQoveryNetworkMode: {s}"))),
-            },
-            Value::Object(map) => {
-                let type_field = map
-                    .get("type")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| serde::de::Error::custom("Missing 'type' field"))?;
-
-                if type_field == "WithNatGateways" {
-                    // Handle nat_gateway_parameters being null, missing, or an object
-                    let params = match map.get("nat_gateway_parameters") {
-                        None => None,
-                        Some(Value::Null) => None,
-                        Some(v) => Some(serde_json::from_value(v.clone()).map_err(serde::de::Error::custom)?),
-                    };
-
-                    Ok(VpcQoveryNetworkMode::WithNatGateways {
-                        nat_gateway_parameters: params,
-                    })
-                } else {
-                    Err(serde::de::Error::custom(format!("Unknown type: {type_field}",)))
-                }
-            }
-            _ => Err(serde::de::Error::custom("Expected string or object for VpcQoveryNetworkMode")),
+impl Display for NatGatewayType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            NatGatewayType::Scaleway(gateway_type) => write!(f, "{gateway_type}"),
         }
     }
+}
+
+impl ToTerraformString for NatGatewayType {
+    fn to_terraform_format_string(&self) -> String {
+        self.to_string()
+    }
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct NatGatewayParameters {
+    pub nat_gateway_type: NatGatewayType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -453,11 +428,16 @@ impl CustomerHelmChartsOverride {
 
 #[cfg(test)]
 mod tests {
-    use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode};
+    use crate::environment::models::domain::ToTerraformString;
+    use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
+    use crate::io_models::models::{
+        KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
+    };
     use serde::Deserialize;
     use serde_derive::Serialize;
     use serde_with::DisplayFromStr;
     use std::str::FromStr;
+    use strum::IntoEnumIterator;
 
     #[test]
     fn test_kubernetes_cpu_resource_unit_to_string() {
@@ -664,207 +644,151 @@ mod tests {
     }
 
     #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_string_without_nat_gateways() {
+    fn test_nat_gateway_parameters_deserialization_with_alias() {
         // setup
-        let json = r#""WithoutNatGateways""#;
+        let test_cases = vec![
+            (
+                r#"{"nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-S"}}"#,
+                ScalewayPublicGatewayType::Small,
+            ),
+            (
+                r#"{"nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-M"}}"#,
+                ScalewayPublicGatewayType::Medium,
+            ),
+            (
+                r#"{"nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-L"}}"#,
+                ScalewayPublicGatewayType::Large,
+            ),
+            (
+                r#"{"nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-XL"}}"#,
+                ScalewayPublicGatewayType::XLarge,
+            ),
+        ];
 
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
+        for (json, expected_type) in test_cases {
+            // execute
+            let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
 
-        // verify
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), VpcQoveryNetworkMode::WithoutNatGateways);
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_string_with_nat_gateways() {
-        // setup
-        let json = r#""WithNatGateways""#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            VpcQoveryNetworkMode::WithNatGateways {
-                nat_gateway_parameters: None
-            }
-        );
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_string_invalid() {
-        // setup
-        let json = r#""InvalidVariant""#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_err());
-        let error_message = result.unwrap_err().to_string();
-        assert!(error_message.contains("Unknown VpcQoveryNetworkMode"));
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_no_params() {
-        // setup
-        let json = r#"{"type": "WithNatGateways"}"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            VpcQoveryNetworkMode::WithNatGateways {
-                nat_gateway_parameters: None
-            }
-        );
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_null_params() {
-        // setup
-        let json = r#"{"type": "WithNatGateways", "nat_gateway_parameters": null}"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_ok());
-        assert_eq!(
-            result.unwrap(),
-            VpcQoveryNetworkMode::WithNatGateways {
-                nat_gateway_parameters: None
-            }
-        );
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_with_params() {
-        // setup
-        let json = r#"{
-            "type": "WithNatGateways",
-            "nat_gateway_parameters": {
-                "enable_static_ip": true,
-                "vpc_gateway_type": "VPC-GW-S"
-            }
-        }"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_ok());
-        let network_mode = result.unwrap();
-        match network_mode {
-            VpcQoveryNetworkMode::WithNatGateways { nat_gateway_parameters } => {
-                assert!(nat_gateway_parameters.is_some());
-                let params = nat_gateway_parameters.unwrap();
-                assert!(params.enable_static_ip);
-                assert!(params.vpc_gateway_type.is_some());
-            }
-            _ => panic!("Expected WithNatGateways variant"),
+            // verify
+            assert!(result.is_ok(), "Failed to deserialize with alias: {:?}", result.err());
+            let nat_gateway = result.unwrap();
+            assert_eq!(
+                nat_gateway.nat_gateway_type,
+                NatGatewayType::Scaleway(expected_type),
+                "Failed for JSON with alias: {json}",
+            );
         }
     }
 
     #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_with_nat_gateways_with_params_no_static_ip() {
+    fn test_nat_gateway_parameters_roundtrip_serialization() {
         // setup
-        let json = r#"{
-            "type": "WithNatGateways",
-            "nat_gateway_parameters": {
-                "enable_static_ip": false
-            }
-        }"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_ok());
-        let network_mode = result.unwrap();
-        match network_mode {
-            VpcQoveryNetworkMode::WithNatGateways { nat_gateway_parameters } => {
-                assert!(nat_gateway_parameters.is_some());
-                let params = nat_gateway_parameters.unwrap();
-                assert!(!params.enable_static_ip);
-                assert!(params.vpc_gateway_type.is_none());
-            }
-            _ => panic!("Expected WithNatGateways variant"),
-        }
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_missing_type_field() {
-        // setup
-        let json = r#"{"nat_gateway_parameters": null}"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_err());
-        let error_message = result.unwrap_err().to_string();
-        assert!(error_message.contains("Missing 'type' field"));
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_object_invalid_type() {
-        // setup
-        let json = r#"{"type": "InvalidType"}"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_err());
-        let error_message = result.unwrap_err().to_string();
-        assert!(error_message.contains("Unknown type"));
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_invalid_type() {
-        // setup
-        let json = r#"123"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_err());
-        let error_message = result.unwrap_err().to_string();
-        assert!(error_message.contains("Expected string or object for VpcQoveryNetworkMode"));
-    }
-
-    #[test]
-    fn test_vpc_qovery_network_mode_deserialize_from_array() {
-        // setup
-        let json = r#"["WithNatGateways"]"#;
-
-        // execute
-        let result = serde_json::from_str::<VpcQoveryNetworkMode>(json);
-
-        // verify
-        assert!(result.is_err());
-        let error_message = result.unwrap_err().to_string();
-        assert!(error_message.contains("Expected string or object for VpcQoveryNetworkMode"));
-    }
-
-    #[test]
-    fn test_vpc_network_mode_to_string() {
-        // setup
-        let without_nat = VpcQoveryNetworkMode::WithoutNatGateways;
-        let with_nat = VpcQoveryNetworkMode::WithNatGateways {
-            nat_gateway_parameters: None,
+        let original = NatGatewayParameters {
+            nat_gateway_type: NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium),
         };
 
-        // execute & verify
-        assert_eq!(without_nat.to_string(), "WithoutNatGateways");
-        assert_eq!(with_nat.to_string(), "WithNatGateways");
+        // execute: serialize then deserialize
+        let json = serde_json::to_string(&original).expect("Failed to serialize");
+        let deserialized: NatGatewayParameters = serde_json::from_str(&json).expect("Failed to deserialize");
+
+        // verify
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_invalid_provider() {
+        // setup
+        let json = r#"{"nat_gateway_type":{"provider":"aws","type":"some-type"}}"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify - should fail because "aws" is not a valid provider
+        assert!(result.is_err(), "Should fail with invalid provider");
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_invalid_type() {
+        // setup
+        let json = r#"{"nat_gateway_type":{"provider":"scaleway","type":"InvalidType"}}"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify - should fail because "InvalidType" is not a valid gateway type
+        assert!(result.is_err(), "Should fail with invalid gateway type");
+    }
+
+    #[test]
+    fn test_nat_gateway_type_to_string() {
+        // setup
+        let test_cases = vec![
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Small), "VPC-GW-S"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium), "VPC-GW-M"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large), "VPC-GW-L"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::XLarge), "VPC-GW-XL"),
+        ];
+
+        for (gateway_type, expected) in test_cases {
+            // execute
+            let result = gateway_type.to_string();
+
+            // verify
+            assert_eq!(result, expected, "Failed for gateway type: {gateway_type:?}");
+        }
+    }
+
+    #[test]
+    fn test_nat_gateway_type_to_terraform_format_string() {
+        // setup
+        let test_cases = vec![
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Small), "VPC-GW-S"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium), "VPC-GW-M"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large), "VPC-GW-L"),
+            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::XLarge), "VPC-GW-XL"),
+        ];
+
+        for (gateway_type, expected) in test_cases {
+            // execute
+            let result = gateway_type.to_terraform_format_string();
+
+            // verify
+            assert_eq!(result, expected, "Failed for gateway type: {gateway_type:?}");
+        }
+    }
+
+    #[test]
+    fn test_nat_gateway_type_display_and_terraform_format_match() {
+        // setup
+        for scaleway_gateway_type in ScalewayPublicGatewayType::iter() {
+            // execute
+            let nat_gateway_type = NatGatewayType::Scaleway(scaleway_gateway_type.clone());
+            let display_result = nat_gateway_type.to_string();
+            let terraform_result = nat_gateway_type.to_terraform_format_string();
+
+            // verify
+            assert_eq!(
+                display_result, terraform_result,
+                "Display and ToTerraformString should match for {scaleway_gateway_type:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn test_nat_gateway_type_display_format() {
+        // setup
+        use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
+        use crate::io_models::models::NatGatewayType;
+
+        let nat_gateway_type = NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium);
+
+        // execute
+        let display_result = format!("{nat_gateway_type}");
+        let debug_result = format!("{nat_gateway_type:?}");
+
+        // verify
+        assert_eq!(display_result, "VPC-GW-M");
+        assert!(debug_result.contains("Scaleway"));
+        assert!(debug_result.contains("Medium"));
     }
 }
