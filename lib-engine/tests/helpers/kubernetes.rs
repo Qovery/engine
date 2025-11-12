@@ -24,7 +24,7 @@ use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, 
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
-use qovery_engine::io_models::models::{CpuArchitecture, StorageClass, VpcQoveryNetworkMode};
+use qovery_engine::io_models::models::{CpuArchitecture, NatGatewayParameters, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 
@@ -393,6 +393,7 @@ pub fn get_environment_test_kubernetes(
     logger: Box<dyn Logger>,
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
+    nat_gateway_parameters: Option<NatGatewayParameters>,
     min_nodes: i32,
     max_nodes: i32,
     cpu_archi: CpuArchitecture,
@@ -539,6 +540,7 @@ pub fn get_environment_test_kubernetes(
                     }
                 }
             });
+            options.nat_gateway_parameters = nat_gateway_parameters;
 
             Box::new(
                 Kapsule::new(

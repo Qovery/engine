@@ -397,7 +397,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::aws::Options;
     use crate::infrastructure::models::kubernetes::gcp::VpcMode;
     use crate::io_models::engine_location::EngineLocation;
-    use crate::io_models::models::{NatGatewayParameters, StorageClass, VpcQoveryNetworkMode};
+    use crate::io_models::models::{StorageClass, VpcQoveryNetworkMode};
     use std::sync::Arc;
     use time::Time;
 
@@ -593,12 +593,7 @@ mod tests {
             alb_controller_already_deployed: false,
             kubernetes_version_upgrade_requested: false,
             infra_options: Options {
-                vpc_qovery_network_mode: VpcQoveryNetworkMode::WithNatGateways {
-                    nat_gateway_parameters: Some(NatGatewayParameters {
-                        enable_static_ip: true,
-                        ..Default::default()
-                    }),
-                },
+                vpc_qovery_network_mode: VpcQoveryNetworkMode::WithNatGateways,
                 qovery_engine_location: EngineLocation::ClientSide,
                 ec2_zone_a_subnet_blocks: vec![],
                 ec2_zone_b_subnet_blocks: vec![],

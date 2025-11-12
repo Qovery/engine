@@ -2,15 +2,13 @@ use crate::helpers::utilities::{
     context_for_cluster, engine_run_test, generate_cluster_id, generate_organization_id, logger, metrics_registry,
 };
 use ::function_name::named;
-use qovery_engine::environment::models::domain::ToTerraformString;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
 
 use crate::helpers::common::{ClusterDomain, NodeManager};
 use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use qovery_engine::environment::models::scaleway::ScwZone;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
-use qovery_engine::infrastructure::models::kubernetes::scaleway::public_gateway_type::PublicGatewayType;
-use qovery_engine::io_models::models::{CpuArchitecture, NatGatewayParameters, VpcQoveryNetworkMode};
+use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
 use qovery_engine::utilities::to_short_id;
 
 #[cfg(any(
@@ -85,12 +83,7 @@ fn create_pause_and_destroy_kapsule_cluster_with_nat_gw_ams_1() {
         zone,
         ClusterTestType::WithPause,
         function_name!(),
-        Some(VpcQoveryNetworkMode::WithNatGateways {
-            nat_gateway_parameters: Some(NatGatewayParameters {
-                enable_static_ip: true,
-                vpc_gateway_type: Some(PublicGatewayType::Small.to_terraform_format_string()),
-            }),
-        }),
+        Some(VpcQoveryNetworkMode::WithNatGateways),
     );
 }
 

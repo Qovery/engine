@@ -177,6 +177,7 @@ impl Cluster<Azure, AksOptions> for Azure {
             logger.clone(),
             localisation,
             vpc_network_mode,
+            None,
             min_nodes,
             max_nodes,
             cpu_archi,
