@@ -38,7 +38,7 @@ fn should_have_mounted_files_as_volume() {
         let mounted_file_id = QoveryIdentifier::new_random();
         let mounted_file = MountedFile {
             long_id: mounted_file_id.to_uuid(),
-            kube_name: mounted_file_id.to_string(),
+            kube_name: mounted_file_id.short().to_string(),
             mount_path: "/tmp/app.config.json".to_string(),
             file_content_b64: general_purpose::STANDARD.encode(r#"{"name": "config"}"#),
         };
@@ -81,12 +81,16 @@ fn should_have_mounted_files_as_volume() {
         // create a job
         let mut job = cron_job.clone();
         let job_id = QoveryIdentifier::new_random();
+
         job.name = job_id.short().to_string();
         job.long_id = job_id.to_uuid();
         job.force_trigger = true;
         job.schedule = JobSchedule::OnStart {
             lifecycle_type: LifecycleType::TERRAFORM,
         };
+        let id = QoveryIdentifier::new_random();
+        job.mounted_files[0].long_id = id.to_uuid();
+        job.mounted_files[0].kube_name = id.short().to_string();
 
         // attaching job to env
         ea.jobs = vec![cron_job, job];
