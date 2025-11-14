@@ -27,6 +27,33 @@ config:
                 qovery_com_associated_service_id: null
                 qovery_com_environment_id: null
 
+      - match:
+          selector: '{app="k8s-event-logger"}'
+          stages:
+            - json:
+                expressions:
+                  reason: reason
+                  type: type
+                  kind: kind
+                  event_namespace: namespace
+                  qovery_project_id: qovery_project_id
+                  qovery_environment_id: qovery_environment_id
+                  qovery_service_id: qovery_service_id
+                  timestamp: timestamp
+                drop_malformed_json: false
+
+            - labels:
+                reason: null
+                type: null
+                kind: null
+                qovery_project_id: null
+                qovery_environment_id: null
+                qovery_service_id: null
+
+            - timestamp:
+                source: timestamp
+                format: Unix
+
       # STAGE 1: Extract log level from JSON-structured logs
       # First attempt: extract 'level' field from JSON
       # Then publish as label (may be empty if 'level' field doesn't exist)
