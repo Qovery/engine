@@ -146,6 +146,7 @@ impl CloudProviderMetricsConfig<'_> {
         &self,
         chart_prefix_path: Option<&str>,
         cloudwatch_exporter_config: &CloudWatchExporterConfig,
+        resource_profile: ResourceProfile,
     ) -> Option<CommonChart> {
         if let Self::Eks(eks_config) = self {
             let action = if cloudwatch_exporter_config.enabled {
@@ -161,6 +162,7 @@ impl CloudProviderMetricsConfig<'_> {
                 eks_config.aws_iam_cloudwatch_exporter_role_arn.clone(),
                 eks_config.region.to_cloud_provider_format().to_string(),
                 eks_config.cluster_id.to_string(),
+                resource_profile,
             )
             .to_common_helm_chart()
             .ok()
@@ -361,7 +363,8 @@ fn generate_charts_installed_by_qovery(
     .to_common_helm_chart()?;
 
     // YACE (AWS Cloud Watch exporter)
-    let yace_chart = provider_config.create_yace_chart(chart_prefix_path, &cloudwatch_exporter_config);
+    let yace_chart =
+        provider_config.create_yace_chart(chart_prefix_path, &cloudwatch_exporter_config, resource_profile);
 
     // Generate service URLs only on Deploy, not on Destroy
     let (metrics_query_url, prometheus_service_url, alert_manager_service_url) = match helm_action {

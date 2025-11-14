@@ -167,6 +167,19 @@ impl AlertManagerResources {
     }
 }
 
+/// Resource configurations for Yet Another Cloudwatch Exporter based on the chosen profile
+pub struct YaceResources;
+
+impl YaceResources {
+    pub fn get(profile: ResourceProfile) -> ResourceConfig {
+        match profile {
+            ResourceProfile::Low => ResourceConfig::new("150", "150", "256Mi", "256Mi"),
+            ResourceProfile::Normal => ResourceConfig::new("250m", "250m", "512Mi", "512Mi"),
+            ResourceProfile::High => ResourceConfig::new("500m", "500m", "768Mi", "768Mi"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

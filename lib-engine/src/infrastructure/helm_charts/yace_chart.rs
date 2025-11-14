@@ -3,10 +3,13 @@ use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmAction, HelmChartError,
     HelmChartNamespaces,
 };
+use crate::infrastructure::action::metrics_resource_profile::{ResourceProfile, YaceResources};
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::str::FromStr;
 
 pub struct YaceChart {
     action: HelmAction,
@@ -16,6 +19,7 @@ pub struct YaceChart {
     cloudwatch_exporter_role_arn: Option<String>,
     aws_region: String,
     cluster_short_id: String,
+    query_resources: HelmChartResources,
 }
 
 impl YaceChart {
@@ -26,7 +30,9 @@ impl YaceChart {
         cloudwatch_exporter_role_arn: Option<String>,
         aws_region: String,
         cluster_short_id: String,
+        resource_profile: ResourceProfile,
     ) -> Self {
+        let yace_resources = YaceResources::get(resource_profile);
         YaceChart {
             action,
             chart_path: HelmChartPath::new(
@@ -43,6 +49,12 @@ impl YaceChart {
             cloudwatch_exporter_role_arn,
             aws_region,
             cluster_short_id,
+            query_resources: HelmChartResources {
+                limit_cpu: KubernetesCpuResourceUnit::from_str(&yace_resources.cpu_limit).unwrap(),
+                limit_memory: KubernetesMemoryResourceUnit::from_str(&yace_resources.memory_limit).unwrap(),
+                request_cpu: KubernetesCpuResourceUnit::from_str(&yace_resources.cpu_request).unwrap(),
+                request_memory: KubernetesMemoryResourceUnit::from_str(&yace_resources.memory_request).unwrap(),
+            },
         }
     }
 
@@ -66,99 +78,71 @@ discovery:
       - name: MaximumUsedTransactionIDs
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: CPUUtilization
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: DatabaseConnections
         statistics:
           - Average
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: FreeableMemory
         statistics:
           - Average
           - Minimum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: FreeStorageSpace
         statistics:
           - Average
-          - Minimum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: ReadLatency
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: WriteLatency
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: ReadIOPS
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
+        addCloudwatchTimestamp: true
       - name: WriteIOPS
         statistics:
           - Average
-          - Maximum
-        period: 300
+        period: 60
         length: 600
-      - name: ReadThroughput
-        statistics:
-          - Average
-        period: 300
-        length: 600
-      - name: WriteThroughput
-        statistics:
-          - Average
-        period: 300
-        length: 600
+        addCloudwatchTimestamp: true
       - name: DiskQueueDepth
         statistics:
           - Average
           - Maximum
-        period: 300
+        period: 60
         length: 600
-      - name: ReplicaLag
-        statistics:
-          - Average
-          - Maximum
-        period: 300
-        length: 600
-      - name: NetworkReceiveThroughput
-        statistics:
-          - Average
-        period: 300
-        length: 600
-      - name: NetworkTransmitThroughput
-        statistics:
-          - Average
-        period: 300
-        length: 600
+        addCloudwatchTimestamp: true
       - name: SwapUsage
         statistics:
           - Average
-        period: 300
+        period: 60
         length: 600
-      - name: BurstBalance
-        statistics:
-          - Average
-          - Minimum
-        period: 300
-        length: 600
+        addCloudwatchTimestamp: true
 "#,
             self.aws_region, self.aws_region, self.cluster_short_id,
         )
@@ -180,7 +164,7 @@ impl ToCommonHelmChart for YaceChart {
                 values: vec![
                     ChartSetValue {
                         key: "serviceMonitor.interval".to_string(),
-                        value: "30s".to_string(),
+                        value: "60s".to_string(),
                     },
                     ChartSetValue {
                         key: "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn".to_string(),
@@ -191,25 +175,20 @@ impl ToCommonHelmChart for YaceChart {
                         value: self.cloudwatch_exporter_role_arn.clone().unwrap_or("".to_string()),
                     },
                     ChartSetValue {
-                        // TODO read from metrics profile
                         key: "resources.requests.memory".to_string(),
-                        value: "512Mi".to_string(),
+                        value: self.query_resources.request_memory.to_string(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: "250m".to_string(),
+                        value: self.query_resources.request_cpu.to_string(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: "512Mi".to_string(),
+                        value: self.query_resources.limit_memory.to_string(),
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: "250m".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: "250m".to_string(),
+                        value: self.query_resources.limit_cpu.to_string(),
                     },
                 ],
                 yaml_files_content: vec![ChartValuesGenerated {
@@ -254,6 +233,7 @@ impl ChartInstallationChecker for YaceChartChecker {
 mod tests {
     use crate::helm::{HelmAction, HelmChartNamespaces};
 
+    use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
     use crate::infrastructure::helm_charts::yace_chart::YaceChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -273,6 +253,7 @@ mod tests {
             Some("cloudwatch_exporter_role_arn".to_string()),
             "us-east-1".to_string(),
             "zbe9e2".to_string(),
+            ResourceProfile::Normal,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -306,6 +287,7 @@ mod tests {
             Some("cloudwatch_exporter_role_arn".to_string()),
             "us-east-1".to_string(),
             "zbe9e2".to_string(),
+            ResourceProfile::Normal,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -346,6 +328,7 @@ mod tests {
             Some("cloudwatch_exporter_role_arn".to_string()),
             "us-east-1".to_string(),
             "zbe9e2".to_string(),
+            ResourceProfile::Normal,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
