@@ -8,6 +8,23 @@ updateStrategy:
 
 args: [] # set-by-engine-code
 
+replicas: set-by-engine-code
+
+podDisruptionBudget:
+  enabled: set-by-engine-code
+  minAvailable: set-by-engine-code
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - metrics-server
+        topologyKey: kubernetes.io/hostname
+
 # set resources
 resources:
   limits:

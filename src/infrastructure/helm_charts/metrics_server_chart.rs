@@ -23,6 +23,7 @@ pub struct MetricsServerChart {
     enable_vpa: bool,
     allow_insecure_tls: bool,
     customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
+    replicas: u32,
 }
 
 impl MetricsServerChart {
@@ -34,6 +35,7 @@ impl MetricsServerChart {
         enable_vpa: bool,
         allow_insecure_tls: bool,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        replicas: Option<u32>,
     ) -> MetricsServerChart {
         MetricsServerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -61,6 +63,7 @@ impl MetricsServerChart {
             update_strategy,
             enable_vpa,
             allow_insecure_tls,
+            replicas: replicas.unwrap_or(1),
         }
     }
 
@@ -97,6 +100,26 @@ impl ToCommonHelmChart for MetricsServerChart {
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
                         value: self.chart_resources.request_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "replicas".to_string(),
+                        value: self.replicas.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "podDisruptionBudget.enabled".to_string(),
+                        value: if self.replicas <= 1 {
+                            "false".to_string()
+                        } else {
+                            "true".to_string()
+                        },
+                    },
+                    ChartSetValue {
+                        key: "podDisruptionBudget.minAvailable".to_string(),
+                        value: if self.replicas <= 1 {
+                            "1".to_string()
+                        } else {
+                            (self.replicas - 1).to_string()
+                        },
                     },
                 ],
                 ..Default::default()
@@ -186,6 +209,7 @@ mod tests {
             false,
             false,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -217,6 +241,7 @@ mod tests {
             false,
             false,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            Some(1),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -252,6 +277,7 @@ mod tests {
             false,
             false,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            Some(1),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

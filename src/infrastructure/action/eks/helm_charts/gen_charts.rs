@@ -346,6 +346,9 @@ pub(super) fn eks_helm_charts(
         true,
         false,
         get_chart_override_fn.clone(),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_metrics_server_replicas,
     )
     .to_common_helm_chart()?;
 
