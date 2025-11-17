@@ -302,6 +302,9 @@ pub struct ClusterAdvancedSettings {
 
     #[serde(alias = "object_storage.enable_logging")]
     pub object_storage_enable_logging: bool,
+
+    #[serde(alias = "aws.metrics_server.replicas")]
+    pub aws_metrics_server_replicas: Option<u32>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -367,6 +370,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_default_backend_image_repository: None,
             nginx_default_backend_image_tag: None,
             object_storage_enable_logging: false,
+            aws_metrics_server_replicas: None,
         }
     }
 }
