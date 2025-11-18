@@ -100,9 +100,13 @@ pub struct UserNetworkConfig {
     pub eks_subnets_zone_c_ids: Vec<String>,
 
     // karpenter
-    pub eks_karpenter_fargate_subnets_zone_a_ids: Vec<String>,
-    pub eks_karpenter_fargate_subnets_zone_b_ids: Vec<String>,
-    pub eks_karpenter_fargate_subnets_zone_c_ids: Vec<String>,
+    #[serde(alias = "eks_karpenter_fargate_subnets_zone_a_ids")]
+    pub eks_private_subnets_zone_a_ids: Vec<String>,
+    #[serde(alias = "eks_karpenter_fargate_subnets_zone_b_ids")]
+    pub eks_private_subnets_zone_b_ids: Vec<String>,
+    #[serde(alias = "eks_karpenter_fargate_subnets_zone_c_ids")]
+    pub eks_private_subnets_zone_c_ids: Vec<String>,
+    pub eks_create_nodes_in_private_subnet: bool,
 }
 
 impl ProviderOptions for Options {}
