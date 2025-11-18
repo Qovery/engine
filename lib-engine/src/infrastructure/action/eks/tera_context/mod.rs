@@ -76,16 +76,20 @@ pub fn eks_tera_context(
         context.insert("eks_subnets_zone_c_ids", &user_network_cfg.eks_subnets_zone_c_ids);
 
         context.insert(
-            "eks_karpenter_fargate_subnets_zone_a_ids",
-            &user_network_cfg.eks_karpenter_fargate_subnets_zone_a_ids,
+            "eks_create_nodes_in_private_subnet",
+            &user_network_cfg.eks_create_nodes_in_private_subnet,
         );
         context.insert(
-            "eks_karpenter_fargate_subnets_zone_b_ids",
-            &user_network_cfg.eks_karpenter_fargate_subnets_zone_b_ids,
+            "eks_private_subnets_zone_a_ids",
+            &user_network_cfg.eks_private_subnets_zone_a_ids,
         );
         context.insert(
-            "eks_karpenter_fargate_subnets_zone_c_ids",
-            &user_network_cfg.eks_karpenter_fargate_subnets_zone_c_ids,
+            "eks_private_subnets_zone_b_ids",
+            &user_network_cfg.eks_private_subnets_zone_b_ids,
+        );
+        context.insert(
+            "eks_private_subnets_zone_c_ids",
+            &user_network_cfg.eks_private_subnets_zone_c_ids,
         );
     }
 
@@ -346,14 +350,6 @@ pub fn eks_tera_context(
     context.insert("k3s_version", &kubernetes.version().to_string());
 
     context.insert("eks_upgrade_timeout_in_min", &eks_upgrade_timeout_in_min.num_minutes());
-
-    // TODO(ENG-1456): remove condition when migration is done
-    if let (Some(suffix), Some(patch)) = (kubernetes.version().suffix(), kubernetes.version().patch()) {
-        if suffix.as_ref() == "+k3s1" && patch == &8 {
-            context.insert("is_old_k3s_version", &true);
-            context.insert("ec2_port", &9876.to_string());
-        }
-    }
 
     if let Some(port) = options.ec2_exposed_port {
         context.insert("ec2_port", &port.to_string());

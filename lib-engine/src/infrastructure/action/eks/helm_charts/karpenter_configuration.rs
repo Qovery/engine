@@ -75,17 +75,24 @@ impl KarpenterConfigurationChart {
             kubernetes_version: kubernetes_version.clone(),
             karpenter_parameters,
             explicit_subnet_ids: if let Some(user_network_config) = &user_network_config {
-                [
-                    &user_network_config.eks_subnets_zone_a_ids,
-                    &user_network_config.eks_subnets_zone_b_ids,
-                    &user_network_config.eks_subnets_zone_c_ids,
-                ]
+                match user_network_config.eks_create_nodes_in_private_subnet {
+                    true => [
+                        &user_network_config.eks_private_subnets_zone_a_ids,
+                        &user_network_config.eks_private_subnets_zone_b_ids,
+                        &user_network_config.eks_private_subnets_zone_c_ids,
+                    ],
+                    false => [
+                        &user_network_config.eks_subnets_zone_a_ids,
+                        &user_network_config.eks_subnets_zone_b_ids,
+                        &user_network_config.eks_subnets_zone_c_ids,
+                    ],
+                }
                 .iter()
                 .flat_map(|v| v.iter())
                 .cloned()
                 .collect_vec()
             } else {
-                vec![]
+                Vec::with_capacity(0)
             },
             // TODO(benjaminch): once 1.33 is fully released, we can remove this override
             eks_ec2_ami: match eks_ec2_ami {
@@ -445,7 +452,7 @@ mod tests {
     };
     use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
     use crate::infrastructure::models::disk_size::DiskSize;
-    use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
+    use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
     use crate::infrastructure::models::kubernetes::karpenter::{
         KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
         KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
@@ -1010,5 +1017,177 @@ mod tests {
             duration.unwrap_or("NO_DURATION".to_string()),
             schedule.unwrap_or("NO_SCHEDULE".to_string()),
         )
+    }
+
+    #[test]
+    fn test_karpenter_configuration_with_custom_vpc_private_subnets() {
+        // setup:
+        let user_network_config = UserNetworkConfig {
+            documentdb_subnets_zone_a_ids: vec!["subnet-docdb-a".to_string()],
+            documentdb_subnets_zone_b_ids: vec!["subnet-docdb-b".to_string()],
+            documentdb_subnets_zone_c_ids: vec!["subnet-docdb-c".to_string()],
+            elasticache_subnets_zone_a_ids: vec!["subnet-elastic-a".to_string()],
+            elasticache_subnets_zone_b_ids: vec!["subnet-elastic-b".to_string()],
+            elasticache_subnets_zone_c_ids: vec!["subnet-elastic-c".to_string()],
+            rds_subnets_zone_a_ids: vec!["subnet-rds-a".to_string()],
+            rds_subnets_zone_b_ids: vec!["subnet-rds-b".to_string()],
+            rds_subnets_zone_c_ids: vec!["subnet-rds-c".to_string()],
+            aws_vpc_eks_id: "vpc-custom-12345".to_string(),
+            eks_subnets_zone_a_ids: vec!["subnet-public-a-1".to_string(), "subnet-public-a-2".to_string()],
+            eks_subnets_zone_b_ids: vec!["subnet-public-b-1".to_string(), "subnet-public-b-2".to_string()],
+            eks_subnets_zone_c_ids: vec!["subnet-public-c-1".to_string(), "subnet-public-c-2".to_string()],
+            eks_private_subnets_zone_a_ids: vec!["subnet-private-a-1".to_string(), "subnet-private-a-2".to_string()],
+            eks_private_subnets_zone_b_ids: vec!["subnet-private-b-1".to_string(), "subnet-private-b-2".to_string()],
+            eks_private_subnets_zone_c_ids: vec!["subnet-private-c-1".to_string(), "subnet-private-c-2".to_string()],
+            eks_create_nodes_in_private_subnet: true,
+        };
+
+        // execute:
+        let chart = KarpenterConfigurationChart::new(
+            None,
+            "test-cluster".to_string(),
+            true,
+            "sg-12345".to_string(),
+            "cluster-id",
+            Uuid::new_v4(),
+            "org-id",
+            Uuid::new_v4(),
+            KUBERNETES_VERSION,
+            "us-east-1",
+            KarpenterParameters {
+                spot_enabled: false,
+                max_node_drain_time_in_secs: None,
+                disk_size: DiskSize::Gib(50),
+                default_service_architecture: ARM64,
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![],
+                    stable_override: KarpenterStableNodePoolOverride {
+                        budgets: vec![],
+                        limits: None,
+                    },
+                    default_override: None,
+                    gpu_override: None,
+                },
+            },
+            Some(&user_network_config),
+            Ec2Ami::AmazonLinux2023,
+            AwsStorageType::GP3,
+            0,
+        );
+
+        // verify:
+        let expected_private_subnets = vec![
+            "subnet-private-a-1".to_string(),
+            "subnet-private-a-2".to_string(),
+            "subnet-private-b-1".to_string(),
+            "subnet-private-b-2".to_string(),
+            "subnet-private-c-1".to_string(),
+            "subnet-private-c-2".to_string(),
+        ];
+        assert_eq!(
+            chart.explicit_subnet_ids, expected_private_subnets,
+            "When eks_create_nodes_in_private_subnet is true, explicit_subnet_ids should contain private subnets"
+        );
+
+        // verify:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+        let explicit_subnet_value = common_chart
+            .chart_info
+            .values
+            .iter()
+            .find(|v| v.key == "explicitSubnetIds")
+            .expect("explicitSubnetIds should be set in chart values");
+
+        assert_eq!(
+            explicit_subnet_value.value,
+            "{subnet-private-a-1,subnet-private-a-2,subnet-private-b-1,subnet-private-b-2,subnet-private-c-1,subnet-private-c-2}",
+            "explicitSubnetIds helm value should be formatted correctly with private subnets"
+        );
+    }
+
+    #[test]
+    fn test_karpenter_configuration_with_custom_vpc_public_subnets() {
+        // setup:
+        let user_network_config = UserNetworkConfig {
+            documentdb_subnets_zone_a_ids: vec!["subnet-docdb-a".to_string()],
+            documentdb_subnets_zone_b_ids: vec!["subnet-docdb-b".to_string()],
+            documentdb_subnets_zone_c_ids: vec!["subnet-docdb-c".to_string()],
+            elasticache_subnets_zone_a_ids: vec!["subnet-elastic-a".to_string()],
+            elasticache_subnets_zone_b_ids: vec!["subnet-elastic-b".to_string()],
+            elasticache_subnets_zone_c_ids: vec!["subnet-elastic-c".to_string()],
+            rds_subnets_zone_a_ids: vec!["subnet-rds-a".to_string()],
+            rds_subnets_zone_b_ids: vec!["subnet-rds-b".to_string()],
+            rds_subnets_zone_c_ids: vec!["subnet-rds-c".to_string()],
+            aws_vpc_eks_id: "vpc-custom-12345".to_string(),
+            eks_subnets_zone_a_ids: vec!["subnet-public-a-1".to_string(), "subnet-public-a-2".to_string()],
+            eks_subnets_zone_b_ids: vec!["subnet-public-b-1".to_string(), "subnet-public-b-2".to_string()],
+            eks_subnets_zone_c_ids: vec!["subnet-public-c-1".to_string(), "subnet-public-c-2".to_string()],
+            eks_private_subnets_zone_a_ids: vec!["subnet-private-a-1".to_string(), "subnet-private-a-2".to_string()],
+            eks_private_subnets_zone_b_ids: vec!["subnet-private-b-1".to_string(), "subnet-private-b-2".to_string()],
+            eks_private_subnets_zone_c_ids: vec!["subnet-private-c-1".to_string(), "subnet-private-c-2".to_string()],
+            eks_create_nodes_in_private_subnet: false,
+        };
+
+        // execute:
+        let chart = KarpenterConfigurationChart::new(
+            None,
+            "test-cluster".to_string(),
+            true,
+            "sg-12345".to_string(),
+            "cluster-id",
+            Uuid::new_v4(),
+            "org-id",
+            Uuid::new_v4(),
+            KUBERNETES_VERSION,
+            "us-east-1",
+            KarpenterParameters {
+                spot_enabled: false,
+                max_node_drain_time_in_secs: None,
+                disk_size: DiskSize::Gib(50),
+                default_service_architecture: ARM64,
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![],
+                    stable_override: KarpenterStableNodePoolOverride {
+                        budgets: vec![],
+                        limits: None,
+                    },
+                    default_override: None,
+                    gpu_override: None,
+                },
+            },
+            Some(&user_network_config),
+            Ec2Ami::AmazonLinux2023,
+            AwsStorageType::GP3,
+            0,
+        );
+
+        // verify:
+        let expected_public_subnets = vec![
+            "subnet-public-a-1".to_string(),
+            "subnet-public-a-2".to_string(),
+            "subnet-public-b-1".to_string(),
+            "subnet-public-b-2".to_string(),
+            "subnet-public-c-1".to_string(),
+            "subnet-public-c-2".to_string(),
+        ];
+        assert_eq!(
+            chart.explicit_subnet_ids, expected_public_subnets,
+            "When eks_create_nodes_in_private_subnet is false, explicit_subnet_ids should contain public subnets"
+        );
+
+        // verify:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+        let explicit_subnet_value = common_chart
+            .chart_info
+            .values
+            .iter()
+            .find(|v| v.key == "explicitSubnetIds")
+            .expect("explicitSubnetIds should be set in chart values");
+
+        assert_eq!(
+            explicit_subnet_value.value,
+            "{subnet-public-a-1,subnet-public-a-2,subnet-public-b-1,subnet-public-b-2,subnet-public-c-1,subnet-public-c-2}",
+            "explicitSubnetIds helm value should be formatted correctly with public subnets"
+        );
     }
 }
