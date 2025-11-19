@@ -372,11 +372,11 @@ async fn fetch_job_deployment_report(
 ) -> Result<JobDeploymentReport, kube::Error> {
     let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
     let jobs_api: Api<K8sJob> = Api::namespaced(kube.clone(), namespace);
-    let event_api: Api<Event> = Api::namespaced(kube.clone(), namespace);
+    let event_api: Api<Event> = Api::all(kube.clone()); // To have also global/node/karpenter events
 
     let list_params = ListParams::default().labels(selector).timeout(15);
     let pods = pods_api.list(&list_params);
-    let events_params = ListParams::default().timeout(15);
+    let events_params = ListParams::default().timeout(15).limit(200);
     let events = event_api.list(&events_params);
     let jobs = jobs_api.list(&list_params);
     let (pods, jobs, events) = futures::future::try_join3(pods, jobs, events).await?;
