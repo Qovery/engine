@@ -1,4 +1,4 @@
-use crate::environment::report::utils::Strategy::OnlyWarningIfAny;
+use crate::environment::report::utils::Strategy::OnlyWarningIfAnyAndKarpenter;
 use itertools::Itertools;
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use k8s_openapi::api::batch::v1::Job;
@@ -146,10 +146,16 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                 type_: svc_type.to_string(),
                 state: DeploymentState::Terminating,
                 message: None,
-                events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                    .into_iter()
-                    .flat_map(to_event_context)
-                    .collect(),
+                events: get_last_events_for(
+                    events.iter(),
+                    svc_uid,
+                    svc_name,
+                    DEFAULT_MAX_EVENTS,
+                    OnlyWarningIfAnyAndKarpenter,
+                )
+                .into_iter()
+                .flat_map(to_event_context)
+                .collect(),
             });
             continue;
         }
@@ -176,10 +182,16 @@ pub fn to_services_render_context(services: &[Service], events: &[Event]) -> Vec
                         type_: svc_type.to_string(),
                         state: DeploymentState::Starting,
                         message: Some("waiting to be assigned an Ip".to_string()),
-                        events: get_last_events_for(events.iter(), svc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                            .into_iter()
-                            .flat_map(to_event_context)
-                            .collect(),
+                        events: get_last_events_for(
+                            events.iter(),
+                            svc_uid,
+                            svc_name,
+                            DEFAULT_MAX_EVENTS,
+                            OnlyWarningIfAnyAndKarpenter,
+                        )
+                        .into_iter()
+                        .flat_map(to_event_context)
+                        .collect(),
                     });
                 }
             }
@@ -242,10 +254,16 @@ pub fn to_job_render_context(job: &Job, events: &[Event]) -> JobRenderContext {
         name: job_name.to_string(),
         state,
         message,
-        events: get_last_events_for(events.iter(), job_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-            .into_iter()
-            .flat_map(to_event_context)
-            .collect(),
+        events: get_last_events_for(
+            events.iter(),
+            job_uid,
+            job_name,
+            DEFAULT_MAX_EVENTS,
+            OnlyWarningIfAnyAndKarpenter,
+        )
+        .into_iter()
+        .flat_map(to_event_context)
+        .collect(),
     }
 }
 
@@ -290,10 +308,16 @@ pub fn to_pods_render_context_by_state(
                 message: Some(error_reason.to_string()),
                 container_states: pod.container_states(),
                 service_version: pod.service_version(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                    .into_iter()
-                    .flat_map(to_event_context)
-                    .collect(),
+                events: get_last_events_for(
+                    events.iter(),
+                    pod_uid,
+                    pod_name,
+                    DEFAULT_MAX_EVENTS,
+                    OnlyWarningIfAnyAndKarpenter,
+                )
+                .into_iter()
+                .flat_map(to_event_context)
+                .collect(),
             });
             continue;
         }
@@ -305,10 +329,16 @@ pub fn to_pods_render_context_by_state(
                 message: None,
                 container_states: pod.container_states(),
                 service_version: pod.service_version(),
-                events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                    .into_iter()
-                    .flat_map(to_event_context)
-                    .collect(),
+                events: get_last_events_for(
+                    events.iter(),
+                    pod_uid,
+                    pod_name,
+                    DEFAULT_MAX_EVENTS,
+                    OnlyWarningIfAnyAndKarpenter,
+                )
+                .into_iter()
+                .flat_map(to_event_context)
+                .collect(),
             });
             continue;
         }
@@ -319,10 +349,16 @@ pub fn to_pods_render_context_by_state(
             message: None,
             container_states: pod.container_states(),
             service_version: pod.service_version(),
-            events: get_last_events_for(events.iter(), pod_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                .into_iter()
-                .flat_map(to_event_context)
-                .collect(),
+            events: get_last_events_for(
+                events.iter(),
+                pod_uid,
+                pod_name,
+                DEFAULT_MAX_EVENTS,
+                OnlyWarningIfAnyAndKarpenter,
+            )
+            .into_iter()
+            .flat_map(to_event_context)
+            .collect(),
         });
     }
 
@@ -348,10 +384,16 @@ pub fn to_replicasets_render_context(replicasets: &[ReplicaSet], events: &[Event
             continue;
         };
 
-        let events: Vec<_> = get_last_events_for(events.iter(), replicaset_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-            .into_iter()
-            .flat_map(to_event_context)
-            .collect();
+        let events: Vec<_> = get_last_events_for(
+            events.iter(),
+            replicaset_uid,
+            replicaset_name,
+            DEFAULT_MAX_EVENTS,
+            OnlyWarningIfAnyAndKarpenter,
+        )
+        .into_iter()
+        .flat_map(to_event_context)
+        .collect();
 
         if !events.is_empty() {
             let replicaset_status = replicaset
@@ -439,10 +481,16 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Failing,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                    .into_iter()
-                    .flat_map(to_event_context)
-                    .collect(),
+                events: get_last_events_for(
+                    events.iter(),
+                    pvc_uid,
+                    pvc_name,
+                    DEFAULT_MAX_EVENTS,
+                    OnlyWarningIfAnyAndKarpenter,
+                )
+                .into_iter()
+                .flat_map(to_event_context)
+                .collect(),
             });
             continue;
         }
@@ -451,10 +499,16 @@ pub fn to_pvc_render_context(pvcs: &[PersistentVolumeClaim], events: &[Event]) -
             pvcs_context.push(PvcRenderContext {
                 name: pvc_name.to_string(),
                 state: DeploymentState::Starting,
-                events: get_last_events_for(events.iter(), pvc_uid, DEFAULT_MAX_EVENTS, OnlyWarningIfAny)
-                    .into_iter()
-                    .flat_map(to_event_context)
-                    .collect(),
+                events: get_last_events_for(
+                    events.iter(),
+                    pvc_uid,
+                    pvc_name,
+                    DEFAULT_MAX_EVENTS,
+                    OnlyWarningIfAnyAndKarpenter,
+                )
+                .into_iter()
+                .flat_map(to_event_context)
+                .collect(),
             });
             continue;
         }
@@ -632,32 +686,77 @@ const DEFAULT_MAX_EVENTS: usize = 3;
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Strategy {
     //AllEvents,
-    OnlyWarningIfAny,
+    OnlyWarningIfAnyAndKarpenter,
 }
 
 const WARNING_EVENT_TYPE: &str = "Warning";
 pub fn get_last_events_for<'a>(
     events: impl Iterator<Item = &'a Event>,
-    uid: &str,
+    obj_uid: &str,
+    obj_name: &str,
     max_events: usize,
     strategy: Strategy,
 ) -> Vec<&'a Event> {
+    const KARPENTER_COMPONENT: Option<&str> = Some("karpenter");
+
     let events = events
-        .filter(|ev| ev.involved_object.uid.as_deref() == Some(uid))
+        .filter(|ev| {
+            ev.involved_object.uid.as_deref() == Some(obj_uid) || ev.involved_object.name.as_deref() == Some(obj_name)
+        })
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
         .take(max_events);
 
     match strategy {
-        OnlyWarningIfAny => {
+        OnlyWarningIfAnyAndKarpenter if events.clone().any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) => {
             // To avoid consuming the iterator
-            if events.clone().any(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE)) {
-                events
-                    .filter(|ev| ev.type_.as_deref() == Some(WARNING_EVENT_TYPE))
-                    .collect()
-            } else {
-                events.collect()
-            }
+            // We make an exception for Karpenter events, because they are all emitted as Normal events
+            // But they are actually important to understand the issue. (i.e: jobs evicted)
+            events
+                .filter(|ev| {
+                    let is_warning = ev.type_.as_deref() == Some(WARNING_EVENT_TYPE);
+                    let is_from_karpenter =
+                        ev.source.as_ref().and_then(|s| s.component.as_deref()) == KARPENTER_COMPONENT;
+
+                    is_warning || is_from_karpenter
+                })
+                .collect()
         }
+        OnlyWarningIfAnyAndKarpenter => events.collect(),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::vec;
+
+    #[test]
+    fn test_get_last_events_for() {
+        let events: Vec<Event> = vec![
+            serde_json::from_str(r#"
+            {"apiVersion":"v1","count":6,"eventTime":null,"firstTimestamp":"2025-11-19T06:37:04Z","involvedObject":{"apiVersion":"v1","fieldPath":"spec.containers{linux}","kind":"Pod","name":"debug-9pcp9","namespace":"default","resourceVersion":"142029890","uid":"a6e54522-9929-48fa-8a79-dc48e8d3ce7e"},"kind":"Event","lastTimestamp":"2025-11-19T11:37:09Z","message":"Created container: linux","metadata":{"creationTimestamp":"2025-11-19T06:37:04Z","name":"debug-9pcp9.187955089086b60f","namespace":"default","resourceVersion":"142164713","uid":"ebaf5046-60ee-4e73-b9f6-9ff0752a3c62"},"reason":"Created","reportingComponent":"kubelet","reportingInstance":"ip-10-0-112-178.eu-west-3.compute.internal","source":{"component":"kubelet","host":"ip-10-0-112-178.eu-west-3.compute.internal"},"type":"Normal"}
+        "#).unwrap(),
+            serde_json::from_str(r#"
+         {"metadata":{"name":"job-z4bb5a206-2d4sq.187738e78dfe3276","namespace":"z4f559663-z467cd0d9","uid":"ce4876c9-10ca-4c97-97d4-9570139d737c","resourceVersion":"558675209","creationTimestamp":"2025-11-12T09:39:06Z","managedFields":[{"manager":"karpenter","operation":"Update","apiVersion":"v1","time":"2025-11-12T09:39:06Z","fieldsType":"FieldsV1","fieldsV1":{"f:count":{},"f:firstTimestamp":{},"f:involvedObject":{},"f:lastTimestamp":{},"f:message":{},"f:reason":{},"f:reportingComponent":{},"f:source":{"f:component":{}},"f:type":{}}}]},"involvedObject":{"kind":"Pod","namespace":"z4f559663-z467cd0d9","name":"job-z4bb5a206-2d4sq","apiVersion":"v1"},"reason":"Evicted","message":"Evicted pod: Underutilized","source":{"component":"karpenter"},"firstTimestamp":"2025-11-12T09:39:06Z","lastTimestamp":"2025-11-12T09:39:06Z","count":1,"type":"Normal","eventTime":null,"reportingComponent":"karpenter","reportingInstance":""}
+        "#).unwrap(),
+            serde_json::from_str(r#"
+            {"apiVersion":"v1","count":13,"eventTime":null,"firstTimestamp":"2025-11-19T08:41:32Z","involvedObject":{"apiVersion":"v1","kind":"Node","name":"ip-10-0-118-95.eu-west-3.compute.internal","resourceVersion":"142085271","uid":"6a6d48a3-d542-4908-89b0-06456df69148"},"kind":"Event","lastTimestamp":"2025-11-19T11:43:07Z","message":"Can't replace with a cheaper node","metadata":{"creationTimestamp":"2025-11-19T08:41:32Z","name":"ip-10-0-118-95.eu-west-3.compute.internal.18795bd36dc7a767","namespace":"default","resourceVersion":"142167221","uid":"b3ae5bb1-6645-473c-9ca1-7eebb1675697"},"reason":"Unconsolidatable","reportingComponent":"karpenter","reportingInstance":"","source":{"component":"karpenter"},"type":"Normal"}
+        "#).unwrap()
+            ];
+
+        let events_with_warning = get_last_events_for(
+            events.iter(),
+            "ce4876c9-10ca-4c97-97d4-9570139d737c",
+            "job-z4bb5a206-2d4sq",
+            10,
+            OnlyWarningIfAnyAndKarpenter,
+        );
+        assert_eq!(events_with_warning.len(), 1);
+        assert!(matches!(events_with_warning[0].reason.as_deref(), Some("Evicted")));
+        assert!(matches!(
+            events_with_warning[0].reporting_component.as_deref(),
+            Some("karpenter")
+        ));
     }
 }
