@@ -701,7 +701,16 @@ pub fn get_last_events_for<'a>(
 
     let events = events
         .filter(|ev| {
-            ev.involved_object.uid.as_deref() == Some(obj_uid) || ev.involved_object.name.as_deref() == Some(obj_name)
+            let is_obj_uid = ev.involved_object.uid.as_deref() == Some(obj_uid);
+            // Karpenter does not set uid in the eventsource, so we need to check the name too
+            let is_obj_name = ev
+                .involved_object
+                .name
+                .as_ref()
+                .map(|n| n.starts_with(obj_name))
+                .unwrap_or(false);
+
+            is_obj_uid || is_obj_name
         })
         // last first
         .sorted_by(|evl, evr| evl.last_timestamp.cmp(&evr.last_timestamp).reverse())
@@ -748,7 +757,7 @@ mod test {
         let events_with_warning = get_last_events_for(
             events.iter(),
             "ce4876c9-10ca-4c97-97d4-9570139d737c",
-            "job-z4bb5a206-2d4sq",
+            "job-z4bb5a206",
             10,
             OnlyWarningIfAnyAndKarpenter,
         );
