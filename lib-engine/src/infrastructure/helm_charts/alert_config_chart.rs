@@ -216,7 +216,12 @@ fn build_target_values(
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.expr"),
-                value: alert.expr.clone(),
+                value: alert
+                    .expr
+                    .replace("\\", "\\\\")
+                    .replace("\"", "\\\"")
+                    .replace(",", "\\,")
+                    .clone(),
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.for"),
