@@ -29,9 +29,26 @@ spec:
     {{- if $rcv.slack }}
       slackConfigs:
         - channel: {{ $rcv.slack.channel }}
-          title: "Alert: {{`{{ .GroupLabels.alertname }}`}}"
-          text: "{{`{{ range .Alerts }}{{ .Annotations.description }}{{ end }}`}}"
+          title: |
+               {{ `{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ .CommonLabels.alertname | default "Alert" }}` }}
+          text: |
+               {{ `{{ range .Alerts }}*Alert:* {{ .Labels.alertname | default "Unknown" }}
+               {{ with .Annotations.summary }}📊 *{{ . }}*{{ else }}{{ with .Annotations.description }}📊 *{{ . }}*{{ end }}{{ end }}
+               {{ with .Labels.container }}• Container: {{ . }}{{ end }}
+               {{ with .Labels.namespace }}• Namespace: {{ . }}{{ end }}
+               • Since: {{ .StartsAt.Format "15:04:05" }}
+               ---
+               {{ end }}` }}
+{{/*          title: "Alert: {{`{{ .GroupLabels.alertname }}`}}"*/}}
+{{/*          text: "{{`{{ range .Alerts }}{{ .Annotations.description }}{{ end }}`}}"*/}}
           sendResolved: {{ default true $rcv.slack.sendResolved }}
+          groupBy:
+            - alertname                                                                                                                                                                                                                                                                                        │
+            - qovery_alert_long_id                                                                                                                                                                                                                                                                             │
+            - qovery_target_id
+          groupInterval: 5m                                                                                                                                                                                                                                                                                  │
+          groupWait: 30s
+          repeatInterval: 4h
           apiURL:
             name: {{ $secret }}
             key: "url"
