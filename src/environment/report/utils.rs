@@ -7,6 +7,8 @@ use k8s_openapi::api::core::v1::{
     Pod, PodStatus, Service, ServiceStatus,
 };
 use k8s_openapi::apimachinery::pkg::apis::meta::v1;
+use kube::Api;
+use kube::api::ListParams;
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use tera::Tera;
@@ -733,6 +735,23 @@ pub fn get_last_events_for<'a>(
         }
         OnlyWarningIfAnyAndKarpenter => events.collect(),
     }
+}
+pub async fn get_kube_events(kube: kube::Client, namespace: &str) -> Result<Vec<Event>, kube::Error> {
+    let event_api: Api<Event> = Api::namespaced(kube.clone(), namespace);
+    let events_params = ListParams::default().timeout(15);
+    let events_by_ns = event_api.list(&events_params);
+
+    // We can't use .limit on the listParams because kube does not order the events by lastTimestamp.
+    // It just returns them in any order, so if we use limit it is going to return random ones.
+    let event_api: Api<Event> = Api::all(kube.clone());
+    let events_params = ListParams::default()
+        .timeout(15)
+        .fields(&format!("reportingComponent=karpenter,involvedObject.namespace!={namespace}"));
+    let events_karpenter = event_api.list(&events_params);
+    let (mut events, karpenter_events) = futures::future::try_join(events_by_ns, events_karpenter).await?;
+
+    events.items.extend(karpenter_events.items);
+    Ok(events.items)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@ use crate::environment::models::database::DatabaseService;
 use crate::environment::report::database::renderer::render_database_deployment_report;
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
+use crate::environment::report::utils::get_kube_events;
 use crate::environment::report::{DeploymentReporter, MAX_ELAPSED_TIME_WITHOUT_REPORT};
 use crate::errors::EngineError;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
@@ -42,13 +43,10 @@ async fn fetch_database_deployment_report(
     // managed database, fetch only svc and events, the rest is managed by the cloud provider
     if is_managed {
         let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
-        let event_api: Api<Event> = Api::all(kube.clone()); // To have also global/node/karpenter events
 
         let list_params = ListParams::default().labels(&selector).timeout(15);
         let services = svc_api.list(&list_params);
-        let events_params = ListParams::default().timeout(15).limit(200);
-        let events = event_api.list(&events_params);
-        let (services, events) = futures::future::try_join(services, events).await?;
+        let (services, events) = futures::future::try_join(services, get_kube_events(kube.clone(), namespace)).await?;
 
         return Ok(DatabaseDeploymentReport {
             id: *database_id,
@@ -58,7 +56,7 @@ async fn fetch_database_deployment_report(
             pods: vec![],
             services: services.items,
             pvcs: vec![],
-            events: events.items,
+            events,
         });
     }
 
