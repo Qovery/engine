@@ -17,6 +17,7 @@ use kube::api::ListParams;
 use std::sync::Arc;
 
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
+use crate::environment::report::utils::get_kube_events;
 use k8s_openapi::api::apps::v1::ReplicaSet;
 use std::time::Instant;
 use uuid::Uuid;
@@ -287,17 +288,14 @@ async fn fetch_app_deployment_report(
     let svc_api: Api<Service> = Api::namespaced(kube.clone(), namespace);
     let pvc_api: Api<PersistentVolumeClaim> = Api::namespaced(kube.clone(), namespace);
     let replicaset_api: Api<ReplicaSet> = Api::namespaced(kube.clone(), namespace);
-    let event_api: Api<Event> = Api::all(kube.clone()); // To have also global/node/karpenter events
 
     let list_params = ListParams::default().labels(selector).timeout(15);
     let pods = pods_api.list(&list_params);
     let services = svc_api.list(&list_params);
     let pvcs = pvc_api.list(&list_params);
     let replicasets = replicaset_api.list(&list_params);
-    let events_params = ListParams::default().timeout(15).limit(200);
-    let events = event_api.list(&events_params);
     let (pods, services, pvcs, replicasets, events) =
-        futures::future::try_join5(pods, services, pvcs, replicasets, events).await?;
+        futures::future::try_join5(pods, services, pvcs, replicasets, get_kube_events(kube.clone(), namespace)).await?;
 
     Ok(AppDeploymentReport {
         id: *service_id,
@@ -305,6 +303,6 @@ async fn fetch_app_deployment_report(
         services: services.items,
         pvcs: pvcs.items,
         replicasets: replicasets.items,
-        events: events.items,
+        events,
     })
 }

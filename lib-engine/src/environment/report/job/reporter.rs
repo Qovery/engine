@@ -16,7 +16,7 @@ use kube::api::ListParams;
 use crate::environment::models::job::JobService;
 use crate::environment::report::job::renderer::render_job_deployment_report;
 use crate::environment::report::recap_reporter::{RecapReporterDeploymentState, render_recap_events};
-use crate::environment::report::utils::to_job_render_context;
+use crate::environment::report::utils::{get_kube_events, to_job_render_context};
 use crate::errors::Tag::JobFailure;
 use crate::io_models::job::JobSchedule;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepStatus};
@@ -372,19 +372,16 @@ async fn fetch_job_deployment_report(
 ) -> Result<JobDeploymentReport, kube::Error> {
     let pods_api: Api<Pod> = Api::namespaced(kube.clone(), namespace);
     let jobs_api: Api<K8sJob> = Api::namespaced(kube.clone(), namespace);
-    let event_api: Api<Event> = Api::all(kube.clone()); // To have also global/node/karpenter events
 
     let list_params = ListParams::default().labels(selector).timeout(15);
     let pods = pods_api.list(&list_params);
-    let events_params = ListParams::default().timeout(15).limit(200);
-    let events = event_api.list(&events_params);
     let jobs = jobs_api.list(&list_params);
-    let (pods, jobs, events) = futures::future::try_join3(pods, jobs, events).await?;
+    let (pods, jobs, events) = futures::future::try_join3(pods, jobs, get_kube_events(kube.clone(), namespace)).await?;
 
     Ok(JobDeploymentReport {
         id: *service_id,
         pods: pods.items,
         job: jobs.items.into_iter().find_or_first(|_| true),
-        events: events.items,
+        events,
     })
 }
