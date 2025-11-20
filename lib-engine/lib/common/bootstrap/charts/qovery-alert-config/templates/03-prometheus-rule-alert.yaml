@@ -10,8 +10,8 @@ metadata:
     release: kube-prometheus-stack
     alertmanager: main
     app.kubernetes.io/managed-by: qovery-alert-config
-    target_id: {{ $target.target_id | quote }}
-    target_type: {{ $target.target_type | quote }}
+    qovery_target_id: {{ $target.target_id | quote }}
+    qovery_target_type: {{ $target.target_type | quote }}
     {{- with $root.Values.extraLabels }}
 {{ toYaml . | nindent 4 }}
     {{- end }}
@@ -29,10 +29,10 @@ spec:
           for: {{ $a.for }}
         {{- end }}
           labels:
-            qovery_alert_long_id: {{ $a.alert_long_id | quote }}
-            target_id: {{ $target.target_id | quote }}
-            target_type: {{ $target.target_type | quote }}
             namespace: {{ $target.namespace | quote }}
+            qovery_alert_long_id: {{ $a.alert_long_id | quote }}
+            qovery_target_id: {{ $target.target_id | quote }}
+            qovery_target_type: {{ $target.target_type | quote }}
             qovery_version: {{ $a.version | quote }}
           {{- with $root.Values.commonLabels }}
 {{ toYaml . | nindent 12 }}
