@@ -351,7 +351,9 @@ fn replace_qovery_env_variable<'a>(
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
         if needle[PREFIX.len()..].starts_with("QOVERY_") {
             return Err(anyhow!(
-                "You cannot use Qovery built_in variable in your helm values file. Please create and use an alias. line: {}",
+                r#"You cannot use Qovery built-in variable in your helm values file because it will break/not being replaced when cloning your helm.
+Please create and use an alias so it can be automatically replaced during clone of the service.
+Faulty line: {}"#,
                 line
             ));
         }
