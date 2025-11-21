@@ -29,18 +29,28 @@ spec:
     {{- if $rcv.slack }}
       slackConfigs:
         - channel: {{ $rcv.slack.channel }}
-          title: |
-               {{ `{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ .CommonLabels.alertname | default "Alert" }}` }}
-          text: |
-               {{ `{{ range .Alerts }}*Alert:* {{ .Labels.alertname | default "Unknown" }}
-               {{ with .Annotations.summary }}📊 *{{ . }}*{{ else }}{{ with .Annotations.description }}📊 *{{ . }}*{{ end }}{{ end }}
-               {{ with .Labels.container }}• Container: {{ . }}{{ end }}
-               {{ with .Labels.namespace }}• Namespace: {{ . }}{{ end }}
-               • Since: {{ .StartsAt.Format "15:04:05" }}
-               ---
-               {{ end }}` }}
-{{/*          title: "Alert: {{`{{ .GroupLabels.alertname }}`}}"*/}}
-{{/*          text: "{{`{{ range .Alerts }}{{ .Annotations.description }}{{ end }}`}}"*/}}
+          title: >-
+             {{`{{ if .CommonLabels.alertname }}`}}{{`{{ .CommonLabels.alertname }}`}}
+             {{`{{ else if .GroupLabels.alertname }}`}}{{`{{ .GroupLabels.alertname }}`}}
+             {{`{{ else if .Alerts }}`}}{{`{{ (index .Alerts 0).Labels.alertname }}`}}
+             {{`{{ else }}`}}Alert{{`{{ end }}`}}
+          text: >-
+             {{`{{ if .CommonAnnotations.summary }}`}}
+               {{`{{ .CommonAnnotations.summary }}`}}
+             {{`{{ else if .CommonAnnotations.description }}`}}
+               {{`{{ .CommonAnnotations.description }}`}}
+             {{`{{ else if .Alerts }}`}}
+               {{`{{ (index .Alerts 0).Annotations.description }}`}}
+             {{`{{ end }}`}}
+             {{` {{ range .Alerts }`}}
+             {{` *Alert:* {{ .Labels.alertname }}`}}
+             {{` *Severity:* {{ .Labels.severity }}`}}
+             {{` *Cluster:* {{ .Labels.cluster }}`}}
+             {{` *Namespace:* {{ .Labels.namespace }}`}}
+             {{` *Pod:* {{ .Labels.pod }}`}}
+             {{` *Description:* {{ .Annotations.description }}`}}
+             {{` *Value:* {{ .Annotations.value }}`}}
+             {{`{{ end }}`}}
           sendResolved: {{ default true $rcv.slack.sendResolved }}
           groupBy:
             - alertname                                                                                                                                                                                                                                                                                        │

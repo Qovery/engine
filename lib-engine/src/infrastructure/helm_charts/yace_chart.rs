@@ -143,6 +143,12 @@ discovery:
         period: 60
         length: 600
         addCloudwatchTimestamp: true
+      - name: ReplicaLag
+        statistics:
+          - Average
+        period: 60
+        length: 600
+
 "#,
             self.aws_region, self.aws_region, self.cluster_short_id,
         )
