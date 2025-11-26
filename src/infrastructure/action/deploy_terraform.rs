@@ -1,6 +1,7 @@
 use crate::cmd::terraform::{
-    terraform_apply, terraform_apply_with_specific_resources, terraform_destroy, terraform_init_validate,
-    terraform_output, terraform_plan, terraform_remove_resource_from_tf_state, terraform_state_list,
+    terraform_apply, terraform_apply_with_specific_resources, terraform_destroy,
+    terraform_destroy_with_specific_resources, terraform_init_validate, terraform_output, terraform_plan,
+    terraform_remove_resource_from_tf_state, terraform_state_list,
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
@@ -205,6 +206,30 @@ impl TerraformInfraResources {
             self.destination_folder.to_string_lossy().as_ref(),
             resources,
             &envs_to_slice(self.envs.as_slice()),
+            &TerraformValidators::Default,
+            self.is_dry_run,
+        )
+        .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+
+        Ok(())
+    }
+
+    pub fn destroy_specific_resources(
+        &self,
+        resources: &[&str],
+        logger: &impl InfraLogger,
+    ) -> Result<(), Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
+        self.prepare_terraform_files()?;
+        self.terraform_init(&envs)?;
+
+        logger.info("🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️ 🏗️");
+        logger.info(format!("Destroying specific terraform resources: {}", resources.join(", ")));
+        terraform_destroy_with_specific_resources(
+            self.destination_folder.to_string_lossy().as_ref(),
+            resources,
+            &envs,
             &TerraformValidators::Default,
             self.is_dry_run,
         )

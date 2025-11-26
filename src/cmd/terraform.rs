@@ -1310,6 +1310,53 @@ pub fn terraform_apply_with_specific_resources(
     }
 }
 
+pub fn terraform_destroy_with_specific_resources(
+    root_dir: &str,
+    tf_resources: &[impl AsRef<str>],
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    is_dry_run: bool,
+) -> Result<TerraformOutput, TerraformError> {
+    let mut terraform_args_string = vec![
+        "destroy".to_string(),
+        "-lock=false".to_string(),
+        "-auto-approve".to_string(),
+    ];
+    for x in tf_resources {
+        terraform_args_string.push(format!("-target={}", x.as_ref()));
+    }
+
+    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
+        if is_dry_run {
+            // For dry run, just show the plan
+            let plan = match terraform_plan_internal(root_dir, envs, validators, true) {
+                Ok(plan) => plan,
+                Err(err) => return OperationResult::Retry(err),
+            };
+            return OperationResult::Ok(plan);
+        }
+
+        // terraform destroy
+        match terraform_exec(
+            root_dir,
+            terraform_args_string.iter().map(|e| e.as_str()).collect(),
+            envs,
+            validators,
+        ) {
+            Ok(out) => OperationResult::Ok(out),
+            Err(err) => {
+                // Error while trying to run terraform destroy on targeted resources, retrying...
+                OperationResult::Retry(err)
+            }
+        }
+    });
+
+    match result {
+        Ok(output) => Ok(output),
+        Err(retry::Error { error, .. }) => Err(error),
+    }
+}
+
 pub fn terraform_state_rm_entry(
     root_dir: &str,
     entry: &str,

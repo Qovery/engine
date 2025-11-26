@@ -6,10 +6,14 @@ use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage};
 use crate::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
+use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
+use crate::infrastructure::action::eks::AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION;
 use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
+use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -20,12 +24,14 @@ use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, Options};
 use crate::io_models::models::{KubernetesClusterAction, NodeGroups};
 use crate::runtime::block_on;
 use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
+use crate::utilities::envs_to_string;
 use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
 use jsonptr::Pointer;
 use k8s_openapi::api::core::v1::Node;
 use retry::OperationResult;
 use retry::delay::Fixed;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::string::ToString;
 use std::time::Duration;
@@ -34,16 +40,24 @@ const KARPENTER_NAMESPACE: &str = "kube-system";
 const KARPENTER_LABEL_SELECTOR: &str = "app.kubernetes.io/instance=karpenter";
 const KARPENTER_EXPECTED_POD_COUNT: u32 = 2;
 const KARPENTER_DEPLOYMENT_NAME: &str = "karpenter";
-const KARPENTER_MIN_NODES_DRAIN_TIMEOUT: ChronoDuration = ChronoDuration::seconds(60);
+const KARPENTER_MIN_NODES_DRAIN_TIMEOUT: ChronoDuration = ChronoDuration::seconds(300);
+
+// Terraform resources for karpenter nodegroup (used for pause/resume)
+const KARPENTER_NODEGROUP_TERRAFORM_RESOURCES: &[&str] = &[
+    "aws_launch_template.karpenter_nodegroup",
+    "aws_eks_node_group.karpenter_controller",
+];
 
 pub struct Karpenter {}
 
 impl Karpenter {
     pub async fn pause(
         kubernetes: &EKS,
-        cloud_provider: &dyn CloudProvider,
+        infra_ctx: &InfrastructureContext,
         client: &QubeClient,
+        logger: &impl InfraLogger,
     ) -> Result<(), Box<EngineError>> {
+        let cloud_provider = infra_ctx.cloud_provider();
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
         Self::delete_nodes_spawned_by_karpenter(kubernetes, cloud_provider, client, &event_details).await?;
@@ -51,12 +65,57 @@ impl Karpenter {
         // scale down the karpenter deployment
         client
             .set_deployment_replicas_number(
-                event_details,
+                event_details.clone(),
                 KARPENTER_DEPLOYMENT_NAME,
                 &HelmChartNamespaces::KubeSystem.to_string(),
                 0,
             )
-            .await
+            .await?;
+
+        // delete the karpenter-controller nodegroup
+        logger.info("Deleting karpenter-controller nodegroup...");
+        Self::delete_karpenter_nodegroup(kubernetes, infra_ctx, logger)?;
+        logger.info("Karpenter-controller nodegroup deleted successfully");
+
+        Ok(())
+    }
+
+    fn delete_karpenter_nodegroup(
+        kubernetes: &EKS,
+        infra_ctx: &InfrastructureContext,
+        logger: &impl InfraLogger,
+    ) -> Result<(), Box<EngineError>> {
+        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
+        let cloud_provider = infra_ctx.cloud_provider();
+        let dns_provider = infra_ctx.dns_provider();
+
+        // Build terraform context normally
+        let tera_context = eks_tera_context(
+            kubernetes,
+            cloud_provider,
+            dns_provider,
+            kubernetes.zones.as_slice(),
+            &[], // No regular nodegroups
+            &kubernetes.options,
+            AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION,
+            &kubernetes.advanced_settings,
+            kubernetes.qovery_allowed_public_access_cidrs.as_ref(),
+        )?;
+
+        let tf_action = TerraformInfraResources::new(
+            tera_context,
+            PathBuf::from(&kubernetes.template_directory).join("terraform"),
+            kubernetes.temp_dir().join("terraform"),
+            event_details,
+            envs_to_string(cloud_provider.credentials_environment_variables()),
+            infra_ctx.context().is_dry_run_deploy(),
+        );
+
+        // Explicitly destroy the karpenter nodegroup resources
+        tf_action.destroy_specific_resources(KARPENTER_NODEGROUP_TERRAFORM_RESOURCES, logger)?;
+
+        logger.info("Karpenter nodegroup terraform resources deleted");
+        Ok(())
     }
 
     pub async fn restart(

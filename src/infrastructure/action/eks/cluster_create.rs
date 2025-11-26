@@ -160,12 +160,12 @@ pub fn create_eks_cluster(
     }
 
     // Deploy Karpenter nodegroup and install Karpenter charts if migration is enabled
-    logger.info("Checking if Karpenter migration should run...");
+    logger.info("Checking if Karpenter nodegroup should be deployed...");
     if should_deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger) {
-        logger.info("🔄 Karpenter Fargate to Nodegroup migration enabled");
+        logger.info("🚀 Deploying Karpenter controller nodegroup");
         let _karpenter_tf_output = deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger)?;
     } else {
-        logger.info("⏭️  Skipping Karpenter migration (not required)");
+        logger.info("⏭️  Skipping Karpenter nodegroup deployment (not required)");
     }
 
     // apply to generate tf_qovery_config.json
@@ -181,6 +181,7 @@ pub fn create_eks_cluster(
         }
 
         if Karpenter::is_paused(&infra_ctx.mk_kube_client()?, &event_details)? {
+            logger.info("Karpenter is paused, restarting...");
             block_on(Karpenter::restart(
                 kubernetes,
                 cloud_provider,

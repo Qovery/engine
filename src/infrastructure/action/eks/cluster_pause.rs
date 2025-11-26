@@ -25,7 +25,7 @@ pub fn pause_eks_cluster(
     // For Karpenter
     let kube_client = infra_ctx.mk_kube_client()?;
     if kubernetes.is_karpenter_enabled() {
-        block_on(Karpenter::pause(kubernetes, infra_ctx.cloud_provider(), &kube_client))?;
+        block_on(Karpenter::pause(kubernetes, infra_ctx, &kube_client, &logger))?;
         logger.info(format!("Kubernetes cluster {} successfully paused", kubernetes.name()));
         return Ok(());
     }
