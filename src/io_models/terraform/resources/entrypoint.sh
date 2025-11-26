@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+
+set -eo pipefail
 
 TF_COMMAND={{terraform_command}}
 ROOT_MODULE_PATH=$1
@@ -27,8 +28,9 @@ log() {
 
 run_terraform_init() {
   log "${TF_COMMAND} init $TF_CLI_ARGS_init"
+  # We want to check for this specific patterns to avoid terraform returning success if it inits on an empty dir
   ${TF_COMMAND} init -backend-config="/backend-config/config" 2>&1 \
-    | awk '{print} /has been successfully initialized!/ {exit}'
+    | awk '{print} /has been successfully initialized!/ {found=1} END {if (found) exit 0; else exit 1}'
 }
 
 attempt_force_unlock() {
