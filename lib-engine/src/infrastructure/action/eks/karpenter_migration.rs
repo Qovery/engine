@@ -50,7 +50,7 @@ pub fn deploy_karpenter_nodegroup(
     let cloud_provider = infra_ctx.cloud_provider();
     let dns_provider = infra_ctx.dns_provider();
 
-    logger.info("🚀 Creating dedicated nodegroup for Karpenter controller (Fargate → Nodegroup migration)");
+    logger.info("🚀 Creating dedicated nodegroup for Karpenter controller");
 
     // Build terraform context
     let tera_context = eks_tera_context(
@@ -225,7 +225,7 @@ pub fn should_deploy_karpenter_nodegroup(
     let is_first_deployment = infra_ctx.context().is_first_cluster_deployment();
 
     if !has_karpenter || is_first_deployment {
-        logger.info("Skipping Karpenter migration: prerequisites not met");
+        logger.info("Skipping Karpenter nodegroup deployment: prerequisites not met");
         return false;
     }
 
@@ -234,7 +234,7 @@ pub fn should_deploy_karpenter_nodegroup(
         Ok(client) => client,
         Err(e) => {
             logger.warn(format!(
-                "Cannot check Karpenter migration status: failed to create Kubernetes client: {e:?}"
+                "Cannot check Karpenter nodegroup status: failed to create Kubernetes client: {e:?}"
             ));
             return false;
         }
@@ -252,7 +252,7 @@ pub fn should_deploy_karpenter_nodegroup(
     )) {
         Ok(nodes) => nodes,
         Err(e) => {
-            logger.warn(format!("Cannot check Karpenter migration status: failed to query nodes: {e:?}"));
+            logger.warn(format!("Cannot check Karpenter nodegroup status: failed to query nodes: {e:?}"));
             return false;
         }
     };
@@ -281,7 +281,7 @@ pub fn should_deploy_karpenter_nodegroup(
         Ok(deployments) => deployments,
         Err(e) => {
             logger.warn(format!(
-                "Cannot check Karpenter migration status: failed to query karpenter deployment: {e:?}"
+                "Cannot check Karpenter nodegroup status: failed to query karpenter deployment: {e:?}"
             ));
             return false;
         }
@@ -296,11 +296,11 @@ pub fn should_deploy_karpenter_nodegroup(
 
     // Migration is complete if exactly 2 nodes and exactly 2 ready replicas exist
     let migration_complete = node_count == 2 && ready_replicas == 2;
-    let should_migrate = !migration_complete;
+    let should_deploy = !migration_complete;
 
     logger.info(format!(
-        "Karpenter migration check: {node_count} nodes, {ready_replicas} replicas ready, migration needed: {should_migrate}"
+        "Karpenter nodegroup check: {node_count} nodes, {ready_replicas} replicas ready, deployment needed: {should_deploy}"
     ));
 
-    should_migrate
+    should_deploy
 }
