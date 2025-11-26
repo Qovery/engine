@@ -4,7 +4,7 @@ serviceAccount:
   annotations:
     eks.amazonaws.com/role-arn: set-by-engine-code
 
-replicaCount: 1
+replicaCount: set-by-engine-code
 
 enableServiceMutatorWebhook: set-by-engine-code
 enableCertManager: true

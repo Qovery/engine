@@ -4,8 +4,8 @@ use crate::helm::{
     VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
-    HelmChartValuesFilePath, HelmChartVpaType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartReplicaType, HelmChartResources,
+    HelmChartResourcesConstraintType, HelmChartValuesFilePath, HelmChartVpaType, ToCommonHelmChart,
 };
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
@@ -14,6 +14,7 @@ pub struct AwsLoadBalancerControllerChart {
     chart_prefix_path: Option<String>,
     chart_values_path: HelmChartValuesFilePath,
     chart_resources: HelmChartResources,
+    replicas: HelmChartReplicaType,
     chart_vpa: HelmChartVpaType,
     aws_alb_controller_role_arn: String,
     cluster_name: String,
@@ -26,6 +27,7 @@ impl AwsLoadBalancerControllerChart {
         aws_alb_controller_role_arn: String,
         cluster_name: String,
         chart_resources: HelmChartResourcesConstraintType,
+        replicas: HelmChartReplicaType,
         chart_vpa: HelmChartVpaType,
         // https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.5/deploy/installation/
         enable_mutator_webhook: bool,
@@ -55,6 +57,7 @@ impl AwsLoadBalancerControllerChart {
             aws_alb_controller_role_arn,
             cluster_name,
             enable_mutator_webhook,
+            replicas,
         }
     }
 
@@ -100,6 +103,13 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
                         value: self.chart_resources.request_memory.to_string(),
+                    },
+                    ChartSetValue {
+                        key: "replicaCount".to_string(),
+                        value: match self.replicas {
+                            HelmChartReplicaType::ChartDefault => "2".to_string(),
+                            HelmChartReplicaType::Fixed(count) => count.to_string(),
+                        },
                     },
                 ],
                 ..Default::default()
@@ -181,6 +191,7 @@ mod tests {
             "arn:aws:iam::123456789012:role/eks-alb-ingress-controller".to_string(),
             "cluster-name".to_string(),
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
         );
@@ -214,6 +225,7 @@ mod tests {
             "arn:aws:iam::123456789012:role/eks-alb-ingress-controller".to_string(),
             "cluster-name".to_string(),
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
         );
@@ -248,6 +260,7 @@ mod tests {
             "arn:aws:iam::123456789012:role/eks-alb-ingress-controller".to_string(),
             "cluster-name".to_string(),
             HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
         );
