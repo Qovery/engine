@@ -11,18 +11,21 @@ use tempfile::TempDir;
 const PROMTAIL_DOCKER_IMAGE: &str = "grafana/promtail:3.5.1";
 const CONTAINER_NAME: &str = "promtail-test-runner";
 
-static PROMTAIL_CONTAINER: Lazy<Mutex<PromtailContainer>> = Lazy::new(|| Mutex::new(PromtailContainer::new()));
+// Single global lock to serialize all tests and prevent race conditions
+static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 
-struct PromtailContainer {}
+struct PromtailContainer {
+    name: String,
+}
 
 impl PromtailContainer {
-    fn new() -> Self {
-        Self {}
+    fn new(name: &str) -> Self {
+        Self { name: name.to_string() }
     }
 
     fn ensure_running(&self) -> Result<(), Box<dyn std::error::Error>> {
         let inspect = Command::new("docker")
-            .args(["inspect", "-f", "{{.State.Running}}", CONTAINER_NAME])
+            .args(["inspect", "-f", "{{.State.Running}}", &self.name])
             .output();
 
         let is_running = match inspect {
@@ -34,14 +37,27 @@ impl PromtailContainer {
             return Ok(());
         }
 
-        let _ = Command::new("docker").args(["rm", "-f", CONTAINER_NAME]).output();
+        // Container exists but is stopped - try to start it
+        let start_result = Command::new("docker").args(["start", &self.name]).output();
 
+        if start_result.is_ok() && start_result.unwrap().status.success() {
+            // Container was stopped, now it's started
+            thread::sleep(Duration::from_millis(500));
+            return Ok(());
+        }
+
+        // Container doesn't exist or can't be started - remove and recreate
+        let _ = Command::new("docker").args(["rm", "-f", &self.name]).output();
+
+        thread::sleep(Duration::from_millis(200));
+
+        // Start a new container
         let output = Command::new("docker")
             .args([
                 "run",
                 "-d",
                 "--name",
-                CONTAINER_NAME,
+                &self.name,
                 "--entrypoint",
                 "/bin/sh",
                 PROMTAIL_DOCKER_IMAGE,
@@ -54,17 +70,34 @@ impl PromtailContainer {
             return Err(format!("Failed to start container: {}", String::from_utf8_lossy(&output.stderr)).into());
         }
 
-        thread::sleep(Duration::from_millis(100));
-        Ok(())
+        // Wait for the container to be ready
+        for _ in 0..30 {
+            thread::sleep(Duration::from_millis(100));
+
+            let check = Command::new("docker")
+                .args(["exec", &self.name, "echo", "ready"])
+                .output();
+
+            if check.is_ok() && check.unwrap().status.success() {
+                return Ok(());
+            }
+        }
+
+        Err("Container failed to become ready within 3 seconds".into())
     }
 
     fn exec_promtail(&self, config_path: &str, log: &str) -> Result<String, Box<dyn std::error::Error>> {
         self.ensure_running()?;
 
         let config_name = format!("config-{}.yml", rand::random::<u32>());
+        let config_path_in_container = format!("/tmp/{config_name}");
 
         let copy_result = Command::new("docker")
-            .args(["cp", config_path, &format!("{CONTAINER_NAME}:/tmp/{config_name}")])
+            .args([
+                "cp",
+                config_path,
+                &format!("{}:{}", self.name, config_path_in_container),
+            ])
             .output()?;
 
         if !copy_result.status.success() {
@@ -75,9 +108,9 @@ impl PromtailContainer {
             .args([
                 "exec",
                 "-i",
-                CONTAINER_NAME,
+                &self.name,
                 "/usr/bin/promtail",
-                &format!("--config.file=/tmp/{config_name}"),
+                &format!("--config.file={config_path_in_container}"),
                 "--dry-run",
                 "--stdin",
                 "--client.external-labels=namespace=qovery-engine,container=engine,stream=stdout",
@@ -95,6 +128,10 @@ impl PromtailContainer {
 
         let output = child.wait_with_output()?;
 
+        let _ = Command::new("docker")
+            .args(["exec", &self.name, "rm", "-f", &config_path_in_container])
+            .output();
+
         if !output.status.success() {
             return Err(format!(
                 "Promtail failed:\nSTDOUT: {}\nSTDERR: {}",
@@ -110,7 +147,8 @@ impl PromtailContainer {
 
 impl Drop for PromtailContainer {
     fn drop(&mut self) {
-        let _ = Command::new("docker").args(["rm", "-f", CONTAINER_NAME]).output();
+        // Don't remove the container - it will be reused by subsequent tests
+        // The container will be cleaned up manually or when Docker is restarted
     }
 }
 
@@ -180,6 +218,7 @@ scrape_configs:
 struct PromtailTestFixture {
     _temp_dir: TempDir,
     config_path: PathBuf,
+    container: PromtailContainer,
 }
 
 impl PromtailTestFixture {
@@ -195,12 +234,12 @@ impl PromtailTestFixture {
         Ok(Self {
             _temp_dir: temp_dir,
             config_path,
+            container: PromtailContainer::new(CONTAINER_NAME),
         })
     }
 
     fn extract_level(&self, log: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
-        let container = PROMTAIL_CONTAINER.lock().unwrap();
-        let output = container.exec_promtail(&self.config_path.to_string_lossy(), log)?;
+        let output = self.container.exec_promtail(&self.config_path.to_string_lossy(), log)?;
 
         for line in output.lines() {
             if let Some(start) = line.find('{') {
@@ -255,6 +294,7 @@ mod tests {
 
     #[test]
     fn test_rust_info_log_not_classified_as_error() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -273,6 +313,7 @@ mod tests {
 
     #[test]
     fn test_real_world_info_log_from_user() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -291,6 +332,7 @@ mod tests {
 
     #[test]
     fn test_rust_error_log_classified_correctly() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -309,6 +351,7 @@ mod tests {
 
     #[test]
     fn test_rust_warn_log_classified_correctly() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -323,6 +366,7 @@ mod tests {
 
     #[test]
     fn test_rust_debug_log_classified_correctly() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -341,6 +385,7 @@ mod tests {
 
     #[test]
     fn test_rust_trace_log_classified_correctly() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -359,6 +404,7 @@ mod tests {
 
     #[test]
     fn test_json_log_with_level_info() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -377,6 +423,7 @@ mod tests {
 
     #[test]
     fn test_json_log_with_level_error() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -395,6 +442,7 @@ mod tests {
 
     #[test]
     fn test_json_log_with_severity_warn() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -413,6 +461,7 @@ mod tests {
 
     #[test]
     fn test_json_log_with_severity_warning_uppercase() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -431,6 +480,7 @@ mod tests {
 
     #[test]
     fn test_false_positive_error_in_field_name() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -449,6 +499,7 @@ mod tests {
 
     #[test]
     fn test_false_positive_failed_in_message() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -467,6 +518,7 @@ mod tests {
 
     #[test]
     fn test_plain_text_without_level() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -481,6 +533,7 @@ mod tests {
 
     #[test]
     fn test_nginx_style_log_without_rust_format() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -495,6 +548,7 @@ mod tests {
 
     #[test]
     fn test_critical_bug_regression_info_not_error() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -513,6 +567,7 @@ mod tests {
 
     #[test]
     fn test_batch_of_mixed_log_levels() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -537,6 +592,7 @@ mod tests {
 
     #[test]
     fn test_go_logfmt_key_value() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -551,6 +607,7 @@ mod tests {
 
     #[test]
     fn test_go_json_levels() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -563,6 +620,7 @@ mod tests {
 
     #[test]
     fn test_rust_timestamp_level_simple() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -583,6 +641,7 @@ mod tests {
     #[test]
     fn test_rust_leading_integer_and_double_timestamp() -> Result<(), Box<dyn std::error::Error>> {
         // Real-world Rust line with leading integer + double timestamp
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -593,6 +652,7 @@ mod tests {
 
     #[test]
     fn test_java_iso_and_non_iso() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -613,6 +673,7 @@ mod tests {
 
     #[test]
     fn test_kotlin_iso_and_keyvalue() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -633,6 +694,7 @@ mod tests {
 
     #[test]
     fn test_edge_false_positives_and_normalization() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -652,6 +714,7 @@ mod tests {
 
     #[test]
     fn test_last_resort_only_when_level_empty() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -668,6 +731,7 @@ mod tests {
 
     #[test]
     fn test_malformed_json_and_noise_lines() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
@@ -680,6 +744,7 @@ mod tests {
 
     #[test]
     fn test_with_ansi_codes() -> Result<(), Box<dyn std::error::Error>> {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
