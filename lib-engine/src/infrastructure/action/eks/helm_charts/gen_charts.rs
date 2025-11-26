@@ -11,8 +11,8 @@ use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAge
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::infrastructure::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
-    HelmChartVpaType, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartReplicaType, HelmChartResources, HelmChartResourcesConstraintType,
+    HelmChartTimeout, HelmChartVpaType, ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
@@ -211,6 +211,11 @@ pub(super) fn eks_helm_charts(
         chart_config_prerequisites.aws_iam_alb_controller_arn.clone(),
         chart_config_prerequisites.cluster_name.clone(),
         HelmChartResourcesConstraintType::ChartDefault,
+        HelmChartReplicaType::Fixed(
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .aws_eks_alb_controller_replicas,
+        ),
         HelmChartVpaType::EnabledWithConstraints(VpaContainerPolicy::new(
             "*".to_string(),
             Some(KubernetesCpuResourceUnit::MilliCpu(

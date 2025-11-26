@@ -78,6 +78,13 @@ pub enum HelmChartVpaType {
     EnabledWithConstraints(VpaContainerPolicy),
 }
 
+pub enum HelmChartReplicaType {
+    /// Let helm chart defines what it wants
+    ChartDefault,
+    /// Let user define what they want
+    Fixed(u32),
+}
+
 #[derive(Clone)]
 pub struct HelmChartPath {
     path: HelmPath,

@@ -40,6 +40,10 @@ fn default_aws_eks_ec2_ami() -> Ec2Ami {
     Ec2Ami::AmazonLinux2023
 }
 
+fn default_aws_alb_controller_replicas() -> u32 {
+    2
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {
@@ -206,6 +210,11 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_flow_logs_retention_days: u32,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
+    #[serde(
+        alias = "aws.eks.alb_controller.replicas",
+        default = "default_aws_alb_controller_replicas"
+    )]
+    pub aws_eks_alb_controller_replicas: u32,
     #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.min_in_milli_cpu")]
     pub aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: u32,
     #[serde(alias = "aws.eks.alb_controller.vpa.vcpu.max_in_milli_cpu")]
@@ -359,6 +368,7 @@ impl Default for ClusterAdvancedSettings {
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,
             k8s_api_allowed_public_access_cidrs: None,
+            aws_eks_alb_controller_replicas: 1u32,
             aws_eks_alb_controller_vpa_min_vcpu_in_milli_cpu: 128,
             aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
