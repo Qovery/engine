@@ -42,7 +42,7 @@ spec:
              {{`{{ else if .Alerts }}`}}
                {{`{{ (index .Alerts 0).Annotations.description }}`}}
              {{`{{ end }}`}}
-             {{` {{ range .Alerts }`}}
+             {{` {{ range .Alerts }}`}}
              {{` *Alert:* {{ .Labels.alertname }}`}}
              {{` *Severity:* {{ .Labels.severity }}`}}
              {{` *Cluster:* {{ .Labels.cluster }}`}}
