@@ -73,11 +73,12 @@ pub struct AlertTarget {
 pub struct AlertConfigAlert {
     pub long_id: Uuid,
     pub name: String,
+    pub description: Option<String>,
+    pub severity: Option<String>,
     pub expr: String,
     pub for_duration_minutes: i32,
     pub labels: HashMap<String, String>,
     pub summary: Option<String>,
-    pub description: Option<String>,
     pub runbook_url: Option<String>,
     #[serde(default)]
     pub receivers: Vec<Uuid>,

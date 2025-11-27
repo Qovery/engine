@@ -244,6 +244,13 @@ fn build_target_values(
             })
         }
 
+        if let Some(severity) = &alert.severity {
+            values.push(ChartSetValue {
+                key: format!("{alert_prefix}.annotations.severity"),
+                value: severity.clone(),
+            })
+        }
+
         if let Some(description) = &alert.description {
             values.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.description"),
@@ -465,6 +472,7 @@ mod tests {
             labels: HashMap::new(),
             summary: None,
             description: None,
+            severity: None,
             runbook_url: None,
             receivers: vec![],
             target: target1.clone(),
@@ -479,6 +487,7 @@ mod tests {
             labels: HashMap::new(),
             summary: None,
             description: None,
+            severity: None,
             runbook_url: None,
             receivers: vec![],
             target: target1.clone(),
@@ -494,6 +503,7 @@ mod tests {
             labels: HashMap::new(),
             summary: None,
             description: None,
+            severity: None,
             runbook_url: None,
             receivers: vec![],
             target: target2.clone(),
@@ -535,6 +545,7 @@ mod tests {
             labels: labels.clone(),
             summary: Some("Service is down".to_string()),
             description: Some("The service has been down for 5 minutes".to_string()),
+            severity: Some("Warning".to_string()),
             runbook_url: Some("https://runbook.example.com".to_string()),
             receivers: vec![receiver_id],
             target: target.clone(),
@@ -674,6 +685,7 @@ mod tests {
             labels: HashMap::new(),
             summary: Some("CPU usage is too high".to_string()),
             description: Some("This is for a test".to_string()),
+            severity: Some("Warning".to_string()),
             runbook_url: None,
             receivers: vec![receiver_id],
             target: target.clone(),
@@ -787,6 +799,7 @@ mod tests {
             labels: HashMap::new(),
             summary: None,
             description: None,
+            severity: Some("Warning".to_string()),
             runbook_url: None,
             receivers: vec![],
             target: target.clone(),

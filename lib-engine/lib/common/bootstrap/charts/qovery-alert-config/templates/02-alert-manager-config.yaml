@@ -44,12 +44,12 @@ spec:
              {{`{{ end }}`}}
              {{` {{ range .Alerts }}`}}
              {{` *Alert:* {{ .Labels.alertname }}`}}
-             {{` *Severity:* {{ .Labels.severity }}`}}
-             {{` *Cluster:* {{ .Labels.cluster }}`}}
-             {{` *Namespace:* {{ .Labels.namespace }}`}}
-             {{` *Pod:* {{ .Labels.pod }}`}}
+             {{` *Severity:* {{ .Annotations.severity }}`}}
+             {{` *TargetType:* {{ .CommonLabels.qovery_target_type }}`}}
+             {{` *TargetId:* {{ .CommonLabels.qovery_target_id }}`}}
              {{` *Description:* {{ .Annotations.description }}`}}
-             {{` *Value:* {{ .Annotations.value }}`}}
+             {{` *Summary:* {{ .Annotations.summary }}`}}
+             {{` *runbook_url:* {{ .Annotations.runbook_url }}`}}
              {{`{{ end }}`}}
           sendResolved: {{ default true $rcv.slack.sendResolved }}
           groupBy:
