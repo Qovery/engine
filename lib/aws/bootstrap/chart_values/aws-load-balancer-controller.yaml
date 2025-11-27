@@ -9,8 +9,12 @@ replicaCount: set-by-engine-code
 enableServiceMutatorWebhook: set-by-engine-code
 enableCertManager: true
 
+# Since VPA is activated for this chart, HPA is not relevant here.
+# Number of replicas is customizable via cluster advanced settings.
 autoscaling:
-  enabled: true
+  enabled: false
+#   minReplicas: set-by-engine-code
+#   maxReplicas: set-by-engine-code
 
 resources:
   limits:
