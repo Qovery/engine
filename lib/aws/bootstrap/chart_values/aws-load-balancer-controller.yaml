@@ -5,6 +5,19 @@ serviceAccount:
     eks.amazonaws.com/role-arn: set-by-engine-code
 
 replicaCount: set-by-engine-code
+# PDB settings will be used only if replicaCount > 1
+podDisruptionBudget:
+  maxUnavailable: 1
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - aws-load-balancer-controller
+        topologyKey: kubernetes.io/hostname
 
 enableServiceMutatorWebhook: set-by-engine-code
 enableCertManager: true
