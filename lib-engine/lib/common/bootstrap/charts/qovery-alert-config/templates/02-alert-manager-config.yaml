@@ -45,8 +45,8 @@ spec:
              {{` {{ range .Alerts }}`}}
              {{` *Alert:* {{ .Labels.alertname }}`}}
              {{` *Severity:* {{ .Annotations.severity }}`}}
-             {{` *TargetType:* {{ .CommonLabels.qovery_target_type }}`}}
-             {{` *TargetId:* {{ .CommonLabels.qovery_target_id }}`}}
+             {{` *TargetType:* {{ .Labels.qovery_target_type }}`}}
+             {{` *TargetId:* {{ .Labels.qovery_target_id }}`}}
              {{` *Description:* {{ .Annotations.description }}`}}
              {{` *Summary:* {{ .Annotations.summary }}`}}
              {{` *runbook_url:* {{ .Annotations.runbook_url }}`}}
