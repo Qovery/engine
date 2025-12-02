@@ -66,6 +66,12 @@ pub enum AlertTargetType {
 pub struct AlertTarget {
     pub id: Uuid,
     pub r#type: AlertTargetType,
+    pub name: String,
+    pub organization_id: Uuid,
+    pub project_id: Option<Uuid>,
+    pub project_name: Option<String>,
+    pub environment_id: Option<Uuid>,
+    pub environment_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -84,6 +90,7 @@ pub struct AlertConfigAlert {
     pub receivers: Vec<Uuid>,
     pub target: AlertTarget,
     pub version_tag: Option<String>,
+    pub tag: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -155,7 +162,9 @@ mod tests {
                   "runbook_url":"runbookUrl 1",
                   "target": {
                     "id":"4f50657b-1162-4dde-b706-4d5e937f3c02",
-                    "type":"APPLICATION"
+                    "type":"APPLICATION",
+                    "name": "a service",
+                    "organization_id":"4f50657b-1162-4dde-b706-4d5e937f3c09"
                   },
                   "version_tag": "2025-10-24T12:34:18.232424Z"
                 }
