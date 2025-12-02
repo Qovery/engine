@@ -362,6 +362,7 @@ impl EnvironmentRequest {
                     container_registry,
                     cluster,
                     &self.kube_name,
+                    self.long_id,
                     &self.annotations_groups,
                     &self.labels_groups,
                 )

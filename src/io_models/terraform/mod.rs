@@ -194,6 +194,7 @@ impl TerraformService {
         default_container_registry: &dyn InteractWithRegistry,
         cluster: &dyn Kubernetes,
         environment_kube_name: &str,
+        environment_long_id: Uuid,
         annotations_group: &BTreeMap<Uuid, AnnotationsGroup>,
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
     ) -> Result<Box<dyn TerraformServiceTrait>, TerraformServiceError> {
@@ -230,7 +231,7 @@ impl TerraformService {
         let tf_files_source_domain =
             self.get_terraform_files_source_domain(&ssh_keys, context.qovery_api.clone(), self.long_id);
 
-        let backend = self.get_terraform_backend(environment_kube_name)?;
+        let backend = self.get_terraform_backend(environment_kube_name, environment_long_id)?;
 
         let terraform_action = self.get_terraform_action()?;
 
@@ -475,6 +476,7 @@ impl TerraformService {
     fn get_terraform_backend(
         &self,
         environment_kube_name: &str,
+        environment_long_id: Uuid,
     ) -> Result<models::terraform_service::TerraformBackend, TerraformServiceError> {
         let configs = match self.backend.backend_type {
             TerraformBackendType::DefinedInTerraformFile => vec![],
@@ -489,7 +491,7 @@ impl TerraformService {
                 ))
                 .map_err(TerraformServiceError::InvalidConfig)?,
                 models::terraform_service::TerraformBackendConfig::from_str(
-                    &format!(r#"labels={{"qovery.com/service-id": "{}", "qovery.com/service-type": "terraform-service", "qovery.com/environment-id": "{environment_kube_name}" }}"#
+                    &format!(r#"labels={{"qovery.com/service-id": "{}", "qovery.com/service-type": "terraform-service", "qovery.com/environment-id": "{environment_long_id}" }}"#
                         , self.long_id),
                 )
                 .map_err(TerraformServiceError::InvalidConfig)?,
@@ -498,7 +500,7 @@ impl TerraformService {
 
         Ok(models::terraform_service::TerraformBackend {
             configs,
-            kube_secret_name: "backend-config".to_string(),
+            kube_secret_name: format!("{}-backend-config", self.long_id),
         })
     }
 
@@ -673,5 +675,123 @@ terraform {{
             shared_repository_name: cr_info.get_shared_repository_name(cluster_id, sanitized_git_url(git_url)),
             shared_image_feature_enabled: self.shared_image_feature_enabled,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_test_terraform_service(kube_name: &str) -> TerraformService {
+        TerraformService {
+            long_id: Uuid::new_v4(),
+            name: "test-service".to_string(),
+            kube_name: kube_name.to_string(),
+            action: Action::Create,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 200,
+            ram_request_in_mib: 128,
+            ram_limit_in_mib: 256,
+            gpu_request: None,
+            gpu_limit: None,
+            persistent_storage: PersistentStorage {
+                storage_class: "standard".to_string(),
+                size_in_gib: 1,
+            },
+            tf_files_source: TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/test/repo").unwrap(),
+                git_credentials: None,
+                commit_id: "abc123".to_string(),
+                root_module_path: ".".to_string(),
+            },
+            tf_var_file_paths: vec![],
+            tf_vars: vec![],
+            provider: TerraformProvider::Terraform,
+            provider_version: "1.0.0".to_string(),
+            backend: TerraformBackend {
+                backend_type: TerraformBackendType::Kubernetes,
+            },
+            terraform_action: TerraformAction {
+                command: TerraformActionCommand::PlanAndApply,
+                plan_execution_id: None,
+            },
+            timeout_sec: 600,
+            environment_vars_with_infos: BTreeMap::new(),
+            advanced_settings: TerraformServiceAdvancedSettings::default(),
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
+            shared_image_feature_enabled: false,
+            terraform_credentials: None,
+            extra_action_arguments: BTreeMap::new(),
+        }
+    }
+
+    #[test]
+    fn test_backend_config_secret_name_is_unique_per_service() {
+        // Given two terraform services with different long_ids
+        let service1 = create_test_terraform_service("terraform-abc123-service1");
+        let service2 = create_test_terraform_service("terraform-def456-service2");
+        let env_kube_name = "test-environment";
+        let env_long_id = Uuid::new_v4();
+
+        // When we get the terraform backend for each
+        let backend1 = service1.get_terraform_backend(env_kube_name, env_long_id).unwrap();
+        let backend2 = service2.get_terraform_backend(env_kube_name, env_long_id).unwrap();
+
+        // Then each backend should have a unique secret name based on the service's long_id (UUID)
+        assert_eq!(
+            backend1.kube_secret_name,
+            format!("{}-backend-config", service1.long_id),
+            "Backend config secret name should include the service's long_id"
+        );
+        assert_eq!(
+            backend2.kube_secret_name,
+            format!("{}-backend-config", service2.long_id),
+            "Backend config secret name should include the service's long_id"
+        );
+
+        // And the secret names should be different
+        assert_ne!(
+            backend1.kube_secret_name, backend2.kube_secret_name,
+            "Two different services should have different backend config secret names"
+        );
+    }
+
+    #[test]
+    fn test_backend_config_secret_name_format() {
+        let service = create_test_terraform_service("my-terraform-service");
+        let env_kube_name = "production-env";
+        let env_long_id = Uuid::new_v4();
+
+        let backend = service.get_terraform_backend(env_kube_name, env_long_id).unwrap();
+
+        // Secret name should follow the pattern: {long_id}-backend-config
+        assert!(
+            backend.kube_secret_name.ends_with("-backend-config"),
+            "Secret name should end with '-backend-config'"
+        );
+        assert!(
+            backend.kube_secret_name.starts_with(&service.long_id.to_string()),
+            "Secret name should start with the service's long_id (UUID)"
+        );
+    }
+
+    #[test]
+    fn test_backend_config_for_defined_in_terraform_file_type() {
+        let mut service = create_test_terraform_service("terraform-service");
+        service.backend.backend_type = TerraformBackendType::DefinedInTerraformFile;
+        let env_kube_name = "test-env";
+        let env_long_id = Uuid::new_v4();
+
+        let backend = service.get_terraform_backend(env_kube_name, env_long_id).unwrap();
+
+        // Even for DefinedInTerraformFile type, the secret name should use the service UUID
+        assert_eq!(
+            backend.kube_secret_name,
+            format!("{}-backend-config", service.long_id),
+            "Secret name should use service UUID even when backend type is DefinedInTerraformFile"
+        );
+        // And configs should be empty for this backend type
+        assert!(backend.configs.is_empty());
     }
 }
