@@ -30,27 +30,32 @@ spec:
       slackConfigs:
         - channel: {{ $rcv.slack.channel }}
           title: >-
-             {{`{{ if .CommonLabels.alertname }}`}}{{`{{ .CommonLabels.alertname }}`}}
-             {{`{{ else if .GroupLabels.alertname }}`}}{{`{{ .GroupLabels.alertname }}`}}
-             {{`{{ else if .Alerts }}`}}{{`{{ (index .Alerts 0).Labels.alertname }}`}}
-             {{`{{ else }}`}}Alert{{`{{ end }}`}}
+            {{`
+            {{ .CommonAnnotations.qovery_target_name }}{{ if gt (len .Alerts.Firing) 0 }} - {{ len .Alerts.Firing }} alert(s) firing{{ end }}
+            `}}
+          titleLink: {{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}
           text: >-
-             {{`{{ if .CommonAnnotations.summary }}`}}
-               {{`{{ .CommonAnnotations.summary }}`}}
-             {{`{{ else if .CommonAnnotations.description }}`}}
-               {{`{{ .CommonAnnotations.description }}`}}
-             {{`{{ else if .Alerts }}`}}
-               {{`{{ (index .Alerts 0).Annotations.description }}`}}
-             {{`{{ end }}`}}
-             {{` {{ range .Alerts }}`}}
-             {{` *Alert:* {{ .Labels.alertname }}`}}
-             {{` *Severity:* {{ .Annotations.severity }}`}}
-             {{` *TargetType:* {{ .Labels.qovery_target_type }}`}}
-             {{` *TargetId:* {{ .Labels.qovery_target_id }}`}}
-             {{` *Description:* {{ .Annotations.description }}`}}
-             {{` *Summary:* {{ .Annotations.summary }}`}}
-             {{` *runbook_url:* {{ .Annotations.runbook_url }}`}}
-             {{`{{ end }}`}}
+            {{`{{ range $i, $alert := .Alerts }}
+            • {{ if eq $alert.Status "firing" }}🔥{{ else }}✅{{ end }} {{ $alert.Annotations.qovery_alert_tag }} - {{ $alert.Annotations.severity }} Severity
+            {{ if $alert.Annotations.description }}
+               {{ $alert.Annotations.description }}
+            {{ end }}
+            {{ if $alert.Annotations.summary }}
+               {{ $alert.Annotations.summary }}
+            {{ end }}
+
+            {{ end }}`}}
+          footer: "Please review the service in the Qovery console"
+          actions:
+            - type: button
+              text: "All issues"
+              url: "{{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}"
+            - type: button
+              text: "Service Monitoring"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
+            - type: button
+              text: "Service Logs"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
           sendResolved: {{ default true $rcv.slack.sendResolved }}
           groupBy:
             - alertname                                                                                                                                                                                                                                                                                        │

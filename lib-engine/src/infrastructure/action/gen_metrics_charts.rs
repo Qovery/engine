@@ -26,6 +26,7 @@ use crate::io_models::metrics::{
 use crate::io_models::models::CustomerHelmChartsOverride;
 use std::sync::Arc;
 use url::Url;
+use uuid::Uuid;
 
 /// Type alias for the chart override function to reduce verbosity
 pub type ChartOverrideFn = Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>;
@@ -98,6 +99,15 @@ impl CloudProviderMetricsConfig<'_> {
             Self::Gke(_) => false,
             Self::Kapsule(_) => false,
             Self::Aks(_) => false,
+        }
+    }
+
+    pub fn get_organization_long_id(&self) -> Uuid {
+        match self {
+            Self::Eks(cfg) => cfg.organization_long_id,
+            Self::Gke(cfg) => cfg.organization_long_id,
+            Self::Kapsule(cfg) => cfg.organization_long_id,
+            Self::Aks(cfg) => cfg.organization_long_id,
         }
     }
 
@@ -217,6 +227,7 @@ pub fn generate_metrics_config(
 ) -> Result<MetricsConfig, CommandError> {
     let metrics_configuration = provider_config.metrics_parameters().map(|it| it.config.clone());
     let cluster_name = provider_config.cluster_name();
+    let organization_id = provider_config.get_organization_long_id();
 
     match metrics_configuration {
         Some(MetricsConfiguration::MetricsInstalledByQovery {
@@ -240,6 +251,7 @@ pub fn generate_metrics_config(
             alert_config,
             resource_profile,
             cloudwatch_exporter_config,
+            organization_id,
         ),
         None => generate_charts_installed_by_qovery(
             HelmAction::Destroy,
@@ -255,6 +267,7 @@ pub fn generate_metrics_config(
             None,
             ResourceProfile::default(), // Use default profile for destroy action
             CloudWatchExporterConfig::default(),
+            organization_id,
         ),
         Some(_) => Ok(MetricsConfig {
             prometheus_operator_crds_chart: None,
@@ -285,6 +298,7 @@ fn generate_charts_installed_by_qovery(
     alert_config: Option<AlertManagerConfig>,
     resource_profile: ResourceProfile,
     cloudwatch_exporter_config: CloudWatchExporterConfig,
+    organization_id: Uuid,
 ) -> Result<MetricsConfig, CommandError> {
     // TODO (ENG-1986) ATM we can't install prometheus operator crds systematically, as some clients may have already installed some versions on their side
     // Prometheus CRDs
@@ -359,6 +373,7 @@ fn generate_charts_installed_by_qovery(
         chart_prefix_path,
         cluster_name,
         alert_config,
+        organization_id,
     )
     .to_common_helm_chart()?;
 
@@ -436,6 +451,7 @@ mod tests {
             None,
             ResourceProfile::default(),
             CloudWatchExporterConfig::default(),
+            Uuid::new_v4(),
         );
 
         assert!(result.is_ok());
@@ -473,6 +489,7 @@ mod tests {
             None,
             ResourceProfile::default(),
             CloudWatchExporterConfig::default(),
+            Uuid::new_v4(),
         );
 
         assert!(result.is_ok());

@@ -24,6 +24,7 @@ pub struct AlertConfigChart {
     chart_values_path: HelmChartValuesFilePath,
     prometheus_namespace: HelmChartNamespaces,
     _cluster_name: String,
+    organization_id: Uuid,
 }
 
 impl AlertConfigChart {
@@ -33,6 +34,7 @@ impl AlertConfigChart {
         chart_prefix_path: Option<&str>,
         cluster_name: &str,
         alert_config: Option<AlertManagerConfig>,
+        organization_id: Uuid,
     ) -> Self {
         AlertConfigChart {
             action,
@@ -49,6 +51,7 @@ impl AlertConfigChart {
             ),
             prometheus_namespace,
             _cluster_name: cluster_name.to_string(),
+            organization_id,
         }
     }
 
@@ -83,7 +86,13 @@ impl ToCommonHelmChart for AlertConfigChart {
             let alerts_by_target = group_alerts_by_target(&alert_config.alerts);
 
             for (index, (target, target_alerts)) in alerts_by_target.iter().enumerate() {
-                let target_values = build_target_values(index, target, target_alerts, &self.prometheus_namespace);
+                let target_values = build_target_values(
+                    index,
+                    target,
+                    target_alerts,
+                    &self.prometheus_namespace,
+                    &self.organization_id,
+                );
                 values.extend(target_values.values);
                 values_string.extend(target_values.values_string);
             }
@@ -174,6 +183,7 @@ fn build_target_values(
     target: &AlertTarget,
     alerts: &[&AlertConfigAlert],
     namespace: &HelmChartNamespaces,
+    organization_id: &Uuid,
 ) -> AlertChartValues {
     let mut values = Vec::new();
     let mut values_string = Vec::new();
@@ -196,6 +206,10 @@ fn build_target_values(
             key: format!("{target_prefix}.namespace"),
             value: namespace.to_string(),
         },
+        ChartSetValue {
+            key: format!("{target_prefix}.organization_long_id"),
+            value: organization_id.to_string(),
+        },
     ]);
 
     for (alert_index, alert) in alerts.iter().enumerate() {
@@ -209,6 +223,22 @@ fn build_target_values(
             ChartSetValue {
                 key: format!("{alert_prefix}.alert_long_id"),
                 value: alert.long_id.to_string(),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.target_name"),
+                value: get_display_name(&alert.target),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.base_env_url"),
+                value: get_base_env_url(&alert.target),
+            },
+            ChartSetValue {
+                key: format!("{alert_prefix}.tag"),
+                value: alert
+                    .tag
+                    .as_ref()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "undefined tag".to_string()),
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.name"),
@@ -235,6 +265,10 @@ fn build_target_values(
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "undefined".to_string()),
             },
+            ChartSetValue {
+                key: format!("{alert_prefix}.organization_long_id"),
+                value: organization_id.to_string(),
+            },
         ]);
 
         if let Some(summary) = &alert.summary {
@@ -247,7 +281,7 @@ fn build_target_values(
         if let Some(severity) = &alert.severity {
             values.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.severity"),
-                value: severity.clone(),
+                value: capitalize(severity),
             })
         }
 
@@ -279,6 +313,33 @@ fn build_target_values(
     }
 
     AlertChartValues { values, values_string }
+}
+
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+    }
+}
+
+fn get_base_env_url(alert_target: &AlertTarget) -> String {
+    match (alert_target.environment_id, alert_target.project_id) {
+        (Some(environment_id), Some(project_id)) => {
+            format!(
+                "https://console.qovery.com/organization/{}/project/{}/environment/{}",
+                alert_target.organization_id, project_id, environment_id
+            )
+        }
+        _ => String::new(),
+    }
+}
+
+fn get_display_name(alert_target: &AlertTarget) -> String {
+    match &alert_target.environment_name {
+        Some(environment_name) => format!("{environment_name}/{}", alert_target.name),
+        None => alert_target.name.clone(),
+    }
 }
 
 #[derive(Clone)]
@@ -318,6 +379,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::Kind;
     use crate::io_models::metrics::AlertManagerConfig;
     use std::env;
+    use uuid::Uuid;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -337,6 +399,7 @@ mod tests {
                 alerts: vec![],
                 config_name: None,
             }),
+            Uuid::new_v4(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -374,6 +437,7 @@ mod tests {
                 alerts: vec![],
                 config_name: None,
             }),
+            Uuid::new_v4(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -421,6 +485,7 @@ mod tests {
                 alerts: vec![],
                 config_name: None,
             }),
+            Uuid::new_v4(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -457,10 +522,22 @@ mod tests {
         let target1 = AlertTarget {
             id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
             r#type: AlertTargetType::Application,
+            name: "serviceA".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
         };
         let target2 = AlertTarget {
             id: Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap(),
             r#type: AlertTargetType::Container,
+            name: "serviceA".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
         };
 
         // Create alerts for target1
@@ -477,6 +554,7 @@ mod tests {
             receivers: vec![],
             target: target1.clone(),
             version_tag: Some("1".to_string()),
+            tag: None,
         };
 
         let alert2 = AlertConfigAlert {
@@ -492,6 +570,7 @@ mod tests {
             receivers: vec![],
             target: target1.clone(),
             version_tag: Some("1".to_string()),
+            tag: None,
         };
 
         // Create alert for target2
@@ -508,6 +587,7 @@ mod tests {
             receivers: vec![],
             target: target2.clone(),
             version_tag: Some("2".to_string()),
+            tag: None,
         };
 
         let alerts = vec![alert1, alert2, alert3];
@@ -530,6 +610,12 @@ mod tests {
         let target = AlertTarget {
             id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
             r#type: AlertTargetType::Application,
+            name: "serviceA".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
         };
 
         let receiver_id = Uuid::parse_str("99999999-9999-9999-9999-999999999999").unwrap();
@@ -550,12 +636,13 @@ mod tests {
             receivers: vec![receiver_id],
             target: target.clone(),
             version_tag: Some("1".to_string()),
+            tag: None,
         };
 
         let alerts = vec![&alert];
 
         // Execute
-        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus);
+        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus, &Uuid::new_v4());
 
         // Verify target values
         assert!(
@@ -674,6 +761,12 @@ mod tests {
         let target = AlertTarget {
             id: Uuid::parse_str("3f50657b-1162-4dde-b706-4d5e937f3c09").unwrap(),
             r#type: AlertTargetType::KubernetesProvider,
+            name: "serviceA".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
         };
 
         // Create alert
@@ -690,6 +783,7 @@ mod tests {
             receivers: vec![receiver_id],
             target: target.clone(),
             version_tag: Some("1".to_string()),
+            tag: None,
         };
 
         let alert_config = AlertManagerConfig {
@@ -709,6 +803,7 @@ mod tests {
             None,
             "test-cluster",
             Some(alert_config),
+            Uuid::new_v4(),
         );
 
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -764,6 +859,7 @@ mod tests {
             None,
             "test-cluster",
             Some(alert_config),
+            Uuid::new_v4(),
         );
 
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -789,6 +885,12 @@ mod tests {
         let target = AlertTarget {
             id: Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap(),
             r#type: AlertTargetType::Application,
+            name: "serviceA".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
         };
 
         let alert = AlertConfigAlert {
@@ -804,10 +906,11 @@ mod tests {
             receivers: vec![],
             target: target.clone(),
             version_tag: Some("1".to_string()),
+            tag: None,
         };
 
         let alerts = vec![&alert];
-        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus);
+        let result = super::build_target_values(0, &target, &alerts, &HelmChartNamespaces::Prometheus, &Uuid::new_v4());
 
         // Should not have annotation keys if values are None
         assert!(
