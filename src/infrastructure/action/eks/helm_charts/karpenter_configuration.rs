@@ -2,7 +2,8 @@ use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::domain::ToHelmString;
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError,
+    HelmChartNamespaces,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -402,6 +403,11 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
                 values_string,
+                // Retry helm install in case CRDs are not yet fully propagated in the API server
+                upgrade_retry: Some(ChartInfoUpgradeRetry {
+                    nb_retry: 3,
+                    delay_in_milli_sec: 10_000, // 10 seconds between retries = 30s total
+                }),
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
