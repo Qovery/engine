@@ -46,7 +46,6 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) kube_name: String,
     pub(crate) action: Action,
     pub(crate) build: Build,
-    pub(crate) root_module_path: PathBuf,
     pub(crate) terraform_files_source: TerraformFilesSource,
     pub(crate) terraform_var_file_paths: Vec<String>,
     pub(crate) terraform_vars: Vec<(String, String)>,
@@ -85,7 +84,6 @@ impl<T: CloudProvider> TerraformService<T> {
         gpu_limit: Option<KubernetesGpuResourceUnit>,
         persistent_storage: PersistentStorage,
         build: Build,
-        root_module_path: PathBuf,
         terraform_files_source: TerraformFilesSource,
         terraform_var_file_paths: Vec<String>,
         terraform_vars: Vec<(String, String)>,
@@ -124,7 +122,6 @@ impl<T: CloudProvider> TerraformService<T> {
             kube_name,
             action,
             build,
-            root_module_path,
             terraform_files_source,
             terraform_var_file_paths,
             terraform_vars,
@@ -282,7 +279,8 @@ impl<T: CloudProvider> TerraformService<T> {
     }
 
     fn get_command_args(&self) -> Vec<String> {
-        let base_path = self.root_module_path.to_str().unwrap_or_default().to_string();
+        // Content is already at root of build context since we set root_path to root_module_path
+        let base_path = ".".to_string();
 
         let var_file_args: Vec<String> = self
             .terraform_var_file_paths

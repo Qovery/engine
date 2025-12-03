@@ -27,7 +27,6 @@ use base64::engine::general_purpose;
 use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -240,12 +239,6 @@ impl TerraformService {
             size_in_gib: KubernetesMemoryResourceUnit::GibiByte(self.persistent_storage.size_in_gib),
         };
 
-        let root_module_path = match self.tf_files_source {
-            TerraformFilesSource::Git {
-                ref root_module_path, ..
-            } => PathBuf::from(root_module_path),
-        };
-
         let terraform_credentials_domain = self.get_terraform_credentials_domain()?;
 
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
@@ -264,7 +257,6 @@ impl TerraformService {
                     self.gpu_limit.map(KubernetesGpuResourceUnit),
                     persistent_storage,
                     build,
-                    root_module_path,
                     tf_files_source_domain,
                     self.tf_var_file_paths,
                     self.tf_vars,
@@ -295,7 +287,6 @@ impl TerraformService {
                     self.gpu_limit.map(KubernetesGpuResourceUnit),
                     persistent_storage,
                     build,
-                    root_module_path,
                     tf_files_source_domain,
                     self.tf_var_file_paths,
                     self.tf_vars,
@@ -325,7 +316,6 @@ impl TerraformService {
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 persistent_storage,
                 build,
-                root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
                 self.tf_vars,
@@ -354,7 +344,6 @@ impl TerraformService {
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 persistent_storage,
                 build,
-                root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
                 self.tf_vars,
@@ -383,7 +372,6 @@ impl TerraformService {
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 persistent_storage,
                 build,
-                root_module_path,
                 tf_files_source_domain,
                 self.tf_var_file_paths,
                 self.tf_vars,
@@ -530,8 +518,8 @@ impl TerraformService {
                 ),
             };
 
-        // Convert our root module path to a relative path to be able to append them correctly
-        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path("/", dockerfile_path);
+        // Use root_module_path as the Docker build context so only necessary files are copied
+        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
         let mut disable_build_cache = false;
 
         let build_env_vars = self
@@ -621,7 +609,9 @@ terraform {{
     }
 
     fn build_extra_files(&self, root_module_path: &str) -> Result<Vec<GitRepositoryExtraFile>, TerraformServiceError> {
-        let (_, entry_point_file_path) = normalize_root_and_dockerfile_path("/", &Some("entrypoint.sh".to_string()));
+        // Place entrypoint.sh in root_module_path so it ends up at /data/entrypoint.sh in the Docker image
+        let (_, entry_point_file_path) =
+            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
 
         let mut extra_files = vec![GitRepositoryExtraFile {
             path: entry_point_file_path
