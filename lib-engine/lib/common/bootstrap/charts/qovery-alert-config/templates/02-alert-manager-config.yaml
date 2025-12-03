@@ -10,6 +10,8 @@ metadata:
 spec:
   route:
     receiver: default
+    groupBy:
+      - qovery_target_id
     routes:
 {{- range $i, $rcv := $root.Values.receivers }}
       - matchers:
@@ -57,11 +59,7 @@ spec:
               text: "Service Logs"
               url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
           sendResolved: {{ default true $rcv.slack.sendResolved }}
-          groupBy:
-            - alertname                                                                                                                                                                                                                                                                                        │
-            - qovery_alert_long_id                                                                                                                                                                                                                                                                             │
-            - qovery_target_id
-          groupInterval: 5m                                                                                                                                                                                                                                                                                  │
+          groupInterval: 5m
           groupWait: 30s
           repeatInterval: 4h
           apiURL:
