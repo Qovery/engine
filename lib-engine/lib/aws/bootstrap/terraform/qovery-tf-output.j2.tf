@@ -18,6 +18,12 @@ output "cluster_vpc_id" { value = try(aws_eks_cluster.eks_cluster.vpc_config[0].
 {% if enable_cloudwatch_exporter -%}
 output "aws_iam_cloudwatch_exporter_role_arn" { value = aws_iam_role.cloudwatch_exporter.arn }
 {% endif -%}
+{% if not user_provided_network -%}
+output "s3_vpc_endpoint_id" {
+  description = "ID of the S3 VPC Gateway endpoint"
+  value       = aws_vpc_endpoint.s3.id
+}
+{% endif -%}
 output "kubeconfig" {
   sensitive = true
   depends_on = [aws_eks_cluster.eks_cluster]
