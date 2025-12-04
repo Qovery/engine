@@ -8,7 +8,7 @@ nameOverride: ""
 ## @param fullnameOverride String to fully override the release name
 fullnameOverride: ""
 
-## @param provider DNS provider type (cloudflare, pdns)
+## @param provider DNS provider type (cloudflare, pdns, route53)
 provider: ""
 
 ## PowerDNS configuration
@@ -24,3 +24,12 @@ cloudflare:
   apiKey: ""
   ## @param cloudflare.email Cloudflare email (required for API key method)
   email: ""
+
+## AWS Route 53 configuration
+route53:
+  ## @param route53.accessKeyId AWS Access Key ID
+  accessKeyId: ""
+  ## @param route53.secretAccessKey AWS Secret Access Key
+  secretAccessKey: ""
+  ## @param route53.region AWS region
+  region: ""

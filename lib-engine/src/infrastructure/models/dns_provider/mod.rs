@@ -4,6 +4,7 @@ use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::infrastructure::models::dns_provider::cloudflare::CloudflareDnsConfig;
 use crate::infrastructure::models::dns_provider::errors::DnsProviderError;
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDnsConfig;
+use crate::infrastructure::models::dns_provider::route53::Route53DnsConfig;
 use tera::Context as TeraContext;
 use uuid::Uuid;
 
@@ -15,17 +16,20 @@ pub mod cloudflare;
 pub mod errors;
 pub mod io;
 pub mod qoverydns;
+pub mod route53;
 
 #[derive(Clone, Debug)]
 pub enum Kind {
     Cloudflare,
     QoveryDns,
+    Route53,
 }
 
 #[derive(Clone, Debug)]
 pub enum DnsProviderConfiguration {
     Cloudflare(CloudflareDnsConfig),
     QoveryDns(QoveryDnsConfig),
+    Route53(Route53DnsConfig),
 }
 
 impl DnsProviderConfiguration {
@@ -33,6 +37,7 @@ impl DnsProviderConfiguration {
         match self {
             DnsProviderConfiguration::Cloudflare(_) => "cloudflare",
             DnsProviderConfiguration::QoveryDns(_) => "pdns",
+            DnsProviderConfiguration::Route53(_) => "route53",
         }
         .to_string()
     }

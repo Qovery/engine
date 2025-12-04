@@ -42,6 +42,17 @@ spec:
                 key: apiPort
                 name: {{ .Values.externalDnsProvider }}-api-token-secret
           {{ end }}
+          {{ if eq .Values.externalDnsProvider "route53" }}
+          route53:
+            region: {{ .Values.provider.route53.region }}
+            {{ if .Values.provider.route53.hostedZoneId }}
+            hostedZoneID: {{ .Values.provider.route53.hostedZoneId }}
+            {{ end }}
+            accessKeyID: {{ .Values.provider.route53.accessKeyId }}
+            secretAccessKeySecretRef:
+              name: {{ .Values.externalDnsProvider }}-api-token-secret
+              key: secretAccessKey
+          {{ end }}
         selector:
           dnsZones:
             {{- range .Values.managedDns }}

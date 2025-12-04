@@ -27,3 +27,8 @@ provider:
     apiUrl: set-by-engine-code
     # Qovery DNS: apiKey: *jwtToken
     apiKey: set-by-engine-code
+  route53:
+    accessKeyId: set-by-engine-code
+    secretAccessKey: set-by-engine-code
+    region: set-by-engine-code
+    hostedZoneId: set-by-engine-code

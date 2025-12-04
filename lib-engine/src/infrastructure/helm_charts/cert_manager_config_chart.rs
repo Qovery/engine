@@ -90,6 +90,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                                 cloudflare_config.cloudflare_api_token.to_string()
                             }
                             DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
                         },
                     },
                     ChartSetValue {
@@ -99,6 +100,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                                 cloudflare_config.cloudflare_email.to_string()
                             }
                             DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
                         },
                     },
                     // Qovery DNS
@@ -128,6 +130,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                                 format!("\"{}\"", qovery_dns_config.api_url_port)
                             }
                             DnsProviderConfiguration::Cloudflare(_) => "no-set".to_string(),
+                            DnsProviderConfiguration::Route53(_) => "no-set".to_string(),
                         },
                     },
                     ChartSetValue {
@@ -137,6 +140,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                                 qovery_dns_config.api_url_scheme_and_domain.to_string()
                             }
                             DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
                         },
                     },
                     ChartSetValue {
@@ -146,6 +150,46 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                                 qovery_dns_config.api_key.to_string()
                             }
                             DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
+                        },
+                    },
+                    // Route 53
+                    ChartSetValue {
+                        key: "provider.route53.accessKeyId".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(route53_config) => {
+                                route53_config.aws_access_key_id.to_string()
+                            }
+                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                        },
+                    },
+                    ChartSetValue {
+                        key: "provider.route53.secretAccessKey".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(route53_config) => {
+                                route53_config.aws_secret_access_key.to_string()
+                            }
+                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                        },
+                    },
+                    ChartSetValue {
+                        key: "provider.route53.region".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(route53_config) => route53_config.aws_region.to_string(),
+                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                        },
+                    },
+                    ChartSetValue {
+                        key: "provider.route53.hostedZoneId".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(route53_config) => {
+                                route53_config.hosted_zone_id.clone().unwrap_or_else(|| "".to_string())
+                            }
+                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
                         },
                     },
                 ],
