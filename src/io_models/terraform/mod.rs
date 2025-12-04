@@ -577,6 +577,11 @@ impl TerraformService {
         Ok(build)
     }
 
+    /// Generates the Dockerfile content for the Terraform/OpenTofu service.
+    ///
+    /// The returned Dockerfile contains a `{{custom_fragment}}` placeholder that will be
+    /// replaced at build time with the content of `qovery-build-fragment.dockerfile` if
+    /// present in the user's repository.
     fn get_docker_file(&self) -> String {
         let dockerfile = match &self.provider {
             TerraformProvider::Terraform => include_str!("resources/terraform.dockerfile"),
@@ -783,5 +788,34 @@ mod tests {
         );
         // And configs should be empty for this backend type
         assert!(backend.configs.is_empty());
+    }
+
+    #[test]
+    fn test_get_docker_file_contains_custom_fragment_placeholder() {
+        let service = create_test_terraform_service("terraform-service");
+
+        let dockerfile = service.get_docker_file();
+
+        // Should contain the placeholder for build-time injection
+        assert!(dockerfile.contains("{{custom_fragment}}"));
+        // Should have provider version replaced
+        assert!(dockerfile.contains("1.0.0"));
+        assert!(!dockerfile.contains("{{provider_version}}"));
+    }
+
+    #[test]
+    fn test_get_docker_file_opentofu_contains_custom_fragment_placeholder() {
+        let mut service = create_test_terraform_service("opentofu-service");
+        service.provider = TerraformProvider::OpenTofu;
+
+        let dockerfile = service.get_docker_file();
+
+        // Should contain the placeholder for build-time injection
+        assert!(dockerfile.contains("{{custom_fragment}}"));
+        // Should have provider version replaced
+        assert!(dockerfile.contains("1.0.0"));
+        assert!(!dockerfile.contains("{{provider_version}}"));
+        // Should be OpenTofu image
+        assert!(dockerfile.contains("opentofu"));
     }
 }

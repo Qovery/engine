@@ -12,6 +12,9 @@ EOF
 WORKDIR /data
 COPY --chown=app:app . .
 
+# Custom build fragment (injected from qovery-build-fragment.dockerfile if present)
+{{custom_fragment}}
+
 RUN chmod +x entrypoint.sh
 USER app
 
