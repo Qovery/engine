@@ -30,6 +30,7 @@ use crate::infrastructure::models::container_registry::scaleway_container_regist
 use crate::infrastructure::models::dns_provider::cloudflare::Cloudflare;
 use crate::infrastructure::models::dns_provider::io::Kind;
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDns;
+use crate::infrastructure::models::dns_provider::route53::Route53;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::azure::AksOptions;
 use crate::infrastructure::models::kubernetes::azure::node::AzureInstancesType;
@@ -888,6 +889,23 @@ impl DnsProvider {
                 }
 
                 None
+            }
+            Kind::Route53 => {
+                let aws_access_key_id = self.options.get("aws_access_key_id")?;
+                let aws_secret_access_key = self.options.get("aws_secret_access_key")?;
+                let aws_region = self.options.get("aws_region")?;
+                let hosted_zone_id = self.options.get("hosted_zone_id").cloned();
+
+                Some(Box::new(Route53::new(
+                    context,
+                    self.long_id,
+                    self.name.as_str(),
+                    Domain::new(self.domain.clone()),
+                    aws_access_key_id.as_str(),
+                    aws_secret_access_key.as_str(),
+                    aws_region.as_str(),
+                    hosted_zone_id,
+                )))
             }
         }
     }

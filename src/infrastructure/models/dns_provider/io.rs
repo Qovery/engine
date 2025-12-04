@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub enum Kind {
     Cloudflare,
     QoveryDns,
+    Route53,
 }
 
 impl From<dns_provider::Kind> for Kind {
@@ -13,6 +14,7 @@ impl From<dns_provider::Kind> for Kind {
         match kind {
             dns_provider::Kind::Cloudflare => Kind::Cloudflare,
             dns_provider::Kind::QoveryDns => Kind::QoveryDns,
+            dns_provider::Kind::Route53 => Kind::Route53,
         }
     }
 }

@@ -80,6 +80,11 @@ impl ExternalDNSChart {
                 "pdns".hash(&mut hasher);
                 config.api_key.hash(&mut hasher);
             }
+            DnsProviderConfiguration::Route53(config) => {
+                "route53".hash(&mut hasher);
+                config.aws_access_key_id.hash(&mut hasher);
+                config.aws_secret_access_key.hash(&mut hasher);
+            }
         }
         format!("{:x}", hasher.finish())
     }
@@ -139,6 +144,16 @@ impl ToCommonHelmChart for ExternalDNSChart {
                         value: "$(PDNS_API_KEY)".to_string(),
                     },
                 ]);
+            }
+            DnsProviderConfiguration::Route53(config) => {
+                // Route 53 specific configuration
+                // Add zone-id-filter if hosted_zone_id is provided for better performance
+                if let Some(hosted_zone_id) = &config.hosted_zone_id {
+                    values.push(ChartSetValue {
+                        key: "extraArgs.zone-id-filter".to_string(),
+                        value: hosted_zone_id.clone(),
+                    });
+                }
             }
         }
 
@@ -209,6 +224,49 @@ impl ToCommonHelmChart for ExternalDNSChart {
                     ChartSetValue {
                         key: "env[0].valueFrom.secretKeyRef.key".to_string(),
                         value: "pdns_api_key".to_string(),
+                    },
+                ]);
+            }
+            DnsProviderConfiguration::Route53(_) => {
+                values.extend(vec![
+                    // AWS_ACCESS_KEY_ID
+                    ChartSetValue {
+                        key: "env[0].name".to_string(),
+                        value: "AWS_ACCESS_KEY_ID".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[0].valueFrom.secretKeyRef.name".to_string(),
+                        value: "external-dns-secret".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[0].valueFrom.secretKeyRef.key".to_string(),
+                        value: "aws_access_key_id".to_string(),
+                    },
+                    // AWS_SECRET_ACCESS_KEY
+                    ChartSetValue {
+                        key: "env[1].name".to_string(),
+                        value: "AWS_SECRET_ACCESS_KEY".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[1].valueFrom.secretKeyRef.name".to_string(),
+                        value: "external-dns-secret".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[1].valueFrom.secretKeyRef.key".to_string(),
+                        value: "aws_secret_access_key".to_string(),
+                    },
+                    // AWS_DEFAULT_REGION
+                    ChartSetValue {
+                        key: "env[2].name".to_string(),
+                        value: "AWS_DEFAULT_REGION".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[2].valueFrom.secretKeyRef.name".to_string(),
+                        value: "external-dns-secret".to_string(),
+                    },
+                    ChartSetValue {
+                        key: "env[2].valueFrom.secretKeyRef.key".to_string(),
+                        value: "aws_region".to_string(),
                     },
                 ]);
             }
@@ -367,6 +425,28 @@ impl ToCommonHelmChart for ExternalDNSSecretChart {
                         key: "pdns.apiKey".to_string(),
                         value: match &self.dns_provider_configuration {
                             DnsProviderConfiguration::QoveryDns(config) => config.api_key.to_string(),
+                            _ => "null".to_string(),
+                        },
+                    },
+                    // Route 53 secrets
+                    ChartSetValue {
+                        key: "route53.accessKeyId".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(config) => config.aws_access_key_id.to_string(),
+                            _ => "null".to_string(),
+                        },
+                    },
+                    ChartSetValue {
+                        key: "route53.secretAccessKey".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(config) => config.aws_secret_access_key.to_string(),
+                            _ => "null".to_string(),
+                        },
+                    },
+                    ChartSetValue {
+                        key: "route53.region".to_string(),
+                        value: match &self.dns_provider_configuration {
+                            DnsProviderConfiguration::Route53(config) => config.aws_region.to_string(),
                             _ => "null".to_string(),
                         },
                     },
