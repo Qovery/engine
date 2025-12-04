@@ -45,6 +45,8 @@ crds:
 
 alertmanager:
   enabled: "set-by-engine-code"
+  podDisruptionBudget:
+    enabled: true
   alertmanagerSpec:
     replicas: 2
     resources:

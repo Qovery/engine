@@ -1,7 +1,7 @@
 defaultRules:
   create: true
   rules:
-    alertmanager: false
+    alertmanager: "set-by-engine-code"
     etcd: false
     configReloaders: true
     kubeApiserverAvailability: false
@@ -44,7 +44,18 @@ crds:
   enabled: false
 
 alertmanager:
-  enabled: false
+  enabled: "set-by-engine-code"
+  podDisruptionBudget:
+    enabled: true
+  alertmanagerSpec:
+    replicas: 2
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
 
 nodeExporter:
   enabled: false # Handling GKE autopilot: https://github.com/SumoLogic/sumologic-kubernetes-collection/issues/1468#issuecomment-1005800179
