@@ -272,7 +272,7 @@ fn build_target_values(
         ]);
 
         if let Some(summary) = &alert.summary {
-            values.push(ChartSetValue {
+            values_string.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.summary"),
                 value: summary.clone(),
             })
@@ -286,7 +286,7 @@ fn build_target_values(
         }
 
         if let Some(description) = &alert.description {
-            values.push(ChartSetValue {
+            values_string.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.description"),
                 value: description.clone(),
             })
@@ -701,14 +701,14 @@ mod tests {
         // Verify annotations
         assert!(
             result
-                .values
+                .values_string
                 .iter()
                 .any(|v| v.key == "targets[0].alerts[0].annotations.summary" && v.value == "Service is down"),
             "Should contain summary annotation"
         );
         assert!(
             result
-                .values
+                .values_string
                 .iter()
                 .any(|v| v.key == "targets[0].alerts[0].annotations.description"),
             "Should contain description annotation"
