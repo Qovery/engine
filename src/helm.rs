@@ -894,10 +894,16 @@ impl HelmChart for CommonChart {
             None => self.get_vpa_chart_info(None),
         };
         warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
-        // Deploy VPA only if both VPA and parent are in Deploy mode
-        if let (Deploy, Deploy) = (&chart_info.action, &vpa_chart.action) {
-            warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
-            helm.upgrade(&vpa_chart, &[], cmd_killer)?;
+        // Deploy VPA if both VPA and parent are in Deploy mode, otherwise uninstall it
+        match (&chart_info.action, &vpa_chart.action) {
+            (Deploy, Deploy) => {
+                warn!("UPGRADE VPA CHART ++++++++++++++++++++++++++++++++");
+                helm.upgrade(&vpa_chart, &[], cmd_killer)?;
+            }
+            _ => {
+                warn!("UNINSTALL VPA CHART ++++++++++++++++++++++++++++++++");
+                helm.uninstall(&vpa_chart, &[], cmd_killer, &mut |_| {}, &mut |_| {})?;
+            }
         }
 
         Ok(payload)
@@ -906,37 +912,20 @@ impl HelmChart for CommonChart {
     fn post_exec(
         &self,
         kube_client: &kube::Client,
-        kubernetes_config: &Path,
-        envs: &[(&str, &str)],
+        _kubernetes_config: &Path,
+        _envs: &[(&str, &str)],
         payload: Option<ChartPayload>,
         _cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         // installation checker
-        let chart_payload_res = match &self.chart_installation_checker {
+        match &self.chart_installation_checker {
             Some(checker) => match checker.verify_installation(kube_client) {
                 Ok(_) => Ok(payload),
                 Err(e) => Err(HelmChartError::CommandError(e)),
             },
             // If no checker set, then consider it's ok
             None => Ok(payload),
-        };
-
-        let helm = Helm::new(Some(kubernetes_config), envs)?;
-
-        //  uninstall VPA if not wanted
-        let vpa_chart = match &self.vertical_pod_autoscaler {
-            Some(vpa) => self.get_vpa_chart_info(Some(vpa.clone())),
-            None => self.get_vpa_chart_info(None),
-        };
-        warn!("VPA CHART ++++++++++++++++++++++++++++++++ {:?}", &vpa_chart);
-        let chart_info = &self.get_chart_info();
-        // Destroy VPA only if both VPA and parent are in Destroy mode
-        if let (HelmAction::Destroy, HelmAction::Destroy) = (&chart_info.action, &vpa_chart.action) {
-            warn!("DESTROY VPA CHART ++++++++++++++++++++++++++++++++");
-            helm.uninstall(&vpa_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
         }
-
-        chart_payload_res
     }
 }
 
