@@ -41,6 +41,15 @@ impl DnsProviderConfiguration {
         }
         .to_string()
     }
+
+    pub fn get_external_dns_provider_name(&self) -> String {
+        match self {
+            DnsProviderConfiguration::Cloudflare(_) => "cloudflare",
+            DnsProviderConfiguration::QoveryDns(_) => "pdns",
+            DnsProviderConfiguration::Route53(_) => "aws",
+        }
+        .to_string()
+    }
 }
 
 pub trait DnsProvider: Send + Sync {

@@ -100,7 +100,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
             },
             ChartSetValue {
                 key: "provider".to_string(),
-                value: self.dns_provider_configuration.get_cert_manager_config_name(),
+                value: self.dns_provider_configuration.get_external_dns_provider_name(),
             },
             ChartSetValue {
                 key: "txtOwnerId".to_string(),
@@ -147,6 +147,11 @@ impl ToCommonHelmChart for ExternalDNSChart {
             }
             DnsProviderConfiguration::Route53(config) => {
                 // Route 53 specific configuration
+                values.push(ChartSetValue {
+                    key: "extraArgs.aws-zone-type".to_string(),
+                    value: "public".to_string(),
+                });
+
                 // Add zone-id-filter if hosted_zone_id is provided for better performance
                 if let Some(hosted_zone_id) = &config.hosted_zone_id {
                     values.push(ChartSetValue {
