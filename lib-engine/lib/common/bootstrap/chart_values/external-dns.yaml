@@ -32,11 +32,13 @@ provider: set-by-engine-code
 # dynamically populated by engine code based on provider
 # For PDNS: pdns-server and pdns-api-key will be set
 # For Cloudflare: cloudflare-proxied will be set
+# For Route53: aws-zone-type and zone-id-filter (optional) will be set
 extraArgs: {} #set-by-engine-code
 
 # env variables are dynamically set by engine code based on provider
 # For PDNS: PDNS_API_KEY will be set
 # For Cloudflare: CF_API_TOKEN, CF_API_KEY, CF_API_EMAIL will be set
+# For Route53: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_DEFAULT_REGION will be set
 env: [] #set-by-engine-code
 
 # SHA-256 checksum of DNS provider secrets to trigger pod restarts when secrets change
