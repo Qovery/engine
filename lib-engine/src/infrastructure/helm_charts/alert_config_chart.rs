@@ -136,6 +136,34 @@ fn format_target_id(target: &AlertTarget) -> String {
     format!("{}-{}-{}", ALERT_PREFIX, type_suffix, to_short_id(&target.id))
 }
 
+/// Example: "high CPU usage" -> "HighCPUUsage"
+fn format_alert_name_prometheus(name: &str) -> Option<String> {
+    fn capitalize_first_char(word: &str) -> String {
+        let mut chars = word.chars();
+        match chars.next() {
+            None => String::new(),
+            Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        }
+    }
+
+    let formatted = name
+        .split(|c: char| c.is_whitespace() || c == '-' || c == '.' || c == '_')
+        .filter(|s| !s.is_empty())
+        .map(capitalize_first_char)
+        .collect::<String>();
+
+    if formatted.is_empty() {
+        return None;
+    }
+
+    // Prefix with underscore if it doesn't start with a letter
+    if formatted.chars().next().map(|c| c.is_alphabetic()) == Some(false) {
+        Some(format!("_{formatted}"))
+    } else {
+        Some(formatted)
+    }
+}
+
 fn group_alerts_by_target(alerts: &[AlertConfigAlert]) -> HashMap<&AlertTarget, Vec<&AlertConfigAlert>> {
     alerts.iter().into_group_map_by(|alert| &alert.target)
 }
@@ -242,7 +270,7 @@ fn build_target_values(
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.name"),
-                value: alert.name.clone(),
+                value: format_alert_name_prometheus(&alert.name).unwrap_or_else(|| alert.name.clone()),
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.expr"),
@@ -298,6 +326,11 @@ fn build_target_values(
                 value: runbook_url.clone(),
             })
         }
+
+        values.push(ChartSetValue {
+            key: format!("{alert_prefix}.annotations.qovery_alert_display_name"),
+            value: alert.name.clone(),
+        });
 
         values_string.extend(alert.labels.iter().map(|(key, value)| ChartSetValue {
             key: format!("{alert_prefix}.labels.{key}"),

@@ -38,7 +38,7 @@ spec:
           titleLink: {{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}
           text: >-
             {{`{{ range $i, $alert := .Alerts }}
-            {{ if eq $alert.Status "firing" }}🔥{{ else }}✅{{ end }} {{ $alert.Labels.alertname }} - {{ if $alert.Annotations.description }}{{ $alert.Annotations.description }}{{ end }} - {{ $alert.Annotations.severity }} Severity
+            {{ if eq $alert.Status "firing" }}🔥{{ else }}✅{{ end }} {{ if $alert.Annotations.qovery_alert_display_name }}{{ $alert.Annotations.qovery_alert_display_name }}{{ else }}{{ $alert.Labels.alertname }}{{ end }} - {{ if $alert.Annotations.description }}{{ $alert.Annotations.description }}{{ end }} - {{ $alert.Annotations.severity }} Severity
             {{ if $alert.Annotations.summary }}
                {{ $alert.Annotations.summary }}
             {{ end }}
