@@ -143,7 +143,7 @@ compactor:
     enabled: true
     ephemeral: true
     defaultEmptyDir: true
-    size: 50Gi
+    size: 250Gi
 
 # Store Gateway: implements Prometheus’s v1 API to proxy it to the underlying components.
 storegateway:
