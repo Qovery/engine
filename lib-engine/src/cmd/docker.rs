@@ -662,7 +662,7 @@ impl Docker {
         context: &Path,
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
-        cache: &ContainerImage,
+        cache: Option<&ContainerImage>,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -710,7 +710,7 @@ impl Docker {
         context: &Path,
         image_to_build: &ContainerImage,
         build_args: &[(&str, &str)],
-        cache: &ContainerImage,
+        cache: Option<&ContainerImage>,
         push_after_build: bool,
         architectures: &[Architecture],
         stdout_output: &mut Stdout,
@@ -740,18 +740,21 @@ impl Docker {
             } else {
                 "--output=type=docker".to_string() // tell buildkit to load the image into docker after build
             },
-            "--cache-from".to_string(),
-            format!("type=registry,ref={}", cache.image_name()),
             "-f".to_string(),
             dockerfile.to_str().unwrap_or_default().to_string(),
         ];
+
+        if let Some(cache) = cache {
+            args_string.push("--cache-from".to_string());
+            args_string.push(format!("type=registry,ref={}", cache.image_name()));
+        }
 
         if let Some(target_build_stage) = target_build_stage {
             args_string.push("--target".to_owned());
             args_string.push(target_build_stage.to_string());
         }
 
-        if push_after_build {
+        if push_after_build && let Some(cache) = cache {
             args_string.push("--cache-to".to_string());
             args_string.push(format!(
                 "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref={}",
@@ -1078,7 +1081,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1095,7 +1098,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1130,7 +1133,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1266,7 +1269,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
             false,
             &[Architecture::AMD64],
             &mut |msg| println!("{msg}"),
@@ -1301,7 +1304,7 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),
@@ -1318,7 +1321,37 @@ mod tests {
             Path::new("tests/docker/multi_stage_simple/"),
             &image_to_build,
             &[],
-            &image_cache,
+            Some(&image_cache),
+            false,
+            CPU_ARCHITECTURE,
+            &mut |msg| println!("{msg}"),
+            &mut |msg| eprintln!("{msg}"),
+            &CommandKiller::never(),
+            Some(&"build".to_string()),
+        );
+
+        assert!(ret.is_ok());
+    }
+
+    #[test]
+    fn test_buildkit_build_without_cache() {
+        // start a local registry to run this test
+        // docker run --rm -d -p 5000:5000 --name registry registry:2
+        let docker = Docker::new_with_local_builder(None).unwrap();
+        let image_to_build = ContainerImage::new(
+            private_registry_url(),
+            "local-repo/alpine".to_string(),
+            vec!["3.15".to_string()],
+        );
+
+        // It should work
+        let ret = docker.build_with_buildkit(
+            &None,
+            Path::new("tests/docker/multi_stage_simple/Dockerfile"),
+            Path::new("tests/docker/multi_stage_simple/"),
+            &image_to_build,
+            &[],
+            None,
             false,
             CPU_ARCHITECTURE,
             &mut |msg| println!("{msg}"),

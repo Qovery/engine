@@ -148,6 +148,9 @@ pub struct ApplicationAdvancedSettings {
     #[serde(default)]
     #[serde(alias = "build.ephemeral_storage_in_gib")]
     pub build_ephemeral_storage_in_gib: Option<u32>,
+    #[serde(default)]
+    #[serde(alias = "build.disable_buildkit_cache")]
+    pub build_disable_buildkit_cache: bool,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -237,6 +240,7 @@ impl Default for ApplicationAdvancedSettings {
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
+            build_disable_buildkit_cache: false,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
@@ -629,7 +633,6 @@ impl Application {
         //FIXME: Return a result the function
         let url = Url::parse(&self.git_url).unwrap_or_else(|_| Url::parse("https://invalid-git-url.com").unwrap());
 
-        let mut disable_build_cache = false;
         let mut build = Build {
             git_repository: GitRepository {
                 url,
@@ -651,7 +654,7 @@ impl Application {
             environment_variables: self
                 .environment_vars_with_infos
                 .iter()
-                .filter_map(|(k, variable_infos)| {
+                .map(|(k, variable_infos)| {
                     // Remove special vars
                     let v = String::from_utf8(
                         general_purpose::STANDARD
@@ -659,15 +662,10 @@ impl Application {
                             .unwrap_or_default(),
                     )
                     .unwrap_or_default();
-                    if k == "QOVERY_DISABLE_BUILD_CACHE" && v.to_lowercase() == "true" {
-                        disable_build_cache = true;
-                        return None;
-                    }
-
-                    Some((k.clone(), v))
+                    (k.clone(), v)
                 })
                 .collect::<BTreeMap<_, _>>(),
-            disable_cache: disable_build_cache,
+            disable_buildkit_cache: self.advanced_settings.build_disable_buildkit_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,

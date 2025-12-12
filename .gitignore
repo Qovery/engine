@@ -25,3 +25,4 @@ firedbg/
 CLAUDE.md
 
 dist/
+.speckit/
