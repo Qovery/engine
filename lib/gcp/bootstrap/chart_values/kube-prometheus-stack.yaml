@@ -121,6 +121,7 @@ prometheus:
       repository: pub-mirror-prometheus
     # Replica label to be used by thanos
     replicaExternalLabelName: "replica"
+    serviceDiscoveryRole: "EndpointSlice"
     thanos:
       objectStorageConfig:
         secret:
