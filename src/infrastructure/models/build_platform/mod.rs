@@ -117,7 +117,7 @@ pub struct Build {
     pub git_repository: GitRepository,
     pub image: Image,
     pub environment_variables: BTreeMap<String, String>,
-    pub disable_cache: bool,
+    pub disable_buildkit_cache: bool,
     pub timeout: Duration,
     pub architectures: Vec<CpuArchitecture>,
     pub max_cpu_in_milli: u32,

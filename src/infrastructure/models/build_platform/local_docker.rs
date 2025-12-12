@@ -146,8 +146,14 @@ impl LocalDocker {
             vec![build.image.tag.clone(), "latest".to_string()],
         );
 
-        let image_cache =
-            ContainerImage::new(build.image.registry_url.clone(), build.image.name(), vec!["cache".to_string()]);
+        let image_cache = match build.disable_buildkit_cache {
+            true => None,
+            false => Some(ContainerImage::new(
+                build.image.registry_url.clone(),
+                build.image.name(),
+                vec!["cache".to_string()],
+            )),
+        };
 
         // Login to the registry at repository level if needed
         let login_ret = retry::retry(Fibonacci::from(Duration::from_secs(1)).take(4), || {
@@ -252,7 +258,7 @@ impl LocalDocker {
             Path::new(into_dir_docker_style),
             &image_to_build,
             &env_vars,
-            &image_cache,
+            image_cache.as_ref(),
             true,
             &arch,
             &mut |line| logger.send_progress(line),

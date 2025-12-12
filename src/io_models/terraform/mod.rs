@@ -563,7 +563,7 @@ impl TerraformService {
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,
-            disable_cache: disable_build_cache,
+            disable_buildkit_cache: disable_build_cache,
             timeout: Duration::from_secs(self.advanced_settings.build_timeout_max_sec as u64),
             architectures,
             max_cpu_in_milli: self.advanced_settings.build_cpu_max_in_milli,
