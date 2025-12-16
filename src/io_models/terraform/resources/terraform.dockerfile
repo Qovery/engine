@@ -1,10 +1,15 @@
-FROM hashicorp/terraform:{{provider_version}}
+FROM hashicorp/terraform:{{provider_version}} AS terraform
+
+FROM debian:trixie-slim
+
+COPY --from=terraform /bin/terraform /usr/local/bin/terraform
 
 RUN <<EOF
 set -e
-apk update
-apk add dumb-init rsync
-adduser -D -u 1000 app
+apt-get update
+apt-get install -y --no-install-recommends dumb-init rsync bash ca-certificates
+rm -rf /var/lib/apt/lists/*
+useradd -m -u 1000 app
 mkdir /data
 chown -R app:app /data
 EOF
