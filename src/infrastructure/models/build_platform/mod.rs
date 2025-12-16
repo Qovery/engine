@@ -99,6 +99,15 @@ pub fn to_engine_error(event_details: EventDetails, err: BuildError, user_messag
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum DockerfileFragment {
+    /// Fragment content read from a file in the Git repository.
+    /// The path is relative to the root_module_path.
+    File { path: String },
+    /// Fragment content provided directly via API.
+    Inline { content: String },
+}
+
 pub trait BuildPlatform: Send + Sync {
     fn kind(&self) -> Kind;
     fn id(&self) -> &str;
@@ -125,6 +134,7 @@ pub struct Build {
     pub ephemeral_storage_in_gib: Option<u32>,
     // registries used by the build where we need to login to pull image
     pub registries: Vec<Registry>,
+    pub dockerfile_fragment: Option<DockerfileFragment>,
 }
 
 impl Build {
@@ -137,6 +147,7 @@ impl Build {
             &self.environment_variables,
             &self.git_repository.commit_id,
             &self.git_repository.docker_target_build_stage,
+            &self.dockerfile_fragment,
         );
     }
 }

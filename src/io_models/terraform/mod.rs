@@ -2,7 +2,9 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models;
 use crate::environment::models::terraform_service::{TerraformServiceError, TerraformServiceTrait};
 use crate::environment::models::types::{AWS, Azure, GCP, OnPremise, SCW};
-use crate::infrastructure::models::build_platform::{Build, GitRepository, GitRepositoryExtraFile, Image, SshKey};
+use crate::infrastructure::models::build_platform::{
+    Build, DockerfileFragment as BuildDockerfileFragment, GitRepository, GitRepositoryExtraFile, Image, SshKey,
+};
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::container_registry::{
@@ -144,6 +146,22 @@ pub struct TerraformCredentials {
     pub use_cluster_credentials: bool,
 }
 
+/// Custom Dockerfile fragment for Terraform/OpenTofu service builds.
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum DockerfileFragment {
+    /// File-based fragment referencing a Dockerfile fragment file in the Git repository.
+    File {
+        /// Path to the Dockerfile fragment file, relative to root_module_path
+        path: String,
+    },
+    /// Inline fragment with content provided directly.
+    Inline {
+        /// Dockerfile commands to inject
+        content: String,
+    },
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct TerraformService {
     pub long_id: Uuid,
@@ -183,6 +201,8 @@ pub struct TerraformService {
     // key is the name of the terraform action I.e: apply. Value is the list of extra arguments for this action
     #[serde(default)]
     pub extra_action_arguments: BTreeMap<String, Vec<String>>,
+    #[serde(default)]
+    pub dockerfile_fragment: Option<DockerfileFragment>,
 }
 
 impl TerraformService {
@@ -570,6 +590,12 @@ impl TerraformService {
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
             ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
             registries: vec![],
+            dockerfile_fragment: self.dockerfile_fragment.as_ref().map(|fragment| match fragment {
+                DockerfileFragment::File { path } => BuildDockerfileFragment::File { path: path.clone() },
+                DockerfileFragment::Inline { content } => BuildDockerfileFragment::Inline {
+                    content: content.clone(),
+                },
+            }),
         };
 
         build.compute_image_tag();
@@ -718,6 +744,7 @@ mod tests {
             shared_image_feature_enabled: false,
             terraform_credentials: None,
             extra_action_arguments: BTreeMap::new(),
+            dockerfile_fragment: None,
         }
     }
 

@@ -285,6 +285,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             max_ram_in_gib: 4,
             ephemeral_storage_in_gib: None,
             registries: vec![],
+            dockerfile_fragment: None,
         },
         vec![],
         None,

@@ -672,6 +672,7 @@ impl Application {
             max_ram_in_gib: self.advanced_settings.build_ram_max_in_gib,
             ephemeral_storage_in_gib: self.advanced_settings.build_ephemeral_storage_in_gib,
             registries: self.container_registries.clone(),
+            dockerfile_fragment: None, // Applications don't support dockerfile fragments
         };
 
         build.compute_image_tag();
