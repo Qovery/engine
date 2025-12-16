@@ -99,6 +99,7 @@ impl TerraformServiceTestBuilder {
             shared_image_feature_enabled: false,
             terraform_credentials: None,
             extra_action_arguments: self.extra_action_arguments.clone(),
+            dockerfile_fragment: None,
         }
     }
 }

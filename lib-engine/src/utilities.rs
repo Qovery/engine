@@ -5,7 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 
-use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
+use crate::infrastructure::models::build_platform::{DockerfileFragment, GitRepositoryExtraFile};
 use reqwest::header::{HeaderMap, HeaderValue};
 use uuid::Uuid;
 
@@ -31,6 +31,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     environment_variables: &BTreeMap<String, String>,
     commit_id: &str,
     docker_target_build_stage: &Option<String>,
+    dockerfile_fragment: &Option<DockerfileFragment>,
 ) -> String {
     // Image tag == hash(root_path) + commit_id truncate to 127 char
     // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
@@ -59,6 +60,13 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
             extra_file.content.hash(&mut hasher);
             extra_file.path.hash(&mut hasher);
         });
+    }
+
+    // Include dockerfile_fragment for cache invalidation
+    // - For inline fragments: hash the content so changes trigger rebuild
+    // - For file fragments: hash the path (file content changes are tracked via commit_id)
+    if let Some(fragment) = dockerfile_fragment {
+        fragment.hash(&mut hasher);
     }
 
     let mut tag = format!("{}-{}", hasher.finish(), commit_id);
@@ -95,7 +103,7 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 
 #[cfg(test)]
 mod tests_utilities {
-    use crate::infrastructure::models::build_platform::GitRepositoryExtraFile;
+    use crate::infrastructure::models::build_platform::{DockerfileFragment, GitRepositoryExtraFile};
     use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
     use base64::Engine;
     use base64::engine::general_purpose;
@@ -112,6 +120,7 @@ mod tests_utilities {
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
 
         let image_tag_2 = compute_image_tag(
@@ -121,6 +130,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
             &None,
         );
 
@@ -134,6 +144,7 @@ mod tests_utilities {
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
 
         assert_ne!(image_tag, image_tag_3);
@@ -146,6 +157,7 @@ mod tests_utilities {
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
 
         assert_eq!(image_tag_3, image_tag_3_2);
@@ -157,6 +169,7 @@ mod tests_utilities {
             &[],
             &BTreeMap::new(),
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
             &None,
         );
 
@@ -171,6 +184,7 @@ mod tests_utilities {
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
 
         assert_eq!(image_tag_4, image_tag_5);
@@ -182,6 +196,7 @@ mod tests_utilities {
             &[],
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
+            &None,
             &None,
         );
         assert_ne!(image_tag_4, image_tag_5);
@@ -197,6 +212,7 @@ mod tests_utilities {
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
         assert_ne!(image_tag_5, image_tag_6);
 
@@ -211,6 +227,7 @@ mod tests_utilities {
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
+            &None,
         );
         assert_ne!(image_tag_6, image_tag_7);
 
@@ -223,6 +240,7 @@ mod tests_utilities {
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &Some("stage1".to_string()),
+            &None,
         );
 
         let image_tag_9 = compute_image_tag(
@@ -233,9 +251,76 @@ mod tests_utilities {
             &env_vars_5,
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &Some("stage2".to_string()),
+            &None,
         );
 
         assert_ne!(image_tag_8, image_tag_9);
+    }
+
+    #[test]
+    fn test_dockerfile_fragment_affects_image_tag() {
+        let env_vars = BTreeMap::new();
+
+        // Without dockerfile_fragment
+        let tag_no_fragment = compute_image_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &None,
+            &[],
+            &env_vars,
+            "abc123",
+            &None,
+            &None,
+        );
+
+        // With inline dockerfile_fragment
+        let tag_with_inline = compute_image_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &None,
+            &[],
+            &env_vars,
+            "abc123",
+            &None,
+            &Some(DockerfileFragment::Inline {
+                content: "RUN apk add jq".to_string(),
+            }),
+        );
+
+        assert_ne!(tag_no_fragment, tag_with_inline);
+
+        // With file dockerfile_fragment
+        let tag_with_file = compute_image_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &None,
+            &[],
+            &env_vars,
+            "abc123",
+            &None,
+            &Some(DockerfileFragment::File {
+                path: "/custom/fragment.dockerfile".to_string(),
+            }),
+        );
+
+        assert_ne!(tag_no_fragment, tag_with_file);
+        assert_ne!(tag_with_inline, tag_with_file);
+
+        // Different inline content produces different tag
+        let tag_with_inline_2 = compute_image_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &None,
+            &[],
+            &env_vars,
+            "abc123",
+            &None,
+            &Some(DockerfileFragment::Inline {
+                content: "RUN apk add curl".to_string(),
+            }),
+        );
+
+        assert_ne!(tag_with_inline, tag_with_inline_2);
     }
 
     #[test]

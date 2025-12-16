@@ -20,7 +20,9 @@ use crate::cmd::docker::{Architecture, BuilderHandle, ContainerImage};
 use crate::cmd::git_lfs::{GitLfs, GitLfsError};
 use crate::environment::report::logger::EnvLogger;
 use crate::infrastructure::models::build_platform::dockerfile_utils::extract_dockerfile_args;
-use crate::infrastructure::models::build_platform::{Build, BuildError, BuildPlatform, Kind, to_build_error};
+use crate::infrastructure::models::build_platform::{
+    Build, BuildError, BuildPlatform, DockerfileFragment, Kind, to_build_error,
+};
 
 use crate::cmd::git;
 use crate::environment::models::abort::Abort;
@@ -39,12 +41,9 @@ const DOCKER_IGNORE: &str = r#"
 .gitignore
 "#;
 
-/// Filename for custom Dockerfile fragment that users can place in their repository
-/// to customize the Terraform/OpenTofu build image.
-const CUSTOM_BUILD_FRAGMENT_FILENAME: &str = "qovery-build-fragment.dockerfile";
-
 /// Placeholder in Dockerfile templates that gets replaced with custom fragment content.
-const CUSTOM_FRAGMENT_PLACEHOLDER: &str = "{{custom_fragment}}";
+/// Used by the inject_custom_build_fragment function.
+const CUSTOM_FRAGMENT_PLACEHOLDER: &str = "#{{custom_fragment}}";
 
 /// use Docker in local
 pub struct LocalDocker {
@@ -76,33 +75,57 @@ impl LocalDocker {
         })
     }
 
-    /// Checks for a custom build fragment file in the build context and injects its content
-    /// into the dockerfile template, replacing the `{{custom_fragment}}` placeholder.
-    ///
-    /// This allows users to customize Terraform/OpenTofu build images by placing a
-    /// `qovery-build-fragment.dockerfile` file in their repository.
-    ///
-    /// If the fragment file doesn't exist or the placeholder is not present, returns
-    /// the original content (with placeholder replaced by empty string if present).
-    fn inject_custom_build_fragment(dockerfile_content: &str, build_context_path: &Path) -> String {
-        // Only process if the dockerfile contains the placeholder
-        if !dockerfile_content.contains(CUSTOM_FRAGMENT_PLACEHOLDER) {
-            return dockerfile_content.to_string();
+    /// Injects custom Dockerfile fragment into the build
+    /// If explicit fragment config provided, use that (file path or inline content)
+    fn inject_custom_build_fragment(
+        dockerfile_content: &str,
+        build_context_path: &Path,
+        dockerfile_fragment: Option<&DockerfileFragment>,
+    ) -> Result<String, BuildError> {
+        if !dockerfile_content.contains(CUSTOM_FRAGMENT_PLACEHOLDER) && dockerfile_fragment.is_some() {
+            return Err(BuildError::InvalidConfig {
+                application: "terraform".to_string(),
+                raw_error_message: format!(
+                    "Dockerfile does not contain the required placeholder `{CUSTOM_FRAGMENT_PLACEHOLDER}` for injecting custom fragment"
+                ),
+            });
         }
 
-        let fragment_path = build_context_path.join(CUSTOM_BUILD_FRAGMENT_FILENAME);
-        let custom_fragment = match fs::read_to_string(&fragment_path) {
-            Ok(content) => {
-                info!("Found custom build fragment at {:?}, injecting into Dockerfile", fragment_path);
-                content
+        let custom_fragment = match dockerfile_fragment {
+            None => String::new(),
+            Some(DockerfileFragment::Inline { content }) => {
+                info!("Using inline Dockerfile fragment ({} bytes)", content.len());
+                content.clone()
             }
-            Err(_) => {
-                // Fragment file doesn't exist or can't be read - this is normal for most builds
-                String::new()
+            Some(DockerfileFragment::File { path }) => {
+                // Path is provided relative to root_module_path
+                // Strip leading slash if present since build_context_path is absolute
+                let relative_path = path.strip_prefix('/').unwrap_or(path);
+                let fragment_path = build_context_path.join(relative_path);
+
+                match fs::read_to_string(&fragment_path) {
+                    Ok(content) => {
+                        info!(
+                            "Found custom build fragment at {:?}, injecting into Dockerfile ({} bytes)",
+                            fragment_path,
+                            content.len()
+                        );
+                        content
+                    }
+                    Err(e) => {
+                        return Err(BuildError::IoError {
+                            application: "terraform".to_string(),
+                            action_description: format!(
+                                "reading dockerfile fragment from {fragment_path:?} (configured path: {path})"
+                            ),
+                            raw_error: e,
+                        });
+                    }
+                }
             }
         };
 
-        dockerfile_content.replace(CUSTOM_FRAGMENT_PLACEHOLDER, &custom_fragment)
+        Ok(dockerfile_content.replace(CUSTOM_FRAGMENT_PLACEHOLDER, &custom_fragment))
     }
 
     fn build_image_with_docker(
@@ -622,8 +645,11 @@ impl BuildPlatform for LocalDocker {
 
         // if the dockerfile content is provided, write it to the file before building
         if let Some(dockerfile_content) = &build.git_repository.dockerfile_content {
-            // Check for custom build fragment and inject it into the dockerfile if present
-            let dockerfile_content = Self::inject_custom_build_fragment(dockerfile_content, &build_context_path);
+            let dockerfile_content = Self::inject_custom_build_fragment(
+                dockerfile_content,
+                &build_context_path,
+                build.dockerfile_fragment.as_ref(),
+            )?;
 
             fs::write(&dockerfile_absolute_path, dockerfile_content).map_err(|err| BuildError::IoError {
                 application: app_id.clone(),
@@ -680,95 +706,154 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn test_inject_custom_build_fragment_with_fragment_file() {
+    fn test_inject_fragment_with_file_path() {
         let temp_dir = tempdir().unwrap();
         let fragment_content = "RUN apk add --no-cache jq curl\nRUN echo 'custom fragment'";
 
-        // Create the fragment file
-        fs::write(temp_dir.path().join(CUSTOM_BUILD_FRAGMENT_FILENAME), fragment_content).unwrap();
+        // Create the fragment file at a custom path
+        fs::write(temp_dir.path().join("custom/fragment.dockerfile"), fragment_content).unwrap_or_else(|_| {
+            fs::create_dir_all(temp_dir.path().join("custom")).unwrap();
+            fs::write(temp_dir.path().join("custom/fragment.dockerfile"), fragment_content).unwrap();
+        });
+        fs::create_dir_all(temp_dir.path().join("custom")).unwrap();
+        fs::write(temp_dir.path().join("custom/fragment.dockerfile"), fragment_content).unwrap();
 
         let dockerfile_template = r#"FROM alpine:3.22
 WORKDIR /data
 COPY . .
-# Custom build fragment (injected from qovery-build-fragment.dockerfile if present)
-{{custom_fragment}}
+#{{custom_fragment}}
 RUN chmod +x entrypoint.sh
 USER app"#;
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path());
+        let fragment = Some(DockerfileFragment::File {
+            path: "/custom/fragment.dockerfile".to_string(),
+        });
+
+        let result =
+            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
 
         assert!(result.contains("RUN apk add --no-cache jq curl"));
         assert!(result.contains("RUN echo 'custom fragment'"));
-        assert!(!result.contains("{{custom_fragment}}"));
+        assert!(!result.contains("#{{custom_fragment}}"));
     }
 
     #[test]
-    fn test_inject_custom_build_fragment_without_fragment_file() {
+    fn test_inject_fragment_with_inline_content() {
         let temp_dir = tempdir().unwrap();
-        // No fragment file created
+        let inline_content = "RUN apk add --no-cache aws-cli jq curl";
 
         let dockerfile_template = r#"FROM alpine:3.22
 WORKDIR /data
 COPY . .
-# Custom build fragment (injected from qovery-build-fragment.dockerfile if present)
-{{custom_fragment}}
+#{{custom_fragment}}
 RUN chmod +x entrypoint.sh
 USER app"#;
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path());
+        let fragment = Some(DockerfileFragment::Inline {
+            content: inline_content.to_string(),
+        });
+
+        let result =
+            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+
+        assert!(result.contains("RUN apk add --no-cache aws-cli jq curl"));
+        assert!(!result.contains("#{{custom_fragment}}"));
+    }
+
+    #[test]
+    fn test_inject_fragment_none_removes_placeholder() {
+        let temp_dir = tempdir().unwrap();
+
+        let dockerfile_template = r#"FROM alpine:3.22
+WORKDIR /data
+COPY . .
+#{{custom_fragment}}
+RUN chmod +x entrypoint.sh
+USER app"#;
+
+        // No fragment configured - V2 behavior: placeholder is replaced with empty string
+        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), None).unwrap();
 
         // Placeholder should be replaced with empty string
-        assert!(!result.contains("{{custom_fragment}}"));
-        // The comment line and surrounding structure should remain
-        assert!(result.contains("# Custom build fragment"));
+        assert!(!result.contains("#{{custom_fragment}}"));
+        // The surrounding structure should remain
         assert!(result.contains("RUN chmod +x entrypoint.sh"));
     }
 
     #[test]
-    fn test_inject_custom_build_fragment_with_empty_fragment_file() {
+    fn test_inject_fragment_empty_inline_content() {
         let temp_dir = tempdir().unwrap();
 
-        // Create an empty fragment file
-        fs::write(temp_dir.path().join(CUSTOM_BUILD_FRAGMENT_FILENAME), "").unwrap();
-
         let dockerfile_template = r#"FROM alpine:3.22
-{{custom_fragment}}
+#{{custom_fragment}}
 RUN chmod +x entrypoint.sh"#;
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path());
+        let fragment = Some(DockerfileFragment::Inline { content: String::new() });
 
-        assert!(!result.contains("{{custom_fragment}}"));
+        let result =
+            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
+
+        assert!(!result.contains("#{{custom_fragment}}"));
         assert!(result.contains("FROM alpine:3.22"));
         assert!(result.contains("RUN chmod +x entrypoint.sh"));
     }
 
     #[test]
-    fn test_inject_custom_build_fragment_without_placeholder() {
+    fn test_inject_fragment_without_placeholder_returns_error() {
         let temp_dir = tempdir().unwrap();
-
-        // Create a fragment file
-        fs::write(temp_dir.path().join(CUSTOM_BUILD_FRAGMENT_FILENAME), "RUN apk add jq").unwrap();
 
         // Dockerfile without the placeholder
         let dockerfile_template = r#"FROM alpine:3.22
 RUN chmod +x entrypoint.sh"#;
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path());
+        let fragment = Some(DockerfileFragment::Inline {
+            content: "RUN apk add jq".to_string(),
+        });
 
-        // Should return the original content unchanged
-        assert_eq!(result, dockerfile_template);
+        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref());
+
+        // Should return an error since there's no placeholder but a fragment is provided
+        assert!(result.is_err());
+        if let Err(BuildError::InvalidConfig { raw_error_message, .. }) = result {
+            assert!(raw_error_message.contains("#{{custom_fragment}}"));
+        } else {
+            panic!("Expected InvalidConfig error for missing placeholder");
+        }
     }
 
     #[test]
-    fn test_inject_custom_build_fragment_preserves_content_exactly() {
+    fn test_inject_fragment_file_not_found_returns_error() {
+        let temp_dir = tempdir().unwrap();
+
+        let dockerfile_template = "FROM alpine:3.22\n#{{custom_fragment}}\nRUN echo done";
+
+        let fragment = Some(DockerfileFragment::File {
+            path: "/non-existent/fragment.dockerfile".to_string(),
+        });
+
+        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref());
+
+        assert!(result.is_err());
+        if let Err(BuildError::IoError { action_description, .. }) = result {
+            assert!(action_description.contains("non-existent/fragment.dockerfile"));
+        } else {
+            panic!("Expected IoError for missing fragment file");
+        }
+    }
+
+    #[test]
+    fn test_inject_fragment_inline_preserves_content_exactly() {
         let temp_dir = tempdir().unwrap();
         let fragment_content = "# Install tools\nRUN apk add --no-cache \\\n    jq \\\n    curl";
 
-        fs::write(temp_dir.path().join(CUSTOM_BUILD_FRAGMENT_FILENAME), fragment_content).unwrap();
+        let dockerfile_template = "FROM alpine:3.22\n#{{custom_fragment}}\nRUN echo done";
 
-        let dockerfile_template = "FROM alpine:3.22\n{{custom_fragment}}\nRUN echo done";
+        let fragment = Some(DockerfileFragment::Inline {
+            content: fragment_content.to_string(),
+        });
 
-        let result = LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path());
+        let result =
+            LocalDocker::inject_custom_build_fragment(dockerfile_template, temp_dir.path(), fragment.as_ref()).unwrap();
 
         // Fragment content should be preserved exactly, including newlines and escapes
         assert!(result.contains(fragment_content));
