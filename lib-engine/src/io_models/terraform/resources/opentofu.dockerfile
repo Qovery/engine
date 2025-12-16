@@ -1,18 +1,18 @@
 FROM ghcr.io/opentofu/opentofu:{{provider_version}}-minimal AS opentofu
 
-FROM alpine:3.22
+FROM debian:trixie-slim
 
 COPY --from=opentofu /usr/local/bin/tofu /usr/local/bin/tofu
 
 RUN <<EOF
 set -e
-apk update
-apk add dumb-init rsync bash
-adduser -D -u 1000 app
+apt-get update
+apt-get install -y --no-install-recommends dumb-init rsync bash ca-certificates
+rm -rf /var/lib/apt/lists/*
+useradd -m -u 1000 app
 mkdir /data
 chown -R app:app /data
 EOF
-
 
 WORKDIR /data
 COPY --chown=app:app . .
