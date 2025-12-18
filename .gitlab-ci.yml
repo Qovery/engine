@@ -63,13 +63,47 @@ default:
   after_script:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
 
+# Resource allocation templates for k8s-runner
+.resources-heavy:
+  variables:
+    KUBERNETES_CPU_REQUEST: "7"
+    KUBERNETES_MEMORY_REQUEST: "20Gi"
+    KUBERNETES_MEMORY_LIMIT: "20Gi"
+
+.resources-build:
+  variables:
+    KUBERNETES_CPU_REQUEST: "7"
+    KUBERNETES_MEMORY_REQUEST: "16Gi"
+    KUBERNETES_MEMORY_LIMIT: "16Gi"
+
+.resources-test:
+  variables:
+    KUBERNETES_CPU_REQUEST: "3"
+    KUBERNETES_MEMORY_REQUEST: "12Gi"
+    KUBERNETES_MEMORY_LIMIT: "12Gi"
+
+.resources-image:
+  variables:
+    KUBERNETES_CPU_REQUEST: "1"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "1Gi"
+
+.resources-minimal:
+  variables:
+    KUBERNETES_CPU_REQUEST: "250m"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "1Gi"
+
 # ----------------------------------------- #
 
 stages:
   - build-and-lint
   - build-final
   - minimal-tests
-  - tests
+  - tests-aws
+  - tests-azure
+  - tests-gcp
+  - tests-scw
   - tests-quarantine
   - release-tag
   - release
@@ -82,7 +116,7 @@ stages:
 
 build-and-lint-code:
   stage: build-and-lint
-  extends: [.cargo-cache]
+  extends: [.cargo-cache, .resources-heavy]
   retry: 0
   script:
     - ./helper.sh cargo_version
@@ -90,7 +124,7 @@ build-and-lint-code:
     - ./helper.sh unused_dependencies
     - ./helper.sh build
   tags:
-    - bm-7cpu-20gmem-0g
+    - k8s-runner
   when: always
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -98,12 +132,12 @@ build-and-lint-code:
 
 unit-tests:
   stage: build-and-lint
-  extends: [.cargo-cache, .with-artifacts]
+  extends: [.cargo-cache, .with-artifacts, .resources-build]
   retry: 0
   script:
     - ./helper.sh unit_tests
   tags:
-    - bm-7cpu-16gmem-0g
+    - k8s-runner
   when: always
   needs: ["build-and-lint-code"]
   rules:
@@ -112,7 +146,7 @@ unit-tests:
 
 build-engine-ci-image:
   stage: build-and-lint
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-image]
   retry: 0
   before_script:
     - ci_helper init_buildkit_builder "${CI_JOB_NAME}" 4 20
@@ -126,7 +160,7 @@ build-engine-ci-image:
       -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-$(date +%Y-%m-%dT%H-%M-%S)
       --push .
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   when: manual
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
@@ -134,7 +168,7 @@ build-engine-ci-image:
 
 release-image:
   stage: build-and-lint
-  extends: [.buildx]
+  extends: [.buildx, .resources-image]
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
@@ -151,7 +185,7 @@ release-image:
     matrix:
       - IMAGE_ARCH: [amd64, arm64]
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
@@ -162,7 +196,7 @@ release-image:
 
 release-image-slim:
   stage: build-and-lint
-  extends: [.buildx]
+  extends: [.buildx, .resources-image]
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
@@ -178,7 +212,7 @@ release-image-slim:
     matrix:
       - IMAGE_ARCH: [amd64, arm64]
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
@@ -193,19 +227,20 @@ release-image-slim:
 
 check-pr-labels-is-set:
   stage: minimal-tests
+  extends: [.resources-minimal]
   retry: 0
   script:
     - if [ "$CI_MERGE_REQUEST_LABELS" == "" ] ; then echo "You need to set labels to make the job success" ; exit 1 ; fi
   when: always
   tags:
-    - vm-250mcpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: always
 
 azure-minimal-tests:
   stage: minimal-tests
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -215,13 +250,13 @@ azure-minimal-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
 
 scw-minimal-tests:
   stage: minimal-tests
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -231,14 +266,14 @@ scw-minimal-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   allow_failure: true # SCW issues with registry
 
 aws-minimal-tests:
   stage: minimal-tests
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -248,13 +283,13 @@ aws-minimal-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
 
 gcp-minimal-tests:
   stage: minimal-tests
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   before_script:
@@ -264,13 +299,13 @@ gcp-minimal-tests:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
 
 infra-without-cloud-providers:
   stage: minimal-tests
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-heavy]
   before_script:
     - ci_helper await_docker_socket
   script:
@@ -280,7 +315,7 @@ infra-without-cloud-providers:
   dependencies:
     - build-and-lint-code
   tags:
-    - bm-7cpu-20gmem-0g
+    - k8s-runner
   retry: 2 # because of docker rate exceeded error
 
 #########
@@ -288,14 +323,14 @@ infra-without-cloud-providers:
 #########
 
 azure-infra:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-azure
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   script:
     - ./helper.sh azure_infra
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -307,15 +342,15 @@ azure-infra:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 azure-infra-upgrade:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-azure
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   when: manual
   script:
     - ./helper.sh azure_infra_upgrade
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -327,14 +362,14 @@ azure-infra-upgrade:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 azure-managed-services:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-azure
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh azure_managed_services
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -346,14 +381,14 @@ azure-managed-services:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 azure-self-hosted:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-azure
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh azure_self_hosted
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -365,8 +400,8 @@ azure-self-hosted:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 azure-whole-enchilada:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-azure
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -374,7 +409,7 @@ azure-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -386,14 +421,14 @@ azure-whole-enchilada:
   when: manual
 
 aws-infra:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   script:
     - ./helper.sh aws_infra
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -405,14 +440,14 @@ aws-infra:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 aws-infra-arm:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   script:
     - ./helper.sh aws_infra_arm
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -424,14 +459,14 @@ aws-infra-arm:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 aws-infra-karpenter:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   script:
     - ./helper.sh aws_infra_karpenter
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -443,14 +478,14 @@ aws-infra-karpenter:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 aws-infra-nat-gateway:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   script:
     - ./helper.sh aws_infra_nat_gateway
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -462,15 +497,15 @@ aws-infra-nat-gateway:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 aws-infra-upgrade:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 0
   timeout: 4 hours
   when: manual
   script:
     - ./helper.sh aws_infra_upgrade
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -482,14 +517,14 @@ aws-infra-upgrade:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 aws-managed-services:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_managed_services
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -501,14 +536,14 @@ aws-managed-services:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 aws-self-hosted:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh aws_self_hosted
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -520,8 +555,8 @@ aws-self-hosted:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 aws-whole-enchilada:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -529,7 +564,7 @@ aws-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -541,8 +576,8 @@ aws-whole-enchilada:
   when: manual
 
 aws-whole-enchilada-gpu:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-aws
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -550,7 +585,7 @@ aws-whole-enchilada-gpu:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -562,8 +597,8 @@ aws-whole-enchilada-gpu:
   when: manual
 
 scw-infra:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -571,7 +606,7 @@ scw-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -581,14 +616,14 @@ scw-infra:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 scw-infra-nat-gateway:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
     - ./helper.sh scw_infra_nat_gateway
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -600,8 +635,8 @@ scw-infra-nat-gateway:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 scw-infra-upgrade:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -610,7 +645,7 @@ scw-infra-upgrade:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -620,14 +655,14 @@ scw-infra-upgrade:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 scw-managed-services:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh scw_managed_services
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -640,8 +675,8 @@ scw-managed-services:
   allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
 
 scw-self-hosted:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -649,7 +684,7 @@ scw-self-hosted:
   script:
     - ./helper.sh scw_self_hosted
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -660,8 +695,8 @@ scw-self-hosted:
   allow_failure: true # SCW issues with registry
 
 scw-whole-enchilada:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-scw
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -669,7 +704,7 @@ scw-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -682,8 +717,8 @@ scw-whole-enchilada:
   when: manual
 
 gcp-infra:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-gcp
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -691,7 +726,7 @@ gcp-infra:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -701,8 +736,8 @@ gcp-infra:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 gcp-infra-upgrade:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-gcp
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -711,7 +746,7 @@ gcp-infra-upgrade:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -721,14 +756,14 @@ gcp-infra-upgrade:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
 
 gcp-managed-services:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-gcp
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   script:
     - ./helper.sh gcp_managed_services
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -740,8 +775,8 @@ gcp-managed-services:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 gcp-self-hosted:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-gcp
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -749,7 +784,7 @@ gcp-self-hosted:
   script:
     - ./helper.sh gcp_self_hosted
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -759,8 +794,8 @@ gcp-self-hosted:
       - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
 
 gcp-whole-enchilada:
-  stage: tests
-  extends: [.needs-docker, .with-artifacts]
+  stage: tests-gcp
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 1
   timeout: 4 hours
   script:
@@ -768,7 +803,7 @@ gcp-whole-enchilada:
   dependencies:
     - build-and-lint-code
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   only:
     refs:
       - merge_requests
@@ -785,13 +820,13 @@ gcp-whole-enchilada:
 
 quarantine:
   stage: tests-quarantine
-  extends: [.needs-docker, .with-artifacts]
+  extends: [.needs-docker, .with-artifacts, .resources-test]
   retry: 2
   timeout: 4 hours
   script:
     - ./helper.sh quarantine
   tags:
-    - vm-3cpu-12gmem-0g
+    - k8s-runner
   dependencies:
     - build-and-lint-code
   only:
@@ -809,7 +844,7 @@ quarantine:
 
 create-multi-arch-image:
   stage: build-final
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-image]
   retry: 1
   before_script:
     - ci_helper docker_login_public_prod_ecr
@@ -817,14 +852,14 @@ create-multi-arch-image:
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
       when: always
 
 docker-tag:
   stage: release-tag
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-image]
   resource_group: docker-tag-${CI_COMMIT_TAG}
   retry: 0
   before_script:
@@ -838,7 +873,7 @@ docker-tag:
     - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}
     - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}-slim
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: always
@@ -846,6 +881,7 @@ docker-tag:
 
 gitlab-release:
   stage: release
+  extends: [.resources-image]
   retry: 1
   variables:
     GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
@@ -854,7 +890,7 @@ gitlab-release:
     - ./helper.sh update_engine_version
     - unset GITHUB_TOKEN ; goreleaser release --skip=validate --clean
   tags:
-    - vm-1cpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: always
@@ -865,6 +901,7 @@ gitlab-release:
 
 1-set-globally-available:
   stage: deploy-prod
+  extends: [.resources-minimal]
   needs:
     - gitlab-release
   retry: 2
@@ -873,20 +910,20 @@ gitlab-release:
   script:
     - ./helper.sh set_release_ga
   tags:
-    - vm-250mcpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
 
 .deploy-qovery-infra-engines:
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-minimal]
   retry: 0
   needs:
     - gitlab-release
   script:
     - ./helper.sh deploy_engines_infra_static_ip $CHANNEL
   tags:
-    - vm-250mcpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
@@ -906,7 +943,7 @@ gitlab-release:
 
 2-dry-run-deploy-dev-clusters:
   stage: deploy-staging
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-minimal]
   retry: 0
   needs:
     - gitlab-release
@@ -915,7 +952,7 @@ gitlab-release:
     - echo 'You can follow the dry-run diff overview at https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1'
     - qovery admin cluster deploy --parallel-run=50 --filters IsProduction=false --execution-mode=on-the-fly --no-confirm
   tags:
-    - vm-250mcpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
@@ -935,7 +972,7 @@ gitlab-release:
 
 3-update_qovery_chart:
   stage: deploy-prod
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-build]
   resource_group: chart-release
   retry: 1
   needs:
@@ -943,14 +980,14 @@ gitlab-release:
   script:
     - ./helper.sh update_qovery_chart
   tags:
-    - bm-7cpu-16gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
 
 4-deploy-qovery-env-engines:
   stage: deploy-prod
-  extends: [.needs-docker]
+  extends: [.needs-docker, .resources-minimal]
   retry: 0
   variables:
     CHANNEL: prod
@@ -963,7 +1000,7 @@ gitlab-release:
   script:
     - ./helper.sh deploy_engines_environment_static_ip
   tags:
-    - vm-250mcpu-1gmem-0g
+    - k8s-runner
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
