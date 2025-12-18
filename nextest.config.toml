@@ -1,3 +1,7 @@
+[profile.default]
+# Limit overall test parallelism to avoid cloud quota issues
+test-threads = 4
+
 [profile.default.junit]
 path = "junit.xml" # output junit report
 
