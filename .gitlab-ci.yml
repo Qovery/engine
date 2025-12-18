@@ -94,6 +94,17 @@ default:
     KUBERNETES_MEMORY_REQUEST: "1Gi"
     KUBERNETES_MEMORY_LIMIT: "1Gi"
 
+# Template for test jobs to run in parallel after minimal-tests
+.needs-minimal-tests:
+  needs:
+    - build-and-lint-code
+    - azure-minimal-tests
+    - job: scw-minimal-tests
+      optional: true
+    - aws-minimal-tests
+    - gcp-minimal-tests
+    - infra-without-cloud-providers
+
 # ----------------------------------------- #
 
 stages:
@@ -324,7 +335,8 @@ infra-without-cloud-providers:
 
 azure-infra:
   stage: tests-azure
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   script:
@@ -343,7 +355,8 @@ azure-infra:
 
 azure-infra-upgrade:
   stage: tests-azure
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   when: manual
@@ -363,7 +376,8 @@ azure-infra-upgrade:
 
 azure-managed-services:
   stage: tests-azure
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -382,7 +396,8 @@ azure-managed-services:
 
 azure-self-hosted:
   stage: tests-azure
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -401,7 +416,8 @@ azure-self-hosted:
 
 azure-whole-enchilada:
   stage: tests-azure
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -422,7 +438,8 @@ azure-whole-enchilada:
 
 aws-infra:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   script:
@@ -441,7 +458,8 @@ aws-infra:
 
 aws-infra-arm:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   script:
@@ -460,7 +478,8 @@ aws-infra-arm:
 
 aws-infra-karpenter:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   script:
@@ -479,7 +498,8 @@ aws-infra-karpenter:
 
 aws-infra-nat-gateway:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   script:
@@ -498,7 +518,8 @@ aws-infra-nat-gateway:
 
 aws-infra-upgrade:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 0
   timeout: 4 hours
   when: manual
@@ -518,7 +539,8 @@ aws-infra-upgrade:
 
 aws-managed-services:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -537,7 +559,8 @@ aws-managed-services:
 
 aws-self-hosted:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -556,7 +579,8 @@ aws-self-hosted:
 
 aws-whole-enchilada:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -577,7 +601,8 @@ aws-whole-enchilada:
 
 aws-whole-enchilada-gpu:
   stage: tests-aws
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -598,7 +623,8 @@ aws-whole-enchilada-gpu:
 
 scw-infra:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -617,7 +643,8 @@ scw-infra:
 
 scw-infra-nat-gateway:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -636,7 +663,8 @@ scw-infra-nat-gateway:
 
 scw-infra-upgrade:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -656,7 +684,8 @@ scw-infra-upgrade:
 
 scw-managed-services:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -676,7 +705,8 @@ scw-managed-services:
 
 scw-self-hosted:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -696,7 +726,8 @@ scw-self-hosted:
 
 scw-whole-enchilada:
   stage: tests-scw
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -718,7 +749,8 @@ scw-whole-enchilada:
 
 gcp-infra:
   stage: tests-gcp
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -737,7 +769,8 @@ gcp-infra:
 
 gcp-infra-upgrade:
   stage: tests-gcp
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   when: manual
@@ -757,7 +790,8 @@ gcp-infra-upgrade:
 
 gcp-managed-services:
   stage: tests-gcp
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   script:
@@ -776,7 +810,8 @@ gcp-managed-services:
 
 gcp-self-hosted:
   stage: tests-gcp
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 3 hours
   dependencies:
@@ -795,7 +830,8 @@ gcp-self-hosted:
 
 gcp-whole-enchilada:
   stage: tests-gcp
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 1
   timeout: 4 hours
   script:
@@ -820,7 +856,8 @@ gcp-whole-enchilada:
 
 quarantine:
   stage: tests-quarantine
-  extends: [.needs-docker, .with-artifacts, .resources-test]
+  extends:
+    [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests]
   retry: 2
   timeout: 4 hours
   script:
