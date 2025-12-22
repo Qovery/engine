@@ -1,0 +1,29 @@
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  {{- if or .Values.certificates.certManager.enabled .Values.additionalAnnotations }}
+  annotations:
+    {{- if .Values.certificates.certManager.enabled }}
+    {{- if and (not .Values.certificates.certManager.generateCA) .Values.certificates.certManager.issuer.generate }}
+    cert-manager.io/inject-ca-from-secret: {{ .Release.Namespace }}/{{ .Values.certificates.certManager.caSecretName }}
+    {{- else }}
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Values.operator.name }}-tls-certificates
+    {{- end }}
+    {{- end }}
+    {{- if .Values.additionalAnnotations }}
+    {{- toYaml .Values.additionalAnnotations | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: v1beta1.external.metrics.k8s.io
+    {{- include "keda.labels" . | indent 4 }}
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  service:
+    name: {{ .Values.operator.name }}-metrics-apiserver
+    namespace: {{ .Release.Namespace }}
+    port: {{ .Values.service.portHttps }}
+  group: external.metrics.k8s.io
+  version: v1beta1
+  groupPriorityMinimum: 100
+  versionPriority: 100

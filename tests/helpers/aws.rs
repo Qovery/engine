@@ -298,6 +298,7 @@ impl Cluster<AWS, Options> for AWS {
             aws_addon_coredns_version_override: None,
             ec2_exposed_port: Some(9876),
             karpenter_parameters: None,
+            keda_parameters: None,
             metrics_parameters: None,
         }
     }

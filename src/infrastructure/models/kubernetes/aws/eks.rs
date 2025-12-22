@@ -9,6 +9,7 @@ use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, Aws
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::aws;
 use crate::infrastructure::models::kubernetes::aws::{KarpenterParameters, Options};
+use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, event_details};
 use crate::infrastructure::models::object_storage::s3::S3;
 use crate::io_models::context::Context;
@@ -113,6 +114,10 @@ impl EKS {
 
     pub fn get_karpenter_parameters(&self) -> Option<KarpenterParameters> {
         self.options.karpenter_parameters.clone()
+    }
+
+    pub fn get_keda_parameters(&self) -> Option<KedaParameters> {
+        self.options.keda_parameters.clone()
     }
 }
 

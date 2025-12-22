@@ -1,0 +1,9 @@
+# Additional annotations for CRDs
+additionalAnnotations: {}
+
+crds:
+  install: true
+
+operator:
+  # -- Name of the KEDA operator
+  name: keda-operator

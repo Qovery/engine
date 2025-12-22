@@ -1,0 +1,32 @@
+{{- if or (or .Values.podDisruptionBudget.minAvailable .Values.podDisruptionBudget.maxUnavailable)  .Values.podDisruptionBudget.operator }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .Values.operator.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{-  if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.operator }}
+  {{- if .Values.podDisruptionBudget.operator.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.operator.minAvailable }}
+  {{- end }}
+  {{- if  .Values.podDisruptionBudget.operator.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.operator.maxUnavailable }}
+  {{- end }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.operator.name }}
+{{- end }}

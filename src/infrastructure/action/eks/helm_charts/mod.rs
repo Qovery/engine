@@ -31,6 +31,7 @@ pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
 mod gen_charts;
 pub mod gen_karpenter_charts;
+pub mod gen_keda_charts;
 pub mod karpenter;
 pub mod karpenter_configuration;
 pub mod karpenter_crd;
@@ -63,6 +64,7 @@ pub struct EksChartsConfigPrerequisites {
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub is_karpenter_enabled: bool,
     pub karpenter_parameters: Option<KarpenterParameters>,
+    pub is_keda_enabled: bool,
     pub aws_iam_eks_user_mapper_role_arn: String,
     pub aws_iam_cluster_autoscaler_role_arn: String,
     pub aws_iam_cloudwatch_role_arn: String,
@@ -143,6 +145,10 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             cluster_advanced_settings: cluster.advanced_settings().clone(),
             is_karpenter_enabled: cluster.is_karpenter_enabled(),
             karpenter_parameters: cluster.get_karpenter_parameters(),
+            is_keda_enabled: cluster
+                .get_keda_parameters()
+                .map(|params| params.enabled)
+                .unwrap_or(false),
             aws_iam_eks_user_mapper_role_arn: self.terraform_output.aws_iam_eks_user_mapper_role_arn.clone(),
             aws_iam_cluster_autoscaler_role_arn: self.terraform_output.aws_iam_cluster_autoscaler_role_arn.clone(),
             aws_iam_cloudwatch_role_arn: self.terraform_output.aws_iam_cloudwatch_role_arn.clone(),

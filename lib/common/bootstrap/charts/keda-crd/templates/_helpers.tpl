@@ -1,0 +1,1 @@
+../../keda/templates/_helpers.tpl

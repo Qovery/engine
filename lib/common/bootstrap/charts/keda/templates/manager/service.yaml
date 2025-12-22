@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Service
+metadata:
+  {{- if or .Values.additionalAnnotations .Values.service.annotations (and .Values.prometheus.operator.enabled ( not (or .Values.prometheus.operator.podMonitor.enabled .Values.prometheus.operator.serviceMonitor.enabled ))) }}
+  annotations:
+    {{- if and .Values.prometheus.operator.enabled ( not (or .Values.prometheus.operator.podMonitor.enabled .Values.prometheus.operator.serviceMonitor.enabled )) }}
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.prometheus.operator.port | quote }}
+    prometheus.io/path: "/metrics"
+    {{- end }}
+    {{- with .Values.additionalAnnotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.service.annotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+  name: {{ .Values.operator.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - name: metricsservice
+    port: 9666
+    targetPort: 9666
+  {{- if .Values.prometheus.operator.enabled }}
+  - name: metrics
+    port: {{ .Values.prometheus.operator.port }}
+    targetPort: {{ .Values.prometheus.operator.port }}
+    {{- with .Values.prometheus.operator.appProtocol }}
+    appProtocol: {{ . }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.profiling.operator.enabled }}
+  - name: profiling
+    port: {{ .Values.profiling.operator.port }}
+    targetPort: {{ .Values.profiling.operator.port }}
+  {{- end }}
+  selector:
+    app: {{ .Values.operator.name }}

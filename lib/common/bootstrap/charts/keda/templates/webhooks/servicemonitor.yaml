@@ -1,0 +1,71 @@
+{{- if and .Values.webhooks.enabled }}
+{{- if and .Values.prometheus.webhooks.enabled .Values.prometheus.webhooks.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.webhooks.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+    {{- range $key, $value := .Values.prometheus.webhooks.serviceMonitor.additionalLabels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- with .Values.prometheus.webhooks.serviceMonitor.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  {{- with .Values.prometheus.webhooks.serviceMonitor.jobLabel }}
+  jobLabel: {{ . }}
+  {{- end }}
+  {{- with .Values.prometheus.webhooks.serviceMonitor.targetLabels }}
+  targetLabels:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.prometheus.webhooks.serviceMonitor.podTargetLabels }}
+  podTargetLabels:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  endpoints:
+  - port: {{ .Values.prometheus.webhooks.serviceMonitor.port }}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.targetPort }}
+    targetPort: {{ . }}
+    {{- end }}
+    path: /metrics
+    {{- with .Values.prometheus.webhooks.serviceMonitor.interval }}
+    interval: {{ . }}
+    {{- end }}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
+    {{- end }}
+  {{- if .Values.prometheus.webhooks.serviceMonitor.relabelings}}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.relabelings }}
+    relabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- else }}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.relabellings }}
+    relabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end}}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+    scheme: {{ .Values.prometheus.webhooks.serviceMonitor.scheme }}
+    {{- with .Values.prometheus.webhooks.serviceMonitor.tlsConfig }}
+    tlsConfig:
+    {{ toYaml . | nindent 6}}
+    {{- end }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.webhooks.name }}
+{{- end }}
+{{- end }}

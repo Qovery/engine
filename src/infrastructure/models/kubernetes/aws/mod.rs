@@ -7,6 +7,7 @@ use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
 use crate::infrastructure::models::kubernetes::ProviderOptions;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
+use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::database::DiskIOPS;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
@@ -73,6 +74,8 @@ pub struct Options {
     pub ec2_exposed_port: Option<u16>,
     #[serde(default)]
     pub karpenter_parameters: Option<KarpenterParameters>,
+    #[serde(default)]
+    pub keda_parameters: Option<KedaParameters>,
     #[serde(default)]
     pub metrics_parameters: Option<MetricsParameters>,
 }

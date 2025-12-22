@@ -148,6 +148,9 @@ charts:
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
     version: 1.5.1
+  - name: keda
+    repo_name: kedacore
+    version: v2.18.2
   - name: nvidia-device-plugin
     dest: aws-bootstrap
     repo_name: nvidia
@@ -196,6 +199,8 @@ repos:
   - name: qovery-github
     type: git
     url: https://github.com/Qovery/k8s-event-logger.git
+  - name: kedacore
+    url: https://kedacore.github.io/charts
 
 destinations:
   - name: default

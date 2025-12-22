@@ -1,0 +1,50 @@
+{{- if .Values.rbac.create }}
+{{- if not .Values.watchNamespace }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+  name: {{ .Values.operator.name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.operator.name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ (.Values.serviceAccount.operator).name | default .Values.serviceAccount.name }}
+  namespace: {{ .Release.Namespace }}
+{{- else }}
+  {{- $namespaces := append (splitList "," .Values.watchNamespace) .Release.Namespace -}}
+  {{- range $namespaces }}
+---
+# Role binding for namespace '{{ . }}'
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  {{- with $.Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ $.Values.operator.name }}
+    {{- include "keda.labels" $ | indent 4 }}
+  name: {{ $.Values.operator.name }}
+  namespace: {{ . | trim }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $.Values.operator.name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ ($.Values.serviceAccount.operator).name | default $.Values.serviceAccount.name }}
+  namespace: {{ $.Release.Namespace }}
+---
+  {{- end }}
+{{- end }}
+{{- end }}

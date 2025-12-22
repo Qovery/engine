@@ -3,6 +3,7 @@ pub mod azure;
 pub mod eksanywhere;
 pub mod gcp;
 pub mod karpenter;
+pub mod keda;
 pub mod scaleway;
 pub mod self_managed;
 
