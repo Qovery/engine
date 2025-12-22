@@ -1,0 +1,34 @@
+{{- if and .Values.webhooks.enabled }}
+{{- if or (or .Values.podDisruptionBudget.minAvailable .Values.podDisruptionBudget.maxUnavailable)  .Values.podDisruptionBudget.webhooks }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .Values.webhooks.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{-  if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.webhooks }}
+  {{- if .Values.podDisruptionBudget.webhooks.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.webhooks.minAvailable }}
+  {{- end }}
+  {{- if  .Values.podDisruptionBudget.webhooks.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.webhooks.maxUnavailable }}
+  {{- end }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.webhooks.name }}
+{{- end }}
+{{- end }}

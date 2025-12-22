@@ -1,0 +1,10 @@
+# Qovery configuration for KEDA CRDs
+crds:
+  additionalAnnotations:
+    qovery.com/service-type: "keda"
+    meta.helm.sh/release-name: keda-crd
+  install: true
+
+operator:
+  name: keda-operator
+

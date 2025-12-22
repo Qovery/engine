@@ -33,6 +33,7 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
+use crate::infrastructure::action::eks::helm_charts::gen_keda_charts::generate_keda_charts;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -176,6 +177,13 @@ pub(super) fn eks_helm_charts(
         true => Some(generate_karpenter_charts(chart_prefix_path, chart_config_prerequisites)?),
         false => None,
     };
+
+    // KEDA
+    let keda_charts = generate_keda_charts(
+        chart_prefix_path,
+        chart_config_prerequisites,
+        chart_config_prerequisites.is_keda_enabled,
+    )?;
 
     // Cluster autoscaler
     let cluster_autoscaler = ClusterAutoscalerChart::new(
@@ -789,6 +797,10 @@ pub(super) fn eks_helm_charts(
     } else {
         level_5.push(Box::new(coredns_config));
     }
+
+    // keda
+    level_0.push(Box::new(keda_charts.keda_crd_chart));
+    level_4.push(Box::new(keda_charts.keda_chart));
 
     info!("charts configuration preparation finished");
     Ok(vec![

@@ -1,0 +1,167 @@
+{{- if and .Values.webhooks.enabled }}
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  {{- if or .Values.certificates.certManager.enabled .Values.additionalAnnotations }}
+  annotations:
+    {{- if .Values.certificates.certManager.enabled }}
+    {{- if and (not .Values.certificates.certManager.generateCA) .Values.certificates.certManager.issuer.generate }}
+    cert-manager.io/inject-ca-from-secret: {{ .Release.Namespace }}/{{ .Values.certificates.certManager.caSecretName }}
+    {{- else }}
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ .Values.operator.name }}-tls-certificates
+    {{- end }}
+    {{- end }}
+    {{- if .Values.additionalAnnotations }}
+    {{- toYaml .Values.additionalAnnotations | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+  name: keda-admission
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-keda-sh-v1alpha1-scaledobject
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vscaledobject.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - scaledobjects
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-keda-sh-v1alpha1-scaledjob
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vscaledjob.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - scaledjobs
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-keda-sh-v1alpha1-triggerauthentication
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vstriggerauthentication.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - triggerauthentications
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-keda-sh-v1alpha1-clustertriggerauthentication
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vsclustertriggerauthentication.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clustertriggerauthentications
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-eventing-keda-sh-v1alpha1-cloudeventsource
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vcloudeventsource.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - eventing.keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - cloudeventsources
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: {{ .Values.webhooks.name }}
+      namespace: {{ .Release.Namespace }}
+      path: /validate-eventing-keda-sh-v1alpha1-clustercloudeventsource
+  failurePolicy: {{ .Values.webhooks.failurePolicy }}
+  matchPolicy: Equivalent
+  name: vclustercloudeventsource.kb.io
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - eventing.keda.sh
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - clustercloudeventsources
+  sideEffects: None
+  timeoutSeconds: {{ .Values.webhooks.timeoutSeconds | default 10 }}
+{{- end }}

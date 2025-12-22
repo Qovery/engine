@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}-metrics-apiserver
+    app: {{ .Values.operator.name }}-metrics-apiserver
+    {{- include "keda.labels" . | indent 4 }}
+  name: {{ .Values.operator.name }}-metrics-apiserver
+  namespace: {{ .Release.Namespace }}
+  {{- if or .Values.additionalAnnotations .Values.service.annotations (and .Values.prometheus.metricServer.enabled ( not (or .Values.prometheus.metricServer.podMonitor.enabled .Values.prometheus.metricServer.serviceMonitor.enabled )))}}
+  annotations:
+    {{- if and .Values.prometheus.metricServer.enabled ( not (or .Values.prometheus.metricServer.podMonitor.enabled .Values.prometheus.metricServer.serviceMonitor.enabled )) }}
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.prometheus.metricServer.port | quote }}
+    prometheus.io/path: "/metrics"
+    {{- end }}
+    {{- with .Values.additionalAnnotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.service.annotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+  - name: https
+    port: {{ .Values.service.portHttps }}
+    targetPort: {{ .Values.service.portHttpsTarget }}
+    protocol: TCP
+    appProtocol: https
+  - name: {{ .Values.prometheus.metricServer.portName }}
+    port: {{ .Values.prometheus.metricServer.port }}
+    targetPort: {{ .Values.prometheus.metricServer.port }}
+    protocol: TCP
+    {{- with .Values.prometheus.metricServer.appProtocol }}
+    appProtocol: {{ . }}
+    {{- end }}
+  {{- if .Values.profiling.metricsServer.enabled }}
+  - name: profiling
+    port: {{ .Values.profiling.metricsServer.port }}
+    targetPort: {{ .Values.profiling.metricsServer.port }}
+    protocol: TCP
+  {{- end }}
+  selector:
+    app: {{ .Values.operator.name }}-metrics-apiserver

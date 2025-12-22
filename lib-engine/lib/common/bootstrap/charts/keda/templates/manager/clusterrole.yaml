@@ -1,0 +1,276 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+  name: {{ .Values.operator.name }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - configmaps/status
+  - limitranges
+  - pods
+  - services
+  - serviceaccounts
+  verbs:
+  - get
+  - list
+  - watch
+{{- if eq .Values.permissions.operator.restrict.allowAllServiceAccountTokenCreation true }}
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/token
+  verbs:
+  - create
+{{- end }}
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+    - discovery.k8s.io
+  resources:
+    - endpointslices
+  verbs:
+    - get
+    - list
+    - watch
+{{- if not .Values.permissions.operator.restrict.secret }}
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - list
+  - watch
+  {{- with .Values.permissions.operator.restrict.namesAllowList }}
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  resourceNames: {{ toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if .Values.rbac.enabledCustomScaledRefKinds }}
+  {{- range .Values.rbac.scaledRefKinds }}
+- apiGroups:
+  - {{ .apiGroup | quote }}
+  resources:
+  - {{ printf "%s/scale" .kind | quote }}
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - {{ .apiGroup | quote }}
+  resources:
+  - {{ .kind | quote }}
+  verbs:
+  - get
+  {{- end }}
+{{- end }}
+- apiGroups:
+  - apps
+  resources:
+  - deployments/scale
+  - statefulsets/scale
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - autoscaling
+  resources:
+  - horizontalpodautoscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - eventing.keda.sh
+  resources:
+  - cloudeventsources
+  - cloudeventsources/status
+  - clustercloudeventsources
+  - clustercloudeventsources/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - keda.sh
+  resources:
+  - scaledjobs
+  - scaledjobs/finalizers
+  - scaledjobs/status
+  - scaledobjects
+  - scaledobjects/finalizers
+  - scaledobjects/status
+  - triggerauthentications
+  - triggerauthentications/status
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+{{- if .Values.rbac.aggregateToDefaultRoles }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: keda:edit
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+rules:
+- apiGroups:
+  - keda.sh
+  resources:
+  - clustertriggerauthentications
+  - scaledjobs
+  - scaledobjects
+  - triggerauthentications
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - eventing.keda.sh
+  resources:
+  - cloudeventsources
+  - clustercloudeventsources
+  verbs:
+  - create
+  - delete
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: keda:view
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+    rbac.authorization.k8s.io/aggregate-to-edit: "true"
+    rbac.authorization.k8s.io/aggregate-to-view: "true"
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+rules:
+- apiGroups:
+  - keda.sh
+  resources:
+  - clustertriggerauthentications
+  - scaledjobs
+  - scaledobjects
+  - triggerauthentications
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - eventing.keda.sh
+  resources:
+  - cloudeventsources
+  - clustercloudeventsources
+  verbs:
+  - get
+  - list
+  - watch
+{{- end -}}
+{{- if .Values.permissions.operator.restrict.serviceAccountTokenCreationRoles }}
+{{- range $r := .Values.permissions.operator.restrict.serviceAccountTokenCreationRoles }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  {{- with $.Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ $.Values.operator.name }}
+    {{- include "keda.labels" $ | indent 4 }}
+  name: {{ $.Values.operator.name }}-token-creator-{{ $r.name }}
+  namespace: {{ $r.namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/token
+  verbs:
+  - create
+  resourceNames:
+  - {{ $r.name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  {{- with $.Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ $.Values.operator.name }}
+    {{- include "keda.labels" $ | indent 4 }}
+  name: {{ $.Values.operator.name }}-token-creator-{{ $r.name }}
+  namespace: {{ $r.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $.Values.operator.name }}-token-creator-{{ $r.name }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $.Values.operator.name }}
+  namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end -}}

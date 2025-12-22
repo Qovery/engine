@@ -1,0 +1,48 @@
+{{- if .Values.certificates.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.operator.name }}-tls-certificates
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  commonName: {{ .Values.operator.name }}
+  dnsNames:
+  - {{ .Values.operator.name }}.{{ .Release.Namespace }}
+  - {{ .Values.operator.name }}.{{ .Release.Namespace }}.svc
+  - {{ .Values.operator.name }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+  - {{ .Values.operator.name }}-metrics-apiserver.{{ .Release.Namespace }}
+  - {{ .Values.operator.name }}-metrics-apiserver.{{ .Release.Namespace }}.svc
+  - {{ .Values.operator.name }}-metrics-apiserver.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+  - {{ .Values.webhooks.name }}.{{ .Release.Namespace }}
+  - {{ .Values.webhooks.name }}.{{ .Release.Namespace }}.svc
+  - {{ .Values.webhooks.name }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}
+  secretName: {{ .Values.certificates.secretName }}
+  secretTemplate:
+    {{- toYaml .Values.certificates.certManager.secretTemplate | nindent 4 }}
+  usages:
+    - server auth
+    - client auth
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  duration: {{ .Values.certificates.certManager.duration }}
+  renewBefore: {{ .Values.certificates.certManager.renewBefore }}
+  issuerRef:
+    {{- if .Values.certificates.certManager.issuer.generate }}
+    name: {{ .Values.operator.name }}-issuer
+    kind: Issuer
+    group: cert-manager.io
+    {{- else }}
+    {{- if .Values.certificates.certManager.issuer.name }}
+    name: {{ .Values.certificates.certManager.issuer.name }}
+    {{- end }}
+    {{- if .Values.certificates.certManager.issuer.kind }}
+    kind: {{ .Values.certificates.certManager.issuer.kind }}
+    {{- end }}
+    {{- if .Values.certificates.certManager.issuer.group }}
+    group: {{ .Values.certificates.certManager.issuer.group }}
+    {{- end }}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,26 @@
+{{- if and .Values.webhooks.enabled }}
+{{- if and .Values.prometheus.webhooks.enabled .Values.prometheus.webhooks.prometheusRules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.webhooks.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+    {{- range $key, $value := .Values.prometheus.webhooks.prometheusRules.additionalLabels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- with .Values.prometheus.webhooks.prometheusRules.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  groups:
+  - name: {{ .Values.webhooks.name }}
+    rules:
+{{ toYaml .Values.prometheus.webhooks.prometheusRules.alerts | indent 6 }}
+{{- end }}
+{{- end }}

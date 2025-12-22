@@ -1,0 +1,43 @@
+{{- if and .Values.prometheus.operator.enabled .Values.prometheus.operator.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Values.operator.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+    {{- range $key, $value := .Values.prometheus.operator.podMonitor.additionalLabels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- with .Values.prometheus.operator.podMonitor.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    {{- with .Values.prometheus.operator.podMonitor.interval }}
+    interval: {{ . }}
+    {{- end }}
+    {{- with .Values.prometheus.operator.podMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
+    {{- end }}
+    {{- with .Values.prometheus.operator.podMonitor.relabelings }}
+    relabelings:
+{{ toYaml . | indent 4 }}
+    {{- end }}
+    {{- with .Values.prometheus.operator.podMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app: {{ .Values.operator.name }}
+{{- end }}
