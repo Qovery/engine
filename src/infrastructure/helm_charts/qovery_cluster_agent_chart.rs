@@ -207,7 +207,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                             "*".to_string(),
                             Some(KubernetesCpuResourceUnit::MilliCpu(150)),
                             Some(KubernetesCpuResourceUnit::MilliCpu(500)),
-                            Some(KubernetesMemoryResourceUnit::MebiByte(64)),
+                            Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                             Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                         ),
                         customer_helm_chart_override: self.customer_helm_chart_vpa_override.clone(),
