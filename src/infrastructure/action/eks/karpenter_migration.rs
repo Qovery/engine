@@ -211,6 +211,7 @@ fn install_karpenter_charts(
 /// 3. The karpenter nodegroup is NOT already deployed (checked by verifying nodes and deployment)
 ///
 /// Returns false if:
+/// - Dry run mode is enabled
 /// - Karpenter is not enabled
 /// - This is the first cluster deployment
 /// - The karpenter nodegroup is already deployed (exactly 2 nodes and 2 ready deployment replicas exist)
@@ -220,6 +221,12 @@ pub fn should_deploy_karpenter_nodegroup(
     infra_ctx: &InfrastructureContext,
     logger: &impl InfraLogger,
 ) -> bool {
+    // Skip in dry run mode - no need to query cluster state
+    if infra_ctx.context().is_dry_run_deploy() {
+        logger.info("👻 Skipping Karpenter nodegroup deployment: dry run mode enabled");
+        return false;
+    }
+
     // Check prerequisites
     let has_karpenter = kubernetes.get_karpenter_parameters().is_some();
     let is_first_deployment = infra_ctx.context().is_first_cluster_deployment();
