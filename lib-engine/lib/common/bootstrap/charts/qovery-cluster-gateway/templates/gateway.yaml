@@ -1,0 +1,37 @@
+# global gateways, one public per cluster
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: qovery-cluster-public-gateway
+  namespace: {{ .Values.namespace }}
+  annotations:
+  {{- range $key, $value := .Values.gateway.qoveryPublic.annotations }}
+    {{ $key }}: {{ tpl ($value | toString) $ | quote }}
+  {{- end }}
+spec:
+  gatewayClassName: qovery-public-gateway
+  infrastructure:
+    annotations:
+    {{- range $key, $value := .Values.infrastructure.annotations }}
+      {{ $key }}: {{ tpl ($value | toString) $ | quote }}
+    {{- end }}
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+    allowedRoutes:
+      namespaces:
+        from: All  # Allow routes from all namespaces
+  - name: https
+    protocol: HTTPS
+    port: 443
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - kind: Secret
+        name: letsencrypt-acme-qovery-cert
+        namespace: cert-manager

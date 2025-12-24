@@ -9,7 +9,7 @@ use crate::infrastructure::action::kubectl_utils::{delete_completed_jobs, delete
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::gcp::GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES;
-use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manager};
+use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manager, uninstall_gateway_api};
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
 use k8s_openapi::api::core::v1::Namespace;
@@ -116,6 +116,20 @@ pub(super) fn delete_kube_apps(
             .map(|ns| ns.metadata.name.unwrap_or_default())
             .collect::<Vec<String>>()
     });
+
+    // Delete envoy / gateway API before cert-manager other it fails
+    if let Err(e) = uninstall_gateway_api(
+        cluster.kubeconfig_local_file_path(),
+        infra_ctx.cloud_provider().credentials_environment_variables(),
+        event_details.clone(),
+        cluster.logger(),
+    ) {
+        // this error is not blocking, logging a warning and move on
+        logger.warn(EventMessage::new(
+            "An error occurred while trying to uninstall gateway-api stack. This is not blocking.".to_string(),
+            Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+        ));
+    }
 
     // Delete cert-manager objects first
     // required to avoid namespace stuck on deletion

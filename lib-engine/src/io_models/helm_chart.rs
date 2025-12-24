@@ -34,21 +34,53 @@ pub struct HelmCredentials {
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct HelmChartAdvancedSettings {
+    // Gateway API
+    #[serde(alias = "network.gateway_api.enable_sticky_session")]
+    pub network_gateway_api_sticky_session_enable: bool,
+    #[serde(alias = "network.gateway_api.force_ssl_redirect")]
+    pub network_gateway_api_force_ssl_redirect: bool,
+    #[serde(alias = "network.gateway_api.enable_cors")]
+    pub network_gateway_api_enable_cors: bool,
+    #[serde(alias = "network.gateway_api.cors_allow_origin")]
+    pub network_gateway_api_cors_allow_origin: String,
+    #[serde(alias = "network.gateway_api.cors_allow_methods")]
+    pub network_gateway_api_cors_allow_methods: String,
+    #[serde(alias = "network.gateway_api.cors_allow_headers")]
+    pub network_gateway_api_cors_allow_headers: String,
+    #[serde(alias = "network.gateway_api.whitelist_source_range")]
+    pub network_gateway_api_whitelist_source_range: String,
+    #[serde(alias = "network.gateway_api.denylist_source_range")]
+    pub network_gateway_api_denylist_source_range: String,
+    #[serde(alias = "network.gateway_api.basic_auth_env_var")]
+    pub network_gateway_api_basic_auth_env_var: String,
+    #[serde(alias = "network.gateway_api.route_limit_rpm")]
+    pub network_gateway_api_route_limit_rpm: Option<u32>,
+    #[serde(alias = "network.gateway_api.route_limit_rps")]
+    pub network_gateway_api_route_limit_rps: Option<u32>,
+    #[serde(alias = "network.gateway_api.route_limit_source_cidrs")]
+    pub network_gateway_api_route_limit_source_cidrs: String,
+    #[serde(alias = "network.gateway_api.route_limit_headers")]
+    pub network_gateway_api_route_limit_headers: String,
+    #[serde(alias = "network.gateway_api.add_headers")]
+    pub network_gateway_api_add_headers: BTreeMap<String, String>,
+    #[serde(alias = "network.gateway_api.proxy_set_headers")]
+    pub network_gateway_api_proxy_set_headers: BTreeMap<String, String>,
+
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
     pub network_ingress_proxy_body_size_mb: u32,
     #[serde(alias = "network.ingress.force_ssl_redirect")]
-    pub network_ingress_force_ssl_redirect: bool,
+    pub network_ingress_force_ssl_redirect: bool, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.enable_cors")]
-    pub network_ingress_cors_enable: bool,
+    pub network_ingress_cors_enable: bool, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.enable_sticky_session")]
-    pub network_ingress_sticky_session_enable: bool,
+    pub network_ingress_sticky_session_enable: bool, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.cors_allow_origin")]
-    pub network_ingress_cors_allow_origin: String,
+    pub network_ingress_cors_allow_origin: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.cors_allow_methods")]
-    pub network_ingress_cors_allow_methods: String,
+    pub network_ingress_cors_allow_methods: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.cors_allow_headers")]
-    pub network_ingress_cors_allow_headers: String,
+    pub network_ingress_cors_allow_headers: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.keepalive_time_seconds")]
     pub network_ingress_keepalive_time_seconds: u32,
     #[serde(alias = "network.ingress.keepalive_timeout_seconds")]
@@ -56,31 +88,31 @@ pub struct HelmChartAdvancedSettings {
     #[serde(alias = "network.ingress.send_timeout_seconds")]
     pub network_ingress_send_timeout_seconds: u32,
     #[serde(alias = "network.ingress.add_headers")]
-    pub network_ingress_add_headers: BTreeMap<String, String>,
+    pub network_ingress_add_headers: BTreeMap<String, String>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.proxy_set_headers")]
-    pub network_ingress_proxy_set_headers: BTreeMap<String, String>,
+    pub network_ingress_proxy_set_headers: BTreeMap<String, String>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.proxy_connect_timeout_seconds")]
     pub network_ingress_proxy_connect_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_send_timeout_seconds")]
     pub network_ingress_proxy_send_timeout_seconds: u32,
     #[serde(alias = "network.ingress.proxy_read_timeout_seconds")]
-    pub network_ingress_proxy_read_timeout_seconds: u32,
+    pub network_ingress_proxy_read_timeout_seconds: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.proxy_request_buffering")]
-    pub network_ingress_proxy_request_buffering: String,
+    pub network_ingress_proxy_request_buffering: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.proxy_buffering")]
-    pub network_ingress_proxy_buffering: String,
+    pub network_ingress_proxy_buffering: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.proxy_buffer_size_kb")]
-    pub network_ingress_proxy_buffer_size_kb: u32,
+    pub network_ingress_proxy_buffer_size_kb: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.whitelist_source_range")]
-    pub network_ingress_whitelist_source_range: String,
+    pub network_ingress_whitelist_source_range: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.denylist_source_range")]
-    pub network_ingress_denylist_source_range: String,
+    pub network_ingress_denylist_source_range: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.basic_auth_env_var")]
-    pub network_ingress_basic_auth_env_var: String,
+    pub network_ingress_basic_auth_env_var: String, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_rpm")]
-    pub network_ingress_nginx_limit_rpm: Option<u32>,
+    pub network_ingress_nginx_limit_rpm: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_rps")]
-    pub network_ingress_nginx_limit_rps: Option<u32>,
+    pub network_ingress_nginx_limit_rps: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
     #[serde(alias = "network.ingress.nginx_limit_connections")]
@@ -131,6 +163,21 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_nginx_custom_http_errors: None,
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
+            network_gateway_api_sticky_session_enable: false,
+            network_gateway_api_force_ssl_redirect: false,
+            network_gateway_api_enable_cors: false,
+            network_gateway_api_cors_allow_origin: "*".to_string(),
+            network_gateway_api_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
+            network_gateway_api_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+            network_gateway_api_whitelist_source_range: "0.0.0.0/0".to_string(),
+            network_gateway_api_denylist_source_range: "".to_string(),
+            network_gateway_api_basic_auth_env_var: "".to_string(),
+            network_gateway_api_route_limit_rpm: None,
+            network_gateway_api_route_limit_rps: None,
+            network_gateway_api_route_limit_source_cidrs: "".to_string(),
+            network_gateway_api_route_limit_headers: "".to_string(),
+            network_gateway_api_add_headers: BTreeMap::new(),
+            network_gateway_api_proxy_set_headers: BTreeMap::new(),
         }
     }
 }

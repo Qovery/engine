@@ -810,7 +810,7 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
             helpers::environment::working_environment_with_application_and_stateful_crashing_if_file_doesnt_exist(
                 &context,
                 &mounted_file,
-                &AwsStorageType::GP2.to_k8s_storage_class(),
+                &AwsStorageType::GP3.to_k8s_storage_class(),
             );
 
         let mut environment_delete = environment.clone();
@@ -818,6 +818,14 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
 
         let ea = environment.clone();
         let ea_delete = environment_delete.clone();
+
+        // Ensure cleanup always runs, even if test panics
+        let _cleanup_guard = scopeguard::guard(
+            (environment_delete.clone(), ea_delete.clone(), &infra_ctx_for_deletion),
+            |(env_delete, ea, infra_ctx)| {
+                let _ = env_delete.delete_environment(&ea, infra_ctx);
+            },
+        );
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
@@ -843,9 +851,6 @@ fn deploy_a_working_environment_with_mounted_files_as_volume() {
                     .to_str()
             );
         }
-
-        let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_deletion);
-        assert!(ret.is_ok());
 
         test_name.to_string()
     })

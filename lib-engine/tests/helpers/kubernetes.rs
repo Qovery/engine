@@ -471,6 +471,7 @@ pub fn get_environment_test_kubernetes(
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
                         ),
+                        k8s_deploy_api_gateway: Some(true),
                         ..Default::default()
                     },
                     None,
@@ -505,6 +506,7 @@ pub fn get_environment_test_kubernetes(
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
                         ),
+                        // k8s_deploy_api_gateway: Some(true),
                         ..Default::default()
                     },
                     None,
@@ -559,6 +561,7 @@ pub fn get_environment_test_kubernetes(
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
                         ),
+                        // k8s_deploy_api_gateway: Some(true),
                         ..Default::default()
                     },
                     None,
@@ -610,6 +613,7 @@ pub fn get_environment_test_kubernetes(
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
                         ),
+                        // k8s_deploy_api_gateway: Some(true),
                         ..Default::default()
                     },
                     None,

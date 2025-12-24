@@ -19,6 +19,7 @@ use thiserror::Error;
 
 use crate::cmd::command::CommandKiller;
 use crate::environment::action::deploy_helm::default_helm_timeout;
+use crate::environment::models::types::Percentage;
 use crate::events::EventDetails;
 use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmPath, HelmPathType};
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -123,6 +124,21 @@ impl ChartValuesGenerated {
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
+pub enum QoveryGatewayClass {
+    PublicGateway,
+    PrivateGateway,
+}
+
+impl Display for QoveryGatewayClass {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            QoveryGatewayClass::PublicGateway => "qovery-public-gateway",
+            QoveryGatewayClass::PrivateGateway => "qovery-private-gateway",
+        })
+    }
+}
+
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum QoveryPriorityClass {
     HighPriority,
     StandardPriority,
@@ -137,6 +153,7 @@ impl Display for QoveryPriorityClass {
     }
 }
 
+#[derive(Clone)]
 pub enum PriorityClass {
     Default,
     Qovery(QoveryPriorityClass),
@@ -356,6 +373,31 @@ impl Display for VpaControllerResources {
 }
 
 #[derive(Clone, Debug)]
+pub struct HpaConfig {
+    pub min_replicas: u32,
+    pub max_replicas: u32,
+    pub cpu_average_utilization_percentage: Option<Percentage>,
+    pub memory_average_utilization_percentage: Option<Percentage>,
+}
+
+impl Default for HpaConfig {
+    fn default() -> Self {
+        HpaConfig {
+            min_replicas: 1,
+            max_replicas: 3,
+            cpu_average_utilization_percentage: None,
+            memory_average_utilization_percentage: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum HpaMode {
+    Enabled { config: HpaConfig },
+    Disabled,
+}
+
+#[derive(Clone, Debug)]
 pub struct ChartInfoUpgradeRetry {
     pub nb_retry: usize,
     pub delay_in_milli_sec: u64,
@@ -385,6 +427,10 @@ pub struct ChartInfo {
     pub crds_update: Option<CRDSUpdate>,
     pub skip_if_already_installed: bool,
     pub upgrade_retry: Option<ChartInfoUpgradeRetry>,
+    /// This option to execute the chart server side apply instead of client side apply
+    /// until we rollout helm version 4 which will have server side apply by default
+    /// we use helm template + kubectl apply --server-side to mimic server side apply
+    pub requires_server_side_apply: bool,
 }
 
 impl ChartInfo {
@@ -463,6 +509,7 @@ impl Default for ChartInfo {
             crds_update: None,
             skip_if_already_installed: false,
             upgrade_retry: None,
+            requires_server_side_apply: false,
         }
     }
 }
@@ -516,14 +563,13 @@ pub trait HelmChart: Send {
         let chart_info = &self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                if let Some(crds_update) = &chart_info.crds_update {
-                    if let Err(_e) =
+                if let Some(crds_update) = &chart_info.crds_update
+                    && let Err(_e) =
                         kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
-                    {
-                        return Err(HelmChartError::CannotUpdateCrds {
-                            crd_path: crds_update.path.clone(),
-                        });
-                    }
+                {
+                    return Err(HelmChartError::CannotUpdateCrds {
+                        crd_path: crds_update.path.clone(),
+                    });
                 }
             }
             HelmAction::Destroy => {}
@@ -619,31 +665,43 @@ pub trait HelmChart: Send {
                 } else {
                     Fixed::from_millis(0).take(0)
                 };
-                let result = retry::retry(attempts, || match helm.upgrade(chart_info, &[], cmd_killer) {
-                    Ok(_) => OperationResult::Ok(()),
-                    Err(e) => {
-                        warn!("Helm upgrade failed, retrying... error: {:?}", e);
-                        OperationResult::Retry(e)
+                let result = retry::retry(attempts, || match chart_info.requires_server_side_apply {
+                    false => match helm.upgrade(chart_info, &[], cmd_killer) {
+                        Ok(_) => OperationResult::Ok(()),
+                        Err(e) => {
+                            warn!("Helm upgrade failed, retrying... error: {:?}", e);
+                            OperationResult::Retry(e)
+                        }
+                    },
+                    true => {
+                        // use helm template + kubectl apply --server-side
+                        match helm.upgrade_with_server_side_apply(kubernetes_config, chart_info, envs, cmd_killer) {
+                            Ok(_) => OperationResult::Ok(()),
+                            Err(e) => {
+                                warn!("Helm upgrade with server side apply failed, retrying... error: {:?}", e);
+                                OperationResult::Retry(e)
+                            }
+                        }
                     }
                 });
                 match result {
                     Ok(_) => {
-                        if upgrade_status.is_backupable {
-                            if let Err(e) = apply_chart_backup(
+                        if upgrade_status.is_backupable
+                            && let Err(e) = apply_chart_backup(
                                 kubernetes_config,
                                 upgrade_status.backup_path.as_path(),
                                 envs,
                                 chart_info,
-                            ) {
-                                warn!("error while trying to apply backup: {:?}", e);
-                            };
+                            )
+                        {
+                            warn!("error while trying to apply backup: {e:?}");
                         }
                     }
                     Err(e) => {
-                        if upgrade_status.is_backupable {
-                            if let Err(e) = delete_unused_chart_backup(kubernetes_config, envs, chart_info) {
-                                warn!("error while trying to delete backup: {:?}", e);
-                            }
+                        if upgrade_status.is_backupable
+                            && let Err(e) = delete_unused_chart_backup(kubernetes_config, envs, chart_info)
+                        {
+                            warn!("error while trying to delete backup: {e:?}");
                         }
 
                         return Err(HelmChartError::HelmError(e.error));
@@ -873,14 +931,13 @@ impl HelmChart for CommonChart {
         let chart_info = &self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                if let Some(crds_update) = &chart_info.crds_update {
-                    if let Err(_e) =
+                if let Some(crds_update) = &chart_info.crds_update
+                    && let Err(_e) =
                         kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
-                    {
-                        return Err(HelmChartError::CannotUpdateCrds {
-                            crd_path: crds_update.path.clone(),
-                        });
-                    }
+                {
+                    return Err(HelmChartError::CannotUpdateCrds {
+                        crd_path: crds_update.path.clone(),
+                    });
                 }
             }
             HelmAction::Destroy => {}
@@ -964,14 +1021,13 @@ impl HelmChart for ServiceChart {
         let chart_info = &self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                if let Some(crds_update) = &chart_info.crds_update {
-                    if let Err(_e) =
+                if let Some(crds_update) = &chart_info.crds_update
+                    && let Err(_e) =
                         kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
-                    {
-                        return Err(HelmChartError::CannotUpdateCrds {
-                            crd_path: crds_update.path.clone(),
-                        });
-                    }
+                {
+                    return Err(HelmChartError::CannotUpdateCrds {
+                        crd_path: crds_update.path.clone(),
+                    });
                 }
             }
             HelmAction::Destroy => {}

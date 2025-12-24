@@ -1,6 +1,13 @@
 [profile.default]
 # Limit overall test parallelism to avoid cloud quota issues
-test-threads = 4
+# test-threads = 4
+# jitter allows to avoid thundering herd problems, adding randomness to delays
+retries = { backoff = "exponential", count = 3, delay = "5s", max-delay = "30s", jitter = true }
+
+# GCP bucket tests tend to be more flaky, so we apply a more aggressive retry policy
+[[profile.default.overrides]]
+filter = 'test(test-gcp-minimal)'
+retries = { backoff = "exponential", count = 5, delay = "10s", max-delay = "45s", jitter = true }
 
 [profile.default.junit]
 path = "junit.xml" # output junit report

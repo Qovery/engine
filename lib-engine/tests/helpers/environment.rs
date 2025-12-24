@@ -223,6 +223,17 @@ pub fn working_environment_with_application_and_stateful_crashing_if_file_doesnt
     statefulset.long_id = statefulset_id.to_uuid();
     statefulset.liveness_probe = None;
     statefulset.readiness_probe = None;
+
+    // Create a unique mounted file for the statefulset to avoid Helm Secret ownership conflicts
+    let statefulset_mounted_file_id = QoveryIdentifier::new_random();
+    let statefulset_mounted_file = MountedFile {
+        long_id: statefulset_mounted_file_id.to_uuid(),
+        kube_name: statefulset_mounted_file_id.to_string(),
+        mount_path: mounted_file.mount_path.clone(),
+        file_content_b64: mounted_file.file_content_b64.clone(),
+    };
+    statefulset.mounted_files = vec![statefulset_mounted_file];
+
     let storage_id = QoveryIdentifier::new_random();
     statefulset.storage = vec![qovery_engine::io_models::application::Storage {
         id: storage_id.short().to_string(),

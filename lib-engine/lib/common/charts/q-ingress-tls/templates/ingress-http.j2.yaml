@@ -14,6 +14,7 @@ metadata:
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    qovery.com/gateway-api-deployed: "true" # TODO(QOV-1400): to be removed once migration is done, just to flag which ingress have the gateway deployed
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}

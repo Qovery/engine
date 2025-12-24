@@ -10,22 +10,55 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
+use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
+use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 use std::ops::Add;
 use std::sync::Arc;
+
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum ExternalDNSSource {
+    GatewayHttpRoute,
+    GatewayTcpRoute,
+    GatewayUdpRoute,
+    GatewayTlsRoute,
+    Ingress,
+    Service,
+}
+
+impl Display for ExternalDNSSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let source_str = match *self {
+            ExternalDNSSource::GatewayHttpRoute => "gateway-httproute",
+            ExternalDNSSource::GatewayTcpRoute => "gateway-tcproute",
+            ExternalDNSSource::GatewayUdpRoute => "gateway-udproute",
+            ExternalDNSSource::GatewayTlsRoute => "gateway-tlsroute",
+            ExternalDNSSource::Ingress => "ingress",
+            ExternalDNSSource::Service => "service",
+        };
+        write!(f, "{source_str}")
+    }
+}
+
+pub enum ExternalDNSSourcesMode {
+    GatewayApi,
+    Ingress,
+    All,
+}
 
 pub struct ExternalDNSChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
     dns_provider_configuration: DnsProviderConfiguration,
-    managed_dns_domains_root_helm_format: String,
+    managed_dns_domain_root_helm_format: String,
     cluster_id: String,
     update_strategy: UpdateStrategy,
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
+    sources: HashSet<ExternalDNSSource>,
 }
 
 impl ExternalDNSChart {
@@ -38,6 +71,7 @@ impl ExternalDNSChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
+        source_mode: ExternalDNSSourcesMode,
     ) -> ExternalDNSChart {
         ExternalDNSChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -52,12 +86,36 @@ impl ExternalDNSChart {
                 ExternalDNSChart::chart_name(),
             ),
             dns_provider_configuration,
-            managed_dns_domains_root_helm_format,
+            managed_dns_domain_root_helm_format: managed_dns_domains_root_helm_format,
             cluster_id,
             update_strategy,
             enable_vpa,
             namespace,
             customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
+            sources: match source_mode {
+                ExternalDNSSourcesMode::GatewayApi => vec![
+                    ExternalDNSSource::GatewayHttpRoute,
+                    ExternalDNSSource::GatewayTcpRoute,
+                    ExternalDNSSource::GatewayUdpRoute,
+                    ExternalDNSSource::GatewayTlsRoute,
+                    // ExternalDNSSource::Service,
+                ]
+                .into_iter()
+                .collect(),
+                ExternalDNSSourcesMode::Ingress => vec![ExternalDNSSource::Ingress, ExternalDNSSource::Service]
+                    .into_iter()
+                    .collect(),
+                ExternalDNSSourcesMode::All => vec![
+                    ExternalDNSSource::GatewayHttpRoute,
+                    ExternalDNSSource::GatewayTcpRoute,
+                    ExternalDNSSource::GatewayUdpRoute,
+                    ExternalDNSSource::GatewayTlsRoute,
+                    ExternalDNSSource::Ingress,
+                    ExternalDNSSource::Service,
+                ]
+                .into_iter()
+                .collect(),
+            },
         }
     }
 
@@ -114,7 +172,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
 
         let values_string = vec![ChartSetValue {
             key: "domainFilters".to_string(),
-            value: self.managed_dns_domains_root_helm_format.to_string(),
+            value: self.managed_dns_domain_root_helm_format.to_string(),
         }];
 
         // Set extraArgs based on provider using individual key-value pairs
@@ -160,6 +218,14 @@ impl ToCommonHelmChart for ExternalDNSChart {
                     });
                 }
             }
+        }
+
+        // Set proper sources based on selected mode
+        for (index, source) in self.sources.iter().enumerate() {
+            values.push(ChartSetValue {
+                key: format!("sources[{index}]",),
+                value: source.to_string(),
+            });
         }
 
         // Set env variables based on provider using individual key-value pairs
@@ -493,7 +559,9 @@ impl ChartInstallationChecker for ExternalDNSSecretChartInstallationChecker {
 #[cfg(test)]
 mod tests {
     use crate::helm::{HelmChartNamespaces, UpdateStrategy};
-    use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
+    use crate::infrastructure::helm_charts::external_dns_chart::{
+        ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
+    };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
@@ -521,6 +589,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            ExternalDNSSourcesMode::GatewayApi,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -557,6 +626,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            ExternalDNSSourcesMode::GatewayApi,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -597,6 +667,7 @@ mod tests {
             false,
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
+            ExternalDNSSourcesMode::GatewayApi,
         );
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 

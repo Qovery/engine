@@ -22,7 +22,9 @@ use crate::infrastructure::action::eksanywhere::helm_charts::EksAnywhereChartsCo
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_chart::MetalLbChart;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_config_chart::MetalLbConfigChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
+use crate::infrastructure::helm_charts::external_dns_chart::{
+    ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
+};
 use crate::infrastructure::helm_charts::loki_chart::{LokiChart, LokiObjectBucketConfiguration};
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
@@ -75,6 +77,7 @@ pub(super) fn eks_anywhere_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         get_chart_override_fn.clone(),
+        ExternalDNSSourcesMode::Ingress,
     )
     .to_common_helm_chart()?;
 
@@ -376,7 +379,7 @@ pub(super) fn eks_anywhere_helm_charts(
             chart_prefix_path,
             &chart_config_prerequisites.lets_encrypt_config,
             &chart_config_prerequisites.dns_provider_config,
-            chart_config_prerequisites.managed_dns_helm_format.to_string(),
+            vec![domain.to_string()],
             HelmChartNamespaces::Qovery,
         )
         .to_common_helm_chart()?,

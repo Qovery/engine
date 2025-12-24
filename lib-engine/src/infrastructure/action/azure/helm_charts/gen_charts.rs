@@ -8,7 +8,9 @@ use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConf
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
-use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
+use crate::infrastructure::helm_charts::external_dns_chart::{
+    ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
+};
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::loki_chart::{
     BlobStorageLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
@@ -86,6 +88,7 @@ pub(super) fn aks_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         get_chart_override_fn.clone(),
+        ExternalDNSSourcesMode::Ingress,
     )
     .to_common_helm_chart()?;
 
@@ -156,6 +159,10 @@ pub(super) fn aks_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         HelmChartNamespaces::Qovery,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
     )
     .to_common_helm_chart()?;
 
@@ -164,7 +171,7 @@ pub(super) fn aks_helm_charts(
         chart_prefix_path,
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        vec![domain.to_string()],
         HelmChartNamespaces::Qovery,
     )
     .to_common_helm_chart()?;

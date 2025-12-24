@@ -1,9 +1,11 @@
 use crate::helm::{
-    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, PriorityClass, QoveryPriorityClass,
-    UpdateStrategy, VpaContainerPolicy, get_engine_helm_action_from_location,
+    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass,
+    QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy, get_engine_helm_action_from_location,
 };
 use crate::infrastructure::action::eks::helm_charts::nvidia_gpu_k8s_device_plugin_chart::NvidiaGpuK8sDevicePluginChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
+use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
+use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::EnvoyGatewayCrdChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
@@ -37,7 +39,9 @@ use crate::infrastructure::action::eks::helm_charts::gen_keda_charts::generate_k
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
-use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
+use crate::infrastructure::helm_charts::external_dns_chart::{
+    ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
+};
 use crate::infrastructure::helm_charts::grafana_chart::{
     CloudWatchConfig, GrafanaAdminUser, GrafanaChart, GrafanaDatasources,
 };
@@ -47,6 +51,10 @@ use crate::infrastructure::helm_charts::loki_chart::{
 use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
+use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
+    QoveryClusterGatewayChart, QoveryClusterGatewayOptionsPerKubernetesKind,
+};
+use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::infrastructure::models::kubernetes::aws::AwsStorageType;
 use crate::io_models::QoveryIdentifier;
@@ -71,6 +79,8 @@ pub(super) fn eks_helm_charts(
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
     let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+
+    let new_gateway_api_domain = domain.with_sub_domain("new-gateway-api".to_string());
 
     let metrics_config = generate_metrics_config(
         CloudProviderMetricsConfig::Eks(chart_config_prerequisites),
@@ -247,10 +257,18 @@ pub(super) fn eks_helm_charts(
                     .aws_eks_alb_controller_vpa_max_memory_in_mib,
             )),
         )),
-        chart_config_prerequisites.alb_controller_already_deployed
-            && chart_config_prerequisites
+        !(!chart_config_prerequisites.alb_controller_already_deployed
+            || !chart_config_prerequisites
                 .cluster_advanced_settings
-                .aws_eks_enable_alb_controller,
+                .aws_eks_enable_alb_controller
+                && !chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .k8s_deploy_api_gateway
+                    .unwrap_or(false)
+                && !chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .k8s_use_api_gateway
+                    .unwrap_or(false)),
     )
     .to_common_helm_chart()?;
 
@@ -274,6 +292,20 @@ pub(super) fn eks_helm_charts(
         true,
         HelmChartNamespaces::KubeSystem,
         get_chart_override_fn.clone(),
+        match (
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_deploy_api_gateway
+                .unwrap_or(false),
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .k8s_use_api_gateway
+                .unwrap_or(false),
+        ) {
+            (true, true) => ExternalDNSSourcesMode::GatewayApi,
+            (true, false) => ExternalDNSSourcesMode::All,
+            _ => ExternalDNSSourcesMode::Ingress,
+        },
     )
     .to_common_helm_chart()?;
 
@@ -405,6 +437,10 @@ pub(super) fn eks_helm_charts(
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
     )
     .to_common_helm_chart()?;
 
@@ -413,7 +449,7 @@ pub(super) fn eks_helm_charts(
         chart_prefix_path,
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        vec![domain.to_string(), new_gateway_api_domain.to_string()],
         HelmChartNamespaces::CertManager,
     )
     .to_common_helm_chart()?;
@@ -522,6 +558,100 @@ pub(super) fn eks_helm_charts(
         },
     )
     .to_common_helm_chart()?;
+
+    // API Gateway / Envoy stack
+    let mut envoy_gateway_crd: Option<CommonChart> = None;
+    let mut qovery_gateway_class_chart: Option<CommonChart> = None;
+    let mut qovery_cluster_gateway: Option<CommonChart> = None;
+    let mut envoy_gateway: Option<CommonChart> = None;
+    if chart_config_prerequisites
+        .cluster_advanced_settings
+        .k8s_deploy_api_gateway
+        .unwrap_or(false)
+    {
+        envoy_gateway_crd = Some(
+            EnvoyGatewayCrdChart::new(chart_prefix_path, HelmChartDirectoryLocation::CommonFolder)
+                .to_common_helm_chart()?,
+        );
+        qovery_gateway_class_chart = Some(
+            QoveryGatewayClassChart::new(
+                chart_prefix_path,
+                HashSet::from_iter(vec![QoveryGatewayClass::PublicGateway, QoveryGatewayClass::PrivateGateway]),
+            )
+            .to_common_helm_chart()?,
+        );
+        qovery_cluster_gateway = Some(
+            QoveryClusterGatewayChart::new(
+                chart_prefix_path,
+                HelmChartNamespaces::Qovery,
+                match chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .k8s_use_api_gateway
+                    .unwrap_or(false)
+                {
+                    true => domain.clone(),
+                    // Gateway API will declare a new wildcard domain (gateway api), like *.new-gateway-api.cluster_id.domain.root,
+                    // to avoid conflict with API Gateway which will declare *.cluster_id.domain.root
+                    false => new_gateway_api_domain,
+                },
+                QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
+                QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
+                QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+            )
+            .to_common_helm_chart()?,
+        );
+        envoy_gateway = Some(
+            EnvoyGatewayChart::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                HelmChartNamespaces::Qovery,
+                PriorityClass::Default,
+                HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_vcpu_request_in_milli_cpu,
+                    ),
+                    request_memory: KubernetesMemoryResourceUnit::MebiByte(
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_memory_request_in_mib,
+                    ),
+                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_vcpu_limit_in_milli_cpu,
+                    ),
+                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_memory_limit_in_mib,
+                    ),
+                }),
+                EnvoyGatewayOptions {
+                    hpa_mode: HpaMode::Enabled {
+                        config: HpaConfig {
+                            min_replicas: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .envoy_hpa_min_number_instances,
+                            max_replicas: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .envoy_hpa_max_number_instances,
+                            cpu_average_utilization_percentage: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .envoy_hpa_cpu_average_utilization_percentage_threshold
+                                .clone(),
+                            memory_average_utilization_percentage: chart_config_prerequisites
+                                .cluster_advanced_settings
+                                .envoy_hpa_memory_average_utilization_percentage_threshold
+                                .clone(),
+                        },
+                    },
+                },
+            )
+            .to_common_helm_chart()?,
+        );
+    }
 
     // Qovery cluster agent
     let cluster_agent = QoveryClusterAgentChart::new(
@@ -684,8 +814,16 @@ pub(super) fn eks_helm_charts(
     if let Some(chart) = metrics_config.prometheus_operator_crds_chart {
         level_0.push(Box::new(chart));
     }
+    // Add envoy gateway api CRDs
+    if let Some(chart) = envoy_gateway_crd {
+        level_0.push(Box::new(chart));
+    }
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
+    // Add Qovery gateway class
+    if let Some(chart) = qovery_gateway_class_chart {
+        level_1.push(Box::new(chart));
+    }
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![
@@ -714,9 +852,13 @@ pub(super) fn eks_helm_charts(
 
     let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
-    let level_6: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let mut level_6: Vec<Box<dyn HelmChart>> = vec![];
+    // Add Qovery cluster gateway - must be deployed after cert-manager since it creates resources in cert-manager namespace
+    if let Some(chart) = qovery_cluster_gateway {
+        level_6.push(Box::new(chart));
+    }
 
     let mut level_7: Vec<Box<dyn HelmChart>> = vec![Box::new(cluster_autoscaler), Box::new(external_dns_secret)];
 
@@ -734,11 +876,23 @@ pub(super) fn eks_helm_charts(
         .cluster_advanced_settings
         .aws_eks_enable_alb_controller
         || chart_config_prerequisites.alb_controller_already_deployed
+        || chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false)
+        || chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false)
     {
         level_8.push(Box::new(aws_load_balancer_controller));
     }
 
-    let level_9: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    let mut level_9: Vec<Box<dyn HelmChart>> = vec![Box::new(nginx_ingress)];
+    // Add Envoy gateway
+    if let Some(chart) = envoy_gateway {
+        level_9.push(Box::new(chart));
+    }
 
     let level_10: Vec<Box<dyn HelmChart>> = vec![
         Box::new(cert_manager_config),

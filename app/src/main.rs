@@ -71,6 +71,7 @@ pub fn main() -> io::Result<()> {
         .with_timer(UtcTime::rfc_3339())
         .init();
 
+    let engine_tag_version = env::var("ENGINE_TAG_VERSION").unwrap_or_else(|_| "unknown".to_string());
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let test_cluster_env_var = env::var("TEST_CLUSTER");
@@ -83,6 +84,7 @@ pub fn main() -> io::Result<()> {
     let metrics_registry = Box::new(StdMetricsRegistry::new(Box::new(StdMsgPublisher::new())));
 
     info!("engine id: {}", engine_id.as_str());
+    info!("engine version : {}", engine_tag_version.as_str());
     info!(
         "running from current directory: {}",
         env::current_dir().unwrap().to_str().unwrap()

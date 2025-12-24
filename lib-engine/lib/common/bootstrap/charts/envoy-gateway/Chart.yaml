@@ -1,0 +1,20 @@
+apiVersion: v2
+appVersion: v1.6.1
+description: The Helm chart for Envoy Gateway
+home: https://gateway.envoyproxy.io/
+icon: https://raw.githubusercontent.com/envoyproxy/gateway/main/site/assets/icons/logo.svg
+keywords:
+- gateway-api
+- envoyproxy
+- envoy-gateway
+- eg
+maintainers:
+- name: envoy-gateway-steering-committee
+  url: https://github.com/envoyproxy/gateway/blob/main/GOVERNANCE.md
+- name: envoy-gateway-maintainers
+  url: https://github.com/envoyproxy/gateway/blob/main/CODEOWNERS
+name: gateway-helm
+sources:
+- https://github.com/envoyproxy/gateway
+type: application
+version: 1.6.1

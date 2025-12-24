@@ -1,0 +1,5 @@
+gatewayClass:
+  qoveryPublic:
+    enable: true
+  qoveryPrivate:
+    enable: true

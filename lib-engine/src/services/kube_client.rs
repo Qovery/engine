@@ -42,6 +42,16 @@ pub enum SelectK8sResourceBy {
     LabelsSelector(String), // select resources by labels
 }
 
+// kube.rs extension to be able to query GatewayClass
+#[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[kube(
+    group = "gateway.networking.k8s.io",
+    version = "v1",
+    kind = "GatewayClass",
+    namespaced = false
+)]
+pub struct GatewayClassSpec {}
+
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
