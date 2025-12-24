@@ -156,6 +156,14 @@ charts:
     repo_name: nvidia
     version: 0.17.1
     comment: https://github.com/NVIDIA/k8s-device-plugin
+  - name: gateway-helm
+    dest_folder_override: envoy-gateway
+    repo_name: oci://docker.io/envoyproxy
+    version: 1.6.1
+  - name: gateway-crds-helm
+    dest_folder_override: envoy-gateway-crd
+    repo_name: oci://docker.io/envoyproxy
+    version: 1.6.1
 
 repos:
   - name: stable

@@ -26,7 +26,9 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
-use crate::infrastructure::helm_charts::external_dns_chart::{ExternalDNSChart, ExternalDNSSecretChart};
+use crate::infrastructure::helm_charts::external_dns_chart::{
+    ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
+};
 use crate::infrastructure::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
 use crate::infrastructure::helm_charts::loki_chart::{
     LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
@@ -142,6 +144,7 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::KubeSystem,
         get_chart_override_fn.clone(),
+        ExternalDNSSourcesMode::Ingress,
     )
     .to_common_helm_chart()?;
 
@@ -230,6 +233,10 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
     )
     .to_common_helm_chart()?;
 
@@ -238,7 +245,7 @@ pub fn kapsule_helm_charts(
         chart_prefix_path,
         &chart_config_prerequisites.lets_encrypt_config,
         &chart_config_prerequisites.dns_provider_config,
-        chart_config_prerequisites.managed_dns_helm_format.to_string(),
+        vec![domain.to_string()],
         HelmChartNamespaces::CertManager,
     )
     .to_common_helm_chart()?;

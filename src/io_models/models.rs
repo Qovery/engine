@@ -101,6 +101,33 @@ pub struct KubeServicePort {
     pub protocol: String,
 }
 
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+pub enum HostPathType {
+    Exact,
+    PathPrefix,
+    RegularExpression,
+}
+
+impl HostPathType {
+    pub fn from_path(path: &str, default_host_path_type: HostPathType) -> HostPathType {
+        let has_character_class = path.contains('[') && path.contains(']');
+        let has_quantifier = path.contains('*') || path.contains('+') || path.contains('?');
+        let has_alternation = path.contains('|');
+        let has_group = path.contains('(') && path.contains(')');
+        let has_anchor = path.starts_with('^') || path.ends_with('$');
+
+        let has_wildcard_pattern = path.contains(".*") || path.contains(".+");
+
+        if has_character_class || has_quantifier || has_alternation || has_group || has_anchor || has_wildcard_pattern {
+            HostPathType::RegularExpression
+        } else if path == "/" || path.ends_with('/') {
+            HostPathType::PathPrefix
+        } else {
+            default_host_path_type
+        }
+    }
+}
+
 #[derive(Serialize, Eq, PartialEq)]
 pub struct HostDataTemplate {
     pub domain_name: String,
@@ -108,6 +135,8 @@ pub struct HostDataTemplate {
     pub service_port: u16,
     pub path: String,
     pub path_rewrite: Option<String>,
+    pub path_type: HostPathType,
+    pub weight: u32,
 }
 
 pub struct Route {
@@ -431,7 +460,7 @@ mod tests {
     use crate::environment::models::domain::ToTerraformString;
     use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
     use crate::io_models::models::{
-        KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
+        HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
     };
     use serde::Deserialize;
     use serde_derive::Serialize;
@@ -790,5 +819,85 @@ mod tests {
         assert_eq!(display_result, "VPC-GW-M");
         assert!(debug_result.contains("Scaleway"));
         assert!(debug_result.contains("Medium"));
+    }
+
+    #[test]
+    fn test_host_path_type_from_path_returns_regular_expression_for_regex_patterns() {
+        // setup
+        let cases = vec![".*", "[a-z]", "path|other", "(group)", "^start$"];
+
+        // execute
+        for path in &cases {
+            let result = HostPathType::from_path(path, HostPathType::Exact);
+
+            // verify
+            assert_eq!(result, HostPathType::RegularExpression, "Failed for path: {path}",);
+        }
+    }
+
+    #[test]
+    fn test_host_path_type_from_path_returns_prefix_for_slash_or_trailing_slash() {
+        // setup
+        let cases = vec!["/", "/path/"];
+
+        // execute
+        for path in &cases {
+            let result = HostPathType::from_path(path, HostPathType::Exact);
+
+            // verify
+            assert_eq!(result, HostPathType::PathPrefix, "Failed for path: {path}",);
+        }
+    }
+
+    #[test]
+    fn test_host_path_type_from_path_returns_default_for_non_special_paths() {
+        // setup
+        let case_exact = ("/simple/path", HostPathType::Exact);
+        let case_prefix = ("plainpath", HostPathType::PathPrefix);
+
+        // execute
+        let result_exact = HostPathType::from_path(case_exact.0, case_exact.1.clone());
+        let result_prefix = HostPathType::from_path(case_prefix.0, case_prefix.1.clone());
+
+        // verify
+        assert_eq!(result_exact, HostPathType::Exact, "Failed for path: {}", case_exact.0);
+        assert_eq!(result_prefix, HostPathType::PathPrefix, "Failed for path: {}", case_prefix.0);
+    }
+
+    #[test]
+    fn test_host_path_type_from_path_handles_empty_path() {
+        // setup
+        let path = "";
+        let default = HostPathType::Exact;
+
+        // execute
+        let result = HostPathType::from_path(path, default);
+
+        // verify
+        assert_eq!(
+            result,
+            HostPathType::Exact,
+            "Empty path should return the default host path type"
+        );
+    }
+
+    #[test]
+    fn test_host_path_type_from_path_handles_edge_cases() {
+        // setup
+        let case_prefix = ("no/special/characters", HostPathType::PathPrefix);
+        let case_regex = ("ends/with$", HostPathType::Exact);
+
+        // execute
+        let result_prefix = HostPathType::from_path(case_prefix.0, case_prefix.1.clone());
+        let result_regex = HostPathType::from_path(case_regex.0, case_regex.1.clone());
+
+        // verify
+        assert_eq!(result_prefix, HostPathType::PathPrefix, "Failed for path: {}", case_prefix.0);
+        assert_eq!(
+            result_regex,
+            HostPathType::RegularExpression,
+            "Failed for path: {}",
+            case_regex.0
+        );
     }
 }

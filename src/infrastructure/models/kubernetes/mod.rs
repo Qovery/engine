@@ -701,6 +701,83 @@ where
     Ok(())
 }
 
+pub fn uninstall_gateway_api<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    event_details: EventDetails,
+    logger: &dyn Logger,
+) -> Result<(), Box<EngineError>>
+where
+    P: AsRef<Path>,
+{
+    // Uninstall Gateway API resources including Gateway, Routes, and Envoy Gateway policies
+    // https://gateway.envoyproxy.io/docs/install/
+
+    let gateway_api_objects = vec![
+        // Application-level Gateway API route resources
+        "HTTPRoute",
+        "GRPCRoute",
+        "TCPRoute",
+        "UDPRoute",
+        // Envoy Gateway-specific policy resources
+        "SecurityPolicy",
+        "BackendTrafficPolicy",
+        "ClientTrafficPolicy",
+        "HTTPRouteFilter",
+        "EnvoyPatchPolicy",
+        "EnvoyExtensionPolicy",
+        // Cluster-level Gateway API resources
+        "Gateway",
+        // ReferenceGrant allows cross-namespace references (e.g., Gateway in qovery namespace accessing secrets in cert-manager namespace)
+        // Must be deleted after Gateway but before cert-manager namespace to avoid dangling resources
+        "ReferenceGrant",
+        "GatewayClass",
+    ];
+
+    for object in gateway_api_objects {
+        // check resource exist first
+        if let Err(e) = kubectl_exec_count_all_objects(&kubernetes_config, object, envs.clone()) {
+            logger.log(EngineEvent::Warning(
+                event_details.clone(),
+                EventMessage::new(
+                    format!("Encountering issues while trying to get objects kind {object}",),
+                    Some(e.message(ErrorMessageVerbosity::FullDetails)),
+                ),
+            ));
+            continue;
+        }
+
+        // delete if resource exists
+        match retry::retry(
+            Fibonacci::from_millis(5000).take(3),
+            || match kubectl_delete_objects_in_all_namespaces(&kubernetes_config, object, envs.clone()) {
+                Ok(_) => OperationResult::Ok(()),
+                Err(e) => {
+                    logger.log(EngineEvent::Warning(
+                        event_details.clone(),
+                        EventMessage::new(format!("Failed to delete all {object} objects, retrying...",), None),
+                    ));
+                    OperationResult::Retry(e)
+                }
+            },
+        ) {
+            Ok(_) => {}
+            Err(retry::Error { error, .. }) => {
+                let engine_error = EngineError::new_cannot_uninstall_helm_chart(
+                    event_details.clone(),
+                    "Gateway-API".to_string(),
+                    object.to_string(),
+                    error,
+                );
+
+                logger.log(EngineEvent::Warning(event_details.clone(), EventMessage::from(engine_error)));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl NodeGroupsWithDesiredState {
     pub fn new_from_node_groups(
         nodegroup: &NodeGroups,

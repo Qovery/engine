@@ -10,6 +10,7 @@ use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
 use crate::cmd::helm_utils::{ChartDependencyYAML, ChartYAML};
+use crate::cmd::kubectl::kubectl_apply_with_server_side_apply;
 use crate::cmd::structs::{HelmChart, HelmChartVersions, HelmListItem};
 use crate::errors;
 use crate::errors::EngineError;
@@ -78,6 +79,9 @@ pub enum HelmError {
 
     #[error("Unsupported Prometheus object bucket configuration. Qovery Engine does not support it.")]
     UnsupportedPrometheusObjectBucketConfiguration,
+
+    #[error("Error while executing kubectl apply command: {0}")]
+    KubernetesApplyError(errors::CommandError),
 }
 
 #[derive(Debug, Clone)]
@@ -1007,6 +1011,162 @@ impl Helm {
         };
 
         Ok(())
+    }
+    pub fn upgrade_with_server_side_apply<P>(
+        &self,
+        kubernetes_config: P,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+    ) -> Result<(), HelmError>
+    where
+        P: AsRef<Path>,
+    {
+        // Due to crash or error it is possible that the release is under an helm lock
+        // Try to un-stuck the situation first if needed
+        // We don't care if the rollback failed, as it is a best effort to remove the lock
+        // and to re-launch an upgrade just after
+        let unlock_ret = self.unlock_release(chart, envs);
+        info!("Helm lock status: {:?}", unlock_ret);
+
+        let timeout_string = format!("{}s", &chart.timeout_in_seconds);
+
+        let mut args_string: Vec<String> = vec![
+            "template".to_string(),
+            "--debug".to_string(),
+            "--timeout".to_string(),
+            timeout_string.as_str().to_string(),
+        ];
+
+        // warn: don't add debug or json output won't work
+        if chart.atomic {
+            args_string.push("--atomic".to_string())
+        }
+        if chart.force_upgrade {
+            args_string.push("--force".to_string())
+        }
+        if chart.dry_run {
+            args_string.push("--dry-run".to_string())
+        }
+        if chart.wait {
+            args_string.push("--wait".to_string())
+        }
+
+        // overrides and files overrides
+        for value in &chart.values {
+            args_string.push("--set".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+        for value in &chart.values_string {
+            args_string.push("--set-string".to_string());
+            args_string.push(format!("{}={}", value.key, value.value));
+        }
+
+        for value_file in &chart.values_files {
+            args_string.push("-f".to_string());
+            args_string.push(value_file.clone());
+        }
+        for value_file in &chart.yaml_files_content {
+            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_create = || -> Result<(), Error> {
+                let mut file = File::create(&file_path)?;
+                file.write_all(value_file.yaml_content.as_bytes())?;
+                Ok(())
+            };
+
+            // no need to validate yaml as it will be done by helm
+            if let Err(e) = file_create() {
+                let cmd_err = errors::CommandError::new(
+                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
+                    Some(
+                        envs.iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect::<Vec<(String, String)>>(),
+                    ),
+                );
+                return Err(CmdError(chart.name.clone(), UPGRADE, cmd_err));
+            };
+
+            args_string.push("-f".to_string());
+            args_string.push(file_path);
+        }
+
+        // add last elements
+        args_string.push(chart.name.clone());
+        args_string.push(chart.path.clone());
+
+        let mut template_lines: Vec<String> = vec![];
+        let mut error_message: Vec<String> = vec![];
+
+        let helm_ret = helm_exec_with_output(
+            &args_string.iter().map(|x| x.as_str()).collect::<Vec<&str>>(),
+            &self.get_all_envs(envs),
+            &mut |line| {
+                template_lines.push(line);
+            },
+            &mut |line| {
+                warn!("chart {}: {}", chart.name, line);
+                // we don't want to flood user with debug log
+                if line.contains(" [debug] ") {
+                    return;
+                }
+                error_message.push(line);
+            },
+            cmd_killer,
+        );
+
+        match helm_ret {
+            Ok(_) => {
+                match kubectl_apply_with_server_side_apply(
+                    &kubernetes_config,
+                    envs.to_vec(),
+                    None,
+                    &template_lines.join("\n"),
+                ) {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(HelmError::KubernetesApplyError(err)),
+                }
+            }
+            Err(err) => {
+                error!("Helm error: {:?}", err);
+
+                // Try do define/specify a bit more the message
+                let stderr_msg: String = error_message.into_iter().collect();
+                let stderr_msg = format!("{stderr_msg}: {err}",);
+
+                // If the user has canceled the helm command, propagate correctly the killed error
+                match err {
+                    CommandError::TimeoutError(_) => {
+                        return Err(HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg));
+                    }
+                    CommandError::Killed(_) => {
+                        return Err(HelmError::Killed(chart.name.clone(), UPGRADE));
+                    }
+                    _ => {}
+                }
+
+                let error = if stderr_msg.contains("another operation (install/upgrade/rollback) is in progress") {
+                    HelmError::ReleaseLocked(chart.name.clone())
+                } else if stderr_msg.contains("has been rolled back") {
+                    HelmError::Rollbacked(chart.name.clone(), UPGRADE)
+                } else if stderr_msg.contains("timed out waiting") || stderr_msg.contains("deadline exceeded") {
+                    HelmError::Timeout(chart.name.clone(), UPGRADE, stderr_msg)
+                } else {
+                    CmdError(
+                        chart.name.clone(),
+                        UPGRADE,
+                        errors::CommandError::new(
+                            "Helm upgrade error".to_string(),
+                            Some(stderr_msg),
+                            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                        ),
+                    )
+                };
+
+                Err(error)
+            }
+        }
     }
 
     pub fn uninstall_chart_if_breaking_version(

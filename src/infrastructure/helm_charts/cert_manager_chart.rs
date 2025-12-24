@@ -33,6 +33,7 @@ pub struct CertManagerChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     leader_election_namespace: HelmChartNamespaces,
+    deploy_gateway_api: bool,
 }
 
 impl CertManagerChart {
@@ -47,6 +48,7 @@ impl CertManagerChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         leader_election_namespace: HelmChartNamespaces,
+        deploy_gateway_api: bool,
     ) -> CertManagerChart {
         CertManagerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -105,6 +107,7 @@ impl CertManagerChart {
             enable_vpa,
             namespace,
             leader_election_namespace,
+            deploy_gateway_api,
         }
     }
 
@@ -115,6 +118,96 @@ impl CertManagerChart {
 
 impl ToCommonHelmChart for CertManagerChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values = vec![
+            ChartSetValue {
+                key: "global.leaderElection.namespace".to_string(),
+                value: self.leader_election_namespace.to_string(),
+            },
+            ChartSetValue {
+                key: "strategy.type".to_string(),
+                value: self.update_strategy.to_string(),
+            },
+            // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
+            ChartSetValue {
+                key: "prometheus.servicemonitor.enabled".to_string(),
+                value: self.ff_metrics_history_enabled.to_string(),
+            },
+            // resources limits
+            ChartSetValue {
+                key: "resources.limits.cpu".to_string(),
+                value: self.chart_resources.limit_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.limits.memory".to_string(),
+                value: self.chart_resources.limit_memory.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.requests.cpu".to_string(),
+                value: self.chart_resources.request_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "resources.requests.memory".to_string(),
+                value: self.chart_resources.request_memory.to_string(),
+            },
+            // Webhooks
+            ChartSetValue {
+                key: "webhook.strategy.type".to_string(),
+                value: self.update_strategy.to_string(),
+            },
+            ChartSetValue {
+                key: "webhook.resources.limits.cpu".to_string(),
+                value: self.webhook_resources.limit_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "webhook.resources.limits.memory".to_string(),
+                value: self.webhook_resources.limit_memory.to_string(),
+            },
+            ChartSetValue {
+                key: "webhook.resources.requests.cpu".to_string(),
+                value: self.webhook_resources.request_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "webhook.resources.requests.memory".to_string(),
+                value: self.webhook_resources.request_memory.to_string(),
+            },
+            // Cainjector
+            ChartSetValue {
+                key: "cainjector.strategy.type".to_string(),
+                value: self.update_strategy.to_string(),
+            },
+            ChartSetValue {
+                key: "cainjector.resources.limits.cpu".to_string(),
+                value: self.ca_injector_resources.limit_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "cainjector.resources.limits.memory".to_string(),
+                value: self.ca_injector_resources.limit_memory.to_string(),
+            },
+            ChartSetValue {
+                key: "cainjector.resources.requests.cpu".to_string(),
+                value: self.ca_injector_resources.request_cpu.to_string(),
+            },
+            ChartSetValue {
+                key: "cainjector.resources.requests.memory".to_string(),
+                value: self.ca_injector_resources.request_memory.to_string(),
+            },
+        ];
+
+        if self.deploy_gateway_api {
+            values.push(ChartSetValue {
+                key: "config.apiVersion".to_string(),
+                value: "controller.config.cert-manager.io/v1alpha1".to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "config.kind".to_string(),
+                value: "ControllerConfiguration".to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "config.enableGatewayAPI".to_string(),
+                value: true.to_string(),
+            });
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: CertManagerChart::chart_name(),
@@ -122,80 +215,7 @@ impl ToCommonHelmChart for CertManagerChart {
                 namespace: self.namespace.clone(),
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(1, 4, 4)),
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "global.leaderElection.namespace".to_string(),
-                        value: self.leader_election_namespace.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "strategy.type".to_string(),
-                        value: self.update_strategy.to_string(),
-                    },
-                    // https://cert-manager.io/docs/configuration/acme/dns01/#setting-nameservers-for-dns01-self-check
-                    ChartSetValue {
-                        key: "prometheus.servicemonitor.enabled".to_string(),
-                        value: self.ff_metrics_history_enabled.to_string(),
-                    },
-                    // resources limits
-                    ChartSetValue {
-                        key: "resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
-                    },
-                    // Webhooks
-                    ChartSetValue {
-                        key: "webhook.strategy.type".to_string(),
-                        value: self.update_strategy.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "webhook.resources.limits.cpu".to_string(),
-                        value: self.webhook_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "webhook.resources.limits.memory".to_string(),
-                        value: self.webhook_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "webhook.resources.requests.cpu".to_string(),
-                        value: self.webhook_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "webhook.resources.requests.memory".to_string(),
-                        value: self.webhook_resources.request_memory.to_string(),
-                    },
-                    // Cainjector
-                    ChartSetValue {
-                        key: "cainjector.strategy.type".to_string(),
-                        value: self.update_strategy.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "cainjector.resources.limits.cpu".to_string(),
-                        value: self.ca_injector_resources.limit_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "cainjector.resources.limits.memory".to_string(),
-                        value: self.ca_injector_resources.limit_memory.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "cainjector.resources.requests.cpu".to_string(),
-                        value: self.ca_injector_resources.request_cpu.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "cainjector.resources.requests.memory".to_string(),
-                        value: self.ca_injector_resources.request_memory.to_string(),
-                    },
-                ],
+                values,
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
@@ -343,6 +363,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -377,6 +398,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -415,6 +437,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

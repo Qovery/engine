@@ -1,0 +1,5 @@
+gatewayClass:
+  qoveryPublic:
+    enable: set-by-engine
+  qoveryPrivate:
+    enable: set-by-engine

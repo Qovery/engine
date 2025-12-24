@@ -841,6 +841,47 @@ where
     kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
 }
 
+pub fn kubectl_apply_with_server_side_apply<P>(
+    kubernetes_config: P,
+    envs: Vec<(&str, &str)>,
+    args: Option<Vec<&str>>,
+    template: &str,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    let mut cmd_args = vec!["apply"];
+
+    if let Some(args) = args {
+        for arg in args {
+            cmd_args.push(arg)
+        }
+    }
+
+    cmd_args.push("--server-side");
+    cmd_args.push("-f");
+
+    // write the template in a temporary file
+    let tmp_file = tempfile::NamedTempFile::new().map_err(|e| {
+        CommandError::new(
+            "Error while creating temporary file for kubectl apply.".to_string(),
+            Some(e.to_string()),
+            None,
+        )
+    })?;
+    std::fs::write(tmp_file.path(), template).map_err(|e| {
+        CommandError::new(
+            "Error while writing to temporary file for kubectl apply.".to_string(),
+            Some(e.to_string()),
+            None,
+        )
+    })?;
+
+    cmd_args.push(tmp_file.path().to_str().unwrap_or_default());
+
+    kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
+}
+
 pub fn kubectl_create_secret<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,

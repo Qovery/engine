@@ -556,7 +556,6 @@ mod tests {
             cluster_name: String::new(),
             cluster_creation_date: Default::default(),
             ff_log_history_enabled: false,
-            managed_dns_helm_format: String::new(),
             managed_dns_root_domain_helm_format: String::new(),
             lets_encrypt_config: LetsEncryptConfig::new("a".to_string(), true),
             dns_provider_config: create_test_dns_config(),

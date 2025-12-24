@@ -280,6 +280,20 @@ impl TryFrom<f64> for Percentage {
     }
 }
 
+impl TryFrom<u32> for Percentage {
+    type Error = PercentageError;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        if value > 100 {
+            return Err(PercentageError::ValueOutOfRange {
+                raw_error_message: format!("Percentage value must be between 0 and 100, provided value: `{value}`"),
+            });
+        }
+
+        Ok(Percentage(value as f64 / 100.0))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

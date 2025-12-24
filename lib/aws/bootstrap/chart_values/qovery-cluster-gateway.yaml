@@ -1,0 +1,20 @@
+dns:
+  domain: set-by-engine-code
+
+gateway:
+  qoveryPublic:
+    enable: true
+
+infrastructure:
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "external"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-name: "set-by-engine-code"
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
+    service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "set-by-engine-code"
+    service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
+    # Validation rule, must have max 8 annotations
+    # spec.infrastructure.annotations: Too many: 10: must have at most 8 items
+    # service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300" # Can use AWS defaults or set via AWS Load Balancer Controller configuration

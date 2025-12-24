@@ -13,7 +13,9 @@ use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, Route};
+use crate::io_models::models::{
+    CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
+};
 use crate::utilities::to_short_id;
 use std::collections::HashMap;
 use std::iter;
@@ -239,7 +241,7 @@ impl<T: CloudProvider> Router<T> {
                     .advanced_settings()
                     .network_ingress_nginx_controller_server_snippet
                 {
-                    // this advanced setting is inject independently of other advanced settings because we inject the proper model object instead of the io model
+                    // this advanced setting is injected independently of other advanced settings because we inject the proper model object instead of the io model
                     context.insert(
                         "nginx_ingress_controller_server_snippet",
                         &network_ingress_nginx_controller_server_snippet
@@ -326,6 +328,9 @@ impl<T: CloudProvider> Router<T> {
         };
         context.insert("spec_acme_server", lets_encrypt_url);
 
+        context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
+        context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
+
         Ok(context)
     }
 
@@ -351,6 +356,10 @@ fn to_host_data_template(
     }
     let to_port_path = |port: &Port| -> String { port.public_path().expect("port should be public here").to_string() };
     let to_path_rewrite = |port: &Port| -> Option<String> { port.public_path_rewrite().map(|p| p.to_string()) };
+    let to_path_type = |port: &Port| -> HostPathType {
+        HostPathType::from_path(port.public_path().unwrap_or_default(), HostPathType::PathPrefix)
+    };
+    let to_path_weight = |_port: &Port| -> u32 { 1 };
     let ports_by_namespace = get_ports_by_namespace(ports);
 
     let mut hosts_per_namespace: HashMap<String, Vec<HostDataTemplate>> =
@@ -371,6 +380,8 @@ fn to_host_data_template(
                     service_port: port.port,
                     path: to_port_path(port),
                     path_rewrite: to_path_rewrite(port),
+                    path_type: to_path_type(port),
+                    weight: to_path_weight(port),
                 });
             }
 
@@ -384,6 +395,8 @@ fn to_host_data_template(
                 service_port: port.port,
                 path: to_port_path(port),
                 path_rewrite: to_path_rewrite(port),
+                path_type: to_path_type(port),
+                weight: to_path_weight(port),
             });
             hosts.push(HostDataTemplate {
                 domain_name: wildcard_domain.domain_without_wildcard().to_string(),
@@ -391,6 +404,8 @@ fn to_host_data_template(
                 service_port: port.port,
                 path: to_port_path(port),
                 path_rewrite: to_path_rewrite(port),
+                path_type: to_path_type(port),
+                weight: to_path_weight(port),
             });
         }
 
@@ -403,6 +418,8 @@ fn to_host_data_template(
                 service_port: port.port,
                 path: to_port_path(port),
                 path_rewrite: to_path_rewrite(port),
+                path_type: to_path_type(port),
+                weight: to_path_weight(port),
             });
 
             if port.is_default {
@@ -412,6 +429,8 @@ fn to_host_data_template(
                     service_port: port.port,
                     path: to_port_path(port),
                     path_rewrite: to_path_rewrite(port),
+                    path_type: to_path_type(port),
+                    weight: to_path_weight(port),
                 });
             }
 
@@ -429,6 +448,8 @@ fn to_host_data_template(
                     service_port: port.port,
                     path: to_port_path(port),
                     path_rewrite: to_path_rewrite(port),
+                    path_type: to_path_type(port),
+                    weight: to_path_weight(port),
                 });
 
                 if port.is_default {
@@ -438,6 +459,8 @@ fn to_host_data_template(
                         service_port: port.port,
                         path: to_port_path(port),
                         path_rewrite: to_path_rewrite(port),
+                        path_type: to_path_type(port),
+                        weight: to_path_weight(port),
                     });
                 }
             }
@@ -607,7 +630,7 @@ mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{generate_certificate_alternative_names, to_host_data_template};
 
-    use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate};
+    use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
 
     #[test]
     pub fn test_certificate_alternative_names() {
@@ -767,6 +790,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-cluster.com".to_string(),
@@ -774,6 +799,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "*.toto.mydomain.com".to_string(),
@@ -781,6 +808,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.toto.mydomain.com".to_string(),
@@ -788,6 +817,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "toto.mydomain.com".to_string(),
@@ -795,6 +826,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
 
         // If the port is not the default one, there should not be default and wildcard route/host
@@ -809,6 +842,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.toto.mydomain.com".to_string(),
@@ -816,6 +851,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
 
         // we mix both wildcard and non wildcard domains
@@ -852,6 +889,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.toto.mydomain.com".to_string(),
@@ -859,6 +898,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "cluster.com".to_string(),
@@ -866,6 +907,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-cluster.com".to_string(),
@@ -873,6 +916,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "*.toto.mydomain.com".to_string(),
@@ -880,6 +925,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.toto.mydomain.com".to_string(),
@@ -887,6 +934,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "toto.mydomain.com".to_string(),
@@ -894,6 +943,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "super.mydomain.com".to_string(),
@@ -901,6 +952,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http.super.mydomain.com".to_string(),
@@ -908,6 +961,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "grpc.super.mydomain.com".to_string(),
@@ -915,6 +970,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
     }
 
@@ -952,6 +1009,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
 
         let namespace = "namespace2";
@@ -965,6 +1024,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
     }
 
@@ -1017,6 +1078,8 @@ mod tests {
             service_port: 8080,
             path: "/toto".to_string(),
             path_rewrite: Some("/titi".to_string()),
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
     }
 
@@ -1075,6 +1138,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-1-cluster.com".to_string(),
@@ -1082,6 +1147,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2.toto.mydomain.com".to_string(),
@@ -1089,6 +1156,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2-cluster.com".to_string(),
@@ -1096,6 +1165,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
     }
 
@@ -1154,6 +1225,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-1-cluster.com".to_string(),
@@ -1161,6 +1234,8 @@ mod tests {
             service_port: 80,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         let host_data = ret.get("namespace1").unwrap();
         assert_eq!(host_data.len(), 2);
@@ -1170,6 +1245,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
         assert!(host_data.contains(&HostDataTemplate {
             domain_name: "http-2-cluster.com".to_string(),
@@ -1177,6 +1254,8 @@ mod tests {
             service_port: 8080,
             path: "/".to_string(),
             path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
         }));
     }
 }

@@ -1,0 +1,36 @@
+config:
+  envoyGateway:
+    gateway:
+      controllerName: qovery.com/gateway-controller
+
+service:
+  annotations: {} # set-by-engine
+
+hpa:
+  enabled: false # set-by-engine
+  minReplicas: 1 # set-by-engine
+  maxReplicas: 1 # set-by-engine
+
+deployment:
+  envoyGateway:
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+
+podDisruptionBudget:
+  maxUnavailable: 1 # set-by-engine
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - envoy-gateway
+        topologyKey: kubernetes.io/hostname

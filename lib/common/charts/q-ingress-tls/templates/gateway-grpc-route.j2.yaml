@@ -1,0 +1,93 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
+{%- if grpc_hosts|length >= 1  %}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: {{ sanitized_name }}-grpc
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
+    # If NOT forcing SSL redirect, also accept HTTP traffic directly
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {%- endif %}
+  hostnames:
+    {%- for host in grpc_hosts %}
+    - "{{ host.domain_name }}"
+    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
+    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endfor %}
+  rules:
+    {%- for host in grpc_hosts %}
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: "{{ host.service_name }}"
+          port: {{ host.service_port }}
+          weight: {{ host.weight }}
+      {%- if host.grpc_service is defined and host.grpc_service | trim %}
+      # GRPCRoute uses method matching (service/method) instead of path matching
+      matches:
+        - method:
+            {%- if host.grpc_method is defined and host.grpc_method | trim %}
+            type: Exact
+            service: "{{ host.grpc_service | trim }}"
+            method: "{{ host.grpc_method | trim }}"
+            {%- else %}
+            type: Exact
+            service: "{{ host.grpc_service | trim }}"
+            {%- endif %}
+      {%- endif %}
+      {%- if advanced_settings.network_gateway_api_add_headers or advanced_settings.network_gateway_api_proxy_set_headers %}
+      filters:
+       {%- if advanced_settings.network_gateway_api_add_headers %}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+       {%- endif %}
+       {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+        # Add custom request headers (proxy_set_header equivalent)
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+       {%- endif %}
+      {%- endif %}
+    {%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

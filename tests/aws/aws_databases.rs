@@ -945,6 +945,7 @@ fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "AWS DocumentDB no longer supports MongoDB 4.0"]
 fn private_mongodb_v4_0_deploy_a_working_prod_environment() {
     test_mongodb_configuration("4.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }

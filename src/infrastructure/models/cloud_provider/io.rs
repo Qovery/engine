@@ -258,9 +258,9 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "nginx.memory.limit_in_mib")]
     pub nginx_memory_limit_in_mib: u32,
     #[serde(alias = "nginx.hpa.cpu_utilization_percentage_threshold")]
-    pub nginx_hpa_cpu_utilization_percentage_threshold: u32,
+    pub nginx_hpa_cpu_utilization_percentage_threshold: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.hpa.min_number_instances")]
-    pub nginx_hpa_min_number_instances: u32,
+    pub nginx_hpa_min_number_instances: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.enable_client_ip")]
     pub nginx_controller_enable_client_ip: bool,
     #[serde(alias = "nginx.controller.use_forwarded_headers")]
@@ -283,7 +283,7 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "nginx.controller.configuration_snippet")]
     pub nginx_controller_configuration_snippet: Option<NginxConfigurationSnippet>,
     #[serde(alias = "nginx.hpa.max_number_instances")]
-    pub nginx_hpa_max_number_instances: u32,
+    pub nginx_hpa_max_number_instances: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
 
     #[serde(alias = "nginx.controller.custom_http_errors")]
     pub nginx_controller_custom_http_errors: Option<String>,
@@ -314,6 +314,28 @@ pub struct ClusterAdvancedSettings {
 
     #[serde(alias = "aws.metrics_server.replicas")]
     pub aws_metrics_server_replicas: Option<u32>,
+
+    #[serde(alias = "k8s.deploy_api_gateway", default)]
+    pub k8s_deploy_api_gateway: Option<bool>,
+    #[serde(alias = "k8s.use_api_gateway", default)]
+    pub k8s_use_api_gateway: Option<bool>,
+
+    #[serde(alias = "envoy.hpa.cpu_average_utilization_percentage_threshold")]
+    pub envoy_hpa_cpu_average_utilization_percentage_threshold: Option<Percentage>,
+    #[serde(alias = "envoy.hpa.memory_average_utilization_percentage_threshold")]
+    pub envoy_hpa_memory_average_utilization_percentage_threshold: Option<Percentage>,
+    #[serde(alias = "envoy.hpa.min_number_instances")]
+    pub envoy_hpa_min_number_instances: u32,
+    #[serde(alias = "envoy.hpa.max_number_instances")]
+    pub envoy_hpa_max_number_instances: u32,
+    #[serde(alias = "envoy.vcpu.request_in_milli_cpu")]
+    pub envoy_vcpu_request_in_milli_cpu: u32,
+    #[serde(alias = "envoy.vcpu.limit_in_milli_cpu")]
+    pub envoy_vcpu_limit_in_milli_cpu: u32,
+    #[serde(alias = "envoy.memory.request_in_mib")]
+    pub envoy_memory_request_in_mib: u32,
+    #[serde(alias = "envoy.memory.limit_in_mib")]
+    pub envoy_memory_limit_in_mib: u32,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -381,6 +403,16 @@ impl Default for ClusterAdvancedSettings {
             nginx_default_backend_image_tag: None,
             object_storage_enable_logging: false,
             aws_metrics_server_replicas: None,
+            k8s_use_api_gateway: None,
+            k8s_deploy_api_gateway: None,
+            envoy_hpa_cpu_average_utilization_percentage_threshold: None,
+            envoy_hpa_memory_average_utilization_percentage_threshold: None,
+            envoy_hpa_min_number_instances: 2,
+            envoy_hpa_max_number_instances: 25,
+            envoy_vcpu_request_in_milli_cpu: 100,
+            envoy_vcpu_limit_in_milli_cpu: 1000,
+            envoy_memory_request_in_mib: 256,
+            envoy_memory_limit_in_mib: 1024,
         }
     }
 }

@@ -15,7 +15,7 @@ pub struct CertManagerConfigsChart<'a> {
     chart_values_path: HelmChartValuesFilePath,
     lets_encrypt_config: &'a LetsEncryptConfig,
     dns_provider_configuration: &'a DnsProviderConfiguration,
-    managed_dns_helm_format: String,
+    managed_dns: Vec<String>,
     namespace: HelmChartNamespaces,
 }
 
@@ -24,7 +24,7 @@ impl<'a> CertManagerConfigsChart<'a> {
         chart_prefix_path: Option<&str>,
         lets_encrypt_config: &'a LetsEncryptConfig,
         dns_provider_configuration: &'a DnsProviderConfiguration,
-        managed_dns_helm_format: String,
+        managed_dns_helm_format: Vec<String>,
         namespace: HelmChartNamespaces,
     ) -> Self {
         CertManagerConfigsChart {
@@ -40,7 +40,7 @@ impl<'a> CertManagerConfigsChart<'a> {
             ),
             lets_encrypt_config,
             dns_provider_configuration,
-            managed_dns_helm_format,
+            managed_dns: managed_dns_helm_format,
             namespace,
         }
     }
@@ -52,6 +52,136 @@ impl<'a> CertManagerConfigsChart<'a> {
 
 impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let values = vec![
+            ChartSetValue {
+                key: "namespace".to_string(),
+                value: self.namespace.to_string(),
+            },
+            ChartSetValue {
+                key: "externalDnsProvider".to_string(),
+                value: self.dns_provider_configuration.get_cert_manager_config_name(),
+            },
+            ChartSetValue {
+                key: "acme.letsEncrypt.emailReport".to_string(),
+                value: self.lets_encrypt_config.email_report().to_string(),
+            },
+            ChartSetValue {
+                key: "acme.letsEncrypt.acmeUrl".to_string(),
+                value: self.lets_encrypt_config.acme_url().to_string(),
+            },
+            ChartSetValue {
+                key: "managedDns".to_string(),
+                value: format!("{{{}}}", self.managed_dns.join(",")),
+            },
+            // Providers
+            // Cloudflare
+            ChartSetValue {
+                key: "provider.cloudflare.apiToken".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Cloudflare(cloudflare_config) => {
+                        cloudflare_config.cloudflare_api_token.to_string()
+                    }
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.cloudflare.email".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Cloudflare(cloudflare_config) => {
+                        cloudflare_config.cloudflare_email.to_string()
+                    }
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
+                },
+            },
+            // Qovery DNS
+            ChartSetValue {
+                key: "provider.pdns.apiPort".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::QoveryDns(qovery_dns_config) => {
+                        // TODO(benjaminch): Hack to be fixed: I don't want to use `values_string` field from `ChartInfo`
+                        // as it's also kind of a hack.
+                        // Good solution will be to merge `values` and `values_string` fields into one and having `ChartSetValue`
+                        // to carry type as variant making a cleaner API to be used, way less confusing and ... testable \o/ !
+                        //
+                        // Ticket: ENG-1404
+                        //
+                        // pub enum ChartSetValue {
+                        //     String(String),
+                        //     Integer(i64),
+                        //     Boolean(bool),
+                        //     Array(Vec<ChartSetValue>),
+                        // }
+                        //
+                        // #[derive(Clone)]
+                        // pub struct ChartSetValue {
+                        //     pub key: String,
+                        //     pub value: ChartSetValue,
+                        // }
+                        format!("\"{}\"", qovery_dns_config.api_url_port)
+                    }
+                    DnsProviderConfiguration::Cloudflare(_) => "no-set".to_string(),
+                    DnsProviderConfiguration::Route53(_) => "no-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.pdns.apiUrl".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::QoveryDns(qovery_dns_config) => {
+                        qovery_dns_config.api_url_scheme_and_domain.to_string()
+                    }
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.pdns.apiKey".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::QoveryDns(qovery_dns_config) => qovery_dns_config.api_key.to_string(),
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
+                },
+            },
+            // Route 53
+            ChartSetValue {
+                key: "provider.route53.accessKeyId".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Route53(route53_config) => route53_config.aws_access_key_id.to_string(),
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.route53.secretAccessKey".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Route53(route53_config) => {
+                        route53_config.aws_secret_access_key.to_string()
+                    }
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.route53.region".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Route53(route53_config) => route53_config.aws_region.to_string(),
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                },
+            },
+            ChartSetValue {
+                key: "provider.route53.hostedZoneId".to_string(),
+                value: match &self.dns_provider_configuration {
+                    DnsProviderConfiguration::Route53(route53_config) => {
+                        route53_config.hosted_zone_id.clone().unwrap_or_else(|| "".to_string())
+                    }
+                    DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
+                    DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
+                },
+            },
+        ];
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: CertManagerConfigsChart::chart_name(),
@@ -60,139 +190,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                 // TODO: fix backup apply, it makes the chart deployment failed randomly
                 // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "namespace".to_string(),
-                        value: self.namespace.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "externalDnsProvider".to_string(),
-                        value: self.dns_provider_configuration.get_cert_manager_config_name(),
-                    },
-                    ChartSetValue {
-                        key: "acme.letsEncrypt.emailReport".to_string(),
-                        value: self.lets_encrypt_config.email_report().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "acme.letsEncrypt.acmeUrl".to_string(),
-                        value: self.lets_encrypt_config.acme_url().to_string(),
-                    },
-                    ChartSetValue {
-                        key: "managedDns".to_string(),
-                        value: self.managed_dns_helm_format.to_string(),
-                    },
-                    // Providers
-                    // Cloudflare
-                    ChartSetValue {
-                        key: "provider.cloudflare.apiToken".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Cloudflare(cloudflare_config) => {
-                                cloudflare_config.cloudflare_api_token.to_string()
-                            }
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.cloudflare.email".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Cloudflare(cloudflare_config) => {
-                                cloudflare_config.cloudflare_email.to_string()
-                            }
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
-                        },
-                    },
-                    // Qovery DNS
-                    ChartSetValue {
-                        key: "provider.pdns.apiPort".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::QoveryDns(qovery_dns_config) => {
-                                // TODO(benjaminch): Hack to be fixed: I don't want to use `values_string` field from `ChartInfo`
-                                // as it's also kind of a hack.
-                                // Good solution will be to merge `values` and `values_string` fields into one and having `ChartSetValue`
-                                // to carry type as variant making a cleaner API to be used, way less confusing and ... testable \o/ !
-                                //
-                                // Ticket: ENG-1404
-                                //
-                                // pub enum ChartSetValue {
-                                //     String(String),
-                                //     Integer(i64),
-                                //     Boolean(bool),
-                                //     Array(Vec<ChartSetValue>),
-                                // }
-                                //
-                                // #[derive(Clone)]
-                                // pub struct ChartSetValue {
-                                //     pub key: String,
-                                //     pub value: ChartSetValue,
-                                // }
-                                format!("\"{}\"", qovery_dns_config.api_url_port)
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "no-set".to_string(),
-                            DnsProviderConfiguration::Route53(_) => "no-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.pdns.apiUrl".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::QoveryDns(qovery_dns_config) => {
-                                qovery_dns_config.api_url_scheme_and_domain.to_string()
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.pdns.apiKey".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::QoveryDns(qovery_dns_config) => {
-                                qovery_dns_config.api_key.to_string()
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::Route53(_) => "not-set".to_string(),
-                        },
-                    },
-                    // Route 53
-                    ChartSetValue {
-                        key: "provider.route53.accessKeyId".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Route53(route53_config) => {
-                                route53_config.aws_access_key_id.to_string()
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.route53.secretAccessKey".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Route53(route53_config) => {
-                                route53_config.aws_secret_access_key.to_string()
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.route53.region".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Route53(route53_config) => route53_config.aws_region.to_string(),
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                        },
-                    },
-                    ChartSetValue {
-                        key: "provider.route53.hostedZoneId".to_string(),
-                        value: match &self.dns_provider_configuration {
-                            DnsProviderConfiguration::Route53(route53_config) => {
-                                route53_config.hosted_zone_id.clone().unwrap_or_else(|| "".to_string())
-                            }
-                            DnsProviderConfiguration::Cloudflare(_) => "not-set".to_string(),
-                            DnsProviderConfiguration::QoveryDns(_) => "not-set".to_string(),
-                        },
-                    },
-                ],
+                values,
                 upgrade_retry: Some(ChartInfoUpgradeRetry {
                     nb_retry: 10,
                     delay_in_milli_sec: 30_000,
@@ -259,7 +257,7 @@ mod tests {
             None,
             &lets_encrypt_config,
             &dns_provider_config,
-            "whatever".to_string(),
+            vec!["whatever".to_string()],
             HelmChartNamespaces::CertManager,
         );
 
@@ -295,7 +293,7 @@ mod tests {
             None,
             &lets_encrypt_config,
             &dns_provider_config,
-            "whatever".to_string(),
+            vec!["whatever".to_string()],
             HelmChartNamespaces::CertManager,
         );
 
@@ -335,7 +333,7 @@ mod tests {
             None,
             &lets_encrypt_config,
             &dns_provider_config,
-            "whatever".to_string(),
+            vec!["whatever".to_string()],
             HelmChartNamespaces::CertManager,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
