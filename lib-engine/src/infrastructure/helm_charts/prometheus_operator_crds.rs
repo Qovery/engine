@@ -234,26 +234,26 @@ mod tests {
             let path = entry.unwrap().path();
 
             // only read yaml files
-            if let Some(extension) = path.extension() {
-                if extension == "yaml" {
-                    // remove --- in the file because it's seen as multiple files and not supported by serde
-                    let content = fs::read_to_string(&path).unwrap_or_else(|_| {
-                        panic!(
-                            "error while trying to read crd file {} for prometheus operator crd",
-                            path.to_string_lossy()
-                        )
-                    });
-                    let content = content.replace("---", "");
+            if let Some(extension) = path.extension()
+                && extension == "yaml"
+            {
+                // remove --- in the file because it's seen as multiple files and not supported by serde
+                let content = fs::read_to_string(&path).unwrap_or_else(|_| {
+                    panic!(
+                        "error while trying to read crd file {} for prometheus operator crd",
+                        path.to_string_lossy()
+                    )
+                });
+                let content = content.replace("---", "");
 
-                    // parse crd file
-                    let file = serde_yaml::from_str::<K8sCrd>(&content).unwrap_or_else(|_| {
-                        panic!(
-                            "error while trying to parse crd file {} for prometheus operator crd",
-                            path.to_string_lossy()
-                        )
-                    });
-                    resource_names.push(file.metadata.name);
-                }
+                // parse crd file
+                let file = serde_yaml::from_str::<K8sCrd>(&content).unwrap_or_else(|_| {
+                    panic!(
+                        "error while trying to parse crd file {} for prometheus operator crd",
+                        path.to_string_lossy()
+                    )
+                });
+                resource_names.push(file.metadata.name);
             }
         }
 

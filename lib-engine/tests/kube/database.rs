@@ -144,15 +144,14 @@ fn should_increase_db_storage_size() {
             })
             .expect("Unable to get pvc");
 
-        if let Some(spec) = &pvc.spec {
-            if let Some(resources) = &spec.resources {
-                if let Some(req) = &resources.requests {
-                    assert_eq!(
-                        req["storage"].0,
-                        format!("{}Gi", invalid_statefulset.invalid_pvcs[0].required_disk_size_in_gib)
-                    )
-                }
-            }
+        if let Some(spec) = &pvc.spec
+            && let Some(resources) = &spec.resources
+            && let Some(req) = &resources.requests
+        {
+            assert_eq!(
+                req["storage"].0,
+                format!("{}Gi", invalid_statefulset.invalid_pvcs[0].required_disk_size_in_gib)
+            )
         }
 
         // clean up

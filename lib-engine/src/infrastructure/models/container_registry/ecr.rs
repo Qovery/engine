@@ -477,13 +477,12 @@ impl InteractWithRegistry for ECR {
 
                             let mut ttl = None;
                             for tag in tags.clone().unwrap_or_default() {
-                                if let (Some(k), Some(v)) = (&tag.key, &tag.value) {
-                                    if k.as_str() == "ttl" {
-                                        if let Ok(d) = v.parse() {
-                                            ttl = Some(Duration::from_secs(d));
-                                            break;
-                                        }
-                                    }
+                                if let (Some(k), Some(v)) = (&tag.key, &tag.value)
+                                    && k.as_str() == "ttl"
+                                    && let Ok(d) = v.parse()
+                                {
+                                    ttl = Some(Duration::from_secs(d));
+                                    break;
                                 }
                             }
 

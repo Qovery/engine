@@ -284,20 +284,20 @@ where
     .items;
 
     for secret in secrets {
-        if secret.metadata.name.contains("-q-backup") {
-            if let Err(e) = kubectl_delete_secret(
+        if secret.metadata.name.contains("-q-backup")
+            && let Err(e) = kubectl_delete_secret(
                 &kubernetes_config,
                 envs.to_vec(),
                 Some(chart.clone().namespace.to_string().as_str()),
                 secret.metadata.name,
-            ) {
-                return Err(CmdError(
-                    chart.clone().name,
-                    HelmCommand::UPGRADE,
-                    CommandError::new(e.message_safe(), e.message_raw(), None),
-                ));
-            };
-        }
+            )
+        {
+            return Err(CmdError(
+                chart.clone().name,
+                HelmCommand::UPGRADE,
+                CommandError::new(e.message_safe(), e.message_raw(), None),
+            ));
+        };
     }
 
     Ok(())

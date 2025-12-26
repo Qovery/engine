@@ -339,23 +339,20 @@ pub async fn increase_storage_size(
         .to_string();
 
         // edit statefulset volume claim templates in order to stick to new size
-        if let Some(spec) = current_statefulset.spec.as_mut() {
-            if let Some(volumes) = spec.volume_claim_templates.as_mut() {
-                for volume in volumes {
-                    if let Some(name) = &volume.metadata.name {
-                        // find invalid volume claim template regarding invalid pvc name
-                        if persistent_volume_claim_template_name.starts_with(name) {
-                            if let Some(v_spec) = volume.spec.as_mut() {
-                                if let Some(v_res) = v_spec.resources.as_mut() {
-                                    if let Some(v_req) = v_res.requests.as_mut() {
-                                        if let Some(storage) = v_req.get_mut("storage") {
-                                            // edit storage size
-                                            storage.0 = format!("{}Gi", invalid_pvc.required_disk_size_in_gib);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+        if let Some(spec) = current_statefulset.spec.as_mut()
+            && let Some(volumes) = spec.volume_claim_templates.as_mut()
+        {
+            for volume in volumes {
+                if let Some(name) = &volume.metadata.name {
+                    // find invalid volume claim template regarding invalid pvc name
+                    if persistent_volume_claim_template_name.starts_with(name)
+                        && let Some(v_spec) = volume.spec.as_mut()
+                        && let Some(v_res) = v_spec.resources.as_mut()
+                        && let Some(v_req) = v_res.requests.as_mut()
+                        && let Some(storage) = v_req.get_mut("storage")
+                    {
+                        // edit storage size
+                        storage.0 = format!("{}Gi", invalid_pvc.required_disk_size_in_gib);
                     }
                 }
             }
@@ -455,14 +452,14 @@ pub fn get_service_statefulset_name_and_volumes(
             e,
         ))),
         Ok(result) => {
-            if let Some(statefulset) = result.items.first() {
-                if let Some(name) = &statefulset.metadata.name {
-                    if let Some(spec) = statefulset.clone().spec {
-                        return Ok((name.to_string(), spec.volume_claim_templates));
-                    }
-
-                    return Ok((name.to_string(), None));
+            if let Some(statefulset) = result.items.first()
+                && let Some(name) = &statefulset.metadata.name
+            {
+                if let Some(spec) = statefulset.clone().spec {
+                    return Ok((name.to_string(), spec.volume_claim_templates));
                 }
+
+                return Ok((name.to_string(), None));
             }
 
             Err(Box::new(EngineError::new_k8s_cannot_get_statefulset(

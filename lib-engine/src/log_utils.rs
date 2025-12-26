@@ -31,13 +31,13 @@ where
 
         loop {
             // check if we've exceeded the maximum duration
-            if let Some(max_dur) = max_duration {
-                if start_time.elapsed() >= max_dur {
-                    let timeout_message =
-                        EventMessage::new_from_safe("Task exceeded maximum duration, stopping monitoring".to_string());
-                    logger.log(EngineEvent::Info(event_details.clone(), timeout_message));
-                    break;
-                }
+            if let Some(max_dur) = max_duration
+                && start_time.elapsed() >= max_dur
+            {
+                let timeout_message =
+                    EventMessage::new_from_safe("Task exceeded maximum duration, stopping monitoring".to_string());
+                logger.log(EngineEvent::Info(event_details.clone(), timeout_message));
+                break;
             }
 
             // do notify users here

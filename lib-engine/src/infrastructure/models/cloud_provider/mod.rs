@@ -39,7 +39,7 @@ pub trait CloudProvider: Send + Sync {
     /// environment variables to inject to generate Terraform files from templates
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)>;
     fn terraform_state_credentials(&self) -> Option<&TerraformStateCredentials>;
-    fn downcast_ref(&self) -> CloudProviderKind;
+    fn downcast_ref(&self) -> CloudProviderKind<'_>;
 }
 
 pub enum CloudProviderKind<'a> {

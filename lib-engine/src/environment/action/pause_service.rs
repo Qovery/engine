@@ -212,11 +212,11 @@ async fn unpause_service_if_needed(
                 Api::namespaced(kube.clone(), namespace)
             };
             for statefulset in statefulsets.list(&list_params).await? {
-                if statefulset.status.map(|s| s.replicas).unwrap_or(0) == 0 {
-                    if let (Some(namespace), Some(name)) = (statefulset.metadata.namespace, statefulset.metadata.name) {
-                        let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have statefulsets with namespace
-                        statefulsets.patch_scale(&name, &patch_params, &patch).await?;
-                    }
+                if statefulset.status.map(|s| s.replicas).unwrap_or(0) == 0
+                    && let (Some(namespace), Some(name)) = (statefulset.metadata.namespace, statefulset.metadata.name)
+                {
+                    let statefulsets: Api<StatefulSet> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have statefulsets with namespace
+                    statefulsets.patch_scale(&name, &patch_params, &patch).await?;
                 }
             }
         }
@@ -228,11 +228,11 @@ async fn unpause_service_if_needed(
                 Api::namespaced(kube.clone(), namespace)
             };
             for deployment in deployments.list(&list_params).await? {
-                if deployment.status.and_then(|s| s.replicas).unwrap_or(0) == 0 {
-                    if let (Some(namespace), Some(name)) = (deployment.metadata.namespace, deployment.metadata.name) {
-                        let deployments: Api<Deployment> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have deployments with namespace
-                        deployments.patch_scale(&name, &patch_params, &patch).await?;
-                    }
+                if deployment.status.and_then(|s| s.replicas).unwrap_or(0) == 0
+                    && let (Some(namespace), Some(name)) = (deployment.metadata.namespace, deployment.metadata.name)
+                {
+                    let deployments: Api<Deployment> = Api::namespaced(kube.clone(), &namespace); // patch_scale needs to have deployments with namespace
+                    deployments.patch_scale(&name, &patch_params, &patch).await?;
                 }
             }
         }

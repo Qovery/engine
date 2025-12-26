@@ -71,24 +71,25 @@ fn create_ecr_repository_with_tags() {
         );
         assert!(result.is_ok());
 
-        if let Ok(response) = result {
-            if let Some(repos) = response.repositories {
-                if let Some(arn) = &repos[0].repository_arn {
-                    let result = block_on(container_registry.ecr_client().list_tags_for_resource(
-                        ListTagsForResourceRequest {
-                            resource_arn: arn.to_string(),
-                        },
-                    ));
-                    assert!(result.is_ok());
-                    if let Ok(response) = result {
-                        if let Some(tags) = response.tags {
-                            assert!(tags.contains(&Tag {
-                                key: Some("ttl".to_string()),
-                                value: Some(AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string())
-                            }))
-                        }
-                    }
-                }
+        if let Ok(response) = result
+            && let Some(repos) = response.repositories
+            && let Some(arn) = &repos[0].repository_arn
+        {
+            let result = block_on(
+                container_registry
+                    .ecr_client()
+                    .list_tags_for_resource(ListTagsForResourceRequest {
+                        resource_arn: arn.to_string(),
+                    }),
+            );
+            assert!(result.is_ok());
+            if let Ok(response) = result
+                && let Some(tags) = response.tags
+            {
+                assert!(tags.contains(&Tag {
+                    key: Some("ttl".to_string()),
+                    value: Some(AWS_QUICK_RESOURCE_TTL_IN_SECONDS.to_string())
+                }))
             }
         }
 

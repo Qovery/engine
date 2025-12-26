@@ -22,10 +22,10 @@ impl Bucket {
             .collect();
 
         let mut ttl = None;
-        if let Some(ttl_str) = metadata_without_prefix.get("ttl") {
-            if let Ok(ttl_secs) = ttl_str.parse::<u64>() {
-                ttl = Some(Duration::from_secs(ttl_secs));
-            }
+        if let Some(ttl_str) = metadata_without_prefix.get("ttl")
+            && let Ok(ttl_secs) = ttl_str.parse::<u64>()
+        {
+            ttl = Some(Duration::from_secs(ttl_secs));
         }
 
         Ok(Bucket {

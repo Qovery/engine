@@ -240,19 +240,19 @@ impl PromtailTestFixture {
         let output = self.container.exec_promtail(&self.config_path.to_string_lossy(), log)?;
 
         for line in output.lines() {
-            if let Some(start) = line.find('{') {
-                if let Some(end) = line.find('}') {
-                    let labels_str = &line[start + 1..end];
+            if let Some(start) = line.find('{')
+                && let Some(end) = line.find('}')
+            {
+                let labels_str = &line[start + 1..end];
 
-                    for label_pair in labels_str.split(',') {
-                        let parts: Vec<&str> = label_pair.trim().splitn(2, '=').collect();
-                        if parts.len() == 2 {
-                            let key = parts[0].trim();
-                            let value = parts[1].trim().trim_matches('"');
+                for label_pair in labels_str.split(',') {
+                    let parts: Vec<&str> = label_pair.trim().splitn(2, '=').collect();
+                    if parts.len() == 2 {
+                        let key = parts[0].trim();
+                        let value = parts[1].trim().trim_matches('"');
 
-                            if key == "level" {
-                                return Ok(Some(value.to_string()));
-                            }
+                        if key == "level" {
+                            return Ok(Some(value.to_string()));
                         }
                     }
                 }

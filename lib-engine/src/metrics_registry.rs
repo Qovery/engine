@@ -71,7 +71,7 @@ pub struct StepRecordHandle<'a> {
 }
 
 pub trait MetricsRegistry: Send + Sync {
-    fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle;
+    fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle<'_>;
     fn stop_record(&self, id: Uuid, deployment_step: StepName, status: StepStatus);
     fn record_is_stopped(&self, id: Uuid, deployment_step: StepName) -> bool;
     fn get_records(&self, service_id: Uuid) -> Vec<StepRecord>;
@@ -152,7 +152,7 @@ impl Default for StdMetricsRegistry {
 }
 
 impl MetricsRegistry for StdMetricsRegistry {
-    fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle {
+    fn start_record(&self, id: Uuid, label: StepLabel, step_name: StepName) -> StepRecordHandle<'_> {
         debug!("start record deployment step {:#?} for item {}", step_name, id);
 
         let mut registry = self.registry.map.lock().unwrap();
@@ -194,10 +194,10 @@ impl MetricsRegistry for StdMetricsRegistry {
     fn record_is_stopped(&self, id: Uuid, step_name: StepName) -> bool {
         let mut locked_registry = self.registry.map.lock().unwrap();
         let metrics_per_id = locked_registry.entry(id).or_default();
-        if let Some(deployment_step_record) = metrics_per_id.get(&step_name) {
-            if deployment_step_record.duration.is_some() {
-                return true;
-            }
+        if let Some(deployment_step_record) = metrics_per_id.get(&step_name)
+            && deployment_step_record.duration.is_some()
+        {
+            return true;
         }
         false
     }

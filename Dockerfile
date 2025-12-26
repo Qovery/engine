@@ -11,12 +11,12 @@ ARG HELM_DIFF_VERSION="v3.11.0"
 ARG DOCKER_VERSION="5:28.4.0-1~debian.13~trixie"
 ARG BUILDX_VERSION="0.27.0-1~debian.13~trixie"
 ARG PACK_VERSION="0.35.1"
-ARG CONTAINERD_VERSION="1.7.19-1"
+ARG CONTAINERD_VERSION="1.7.29-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG KUBENT_VERSION=0.7.3
 
 ARG BIN_DEST_FOLDER="/binaries"
-ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.89.0-2025-09-17T15-20-40"
+ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.92.0-2025-12-23T09-44-09"
 
 
 ###########################################

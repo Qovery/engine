@@ -1,85 +1,85 @@
 use qovery_engine::cmd::helm::Helm;
 use qovery_engine::helm::{ChartInfo, ChartSetValue, CommonChart, HelmChartNamespaces};
 
-use serde_derive::Deserialize;
-use serde_derive::Serialize;
+// use serde_derive::Deserialize;
+// use serde_derive::Serialize;
 
 use std::path::PathBuf;
 
 use crate::helpers::utilities::FuncTestsSecrets;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Certificate {
-    pub api_version: String,
-    pub items: Vec<Item>,
-    pub kind: String,
-    pub metadata: Metadata2,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Item {
-    pub api_version: String,
-    pub kind: String,
-    pub metadata: Metadata,
-    pub spec: Spec,
-    pub status: Status,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Metadata {
-    pub annotations: Annotations,
-    pub creation_timestamp: String,
-    pub generation: i64,
-    pub labels: Labels,
-    pub name: String,
-    pub namespace: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Annotations {
-    #[serde(rename = "meta.helm.sh/release-name")]
-    pub meta_helm_sh_release_name: String,
-    #[serde(rename = "meta.helm.sh/release-namespace")]
-    pub meta_helm_sh_release_namespace: String,
-    #[serde(default, rename = "kubectl.kubernetes.io/last-applied-configuration")]
-    pub last_applied_configuration: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Labels {
-    #[serde(rename = "app.kubernetes.io/managed-by")]
-    pub app_kubernetes_io_managed_by: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Spec {
-    pub dns_names: Vec<String>,
-    pub issuer_ref: IssuerRef,
-    pub secret_name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct IssuerRef {
-    pub kind: String,
-    pub name: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Status {}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Metadata2 {
-    pub self_link: String,
-}
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Certificate {
+//     pub api_version: String,
+//     pub items: Vec<Item>,
+//     pub kind: String,
+//     pub metadata: Metadata2,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Item {
+//     pub api_version: String,
+//     pub kind: String,
+//     pub metadata: Metadata,
+//     pub spec: Spec,
+//     pub status: Status,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Metadata {
+//     pub annotations: Annotations,
+//     pub creation_timestamp: String,
+//     pub generation: i64,
+//     pub labels: Labels,
+//     pub name: String,
+//     pub namespace: String,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Annotations {
+//     #[serde(rename = "meta.helm.sh/release-name")]
+//     pub meta_helm_sh_release_name: String,
+//     #[serde(rename = "meta.helm.sh/release-namespace")]
+//     pub meta_helm_sh_release_namespace: String,
+//     #[serde(default, rename = "kubectl.kubernetes.io/last-applied-configuration")]
+//     pub last_applied_configuration: String,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Labels {
+//     #[serde(rename = "app.kubernetes.io/managed-by")]
+//     pub app_kubernetes_io_managed_by: String,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Spec {
+//     pub dns_names: Vec<String>,
+//     pub issuer_ref: IssuerRef,
+//     pub secret_name: String,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct IssuerRef {
+//     pub kind: String,
+//     pub name: String,
+// }
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Status {}
+//
+// #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct Metadata2 {
+//     pub self_link: String,
+// }
 
 #[allow(dead_code)] // TODO(pmavro): fix this by using the correct tag
 fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {

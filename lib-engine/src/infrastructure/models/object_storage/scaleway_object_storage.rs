@@ -96,8 +96,8 @@ impl ScalewayOS {
             }
         };
 
-        if !objects_to_be_deleted.is_empty() {
-            if let Err(e) = block_on(
+        if !objects_to_be_deleted.is_empty()
+            && let Err(e) = block_on(
                 s3_client.delete_objects(DeleteObjectsRequest {
                     bucket: bucket_name.to_string(),
                     delete: Delete {
@@ -113,12 +113,12 @@ impl ScalewayOS {
                     },
                     ..Default::default()
                 }),
-            ) {
-                return Err(ObjectStorageError::CannotEmptyBucket {
-                    bucket_name: bucket_name.to_string(),
-                    raw_error_message: e.to_string(),
-                });
-            }
+            )
+        {
+            return Err(ObjectStorageError::CannotEmptyBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: e.to_string(),
+            });
         }
 
         Ok(())
@@ -213,19 +213,19 @@ impl ObjectStorage for ScalewayOS {
             });
         }
 
-        if bucket_versioning_activated {
-            if let Err(_e) = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
+        if bucket_versioning_activated
+            && let Err(_e) = block_on(s3_client.put_bucket_versioning(PutBucketVersioningRequest {
                 bucket: bucket_name.to_string(),
                 ..Default::default()
-            })) {
-                // TODO(benjaminch): to be investigated, versioning seems to fail
-                // Not blocking if it fails
-                // Err(self.engine_error(ObjectStorageErrorCause::Internal, message))
-            }
+            }))
+        {
+            // TODO(benjaminch): to be investigated, versioning seems to fail
+            // Not blocking if it fails
+            // Err(self.engine_error(ObjectStorageErrorCause::Internal, message))
         }
 
-        if bucket_logging_activated {
-            if let Err(_e) = block_on(s3_client.put_bucket_logging(PutBucketLoggingRequest {
+        if bucket_logging_activated
+            && let Err(_e) = block_on(s3_client.put_bucket_logging(PutBucketLoggingRequest {
                 bucket: bucket_name.to_string(),
                 bucket_logging_status: BucketLoggingStatus {
                     logging_enabled: Some(LoggingEnabled {
@@ -235,9 +235,9 @@ impl ObjectStorage for ScalewayOS {
                     }),
                 },
                 ..Default::default()
-            })) {
-                // Not blocking if it fails
-            }
+            }))
+        {
+            // Not blocking if it fails
         }
 
         self.get_bucket(bucket_name) // TODO(benjaminch): maybe doing a get here is avoidable
@@ -269,14 +269,13 @@ impl ObjectStorage for ScalewayOS {
         if let Ok(bl) = block_on(self.get_s3_client().get_bucket_lifecycle(GetBucketLifecycleRequest {
             bucket: bucket_name.to_string(),
             expected_bucket_owner: None,
-        })) {
-            if let Some(rules) = bl.rules {
-                for r in rules {
-                    if let Some(expiration) = r.expiration {
-                        ttl = expiration
-                            .days
-                            .map(|days| Duration::from_secs(days.unsigned_abs() * 24 * 60 * 60));
-                    }
+        })) && let Some(rules) = bl.rules
+        {
+            for r in rules {
+                if let Some(expiration) = r.expiration {
+                    ttl = expiration
+                        .days
+                        .map(|days| Duration::from_secs(days.unsigned_abs() * 24 * 60 * 60));
                 }
             }
         }
@@ -286,12 +285,10 @@ impl ObjectStorage for ScalewayOS {
         if let Ok(versioning) = block_on(self.get_s3_client().get_bucket_versioning(GetBucketVersioningRequest {
             bucket: bucket_name.to_string(),
             expected_bucket_owner: None,
-        })) {
-            if let Some(status) = versioning.status.map(|s| s.to_lowercase()) {
-                if status == "enabled" {
-                    versioning_activated = true;
-                }
-            }
+        })) && let Some(status) = versioning.status.map(|s| s.to_lowercase())
+            && status == "enabled"
+        {
+            versioning_activated = true;
         }
 
         // Get logging
@@ -299,12 +296,10 @@ impl ObjectStorage for ScalewayOS {
         if let Ok(logging) = block_on(self.get_s3_client().get_bucket_logging(GetBucketLoggingRequest {
             bucket: bucket_name.to_string(),
             expected_bucket_owner: None,
-        })) {
-            if let Some(logging_enabled) = logging.logging_enabled {
-                if logging_enabled.target_bucket == bucket_name {
-                    logging_activated = true;
-                }
-            }
+        })) && let Some(logging_enabled) = logging.logging_enabled
+            && logging_enabled.target_bucket == bucket_name
+        {
+            logging_activated = true;
         }
 
         // Get labels

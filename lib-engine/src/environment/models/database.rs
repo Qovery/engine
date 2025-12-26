@@ -614,56 +614,54 @@ pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode,
         }
     };
 
-    if let Some(spec) = &volume.spec {
-        if let Some(resources) = &spec.resources {
-            if let Some(requests) = &resources.requests {
-                // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
-                let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
-                    Box::new(EngineError::new_cannot_parse_string(
-                        event_details.clone(),
-                        &requests["storage"].0,
-                        e,
-                    ))
-                })?;
+    if let Some(spec) = &volume.spec
+        && let Some(resources) = &spec.resources
+        && let Some(requests) = &resources.requests
+    {
+        // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
+        let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
+            Box::new(EngineError::new_cannot_parse_string(
+                event_details.clone(),
+                &requests["storage"].0,
+                e,
+            ))
+        })?;
 
-                if database.total_disk_size_in_gb > size {
-                    // if volume size in request is bigger than effective size we get related PVC to get its infos
-                    if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
-                        kube_client,
-                        namespace,
-                        &format!("app={}", database.kube_name()),
-                    ))
-                    .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
-                    .items
-                    .first()
-                    {
-                        if let Some(pvc_name) = &pvc.metadata.name {
-                            return Ok(Some(InvalidStatefulsetStorage {
-                                service_type: Database::service_type(database),
-                                service_id: database.long_id,
-                                statefulset_selector: selector,
-                                statefulset_name,
-                                invalid_pvcs: vec![InvalidPVCStorage {
-                                    pvc_name: pvc_name.to_string(),
-                                    required_disk_size_in_gib: database.total_disk_size_in_gb,
-                                }],
-                            }));
-                        }
-                    };
-                }
+        if database.total_disk_size_in_gb > size {
+            // if volume size in request is bigger than effective size we get related PVC to get its infos
+            if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+                kube_client,
+                namespace,
+                &format!("app={}", database.kube_name()),
+            ))
+            .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
+            .items
+            .first()
+                && let Some(pvc_name) = &pvc.metadata.name
+            {
+                return Ok(Some(InvalidStatefulsetStorage {
+                    service_type: Database::service_type(database),
+                    service_id: database.long_id,
+                    statefulset_selector: selector,
+                    statefulset_name,
+                    invalid_pvcs: vec![InvalidPVCStorage {
+                        pvc_name: pvc_name.to_string(),
+                        required_disk_size_in_gib: database.total_disk_size_in_gb,
+                    }],
+                }));
+            };
+        }
 
-                if database.total_disk_size_in_gb < size {
-                    return Err(Box::new(EngineError::new_invalid_engine_payload(
-                        event_details.clone(),
-                        format!(
-                            "new storage size ({}) should be equal or greater than actual size ({})",
-                            database.total_disk_size_in_gb, size
-                        )
-                        .as_str(),
-                        None,
-                    )));
-                }
-            }
+        if database.total_disk_size_in_gb < size {
+            return Err(Box::new(EngineError::new_invalid_engine_payload(
+                event_details.clone(),
+                format!(
+                    "new storage size ({}) should be equal or greater than actual size ({})",
+                    database.total_disk_size_in_gb, size
+                )
+                .as_str(),
+                None,
+            )));
         }
     }
 

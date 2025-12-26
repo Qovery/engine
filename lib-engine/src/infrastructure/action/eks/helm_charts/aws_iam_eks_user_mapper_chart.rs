@@ -239,15 +239,15 @@ impl ChartInstallationChecker for AwsIamEksUserMapperChecker {
                     }
 
                     // Check if contains the subject
-                    if let Some(subjects) = role_binding.subjects {
-                        if !subjects.iter().any(|e| {
+                    if let Some(subjects) = role_binding.subjects
+                        && !subjects.iter().any(|e| {
                             e.name.to_lowercase() == "iam-eks-user-mapper" && e.kind.to_lowercase() == "serviceaccount"
-                        }) {
-                            return Err(CommandError::new_from_safe_message(format!(
-                                "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.",
-                                AwsIamEksUserMapperChart::chart_name()
-                            )));
-                        }
+                        })
+                    {
+                        return Err(CommandError::new_from_safe_message(format!(
+                            "Role binding `eks-configmap-modifier-rolebinding` created by `{}` chart, not installed properly: it should have `iam-eks-user-mapper` subject.",
+                            AwsIamEksUserMapperChart::chart_name()
+                        )));
                     }
                 }
             }

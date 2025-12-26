@@ -131,32 +131,31 @@ pub fn delete_cached_image(
     if let Some(last_image_tag) = last_image
         .as_ref()
         .and_then(|img| img.split(':').next_back().map(str::to_string))
+        && (is_service_deletion || last_image_tag != current_image_tag)
     {
-        if is_service_deletion || last_image_tag != current_image_tag {
-            logger(format!("🪓 Deleting previous cached image {last_image_tag}"));
-            let mirror_repo_name = get_mirror_repository_name(
-                service_id,
-                target.kubernetes.long_id(),
-                &target.kubernetes.advanced_settings().registry_mirroring_mode,
-            );
-            let mirror_repo_name = target
+        logger(format!("🪓 Deleting previous cached image {last_image_tag}"));
+        let mirror_repo_name = get_mirror_repository_name(
+            service_id,
+            target.kubernetes.long_id(),
+            &target.kubernetes.advanced_settings().registry_mirroring_mode,
+        );
+        let mirror_repo_name = target
+            .container_registry
+            .registry_info()
+            .get_repository_name(&mirror_repo_name);
+        let image = Image {
+            name: mirror_repo_name.clone(),
+            tag: last_image_tag,
+            registry_url: target
                 .container_registry
-                .registry_info()
-                .get_repository_name(&mirror_repo_name);
-            let image = Image {
-                name: mirror_repo_name.clone(),
-                tag: last_image_tag,
-                registry_url: target
-                    .container_registry
-                    .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str())),
-                repository_name: mirror_repo_name.clone(),
-                ..Default::default()
-            };
+                .get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str())),
+            repository_name: mirror_repo_name.clone(),
+            ..Default::default()
+        };
 
-            target.container_registry.delete_image(&image)?;
-            if is_service_deletion {
-                target.container_registry.delete_repository(&mirror_repo_name)?;
-            }
+        target.container_registry.delete_image(&image)?;
+        if is_service_deletion {
+            target.container_registry.delete_repository(&mirror_repo_name)?;
         }
     }
 
@@ -300,7 +299,7 @@ fn mirror_image(
                 }
                 iterations += 1;
                 // Send a message every minute to reassure user
-                if iterations % 60 == 0 {
+                if iterations.is_multiple_of(60) {
                     logger.info("🪞 Mirroring is still in progress...".to_string());
                     iterations = 0;
                 }
@@ -475,17 +474,16 @@ pub fn are_pvcs_bound(
     )) {
         Ok(pvcs) => {
             for pvc in pvcs.items {
-                if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name) {
-                    if let Some(phase) = status.phase {
-                        if phase.to_lowercase().as_str() != "bound" {
-                            return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
-                                event_details.clone(),
-                                CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
-                                service.name(),
-                            )));
-                        };
-                    }
-                }
+                if let (Some(status), Some(name)) = (pvc.status, pvc.metadata.name)
+                    && let Some(phase) = status.phase
+                    && phase.to_lowercase().as_str() != "bound"
+                {
+                    return Err(Box::new(EngineError::new_k8s_cannot_bound_pvc(
+                        event_details.clone(),
+                        CommandError::new_from_safe_message(format!("Can't bound PVC {name}")),
+                        service.name(),
+                    )));
+                };
             }
 
             Ok(())

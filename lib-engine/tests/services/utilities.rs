@@ -203,10 +203,10 @@ impl TestInfra {
 
     /// Cleanup environments (Azure specific)
     pub fn cleanup(&self, environment: EnvironmentRequest) {
-        if let Some(region) = self.cloud_provider.get_azure_region(&self.secrets) {
-            if let Err(e) = clean_environments(&self.context, vec![environment], region) {
-                warn!("cannot clean environments, error: {e:?}");
-            }
+        if let Some(region) = self.cloud_provider.get_azure_region(&self.secrets)
+            && let Err(e) = clean_environments(&self.context, vec![environment], region)
+        {
+            warn!("cannot clean environments, error: {e:?}");
         }
     }
 }

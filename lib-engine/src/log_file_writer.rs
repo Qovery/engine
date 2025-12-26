@@ -45,7 +45,7 @@ impl LogFileWriter {
         }
     }
 
-    fn lock_file(&self) -> io::Result<MutexGuard<Option<BufWriter<File>>>> {
+    fn lock_file(&self) -> io::Result<MutexGuard<'_, Option<BufWriter<File>>>> {
         self.file.1.lock().map_err(|_| io::Error::other("Mutex lock failed"))
     }
 }

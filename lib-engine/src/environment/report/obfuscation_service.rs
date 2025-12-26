@@ -50,10 +50,10 @@ impl Default for StdObfuscationService {
 
 impl ObfuscationService for StdObfuscationService {
     fn obfuscate_secrets(&self, text: String) -> String {
-        if let Some(regex) = &self.regex {
-            if let Cow::Owned(obfuscated) = regex.replace_all(&text, "xxx") {
-                return obfuscated;
-            }
+        if let Some(regex) = &self.regex
+            && let Cow::Owned(obfuscated) = regex.replace_all(&text, "xxx")
+        {
+            return obfuscated;
         }
         text
     }
