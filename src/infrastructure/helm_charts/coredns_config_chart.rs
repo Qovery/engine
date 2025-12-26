@@ -134,14 +134,13 @@ impl HelmChart for CoreDNSConfigChart {
         let chart_info = &self.get_chart_info();
         match chart_info.action {
             Deploy => {
-                if let Some(crds_update) = &chart_info.crds_update {
-                    if let Err(_e) =
+                if let Some(crds_update) = &chart_info.crds_update
+                    && let Err(_e) =
                         kubectl_update_crd(kube_client, chart_info.name.as_str(), crds_update.path.as_str())
-                    {
-                        return Err(HelmChartError::CannotUpdateCrds {
-                            crd_path: crds_update.path.clone(),
-                        });
-                    }
+                {
+                    return Err(HelmChartError::CannotUpdateCrds {
+                        crd_path: crds_update.path.clone(),
+                    });
                 }
             }
             HelmAction::Destroy => {}
@@ -394,12 +393,12 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
                     // check all CoreDNS pods are running properly
                     for coredns_pod in coredns_pods_result.items {
                         let mut pod_status_string = "UNKNOWN".to_string();
-                        if let Some(pod_status) = &coredns_pod.status {
-                            if let Some(pod_container_phase) = &pod_status.phase {
-                                pod_status_string = pod_container_phase.trim().to_uppercase();
-                                if pod_status_string == "RUNNING" {
-                                    continue;
-                                }
+                        if let Some(pod_status) = &coredns_pod.status
+                            && let Some(pod_container_phase) = &pod_status.phase
+                        {
+                            pod_status_string = pod_container_phase.trim().to_uppercase();
+                            if pod_status_string == "RUNNING" {
+                                continue;
                             }
                         }
 

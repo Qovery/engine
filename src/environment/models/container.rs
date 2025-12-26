@@ -645,57 +645,52 @@ pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
             };
 
             for volume in volumes {
-                if let Some(spec) = &volume.spec {
-                    if let Some(resources) = &spec.resources {
-                        if let (Some(requests), Some(volume_name)) = (&resources.requests, &volume.metadata.name) {
-                            // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
-                            let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
-                                Box::new(EngineError::new_cannot_parse_string(
-                                    event_details.clone(),
-                                    &requests["storage"].0,
-                                    e,
-                                ))
-                            })?;
-                            if let Some(storage) = container
-                                .storages
-                                .iter()
-                                .find(|storage| volume_name == &storage.long_id.to_string())
+                if let Some(spec) = &volume.spec
+                    && let Some(resources) = &spec.resources
+                    && let (Some(requests), Some(volume_name)) = (&resources.requests, &volume.metadata.name)
+                {
+                    // in order to compare volume size from engine request to effective size in kube, we must get the  effective size
+                    let size = extract_volume_size(requests["storage"].0.to_string()).map_err(|e| {
+                        Box::new(EngineError::new_cannot_parse_string(
+                            event_details.clone(),
+                            &requests["storage"].0,
+                            e,
+                        ))
+                    })?;
+                    if let Some(storage) = container
+                        .storages
+                        .iter()
+                        .find(|storage| volume_name == &storage.long_id.to_string())
+                    {
+                        if storage.size_in_gib > size {
+                            // if volume size in request is bigger than effective size we get related PVC to get its infos
+                            if let Some(pvc) = block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
+                                kube_client,
+                                namespace,
+                                &format!("qovery.com/disk-id={}", storage.long_id),
+                            ))
+                            .map_err(|e| EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e))?
+                            .items
+                            .first()
+                                && let Some(pvc_name) = &pvc.metadata.name
                             {
-                                if storage.size_in_gib > size {
-                                    // if volume size in request is bigger than effective size we get related PVC to get its infos
-                                    if let Some(pvc) =
-                                        block_on(kube_get_resources_by_selector::<PersistentVolumeClaim>(
-                                            kube_client,
-                                            namespace,
-                                            &format!("qovery.com/disk-id={}", storage.long_id),
-                                        ))
-                                        .map_err(|e| {
-                                            EngineError::new_k8s_cannot_get_pvcs(event_details.clone(), namespace, e)
-                                        })?
-                                        .items
-                                        .first()
-                                    {
-                                        if let Some(pvc_name) = &pvc.metadata.name {
-                                            invalid_storage.invalid_pvcs.push(InvalidPVCStorage {
-                                                pvc_name: pvc_name.to_string(),
-                                                required_disk_size_in_gib: storage.size_in_gib,
-                                            })
-                                        }
-                                    };
-                                }
+                                invalid_storage.invalid_pvcs.push(InvalidPVCStorage {
+                                    pvc_name: pvc_name.to_string(),
+                                    required_disk_size_in_gib: storage.size_in_gib,
+                                })
+                            };
+                        }
 
-                                if storage.size_in_gib < size {
-                                    return Err(Box::new(EngineError::new_invalid_engine_payload(
-                                        event_details.clone(),
-                                        format!(
-                                            "new storage size ({}) should be equal or greater than actual size ({})",
-                                            storage.size_in_gib, size
-                                        )
-                                        .as_str(),
-                                        None,
-                                    )));
-                                }
-                            }
+                        if storage.size_in_gib < size {
+                            return Err(Box::new(EngineError::new_invalid_engine_payload(
+                                event_details.clone(),
+                                format!(
+                                    "new storage size ({}) should be equal or greater than actual size ({})",
+                                    storage.size_in_gib, size
+                                )
+                                .as_str(),
+                                None,
+                            )));
                         }
                     }
                 }

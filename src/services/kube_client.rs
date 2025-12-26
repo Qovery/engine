@@ -204,13 +204,13 @@ impl QubeClient {
         let json_patch = json_patch::Patch(patch_operations.to_vec());
         let patch: Patch<Scale> = Patch::Json(json_patch);
 
-        if let Some(name) = node.metadata.name {
-            if let Err(e) = client.patch(&name, &PatchParams::default(), &patch).await {
-                return Err(Box::new(EngineError::new_k8s_patch_node_error(
-                    event_details,
-                    CommandError::new_from_safe_message(format!("Error while trying to patch a kubernetes node. {e}")),
-                )));
-            }
+        if let Some(name) = node.metadata.name
+            && let Err(e) = client.patch(&name, &PatchParams::default(), &patch).await
+        {
+            return Err(Box::new(EngineError::new_k8s_patch_node_error(
+                event_details,
+                CommandError::new_from_safe_message(format!("Error while trying to patch a kubernetes node. {e}")),
+            )));
         }
 
         Ok(())

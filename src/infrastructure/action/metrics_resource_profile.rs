@@ -4,19 +4,15 @@ use serde::{Deserialize, Serialize};
 /// Each profile defines specific CPU and memory values adapted to different usage scenarios.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all(serialize = "SCREAMING_SNAKE_CASE", deserialize = "SCREAMING_SNAKE_CASE"))]
+#[derive(Default)]
 pub enum ResourceProfile {
     /// Low resource profile - suitable for small clusters or development environments
     Low,
     /// Standard resource profile - suitable for most production use cases
+    #[default]
     Normal,
     /// High resource profile - suitable for clusters with high load or many metrics
     High,
-}
-
-impl Default for ResourceProfile {
-    fn default() -> Self {
-        Self::Normal
-    }
 }
 
 impl ResourceProfile {

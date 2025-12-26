@@ -263,25 +263,23 @@ impl ScalewayCR {
             None,
             Some(self.default_project_id.as_str()),
             Some(namespace_name),
-        )) {
-            if let Some(r) = repositories.namespaces {
-                if r.len() == 1 {
-                    if let Some(existing_repository) = r.first() {
-                        return Ok(Repository {
-                            registry_id: existing_repository.id.clone().unwrap_or_default(),
-                            name: existing_repository.name.clone().unwrap_or_default(),
-                            uri: existing_repository.endpoint.clone(),
-                            ttl: None,
-                            labels: None,
-                        });
-                    }
-                    return Err(ContainerRegistryError::CannotCreateRepository {
-                        registry_name: self.name.to_string(),
-                        repository_name: namespace_name.to_string(),
-                        raw_error_message: "Cannot get first repository from returned list".to_string(),
-                    });
-                }
+        )) && let Some(r) = repositories.namespaces
+            && r.len() == 1
+        {
+            if let Some(existing_repository) = r.first() {
+                return Ok(Repository {
+                    registry_id: existing_repository.id.clone().unwrap_or_default(),
+                    name: existing_repository.name.clone().unwrap_or_default(),
+                    uri: existing_repository.endpoint.clone(),
+                    ttl: None,
+                    labels: None,
+                });
             }
+            return Err(ContainerRegistryError::CannotCreateRepository {
+                registry_name: self.name.to_string(),
+                repository_name: namespace_name.to_string(),
+                raw_error_message: "Cannot get first repository from returned list".to_string(),
+            });
         }
 
         // https://developers.scaleway.com/en/products/registry/api/#post-7a8fcc
@@ -413,17 +411,17 @@ impl InteractWithRegistry for ScalewayCR {
             };
 
         // We consider every registry namespace names are unique
-        if let Some(registries) = scaleway_registry_namespaces {
-            if let Some(registry) = registries.into_iter().find(|r| r.status == Some(Status::Ready)) {
-                let repository_id = registry.id.unwrap_or_default();
-                return Ok(Repository {
-                    registry_id: repository_id.to_string(),
-                    name: registry.name.unwrap_or_default(),
-                    uri: registry.endpoint,
-                    ttl: None,
-                    labels: None,
-                });
-            }
+        if let Some(registries) = scaleway_registry_namespaces
+            && let Some(registry) = registries.into_iter().find(|r| r.status == Some(Status::Ready))
+        {
+            let repository_id = registry.id.unwrap_or_default();
+            return Ok(Repository {
+                registry_id: repository_id.to_string(),
+                name: registry.name.unwrap_or_default(),
+                uri: registry.endpoint,
+                ttl: None,
+                labels: None,
+            });
         }
 
         Err(ContainerRegistryError::RepositoryDoesntExistInRegistry {

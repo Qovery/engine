@@ -178,7 +178,7 @@ pub struct EnvProgressLogger<'a> {
 }
 
 impl EnvProgressLogger<'_> {
-    pub fn new(env_logger: &EnvLogger) -> EnvProgressLogger {
+    pub fn new(env_logger: &EnvLogger) -> EnvProgressLogger<'_> {
         EnvProgressLogger { logger: env_logger }
     }
 
@@ -216,7 +216,7 @@ pub struct EnvSuccessLogger<'a> {
 }
 
 impl EnvSuccessLogger<'_> {
-    pub fn new(env_logger: &EnvLogger) -> EnvSuccessLogger {
+    pub fn new(env_logger: &EnvLogger) -> EnvSuccessLogger<'_> {
         EnvSuccessLogger { logger: env_logger }
     }
 

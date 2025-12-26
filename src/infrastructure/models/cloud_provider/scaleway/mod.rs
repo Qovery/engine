@@ -78,7 +78,7 @@ impl CloudProvider for Scaleway {
         Some(&self.terraform_state_credentials)
     }
 
-    fn downcast_ref(&self) -> CloudProviderKind {
+    fn downcast_ref(&self) -> CloudProviderKind<'_> {
         CloudProviderKind::Scw(self)
     }
 }

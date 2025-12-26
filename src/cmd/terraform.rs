@@ -240,211 +240,187 @@ impl TerraformError {
         }
         if let Ok(scw_quotas_exceeded_re) = Regex::new(
             r"Error: scaleway-sdk-go: quota exceeded\(s\): (?P<resource_type>\w+) has reached its quota \((?P<current_resource_count>\d+)/(?P<max_resource_count>\d+)\)",
-        ) {
-            if let Some(cap) = scw_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_type), Some(current_resource_count), Some(max_resource_count)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("current_resource_count").map(|e| e.as_str().parse::<u32>()),
-                    cap.name("max_resource_count").map(|e| e.as_str().parse::<u32>()),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: current_resource_count.ok(),
-                            max_resource_count: max_resource_count.ok(),
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = scw_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_type), Some(current_resource_count), Some(max_resource_count)) = (
+                cap.name("resource_type").map(|e| e.as_str()),
+                cap.name("current_resource_count").map(|e| e.as_str().parse::<u32>()),
+                cap.name("max_resource_count").map(|e| e.as_str().parse::<u32>()),
+            )
+        {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: current_resource_count.ok(),
+                    max_resource_count: max_resource_count.ok(),
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // AWS
         if let Ok(aws_quotas_exceeded_re) =
             Regex::new(r"You've reached your quota for maximum (?P<resource_type>[\w?\s]+) for this account")
+            && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
         {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: None,
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: None,
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_service_not_activated_re) = Regex::new(
             r"Error fetching (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
-        ) {
-            if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
-                    return TerraformError::ServiceNotActivatedOptInRequired {
-                        service_type: service_type.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str())
+            && let Some(service_type) = cap.name("service_type").map(|e| e.as_str())
+        {
+            return TerraformError::ServiceNotActivatedOptInRequired {
+                service_type: service_type.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_service_not_activated_re) = Regex::new(
             r"Error creating (?P<service_type>[\w?\s]+): OptInRequired: You are not subscribed to this service",
-        ) {
-            if let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(service_type) = cap.name("service_type").map(|e| e.as_str()) {
-                    return TerraformError::ServiceNotActivatedOptInRequired {
-                        service_type: service_type.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_service_not_activated_re.captures(raw_terraform_error_output.as_str())
+            && let Some(service_type) = cap.name("service_type").map(|e| e.as_str())
+        {
+            return TerraformError::ServiceNotActivatedOptInRequired {
+                service_type: service_type.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"You have exceeded the limit of (?P<resource_type>[\w?\s]+) allowed on your AWS account \((?P<max_resource_count>\d+) by default\)",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_type), Some(max_resource_count)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("max_resource_count")
-                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: Some(max_resource_count),
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_type), Some(max_resource_count)) = (
+                cap.name("resource_type").map(|e| e.as_str()),
+                cap.name("max_resource_count")
+                    .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+            )
+        {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: Some(max_resource_count),
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"You have requested more (?P<resource_type>[\w?\s]+) capacity than your current [\w?\s]+ limit of (?P<max_resource_count>\d+)",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_type), Some(max_resource_count)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("max_resource_count")
-                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: Some(max_resource_count),
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_type), Some(max_resource_count)) = (
+                cap.name("resource_type").map(|e| e.as_str()),
+                cap.name("max_resource_count")
+                    .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+            )
+        {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: Some(max_resource_count),
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r" creating EC2 (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: None,
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
+        {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: None,
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_quotas_exceeded_re) =
             Regex::new(r" creating (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached")
+            && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
         {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: None,
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: None,
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
             r"InvalidParameterException: Limit of (?P<max_resource_count>[\d]+) (?P<resource_type>[\w?\s]+) exceeded",
-        ) {
-            if let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(max_resource_count), Some(resource_type)) = (
-                    cap.name("max_resource_count")
-                        .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
-                    cap.name("resource_type").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::QuotasExceeded {
-                        sub_type: QuotaExceededError::ResourceLimitExceeded {
-                            resource_type: resource_type.to_string(),
-                            current_resource_count: None,
-                            max_resource_count: Some(max_resource_count),
-                        },
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(max_resource_count), Some(resource_type)) = (
+                cap.name("max_resource_count")
+                    .map(|e| e.as_str().parse::<u32>().unwrap_or(0)),
+                cap.name("resource_type").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::QuotasExceeded {
+                sub_type: QuotaExceededError::ResourceLimitExceeded {
+                    resource_type: resource_type.to_string(),
+                    current_resource_count: None,
+                    max_resource_count: Some(max_resource_count),
+                },
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // State issue
         // AWS
         if let Ok(aws_state_expected_re) = Regex::new(
             r"Error modifying (?P<resource_kind>\w+) instance (?P<resource_name>.+?): \w+: You can't modify a .+",
-        ) {
-            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_kind), Some(resource_name)) = (
-                    cap.name("resource_kind").map(|e| e.as_str()),
-                    cap.name("resource_name").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::WrongExpectedState {
-                        resource_name: resource_name.to_string(),
-                        resource_kind: resource_kind.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_kind), Some(resource_name)) = (
+                cap.name("resource_kind").map(|e| e.as_str()),
+                cap.name("resource_name").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::WrongExpectedState {
+                resource_name: resource_name.to_string(),
+                resource_kind: resource_kind.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // Dependencies issues
         // AWS
         if let Ok(aws_state_expected_re) = Regex::new(
             r"Error:?.*?(?:deleting|Error deleting) (?P<resource_kind>.*?)(?:\s*\([^)]+\))?\s*:.*?DependencyViolation:.*?'(?P<resource_name>[^']+)'",
-        ) {
-            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_kind), Some(resource_name)) = (
-                    cap.name("resource_kind").map(|e| e.as_str()),
-                    cap.name("resource_name").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::ResourceDependencyViolation {
-                        resource_name: resource_name.trim().to_string(),
-                        resource_kind: resource_kind.trim().to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_kind), Some(resource_name)) = (
+                cap.name("resource_kind").map(|e| e.as_str()),
+                cap.name("resource_name").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::ResourceDependencyViolation {
+                resource_name: resource_name.trim().to_string(),
+                resource_kind: resource_kind.trim().to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if let Ok(aws_state_expected_re) = Regex::new(
             r"Error:? deleting (?P<resource_kind>.+?)(\((?P<resource_name>.+?)\))?:(.+?) DependencyViolation:(.+)? has some mapped public address\(es\)",
-        ) {
-            if let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_kind), Some(resource_name)) = (
-                    cap.name("resource_kind").map(|e| e.as_str()),
-                    cap.name("resource_name").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::ResourceDependencyViolation {
-                        resource_name: resource_name.trim().to_string(),
-                        resource_kind: resource_kind.trim().to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_state_expected_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_kind), Some(resource_name)) = (
+                cap.name("resource_kind").map(|e| e.as_str()),
+                cap.name("resource_name").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::ResourceDependencyViolation {
+                resource_name: resource_name.trim().to_string(),
+                resource_kind: resource_kind.trim().to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // Invalid credentials issues
@@ -461,21 +437,19 @@ impl TerraformError {
         }
         if let Ok(aws_not_enough_permissions_re) = Regex::new(
             r"AccessDenied: User: (?P<user>.+?) is not authorized to perform: (?P<action>.+?) on resource: (?P<resource_type_and_name>.+?) because",
-        ) {
-            if let Some(cap) = aws_not_enough_permissions_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_type_and_name), Some(user), Some(action)) = (
-                    cap.name("resource_type_and_name").map(|e| e.as_str()),
-                    cap.name("user").map(|e| e.as_str()),
-                    cap.name("action").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::NotEnoughPermissions {
-                        resource_type_and_name: resource_type_and_name.to_string(),
-                        user: Some(user.to_string()),
-                        action: Some(action.to_string()),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_not_enough_permissions_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_type_and_name), Some(user), Some(action)) = (
+                cap.name("resource_type_and_name").map(|e| e.as_str()),
+                cap.name("user").map(|e| e.as_str()),
+                cap.name("action").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::NotEnoughPermissions {
+                resource_type_and_name: resource_type_and_name.to_string(),
+                user: Some(user.to_string()),
+                action: Some(action.to_string()),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // Resources issues
@@ -483,28 +457,24 @@ impl TerraformError {
         // InvalidParameterException: The following supplied instance types do not exist: [t3a.medium]
         if let Ok(aws_wrong_instance_type_re) = Regex::new(
             r"InvalidParameterException: The following supplied instance types do not exist: \[(?P<instance_type>.+?)\]",
-        ) {
-            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
-                    return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: Some(instance_type.to_string()),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str())
+            && let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str())
+        {
+            return TerraformError::InstanceTypeDoesntExist {
+                instance_type: Some(instance_type.to_string()),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         // InvalidParameterValue: Invalid value 'wrong-instance-type' for InstanceType
         if let Ok(aws_wrong_instance_type_re) =
             Regex::new(r"InvalidParameterValue: Invalid value '(?P<instance_type>.+?)' for InstanceType")
+            && let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str())
+            && let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str())
         {
-            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
-                if let Some(instance_type) = cap.name("instance_type").map(|e| e.as_str()) {
-                    return TerraformError::InstanceTypeDoesntExist {
-                        instance_type: Some(instance_type.to_string()),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+            return TerraformError::InstanceTypeDoesntExist {
+                instance_type: Some(instance_type.to_string()),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         if raw_terraform_error_output.contains(
             "Error: creating EC2 Instance: Unsupported: The requested configuration is currently not supported",
@@ -518,102 +488,88 @@ impl TerraformError {
         // InvalidParameterValue: New size cannot be smaller than existing size
         if let Ok(aws_wrong_instance_type_re) = Regex::new(
             r"Error: updating EC2 Instance \((?P<instance_id>.+?)\) volume \((?P<volume_id>.+?)\): InvalidParameterValue: New size cannot be smaller than existing size",
-        ) {
-            if let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(instance_id), Some(volume_id)) = (
-                    cap.name("instance_id").map(|e| e.as_str()),
-                    cap.name("volume_id").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::InstanceVolumeCannotBeDownSized {
-                        instance_id: instance_id.to_string(),
-                        volume_id: volume_id.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_wrong_instance_type_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(instance_id), Some(volume_id)) = (
+                cap.name("instance_id").map(|e| e.as_str()),
+                cap.name("volume_id").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::InstanceVolumeCannotBeDownSized {
+                instance_id: instance_id.to_string(),
+                volume_id: volume_id.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         // InvalidParameterValue: The destination CIDR block x.x.x.x/x is equal to or more specific than one of this VPC's CIDR blocks.
         if let Ok(aws_wrong_cidr) = Regex::new(
             r"InvalidParameterValue: The destination CIDR block \((?P<cidr>.+?)\) is equal to or more specific than one of this VPC's CIDR blocks. This route can target only an interface or an instance",
-        ) {
-            if let Some(cap) = aws_wrong_cidr.captures(raw_terraform_error_output.as_str()) {
-                if let Some(wrong_cidr) = cap.name("cidr").map(|e| e.as_str()) {
-                    return TerraformError::InvalidCIDRBlock {
-                        cidr: wrong_cidr.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = aws_wrong_cidr.captures(raw_terraform_error_output.as_str())
+            && let Some(wrong_cidr) = cap.name("cidr").map(|e| e.as_str())
+        {
+            return TerraformError::InvalidCIDRBlock {
+                cidr: wrong_cidr.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         // ResourceInUseException: Cluster already exists with name: xxx
         if let Ok(cluster_name_regex) =
             Regex::new(r"Error: creating (?P<resource_type>.*) \((?P<resource_name>[-\w]+)\): ResourceInUseException")
+            && let Some(cap) = cluster_name_regex.captures(raw_terraform_error_output.as_str())
+            && let (Some(resource_type), Some(resource_name)) = (
+                cap.name("resource_type").map(|e| e.as_str()),
+                cap.name("resource_name").map(|e| e.as_str()),
+            )
         {
-            if let Some(cap) = cluster_name_regex.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(resource_type), Some(resource_name)) = (
-                    cap.name("resource_type").map(|e| e.as_str()),
-                    cap.name("resource_name").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::AlreadyExistingResource {
-                        resource_type: resource_type.to_string(),
-                        resource_name: Some(resource_name.to_string()),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+            return TerraformError::AlreadyExistingResource {
+                resource_type: resource_type.to_string(),
+                resource_name: Some(resource_name.to_string()),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // SCW
         if raw_terraform_error_output.contains("scaleway-sdk-go: waiting for")
             && raw_terraform_error_output.contains("failed: timeout after")
-        {
-            if let Ok(scw_resource_issue) = Regex::new(
+            && let Ok(scw_resource_issue) = Regex::new(
                 r"(?P<resource_type>\bscaleway_(?:.*)): Refreshing state... \[id=(?P<resource_identifier>.*)\]",
-            ) {
-                if let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str()) {
-                    if let (Some(resource_type), Some(resource_identifier)) = (
-                        cap.name("resource_type").map(|e| e.as_str()),
-                        cap.name("resource_identifier").map(|e| e.as_str()),
-                    ) {
-                        return TerraformError::WaitingTimeoutResource {
-                            resource_type: resource_type.to_string(),
-                            resource_identifier: resource_identifier.to_string(),
-                            raw_message: raw_terraform_error_output,
-                        };
-                    }
-                }
-            }
+            )
+            && let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str())
+            && let (Some(resource_type), Some(resource_identifier)) = (
+                cap.name("resource_type").map(|e| e.as_str()),
+                cap.name("resource_identifier").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::WaitingTimeoutResource {
+                resource_type: resource_type.to_string(),
+                resource_identifier: resource_identifier.to_string(),
+                raw_message: raw_terraform_error_output,
+            };
         }
 
-        if raw_terraform_error_output.contains("scaleway-sdk-go: insufficient permissions:") {
-            if let Ok(scw_resource) = Regex::new(r"with (?P<resource>\b(?:\w*.\w*))") {
-                if let Some(cap) = scw_resource.captures(raw_terraform_error_output.as_str()) {
-                    if let Some(resource) = cap.name("resource").map(|e| e.as_str()) {
-                        return TerraformError::NotEnoughPermissions {
-                            resource_type_and_name: resource.to_string(),
-                            raw_message: raw_terraform_error_output,
-                            user: None,
-                            action: None,
-                        };
-                    }
-                }
-            }
+        if raw_terraform_error_output.contains("scaleway-sdk-go: insufficient permissions:")
+            && let Ok(scw_resource) = Regex::new(r"with (?P<resource>\b(?:\w*.\w*))")
+            && let Some(cap) = scw_resource.captures(raw_terraform_error_output.as_str())
+            && let Some(resource) = cap.name("resource").map(|e| e.as_str())
+        {
+            return TerraformError::NotEnoughPermissions {
+                resource_type_and_name: resource.to_string(),
+                raw_message: raw_terraform_error_output,
+                user: None,
+                action: None,
+            };
         }
 
         if raw_terraform_error_output.contains("scaleway-sdk-go: invalid argument(s):")
             && raw_terraform_error_output.contains("must be unique across the project")
+            && let Ok(scw_resource_issue) = Regex::new(r"(?P<resource_type>\bscaleway_(?:\w*.\w*)): Creating...")
+            && let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str())
+            && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
         {
-            if let Ok(scw_resource_issue) = Regex::new(r"(?P<resource_type>\bscaleway_(?:\w*.\w*)): Creating...") {
-                if let Some(cap) = scw_resource_issue.captures(raw_terraform_std_output.as_str()) {
-                    if let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str()) {
-                        return TerraformError::AlreadyExistingResource {
-                            resource_type: resource_type.to_string(),
-                            resource_name: None,
-                            raw_message: raw_terraform_error_output,
-                        };
-                    }
-                }
-            }
+            return TerraformError::AlreadyExistingResource {
+                resource_type: resource_type.to_string(),
+                resource_name: None,
+                raw_message: raw_terraform_error_output,
+            };
         }
 
         // Resources creation errors
@@ -621,19 +577,17 @@ impl TerraformError {
         // BucketAlreadyOwnedByYou: S3 bucket cannot be created because it already exists. It might happen if Terraform lost connection before writing to the state.
         if let Ok(bucket_name_re) = Regex::new(
             r#"Error: creating Amazon S3 \(Simple Storage\) Bucket \((?P<bucket_name>.+?)\): BucketAlreadyOwnedByYou: Your previous request to create the named bucket succeeded and you already own it(?s:.)*in resource "aws_s3_bucket" "(?P<terraform_resource_name>.+?)":"#,
-        ) {
-            if let Some(cap) = bucket_name_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(bucket_name), Some(terraform_resource_name)) = (
-                    cap.name("bucket_name").map(|e| e.as_str()),
-                    cap.name("terraform_resource_name").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::S3BucketAlreadyOwnedByYou {
-                        bucket_name: bucket_name.to_string(),
-                        terraform_resource_name: terraform_resource_name.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = bucket_name_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(bucket_name), Some(terraform_resource_name)) = (
+                cap.name("bucket_name").map(|e| e.as_str()),
+                cap.name("terraform_resource_name").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::S3BucketAlreadyOwnedByYou {
+                bucket_name: bucket_name.to_string(),
+                terraform_resource_name: terraform_resource_name.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // Managed database errors
@@ -641,49 +595,44 @@ impl TerraformError {
         // InvalidParameterCombination: Cannot upgrade docdb from 4.0.0 to 5.0.0
         if let Ok(managed_db_upgrade_error_re) = Regex::new(
             r"Error: Failed to modify [\w\W]+ \((?P<database_name>.+?)\): InvalidParameterCombination: Cannot upgrade (?P<database_type>[\w\W]+) from (?P<version_from>[\d\.]+) to (?P<version_to>[\d\.]+)",
-        ) {
-            if let Some(cap) = managed_db_upgrade_error_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(database_name), Some(database_type), Some(version_from), Some(version_to)) = (
-                    cap.name("database_name").map(|e| e.as_str()),
-                    cap.name("database_type").map(|e| e.as_str()),
-                    cap.name("version_from").map(|e| e.as_str()),
-                    cap.name("version_to").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::ManagedDatabaseError {
-                        database_name: Some(database_name.to_string()),
-                        database_type: database_type.to_string(),
-                        database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
-                            from: version_from.to_string(),
-                            to: version_to.to_string(),
-                        }),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = managed_db_upgrade_error_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(database_name), Some(database_type), Some(version_from), Some(version_to)) = (
+                cap.name("database_name").map(|e| e.as_str()),
+                cap.name("database_type").map(|e| e.as_str()),
+                cap.name("version_from").map(|e| e.as_str()),
+                cap.name("version_to").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::ManagedDatabaseError {
+                database_name: Some(database_name.to_string()),
+                database_type: database_type.to_string(),
+                database_error_sub_type: Box::new(DatabaseError::VersionUpgradeNotPossible {
+                    from: version_from.to_string(),
+                    to: version_to.to_string(),
+                }),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
         // InvalidParameterCombination: The combination of the cluster class 'cache.t4g.micro', cache engine 'redis' and cache engine version '5.0.6' is not supported
         if let Ok(managed_db_version_instance_type_incompatible_error_re) = Regex::new(
             r"InvalidParameterCombination: The combination of [\w\s]+ '(?P<database_instance_type>.+?)', [\w\s]+ '(?P<database_type>.+?)' and [\w\s]+ version '(?P<database_engine_version>.+?)' is not supported",
-        ) {
-            if let Some(cap) =
-                managed_db_version_instance_type_incompatible_error_re.captures(raw_terraform_error_output.as_str())
-            {
-                if let (Some(database_instance_type), Some(database_type), Some(database_engine_version)) = (
-                    cap.name("database_instance_type").map(|e| e.as_str()),
-                    cap.name("database_type").map(|e| e.as_str()),
-                    cap.name("database_engine_version").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::ManagedDatabaseError {
-                        database_name: None,
-                        database_type: database_type.to_string(),
-                        database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
-                            version: database_engine_version.to_string(),
-                            db_instance_type: database_instance_type.to_string(),
-                        }),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) =
+            managed_db_version_instance_type_incompatible_error_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(database_instance_type), Some(database_type), Some(database_engine_version)) = (
+                cap.name("database_instance_type").map(|e| e.as_str()),
+                cap.name("database_type").map(|e| e.as_str()),
+                cap.name("database_engine_version").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::ManagedDatabaseError {
+                database_name: None,
+                database_type: database_type.to_string(),
+                database_error_sub_type: Box::new(DatabaseError::VersionNotSupportedOnTheInstanceType {
+                    version: database_engine_version.to_string(),
+                    db_instance_type: database_instance_type.to_string(),
+                }),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // Terraform general errors
@@ -695,37 +644,32 @@ impl TerraformError {
 
         if raw_terraform_error_output.contains("Error acquiring the state lock")
             && raw_terraform_error_output.contains("Lock Info:")
-        {
-            if let Ok(tf_state_lock) = Regex::new(
+            && let Ok(tf_state_lock) = Regex::new(
                 r"ID:\s+(?P<lock_id>\b(?:[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{4}\-[0-9a-fA-F]{12}))",
-            ) {
-                if let Some(cap) = tf_state_lock.captures(raw_terraform_error_output.as_str()) {
-                    if let Some(lock_id) = cap.name("lock_id").map(|e| e.as_str()) {
-                        return TerraformError::StateLocked {
-                            lock_id: lock_id.to_string(),
-                            raw_message: raw_terraform_error_output,
-                        };
-                    }
-                }
-            }
+            )
+            && let Some(cap) = tf_state_lock.captures(raw_terraform_error_output.as_str())
+            && let Some(lock_id) = cap.name("lock_id").map(|e| e.as_str())
+        {
+            return TerraformError::StateLocked {
+                lock_id: lock_id.to_string(),
+                raw_message: raw_terraform_error_output,
+            };
         }
 
         // Cluster version update is not supported (most likely Qovery is trying to deploy an earlier version)
         if let Ok(unsupported_k8s_version_update_re) = Regex::new(
             r"Unsupported Kubernetes minor version update from (?P<cluster_actual_version>[0-9.]+) to (?P<cluster_target_version>[0-9.]+)",
-        ) {
-            if let Some(cap) = unsupported_k8s_version_update_re.captures(raw_terraform_error_output.as_str()) {
-                if let (Some(cluster_actual_version), Some(cluster_target_version)) = (
-                    cap.name("cluster_actual_version").map(|e| e.as_str()),
-                    cap.name("cluster_target_version").map(|e| e.as_str()),
-                ) {
-                    return TerraformError::ClusterVersionUnsupportedUpdate {
-                        cluster_actual_version: cluster_actual_version.to_string(),
-                        cluster_target_version: cluster_target_version.to_string(),
-                        raw_message: raw_terraform_error_output.to_string(),
-                    };
-                }
-            }
+        ) && let Some(cap) = unsupported_k8s_version_update_re.captures(raw_terraform_error_output.as_str())
+            && let (Some(cluster_actual_version), Some(cluster_target_version)) = (
+                cap.name("cluster_actual_version").map(|e| e.as_str()),
+                cap.name("cluster_target_version").map(|e| e.as_str()),
+            )
+        {
+            return TerraformError::ClusterVersionUnsupportedUpdate {
+                cluster_actual_version: cluster_actual_version.to_string(),
+                cluster_target_version: cluster_target_version.to_string(),
+                raw_message: raw_terraform_error_output.to_string(),
+            };
         }
 
         // This kind of error should be triggered as little as possible, ideally, there is no unknown errors

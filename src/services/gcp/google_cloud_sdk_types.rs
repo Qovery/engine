@@ -79,22 +79,22 @@ pub fn from_gcp_repository(
     // name contains the fully qualified elements (e.q "projects/project_id/locations/europe-west9/repositories/repository-for-documentation")
     let mut repository_parent = "".to_string(); // e.q "projects/project_id/locations/europe-west9"
     let mut repository_name = "".to_string();
-    if let Ok(repository_re) = Regex::new(r"(?P<repository_parent>.*)/repositories/(?P<repository_name>.*)") {
-        if let Some(cap) = repository_re.captures(gcp_repository.name.as_str()) {
-            match (
-                cap.name("repository_parent").map(|e| e.as_str()),
-                cap.name("repository_name").map(|e| e.as_str()),
-            ) {
-                (Some(parent), Some(name)) => {
-                    repository_parent = parent.to_string();
-                    repository_name = name.to_string();
-                }
-                _ => {
-                    return Err(format!(
-                        "Cannot extract repository name and parent from fully qualified name: `{}`",
-                        gcp_repository.name.as_str()
-                    ));
-                }
+    if let Ok(repository_re) = Regex::new(r"(?P<repository_parent>.*)/repositories/(?P<repository_name>.*)")
+        && let Some(cap) = repository_re.captures(gcp_repository.name.as_str())
+    {
+        match (
+            cap.name("repository_parent").map(|e| e.as_str()),
+            cap.name("repository_name").map(|e| e.as_str()),
+        ) {
+            (Some(parent), Some(name)) => {
+                repository_parent = parent.to_string();
+                repository_name = name.to_string();
+            }
+            _ => {
+                return Err(format!(
+                    "Cannot extract repository name and parent from fully qualified name: `{}`",
+                    gcp_repository.name.as_str()
+                ));
             }
         }
     }
@@ -123,22 +123,21 @@ impl TryFrom<GcpDockerImage> for DockerImage {
         let mut docker_image_name = "".to_string(); // e.q image-name
         if let Ok(repository_re) = Regex::new(
             r"(?P<repository_identifier>projects/.*/locations/.*/repositories/.*)/dockerImages/(?P<docker_image_name>.*)@sha256:.*",
-        ) {
-            if let Some(cap) = repository_re.captures(gcp_docker_image.name.as_str()) {
-                match (
-                    cap.name("repository_identifier").map(|e| e.as_str()),
-                    cap.name("docker_image_name").map(|e| e.as_str()),
-                ) {
-                    (Some(repository), Some(image_name)) => {
-                        repository_identifier = repository.to_string();
-                        docker_image_name = image_name.to_string();
-                    }
-                    _ => {
-                        return Err(format!(
-                            "Cannot extract docker image name and repository from fully qualified name: `{}`",
-                            gcp_docker_image.name.as_str()
-                        ));
-                    }
+        ) && let Some(cap) = repository_re.captures(gcp_docker_image.name.as_str())
+        {
+            match (
+                cap.name("repository_identifier").map(|e| e.as_str()),
+                cap.name("docker_image_name").map(|e| e.as_str()),
+            ) {
+                (Some(repository), Some(image_name)) => {
+                    repository_identifier = repository.to_string();
+                    docker_image_name = image_name.to_string();
+                }
+                _ => {
+                    return Err(format!(
+                        "Cannot extract docker image name and repository from fully qualified name: `{}`",
+                        gcp_docker_image.name.as_str()
+                    ));
                 }
             }
         }
@@ -164,22 +163,21 @@ impl TryFrom<GcpPackage> for DockerImage {
         let mut docker_image_name = "".to_string(); // e.q image-name
         if let Ok(repository_re) = Regex::new(
             r"(?P<repository_identifier>projects/.*/locations/.*/repositories/.*)/dockerImages/(?P<docker_image_name>.*)@sha256:.*",
-        ) {
-            if let Some(cap) = repository_re.captures(gcp_package.name.as_str()) {
-                match (
-                    cap.name("repository_identifier").map(|e| e.as_str()),
-                    cap.name("docker_image_name").map(|e| e.as_str()),
-                ) {
-                    (Some(repository), Some(image_name)) => {
-                        repository_identifier = repository.to_string();
-                        docker_image_name = image_name.to_string();
-                    }
-                    _ => {
-                        return Err(format!(
-                            "Cannot extract docker image name and repository from fully qualified name: `{}`",
-                            gcp_package.name.as_str()
-                        ));
-                    }
+        ) && let Some(cap) = repository_re.captures(gcp_package.name.as_str())
+        {
+            match (
+                cap.name("repository_identifier").map(|e| e.as_str()),
+                cap.name("docker_image_name").map(|e| e.as_str()),
+            ) {
+                (Some(repository), Some(image_name)) => {
+                    repository_identifier = repository.to_string();
+                    docker_image_name = image_name.to_string();
+                }
+                _ => {
+                    return Err(format!(
+                        "Cannot extract docker image name and repository from fully qualified name: `{}`",
+                        gcp_package.name.as_str()
+                    ));
                 }
             }
         }

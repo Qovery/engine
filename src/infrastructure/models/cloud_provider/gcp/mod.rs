@@ -72,7 +72,7 @@ impl CloudProvider for Google {
         Some(&self.terraform_state_credentials)
     }
 
-    fn downcast_ref(&self) -> CloudProviderKind {
+    fn downcast_ref(&self) -> CloudProviderKind<'_> {
         CloudProviderKind::Gcp(self)
     }
 }

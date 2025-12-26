@@ -114,10 +114,10 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
     // todo(pmavro): temporary remove metrics while implementing them
     // let mut enabled_features = vec![Features::LogsHistory, Features::MetricsHistory];
     let mut enabled_features = vec![Features::LogsHistory];
-    if let Some(kkind) = kind {
-        if kkind == KKind::Eks {
-            enabled_features.push(Features::Grafana)
-        }
+    if let Some(kkind) = kind
+        && kkind == KKind::Eks
+    {
+        enabled_features.push(Features::Grafana)
     }
     let secrets = FuncTestsSecrets::new();
     let versions = get_qovery_app_version(&secrets.QOVERY_API_URL.unwrap()).unwrap();

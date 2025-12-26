@@ -1178,16 +1178,13 @@ impl Helm {
         // then we compare this breaking version with the currently installed version if any.
         // If current installed version is older than breaking change one, then we delete
         // the chart before applying it.
-        if let Some(breaking_version) = &chart.reinstall_chart_if_installed_version_is_below_than {
-            if let Some(installed_versions) =
+        if let Some(breaking_version) = &chart.reinstall_chart_if_installed_version_is_below_than
+            && let Some(installed_versions) =
                 self.get_chart_version(&chart.name, Some(chart.get_namespace_string().as_str()), envs)?
-            {
-                if let Some(version) = installed_versions.chart_version {
-                    if &version < breaking_version {
-                        self.uninstall(chart, envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
-                    }
-                }
-            }
+            && let Some(version) = installed_versions.chart_version
+            && &version < breaking_version
+        {
+            self.uninstall(chart, envs, &CommandKiller::never(), &mut |_| {}, &mut |_| {})?;
         }
 
         Ok(())
@@ -1929,7 +1926,7 @@ mod tests {
             &mut |_line| {},
             &CommandKiller::never(),
         );
-        assert!(output.contains("Version:\"v3.17.3\""));
+        assert!(output.contains("Version:\"v3.17.4\""));
     }
 
     #[test]

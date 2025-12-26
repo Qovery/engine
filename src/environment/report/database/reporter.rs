@@ -230,10 +230,10 @@ impl DeploymentReporter for DatabaseDeploymentReporter {
                 if !event_uuids_to_keep.contains(event.involved_object.uid.as_deref().unwrap_or_default()) {
                     return None;
                 }
-                if let Some(event_type) = &event.type_ {
-                    if event_type == "Warning" {
-                        return Some(event);
-                    }
+                if let Some(event_type) = &event.type_
+                    && event_type == "Warning"
+                {
+                    return Some(event);
                 }
                 None
             })

@@ -40,7 +40,7 @@ impl CloudProvider for SelfManaged {
         None
     }
 
-    fn downcast_ref(&self) -> CloudProviderKind {
+    fn downcast_ref(&self) -> CloudProviderKind<'_> {
         CloudProviderKind::SelfManaged(self)
     }
 }

@@ -283,10 +283,10 @@ impl BlobStorageService {
                 })?
                 .containers;
             for container in containers {
-                if let Some(bucket_name_prefix) = bucket_name_prefix {
-                    if !container.name.starts_with(bucket_name_prefix) {
-                        continue;
-                    }
+                if let Some(bucket_name_prefix) = bucket_name_prefix
+                    && !container.name.starts_with(bucket_name_prefix)
+                {
+                    continue;
                 }
                 if let Some(bucket_labels) = &bucket_labels {
                     for (key, value) in bucket_labels.iter() {
@@ -473,17 +473,17 @@ impl BlobStorageService {
             'blobs: for blob in blobs.items {
                 if let BlobItem::Blob(b) = blob {
                     let object_key = b.name;
-                    if let Some(object_id_prefix) = object_id_prefix {
-                        if !object_key.starts_with(object_id_prefix) {
-                            continue;
-                        }
+                    if let Some(object_id_prefix) = object_id_prefix
+                        && !object_key.starts_with(object_id_prefix)
+                    {
+                        continue;
                     }
-                    if let Some(object_labels) = &object_labels {
-                        if let Some(metadata) = b.metadata {
-                            for (key, value) in object_labels.iter() {
-                                if metadata.get(key).map(|v| v.as_str()) != Some(value) {
-                                    continue 'blobs;
-                                }
+                    if let Some(object_labels) = &object_labels
+                        && let Some(metadata) = b.metadata
+                    {
+                        for (key, value) in object_labels.iter() {
+                            if metadata.get(key).map(|v| v.as_str()) != Some(value) {
+                                continue 'blobs;
                             }
                         }
                     }
