@@ -128,14 +128,9 @@ spec:
                   name: {{ mounted_file.kube_name }}
                   readOnly: true
                 {%- endfor %}
-              env:
-                {%- for ev in environment_variables %}
-                - name: "{{ ev.key }}"
-                  valueFrom:
-                    secretKeyRef:
-                      name: {{ service.name }}
-                      key: {{ ev.key }}
-                {%- endfor %}
+              envFrom:
+                - secretRef:
+                    name: {{ service.name }}
           {%- if service.default_port %}
               ports:
                 - containerPort: {{ service.default_port }}

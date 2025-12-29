@@ -132,14 +132,9 @@ spec:
             - |-
               {{ arg }}
             {%- endfor %}
-          env:
-            {%- for ev in environment_variables %}
-            - name: "{{ ev.key }}"
-              valueFrom:
-                secretKeyRef:
-                  name: {{ service.name }}
-                  key: {{ ev.key }}
-            {%- endfor %}
+          envFrom:
+            - secretRef:
+                name: {{ service.name }}
           ports:
             {%- for port in service.ports %}
             - containerPort: {{ port.port }}
