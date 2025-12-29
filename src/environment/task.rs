@@ -381,7 +381,8 @@ impl EnvironmentTask {
             .chain(environment.routers.iter().map(|x| x.as_service()))
             .chain(environment.databases.iter().map(|x| x.as_service()))
             .chain(environment.jobs.iter().map(|x| x.as_service()))
-            .chain(environment.helm_charts.iter().map(|x| x.as_service()));
+            .chain(environment.helm_charts.iter().map(|x| x.as_service()))
+            .chain(environment.terraform_services.iter().map(|x| x.as_service()));
 
         for service in services {
             if deployed_services.contains(service.long_id()) {
@@ -533,7 +534,6 @@ impl Task for EnvironmentTask {
         };
 
         // run the actions
-
         let metrics_registry = Arc::new(infra_context.metrics_registry().clone_dyn());
         let service_ids = std::iter::empty()
             .chain(environment.applications.iter().map(|x| x.as_service().long_id()))
