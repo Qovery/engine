@@ -917,11 +917,27 @@ gitlab-release:
   extends: [.resources-image]
   retry: 1
   variables:
-    GITLAB_TOKEN: $GITLAB_TOKEN_SEMANTIC_RELEASE
-    GIT_DEPTH: 0
-  script:
-    - ./helper.sh update_engine_version
-    - unset GITHUB_TOKEN ; goreleaser release --skip=validate --clean
+    GIT_DEPTH: 1
+  before_script: |-
+    git config --global user.email $GITLAB_USER_EMAIL
+    git config --global user.name $GITLAB_USER_LOGIN
+
+  script: |-
+    ./helper.sh update_engine_version
+    unset GITHUB_TOKEN
+    goreleaser changelog -o CHANGELOG.md.new
+    goreleaser release --skip=validate --clean
+    
+    mv CHANGELOG.md CHANGELOG.md.old
+    cat <(cat CHANGELOG.md.new) CHANGELOG.md.old > CHANGELOG.md
+    git add CHANGELOG.md
+    git commit -m "chore: update changelog [skip ci]"
+    git push origin "HEAD:main"
+
+  artifacts:
+    paths:
+      - CHANGELOG.md
+    expire_in: 1 week
   tags:
     - k8s-runner
   rules:
