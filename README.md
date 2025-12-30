@@ -198,7 +198,7 @@ DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deploym
 To update the Rust toolchain version, you have to update the `rust-toolchain` file with the new version. Example of content:
 
 ```
-1.79.0
+1.92.0
 ```
 
 Then create a PR and, build the CI image with the new toolchain version with the `build-engine-ci-image` pipeline job.
