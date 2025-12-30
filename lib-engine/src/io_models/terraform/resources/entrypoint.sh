@@ -22,7 +22,7 @@ rsync -a --delete \
 cd /persistent-volume/terraform-work/"$ROOT_MODULE_PATH"
 
 log() {
-  echo -e "\n[==> ${TF_COMMAND}]: $1\n"
+  printf "\n[==> %s]: %s\n" "${TF_COMMAND}" "$1"
 }
 
 
