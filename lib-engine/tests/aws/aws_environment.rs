@@ -1685,6 +1685,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
@@ -1918,6 +1919,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2066,6 +2068,7 @@ fn deploy_container_with_storages_on_aws_eks() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2212,6 +2215,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2371,6 +2375,7 @@ fn deploy_container_with_router_on_aws_eks() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
+            autoscaling: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3372,6 +3377,7 @@ fn test_restart_deployment() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3521,6 +3527,7 @@ fn test_restart_statefulset() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3982,6 +3989,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();

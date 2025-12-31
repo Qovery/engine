@@ -389,6 +389,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         None,
         None,
         true,
+        None,
     )
     .unwrap()
 }
@@ -511,6 +512,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
         get_labels_group(),
+        None,
     )
     .unwrap()
 }

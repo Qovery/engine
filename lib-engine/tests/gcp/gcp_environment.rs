@@ -663,6 +663,7 @@ fn gcp_gke_deploy_container_with_router() {
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
+            autoscaling: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {

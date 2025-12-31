@@ -1,0 +1,52 @@
+{%- if service.storages | length == 0 and service.autoscaling and service.autoscaling.type == "keda" and service.autoscaling.scalers | length > 0 %}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  # annotations:
+  #   scaledobject.keda.sh/transfer-hpa-ownership: "true"
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: {{ service.type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ service.name }}
+  # advanced:
+  #   horizontalPodAutoscalerConfig:
+  #     name: {{ service.name }}
+  {%- if service.autoscaling.polling_interval_seconds %}
+  pollingInterval: {{ service.autoscaling.polling_interval_seconds }}
+  {%- else %}
+  pollingInterval: 30
+  {%- endif %}
+  {%- if service.autoscaling.cooldown_period_seconds %}
+  cooldownPeriod: {{ service.autoscaling.cooldown_period_seconds }}
+  {%- else %}
+  cooldownPeriod: 300
+  {%- endif %}
+  minReplicaCount: {{ service.min_instances }}
+  maxReplicaCount: {{ service.max_instances }}
+  triggers:
+  {%- for scaler in service.autoscaling.scalers %}
+    - type: {{ scaler.scaler_type }}
+      metadata:
+        {%- if scaler.metadata %}
+        {%- for key, value in scaler.metadata %}
+        {{ key }}: {{ value | json_encode }}
+        {%- endfor %}
+        {%- elif scaler.raw_yaml %}
+        {{ scaler.raw_yaml | indent(prefix="        ") }}
+        {%- endif %}
+  {%- endfor %}
+{%- endif %}

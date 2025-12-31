@@ -27,7 +27,7 @@ use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::cloud_provider::{CloudProvider, Kind as CPKind};
 use crate::infrastructure::models::container_registry::{ContainerRegistryInfo, DockerRegistryInfo};
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::container::{ContainerAdvancedSettings, Registry};
+use crate::io_models::container::{AutoscalingConfig, ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
@@ -444,6 +444,8 @@ pub struct Application {
     pub shared_image_feature_enabled: bool,
     #[serde(default)]
     pub docker_target_build_stage: Option<String>,
+    #[serde(default)]
+    pub autoscaling: Option<AutoscalingConfig>,
 }
 
 fn default_root_path_value() -> String {
@@ -512,6 +514,7 @@ impl Application {
                     self.gpu_request.map(KubernetesGpuResourceUnit),
                     self.gpu_limit.map(KubernetesGpuResourceUnit),
                     self.should_delete_shared_registry,
+                    self.autoscaling.clone(),
                 )?))
             }
             CPKind::Azure => Ok(Box::new(models::application::Application::<Azure>::new(
@@ -547,6 +550,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
+                self.autoscaling.clone(),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
@@ -581,6 +585,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
+                self.autoscaling.clone(),
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -615,6 +620,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
+                self.autoscaling.clone(),
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -649,6 +655,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
+                self.autoscaling.clone(),
             )?)),
         }
     }
