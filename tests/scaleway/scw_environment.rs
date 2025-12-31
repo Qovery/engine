@@ -1699,6 +1699,7 @@ fn deploy_container_with_no_router_on_scw() {
             advanced_settings: Default::default(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1847,6 +1848,7 @@ fn deploy_container_on_scw_with_mounted_files_as_volume() {
             }),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2004,6 +2006,7 @@ fn deploy_container_with_router_on_scw() {
             }),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
+            autoscaling: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2809,6 +2812,7 @@ fn deploy_container_with_tcp_public_port() {
             advanced_settings: Default::default(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: btreeset! {},
+            autoscaling: None,
         }];
 
         let mut environment_for_delete = environment.clone();

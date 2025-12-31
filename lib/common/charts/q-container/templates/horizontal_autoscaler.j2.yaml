@@ -1,4 +1,4 @@
-{%- if service.storages | length == 0 and service.min_instances != service.max_instances and service.advanced_settings.hpa_cpu_average_utilization_percent >= 0 %}
+{%- if service.storages | length == 0 and not service.autoscaling and service.min_instances != service.max_instances and service.advanced_settings.hpa_cpu_average_utilization_percent >= 0 %}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

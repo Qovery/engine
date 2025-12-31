@@ -442,6 +442,38 @@ impl Default for ContainerAdvancedSettings {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct KedaScaler {
+    pub scaler_type: String,
+    #[serde(default)]
+    pub metadata: Option<BTreeMap<String, String>>,
+    #[serde(default)]
+    pub raw_yaml: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct KedaConfig {
+    #[serde(default)]
+    pub polling_interval_seconds: Option<u32>,
+    #[serde(default)]
+    pub cooldown_period_seconds: Option<u32>,
+    #[serde(default)]
+    pub scalers: Vec<KedaScaler>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AutoscalingConfig {
+    Keda {
+        #[serde(default)]
+        polling_interval_seconds: Option<u32>,
+        #[serde(default)]
+        cooldown_period_seconds: Option<u32>,
+        #[serde(default)]
+        scalers: Vec<KedaScaler>,
+    },
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Container {
     pub long_id: Uuid,
@@ -478,6 +510,8 @@ pub struct Container {
     pub annotations_group_ids: BTreeSet<Uuid>,
     #[serde(default)]
     pub labels_group_ids: BTreeSet<Uuid>,
+    #[serde(default)]
+    pub autoscaling: Option<AutoscalingConfig>,
 }
 
 impl Container {
@@ -551,6 +585,7 @@ impl Container {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                self.autoscaling.clone(),
             )?),
             CPKind::Azure => Box::new(models::container::Container::<Azure>::new(
                 context,
@@ -584,6 +619,7 @@ impl Container {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                self.autoscaling.clone(),
             )?),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
@@ -617,6 +653,7 @@ impl Container {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                self.autoscaling.clone(),
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -650,6 +687,7 @@ impl Container {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                self.autoscaling.clone(),
             )?),
             CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
@@ -683,9 +721,76 @@ impl Container {
                 |transmitter| context.get_event_details(transmitter),
                 annotations_groups,
                 labels_groups,
+                self.autoscaling.clone(),
             )?),
         };
 
         Ok(service)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_autoscaling_config_deserialization() {
+        let json = r#"{
+            "type": "keda",
+            "polling_interval_seconds": 30,
+            "cooldown_period_seconds": 300,
+            "scalers": [
+                {
+                    "scaler_type": "prometheus",
+                    "raw_yaml": "serverAddress: http://prometheus-operated.prometheus.svc.cluster.local:9090\nquery: sum(rate(nginx_ingress_controller_requests{ingress=\"router-zc5ae9983-gaffotron\"}[2m]))\nthreshold: \"10\""
+                }
+            ]
+        }"#;
+
+        let result: Result<AutoscalingConfig, _> = serde_json::from_str(json);
+        assert!(result.is_ok(), "Failed to deserialize: {:?}", result.err());
+
+        let config = result.unwrap();
+        match config {
+            AutoscalingConfig::Keda {
+                polling_interval_seconds,
+                cooldown_period_seconds,
+                scalers,
+            } => {
+                assert_eq!(polling_interval_seconds, Some(30));
+                assert_eq!(cooldown_period_seconds, Some(300));
+                assert_eq!(scalers.len(), 1);
+                assert_eq!(scalers[0].scaler_type, "prometheus");
+            }
+        }
+    }
+
+    #[test]
+    fn test_autoscaling_config_serialization() {
+        let config = AutoscalingConfig::Keda {
+            polling_interval_seconds: Some(30),
+            cooldown_period_seconds: Some(300),
+            scalers: vec![KedaScaler {
+                scaler_type: "prometheus".to_string(),
+                metadata: None,
+                raw_yaml: Some("serverAddress: http://test.com".to_string()),
+            }],
+        };
+
+        let json = serde_json::to_string_pretty(&config).unwrap();
+        println!("Serialized JSON:\n{}", json);
+
+        // Verify round-trip
+        let deserialized: AutoscalingConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config, deserialized);
+    }
+
+    #[test]
+    fn test_autoscaling_config_none() {
+        let json = r#"null"#;
+        let result: Result<Option<AutoscalingConfig>, _> = serde_json::from_str(json);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
     }
 }

@@ -29,7 +29,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol;
 use crate::io_models::application::Protocol::{TCP, UDP};
-use crate::io_models::container::{ContainerAdvancedSettings, Registry};
+use crate::io_models::container::{AutoscalingConfig, ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
@@ -80,6 +80,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) deployment_id: String,
+    pub(crate) autoscaling: Option<AutoscalingConfig>,
 }
 
 pub fn get_mirror_repository_name(
@@ -144,6 +145,7 @@ impl<T: CloudProvider> Container<T> {
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
+        autoscaling: Option<AutoscalingConfig>,
     ) -> Result<Self, ContainerError> {
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -203,6 +205,7 @@ impl<T: CloudProvider> Container<T> {
                 .rsplit_once('-')
                 .map(|s| s.0.to_string())
                 .unwrap_or_default(),
+            autoscaling,
         })
     }
 
@@ -348,6 +351,7 @@ impl<T: CloudProvider> Container<T> {
                 legacy_volumeclaim_template: false,
                 legacy_deployment_from_scaleway: false,
                 tolerations,
+                autoscaling: self.autoscaling.clone(),
             },
             registry: registry_info
                 .get_registry_docker_json_config(DockerRegistryInfo {
@@ -589,6 +593,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) legacy_volumeclaim_template: bool,
     pub(crate) legacy_deployment_from_scaleway: bool,
     pub(crate) tolerations: BTreeMap<String, String>,
+    pub(crate) autoscaling: Option<AutoscalingConfig>,
 }
 
 #[derive(Serialize, Debug, Clone)]

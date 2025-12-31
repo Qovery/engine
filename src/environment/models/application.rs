@@ -78,6 +78,7 @@ pub struct Application<T: CloudProvider> {
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) should_delete_shared_registry: bool,
     pub(crate) deployment_id: String,
+    pub(crate) autoscaling: Option<AutoscalingConfig>,
 }
 
 // Here we define the common behavior among all providers
@@ -112,6 +113,7 @@ impl<T: CloudProvider> Application<T> {
         gpu_request: Option<KubernetesGpuResourceUnit>,
         gpu_limit: Option<KubernetesGpuResourceUnit>,
         should_delete_shared_registry: bool,
+        autoscaling: Option<AutoscalingConfig>,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
@@ -162,6 +164,7 @@ impl<T: CloudProvider> Application<T> {
                 .rsplit_once('-')
                 .map(|s| s.0.to_string())
                 .unwrap_or_default(),
+            autoscaling,
         })
     }
 
@@ -280,6 +283,7 @@ impl<T: CloudProvider> Application<T> {
                 legacy_volumeclaim_template: true,
                 legacy_deployment_from_scaleway: T::cloud_provider() == Scw,
                 tolerations,
+                autoscaling: self.autoscaling.clone(),
             },
             registry: registry_info
                 .get_registry_docker_json_config(DockerRegistryInfo {
@@ -453,6 +457,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
 use crate::environment::models::port::Port;
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
+use crate::io_models::container::AutoscalingConfig;
 use tera::Context as TeraContext;
 
 impl<T: CloudProvider> ToTeraContext for Application<T> {
