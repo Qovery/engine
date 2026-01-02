@@ -926,10 +926,15 @@ gitlab-release:
     ./helper.sh update_engine_version
     unset GITHUB_TOKEN
     goreleaser release --skip=validate
+  
+
+    # Prepare public branch of engine
     mv dist/CHANGELOG.md /tmp/
     mv lib-engine /tmp/
     
+    git fetch origin engine-public:engine-public
     git checkout engine-public
+    git reset --hard origin/engine-public
     mv /tmp/lib-engine/* .
     mv CHANGELOG.md /tmp/CHANGELOG.md.old
     cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
