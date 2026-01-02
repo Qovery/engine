@@ -9,7 +9,7 @@
 <p align="center">
 <img src="https://img.shields.io/badge/stability-work_in_progress-lightgrey.svg?style=flat-square" alt="work in progress badge">
 <img src="https://github.com/Qovery/engine/workflows/functionnal-tests/badge.svg?style=flat-square" alt="Func tests">
-<a href="https://discord.qovery.com"> <img alt="Discord" src="https://img.shields.io/discord/688766934917185556?label=discord&style=flat-square"> </a>
+<a href="https://discord.gg/nHSckkw"> <img alt="Discord" src="https://img.shields.io/discord/688766934917185556?label=discord&style=flat-square"> </a>
 </p>
 
 <br />
@@ -22,7 +22,7 @@
 
 - Website: https://www.qovery.com
 - Qovery documentation: https://hub.qovery.com/docs
-- Community: [Join us](https://discord.qovery.com) on Discord and on our [Q&A forum](https://discuss.qovery.com)
+- Community: [Join us](https://discord.gg/nHSckkw) on Discord and on our [Q&A forum](https://discuss.qovery.com)
 
 **Please note**: We take Qovery's security and our users' trust very seriously. If you believe you have found a security issue in Qovery, please responsibly disclose by contacting us at security@qovery.com.
 
@@ -175,6 +175,6 @@ See the [LICENSE](./LICENSE) file for licensing information.
 
 ## Qovery
 
-Qovery is a [CNCF](https://landscape.cncf.io/format=members&selected=qovery-member) and [Linux Foundation](https://www.linuxfoundation.org/membership/members/) silver member.
+Qovery is a [CNCF](https://www.cncf.io/about/members/) and [Linux Foundation](https://www.linuxfoundation.org/membership/members/) silver member.
 
 <img src="https://raw.githubusercontent.com/cncf/artwork/master/other/cncf-member/silver/color/cncf-member-silver-color.svg" width="300px" alt="CNCF Silver Member logo" />
