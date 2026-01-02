@@ -5,7 +5,7 @@ changelog:
   use: git
   sort: asc
   format: >
-    {{.SHA}}: {{.Message}} {{ if contains .Message "!:" }}#BREAKING{{ end }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }}{{ end }})
+    [{{.SHA}}](https://github.com/Qovery/engine/commit/{{.SHA}}): {{.Message}} {{ if contains .Message "!:" }}#BREAKING{{ end }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }}{{ end }})
   groups:
     - title: Features
       regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
