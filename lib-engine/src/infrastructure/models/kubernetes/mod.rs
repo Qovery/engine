@@ -540,6 +540,9 @@ pub trait Kubernetes: Send + Sync {
     fn is_karpenter_enabled(&self) -> bool {
         false
     }
+    fn is_keda_enabled(&self) -> bool {
+        false
+    }
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)>;
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction;

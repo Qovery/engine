@@ -28,6 +28,8 @@ pub fn generate_keda_charts(
         chart_prefix_path,
         chart_config_prerequisites.metrics_parameters.is_some(),
         action,
+        chart_config_prerequisites.aws_iam_keda_operator_role_arn.clone(),
+        chart_config_prerequisites.aws_iam_keda_metrics_server_role_arn.clone(),
     )
     .to_common_helm_chart()?;
 

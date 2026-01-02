@@ -18,6 +18,10 @@ output "cluster_vpc_id" { value = try(aws_eks_cluster.eks_cluster.vpc_config[0].
 {% if enable_cloudwatch_exporter -%}
 output "aws_iam_cloudwatch_exporter_role_arn" { value = aws_iam_role.cloudwatch_exporter.arn }
 {% endif -%}
+{% if enable_keda -%}
+output "aws_iam_keda_operator_role_arn" { value = aws_iam_role.keda_operator.arn }
+output "aws_iam_keda_metrics_server_role_arn" { value = aws_iam_role.keda_metrics_server.arn }
+{% endif -%}
 {% if not user_provided_network -%}
 output "s3_vpc_endpoint_id" {
   description = "ID of the S3 VPC Gateway endpoint"
