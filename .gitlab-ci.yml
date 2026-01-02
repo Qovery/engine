@@ -939,7 +939,7 @@ gitlab-release:
     mv /tmp/lib-engine/* .
     git add *
     git commit -m 'chore(ci): public release'
-    git push -f "HEAD:engine-public"
+    git push -f origin "HEAD:engine-public"
 
 
   artifacts:
