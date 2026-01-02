@@ -1,0 +1,70 @@
+{{- if and (.Values.rbac.pspEnabled) (semverCompare "<1.25-0" .Capabilities.KubeVersion.GitVersion) }}
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: {{ template "aws-node-termination-handler.fullname" . }}
+  labels:
+    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames: '*'
+spec:
+  privileged: false
+  hostIPC: false
+  hostNetwork: {{ .Values.useHostNetwork }}
+  hostPID: false
+{{- if and (and (not .Values.enableSqsTerminationDraining) .Values.useHostNetwork ) (or .Values.enablePrometheusServer .Values.enableProbesServer) }}
+  hostPorts:
+{{- if .Values.enablePrometheusServer }}
+  - min: {{ .Values.prometheusServerPort }}
+    max: {{ .Values.prometheusServerPort }}
+{{- end }}
+{{- if .Values.enableProbesServer }}
+  - min: {{ .Values.probes.httpGet.port }}
+    max: {{ .Values.probes.httpGet.port }}
+{{- end }}
+{{- end }}
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+  allowedCapabilities:
+    - '*'
+  fsGroup:
+    rule: RunAsAny
+  runAsUser:
+    rule: RunAsAny
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: RunAsAny
+  volumes:
+    - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ template "aws-node-termination-handler.fullname" . }}-psp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ['policy']
+    resources: ['podsecuritypolicies']
+    verbs:     ['use']
+    resourceNames:
+      - {{ template "aws-node-termination-handler.fullname" . }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ template "aws-node-termination-handler.fullname" . }}-psp
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aws-node-termination-handler.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ template "aws-node-termination-handler.fullname" . }}-psp
+subjects:
+  - kind: ServiceAccount
+    name: {{ template "aws-node-termination-handler.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

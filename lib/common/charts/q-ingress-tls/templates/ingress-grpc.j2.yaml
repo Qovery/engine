@@ -1,0 +1,139 @@
+{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
+{%- if grpc_hosts|length >= 1  %}
+{%- set path_rewrite = grpc_hosts|map(attribute="path_rewrite")|first %}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ sanitized_name }}-grpc
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    qovery.com/gateway-api-deployed: "true" # TODO(QOV-1400): to be removed once migration is done, just to flag which ingress have the gateway deployed
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true" # Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
+    {%- if grpc_hosts_has_regex_path %}
+    nginx.ingress.kubernetes.io/use-regex: "{{ grpc_hosts_has_regex_path }}"
+    {%- endif %}
+    {%- if path_rewrite != "" %}
+    nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
+    {%- endif %}
+    nginx.ingress.kubernetes.io/proxy-body-size: "{{ advanced_settings.network_ingress_proxy_body_size_mb }}m"
+    {%- if advanced_settings.network_ingress_sticky_session_enable == true %}
+    # https://kubernetes.github.io/ingress-nginx/examples/affinity/cookie/
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-secure: "true"
+    nginx.ingress.kubernetes.io/session-cookie-name: "INGRESSCOOKIE_QOVERY"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-expires: "85400" # 1 day
+    nginx.ingress.kubernetes.io/session-cookie-samesite: "Lax"
+    {%- endif %}
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "{{ advanced_settings.network_ingress_proxy_connect_timeout_seconds }}"
+    {%- if advanced_settings.network_ingress_whitelist_source_range %}
+    nginx.ingress.kubernetes.io/whitelist-source-range: "{{ advanced_settings.network_ingress_whitelist_source_range }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_denylist_source_range %}
+    nginx.ingress.kubernetes.io/denylist-source-range: "{{ advanced_settings.network_ingress_denylist_source_range }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_basic_auth_env_var %}
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: htaccess-{{ sanitized_name }}
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+    {%- endif %}
+    # RATE LIMITING
+    {%- if advanced_settings.network_ingress_nginx_limit_rpm %}
+    nginx.ingress.kubernetes.io/limit-rpm: "{{ advanced_settings.network_ingress_nginx_limit_rpm }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_rps %}
+    nginx.ingress.kubernetes.io/limit-rps: "{{ advanced_settings.network_ingress_nginx_limit_rps }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_burst_multiplier %}
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "{{ advanced_settings.network_ingress_nginx_limit_burst_multiplier }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_limit_connections %}
+    nginx.ingress.kubernetes.io/limit-connections: "{{ advanced_settings.network_ingress_nginx_limit_connections }}"
+    {%- endif %}
+    {%- if advanced_settings.network_ingress_nginx_custom_http_errors %}
+    nginx.ingress.kubernetes.io/custom-http-errors: "{{ advanced_settings.network_ingress_nginx_custom_http_errors }}"
+    {%- endif %}
+    # GRPC SPECIFIC
+    # https://kubernetes.github.io/ingress-nginx/examples/grpc/
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      {%- if nginx_ingress_controller_server_snippet %}
+      {{ nginx_ingress_controller_server_snippet | indent(prefix="      ") }}
+      {%- endif %}
+      grpc_socket_keepalive on;
+      keepalive_time "{{ advanced_settings.network_ingress_keepalive_time_seconds }}s";
+      keepalive_timeout "{{ advanced_settings.network_ingress_keepalive_timeout_seconds }}s";
+      grpc_read_timeout "{{ advanced_settings.network_ingress_grpc_read_timeout_seconds }}s";
+      grpc_send_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+      client_body_timeout "{{ advanced_settings.network_ingress_grpc_send_timeout_seconds }}s";
+
+    {%- if advanced_settings.network_ingress_add_headers or advanced_settings.network_ingress_proxy_set_headers %}
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      set $qovery_com_environment_id "{{ environment_long_id }}";
+      set $qovery_com_associated_service_id "{{ associated_service_long_id }}";
+      {%- if nginx_ingress_controller_configuration_snippet %}
+      {{ nginx_ingress_controller_configuration_snippet | indent(prefix="      ") }}
+      {%- endif %}
+
+      {%- for key, value in advanced_settings.network_ingress_add_headers %}
+      add_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+
+      {%- for key, value in advanced_settings.network_ingress_proxy_set_headers %}
+      proxy_set_header {{ key }} "{{ value | nginx_header_value_escape }}";
+      {%- endfor %}
+    {%- endif %}
+    {%- for key, value in annotations_group.ingress %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+
+spec:
+  tls:
+    {%- if certificate_alternative_names|length > 0 %}
+    - secretName: "router-tls-{{ id }}"
+      hosts:
+        {%- for domain in certificate_alternative_names %}
+        - "{{ domain.domain }}"
+        {%- endfor %}
+    {%- endif %}
+  # We dont use secret name as we want to rely on default tls certificate from ingress controller
+  # which has our wildcard certificate https://cert-manager.io/next-docs/faq/kubed/
+  ingressClassName: "nginx-qovery"
+  rules:
+    {%- for host in grpc_hosts %}
+    - host: "{{ host.domain_name }}"
+      http:
+        paths:
+        - path: "{{ host.path }}"
+          pathType: ImplementationSpecific
+          backend:
+            service:
+              name: "{{ host.service_name }}"
+              port:
+                number: {{ host.service_port }}
+    {%- endfor %}
+{%- endif %}
+{%- endfor %}

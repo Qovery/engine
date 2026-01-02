@@ -1,0 +1,104 @@
+image:
+  repository: public.ecr.aws/r3m4q3r9/engine
+  pullPolicy: IfNotPresent
+  tag: ""
+
+metrics:
+  enabled: false
+  portName: "metrics"
+  port: 8080
+
+imagePullSecrets: []
+
+autoscaler:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  averageValue: 0.5
+
+podDisruptionBudget:
+  enabled: true
+  # minAvailable shouldn't be lower than autoscaler.minReplicas
+  minAvailable: 1
+
+overprovisionning:
+  enabled: false
+  # specify the number of over provisioned engine pods
+  # Set the number of replicas depending on the node size (to define how many node overprovidsionned you want)
+  replicas: 2
+  resources:
+    requests:
+      cpu: 1
+      memory: 3Gi
+    limits:
+      cpu: 1
+      memory: 3Gi
+
+labels:
+  app: qovery-engine
+
+environmentVariables:
+  RUST_LOG: DEBUG,rusoto_core=info,trust_dns_resolver=info,trust_dns_proto=info,reqwest::connect=info,hyper=info,rustls=info,vaultrs=info,h2=info,tower::buffer=info
+  #LIB_ROOT_DIR: ""
+  #DOCKER_HOST: ""
+  #ORGANIZATION: ""
+  #CLOUD_PROVIDER: ""
+  #REGION: ""
+
+buildContainer:
+  enabled: true
+  environmentVariables:
+    BUILDER_KUBE_ENABLED: "true"
+    BUILDER_CPU_ARCHITECTURES: "ARM64"
+    BUILDER_ROOTLESS_ENABLED: "true"
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: "OnRootMismatch"
+  # fsGroup: 2000
+
+securityContext:
+  # privileged: true
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+engineResources:
+  requests:
+    cpu: 200m
+    memory: 2Gi
+  limits:
+    cpu: 1
+    memory: 2Gi
+
+nodeSelector: {}
+
+terminationGracePeriodSeconds: 21600
+tolerations:
+  - key: "node.kubernetes.io/not-ready"
+    operator: "Exists"
+    effect: "NoExecute"
+    tolerationSeconds: 21600
+
+affinity: {}
+
+rbac:
+  create: true
+  clusterRole: true
+  clusterPermission: "admin"
+  apiVersion: v1
+
+networkPolicies:
+  enabled: false

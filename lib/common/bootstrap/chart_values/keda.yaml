@@ -1,0 +1,104 @@
+# Qovery configuration for KEDA
+# CRDs are managed separately by keda-crd chart
+crds:
+  install: false
+
+operator:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 1
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  # Tolerations for Qovery infrastructure nodegroup
+  tolerations:
+    - key: "node.qovery.com/infrastructure"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+  # Affinity to prefer infrastructure nodegroup
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: node.qovery.com/infrastructure
+                operator: In
+                values:
+                  - "true"
+
+metricsServer:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 1
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  tolerations:
+    - key: "node.qovery.com/infrastructure"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: node.qovery.com/infrastructure
+                operator: In
+                values:
+                  - "true"
+
+webhooks:
+  enabled: true
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 50m
+      memory: 100Mi
+    requests:
+      cpu: 10m
+      memory: 25Mi
+  tolerations:
+    - key: "node.qovery.com/infrastructure"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+    - key: "CriticalAddonsOnly"
+      operator: "Exists"
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+              - key: node.qovery.com/infrastructure
+                operator: In
+                values:
+                  - "true"
+
+# Prometheus monitoring integration (set dynamically by engine)
+prometheus:
+  operator:
+    enabled: set-by-engine-code
+    podMonitor:
+      enabled: set-by-engine-code
+    prometheusRule:
+      enabled: set-by-engine-code
+
+# Qovery labels
+additionalLabels:
+  qovery.com/managed: "true"
+
+podLabels:
+  admission.datadoghq.com/enabled: "false"

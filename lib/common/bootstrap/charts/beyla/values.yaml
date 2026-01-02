@@ -1,0 +1,365 @@
+## Global properties for image pulling override the values defined under `image.registry`.
+## If you want to override only one image registry, use the specific fields but if you want to override them all, use `global.image.registry`
+global:
+  image:
+    # -- Global image registry to use if it needs to be overridden for some specific use cases (e.g local registries, custom images, ...)
+    registry: ""
+    # -- Optional set of global image pull secrets.
+    pullSecrets: []
+
+image:
+  # -- Beyla image registry (defaults to docker.io)
+  registry: "docker.io"
+  # -- Beyla image repository.
+  repository: grafana/beyla
+  # -- (string) Beyla image tag. When empty, the Chart's appVersion is
+  # used.
+  tag: null
+  # -- Beyla image's SHA256 digest (either in format "sha256:XYZ" or "XYZ"). When set, will override `image.tag`.
+  digest: null
+  # -- Beyla image pull policy.
+  pullPolicy: IfNotPresent
+  # -- Optional set of image pull secrets.
+  pullSecrets: []
+
+# -- Overrides the chart's name
+nameOverride: ""
+
+# -- Overrides the chart's computed fullname.
+fullnameOverride: ""
+
+# -- Override the deployment namespace
+namespaceOverride: ""
+
+## DaemonSet annotations
+# annotations: {}
+
+rbac:
+  # -- Whether to create RBAC resources for Belya
+  create: true
+  # -- Extra custer roles to be created for Belya
+  extraClusterRoleRules: []
+  # - apiGroups: []
+  #   resources: []
+
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # -- ServiceAccount labels.
+  labels: {}
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+# -- If set to false, deploys an unprivileged / less privileged setup.
+privileged: true
+
+# -- Enables context propagation support.
+contextPropagation:
+  enabled: true
+
+# -- Extra capabilities for unprivileged / less privileged setup.
+extraCapabilities: []
+  # - SYS_RESOURCE       # <-- pre 5.11 only. Allows Beyla to increase the amount of locked memory.
+  # - SYS_ADMIN          # <-- Required for Go application trace context propagation, or if kernel.perf_event_paranoid >= 3 on Debian distributions.
+  # - NET_ADMIN          # <-- Required to inject HTTP and TCP context propagation information. This will be added when contextPropagation is enabled.
+
+# -- Security context for privileged setup.
+securityContext:
+  privileged: true
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+priorityClassName: ""
+  # system-node-critical
+  # system-cluster-critical
+
+## -- Expose the Beyla Prometheus and internal metrics service to be accessed from outside the cluster (LoadBalancer service).
+## or access it from within the cluster (ClusterIP service). Set the service type and the port to serve it.
+## ref: http://kubernetes.io/docs/user-guide/services/
+##
+service:
+  # -- whether to create a service for metrics
+  enabled: false
+  # -- type of the service
+  type: ClusterIP
+  # -- Service annotations.
+  annotations: {}
+  # -- Service labels.
+  labels: {}
+  # -- cluster IP
+  clusterIP: ""
+  # -- loadbalancer IP
+  loadBalancerIP: ""
+  # -- loadbalancer class name
+  loadBalancerClass: ""
+  # -- source ranges for loadbalancer
+  loadBalancerSourceRanges: []
+  # -- Prometheus metrics service port
+  port: 80
+  # -- targetPort overrides the Prometheus metrics port. It defaults to the value of `prometheus_export.port`
+  # from the Beyla configuration file.
+  targetPort: null
+  # -- name of the port for Prometheus metrics.
+  portName: metrics
+  # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
+  appProtocol: ""
+  internalMetrics:
+    # -- internal metrics service port
+    port: 8080
+    # -- targetPort overrides the internal metrics port. It defaults to the value of `internal_metrics.prometheus.port`
+    # from the Beyla configuration file.
+    targetPort: null
+    # -- name of the port for internal metrics.
+    portName: int-metrics
+    # -- Adds the appProtocol field to the service. This allows to work with istio protocol selection. Ex: "http" or "tcp"
+    appProtocol: ""
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+## -- See `kubectl explain daemonset.spec.updateStrategy` for more
+## ref: https://kubernetes.io/docs/tasks/manage-daemon/update-daemon-set/#daemonset-update-strategy
+updateStrategy:
+  # -- update strategy type
+  type: RollingUpdate
+
+# -- Additional volumes on the output daemonset definition.
+volumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# -- Additional volumeMounts on the output daemonset definition.
+volumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+# -- The nodeSelector field allows user to constrain which nodes your DaemonSet pods are scheduled to based on labels on the node
+nodeSelector: {}
+
+# -- Tolerations allow pods to be scheduled on nodes with specific taints
+tolerations: []
+
+# -- used for scheduling of pods based on affinity rules
+affinity: {}
+
+# -- Adds custom annotations to the Beyla Pods.
+podAnnotations: {}
+
+# -- Adds custom labels to the Beyla Pods.
+podLabels: {}
+
+## https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/
+# -- Determines how DNS resolution is handled for that pod.
+# If `.Values.preset` is set to `network` or `.Values.config.data.network` is enabled, Beyla requires `hostNetwork` access, causing cluster service DNS resolution to fail.
+# It is recommended not to change this if Beyla sends traces and metrics to Grafana components via k8s service.
+dnsPolicy: ClusterFirstWithHostNet
+
+## More configuration options available at https://grafana.com/docs/beyla/latest/configure/options/
+## The below default configuration
+## 1. looks for ALL the services in the host
+## 2. export metrics as prometheus metrics by default at 9090 port
+## 3. enables kubernetes attribute
+## Note: The default configuration is used if config.create=true and config.name=""
+config:
+  # -- set to true, to skip the check around the ConfigMap creation
+  skipConfigMapCheck: false
+  # -- set to true, to use the below default configurations
+  create: true
+  ## -- Provide the name of the external configmap containing the beyla configuration.
+  ## To create configmap from configuration file, user can use the below command. Note: The name 'beyla-config.yaml' is important.
+  ## `kubectl create cm --from-file=beyla-config.yaml=<name-of-config-file> -n <namespace>`
+  ## If empty, default configuration below is used.
+  name: ""
+  # -- default value of beyla configuration
+  data:
+    # profile_port: 6060
+    # open_port: 8443
+    # routes:
+    #   unmatched: heuristic
+    # log_level: info
+    # otel_traces_export:
+    #   endpoint: http://grafana-agent:4318
+    ## or alternatively use
+    # grafana:
+    #   otlp:
+    #     cloud_zone: prod-eu-west-0
+    #     cloud_instance_id: 123456
+    #     cloud_api_key:
+    attributes:
+      kubernetes:
+        enable: true
+    filter:
+      network:
+        k8s_dst_owner_name:
+          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+        k8s_src_owner_name:
+          not_match: '{kube*,*jaeger-agent*,*prometheus*,*promtail*,*grafana-agent*}'
+    ## to enable network metrics
+    # network:
+    #   enable: true
+    prometheus_export:
+      port: 9090
+      path: /metrics
+    ## to enable internal metrics
+    # internal_metrics:
+    #   prometheus:
+    #     port: 6060
+    #     path: /metrics
+
+## Env variables that will override configmap values
+## For example:
+##   BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
+# -- extra environment variables
+env: {}
+  # BEYLA_INTERNAL_METRICS_PROMETHEUS_PORT: 9090
+  # BEYLA_TRACE_PRINTER: "text"
+
+# -- extra environment variables to be set from resources such as k8s configMaps/secrets
+envValueFrom: {}
+  #  ENV_NAME:
+  #    secretKeyRef:
+  #      name: secret-name
+  #      key: value_key
+
+# -- Preconfigures some default properties for network or application observability.
+# Accepted values are "network" or "application".
+preset: application
+
+# -- Enable creation of ServiceMonitor for scraping of prometheus HTTP endpoint
+serviceMonitor:
+  enabled: false
+  # -- Add custom labels to the ServiceMonitor resource
+  additionalLabels: {}
+  # -- ServiceMonitor annotations
+  annotations: {}
+  metrics:
+  # -- ServiceMonitor Prometheus scraping endpoint.
+  # Target port and path is set based on service and `prometheus_export` values.
+  # For additional values, see the ServiceMonitor spec
+    endpoint:
+      interval: 15s
+  internalMetrics:
+  # -- ServiceMonitor internal metrics scraping endpoint.
+  # Target port and path is set based on service and `internal_metrics` values.
+  # For additional values, see the ServiceMonitor spec
+    endpoint:
+      interval: 15s
+  # -- Prometheus job label.
+  # If empty, chart release name is used
+  jobLabel: ""
+
+# -- Options to deploy the Kubernetes metadata cache as a separate service
+k8sCache:
+  # -- Number of replicas for the Kubernetes metadata cache service. 0 disables the service.
+  replicas: 0
+  # -- Enables the profile port for the Beyla cache
+  profilePort: 0
+  ## Env variables that will override configmap values
+  ## For example:
+  ##   BEYLA_K8S_CACHE_LOG_LEVEL: "debug"
+  # -- extra environment variables
+  env: {}
+    # BEYLA_K8S_CACHE_LOG_LEVEL: "debug"
+
+  # -- extra environment variables to be set from resources such as k8s configMaps/secrets
+  envValueFrom: {}
+    #  ENV_NAME:
+    #    secretKeyRef:
+    #      name: secret-name
+    #      key: value_key
+  resources: {}
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+  image:
+    # -- K8s Cache image registry (defaults to docker.io)
+    registry: "docker.io"
+    # -- K8s Cache image repository.
+    repository: grafana/beyla-k8s-cache
+    # -- (string) K8s Cache image tag. When empty, the Chart's appVersion is used.
+    tag: null
+    # -- K8s Cache image's SHA256 digest (either in format "sha256:XYZ" or "XYZ"). When set, will override `image.tag`.
+    digest: null
+    # -- K8s Cache image pull policy.
+    pullPolicy: IfNotPresent
+    # -- Optional set of image pull secrets.
+    pullSecrets: []
+  service:
+    # -- Name of both the Service and Deployment
+    name: beyla-k8s-cache
+    # -- Port of the Kubernetes metadata cache service.
+    port: 50055
+    # -- Service annotations.
+    annotations: {}
+    # -- Service labels.
+    labels: {}
+  internalMetrics:
+    # 0: disabled by default
+    port: 0
+    path: /metrics
+    portName: metrics
+    #  prometheus:
+    #     port: 6060
+    #     path: /metrics
+  # -- Deployment annotations.
+  annotations: {}
+  # -- Adds custom annotations to the Beyla Kube Cache Pods.
+  podAnnotations: {}
+  # -- Adds custom labels to the Beyla Kube Cache Pods.
+  podLabels: {}
+
+# -- Extra k8s manifests to deploy
+extraObjects: []
+# extraObjects:
+# - apiVersion: v1
+#   kind: Secret
+#   metadata:
+#     name: api-token
+#     namespace: {{ .Release.Namespace }}
+#   stringData:
+#     TOP_SECRET: 'hush hush'
+#
+# Alternatively, you can use strings, which lets you use additional templating features:
+#
+# extraObjects:
+# - |
+#   apiVersion: v1
+#   kind: Secret
+#   metadata:
+#     name: {{ include "beyla.fullname" . }}-api-token
+#     namespace: {{ include "beyla.namespace" .}}
+#    labels:
+#      {{- include "beyla.labels" . | nindent 4 }}
+#   stringData:
+#     TOP_SECRET: 'hush hush'

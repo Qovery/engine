@@ -1,0 +1,277 @@
+{%- if service.storages | length > 0  %}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: {{ service.type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    qovery.com/deployment-id: {{ deployment_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    releaseTime: {% raw %}{{ dateInZone "2006-01-02 15:04:05Z" (now) "UTC"| quote }}{% endraw %}
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {% endfor %}
+spec:
+  replicas: {{ service.min_instances }}
+  serviceName: {{ service.name }}
+  selector:
+    matchLabels:
+      {%- if service.legacy_deployment_matchlabels %}
+      app: {{ service.name }}
+      appId: {{ service.short_id }}
+      envId: {{ environment_short_id }}
+      ownerId: FAKE
+      {%- else %}
+      qovery.com/service-id: {{ service.long_id }}
+      {%- endif %}
+  template:
+    metadata:
+      labels:
+        {%- if service.legacy_deployment_matchlabels %}
+        app: {{ service.name }}
+        appId: {{ service.short_id }}
+        ownerId: FAKE
+        {%- endif %}
+        envId: {{ environment_short_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: {{ service.type }}
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+      annotations:
+        checksum/config: {% raw %}{{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}{% endraw %}
+        checksum/config-mount-files: {% raw %}{{ include (print $.Template.BasePath "/mounted_files_secret.yaml") . | sha256sum }}{% endraw %}
+        {%- if service.legacy_deployment_matchlabels %}
+        appCommitId: {{ service.version }}
+        {%- endif %}
+        qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.pods %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+    spec:
+      {%- if service.tolerations %}
+      tolerations:
+      {%- for key, value in service.tolerations %}
+        - key: "{{ key }}"
+          operator: "Exists"
+          effect: "{{ value }}"
+      {%- endfor %}
+      {%- endif %}
+      affinity:
+        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+        {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+              - key: "{{ key }}"
+                operator: In
+                values:
+                - {{ value }}
+        {%- endfor %}
+        {%- endif %}
+        podAntiAffinity:
+          {%- if service.advanced_settings.deployment_antiaffinity_pod == "Required" %}
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - topologyKey: "kubernetes.io/hostname"
+            labelSelector:
+              matchExpressions:
+              - key: "qovery.com/service-id"
+                operator: In
+                values:
+                - "{{ service.long_id }}"
+          {%- else %}
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: "kubernetes.io/hostname"
+              labelSelector:
+                matchExpressions:
+                  - key: "qovery.com/service-id"
+                    operator: In
+                    values:
+                    - "{{ service.long_id }}"
+          {%- endif %}
+      automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
+      {%- if service.advanced_settings.security_service_account_name != "" %}
+      serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+      {%- endif %}
+      terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+      {%- if registry.secret_name %}
+      imagePullSecrets:
+        - name: {{ registry.secret_name }}
+      {%- endif %}
+      containers:
+        - name: {{ service.name }}
+          image: "{{ service.image_full }}"
+          {%- if service.entrypoint %}
+          command:
+            - |-
+              {{ service.entrypoint }}
+          {%- endif %}
+          args:
+            {%- for arg in service.command_args %}
+            - |-
+              {{ arg }}
+            {%- endfor %}
+          envFrom:
+            - secretRef:
+                name: {{ service.name }}
+          ports:
+            {%- for port in service.ports %}
+            - containerPort: {{ port.port }}
+              name: "p{{ port.port }}"
+              protocol: {% if port.protocol.type == "UDP" %}"UDP"{% else %}"TCP"{% endif %}
+            {%- endfor %}
+          {%- if service.readiness_probe %}
+          readinessProbe:
+            {%- if service.readiness_probe.type.tcp %}
+            tcpSocket:
+              port: {{ service.readiness_probe.port }}
+              host: {{ service.readiness_probe.type.tcp.host }}
+            {%- endif %}
+            {%- if service.readiness_probe.type.http %}
+            httpGet:
+              port: {{ service.readiness_probe.port }}
+              path: {{ service.readiness_probe.type.http.path }}
+              scheme: {{ service.readiness_probe.type.http.scheme }}
+            {%- endif %}
+            {%- if service.readiness_probe.type.exec %}
+            exec:
+              command: {{ service.readiness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if service.readiness_probe.type.grpc %}
+            grpc:
+              port: {{ service.readiness_probe.port }}
+              service: {{ service.readiness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.readiness_probe.initial_delay_seconds }}
+            periodSeconds: {{ service.readiness_probe.period_seconds }}
+            timeoutSeconds: {{ service.readiness_probe.timeout_seconds }}
+            successThreshold: {{ service.readiness_probe.success_threshold }}
+            failureThreshold: {{ service.readiness_probe.failure_threshold }}
+          {%- endif %}
+          {%- if service.liveness_probe %}
+          livenessProbe:
+            {%- if service.liveness_probe.type.tcp %}
+            tcpSocket:
+              port: {{ service.liveness_probe.port }}
+              host: {{ service.liveness_probe.type.tcp.host }}
+            {%- endif %}
+            {%- if service.liveness_probe.type.http %}
+            httpGet:
+              port: {{ service.liveness_probe.port }}
+              path: {{ service.liveness_probe.type.http.path }}
+              scheme: {{ service.liveness_probe.type.http.scheme }}
+            {%- endif %}
+            {%- if service.liveness_probe.type.exec %}
+            exec:
+              command: {{ service.liveness_probe.type.exec.commands }}
+            {%- endif %}
+            {%- if service.liveness_probe.type.grpc %}
+            grpc:
+              port: {{ service.liveness_probe.port }}
+              service: {{ service.liveness_probe.type.grpc.service }}
+            {%- endif %}
+            initialDelaySeconds: {{ service.liveness_probe.initial_delay_seconds }}
+            periodSeconds: {{ service.liveness_probe.period_seconds }}
+            timeoutSeconds: {{ service.liveness_probe.timeout_seconds }}
+            successThreshold: {{ service.liveness_probe.success_threshold }}
+            failureThreshold: {{ service.liveness_probe.failure_threshold }}
+          {%- endif %}
+          securityContext:
+            readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
+          resources:
+            limits:
+              cpu: {{ service.cpu_limit_in_milli }}
+              memory: {{ service.ram_limit_in_mib }}
+              {%- if service.gpu_limit and service.gpu_limit > 0 %}
+              nvidia.com/gpu: {{ service.gpu_limit }}
+              {%- endif %}
+            requests:
+              cpu: {{ service.cpu_request_in_milli }}
+              memory: {{ service.ram_request_in_mib }}
+              {%- if service.gpu_request and service.gpu_request > 0 %}
+              nvidia.com/gpu: {{ service.gpu_request }}
+              {%- endif %}
+          lifecycle:
+            {% if service.advanced_settings.deployment_lifecycle_post_start_exec_command | length > 0 %}
+            postStart:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_post_start_exec_command }}
+            {%- endif %}
+            {% if service.advanced_settings.deployment_lifecycle_pre_stop_exec_command | length > 0 %}
+            preStop:
+              exec:
+                command: {{ service.advanced_settings.deployment_lifecycle_pre_stop_exec_command }}
+            {%- endif %}
+          volumeMounts:
+{%- for s in service.storages %}
+            {%- if service.legacy_volumeclaim_template %}
+            - name: {{ s.id }}
+            {%- else %}
+            - name: {{ s.long_id }}
+            {%- endif %}
+              mountPath: {{ s.mount_point }}
+{%- endfor %}
+{%- for mounted_file in mounted_files %}
+            - mountPath: "{{ mounted_file.mount_path }}"
+              subPath: content
+              name: {{ mounted_file.kube_name }}
+              readOnly: true
+{%- endfor %}
+      volumes:
+{%- for mounted_file in mounted_files %}
+        - name: {{ mounted_file.kube_name }}
+          secret:
+            secretName: {{ mounted_file.kube_name }}
+{%- endfor %}
+  volumeClaimTemplates:
+{%- for s in service.storages %}
+  - metadata:
+      {%- if service.legacy_volumeclaim_template %}
+      name: {{ s.id }}
+      labels:
+        ownerId: FAKE
+        envId: {{ environment_short_id }}
+        appId: {{ service.short_id }}
+        diskId: {{ s.id }}
+        diskType: {{ s.storage_type }}
+      {%- else %}
+      name: {{ s.long_id }}
+      labels:
+        envId: {{ environment_short_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: {{ service.type }}
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+        qovery.com/disk-id: {{ s.long_id }}
+        qovery.com/disk-type: {{ s.storage_type }}
+      {%- endif %}
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: {{ s.storage_type }}
+      resources:
+        requests:
+          storage: {{ s.size_in_gib }}Gi
+{%- endfor %}
+{%- endif %}

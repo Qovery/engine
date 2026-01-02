@@ -1,0 +1,50 @@
+{{- if and .Values.webhooks.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  {{- if or .Values.prometheus.webhooks.enabled .Values.additionalAnnotations .Values.service.annotations }}
+  annotations:
+    {{- if and .Values.prometheus.webhooks.enabled ( not .Values.prometheus.webhooks.serviceMonitor.enabled ) }}
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ .Values.prometheus.webhooks.port | quote }}
+    prometheus.io/path: "/metrics"
+    {{- end }}
+    {{- with .Values.additionalAnnotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+    {{- with .Values.service.annotations }}
+      {{- range $key, $value := . }}
+    {{ $key }}: {{ $value | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+  name: {{ .Values.webhooks.name }}
+  namespace: {{ .Release.Namespace }}
+spec:
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: {{ .Values.webhooks.port | default 9443 }}
+    appProtocol: https
+  {{- if .Values.prometheus.webhooks.enabled }}
+  - name: {{ .Values.prometheus.webhooks.serviceMonitor.port }}
+    port: {{ .Values.prometheus.webhooks.port }}
+    targetPort: {{ .Values.prometheus.webhooks.port }}
+        {{- with .Values.prometheus.webhooks.appProtocol }}
+    appProtocol: {{ . }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.profiling.webhooks.enabled }}
+  - name: profiling
+    port: {{ .Values.profiling.webhooks.port }}
+    targetPort: {{ .Values.profiling.webhooks.port }}
+  {{- end }}
+  selector:
+    app: {{ .Values.webhooks.name }}
+{{- end }}

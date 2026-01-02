@@ -1,0 +1,67 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: {{ include "iam-eks-user.fullname" . }}
+  labels:
+    {{- include "iam-eks-user.labels" . | nindent 4 }}
+  {{- with .Values.extraLabels }}
+  {{ toYaml . | indent 4 }}
+  {{- end }}
+spec:
+  strategy:
+    type: Recreate # avoid collision (even if k8s should have lock mechanism)
+  selector:
+    matchLabels:
+      {{- include "iam-eks-user.selectorLabels" . | nindent 8 }}
+  template:
+    metadata:
+      annotations:
+      labels:
+        {{- include "iam-eks-user.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          env:
+            - name: "REFRESH_INTERVAL_SECONDS"
+              value: "{{ .Values.refreshIntervalSeconds }}"
+            - name: "SERVICE_ACCOUNT_NAME"
+              value: "{{ .Values.serviceAccount.name }}"
+            - name: "ENABLE_GROUP_USER_SYNC"
+              value: "{{ .Values.groupUsersSync.enabled }}"
+            - name: "IAM_K8S_GROUPS"
+              value: "{{ .Values.groupUsersSync.iamK8sGroups }}"
+            - name: "ENABLE_SSO"
+              value: "{{ .Values.sso.enabled }}"
+            {{ if .Values.sso.enabled }}
+            - name: "IAM_SSO_ROLE_ARN"
+              value: "{{ .Values.sso.iamSSORoleArn }}"
+            {{ end }}
+            {{ if .Values.karpenter.enabled }}
+            - name: "KARPENTER_ROLE_ARN"
+              value: "{{ .Values.karpenter.iamKarpenterRoleArn }}"
+            {{ end }}
+            {{ if and .Values.aws.accessKeyId .Values.aws.secretAccessKey }}
+            - name: "AWS_ACCESS_KEY_ID"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "iam-eks-user.aws.secretName" . }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: "AWS_SECRET_ACCESS_KEY"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "iam-eks-user.aws.secretName" . }}
+                  key: AWS_SECRET_ACCESS_KEY
+            {{ end }}
+            - name: AWS_DEFAULT_REGION
+              value: "{{ .Values.aws.defaultRegion }}"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          command:
+            - ./usr/bin/iam-eks-user-mapper
+      automountServiceAccountToken: true
+      serviceAccountName: {{ .Values.serviceAccount.name }}

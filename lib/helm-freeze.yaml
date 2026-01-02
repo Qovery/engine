@@ -1,0 +1,223 @@
+charts:
+  - name: metallb
+    repo_name: bitnami
+    dest_folder_override: metallb
+    dest: eksanywhere-bootstrap
+    version: 6.4.16
+    comment: https://artifacthub.io/packages/helm/bitnami/metallb
+  - name: cert-manager
+    version: v1.18.2
+    repo_name: jetstack
+    comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
+  - name: external-dns
+    repo_name: external-dns
+    version: 1.19.0
+    comment: https://github.com/kubernetes-sigs/external-dns/charts/external-dns
+  - name: grafana
+    version: 6.16.10
+    repo_name: grafana
+    no_sync: true
+    comment: |
+      Dashboard have been set into it as the chart suggest but it's a problem with helm-freeze
+      Need to look if we can move them out of this repo
+  - name: ingress-nginx
+    repo_name: ingress-nginx
+    version: 4.13.0
+    comment: https://github.com/kubernetes/ingress-nginx/releases?q=helm-chart&expanded=true
+  - name: kube-prometheus-stack
+    repo_name: prometheus-community
+    version: 75.9.0
+    comment: |
+      !!! On version upgrade, do not forget to update CRDs !!!
+      https://github.com/prometheus-community/helm-charts/releases?q=kube-prometheus-stack&expanded=true
+  - name: prometheus-operator-crds
+    repo_name: prometheus-community
+    version: 21.0.0
+    comment: "!!! On version upgrade, do not forget to update kube-prometheus-stack !!!"
+  - name: thanos
+    repo_name: bitnami
+    version: 17.2.0
+    comment: https://artifacthub.io/packages/helm/bitnami/thanos
+  - name: kube-state-metrics
+    repo_name: prometheus-community
+    version: 5.27.0
+    comment: |
+      Chart upgrade will require 1.25+
+      https://github.com/prometheus-community/helm-charts/releases?q=kube-state-metrics&expanded=true
+  - name: prometheus-adapter
+    repo_name: prometheus-community
+    version: 4.11.0
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
+  - name: prometheus-nginx-exporter
+    repo_name: prometheus-community
+    version: 0.2.2
+    comment: https://github.com/prometheus-community/helm-charts/releases?q=prometheus-adapter&expanded=true
+  - name: aws-node-termination-handler
+    repo_name: oci://public.ecr.aws/aws-ec2/helm
+    dest: aws-bootstrap
+    version: 0.27.1
+  - name: cluster-autoscaler
+    repo_name: cluster-autoscaler
+    dest: aws-bootstrap
+    version: 9.48.0
+    comment: https://github.com/kubernetes/autoscaler/blob/master/charts/cluster-autoscaler/Chart.yaml#L14
+  - name: aws-load-balancer-controller
+    repo_name: aws
+    dest: aws-bootstrap
+    version: 1.8.3
+    comment: |
+      This chart should be replaced by the EKS addon once it will be out
+      https://github.com/aws/eks-charts/tree/gh-pages
+  - name: metrics-server
+    repo_name: metrics-server
+    version: 3.12.1
+    comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
+  - name: loki
+    repo_name: grafana
+    version: 5.41.4
+    comment: https://github.com/grafana/loki/tree/main/production/helm/loki
+  - name: promtail
+    repo_name: grafana
+    version: 6.17.0
+    comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
+  - name: beyla
+    repo_name: grafana
+    version: 1.9.2
+    comment: https://github.com/grafana/beyla/
+  - name: prometheus-yet-another-cloudwatch-exporter
+    repo_name: prometheus-community
+    dest: aws-bootstrap
+    version: 0.40.2
+  - name: mongodb
+    repo_name: bitnami
+    version: 13.13.1
+    dest: services
+    no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/mongodb
+      Overriden chart:
+      * service name: we use our own naming convention (for the Core)
+      * persistence: bitnami legacy naming was data, not datadir
+  - name: mysql
+    repo_name: bitnami
+    version: 9.10.1
+    dest: services
+    no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/mysql
+      Overriden chart:
+      * service name: we use our own naming convention (for the Core)
+  - name: postgresql
+    repo_name: bitnami
+    version: 12.5.1
+    dest: services
+    no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/postgresql
+      Overriden chart:
+      * service name: we use our own naming convention (for the Core)
+  - name: redis
+    repo_name: bitnami
+    version: 17.11.4
+    dest: services
+    no_sync: true
+    comment: |
+      https://artifacthub.io/packages/helm/bitnami/redis
+  - name: iam-eks-user-mapper
+    version: 1.5.0
+    repo_name: iam-eks-user-mapper
+    dest: aws-bootstrap
+  - name: datadog
+    repo_name: datadog
+    version: 2.22.17
+  - name: vpa
+    dest_folder_override: vertical-pod-autoscaler
+    repo_name: fairwinds
+    version: 4.8.0
+  - name: k8s-event-logger
+    repo_name: qovery-github
+    chart_path: chart
+    version: 1.1.6
+  - name: karpenter
+    dest_folder_override: karpenter
+    repo_name: oci://public.ecr.aws/karpenter
+    dest: aws-bootstrap
+    version: 1.5.1
+  - name: karpenter-crd
+    dest_folder_override: karpenter-crd
+    repo_name: oci://public.ecr.aws/karpenter
+    dest: aws-bootstrap
+    version: 1.5.1
+  - name: keda
+    repo_name: kedacore
+    version: v2.18.2
+  - name: nvidia-device-plugin
+    dest: aws-bootstrap
+    repo_name: nvidia
+    version: 0.17.1
+    comment: https://github.com/NVIDIA/k8s-device-plugin
+  - name: gateway-helm
+    dest_folder_override: envoy-gateway
+    repo_name: oci://docker.io/envoyproxy
+    version: 1.6.1
+  - name: gateway-crds-helm
+    dest_folder_override: envoy-gateway-crd
+    repo_name: oci://docker.io/envoyproxy
+    version: 1.6.1
+
+repos:
+  - name: stable
+    url: https://charts.helm.sh/stable
+  - name: jetstack
+    url: https://charts.jetstack.io
+  - name: bitnami
+    url: https://charts.bitnami.com/bitnami
+  - name: lifen
+    url: https://honestica.github.io/lifen-charts
+  - name: aws
+    url: https://aws.github.io/eks-charts
+  - name: aws-ebs-csi-driver
+    url: https://kubernetes-sigs.github.io/aws-ebs-csi-driver
+  - name: grafana
+    url: https://grafana.github.io/helm-charts
+  - name: iam-eks-user-mapper
+    url: https://qovery.github.io/iam-eks-user-mapper/
+  - name: cluster-autoscaler
+    url: https://kubernetes.github.io/autoscaler
+  - name: do-k8s-token-rotate
+    url: https://qovery.github.io/do-k8s-token-rotate/
+  - name: prometheus-community
+    url: https://prometheus-community.github.io/helm-charts
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx/
+  - name: datadog
+    url: https://helm.datadoghq.com
+  - name: kir4h
+    url: https://kir4h.github.io/charts
+  - name: metrics-server
+    url: https://kubernetes-sigs.github.io/metrics-server/
+  - name: fairwinds
+    url: https://charts.fairwinds.com/stable
+  - name: deliveryhero
+    url: https://charts.deliveryhero.io/
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
+  - name: nvidia
+    url: https://nvidia.github.io/k8s-device-plugin/
+  - name: qovery-github
+    type: git
+    url: https://github.com/Qovery/k8s-event-logger.git
+  - name: kedacore
+    url: https://kedacore.github.io/charts
+
+destinations:
+  - name: default
+    path: common/bootstrap/charts
+  - name: aws-bootstrap
+    path: aws/bootstrap/charts
+  - name: azure-bootstrap
+    path: azure/bootstrap/charts
+  - name: services
+    path: common/services
+  - name: eksanywhere-bootstrap
+    path: eksanywhere/bootstrap/charts

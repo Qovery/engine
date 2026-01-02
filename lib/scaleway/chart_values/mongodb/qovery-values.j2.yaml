@@ -1,0 +1,211 @@
+nameOverride: "{{ sanitized_name }}"
+fullnameOverride: "{{ sanitized_name }}"
+commonLabels:
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
+  tag: "{{ version }}"
+
+useStatefulSet: true
+
+auth:
+  rootPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
+
+resources:
+  requests:
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
+  limits:
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
+
+  # on version > 6 need to use custom liveness/readniess probes to avoid over-using resources usage
+  # otherwise customize the default probes timers, because with minimal resources it takes time to start
+  # https://github.com/bitnami/charts/issues/10264
+  {% set version_number = version | int -%}
+  {% if version_number >= 6 -%}
+customLivenessProbe:
+  exec:
+    command:
+      - mongosh
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
+customReadinessProbe:
+  exec:
+    command:
+      - mongosh
+      - --eval
+      - "db.adminCommand('ping')"
+  initialDelaySeconds: 30
+  periodSeconds: 20
+  timeoutSeconds: 10
+  successThreshold: 1
+  failureThreshold: 6
+  {% else -%}
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 20
+  failureThreshold: 6
+  successThreshold: 1
+  {% endif %}
+
+service:
+  nameOverride: {{ service_name }}
+  ports:
+    mongodb: "{{ database_port }}"
+  type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+  {% if publicly_accessible -%}
+  annotations:
+    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+    service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: tcp
+    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "false"
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for annotations in additional_annotations %}
+    {{ annotations.key }}: |-
+        {{ annotations.value }}
+    {%- endfor %}
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  {% endif %}
+
+persistence:
+  storageClass: "{{ database_disk_type }}"
+  size: "{{ database_disk_size_in_gib }}Gi"
+  labels:
+    # app label required for legacy chart (installed before 01/06/23)
+    app: "{{ sanitized_name }}"
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+  annotations:
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseLongId: "{{ long_id }}"
+    envLongId: "{{ environment_long_id }}"
+    projectLongId: "{{ project_long_id }}"
+    qovery.com/service-id: "{{ long_id }}"
+    qovery.com/service-type: "database"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+
+serviceAccount:
+  create: true
+  name: "{{ sanitized_name }}"
+
+rbac:
+  create: true
+
+volumePermissions:
+  image:
+    registry: {{ registry_name }}
+    repository: {{ repository_name_minideb }}
+
+nodeAffinityPreset:
+  type: "{{ node_affinity_type }}"
+  key: "{{ node_affinity_key }}"
+  values: {{ node_affinity_values }}
+
+hidden:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+
+arbiter:
+  nodeAffinityPreset:
+    type: "{{ node_affinity_type }}"
+    key: "{{ node_affinity_key }}"
+    values: {{ node_affinity_values }}
+  annotations:
+    {%- for key, value in annotations_group.stateful_set %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  podAnnotations:
+    {%- for key, value in annotations_group.pods %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  service:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+    headless:
+      annotations:
+        {%- for key, value in annotations_group.service %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+annotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}

@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+---
+# Grant the webhook permission to read the secrets containing the credentials
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:secrets-reader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+rules:
+  - apiGroups:
+    - ''
+    resources:
+    - 'secrets'
+    verbs:
+    - 'get'
+---
+# Grant the webhook permission to read the secrets containing the credentials
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:secrets-reader
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "qovery-webhook.fullname" . }}:secrets-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "qovery-webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Grant the webhook permission to read the ConfigMap containing the Kubernetes
+# apiserver's requestheader-ca-certificate.
+# This ConfigMap is automatically created by the Kubernetes apiserver.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:webhook-authentication-reader
+  namespace: kube-system
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "qovery-webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# apiserver gets the auth-delegator role to delegate auth decisions to
+# the core apiserver
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:auth-delegator
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "qovery-webhook.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# Grant cert-manager permission to validate using our apiserver
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:domain-solver
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+rules:
+  - apiGroups:
+      - {{ .Values.groupName }}
+    resources:
+      - '*'
+    verbs:
+      - 'create'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:domain-solver
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "qovery-webhook.fullname" . }}:domain-solver
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ .Values.certManager.serviceAccountName }}
+    namespace: {{ .Values.certManager.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:flowcontrol-solver
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+rules:
+  - apiGroups:
+      - "flowcontrol.apiserver.k8s.io"
+    resources:
+      - 'prioritylevelconfigurations'
+      - 'flowschemas'
+    verbs:
+      - 'list'
+      - 'watch'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}:flowcontrol-solver
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "qovery-webhook.fullname" . }}:flowcontrol-solver
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: {{ include "qovery-webhook.fullname" . }}
+    namespace: {{ .Release.Namespace | quote }}
+---

@@ -1,0 +1,19 @@
+{{- $kubefullname := include "kubernetes.fullname" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kubernetes.fullname" . }}
+  labels:
+    {{- include "kubernetes.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: {{ include "kubernetes.fullname" . }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.portal.port }}
+      targetPort: {{ .Values.portal.port }}
+      name: nginx-port
+    - protocol: TCP
+      port: {{ .Values.oauthConfig.port }}
+      targetPort: {{ .Values.oauthConfig.port }}
+      name: oauth-port

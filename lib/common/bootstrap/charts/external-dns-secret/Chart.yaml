@@ -1,0 +1,20 @@
+annotations:
+  category: DeveloperTools
+  licenses: Apache-2.0
+apiVersion: v2
+appVersion: 1.0.0
+# No dependencies - standalone chart
+description: A Helm chart for managing ExternalDNS secrets and credentials for various DNS providers
+home: https://github.com/qovery/engine-core
+keywords:
+  - external-dns
+  - secrets
+  - dns
+  - credentials
+maintainers:
+  - name: Qovery
+    url: https://github.com/qovery/engine-core
+name: external-dns-secret
+sources:
+  - https://github.com/qovery/engine-core
+version: 1.0.0

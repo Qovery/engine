@@ -1,0 +1,215 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.operator.name }}-metrics-apiserver
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.operator.name }}-metrics-apiserver
+    app.kubernetes.io/name: {{ .Values.operator.name }}-metrics-apiserver
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  revisionHistoryLimit: {{ .Values.metricsServer.revisionHistoryLimit}}
+  replicas: {{ .Values.metricsServer.replicaCount }}
+  {{- with .Values.upgradeStrategy.metricsApiServer }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.operator.name }}-metrics-apiserver
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.operator.name }}-metrics-apiserver
+        app.kubernetes.io/name: {{ .Values.operator.name }}-metrics-apiserver
+        {{- include "keda.labels" . | indent 8 }}
+        {{- if .Values.podLabels.metricsAdapter }}
+        {{- toYaml .Values.podLabels.metricsAdapter | nindent 8}}
+        {{- end }}
+      {{- if or .Values.additionalAnnotations .Values.podAnnotations.metricsAdapter (and .Values.prometheus.metricServer.enabled ( not (or .Values.prometheus.metricServer.podMonitor.enabled .Values.prometheus.metricServer.serviceMonitor.enabled )) )}}
+      annotations:
+        {{- if .Values.additionalAnnotations }}
+        {{- toYaml .Values.additionalAnnotations | nindent 8 }}
+        {{- end }}
+        {{- if and .Values.prometheus.metricServer.enabled ( not (or .Values.prometheus.metricServer.podMonitor.enabled .Values.prometheus.metricServer.serviceMonitor.enabled )) }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.prometheus.metricServer.port | quote }}
+        {{- end }}
+        {{- if .Values.podAnnotations.metricsAdapter }}
+        {{- toYaml .Values.podAnnotations.metricsAdapter | nindent 8}}
+        {{- end }}
+      {{- end }}
+    spec:
+      enableServiceLinks: {{ .Values.enableServiceLinks }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ (.Values.serviceAccount.metricServer).name | default .Values.serviceAccount.name }}
+      automountServiceAccountToken: {{ kindIs "invalid" (.Values.serviceAccount.metricServer).automountServiceAccountToken | ternary .Values.serviceAccount.automountServiceAccountToken (.Values.serviceAccount.metricServer).automountServiceAccountToken }}
+      securityContext:
+        {{- if .Values.podSecurityContext.metricServer }}
+        {{- toYaml .Values.podSecurityContext.metricServer | nindent 8 }}
+        {{- else }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: {{ .Values.operator.name }}-metrics-apiserver
+          securityContext:
+            {{- if .Values.securityContext.metricServer }}
+            {{- toYaml .Values.securityContext.metricServer | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- end }}
+          {{- $registry := .Values.global.image.registry | default .Values.image.metricsApiServer.registry | default "" }}
+          {{- if $registry }}
+          image: "{{ $registry }}/{{ .Values.image.metricsApiServer.repository }}:{{ .Values.image.metricsApiServer.tag | default .Chart.AppVersion }}"
+          {{- else }}
+          image: "{{ .Values.image.metricsApiServer.repository }}:{{ .Values.image.metricsApiServer.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.service.portHttpsTarget }}
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.metricsServer.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.metricsServer.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.metricsServer.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.metricsServer.livenessProbe.failureThreshold }}
+            successThreshold: {{ .Values.metricsServer.livenessProbe.successThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.service.portHttpsTarget }}
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.metricsServer.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.metricsServer.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.metricsServer.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.metricsServer.readinessProbe.failureThreshold }}
+            successThreshold: {{ .Values.metricsServer.readinessProbe.successThreshold }}
+          env:
+            - name: WATCH_NAMESPACE
+              value: {{ .Values.watchNamespace | quote }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KEDA_HTTP_DEFAULT_TIMEOUT
+              value: {{ .Values.http.timeout | quote }}
+            - name: KEDA_HTTP_MIN_TLS_VERSION
+              value: {{ .Values.http.minTlsVersion }}
+            {{- if ( not .Values.http.keepAlive.enabled ) }}
+            - name: KEDA_HTTP_DISABLE_KEEP_ALIVE
+              value: "true"
+            {{- end }}
+            {{- if .Values.permissions.metricServer.restrict.secret }}
+            - name: KEDA_RESTRICT_SECRET_ACCESS
+              value: {{ .Values.permissions.metricServer.restrict.secret | quote }}
+            {{- end }}
+            {{- if .Values.env }}
+            {{- toYaml .Values.env | nindent 12 -}}
+            {{- end }}
+          command:
+           - /keda-adapter
+          args:
+          - --port={{ .Values.prometheus.metricServer.port }}
+          - --secure-port={{ .Values.service.portHttpsTarget }}
+          - --logtostderr=true
+          - --stderrthreshold={{ .Values.logging.metricServer.stderrthreshold }}
+          - --disable-compression={{ .Values.metricsServer.disableCompression}}
+          - --metrics-service-address={{ .Values.operator.name }}.{{ .Release.Namespace }}.svc.{{ .Values.clusterDomain }}:9666
+          - --client-ca-file={{ .Values.certificates.mountPath }}/ca.crt
+          - --tls-cert-file={{ .Values.certificates.mountPath }}/tls.crt
+          - --tls-private-key-file={{ .Values.certificates.mountPath }}/tls.key
+          - --cert-dir={{ .Values.certificates.mountPath }}
+          - --v={{ .Values.logging.metricServer.level }}
+          - --zap-log-level={{ .Values.logging.metricServer.zapLevel }}
+          - --zap-encoder={{ .Values.logging.metricServer.zapEncoder }}
+          - --zap-time-encoding={{ .Values.logging.metricServer.zapTimeEncoding }}
+          {{- if .Values.profiling.metricsServer.enabled }}
+          - "--profiling-bind-address=:{{ .Values.profiling.metricsServer.port }}"
+          {{- end }}
+          {{- range $key, $value := .Values.extraArgs.metricsAdapter }}
+          - --{{ $key }}={{ $value }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.service.portHttpsTarget }}
+              name: https
+              protocol: TCP
+            - containerPort: {{ .Values.prometheus.metricServer.port }}
+              name: {{ .Values.prometheus.metricServer.portName }}
+              protocol: TCP
+          volumeMounts:
+          - mountPath: {{ .Values.certificates.mountPath }}
+            name: certificates
+            readOnly: true
+          {{- if .Values.grpcTLSCertsSecret }}
+          - name: grpc-certs
+            mountPath: /grpccerts
+          {{- end }}
+          {{- if .Values.hashiCorpVaultTLS }}
+          - name: hashicorp-vault-certs
+            mountPath: /hashicorp-vaultcerts
+          {{- end }}
+          {{- if .Values.volumes.metricsApiServer.extraVolumeMounts }}
+          {{- toYaml .Values.volumes.metricsApiServer.extraVolumeMounts | nindent 10 }}
+          {{- end }}
+          resources:
+            {{- if .Values.resources.metricServer }}
+            {{- toYaml .Values.resources.metricServer | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.resources | nindent 12 }}
+            {{- end }}
+      volumes:
+      - name: certificates
+        secret:
+          defaultMode: 420
+          secretName: {{ .Values.certificates.secretName }}
+      {{- if .Values.grpcTLSCertsSecret }}
+      - name: grpc-certs
+        secret:
+          secretName: {{ .Values.grpcTLSCertsSecret }}
+      {{- end }}
+      {{- if .Values.hashiCorpVaultTLS }}
+      - name: hashicorp-vault-certs
+        secret:
+          secretName: {{ .Values.hashiCorpVaultTLS }}
+      {{- end }}
+      {{- if .Values.volumes.metricsApiServer.extraVolumes }}
+      {{- toYaml .Values.volumes.metricsApiServer.extraVolumes | nindent 6 }}
+      {{- end }}
+      {{- $dnsConfig := .Values.metricsServer.dnsConfig | default .Values.global.dnsConfig }}
+      {{- if $dnsConfig }}
+      dnsConfig:
+      {{- toYaml $dnsConfig | nindent 8 }}
+      {{- end }}
+      dnsPolicy: {{ .Values.metricsServer.dnsPolicy }}
+      hostNetwork: {{ .Values.metricsServer.useHostNetwork }}
+      nodeSelector:
+        kubernetes.io/os: linux
+      {{- with .Values.nodeSelector }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.metricsServer.affinity }}
+      affinity:
+        {{- toYaml .Values.metricsServer.affinity | nindent 8 }}
+      {{- else if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints.metricsServer}}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

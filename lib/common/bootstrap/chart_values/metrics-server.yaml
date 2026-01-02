@@ -1,0 +1,35 @@
+# create api service to be able to use hpa/vpa
+apiService:
+  create: true
+
+# set rolling restart strategy
+updateStrategy:
+  type: RollingUpdate # set-by-engine-code
+
+args: [] # set-by-engine-code
+
+replicas: set-by-engine-code
+
+podDisruptionBudget:
+  enabled: set-by-engine-code
+  minAvailable: set-by-engine-code
+
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - metrics-server
+        topologyKey: kubernetes.io/hostname
+
+# set resources
+resources:
+  limits:
+    cpu: 250m # set-by-engine-code
+    memory: 64Mi # set-by-engine-code
+  requests:
+    cpu: 250m # set-by-engine-code
+    memory: 64Mi # set-by-engine-code

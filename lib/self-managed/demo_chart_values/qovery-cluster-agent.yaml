@@ -1,0 +1,9 @@
+fullnameOverride: qovery-cluster-agent
+image:
+  tag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
+environmentVariables:
+  CLUSTER_ID: *clusterId
+  CLUSTER_JWT_TOKEN: *jwtToken
+  LOKI_URL: *lokiUrl
+  ORGANIZATION_ID: *organizationId
+  RUST_LOG: "info"

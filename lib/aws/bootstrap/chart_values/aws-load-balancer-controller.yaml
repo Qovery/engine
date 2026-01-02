@@ -1,0 +1,38 @@
+clusterName: set-by-engine-code
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: set-by-engine-code
+
+replicaCount: set-by-engine-code
+# PDB settings will be used only if replicaCount > 1
+podDisruptionBudget:
+  maxUnavailable: 1
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - aws-load-balancer-controller
+        topologyKey: kubernetes.io/hostname
+
+enableServiceMutatorWebhook: set-by-engine-code
+enableCertManager: true
+
+# Since VPA is activated for this chart, HPA is not relevant here.
+# Number of replicas is customizable via cluster advanced settings.
+autoscaling:
+  enabled: false
+#   minReplicas: set-by-engine-code
+#   maxReplicas: set-by-engine-code
+
+resources:
+  limits:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+  requests:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code

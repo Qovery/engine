@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "qovery-webhook.fullname" . }}
+  labels:
+    app: {{ include "qovery-webhook.name" . }}
+    chart: {{ include "qovery-webhook.chart" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    app: {{ include "qovery-webhook.name" . }}
+    release: {{ .Release.Name }}

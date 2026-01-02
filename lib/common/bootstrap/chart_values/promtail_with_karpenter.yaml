@@ -1,0 +1,21 @@
+
+# all the nodes
+tolerations:
+  - operator: Exists
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+          - key: eks.amazonaws.com/compute-type
+            operator: NotIn
+            values:
+              - fargate
+
+# for daemonsets, use rolling update with maxUnavailable 35%
+# it prevents promtail from timeout when updating large clusters (with a lot of nodes)
+updateStrategy:
+  rollingUpdate:
+    maxUnavailable: 35%
+    maxSurge: 0

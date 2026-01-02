@@ -1,0 +1,34 @@
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: {{ .Values.serviceAccount.name }}
+  namespace: kube-system
+{{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+{{- end }}
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: eks-configmap-modifier-role
+  namespace: kube-system
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "update"]
+    resourceNames: ["aws-auth"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  namespace: kube-system
+  name: eks-configmap-modifier-rolebinding
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.serviceAccount.name }}
+    namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eks-configmap-modifier-role

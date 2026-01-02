@@ -1,0 +1,69 @@
+{{- if and .Values.prometheus.operator.enabled .Values.prometheus.operator.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.operator.name }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+    {{- range $key, $value := .Values.prometheus.operator.serviceMonitor.additionalLabels }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+  {{- with .Values.prometheus.operator.serviceMonitor.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+spec:
+  {{- with .Values.prometheus.operator.serviceMonitor.jobLabel }}
+  jobLabel: {{ . }}
+  {{- end }}
+  {{- with .Values.prometheus.operator.serviceMonitor.targetLabels }}
+  targetLabels:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.prometheus.operator.serviceMonitor.podTargetLabels }}
+  podTargetLabels:
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  endpoints:
+  - port: {{ .Values.prometheus.operator.serviceMonitor.port }}
+    {{- with .Values.prometheus.operator.serviceMonitor.targetPort }}
+    targetPort: {{ . }}
+    {{- end }}
+    path: /metrics
+    {{- with .Values.prometheus.operator.serviceMonitor.interval }}
+    interval: {{ . }}
+    {{- end }}
+    {{- with .Values.prometheus.operator.serviceMonitor.scrapeTimeout }}
+    scrapeTimeout: {{ . }}
+    {{- end }}
+  {{- if .Values.prometheus.operator.serviceMonitor.relabelings}}
+    {{- with .Values.prometheus.operator.serviceMonitor.relabelings }}
+    relabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- else }}
+    {{- with .Values.prometheus.operator.serviceMonitor.relabellings }}
+    relabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+  {{- end}}
+    {{- with .Values.prometheus.operator.serviceMonitor.metricRelabelings }}
+    metricRelabelings:
+    {{- toYaml . | nindent 6 }}
+    {{- end }}
+    scheme: {{ .Values.prometheus.operator.serviceMonitor.scheme }}
+    {{- with .Values.prometheus.operator.serviceMonitor.tlsConfig }}
+    tlsConfig:
+    {{ toYaml . | nindent 6}}
+    {{- end }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.operator.name }}
+{{- end }}

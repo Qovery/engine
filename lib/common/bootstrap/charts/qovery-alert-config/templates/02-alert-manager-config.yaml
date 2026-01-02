@@ -1,0 +1,67 @@
+{{- $root := . -}}
+{{- if $root.Values.receivers }}
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: {{ $root.Values.alertManagerConfigName | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $root.Values.namespace | default $root.Release.Namespace }}
+  labels:
+    alertmanager: main
+spec:
+  route:
+    receiver: default
+    groupBy:
+      - qovery_target_id
+    routes:
+{{- range $i, $rcv := $root.Values.receivers }}
+      - matchers:
+          - name: {{ $rcv.matcher_label }}
+            value: "true"
+            matchType: "="
+        receiver: {{ $rcv.id }}
+        continue: true
+{{- end }}
+  receivers:
+    - name: default
+{{- range $i, $rcv := $root.Values.receivers }}
+{{- $rcvName := $rcv.id }}
+{{- $rcvSafe := regexReplaceAll "[^a-z0-9-]" (lower $rcvName) "-" }}
+{{- $secret := $rcv.id | trunc 63 | trimSuffix "-" }}
+    - name: {{ $rcvName }}
+    {{- if $rcv.slack }}
+      slackConfigs:
+        - channel: {{ $rcv.slack.channel }}
+          title: >-
+            {{`
+            {{ .CommonAnnotations.qovery_target_name }}{{ if gt (len .Alerts.Firing) 0 }} - {{ len .Alerts.Firing }} alert(s) firing{{ end }}
+            `}}
+          titleLink: {{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}
+          text: >-
+            {{`{{ range $i, $alert := .Alerts }}
+            {{ if eq $alert.Status "firing" }}🔥{{ else }}✅{{ end }} {{ if $alert.Annotations.qovery_alert_display_name }}{{ $alert.Annotations.qovery_alert_display_name }}{{ else }}{{ $alert.Labels.alertname }}{{ end }} - {{ if $alert.Annotations.description }}{{ $alert.Annotations.description }}{{ end }} - {{ $alert.Annotations.severity }} Severity
+            {{ if $alert.Annotations.summary }}
+               {{ $alert.Annotations.summary }}
+            {{ end }}
+
+            {{ end }}`}}
+          footer: "Please review the service in the Qovery console"
+          actions:
+            - type: button
+              text: "All issues"
+              url: "{{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}"
+            - type: button
+              text: "Service Monitoring"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
+            - type: button
+              text: "Service Logs"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
+          sendResolved: {{ default true $rcv.slack.sendResolved }}
+          groupInterval: 5m
+          groupWait: 30s
+          repeatInterval: 4h
+          apiURL:
+            name: {{ $secret }}
+            key: "url"
+    {{- end }}
+{{- end }}
+{{- end }}

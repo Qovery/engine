@@ -1,0 +1,26 @@
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: coredns-custom
+  namespace: kube-system
+  labels:
+    addonmanager.kubernetes.io/mode: EnsureExists
+    k8s-app: kube-dns
+    kubernetes.io/cluster-service: "true"
+data:
+  qovery-custom.server: |
+    # Qovery custom DNS configuration
+    # This file adds custom DNS zones for Qovery services
+    {{- range .Values.managed_dns }}
+    {{ . }}:53 {
+      errors
+      cache 30
+      forward . {{ join " " $.Values.managed_dns_resolvers }}
+    }
+    {{ end }}
+  {{- if .Values.extra_config }}
+  extra-config.server: |
+    # Extra config from advanced settings
+{{ .Values.extra_config | indent 4 }}
+  {{- end }}

@@ -1,0 +1,54 @@
+logLevel: debug
+
+settings:
+  clusterName: set-by-engine-code
+  interruptionQueue: set-by-engine-code
+  eksControlPlane: "true"
+
+serviceMonitor:
+  enabled: set-by-engine-code
+
+serviceAccount:
+  annotations:
+    eks.amazonaws.com/role-arn: set-by-engine-code
+
+dnsPolicy: Default
+
+webhook:
+  enabled: true
+
+controller:
+  resources:
+    requests:
+      cpu: 1
+      memory: 1Gi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+# Tolerations for the dedicated infrastructure nodegroup
+tolerations:
+  - key: "node.qovery.com/infrastructure"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"
+  - key: "CriticalAddonsOnly"
+    operator: "Exists"
+
+# Affinity rules to prefer the dedicated infrastructure nodegroup
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: node.qovery.com/infrastructure
+              operator: In
+              values:
+                - "true"
+
+podLabels:
+  admission.datadoghq.com/enabled: "false"
+
+additionalLabels:
+  qovery.com/managed: "true"

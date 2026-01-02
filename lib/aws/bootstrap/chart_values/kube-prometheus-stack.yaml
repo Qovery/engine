@@ -1,0 +1,281 @@
+defaultRules:
+  create: true
+  rules:
+    alertmanager: "set-by-engine-code"
+    etcd: false
+    configReloaders: true
+    kubeApiserverAvailability: false
+    kubeApiserverBurnrate: false
+    kubeProxy: false
+    kubeApiserverHistogram: false
+    kubeApiserverSlos: false
+    kubeStateMetrics: false
+    nodeExporterAlerting: false
+    nodeExporterRecording: false
+    windows: false
+
+kube-state-metrics:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-kube-state-metrics
+  prometheus:
+    monitor:
+      enabled: true
+      honorLabels: true
+  metricLabelsAllowlist:
+    - pods=[qovery.com/project-id,qovery.com/environment-id,qovery.com/service-id,qovery.com/deployment-id]
+    - horizontalpodautoscalers=[qovery.com/service-id]
+    - jobs=[qovery.com/service-id,qovery.com/deployment-id]
+    - cronjobs=[qovery.com/service-id]
+    - services=[qovery.com/service-id]
+    - deployments=[qovery.com/service-id]
+    - statefulsets=[qovery.com/service-id]
+    - ingresses=[qovery.com/associated-service-id]
+    - persistentvolumeclaims=[qovery.com/service-id]
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+crds:
+  enabled: false
+
+alertmanager:
+  enabled: "set-by-engine-code"
+  podDisruptionBudget:
+    enabled: true
+  alertmanagerSpec:
+    replicas: 2
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+
+grafana:
+  enabled: false
+  serviceMonitor:
+    enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubelet:
+  serviceMonitor:
+    ## Disable scrapping from resource service, because it's already handled by cAvisor service, as per the official doc:
+    ## Enable scraping /metrics/resource from kubelet's service
+    ## This is disabled by default because container metrics are already exposed by cAdvisor
+    resource: false
+    # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
+    resourcePath: "/metrics/resource"
+
+kubeScheduler:
+  enabled: false
+
+kubeProxy:
+  enabled: false
+
+kubeStateMetrics:
+  enabled: true
+
+prometheus:
+  enabled: true
+  podDisruptionBudget:
+    enabled: "set-by-engine-code"
+  serviceAccount:
+    annotations:
+      eks.amazonaws.com/role-arn: "set-by-engine-code"
+  thanosService:
+    enabled: true
+  thanosServiceMonitor:
+    enabled: true
+  prometheusSpec:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus
+    # Replica label to be used by thanos
+    replicaExternalLabelName: "replica"
+    serviceDiscoveryRole: "EndpointSlice"
+    thanos:
+      objectStorageConfig:
+         secret:
+           type: S3
+           config:
+             aws_sdk_auth: true
+             bucket: "set-by-engine-code"
+             endpoint: "set-by-engine-code"
+             region: "set-by-engine-code"
+             signature_version2: "set-by-engine-code" 
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    retention: 7d
+    retentionSize: "7GB" # prometheus db
+    walCompression: true
+    externalUrl: set-by-engine-code
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: set-by-engine-code
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: "8Gi"
+    resources:
+      limits:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+      requests:
+        cpu: set-by-engine-code
+        memory: set-by-engine-code
+    replicas: set-by-engine-code
+
+prometheusOperator:
+  priorityClassName: qovery-high-priority
+  prometheusConfigReloader:
+    image:
+      registry: public.ecr.aws/r3m4q3r9
+      repository: pub-mirror-prometheus-config-reloader
+  thanosImage:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-thanos
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-operator
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  tls:
+    enabled: false
+  admissionWebhooks:
+    enabled: false
+
+prometheus-node-exporter:
+  image:
+    registry: public.ecr.aws/r3m4q3r9
+    repository: pub-mirror-prometheus-node-exporter
+  priorityClassName: set-by-engine-code
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  prometheus:
+    monitor:
+      enabled: false
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: eks.amazonaws.com/compute-type
+              operator: NotIn
+              values:
+                - fargate
+
+additionalPrometheusRules:
+  - name: beyla.rules
+    groups:
+      - name: beyla-quantiles
+        interval: 30s
+        rules:
+          - record: beyla:http_server_duration:rate5m
+            expr: sum by (le, k8s_container_name) (rate(http_server_request_duration_seconds_bucket{job="beyla"}[5m]))
+          - record: beyla:http_server_p50:5m
+            expr: histogram_quantile(0.5, beyla:http_server_duration:rate5m)
+          - record: beyla:http_server_p95:5m
+            expr: histogram_quantile(0.95, beyla:http_server_duration:rate5m)
+          - record: beyla:http_server_p99:5m
+            expr: histogram_quantile(0.99, beyla:http_server_duration:rate5m)
+
+  - name: nginx.rules
+    groups:
+      - name: nginx-quantiles
+        interval: 30s
+        rules:
+          - record: nginx:request_duration:rate5m
+            expr: sum by (le, ingress) (rate(nginx_ingress_controller_request_duration_seconds_bucket[5m]))
+          - record: nginx:request_p50:5m
+            expr: histogram_quantile(0.5, nginx:request_duration:rate5m)
+          - record: nginx:request_p95:5m
+            expr: histogram_quantile(0.95, nginx:request_duration:rate5m)
+          - record: nginx:request_p99:5m
+            expr: histogram_quantile(0.99, nginx:request_duration:rate5m)
+
+  - name: nginx.core
+    groups:
+      - name: nginx-requests-rates
+        interval: 30s
+        rules:
+          - record: nginx:req_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_status
+            expr: sum by (ingress, status) (rate(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_rate:5m_by_path_status
+            expr: sum by (ingress, path, status) (rate(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-requests-increase
+        interval: 5m
+        rules:
+          - record: nginx:req_inc:5m
+            expr: sum by (ingress) (increase(nginx_ingress_controller_requests[5m]))
+
+          - record: nginx:req_inc:5m_by_status
+            expr: sum by (ingress, status) (increase(nginx_ingress_controller_requests[5m]))
+
+      - name: nginx-sizes
+        interval: 30s
+        rules:
+          - record: nginx:req_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_request_size_sum[5m]))
+          - record: nginx:resp_bytes_rate:5m
+            expr: sum by (ingress) (rate(nginx_ingress_controller_response_size_sum[5m]))
+
+          - record: nginx:req_size_avg_bytes:5m
+            expr: nginx:req_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
+          - record: nginx:resp_size_avg_bytes:5m
+            expr: nginx:resp_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
+
+  - name: beyla.core
+    groups:
+      - name: beyla-requests-rates
+        interval: 30s
+        rules:
+          - record: beyla:req_rate:5m
+            expr: sum by (k8s_container_name) (rate(http_server_request_duration_seconds_count[5m]))
+
+          - record: beyla:req_rate:5m_by_status
+            expr: sum by (k8s_container_name, http_response_status_code) ( rate(http_server_request_duration_seconds_count[5m]))
+
+      - name: beyla-requests-increase
+        interval: 5m
+        rules:
+          - record: beyla:req_inc:5m
+            expr:  sum by (k8s_container_name) (increase(http_server_request_duration_seconds_count[5m]))
+
+          - record: beyla:req_inc:5m_by_status
+            expr: sum by (k8s_container_name, http_response_status_code) (increase(http_server_request_duration_seconds_count[5m]))
+
+      - name: beyla-sizes
+        interval: 30s
+        rules:
+          - record: beyla:req_bytes_rate:5m
+            expr: sum by (k8s_container_name) (rate(http_server_request_body_size_bytes_sum[5m]))
+
+          - record: beyla:resp_bytes_rate:5m
+            expr: sum by (k8s_container_name) (rate(http_server_response_body_size_bytes_sum[5m]))

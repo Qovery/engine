@@ -1,0 +1,24 @@
+{{- if and .Values.certificates.certManager.enabled .Values.certificates.certManager.generateCA .Values.certificates.certManager.issuer.generate }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.operator.name }}-ca
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  isCA: true
+  commonName: {{ .Values.operator.name }}
+  secretName: {{ .Values.certificates.certManager.caSecretName }}
+  secretTemplate:
+    {{- toYaml .Values.certificates.certManager.secretTemplate | nindent 4 }}
+  privateKey:
+    algorithm: RSA
+    size: 2048
+  duration: 43800h0m0s     # 5 years
+  renewBefore: 14600h0m0s  # 1.6 year, 1/3rd of the duration
+  issuerRef:
+    name: {{ .Values.operator.name }}-selfsigned-issuer
+    kind: Issuer
+    group: cert-manager.io
+{{- end }}

@@ -1,0 +1,94 @@
+{{- if .Values.recommender.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  {{- if .Values.recommender.annotations }}
+  annotations:
+  {{- .Values.recommender.annotations | toYaml | nindent 4 }}
+  {{- end }}
+  name: {{ include "vpa.fullname" . }}-recommender
+  labels:
+    app.kubernetes.io/component: recommender
+    {{- include "vpa.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.recommender.replicaCount }}
+  revisionHistoryLimit: {{ .Values.recommender.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: recommender
+      {{- include "vpa.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+    {{- with .Values.recommender.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      labels:
+      {{- with .Values.recommender.podLabels }}
+          {{- toYaml . | nindent 8 }}
+      {{- end }}
+        app.kubernetes.io/component: recommender
+        {{- include "vpa.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      serviceAccountName: {{ include "vpa.serviceAccountName" . }}-recommender
+      securityContext:
+        {{- toYaml .Values.recommender.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.recommender.securityContext | nindent 12 }}
+          image: {{ printf "%s:%s" .Values.recommender.image.repository (.Values.recommender.image.tag | default .Chart.AppVersion) }}
+          imagePullPolicy: {{ .Values.recommender.image.pullPolicy }}
+          {{- if .Values.recommender.extraArgs }}
+          args:
+          {{- range $key, $value := .Values.recommender.extraArgs }}
+            - --{{ $key }}={{ $value }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.recommender.livenessProbe }}
+          livenessProbe:
+            {{- toYaml .Values.recommender.livenessProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.recommender.readinessProbe }}
+          readinessProbe:
+            {{- toYaml .Values.recommender.readinessProbe | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 8942
+              protocol: TCP
+          {{- $extraArgs := .Values.recommender.extraArgs | default dict }}
+          {{- $insightsRecommenderArgs := index $extraArgs "use-insights-recommender" | default dict }}
+          {{- if or .Values.recommender.envFromSecret $insightsRecommenderArgs }}
+          envFrom:
+          {{- if and (not .Values.recommender.envFromSecret) $insightsRecommenderArgs }}
+          - secretRef:
+              name: {{ .Release.Name }}-token
+          {{- end }}
+          {{- if .Values.recommender.envFromSecret }}
+          - secretRef:
+              name: {{ .Values.recommender.envFromSecret }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.recommender.resources | nindent 12 }}
+      {{- with .Values.recommender.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.recommender.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.recommender.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

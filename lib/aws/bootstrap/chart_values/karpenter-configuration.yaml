@@ -1,0 +1,32 @@
+clusterName: set-by-engine-code
+securityGroupId: set-by-engine-code
+diskSize: set-by-engine-code
+storageClass: set-by-engine-code
+capacity_type: set-by-engine-code
+explicitSubnetIds: []
+
+amiSelectorTermsAlias: set-by-engine-code
+gpuAmiSelectorTermsName: set-by-engine-code
+
+kubernetesVersion: set-by-engine-code
+
+tags:
+  ClusterId: set-by-engine-code
+  ClusterLongId: set-by-engine-code
+  OrganizationId: set-by-engine-code
+  OrganizationLongId: set-by-engine-code
+  Region: set-by-engine-code
+
+global_node_pools:
+  requirements: []
+
+# GPUs
+gpuNodePool:
+  enable: set-by-engine-code
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+  diskSize: set-by-engine-code

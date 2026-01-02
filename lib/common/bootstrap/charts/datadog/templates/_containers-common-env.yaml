@@ -1,0 +1,163 @@
+# The purpose of this template is to define a minimal set of environment
+# variables required to operate dedicated containers in the daemonset
+{{- define "containers-common-env" -}}
+# Needs to be removed when Agent N-2 is built with Golang 1.17
+- name: GODEBUG
+  value: x509ignoreCN=0
+- name: DD_API_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ template "datadog.apiSecretName" . }}
+      key: api-key
+{{- if .Values.datadog.kubelet.host }}
+- name: DD_KUBERNETES_KUBELET_HOST
+{{ toYaml .Values.datadog.kubelet.host | indent 2 }}
+{{- end }}
+{{- if .Values.datadog.kubelet.tlsVerify | quote }}
+- name: DD_KUBELET_TLS_VERIFY
+  value: {{ .Values.datadog.kubelet.tlsVerify | quote }}
+{{- end }}
+{{- if ne (include "datadog.kubelet.mountPath" .) "" }}
+- name: DD_KUBELET_CLIENT_CA
+  value: {{ include "datadog.kubelet.mountPath" . }}
+{{- end }}
+{{- if .Values.providers.gke.autopilot }}
+- name: DD_KUBERNETES_HTTPS_KUBELET_PORT
+  value: "0"
+{{- end }}
+{{- if .Values.datadog.clusterName }}
+{{- template "check-cluster-name" . }}
+- name: DD_CLUSTER_NAME
+  value: {{ .Values.datadog.clusterName | quote }}
+{{- end }}
+{{- if .Values.datadog.tags }}
+- name: DD_TAGS
+  value: {{ tpl (.Values.datadog.tags | join " " | quote) . }}
+{{- end }}
+{{- if .Values.datadog.nodeLabelsAsTags }}
+- name: DD_KUBERNETES_NODE_LABELS_AS_TAGS
+  value: '{{ toJson .Values.datadog.nodeLabelsAsTags }}'
+{{- end }}
+{{- if .Values.datadog.podLabelsAsTags }}
+- name: DD_KUBERNETES_POD_LABELS_AS_TAGS
+  value: '{{ toJson .Values.datadog.podLabelsAsTags }}'
+{{- end }}
+{{- if .Values.datadog.podAnnotationsAsTags }}
+- name: DD_KUBERNETES_POD_ANNOTATIONS_AS_TAGS
+  value: '{{ toJson .Values.datadog.podAnnotationsAsTags }}'
+{{- end }}
+{{- if .Values.datadog.namespaceLabelsAsTags }}
+- name: DD_KUBERNETES_NAMESPACE_LABELS_AS_TAGS
+  value: '{{ toJson .Values.datadog.namespaceLabelsAsTags }}'
+{{- end }}
+- name: KUBERNETES
+  value: "yes"
+{{- if .Values.datadog.site }}
+- name: DD_SITE
+  value: {{ .Values.datadog.site | quote }}
+{{- end }}
+{{- if .Values.datadog.dd_url }}
+- name: DD_DD_URL
+  value: {{ .Values.datadog.dd_url | quote }}
+{{- end }}
+{{- if .Values.datadog.env }}
+{{ toYaml .Values.datadog.env }}
+{{- end }}
+{{- if .Values.datadog.acInclude }}
+- name: DD_AC_INCLUDE
+  value: {{ .Values.datadog.acInclude | quote }}
+{{- end }}
+{{- if .Values.datadog.acExclude }}
+- name: DD_AC_EXCLUDE
+  value: {{ .Values.datadog.acExclude | quote }}
+{{- end }}
+{{- if .Values.datadog.containerInclude }}
+- name: DD_CONTAINER_INCLUDE
+  value: {{ .Values.datadog.containerInclude | quote }}
+{{- end }}
+{{- if .Values.datadog.containerExclude }}
+- name: DD_CONTAINER_EXCLUDE
+  value: {{ .Values.datadog.containerExclude | quote }}
+{{- end }}
+{{- if .Values.datadog.containerIncludeMetrics }}
+- name: DD_CONTAINER_INCLUDE_METRICS
+  value: {{ .Values.datadog.containerIncludeMetrics | quote }}
+{{- end }}
+{{- if .Values.datadog.containerExcludeMetrics }}
+- name: DD_CONTAINER_EXCLUDE_METRICS
+  value: {{ .Values.datadog.containerExcludeMetrics | quote }}
+{{- end }}
+{{- if .Values.datadog.containerIncludeLogs }}
+- name: DD_CONTAINER_INCLUDE_LOGS
+  value: {{ .Values.datadog.containerIncludeLogs | quote }}
+{{- end }}
+{{- if .Values.datadog.containerExcludeLogs }}
+- name: DD_CONTAINER_EXCLUDE_LOGS
+  value: {{ .Values.datadog.containerExcludeLogs | quote }}
+{{- end }}
+{{- if not .Values.datadog.excludePauseContainer }}
+- name: DD_EXCLUDE_PAUSE_CONTAINER
+  value: "false"
+{{- end }}
+{{- if eq (include "agent-has-env-ad" .) "true" }}
+{{- if .Values.datadog.dockerSocketPath }}
+- name: DOCKER_HOST
+{{- if eq .Values.targetSystem "linux" }}
+  value:  unix://{{ print "/host/" .Values.datadog.dockerSocketPath | clean }}
+{{- end }}
+{{- if eq .Values.targetSystem "windows" }}
+  value: npipe://{{ .Values.datadog.dockerSocketPath | replace "\\" "/" }}
+{{- end }}
+{{- end }}
+{{- if .Values.datadog.criSocketPath }}
+- name: DD_CRI_SOCKET_PATH
+{{- if eq .Values.targetSystem "linux" }}
+  value: {{ print "/host/" .Values.datadog.criSocketPath | clean }}
+{{- end }}
+{{- if eq .Values.targetSystem "windows" }}
+  value: {{ .Values.datadog.criSocketPath }}
+{{- end }}
+{{- end }}
+{{- else }} # No support for env AD
+{{- if or .Values.providers.gke.autopilot .Values.datadog.criSocketPath }}
+- name: DD_CRI_SOCKET_PATH
+  value: {{ print "/host/" (include "datadog.dockerOrCriSocketPath" .) | clean }}
+{{- else }}
+- name: DOCKER_HOST
+{{- if eq .Values.targetSystem "linux" }}
+  value: unix://{{ print "/host/" (include "datadog.dockerOrCriSocketPath" .) | clean }}
+{{- end }}
+{{- if eq .Values.targetSystem "windows" }}
+  value: npipe://{{ (include "datadog.dockerOrCriSocketPath" .) | replace "\\" "/" }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{ include "provider-env" . }}
+{{- end -}}
+
+
+{{/*
+Return a list of env-vars if the cluster-agent is enabled
+*/}}
+{{- define "containers-cluster-agent-env" -}}
+- name: DD_CLUSTER_AGENT_ENABLED
+  value: {{ (include "cluster-agent-enabled" .) | quote }}
+{{- if eq (include "should-deploy-cluster-agent" .) "true" }}
+- name: DD_CLUSTER_AGENT_KUBERNETES_SERVICE_NAME
+  value: {{ template "datadog.fullname" . }}-cluster-agent
+- name: DD_CLUSTER_AGENT_AUTH_TOKEN
+  valueFrom:
+    secretKeyRef:
+        name: {{ template "clusterAgent.tokenSecretName" . }}
+        key: token
+{{- else if eq (include "existingClusterAgent-configured" .) "true" }}
+- name: DD_CLUSTER_AGENT_KUBERNETES_SERVICE_NAME
+  value: {{ .Values.existingClusterAgent.serviceName | quote }}
+- name: DD_CLUSTER_AGENT_AUTH_TOKEN
+  valueFrom:
+    secretKeyRef:
+        name: {{ .Values.existingClusterAgent.tokenSecretName | quote }}
+        key: token
+{{- end }}
+{{ include "provider-env" . }}
+{{- end -}}

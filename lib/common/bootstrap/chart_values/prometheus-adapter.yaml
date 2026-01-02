@@ -1,0 +1,16 @@
+metricsRelistInterval: 30s
+
+prometheus:
+  url: set-by-engine-code
+
+podDisruptionBudget:
+  enabled: false
+  maxUnavailable: 1
+
+resources:
+  limits:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code
+  requests:
+    cpu: set-by-engine-code
+    memory: set-by-engine-code

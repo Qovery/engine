@@ -1,0 +1,86 @@
+{{- if and .Values.k8sCache.replicas (gt (int .Values.k8sCache.replicas) 0) }}
+{{- $root := . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.k8sCache.service.name }}
+  namespace: {{ include "beyla.namespace" .}}
+  labels:
+    {{- include "beyla.cache.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workload
+  {{- with .Values.k8sCache.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.k8sCache.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.k8sCache.service.name }}
+  template:
+    metadata:
+      {{- with .Values.k8sCache.podAnnotations }}
+      annotations:
+        {{- tpl (toYaml . | nindent 8) $root }}
+      {{- end }}
+      labels:
+        {{- include "beyla.cache.labels" . | nindent 8 }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "beyla.serviceAccountName" . }}
+      {{- end }}
+      {{- if or .Values.global.image.pullSecrets .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- if .Values.global.image.pullSecrets }}
+        {{- toYaml .Values.global.image.pullSecrets | nindent 8 }}
+        {{- else }}
+        {{- toYaml .Values.image.pullSecrets | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: beyla-cache
+          image: {{ .Values.global.image.registry | default .Values.k8sCache.image.registry }}/{{ .Values.k8sCache.image.repository }}{{ include "beyla.k8sCache.imageId" . }}
+          imagePullPolicy: {{ .Values.k8sCache.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.k8sCache.service.port }}
+              protocol: TCP
+              name: grpc
+          {{- if and .Values.k8sCache.profilePort
+              (gt (int .Values.k8sCache.profilePort) 0)}}
+            - name: profile
+              containerPort: {{ .Values.k8sCache.profilePort }}
+              protocol: TCP
+          {{- end }}
+          {{- if and .Values.k8sCache.internalMetrics.port
+                (gt (int .Values.k8sCache.internalMetrics.port) 0) }}
+            - name: {{ .Values.k8sCache.internalMetrics.portName }}
+              containerPort: {{ .Values.k8sCache.internalMetrics.port }}
+              protocol: TCP
+          {{- end }}
+          {{- with .Values.k8sCache.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: BEYLA_K8S_CACHE_PORT
+              value: "{{ .Values.k8sCache.service.port }}"
+          {{- if and .Values.k8sCache.profilePort
+              (gt (int .Values.k8sCache.profilePort) 0)}}
+            - name: BEYLA_K8S_CACHE_PROFILE_PORT
+              value: "{{ .Values.k8sCache.profilePort }}"
+          {{- end }}
+          {{- if and .Values.k8sCache.internalMetrics.port
+                (gt (int .Values.k8sCache.internalMetrics.port) 0) }}
+            - name: BEYLA_K8S_CACHE_INTERNAL_METRICS_PROMETHEUS_PORT
+              value: "{{ .Values.k8sCache.internalMetrics.port }}"
+          {{- end }}
+          {{- range $key, $value := .Values.k8sCache.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+          {{- end }}
+          {{- range $key, $value := .Values.k8sCache.envValueFrom }}
+            - name: {{ $key | quote }}
+              valueFrom:
+          {{- tpl (toYaml $value) $ | nindent 16 }}
+          {{- end }}
+{{- end }}

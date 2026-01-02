@@ -1,0 +1,12 @@
+{{- if and .Values.gateway.enabled  }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "loki.gatewayFullname" . }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "loki.gatewayLabels" . | nindent 4 }}
+data:
+  nginx.conf: |
+    {{- tpl .Values.gateway.nginxConfig.file . | indent 2 }}
+{{- end }}

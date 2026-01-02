@@ -1,0 +1,61 @@
+{{- if .Values.overprovisionning.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-engine-overprovisionning-amd64
+  labels:
+    app: qovery-engine-overprovisioning-amd64
+spec:
+  replicas: {{ .Values.overprovisionning.replicas }}
+  selector:
+    matchLabels:
+      app: qovery-engine-overprovisioning-amd64
+  template:
+    metadata:
+      labels:
+        app: qovery-engine-overprovisioning-amd64
+    spec:
+      priorityClassName: qovery-engine-overprovisioning
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      terminationGracePeriodSeconds: 1
+      containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
+      - name: qovery-engine-overprovisionning
+        # use engine image to warm up the cache
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/sh", "-c", "tail -f /dev/null"]
+        resources:
+        {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-engine-overprovisionning-arm64
+  labels:
+    app: qovery-engine-overprovisioning-arm64
+spec:
+  replicas: {{ .Values.overprovisionning.replicas }}
+  selector:
+    matchLabels:
+      app: qovery-engine-overprovisioning-arm64
+  template:
+    metadata:
+      labels:
+        app: qovery-engine-overprovisioning-arm64
+    spec:
+      priorityClassName: qovery-engine-overprovisioning
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      terminationGracePeriodSeconds: 1
+      containers:
+      - name: buildkit
+        image: moby/buildkit:buildx-stable-1
+      - name: qovery-engine-overprovisionning
+        # use engine image to warm up the cache
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        command: ["/bin/sh", "-c", "tail -f /dev/null"]
+        resources:
+        {{- toYaml .Values.overprovisionning.resources | nindent 10 }}
+{{- end }}

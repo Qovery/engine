@@ -1,0 +1,33 @@
+{{- if or (or .Values.podDisruptionBudget.minAvailable .Values.podDisruptionBudget.maxUnavailable)  .Values.podDisruptionBudget.metricServer }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  namespace: {{ .Release.Namespace }}
+  name: {{ .Values.operator.name }}-metrics-apiserver
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.operator.name }}-metrics-apiserver
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- end }}
+  {{-  if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+  {{- if .Values.podDisruptionBudget.metricServer }}
+  {{- if .Values.podDisruptionBudget.metricServer.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.metricServer.minAvailable }}
+  {{- end }}
+  {{- if  .Values.podDisruptionBudget.metricServer.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.metricServer.maxUnavailable }}
+  {{- end }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.operator.name }}-metrics-apiserver
+{{- end }}
+

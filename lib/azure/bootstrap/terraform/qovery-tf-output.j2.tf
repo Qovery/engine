@@ -1,0 +1,38 @@
+output "kubeconfig" {
+    sensitive = true
+    depends_on = [azurerm_kubernetes_cluster.primary]
+    value = azurerm_kubernetes_cluster.primary.kube_config_raw
+}
+output "aks_cluster_public_hostname" {
+    sensitive = true
+    depends_on = [azurerm_kubernetes_cluster.primary]
+    value = azurerm_kubernetes_cluster.primary.kube_config[0].host
+}
+output "main_storage_account_name" { value = azurerm_storage_account.main_storage.name  }
+output "main_storage_account_primary_access_key" {
+    sensitive = true
+    value = azurerm_storage_account.main_storage.primary_access_key
+}
+output "loki_logging_service_msi_client_id" { value = azurerm_user_assigned_identity.storage_msi.client_id  }
+
+output "cluster_name" {
+    value = azurerm_kubernetes_cluster.primary.name
+}
+
+output "cluster_id" {
+    value = azurerm_kubernetes_cluster.primary.id
+}
+
+output "cluster_oidc_issuer" {
+    value = try(azurerm_kubernetes_cluster.primary.oidc_issuer_url, null)
+}
+
+{% if prometheus_enabled %}
+output "thanos_client_id" {
+    value = try(azurerm_user_assigned_identity.thanos_msi.client_id, null)
+}
+
+output "thanos_storage_account" {
+    value = try(azurerm_storage_account.main_storage.name, null)
+}
+{%  endif %}

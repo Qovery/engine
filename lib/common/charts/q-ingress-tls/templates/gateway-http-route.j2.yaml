@@ -1,0 +1,172 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, http_hosts in http_hosts_per_namespace %}
+{%- if http_hosts|length >= 1  %}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ sanitized_name }}
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
+    # If NOT forcing SSL redirect, also accept HTTP traffic directly
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {%- endif %}
+  hostnames:
+    {%- for host in http_hosts %}
+    - "{{ host.domain_name }}"
+    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
+    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endfor %}
+  rules:
+    {%- for host in http_hosts %}
+    # Rule 1: Main path with optional rewrite
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: "{{ host.service_name }}"
+          port: {{ host.service_port }}
+          weight: {{ host.weight }}
+      matches:
+        - path:
+            type: {{ host.path_type }}
+            value: "{{ host.path }}"
+      filters:
+       {%- if host.path_rewrite is defined and host.path_rewrite | trim %}
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: "{{ host.path_rewrite | trim }}"
+       {%- endif %}
+       {%- if advanced_settings.network_gateway_api_add_headers %}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+        {%- endif %}
+        {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+        # Add custom request headers (proxy_set_header equivalent)
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+        {%- endif %}
+    # Rule 2: Service name prefix path (for pre-migration compatibility)
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: "{{ host.service_name }}"
+          port: {{ host.service_port }}
+          weight: {{ host.weight }}
+      matches:
+        - path:
+            type: PathPrefix
+            value: /{{ associated_service_long_id }}/
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+       {%- if advanced_settings.network_gateway_api_add_headers %}
+        # Add custom response headers
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+        {%- endif %}
+        {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+        # Add custom request headers (proxy_set_header equivalent)
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            add:
+            {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
+            - name: "{{ header_name }}"
+              value: "{{ header_value }}"
+            {%- endfor %}
+        {%- endif %}
+    {%- endfor %}
+{%- if advanced_settings.network_gateway_api_force_ssl_redirect and advanced_settings.network_gateway_api_force_ssl_redirect != "false" %}
+---
+# SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ sanitized_name }}-ssl-redirect
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    {%- if has_wildcard_domain == true %}
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- else %}
+    external-dns.alpha.kubernetes.io/exclude: "true"
+    {%- endif %}
+    cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+  hostnames:
+    {%- for host in http_hosts %}
+    - "{{ host.domain_name }}"
+    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
+    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endfor %}
+  rules:
+  - filters:
+    - type: RequestRedirect
+      requestRedirect:
+        scheme: https
+        statusCode: 301
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}

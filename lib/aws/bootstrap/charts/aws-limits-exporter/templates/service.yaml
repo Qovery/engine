@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aws-limits-exporter.fullname" . }}
+  labels:
+    app: aws-limits-exporter
+    {{- include "aws-limits-exporter.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http-metrics
+      protocol: TCP
+      name: http-metrics
+  selector:
+    {{- include "aws-limits-exporter.selectorLabels" . | nindent 4 }}

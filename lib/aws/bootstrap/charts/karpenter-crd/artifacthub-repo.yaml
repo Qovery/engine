@@ -1,0 +1,7 @@
+repositoryID: 2cfb6f76-afe1-447f-b036-cd2e230d07d7
+owners: []
+#   - name: awsadmin1
+#     email: artifacthub1@aws.com
+ignore:
+  - name: karpenter-crd
+    version: (?:^\d+$)|(?:^v?0\.0\.0)|(?:^v?\d+\-)

@@ -1,0 +1,223 @@
+{{- if and (eq (include "should-deploy-cluster-agent" .) "true") .Values.datadog.clusterChecks.enabled .Values.clusterChecksRunner.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ template "datadog.fullname" . }}-clusterchecks
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+    app.kubernetes.io/component: clusterchecks-agent
+    {{- if .Values.clusterChecksRunner.additionalLabels }}
+{{ toYaml .Values.clusterChecksRunner.additionalLabels | indent 4 }}
+    {{- end }}
+{{ include "provider-labels" . | indent 4 }}
+spec:
+  replicas: {{ .Values.clusterChecksRunner.replicas }}
+  strategy:
+{{ toYaml .Values.clusterChecksRunner.strategy | indent 4 }}
+  selector:
+    matchLabels:
+      app: {{ template "datadog.fullname" . }}-clusterchecks
+  template:
+    metadata:
+      labels:
+{{ include "datadog.template-labels" . | indent 8 }}
+        app.kubernetes.io/component: clusterchecks-agent
+        app: {{ template "datadog.fullname" . }}-clusterchecks
+        {{- if .Values.clusterChecksRunner.additionalLabels }}
+{{ toYaml .Values.clusterChecksRunner.additionalLabels | indent 8 }}
+        {{- end }}
+{{ include "provider-labels" . | indent 8 }}
+      name: {{ template "datadog.fullname" . }}-clusterchecks
+      annotations:
+        checksum/clusteragent_token: {{ include (print $.Template.BasePath "/secret-cluster-agent-token.yaml") . | sha256sum }}
+        {{- if not .Values.datadog.apiKeyExistingSecret }}
+        checksum/api_key: {{ include (print $.Template.BasePath "/secret-api-key.yaml") . | sha256sum }}
+        {{- end }}
+        checksum/install_info: {{ printf "%s-%s" .Chart.Name .Chart.Version | sha256sum }}
+        {{- if .Values.datadog.checksd }}
+        checksum/checksd-config: {{ tpl (toYaml .Values.datadog.checksd) . | sha256sum }}
+        {{- end }}
+      {{- if .Values.clusterChecksRunner.podAnnotations }}
+{{ toYaml .Values.clusterChecksRunner.podAnnotations | indent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.clusterChecksRunner.rbac.dedicated }}
+      serviceAccountName: {{ if .Values.clusterChecksRunner.rbac.create }}{{ template "datadog.fullname" . }}-cluster-checks{{ else }}"{{ .Values.clusterChecksRunner.rbac.serviceAccountName }}"{{ end }}
+      {{- else }}
+      serviceAccountName: {{ if .Values.clusterChecksRunner.rbac.create }}{{ template "datadog.fullname" . }}{{ else }}"{{ .Values.clusterChecksRunner.rbac.serviceAccountName }}"{{ end }}
+      {{- end }}
+      imagePullSecrets:
+{{ toYaml .Values.clusterChecksRunner.image.pullSecrets | indent 8 }}
+      {{- if .Values.clusterChecksRunner.priorityClassName }}
+      priorityClassName: {{ .Values.clusterChecksRunner.priorityClassName }}
+      {{- end }}
+      {{- if .Values.clusterChecksRunner.dnsConfig }}
+      dnsConfig:
+{{ toYaml .Values.clusterChecksRunner.dnsConfig | indent 8 }}
+      {{- end }}
+      {{- if .Values.clusterChecksRunner.securityContext }}
+      securityContext:
+        {{ toYaml .Values.clusterChecksRunner.securityContext | nindent 8 }}
+      {{- end }}
+      initContainers:
+      - name: init-volume
+        image: "{{ include "image-path" (dict "root" .Values "image" .Values.clusterChecksRunner.image) }}"
+        imagePullPolicy: {{ .Values.agents.image.pullPolicy }}
+        command: ["bash", "-c"]
+        args:
+          - cp -r /etc/datadog-agent /opt
+        volumeMounts:
+          - name: config
+            mountPath: /opt/datadog-agent
+        resources:
+{{ toYaml .Values.agents.containers.initContainers.resources | indent 10 }}
+      - name: init-config
+        image: "{{ include "image-path" (dict "root" .Values "image" .Values.clusterChecksRunner.image) }}"
+        imagePullPolicy: {{ .Values.agents.image.pullPolicy }}
+        command: ["bash", "-c"]
+        args:
+          - for script in $(find /etc/cont-init.d/ -type f -name '*.sh' | sort) ; do bash $script ; done
+        volumeMounts:
+          - name: config
+            mountPath: /etc/datadog-agent
+          {{- if .Values.datadog.checksd }}
+          - name: checksd
+            mountPath: /checks.d
+            readOnly: true
+          {{- end }}
+        resources:
+{{ toYaml .Values.agents.containers.initContainers.resources | indent 10 }}
+      containers:
+      - name: agent
+        image: "{{ include "image-path" (dict "root" .Values "image" .Values.clusterChecksRunner.image) }}"
+        command: ["bash", "-c"]
+        args:
+          - rm -rf /etc/datadog-agent/conf.d && touch /etc/datadog-agent/datadog.yaml && exec agent run
+        imagePullPolicy: {{ .Values.clusterChecksRunner.image.pullPolicy }}
+{{- if .Values.clusterChecksRunner.ports }}
+        ports:
+{{ toYaml .Values.clusterChecksRunner.ports | indent 10 }}
+{{- end }}
+{{- if or .Values.datadog.envFrom .Values.clusterChecksRunner.envFrom }}
+        envFrom:
+{{ concat .Values.datadog.envFrom .Values.clusterChecksRunner.envFrom | toYaml  | indent 10 }}
+{{- end }}
+        env:
+          - name: DD_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ template "datadog.apiSecretName" . }}
+                key: api-key
+          - name: KUBERNETES
+            value: "yes"
+          {{- if .Values.datadog.site }}
+          - name: DD_SITE
+            value: {{ .Values.datadog.site | quote }}
+          {{- end }}
+          {{- if .Values.datadog.dd_url }}
+          - name: DD_DD_URL
+            value: {{ .Values.datadog.dd_url | quote }}
+          {{- end }}
+          {{- if .Values.datadog.logLevel }}
+          - name: DD_LOG_LEVEL
+            value: {{ .Values.datadog.logLevel | quote }}
+          {{- end }}
+          - name: DD_EXTRA_CONFIG_PROVIDERS
+            value: "clusterchecks"
+          - name: DD_HEALTH_PORT
+          {{- $healthPort := .Values.clusterChecksRunner.healthPort }}
+            value: {{ $healthPort | quote }}
+          # Cluster checks (cluster-agent communication)
+          {{- include "containers-cluster-agent-env" . | nindent 10 }}
+          # Safely run alongside the daemonset
+          - name: DD_ENABLE_METADATA_COLLECTION
+            value: "false"
+          # Expose CLC stats
+          - name: DD_CLC_RUNNER_ENABLED
+            value: "true"
+          - name: DD_CLC_RUNNER_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: DD_CLC_RUNNER_ID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          # Remove unused features
+          - name: DD_USE_DOGSTATSD
+            value: "false"
+          - name: DD_PROCESS_AGENT_ENABLED
+            value: "false"
+          - name: DD_LOGS_ENABLED
+            value: "false"
+          - name: DD_APM_ENABLED
+            value: "false"
+          - name: DD_HOSTNAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+{{- if .Values.clusterChecksRunner.env }}
+{{ toYaml .Values.clusterChecksRunner.env | indent 10 }}
+{{- end }}
+        resources:
+{{ toYaml .Values.clusterChecksRunner.resources | indent 10 }}
+        volumeMounts:
+          - name: installinfo
+            subPath: install_info
+            {{- if eq .Values.targetSystem "windows" }}
+            mountPath: C:/ProgramData/Datadog/install_info
+            {{- else }}
+            mountPath: /etc/datadog-agent/install_info
+            {{- end }}
+            readOnly: true
+          - name: config
+            mountPath: {{ template "datadog.confPath" . }}
+{{- if .Values.clusterChecksRunner.volumeMounts }}
+{{ toYaml .Values.clusterChecksRunner.volumeMounts | indent 10 }}
+{{- end }}
+        livenessProbe:
+{{- $live := .Values.clusterChecksRunner.livenessProbe }}
+{{ include "probe.http" (dict "settings" $live "path" "/live" "port" $healthPort) | indent 10 }}
+        readinessProbe:
+{{- $ready := .Values.clusterChecksRunner.readinessProbe }}
+{{ include "probe.http" (dict "settings" $ready "path" "/ready" "port" $healthPort) | indent 10 }}
+      volumes:
+        - name: installinfo
+          configMap:
+            name: {{ template "datadog.fullname" . }}-installinfo
+{{- if .Values.clusterChecksRunner.volumes }}
+{{ toYaml .Values.clusterChecksRunner.volumes | indent 8 }}
+{{- end }}
+        - name: config
+          emptyDir: {}
+{{- if .Values.datadog.checksd }}
+        - name: checksd
+          configMap:
+            name: {{ template "datadog.fullname" . }}-checksd
+{{- end }}
+      affinity:
+{{- if .Values.clusterChecksRunner.affinity }}
+{{ toYaml .Values.clusterChecksRunner.affinity | indent 8 }}
+{{- else }}
+        # Prefer scheduling the runners on different nodes if possible
+        # for better checks stability in case of node failure.
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: {{ template "datadog.fullname" . }}-clusterchecks
+              topologyKey: kubernetes.io/hostname
+{{- end }}
+      nodeSelector:
+        {{ template "label.os" . }}: {{ .Values.targetSystem }}
+      {{- if .Values.clusterChecksRunner.nodeSelector }}
+{{ toYaml .Values.clusterChecksRunner.nodeSelector | indent 8 }}
+      {{- end }}
+      {{- if .Values.clusterChecksRunner.tolerations }}
+      tolerations:
+{{ toYaml .Values.clusterChecksRunner.tolerations | indent 8 }}
+      {{- end }}
+{{ end }}

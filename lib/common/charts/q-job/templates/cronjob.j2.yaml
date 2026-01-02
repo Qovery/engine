@@ -1,0 +1,211 @@
+{%- if service.cronjob_schedule %}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ service.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: job
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  annotations:
+    {%- for key, value in annotations_group.cronjob %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  schedule: "{{ service.cronjob_schedule }}"
+  timeZone: "{{ service.cronjob_timezone }}"
+  concurrencyPolicy: {{ service.advanced_settings.cronjob_concurrency_policy }}
+  failedJobsHistoryLimit: {{ service.advanced_settings.cronjob_failed_jobs_history_limit }}
+  successfulJobsHistoryLimit: {{ service.advanced_settings.cronjob_success_jobs_history_limit }}
+  jobTemplate:
+    metadata:
+      name: {{ service.name }}
+      labels:
+        envId: {{ environment_short_id }}
+        qovery.com/service-id: {{ service.long_id }}
+        qovery.com/service-type: job
+        qovery.com/environment-id: {{ environment_long_id }}
+        qovery.com/project-id: {{ project_long_id }}
+        {%- for key, value in labels_group.common %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+      annotations:
+        qovery.com/service-version: {{ service.version }}
+        {%- for key, value in annotations_group.job %}
+        {{ key }}: |-
+           {{ value }}
+        {%- endfor %}
+    spec:
+      backoffLimit: {{ service.max_nb_restart }}
+      activeDeadlineSeconds: {{ service.max_duration_in_sec }}
+      {%- if service.advanced_settings.job_delete_ttl_seconds_after_finished %}
+      ttlSecondsAfterFinished: {{ service.advanced_settings.job_delete_ttl_seconds_after_finished }}
+      {%- endif %}
+      parallelism: 1
+      template:
+        metadata:
+          labels:
+            envId: {{ environment_short_id }}
+            qovery.com/service-id: {{ service.long_id }}
+            qovery.com/service-type: job
+            qovery.com/environment-id: {{ environment_long_id }}
+            qovery.com/project-id: {{ project_long_id }}
+            {%- for key, value in labels_group.common %}
+            {{ key }}: |-
+               {{ value }}
+            {%- endfor %}
+          annotations:
+            qovery.com/service-version: {{ service.version }}
+            {%- for key, value in annotations_group.pods %}
+            {{ key }}: |-
+               {{ value }}
+            {%- endfor %}
+        spec:
+          {%- if service.tolerations %}
+          tolerations:
+            {%- for key, value in service.tolerations %}
+            - key: "{{ key }}"
+              operator: "Exists"
+              effect: "{{ value }}"
+            {%- endfor %}
+          {%- endif %}
+          affinity:
+            {%- if service.advanced_settings.deployment_affinity_node_required %}
+            nodeAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                nodeSelectorTerms:
+                - matchExpressions:
+              {%- for key, value in service.advanced_settings.deployment_affinity_node_required %}
+                    - key: "{{ key }}"
+                      operator: In
+                      values:
+                      - {{ value }}
+            {%- endfor %}
+            {%- endif %}
+          restartPolicy: OnFailure
+          automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
+          {%- if service.advanced_settings.security_service_account_name != "" %}
+          serviceAccountName: {{ service.advanced_settings.security_service_account_name }}
+          {%- endif %}
+          terminationGracePeriodSeconds: {{ service.advanced_settings.deployment_termination_grace_period_seconds }}
+          {%- if registry %}
+          imagePullSecrets:
+            - name: {{ registry.secret_name }}
+          {%- endif %}
+          volumes:
+            {%- for mounted_file in mounted_files %}
+            - name: {{ mounted_file.kube_name }}
+              secret:
+                secretName: {{ mounted_file.kube_name }}
+            {%- endfor %}
+          containers:
+            - name: {{ service.name }}
+              image: "{{ service.image_full }}"
+          {%- if service.entrypoint %}
+              command:
+                - |-
+                  {{ service.entrypoint }}
+          {%- endif %}
+              args:
+                {%- for arg in service.command_args %}
+                - |-
+                  {{ arg }}
+                {%- endfor %}
+              volumeMounts:
+                {%- for mounted_file in mounted_files %}
+                - mountPath: "{{ mounted_file.mount_path }}"
+                  subPath: content
+                  name: {{ mounted_file.kube_name }}
+                  readOnly: true
+                {%- endfor %}
+              envFrom:
+                - secretRef:
+                    name: {{ service.name }}
+          {%- if service.default_port %}
+              ports:
+                - containerPort: {{ service.default_port }}
+                  name: "p{{ service.default_port }}"
+                  protocol: TCP
+          {%- endif %}
+              {%- if service.readiness_probe %}
+              readinessProbe:
+                {%- if service.readiness_probe.type.tcp %}
+                tcpSocket:
+                  port: {{ service.readiness_probe.port }}
+                  host: {{ service.readiness_probe.type.tcp.host }}
+                {%- endif %}
+                {%- if service.readiness_probe.type.http %}
+                httpGet:
+                  port: {{ service.readiness_probe.port }}
+                  path: {{ service.readiness_probe.type.http.path }}
+                  scheme: {{ service.readiness_probe.type.http.scheme }}
+                {%- endif %}
+                {%- if service.readiness_probe.type.exec %}
+                exec:
+                  command: {{ service.readiness_probe.type.exec.commands }}
+                {%- endif %}
+                {%- if service.readiness_probe.type.grpc %}
+                grpc:
+                  port: {{ service.readiness_probe.port }}
+                  service: {{ service.readiness_probe.type.grpc.service }}
+                {%- endif %}
+                initialDelaySeconds: {{ service.readiness_probe.initial_delay_seconds }}
+                periodSeconds: {{ service.readiness_probe.period_seconds }}
+                timeoutSeconds: {{ service.readiness_probe.timeout_seconds }}
+                successThreshold: {{ service.readiness_probe.success_threshold }}
+                failureThreshold: {{ service.readiness_probe.failure_threshold }}
+              {%- endif %}
+              {%- if service.liveness_probe %}
+              livenessProbe:
+                {%- if service.liveness_probe.type.tcp %}
+                tcpSocket:
+                  port: {{ service.liveness_probe.port }}
+                  host: {{ service.liveness_probe.type.tcp.host }}
+                {%- endif %}
+                {%- if service.liveness_probe.type.http %}
+                httpGet:
+                  port: {{ service.liveness_probe.port }}
+                  path: {{ service.liveness_probe.type.http.path }}
+                  scheme: {{ service.liveness_probe.type.http.scheme }}
+                {%- endif %}
+                {%- if service.liveness_probe.type.exec %}
+                exec:
+                  command: {{ service.liveness_probe.type.exec.commands }}
+                {%- endif %}
+                {%- if service.liveness_probe.type.grpc %}
+                grpc:
+                  port: {{ service.liveness_probe.port }}
+                  service: {{ service.liveness_probe.type.grpc.service }}
+                {%- endif %}
+                initialDelaySeconds: {{ service.liveness_probe.initial_delay_seconds }}
+                periodSeconds: {{ service.liveness_probe.period_seconds }}
+                timeoutSeconds: {{ service.liveness_probe.timeout_seconds }}
+                successThreshold: {{ service.liveness_probe.success_threshold }}
+                failureThreshold: {{ service.liveness_probe.failure_threshold }}
+              {%- endif %}
+              securityContext:
+                readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
+              resources:
+                limits:
+                  cpu: {{ service.cpu_limit_in_milli }}
+                  memory: {{ service.ram_limit_in_mib }}
+                  {%- if service.gpu_limit and service.gpu_limit > 0 %}
+                  nvidia.com/gpu: {{ service.gpu_limit }}
+                  {%- endif %}
+                requests:
+                  cpu: {{ service.cpu_request_in_milli }}
+                  memory: {{ service.ram_request_in_mib }}
+                  {%- if service.gpu_request and service.gpu_request > 0 %}
+                  nvidia.com/gpu: {{ service.gpu_request }}
+                  {%- endif %}
+  {%- endif %}

@@ -1,0 +1,36 @@
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        {{- range .Values.global_node_pools.requirements }}
+        - key: "{{ .key }}"
+          operator: "{{ .operator }}"
+          values:
+            {{- range .values }}
+            - "{{ . }}"
+            {{- end }}
+          {{- if .minValues }}
+          minValues: {{ .minValues }}
+          {{- end }}
+        {{- end }}
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
+  disruption:
+    consolidateAfter: 0s
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    budgets:
+    - nodes: 10%
+  {{- if not (and (empty .Values.defaultNodePool.limits.maxCpu) (empty .Values.defaultNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.defaultNodePool.limits.maxCpu }}
+    memory: {{ .Values.defaultNodePool.limits.maxMemory }}
+  {{- end }}
+  weight: 50

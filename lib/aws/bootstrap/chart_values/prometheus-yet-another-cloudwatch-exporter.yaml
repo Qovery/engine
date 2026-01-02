@@ -1,0 +1,23 @@
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: set-by-engine-code
+
+aws:
+  role: set-by-engine-code
+
+# Config is generated dynamically by yace_chart.rs to inject the correct AWS region
+config: set-by-engine-code
+
+serviceMonitor:
+  enabled: true
+  interval: set-by-engine-code
+  scrapeTimeout: 2m
+
+resources:
+  requests:
+    memory: set-by-engine-code
+    cpu: set-by-engine-code
+  limits:
+    memory: set-by-engine-code
+    cpu: set-by-engine-code

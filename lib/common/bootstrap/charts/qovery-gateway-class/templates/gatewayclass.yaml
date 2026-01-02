@@ -1,0 +1,23 @@
+{{ if .Values.gatewayClass.qoveryPublic.enable }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: qovery-public-gateway
+  labels:
+    qovery-type: "qovery-public-gateway"
+spec:
+  controllerName: "qovery.com/gateway-controller"
+{{ end }}
+
+{{ if .Values.gatewayClass.qoveryPrivate.enable }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: qovery-private-gateway
+  labels:
+    qovery-type: "qovery-private-gateway"
+spec:
+  controllerName: "qovery.com/gateway-controller"
+{{ end }}

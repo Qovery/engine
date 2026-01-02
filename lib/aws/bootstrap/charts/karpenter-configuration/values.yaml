@@ -1,0 +1,48 @@
+# Default values for karpenter-configuration.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+clusterName: ""
+
+securityGroupId: ""
+
+diskSize: 0Gi
+storageClass: gp3
+
+capacity_type: []
+explicitSubnetIds: []
+
+amiSelectorTermsAlias: ""
+gpuAmiSelectorTermsName: ""
+kubernetesVersion: ""
+
+tags:
+  ClusterId: ""
+  ClusterLongId: ""
+  OrganizationId: ""
+  OrganizationLongId: ""
+  Region: ""
+
+# to configure all the node pools (later we can have a section by node pool)
+global_node_pools:
+  requirements: []
+  terminationGracePeriod: 1h
+stableNodePool:
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+defaultNodePool:
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+gpuNodePool:
+  enable: false
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""
+  diskSize: 100Gi

@@ -1,0 +1,56 @@
+fullnameOverride: external-dns
+
+# We have only 1 instance of external-dns, so creating pdb benefits nothing and may create unnecessary constraints
+# i.e: Karpenter will take them into account
+pdb:
+  create: false
+
+# Make external DNS ignore this ingress https://github.com/kubernetes-sigs/external-dns/issues/1910#issuecomment-976371247
+annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)"
+# set domainFilters to the domain you want to manage
+domainFilters: [*rootDomain]
+
+triggerLoopOnEvent: true
+policy: sync
+
+# avoid dns collision with other external-dns instances
+txtOwnerId: *clusterShortId
+txtPrefix: *externalDnsPrefix
+
+# set the number of replicas you want to use
+replicas: 1
+
+# set the rolling update strategy you want to apply
+updateStrategy:
+  type: RollingUpdate
+
+# remove if you don't want to use a custom image
+image:
+  repository: public.ecr.aws/r3m4q3r9/pub-mirror-external-dns
+
+# set the provider to use (pdns for Qovery DNS demo)
+provider:
+  name: pdns
+
+# Configure PDNS provider
+# pdns-server: environment variable with port concatenation
+# pdns-api-key: environment variable containing the API key
+extraArgs:
+  pdns-server: "$(QOVERY_DNS_URL):443"
+  pdns-api-key: "$(PDNS_API_KEY)"
+
+# Environment variables reference YAML anchors from values.yaml qovery: section
+env:
+  - name: QOVERY_DNS_URL
+    value: *qoveryDnsUrl
+  - name: PDNS_API_KEY
+    value: *jwtToken
+
+# set resources
+resources:
+  limits:
+    cpu: 50m
+    memory: 100Mi
+  requests:
+    cpu: 50m
+    memory: 100Mi

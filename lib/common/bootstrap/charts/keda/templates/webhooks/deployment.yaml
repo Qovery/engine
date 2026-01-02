@@ -1,0 +1,183 @@
+{{- if and .Values.webhooks.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.webhooks.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.webhooks.name }}
+    name: {{ .Values.webhooks.name }}
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  revisionHistoryLimit: {{ .Values.webhooks.revisionHistoryLimit}}
+  replicas: {{ .Values.webhooks.replicaCount}}
+  {{- with .Values.upgradeStrategy.webhooks }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app: {{ .Values.webhooks.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.webhooks.name }}
+        name: {{ .Values.webhooks.name }}
+        app.kubernetes.io/name: {{ .Values.webhooks.name }}
+        {{- include "keda.labels" . | indent 8 }}
+        {{- if .Values.podLabels.webhooks }}
+        {{- toYaml .Values.podLabels.webhooks | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.podAnnotations.webhooks .Values.additionalAnnotations }}
+      annotations:
+        {{- if .Values.podAnnotations.webhooks }}
+        {{- toYaml .Values.podAnnotations.webhooks | nindent 8 }}
+        {{- end }}
+        {{- if .Values.additionalAnnotations }}
+        {{- toYaml .Values.additionalAnnotations | nindent 8 }}
+        {{- end }}
+      {{- end }}
+    spec:
+      enableServiceLinks: {{ .Values.enableServiceLinks }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName | quote }}
+      {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ (.Values.serviceAccount.webhooks).name | default .Values.serviceAccount.name }}
+      automountServiceAccountToken: {{ kindIs "invalid" (.Values.serviceAccount.webhooks).automountServiceAccountToken | ternary .Values.serviceAccount.automountServiceAccountToken (.Values.serviceAccount.webhooks).automountServiceAccountToken }}
+      securityContext:
+        {{- if .Values.podSecurityContext.webhooks }}
+        {{- toYaml .Values.podSecurityContext.webhooks | nindent 8 }}
+        {{- else }}
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- end }}
+      containers:
+        - name: {{ .Values.webhooks.name }}
+          securityContext:
+            {{- if .Values.securityContext.webhooks }}
+            {{- toYaml .Values.securityContext.webhooks | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.securityContext | nindent 12 }}
+            {{- end }}
+          {{- $registry := .Values.global.image.registry | default .Values.image.webhooks.registry | default "" }}
+          {{- if $registry }}
+          image: "{{ $registry }}/{{ .Values.image.webhooks.repository }}:{{ .Values.image.webhooks.tag | default .Chart.AppVersion }}"
+          {{- else }}
+          image: "{{ .Values.image.webhooks.repository }}:{{ .Values.image.webhooks.tag | default .Chart.AppVersion }}"
+          {{- end }}
+          command:
+          - /keda-admission-webhooks
+          args:
+          - "--zap-log-level={{ .Values.logging.webhooks.level }}"
+          - "--zap-encoder={{ .Values.logging.webhooks.format }}"
+          - "--zap-time-encoding={{ .Values.logging.webhooks.timeEncoding }}"
+          - "--cert-dir={{ .Values.certificates.mountPath }}"
+          - "--health-probe-bind-address=:{{ .Values.webhooks.healthProbePort }}"
+          {{- if .Values.webhooks.port }}
+          - "--port={{ .Values.webhooks.port }}"
+          {{- end }}
+          - --metrics-bind-address=:{{ .Values.prometheus.webhooks.port }}
+          {{- if .Values.profiling.webhooks.enabled }}
+          - "--profiling-bind-address=:{{ .Values.profiling.webhooks.port }}"
+          {{- end }}
+          {{- range $key, $value := .Values.extraArgs.webhooks }}
+          - --{{ $key }}={{ $value }}
+          {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: {{ .Values.webhooks.healthProbePort }}
+            initialDelaySeconds: {{ .Values.webhooks.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.webhooks.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.webhooks.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.webhooks.livenessProbe.failureThreshold }}
+            successThreshold: {{ .Values.webhooks.livenessProbe.successThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: {{ .Values.webhooks.healthProbePort }}
+            initialDelaySeconds: {{ .Values.webhooks.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.webhooks.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.webhooks.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.webhooks.readinessProbe.failureThreshold }}
+            successThreshold: {{ .Values.webhooks.readinessProbe.successThreshold }}
+          ports:
+          - containerPort: {{ .Values.webhooks.port | default 9443 }}
+            name: http
+            protocol: TCP
+          {{- if .Values.prometheus.webhooks.enabled }}
+          - containerPort: {{ .Values.prometheus.webhooks.port }}
+            name: metrics
+            protocol: TCP
+          {{- end }}
+          env:
+            - name: WATCH_NAMESPACE
+              value: {{ .Values.watchNamespace | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if .Values.env }}
+            {{- toYaml .Values.env | nindent 12 -}}
+            {{- end }}
+          volumeMounts:
+          - mountPath: {{ .Values.certificates.mountPath }}
+            name: certificates
+            readOnly: true
+          {{- if .Values.volumes.webhooks.extraVolumeMounts }}
+          {{- toYaml .Values.volumes.webhooks.extraVolumeMounts | nindent 10 }}
+          {{- end }}
+          resources:
+            {{- if .Values.resources.webhooks }}
+            {{- toYaml .Values.resources.webhooks | nindent 12 }}
+            {{- else }}
+            {{- toYaml .Values.resources | nindent 12 }}
+            {{- end }}
+      volumes:
+      - name: certificates
+        secret:
+          defaultMode: 420
+          secretName: {{ .Values.certificates.secretName }}
+      {{- if .Values.volumes.webhooks.extraVolumes }}
+      {{- toYaml .Values.volumes.webhooks.extraVolumes | nindent 6 }}
+      {{- end }}
+      hostNetwork: {{ .Values.webhooks.useHostNetwork }}
+      nodeSelector:
+        kubernetes.io/os: linux
+      {{- with .Values.nodeSelector }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.webhooks.affinity }}
+      affinity:
+        {{- toYaml .Values.webhooks.affinity | nindent 8 }}
+      {{- else if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints.webhooks }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- $dnsConfig := .Values.webhooks.dnsConfig | default .Values.global.dnsConfig }}
+      {{- if $dnsConfig }}
+      dnsConfig:
+      {{- toYaml $dnsConfig | nindent 8 }}
+      {{- end }}
+{{- end }}

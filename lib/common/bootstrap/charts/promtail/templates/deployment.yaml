@@ -1,0 +1,29 @@
+{{- if .Values.deployment.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "promtail.fullname" . }}
+  namespace: {{ include "promtail.namespaceName" . }}
+  labels:
+    {{- include "promtail.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.deployment.autoscaling.enabled }}
+  replicas: {{ .Values.deployment.replicaCount }}
+  {{- end }}
+  {{- if .Values.revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
+  {{- with .Values.deployment.strategy }}
+  strategy:
+    {{- toYaml . | trim | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "promtail.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "promtail.podTemplate" . | nindent 4 }}
+{{- end }}

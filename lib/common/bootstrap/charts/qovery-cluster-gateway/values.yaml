@@ -1,0 +1,10 @@
+dns:
+  domain: ""
+
+gateway:
+  qoveryPublic:
+    enable: true
+    annotations: {}
+
+infrastructure:
+  annotations: {}

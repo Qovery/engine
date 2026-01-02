@@ -1,0 +1,21 @@
+# Empty values file for testing default parameters.
+datadog:
+  apiKey: "00000000000000000000000000000000"
+  appKey: "0000000000000000000000000000000000000000"
+
+  logs:
+    enabled: true
+  apm:
+    enabled: true
+
+  kubeStateMetricsEnabled: false
+  kubeStateMetricsCore:
+    enabled: true
+
+providers:
+  gke:
+    autopilot: true
+
+clusterAgent:
+  metricsProvider:
+    enabled: true

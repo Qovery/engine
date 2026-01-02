@@ -1,0 +1,6 @@
+apiVersion: v2
+name: qovery-engine
+description: A Helm chart for Kubernetes
+type: application
+version: v1.169.9
+appVersion: v1.169.9

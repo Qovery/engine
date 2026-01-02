@@ -1,0 +1,63 @@
+# Default values for iam-eks-user.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+refreshIntervalSeconds: 60
+
+groupUsersSync:
+  enabled: false
+  iamK8sGroups: "" # "group1,group2"
+
+aws:
+  # if you want to use an existing secret, set the name here
+  # it must contain AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+  # Otherwise use STS to assume a role with the service account
+  #accessKeyId: ""
+  #secretAccessKey: ""
+  existingSecretName: ""
+  defaultRegion: "us-west-1"
+
+sso:
+  enabled: false
+  iamSSORoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/aws-reserved/sso.amazonaws.com/[AWS_REGION]/AWSReservedSSO_AdministratorAccess_53b82e109c5e2cac"
+
+karpenter:
+  enabled: false
+  iamKarpenterRoleArn: "" # "arn:aws:iam::[AWS_ACCOUNT_ID]:role/[ROLE_NAME]"
+
+labels:
+  app: iam-eks-user-mapper
+selectorLabels:
+  app: iam-eks-user-mapper
+
+image:
+  repository: "ghcr.io/qovery/iam-eks-user-mapper"
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "main"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "iam-eks-user-mapper"
+
+resources:
+  {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi

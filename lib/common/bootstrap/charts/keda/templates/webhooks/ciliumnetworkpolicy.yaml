@@ -1,0 +1,27 @@
+{{- if and .Values.webhooks.enabled .Values.networkPolicy.enabled (eq .Values.networkPolicy.flavor "cilium") }}
+apiVersion: "cilium.io/v2"
+kind: CiliumNetworkPolicy
+metadata:
+  name: {{ .Values.webhooks.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.webhooks.name }}
+    name: {{ .Values.webhooks.name }}
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  endpointSelector:
+    matchLabels:
+      app: {{ .Values.webhooks.name }}
+  egress:
+    - toEntities:
+        - kube-apiserver
+        - cluster
+  ingress:
+    - fromEntities:
+        - cluster
+{{ end }}

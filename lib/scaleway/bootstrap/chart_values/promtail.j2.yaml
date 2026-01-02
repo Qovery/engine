@@ -1,0 +1,172 @@
+# remove if you don't want to use a custom image
+image:
+  registry: set-by-engine-code
+  repository: set-by-engine-code
+
+# It's mandatory to get this class to ensure paused infra will behave properly on restore
+priorityClassName: system-node-critical
+
+config:
+  clients:
+    # set loki URL: *promtailLokiUrl or set a custom URL
+    - url: set-by-engine-code
+
+  snippets:
+    pipelineStages:
+      - cri: { }
+
+      # SPECIAL: Special nginx-ingress enrichment
+      - match:
+          selector: '{namespace="nginx-ingress", container="controller"}'
+          stages:
+            - json:
+                expressions:
+                  qovery_com_associated_service_id: qovery_com_associated_service_id
+                  qovery_com_environment_id: qovery_com_environment_id
+            - labels:
+                qovery_com_associated_service_id: null
+                qovery_com_environment_id: null
+
+      - match:
+          selector: '{app="k8s-event-logger"}'
+          stages:
+            - json:
+                expressions:
+                  reason: reason
+                  type: type
+                  kind: kind
+                  event_namespace: namespace
+                  qovery_project_id: qovery_project_id
+                  qovery_environment_id: qovery_environment_id
+                  qovery_service_id: qovery_service_id
+                  timestamp: timestamp
+                drop_malformed_json: false
+
+            - labels:
+                reason: null
+                type: null
+                kind: null
+                qovery_project_id: null
+                qovery_environment_id: null
+                qovery_service_id: null
+
+            - timestamp:
+                source: timestamp
+                format: Unix
+
+      # STAGE 1: Extract log level from JSON-structured logs
+      # First attempt: extract 'level' field from JSON
+      # Then publish as label (may be empty if 'level' field doesn't exist)
+      # Fallback: if level is empty, retry JSON extraction mapping 'severity' field to 'level'
+      # (silently fails if JSON is malformed or 'severity' field doesn't exist)
+      - json:
+          expressions:
+            level: level
+          drop_malformed_json: false
+
+      - labels:
+          level: null
+
+      - match:
+          selector: '{level=""}'
+          stages:
+            - json:
+                expressions:
+                  level: severity
+                drop_malformed_json: false
+            - labels: { level: null }
+
+
+      # STAGE 2: Extract from structured text format (Rust tracing, Go logs)
+      # ONLY if level is still empty
+      # Pattern: TIMESTAMP LEVEL
+      # Example: 2025-10-03T05:36:41.932735355Z INFO ...
+      - match:
+          selector: '{level=""}'
+          stages:
+            - decolorize: {}
+            - regex:
+                expression: '^\s*(?:\d{9,}\s+)?\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?(?:\s+\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?)?\s+(?P<level>TRACE|DEBUG|INFO|WARN(?:ING)?|ERROR|CRIT(?:ICAL)?|FATAL|PANIC)\b'
+            - labels: { level: null }
+
+      # STAGE 3: Extract from key=value or key:value patterns
+      # ONLY if level is still empty
+      # Matches: level=INFO, level:WARN, severity=error, etc.
+      - match:
+          selector: '{level=""}'
+          stages:
+            - regex:
+                expression: '(?i)\b(?:level|severity)[:=]\s*"?(?P<level>trace|debug|info|warn(?:ing)?|error|crit(?:ical)?|fatal|panic)"?'
+            - labels: { level: null }
+
+      # STAGE 4: Normalize all captured levels to lowercase
+      {% raw %}
+      - template:
+          source: level
+          template: '{{ if .Value }}{{ ToLower .Value }}{{ end }}'
+      {% endraw %}
+
+      - replace:
+          source: level
+          expression: '^(warning)$'
+          replace: 'warn'
+
+      - replace:
+          source: level
+          expression: '^(err)$'
+          replace: 'error'
+
+      # STAGE 5: Publish level label
+      - labels:
+          level: null
+
+      # STAGE 6: Last resort - detect error keywords in log text
+      # ONLY if level is STILL empty
+      - match:
+          selector: '{level=""} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
+          stages:
+            - static_labels:
+                level: error
+
+      {%- if prometheus_enabled == true %}
+      #  Count all logs labeled as errors (from JSON or pattern matching)
+      - match:
+          selector: '{level="error"}'
+          stages:
+            - metrics:
+                q_log_errors_total:
+                  type: Counter
+                  description: "Lines classified as error"
+                  config:
+                    match_all: true
+                    action: inc
+
+      {%- endif %}
+
+    extraRelabelConfigs:
+      # required this config in order for the cluster agent to retrieve the log of the service
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id|qovery_com_deployment_id)
+
+# set resources
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+{%- if prometheus_enabled == true %}
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels:
+    release: prometheus
+{%- endif %}
+
+# for daemonsets, use rolling update with maxUnavailable 35%
+# it prevents promtail from timeout when updating large clusters (with a lot of nodes)
+updateStrategy:
+  rollingUpdate:
+    maxUnavailable: 35%
+    maxSurge: 0

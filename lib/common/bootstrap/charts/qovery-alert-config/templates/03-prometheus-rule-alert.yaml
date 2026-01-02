@@ -1,0 +1,59 @@
+{{- $root := . -}}
+{{- $ns := $root.Values.namespace | default $root.Release.Namespace -}}
+{{- range $i, $target := $root.Values.targets }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ regexReplaceAll "[^a-z0-9-]" (lower $target.id) "-" | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $ns }}
+  labels:
+    release: kube-prometheus-stack
+    alertmanager: main
+    app.kubernetes.io/managed-by: qovery-alert-config
+    {{- with $root.Values.extraLabels }}
+{{ toYaml . | nindent 4 }}
+    {{- end }}
+  annotations:
+    qovery_target_id: {{ $target.target_id | quote }}
+    qovery_target_type: {{ $target.target_type | quote }}
+spec:
+  groups:
+    - name: {{ default $root.Values.groupName (printf "%s.rules" $target.target_type) }}
+    {{- if $root.Values.interval }}
+      interval: {{ $root.Values.interval }}
+    {{- end }}
+      rules:
+      {{- range $j, $alert := $target.alerts }}
+        - alert: {{ $alert.name }}
+          expr: {{ $alert.expr | quote }}
+        {{- if $alert.for }}
+          for: {{ $alert.for }}
+        {{- end }}
+          labels:
+            namespace: {{ $target.namespace | quote }}
+            qovery_target_id: {{ $target.target_id | quote }}
+            qovery_target_type: {{ $target.target_type | quote }}
+          {{- with $root.Values.commonLabels }}
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $alert.labels }}
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          annotations:
+            qovery_target_name:  {{ $alert.target_name | quote }}
+            qovery_target_base_url:  {{ $alert.base_env_url | quote }}
+            qovery_organization_long_id: {{ $target.organization_long_id | quote }}
+            qovery_alert_tag: {{ $alert.tag | quote }}
+            qovery_alert_long_id: {{ $alert.alert_long_id | quote }}
+            qovery_version: {{ $alert.version | quote }}
+        {{- if or $root.Values.commonAnnotations $alert.annotations }}
+          {{- with $root.Values.commonAnnotations }}
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $alert.annotations }}
+{{ toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+---
+{{- end }}

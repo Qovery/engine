@@ -1,0 +1,19 @@
+apiVersion: v2
+appVersion: 1.4.1
+dependencies:
+- alias: metrics-server
+  condition: metrics-server.enabled
+  name: metrics-server
+  repository: https://kubernetes-sigs.github.io/metrics-server/
+  version: 3.11.0
+description: A Helm chart for Kubernetes Vertical Pod Autoscaler
+home: https://github.com/FairwindsOps/charts/tree/master/stable/vpa
+kubeVersion: '>= 1.24.0-0'
+maintainers:
+- name: sudermanjr
+name: vpa
+sources:
+- https://github.com/FairwindsOps/charts/tree/master/stable/vpa
+- https://github.com/kubernetes/autoscaler/tree/master/vertical-pod-autoscaler
+type: application
+version: 4.8.0

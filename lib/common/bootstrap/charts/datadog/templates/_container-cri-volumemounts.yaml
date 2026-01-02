@@ -1,0 +1,16 @@
+{{- define "container-crisocket-volumemounts" -}}
+{{- if eq .Values.targetSystem "linux" }}
+- name: runtimesocketdir
+  mountPath: {{ print "/host/" (dir (include "datadog.dockerOrCriSocketPath" .)) | clean }}
+  mountPropagation: {{ .Values.datadog.hostVolumeMountPropagation }}
+  readOnly: true
+{{- end }}
+{{- if eq .Values.targetSystem "windows" }}
+- name: runtimesocket
+  mountPath: {{ template "datadog.dockerOrCriSocketPath" . }}
+{{- if not .Values.datadog.criSocketPath }}
+- name: containerdsocket 
+  mountPath: \\.\pipe\containerd-containerd
+{{- end }}
+{{- end }}
+{{- end -}}

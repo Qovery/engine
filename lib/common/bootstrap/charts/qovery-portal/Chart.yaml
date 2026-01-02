@@ -1,0 +1,7 @@
+apiVersion: v2
+appVersion: 0.1.0
+description: Provide an oauth proxy in order to access a cluster's metrics tools
+home: https://github.com/Qovery/
+name: qovery-portal
+type: application
+version: 0.1.0

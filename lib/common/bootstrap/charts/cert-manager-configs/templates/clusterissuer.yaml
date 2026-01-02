@@ -1,0 +1,60 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-qovery
+  namespace: {{ .Values.namespace }}
+spec:
+  acme:
+    server: {{ .Values.acme.letsEncrypt.acmeUrl }}
+    email: {{ .Values.acme.letsEncrypt.emailReport }}
+    skipTLSVerify: {{ .Values.acme.letsEncrypt.skipTLSVerify }}
+
+    # Name of a secret used to store the ACME account private key
+    privateKeySecretRef:
+      name: letsencrypt-acme-priv-key
+
+    # https://cert-manager.io/docs/configuration/acme/
+    solvers:
+      - http01:
+          ingress:
+            class: nginx-qovery
+      - dns01:
+          {{ if eq .Values.externalDnsProvider "cloudflare" }}
+          cloudflare:
+            email: {{ .Values.provider.cloudflare.email }}
+            apiTokenSecretRef:
+              name: {{ .Values.externalDnsProvider }}-api-token-secret
+              key: apiToken
+          {{ end }}
+          {{ if eq .Values.externalDnsProvider "pdns" }}
+          webhook:
+            groupName: acme.qovery.com
+            solverName: qovery
+            config:
+              # Only needed if you don't have default credentials as seen above.
+              apiKeySecretRef:
+                key: apiKey
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
+              apiUrlSecretRef:
+                key: apiUrl
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
+              apiPortSecretRef:
+                key: apiPort
+                name: {{ .Values.externalDnsProvider }}-api-token-secret
+          {{ end }}
+          {{ if eq .Values.externalDnsProvider "route53" }}
+          route53:
+            region: {{ .Values.provider.route53.region }}
+            {{ if .Values.provider.route53.hostedZoneId }}
+            hostedZoneID: {{ .Values.provider.route53.hostedZoneId }}
+            {{ end }}
+            accessKeyID: {{ .Values.provider.route53.accessKeyId }}
+            secretAccessKeySecretRef:
+              name: {{ .Values.externalDnsProvider }}-api-token-secret
+              key: secretAccessKey
+          {{ end }}
+        selector:
+          dnsZones:
+            {{- range .Values.managedDns }}
+            - "{{ . }}"
+            {{- end }}

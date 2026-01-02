@@ -1,0 +1,44 @@
+{{- if and (eq (include "should-deploy-cluster-agent" .) "true") .Values.clusterAgent.rbac.create .Values.clusterAgent.metricsProvider.enabled .Values.clusterAgent.metricsProvider.createReaderRbac -}}
+apiVersion: {{ template "rbac.apiVersion" . }}
+kind: ClusterRole
+metadata:
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+{{- if eq (include "is-gke-without-external-metrics" .) "true" }}
+  name: external-metrics-reader
+{{- else }}
+  name: {{ template "datadog.fullname" . }}-cluster-agent-external-metrics-reader
+{{- end }}
+rules:
+- apiGroups:
+  - "external.metrics.k8s.io"
+  resources:
+  - "*"
+  verbs:
+  - list
+  - get
+  - watch
+---
+apiVersion: {{ template "rbac.apiVersion" . }}
+kind: ClusterRoleBinding
+metadata:
+  labels:
+{{ include "datadog.labels" . | indent 4 }}
+{{- if eq (include "is-gke-without-external-metrics" .) "true" }}
+  name: external-metrics-reader
+{{- else }}
+  name: {{ template "datadog.fullname" . }}-cluster-agent-external-metrics-reader
+{{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+{{- if eq (include "is-gke-without-external-metrics" .) "true" }}
+  name: external-metrics-reader
+{{- else }}
+  name: {{ template "datadog.fullname" . }}-cluster-agent-external-metrics-reader
+{{- end }}
+subjects:
+- kind: ServiceAccount
+  name: horizontal-pod-autoscaler
+  namespace: kube-system
+{{- end -}}

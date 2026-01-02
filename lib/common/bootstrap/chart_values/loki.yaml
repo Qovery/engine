@@ -1,0 +1,176 @@
+# remove if you don't want to use a custom image
+kubectlImage:
+  registry: set-by-engine-code
+  repository: set-by-engine-code
+loki:
+  podLabels: {}
+  # remove if you don't want to use a custom image
+  image:
+    registry: set-by-engine-code
+    repository: set-by-engine-code
+  # set if you want to use authentication
+  auth_enabled: false
+  commonConfig:
+    # for simple usage, without high throughput, you can use the 1 replica only
+    # note: replication is assured by the storage backend
+    replication_factor: 1
+  ingester:
+    chunk_idle_period: 3m
+    chunk_block_size: 262144
+    chunk_retain_period: 1m
+    max_transfer_retries: 0
+    lifecycler:
+      ring:
+        kvstore:
+          store: memberlist
+        replication_factor: 1
+  memberlistConfig:
+    abort_if_cluster_join_fails: false
+    bind_port: 7946
+    join_members:
+      # set loki headless service
+      - loki-headless.logging.svc:7946
+    max_join_backoff: 1m
+    max_join_retries: 10
+    min_join_backoff: 1s
+  limits_config:
+    ingestion_rate_mb: 20
+    ingestion_burst_size_mb: 30
+    enforce_metric_name: false
+    reject_old_samples: true
+    reject_old_samples_max_age: 168h
+    max_concurrent_tail_requests: 100
+    split_queries_by_interval: 0 # Best performance on single pod
+    max_query_lookback: 12w
+    retention_period: set-by-engine-code
+  compactor:
+    working_directory: /data/retention
+    # configure storage provider for the compactor
+    shared_store: set-by-engine-code
+    compaction_interval: 10m
+    retention_enabled: set-by-engine-code
+    retention_delete_delay: 2h
+    retention_delete_worker_count: 150
+  query_scheduler:
+    # the TSDB index dispatches many more, but each individually smaller, requests.
+    # We increase the pending request queue sizes to compensate.
+    max_outstanding_requests_per_tenant: 32768
+  querier:
+    # Each `querier` component process runs a number of parallel workers to process queries simultaneously.
+    # You may want to adjust this up or down depending on your resource usage
+    # (more available cpu and memory can tolerate higher values and vice versa),
+    # but we find the most success running at around `16` with tsdb
+    max_concurrent: 16
+  schemaConfig:
+    configs:
+      # set the schema for the index (2020 version can be deleted on a fresh install)
+      - from: 2020-05-15
+        store: boltdb-shipper
+        object_store: set-by-engine-code
+        schema: v11
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2022-01-11
+        store: boltdb-shipper
+        object_store: set-by-engine-code
+        schema: v12
+        index:
+          prefix: index_
+          period: 24h
+      - from: 2025-10-14
+        store: tsdb
+        object_store: set-by-engine-code
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  storage:
+    # configure the object storage backend
+    bucketNames:
+      chunks: set-by-engine-code
+      ruler: set-by-engine-code
+      admin: set-by-engine-code
+    type: set-by-engine-code
+    s3:
+      s3: set-by-engine-code
+      region: set-by-engine-code
+      s3ForcePathStyle: set-by-engine-code
+      insecure: set-by-engine-code
+    gcs:
+      chunkBufferSize: 0
+      requestTimeout: "0s"
+      enableHttp2: true
+    azure:
+      account_name: set-by-engine-code
+      container_name: set-by-engine-code
+      use_federated_token: true # Use federated token for authentication
+  storage_config:
+    gcs:
+      bucket_name: set-by-engine-code
+    boltdb_shipper:
+      active_index_directory: /data/loki/index
+      shared_store: set-by-engine-code
+      resync_interval: 5s
+      cache_location: /data/loki/boltdb-cache
+    tsdb_shipper:
+      active_index_directory: /data/loki/tsdb-index
+      shared_store: set-by-engine-code
+      cache_location: /data/loki/tsdb-cache
+    azure:
+      account_name: set-by-engine-code
+      container_name: set-by-engine-code
+      use_federated_token: true # Use federated token for authentication
+monitoring:
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+    metricsInstance:
+      enabled: false
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false
+
+test:
+  enabled: false
+
+gateway:
+  enabled: false
+
+# set the single binary version for basic usage
+singleBinary:
+  replicas: 1
+  # set resources
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  persistence:
+    enabled: false
+  extraVolumes:
+    - name: data
+      emptyDir: {}
+    - name: storage
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: data
+      mountPath: /data
+    - name: storage
+      mountPath: /var/loki
+  # set disk persistence to reduce data loss in case of pod crash
+  # persistence:
+  #   storageClass: set-by-engine-code
+
+serviceAccount:
+  name: null
+  labels: {}
+  annotations: {}

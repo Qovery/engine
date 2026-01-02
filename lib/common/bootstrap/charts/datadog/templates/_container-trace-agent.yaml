@@ -1,0 +1,82 @@
+{{- define "container-trace-agent" -}}
+- name: trace-agent
+  image: "{{ include "image-path" (dict "root" .Values "image" .Values.agents.image) }}"
+  imagePullPolicy: {{ .Values.agents.image.pullPolicy }}
+  {{- if eq .Values.targetSystem "linux" }}
+  command: ["trace-agent", "-config={{ template "datadog.confPath" . }}/datadog.yaml"]
+  {{- end }}
+  {{- if eq .Values.targetSystem "windows" }}
+  command: ["trace-agent", "-foreground", "-config={{ template "datadog.confPath" . }}/datadog.yaml"]
+  {{- end }}
+  {{- if .Values.agents.containers.traceAgent.securityContext }}
+  securityContext:
+    {{ toYaml .Values.agents.containers.traceAgent.securityContext | nindent 4 }}
+  {{- end }}
+  resources:
+{{ toYaml .Values.agents.containers.traceAgent.resources | indent 4 }}
+  ports:
+  - containerPort: {{ .Values.datadog.apm.port }}
+    hostPort: {{ .Values.datadog.apm.port }}
+    name: traceport
+    protocol: TCP
+{{- if .Values.agents.containers.traceAgent.ports }}
+{{ toYaml .Values.agents.containers.traceAgent.ports | indent 2 }}
+{{- end }}
+{{- if or .Values.datadog.envFrom .Values.agents.containers.traceAgent.envFrom }}
+  envFrom:
+{{ concat .Values.datadog.envFrom .Values.agents.containers.traceAgent.envFrom | toYaml  | indent 4 }}
+{{- end }}
+  env:
+    {{- include "containers-common-env" . | nindent 4 }}
+    {{- include "containers-cluster-agent-env" . | nindent 4 }}
+    - name: DD_LOG_LEVEL
+      value: {{ .Values.agents.containers.traceAgent.logLevel | default .Values.datadog.logLevel | quote }}
+    - name: DD_APM_ENABLED
+      value: "true"
+    - name: DD_APM_NON_LOCAL_TRAFFIC
+      value: "true"
+    - name: DD_APM_RECEIVER_PORT
+      value: {{ .Values.datadog.apm.port | quote }}
+  {{- if eq (include "trace-agent-use-uds" .) "true" }}
+    - name: DD_APM_RECEIVER_SOCKET
+      value: {{ .Values.datadog.apm.socketPath | quote }}
+  {{- end }}
+  {{- if eq .Values.targetSystem "linux" }}
+    - name: DD_DOGSTATSD_SOCKET
+      value: {{ .Values.datadog.dogstatsd.socketPath | quote }}
+  {{- end }}
+{{- if .Values.agents.containers.traceAgent.env }}
+{{ toYaml .Values.agents.containers.traceAgent.env | indent 4 }}
+{{- end }}
+  volumeMounts:
+    - name: config
+      mountPath: {{ template "datadog.confPath" . }}
+    {{- if .Values.agents.useConfigMap }}
+    - name: {{ template "datadog.fullname" . }}-datadog-yaml
+      mountPath: {{ template "datadog.confPath" . }}/datadog.yaml
+      subPath: datadog.yaml
+    {{- end }}
+    {{- if eq .Values.targetSystem "linux" }}
+    - name: logdatadog
+      mountPath: /var/log/datadog
+    - name: tmpdir
+      mountPath: /tmp
+      readOnly: false
+    - name: dsdsocket
+      mountPath: {{ (dir .Values.datadog.dogstatsd.socketPath) }}
+    {{- if and (eq (include "trace-agent-use-uds" .) "true") (ne (dir .Values.datadog.dogstatsd.socketPath) (dir .Values.datadog.apm.socketPath)) }}
+    - name: apmsocket
+      mountPath: {{ (dir .Values.datadog.apm.socketPath) }}
+    {{- end }}
+    {{- end }}
+    {{- include "container-crisocket-volumemounts" . | nindent 4 }}
+    {{- if .Values.datadog.kubelet.hostCAPath }}
+{{ include "datadog.kubelet.volumeMount" . | indent 4 }}
+    {{- end }}
+{{- if .Values.agents.volumeMounts }}
+{{ toYaml .Values.agents.volumeMounts | indent 4 }}
+{{- end }}
+  livenessProbe:
+{{- $live := .Values.agents.containers.traceAgent.livenessProbe }}
+{{ include "probe.tcp" (dict "port" .Values.datadog.apm.port "settings" $live ) | indent 4 }}
+{{- end -}}
