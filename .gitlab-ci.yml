@@ -926,21 +926,16 @@ gitlab-release:
     ./helper.sh update_engine_version
     unset GITHUB_TOKEN
     goreleaser release --skip=validate
-    
-    mv CHANGELOG.md CHANGELOG.md.old
-    cat <(cat dist/CHANGELOG.md) CHANGELOG.md.old | tee CHANGELOG.md lib-engine/CHANGELOG.md
-    git add CHANGELOG.md lib-engine/CHANGELOG.md
-    git commit -m "chore(ci): update changelog"
-    #git push origin "HEAD:main"
-
-    # Prepare public branch of the engine
+    mv dist/CHANGELOG.md /tmp/
     mv lib-engine /tmp/
-    rm -rf * .gitlab-ci.yml
+    
+    git checkout engine-public
     mv /tmp/lib-engine/* .
+    mv CHANGELOG.md /tmp/CHANGELOG.md.old
+    cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
     git add *
-    git commit -m 'chore(ci): public release'
-    git push -f origin "HEAD:engine-public"
-
+    git commit -m "chore(ci): public release"
+    git push origin "HEAD:engine-public"
 
   artifacts:
     paths:
