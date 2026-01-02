@@ -931,8 +931,7 @@ gitlab-release:
     cat <(cat dist/CHANGELOG.md) CHANGELOG.md.old | tee CHANGELOG.md lib-engine/CHANGELOG.md
     git add CHANGELOG.md lib-engine/CHANGELOG.md
     git commit -m "chore(ci): update changelog"
-    git push origin "HEAD:main"
-
+    #git push origin "HEAD:main"
 
     # Prepare public branch of the engine
     mv lib-engine /tmp/
