@@ -65,6 +65,8 @@ pub struct EksChartsConfigPrerequisites {
     pub is_karpenter_enabled: bool,
     pub karpenter_parameters: Option<KarpenterParameters>,
     pub is_keda_enabled: bool,
+    pub aws_iam_keda_operator_role_arn: Option<String>,
+    pub aws_iam_keda_metrics_server_role_arn: Option<String>,
     pub aws_iam_eks_user_mapper_role_arn: String,
     pub aws_iam_cluster_autoscaler_role_arn: String,
     pub aws_iam_cloudwatch_role_arn: String,
@@ -149,6 +151,8 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
                 .get_keda_parameters()
                 .map(|params| params.enabled)
                 .unwrap_or(false),
+            aws_iam_keda_operator_role_arn: self.terraform_output.aws_iam_keda_operator_role_arn.clone(),
+            aws_iam_keda_metrics_server_role_arn: self.terraform_output.aws_iam_keda_metrics_server_role_arn.clone(),
             aws_iam_eks_user_mapper_role_arn: self.terraform_output.aws_iam_eks_user_mapper_role_arn.clone(),
             aws_iam_cluster_autoscaler_role_arn: self.terraform_output.aws_iam_cluster_autoscaler_role_arn.clone(),
             aws_iam_cloudwatch_role_arn: self.terraform_output.aws_iam_cloudwatch_role_arn.clone(),

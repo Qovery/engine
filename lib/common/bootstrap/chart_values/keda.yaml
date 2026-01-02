@@ -3,6 +3,12 @@
 crds:
   install: false
 
+serviceAccount:
+  create: true
+  name: keda-operator
+  annotations:
+     eks.amazonaws.com/role-arn: set-by-engine-code
+
 operator:
   replicaCount: 1
   resources:
@@ -34,6 +40,11 @@ operator:
 
 metricsServer:
   replicaCount: 1
+  serviceAccount:
+    create: true
+    name: keda-metrics-server
+    annotations:
+       eks.amazonaws.com/role-arn: set-by-engine-code
   resources:
     limits:
       cpu: 1

@@ -135,4 +135,10 @@ pub struct AwsEksQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub aws_iam_keda_operator_role_arn: Option<String>,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub aws_iam_keda_metrics_server_role_arn: Option<String>,
 }

@@ -182,6 +182,14 @@ impl Kubernetes for EKS {
         self.options.karpenter_parameters.is_some()
     }
 
+    fn is_keda_enabled(&self) -> bool {
+        self.options
+            .keda_parameters
+            .as_ref()
+            .map(|params| params.enabled)
+            .unwrap_or(false)
+    }
+
     fn loadbalancer_l4_annotations(&self, cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         let lb_name = match cloud_provider_lb_name {
             Some(x) => format!(",QoveryName={x}"),

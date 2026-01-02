@@ -659,6 +659,8 @@ mod tests {
             is_karpenter_enabled: false,
             karpenter_parameters: None,
             is_keda_enabled: false,
+            aws_iam_keda_operator_role_arn: None,
+            aws_iam_keda_metrics_server_role_arn: None,
             aws_iam_eks_user_mapper_role_arn: String::new(),
             aws_iam_cluster_autoscaler_role_arn: String::new(),
             aws_iam_cloudwatch_role_arn: String::new(),

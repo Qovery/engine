@@ -281,6 +281,9 @@ pub fn eks_tera_context(
     // Karpenter
     context.insert("enable_karpenter", &kubernetes.is_karpenter_enabled());
 
+    // KEDA
+    context.insert("enable_keda", &kubernetes.is_keda_enabled());
+
     // AWS S3 tfstate storage
     context.insert(
         "aws_access_key_tfstates_account",
