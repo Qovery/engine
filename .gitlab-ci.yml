@@ -936,8 +936,8 @@ gitlab-release:
 
     # Prepare public branch of the engine
     mv lib-engine /tmp/
-    rm -rf *
-    mv /tmp/lib-egnine/* .
+    rm -rf * .gitlab-ci.yml
+    mv /tmp/lib-engine/* .
     git add *
     git commit -m 'chore(ci): public release'
     git push -f "HEAD:engine-public"
