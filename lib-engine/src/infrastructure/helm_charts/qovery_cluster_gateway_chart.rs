@@ -21,6 +21,11 @@ pub enum QoveryClusterGatewayOptionsPerKubernetesKind {
     OnPremiseSelfManaged,
 }
 
+#[derive(Default)]
+pub struct QoveryClusterGatewayChartOptions {
+    pub x_forwarded_for_number_truster_hops: Option<u8>, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
+}
+
 pub struct QoveryClusterGatewayChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -29,6 +34,7 @@ pub struct QoveryClusterGatewayChart {
     kubernetes_provider_options: QoveryClusterGatewayOptionsPerKubernetesKind,
     cluster_id: QoveryIdentifier,
     organization_id: QoveryIdentifier,
+    chart_options: QoveryClusterGatewayChartOptions,
 }
 
 impl QoveryClusterGatewayChart {
@@ -39,6 +45,7 @@ impl QoveryClusterGatewayChart {
         kubernetes_provider_options: QoveryClusterGatewayOptionsPerKubernetesKind,
         cluster_id: QoveryIdentifier,
         organization_id: QoveryIdentifier,
+        chart_options: QoveryClusterGatewayChartOptions,
     ) -> Self {
         QoveryClusterGatewayChart {
             chart_path: HelmChartPath::new(
@@ -56,6 +63,7 @@ impl QoveryClusterGatewayChart {
             kubernetes_provider_options,
             cluster_id,
             organization_id,
+            chart_options,
         }
     }
 
@@ -70,6 +78,13 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             key: "dns.domain".to_string(),
             value: self.domain.wildcarded().to_string(),
         }];
+
+        if let Some(num_hops) = self.chart_options.x_forwarded_for_number_truster_hops {
+            chart_set_values.push(ChartSetValue {
+                key: "gateway.qoveryPublic.xForwardedFor.numberTrustedHops".to_string(),
+                value: num_hops.to_string(),
+            });
+        }
 
         match self.kubernetes_provider_options {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks
@@ -154,7 +169,7 @@ mod tests {
     use crate::environment::models::domain::Domain;
     use crate::helm::HelmChartNamespaces;
     use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-        QoveryClusterGatewayChart, QoveryClusterGatewayOptionsPerKubernetesKind,
+        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, QoveryClusterGatewayOptionsPerKubernetesKind,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -179,6 +194,7 @@ mod tests {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
+            QoveryClusterGatewayChartOptions::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -209,6 +225,7 @@ mod tests {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
+            QoveryClusterGatewayChartOptions::default(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -243,6 +260,7 @@ mod tests {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
+            QoveryClusterGatewayChartOptions::default(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

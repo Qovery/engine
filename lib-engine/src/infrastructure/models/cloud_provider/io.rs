@@ -300,19 +300,19 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "registry.mirroring_mode", default = "default_registry_mirroring_mode")]
     pub registry_mirroring_mode: RegistryMirroringMode,
     #[serde(alias = "nginx.vcpu.request_in_milli_cpu")]
-    pub nginx_vcpu_request_in_milli_cpu: u32,
+    pub nginx_vcpu_request_in_milli_cpu: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "nginx.vcpu.limit_in_milli_cpu")]
-    pub nginx_vcpu_limit_in_milli_cpu: u32,
+    pub nginx_vcpu_limit_in_milli_cpu: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "nginx.memory.request_in_mib")]
-    pub nginx_memory_request_in_mib: u32,
+    pub nginx_memory_request_in_mib: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "nginx.memory.limit_in_mib")]
-    pub nginx_memory_limit_in_mib: u32,
+    pub nginx_memory_limit_in_mib: u32, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "nginx.hpa.cpu_utilization_percentage_threshold")]
     pub nginx_hpa_cpu_utilization_percentage_threshold: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.hpa.min_number_instances")]
     pub nginx_hpa_min_number_instances: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.enable_client_ip")]
-    pub nginx_controller_enable_client_ip: bool,
+    pub nginx_controller_enable_client_ip: bool, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.use_forwarded_headers")]
     pub nginx_controller_use_forwarded_headers: bool,
     #[serde(alias = "nginx.controller.compute_full_forwarded_for")]
@@ -386,6 +386,8 @@ pub struct ClusterAdvancedSettings {
     pub envoy_memory_request_in_mib: u32,
     #[serde(alias = "envoy.memory.limit_in_mib")]
     pub envoy_memory_limit_in_mib: u32,
+    #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
+    pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -464,6 +466,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_vcpu_limit_in_milli_cpu: 1000,
             envoy_memory_request_in_mib: 256,
             envoy_memory_limit_in_mib: 1024,
+            envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
         }
     }
 }

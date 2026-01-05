@@ -4,6 +4,8 @@ dns:
 gateway:
   qoveryPublic:
     enable: true
+    xForwardedFor:
+      numberTrustedHops: null
 
 infrastructure:
   annotations:
