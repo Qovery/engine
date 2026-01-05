@@ -929,10 +929,7 @@ gitlab-release:
   
 
     # Prepare public branch of engine
-    env
-
     mv dist/CHANGELOG.md /tmp/
-    #git pull origin $CI_COMMIT_REF_NAME
     git filter-repo --subdirectory-filter lib-engine --force --partial
     mv CHANGELOG.md /tmp/CHANGELOG.md.old
     cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
