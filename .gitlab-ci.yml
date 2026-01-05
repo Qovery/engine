@@ -929,13 +929,13 @@ gitlab-release:
   
 
     # Prepare public branch of engine
-    mv dist/CHANGELOG.md /tmp/
-    git filter-repo --subdirectory-filter lib-engine --force --partial
-    mv CHANGELOG.md /tmp/CHANGELOG.md.old
-    cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
-    git add *
-    git commit -m "chore(ci): public release"
-    git push origin "HEAD:engine-public"
+    #mv dist/CHANGELOG.md /tmp/
+    #git filter-repo --subdirectory-filter lib-engine --force --partial
+    #mv CHANGELOG.md /tmp/CHANGELOG.md.old
+    #cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
+    #git add *
+    #git commit -m "chore(ci): public release"
+    #git push origin "HEAD:engine-public"
 
   artifacts:
     paths:
