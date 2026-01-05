@@ -57,7 +57,7 @@ default:
 .buildx:
   extends: [.needs-docker]
   before_script:
-    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 30 ${IMAGE_ARCH}
+    - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 30 50 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
     - ci_helper docker_login_private_prod_ecr
   after_script:
