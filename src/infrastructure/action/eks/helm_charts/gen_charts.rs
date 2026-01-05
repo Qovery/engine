@@ -52,7 +52,7 @@ use crate::infrastructure::helm_charts::metrics_server_chart::MetricsServerChart
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-    QoveryClusterGatewayChart, QoveryClusterGatewayOptionsPerKubernetesKind,
+    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, QoveryClusterGatewayOptionsPerKubernetesKind,
 };
 use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
@@ -597,6 +597,11 @@ pub(super) fn eks_helm_charts(
                 QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
                 QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
                 QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+                QoveryClusterGatewayChartOptions {
+                    x_forwarded_for_number_truster_hops: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                },
             )
             .to_common_helm_chart()?,
         );

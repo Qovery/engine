@@ -5,6 +5,9 @@ gateway:
   qoveryPublic:
     enable: true
     annotations: {}
+    xForwardedFor:
+      numberTrustedHops: null
 
 infrastructure:
   annotations: {}
+
