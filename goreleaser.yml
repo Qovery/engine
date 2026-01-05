@@ -4,6 +4,7 @@ builds:
 changelog:
   use: git
   sort: asc
+  title: "Release notes engine {{.Tag}}"
   format: >
     [{{.SHA}}](https://github.com/Qovery/engine/commit/{{.SHA}}): {{.Message}} {{ if contains .Message "!:" }}#BREAKING{{ end }} ({{ with .AuthorUsername }}@{{ . }}{{ else }}{{ .AuthorName }}{{ end }})
   groups:
