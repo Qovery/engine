@@ -91,6 +91,24 @@ spec:
         {%- endif %}
       {%- endif %}
   {%- endif %}
+  {%- if advanced_settings.network_gateway_api_custom_http_errors is defined and advanced_settings.network_gateway_api_custom_http_errors %}
+  responseOverride:
+    {%- for code in advanced_settings.network_gateway_api_custom_http_errors | split(pat=",") %}
+    - match:
+        statusCodes:
+          - type: Value
+            value: {{ code | trim }}
+      response:
+        contentType: text/html
+        body:
+          type: ValueRef
+          valueRef:
+            group: ""
+            kind: ConfigMap
+            name: {{ sanitized_name }}-error-pages
+            key: {{ code | trim }}.html
+    {%- endfor %}
+  {%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

@@ -183,6 +183,11 @@ pub struct ApplicationAdvancedSettings {
     pub network_gateway_api_add_headers: BTreeMap<String, String>,
     #[serde(alias = "network.gateway_api.proxy_set_headers")]
     pub network_gateway_api_proxy_set_headers: BTreeMap<String, String>,
+    #[serde(
+        alias = "network.gateway_api.custom_http_errors",
+        with = "crate::io_models::types::http_status_codes"
+    )]
+    pub network_gateway_api_custom_http_errors: Option<Vec<u16>>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -236,11 +241,11 @@ pub struct ApplicationAdvancedSettings {
     #[serde(alias = "network.ingress.nginx_limit_rps")]
     pub network_ingress_nginx_limit_rps: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
-    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>,
+    pub network_ingress_nginx_limit_burst_multiplier: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_connections")]
     pub network_ingress_nginx_limit_connections: Option<u32>,
     #[serde(alias = "network.ingress.nginx_custom_http_errors")]
-    pub network_ingress_nginx_custom_http_errors: Option<String>,
+    pub network_ingress_nginx_custom_http_errors: Option<String>, // TODO(benjaminch QOV-1400): to be removed
 
     #[serde(alias = "network.ingress.grpc_send_timeout_seconds")]
     pub network_ingress_grpc_send_timeout_seconds: u32,
@@ -319,6 +324,7 @@ impl Default for ApplicationAdvancedSettings {
             network_gateway_api_route_limit_headers: "".to_string(),
             network_gateway_api_add_headers: BTreeMap::new(),
             network_gateway_api_proxy_set_headers: BTreeMap::new(),
+            network_gateway_api_custom_http_errors: None,
 
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
@@ -391,6 +397,7 @@ impl ApplicationAdvancedSettings {
             network_gateway_api_route_limit_headers: self.network_gateway_api_route_limit_headers.clone(),
             network_gateway_api_add_headers: self.network_gateway_api_add_headers.clone(),
             network_gateway_api_proxy_set_headers: self.network_gateway_api_proxy_set_headers.clone(),
+            network_gateway_api_custom_http_errors: self.network_gateway_api_custom_http_errors.clone(),
             hpa_cpu_average_utilization_percent: self.hpa_cpu_average_utilization_percent,
             hpa_memory_average_utilization_percent: self.hpa_memory_average_utilization_percent,
         }

@@ -1,0 +1,18 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: qovery-cluster-public-gateway-client-traffic-policy
+  namespace: {{ .Values.namespace }}
+spec:
+  {{- $numHops := dig "qoveryPublic" "xforwardedFor" "numberTrustedHops" -1 .Values }}
+  {{- if ge $numHops 0 }}
+  clientIPDetection:
+    xForwardedFor:
+      numTrustedHops: {{ $numHops }}
+  {{- end }}
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: qovery-cluster-public-gateway
+  enableProxyProtocol: true
+

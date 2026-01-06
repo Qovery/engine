@@ -2,6 +2,7 @@ use crate::helpers;
 use crate::helpers::aws::aws_infra_config;
 use crate::helpers::common::Infrastructure;
 use ::function_name::named;
+use k8s_openapi::api::core::v1::ConfigMap;
 use kube::api::ListParams;
 use kube::{Api, ResourceExt};
 use qovery_engine::io_models::application::PortIo;
@@ -9322,6 +9323,629 @@ fn deploy_helm_with_custom_headers_enabled_on_aws_eks_grpc() {
             }
         } else {
             panic!("GRPCRoute should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_application_with_custom_http_errors_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_custom_http_errors = Some(vec![404, 503]);
+
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "custom-errors-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // Verify ConfigMap was created
+        let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
+        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap = block_on(async { cm_api.get(&configmap_name).await });
+        assert!(configmap.is_ok(), "ConfigMap should be created");
+
+        let cm = configmap.unwrap();
+        assert!(cm.data.is_some(), "ConfigMap should have data");
+
+        let data = cm.data.unwrap();
+        assert!(data.contains_key("404.html"), "ConfigMap should have 404.html");
+        assert!(data.contains_key("503.html"), "ConfigMap should have 503.html");
+
+        let error_404 = data.get("404.html").unwrap();
+        assert!(error_404.contains("404"), "404 page should contain status code");
+        assert!(error_404.contains("Not Found"), "404 page should contain error message");
+
+        let error_503 = data.get("503.html").unwrap();
+        assert!(error_503.contains("503"), "503 page should contain status code");
+        assert!(
+            error_503.contains("Service Unavailable"),
+            "503 page should contain error message"
+        );
+
+        // Verify BackendTrafficPolicy was created
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(policy.is_some(), "BackendTrafficPolicy should be created");
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(response_override) = spec.get("responseOverride").and_then(|v| v.as_array()) {
+                assert_eq!(response_override.len(), 2, "Should have 2 response overrides");
+
+                let has_404 = response_override.iter().any(|override_entry| {
+                    override_entry
+                        .get("match")
+                        .and_then(|m| m.get("statusCodes"))
+                        .and_then(|sc| sc.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|code| code.get("value"))
+                        .and_then(|v| v.as_u64())
+                        == Some(404)
+                });
+
+                let has_503 = response_override.iter().any(|override_entry| {
+                    override_entry
+                        .get("match")
+                        .and_then(|m| m.get("statusCodes"))
+                        .and_then(|sc| sc.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|code| code.get("value"))
+                        .and_then(|v| v.as_u64())
+                        == Some(503)
+                });
+
+                assert!(has_404, "Should have 404 status code override");
+                assert!(has_503, "Should have 503 status code override");
+
+                // Verify ConfigMap reference
+                for override_entry in response_override {
+                    if let Some(response) = override_entry.get("response") {
+                        if let Some(body) = response.get("body") {
+                            let body_type = body.get("type").and_then(|t| t.as_str());
+                            assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
+
+                            if let Some(value_ref) = body.get("valueRef") {
+                                let cm_name = value_ref.get("name").and_then(|n| n.as_str());
+                                assert_eq!(
+                                    cm_name,
+                                    Some(configmap_name.as_str()),
+                                    "Should reference correct ConfigMap"
+                                );
+                            }
+                        }
+                    }
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have responseOverride");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_container_with_custom_http_errors_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let container_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: container_id,
+            name: "custom-errors-test-container".to_string(),
+            kube_name: format!("container-{suffix}"),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                    .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            gpu_request: None,
+            gpu_limit: None,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", container_id, infra_ctx.dns_provider().domain()),
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+            storages: vec![],
+            environment_vars_with_infos: BTreeMap::new(),
+            mounted_files: vec![],
+            readiness_probe: None,
+            liveness_probe: None,
+            advanced_settings: ContainerAdvancedSettings {
+                network_gateway_api_custom_http_errors: Some(vec![400, 500, 502]),
+                ..Default::default()
+            },
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "custom-errors-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: container_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // Verify ConfigMap was created
+        let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
+        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap = block_on(async { cm_api.get(&configmap_name).await });
+        assert!(configmap.is_ok(), "ConfigMap should be created");
+
+        let cm = configmap.unwrap();
+        assert!(cm.data.is_some(), "ConfigMap should have data");
+
+        let data = cm.data.unwrap();
+        assert!(data.contains_key("400.html"), "ConfigMap should have 400.html");
+        assert!(data.contains_key("500.html"), "ConfigMap should have 500.html");
+        assert!(data.contains_key("502.html"), "ConfigMap should have 502.html");
+
+        // Verify BackendTrafficPolicy was created
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(policy.is_some(), "BackendTrafficPolicy should be created");
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(response_override) = spec.get("responseOverride").and_then(|v| v.as_array()) {
+                assert_eq!(response_override.len(), 3, "Should have 3 response overrides");
+
+                let status_codes: Vec<u64> = response_override
+                    .iter()
+                    .filter_map(|override_entry| {
+                        override_entry
+                            .get("match")
+                            .and_then(|m| m.get("statusCodes"))
+                            .and_then(|sc| sc.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|code| code.get("value"))
+                            .and_then(|v| v.as_u64())
+                    })
+                    .collect();
+
+                assert!(status_codes.contains(&400), "Should have 400 status code");
+                assert!(status_codes.contains(&500), "Should have 500 status code");
+                assert!(status_codes.contains(&502), "Should have 502 status code");
+            } else {
+                panic!("BackendTrafficPolicy should have responseOverride");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_helm_with_custom_http_errors_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let helm_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![];
+        environment.helms = vec![HelmChart {
+            long_id: helm_id,
+            name: "custom-errors-test-helm".to_string(),
+            kube_name: format!("helm-{suffix}"),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "values.yaml".to_string(),
+                    content: "nameOverride: custom-errors-test".to_string(),
+                }],
+            },
+            set_values: vec![],
+            set_string_values: vec![("serviceId".to_string(), helm_id.to_string())],
+            set_json_values: vec![],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: BTreeMap::new(),
+            advanced_settings: HelmChartAdvancedSettings {
+                network_gateway_api_custom_http_errors: Some(vec![401, 403, 404]),
+                ..Default::default()
+            },
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "custom-errors-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: helm_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // Verify ConfigMap was created
+        let cm_api: Api<ConfigMap> = Api::namespaced(kube_client.clone(), namespace);
+        let configmap_name = format!("router-{suffix}-error-pages");
+        let configmap = block_on(async { cm_api.get(&configmap_name).await });
+        assert!(configmap.is_ok(), "ConfigMap should be created");
+
+        let cm = configmap.unwrap();
+        assert!(cm.data.is_some(), "ConfigMap should have data");
+
+        let data = cm.data.unwrap();
+        assert!(data.contains_key("401.html"), "ConfigMap should have 401.html");
+        assert!(data.contains_key("403.html"), "ConfigMap should have 403.html");
+        assert!(data.contains_key("404.html"), "ConfigMap should have 404.html");
+
+        let error_401 = data.get("401.html").unwrap();
+        assert!(error_401.contains("401"), "401 page should contain status code");
+        assert!(error_401.contains("Unauthorized"), "401 page should contain error message");
+
+        let error_403 = data.get("403.html").unwrap();
+        assert!(error_403.contains("403"), "403 page should contain status code");
+        assert!(error_403.contains("Forbidden"), "403 page should contain error message");
+
+        // Verify BackendTrafficPolicy was created
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(policy.is_some(), "BackendTrafficPolicy should be created");
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(response_override) = spec.get("responseOverride").and_then(|v| v.as_array()) {
+                assert_eq!(response_override.len(), 3, "Should have 3 response overrides");
+
+                let status_codes: Vec<u64> = response_override
+                    .iter()
+                    .filter_map(|override_entry| {
+                        override_entry
+                            .get("match")
+                            .and_then(|m| m.get("statusCodes"))
+                            .and_then(|sc| sc.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|code| code.get("value"))
+                            .and_then(|v| v.as_u64())
+                    })
+                    .collect();
+
+                assert!(status_codes.contains(&401), "Should have 401 status code");
+                assert!(status_codes.contains(&403), "Should have 403 status code");
+                assert!(status_codes.contains(&404), "Should have 404 status code");
+
+                // Verify ConfigMap reference in each response override
+                for override_entry in response_override {
+                    if let Some(response) = override_entry.get("response") {
+                        if let Some(body) = response.get("body") {
+                            let body_type = body.get("type").and_then(|t| t.as_str());
+                            assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
+
+                            if let Some(value_ref) = body.get("valueRef") {
+                                let cm_name = value_ref.get("name").and_then(|n| n.as_str());
+                                assert_eq!(
+                                    cm_name,
+                                    Some(configmap_name.as_str()),
+                                    "Should reference correct ConfigMap"
+                                );
+
+                                let kind = value_ref.get("kind").and_then(|k| k.as_str());
+                                assert_eq!(kind, Some("ConfigMap"), "Should reference ConfigMap kind");
+                            }
+                        }
+                    }
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have responseOverride");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
         }
 
         // clean up:
