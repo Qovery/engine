@@ -1,0 +1,233 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, http_hosts in http_hosts_per_namespace %}
+{%- if http_hosts|length >= 1 %}
+{%- if advanced_settings.network_gateway_api_custom_http_errors is defined and advanced_settings.network_gateway_api_custom_http_errors %}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ sanitized_name }}-error-pages
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+data:
+  400.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>400 Bad Request</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>400</h1>
+            <h2>Bad Request</h2>
+            <p>The request could not be understood by the server due to malformed syntax.</p>
+        </div>
+    </body>
+    </html>
+
+  401.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>401 Unauthorized</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: #fff; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>401</h1>
+            <h2>Unauthorized</h2>
+            <p>Authentication is required to access this resource.</p>
+        </div>
+    </body>
+    </html>
+
+  403.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>403 Forbidden</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: #fff; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>403</h1>
+            <h2>Forbidden</h2>
+            <p>You don't have permission to access this resource.</p>
+        </div>
+    </body>
+    </html>
+
+  404.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>404 Not Found</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: #fff; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>404</h1>
+            <h2>Not Found</h2>
+            <p>The page you are looking for could not be found.</p>
+        </div>
+    </body>
+    </html>
+
+  500.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>500 Internal Server Error</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #f857a6 0%, #ff5858 100%); color: #fff; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>500</h1>
+            <h2>Internal Server Error</h2>
+            <p>Something went wrong on our end. Please try again later.</p>
+        </div>
+    </body>
+    </html>
+
+  502.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>502 Bad Gateway</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); color: #333; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>502</h1>
+            <h2>Bad Gateway</h2>
+            <p>The server received an invalid response from an upstream server.</p>
+        </div>
+    </body>
+    </html>
+
+  503.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>503 Service Unavailable</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); color: #333; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>503</h1>
+            <h2>Service Unavailable</h2>
+            <p>The service is temporarily unavailable. Please try again in a few moments.</p>
+        </div>
+    </body>
+    </html>
+
+  504.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>504 Gateway Timeout</title>
+        <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                   display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0;
+                   background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); color: #333; }
+            .container { text-align: center; padding: 2rem; }
+            h1 { font-size: 6rem; margin: 0; font-weight: 700; }
+            h2 { font-size: 2rem; margin: 1rem 0; font-weight: 400; }
+            p { font-size: 1.1rem; opacity: 0.9; max-width: 500px; margin: 1rem auto; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>504</h1>
+            <h2>Gateway Timeout</h2>
+            <p>The server didn't receive a timely response from an upstream server.</p>
+        </div>
+    </body>
+    </html>
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
