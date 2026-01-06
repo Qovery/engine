@@ -109,6 +109,18 @@ spec:
             key: {{ code | trim }}.html
     {%- endfor %}
   {%- endif %}
+  {%- if advanced_settings.network_gateway_api_circuit_breaker_max_connections or advanced_settings.network_gateway_api_circuit_breaker_max_pending_requests or advanced_settings.network_gateway_api_circuit_breaker_max_parallel_requests %}
+  circuitBreaker:
+    {%- if advanced_settings.network_gateway_api_circuit_breaker_max_connections %}
+    maxConnections: {{ advanced_settings.network_gateway_api_circuit_breaker_max_connections }}
+    {%- endif %}
+    {%- if advanced_settings.network_gateway_api_circuit_breaker_max_pending_requests %}
+    maxPendingRequests: {{ advanced_settings.network_gateway_api_circuit_breaker_max_pending_requests }}
+    {%- endif %}
+    {%- if advanced_settings.network_gateway_api_circuit_breaker_max_parallel_requests %}
+    maxParallelRequests: {{ advanced_settings.network_gateway_api_circuit_breaker_max_parallel_requests }}
+    {%- endif %}
+  {%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

@@ -70,6 +70,12 @@ pub struct HelmChartAdvancedSettings {
         with = "crate::io_models::types::http_status_codes"
     )]
     pub network_gateway_api_custom_http_errors: Option<Vec<u16>>,
+    #[serde(alias = "network.gateway_api.circuit_breaker.max_connections")]
+    pub network_gateway_api_circuit_breaker_max_connections: Option<u32>,
+    #[serde(alias = "network.gateway_api.circuit_breaker.max_pending_requests")]
+    pub network_gateway_api_circuit_breaker_max_pending_requests: Option<u32>,
+    #[serde(alias = "network.gateway_api.circuit_breaker.max_parallel_requests")]
+    pub network_gateway_api_circuit_breaker_max_parallel_requests: Option<u32>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -121,7 +127,7 @@ pub struct HelmChartAdvancedSettings {
     #[serde(alias = "network.ingress.nginx_limit_burst_multiplier")]
     pub network_ingress_nginx_limit_burst_multiplier: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_limit_connections")]
-    pub network_ingress_nginx_limit_connections: Option<u32>,
+    pub network_ingress_nginx_limit_connections: Option<u32>, // TODO(benjaminch QOV-1400): to be removed
     #[serde(alias = "network.ingress.nginx_controller_server_snippet")]
     pub network_ingress_nginx_controller_server_snippet: Option<NginxServerSnippet>,
     #[serde(alias = "network.ingress.nginx_controller_configuration_snippet")]
@@ -184,6 +190,9 @@ impl Default for HelmChartAdvancedSettings {
             network_gateway_api_add_headers: BTreeMap::new(),
             network_gateway_api_proxy_set_headers: BTreeMap::new(),
             network_gateway_api_custom_http_errors: None,
+            network_gateway_api_circuit_breaker_max_connections: None,
+            network_gateway_api_circuit_breaker_max_pending_requests: None,
+            network_gateway_api_circuit_breaker_max_parallel_requests: None,
         }
     }
 }

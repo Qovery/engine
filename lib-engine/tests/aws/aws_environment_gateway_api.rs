@@ -9955,3 +9955,493 @@ fn deploy_helm_with_custom_http_errors_on_aws_eks() {
         "".to_string()
     })
 }
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_application_with_circuit_breaker_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let mut environment = helpers::environment::working_minimal_environment_with_router(&context, test_domain);
+
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_circuit_breaker_max_connections = Some(100);
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_circuit_breaker_max_pending_requests = Some(50);
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_circuit_breaker_max_parallel_requests = Some(200);
+        environment.applications[0].public_domain = format!("app-{suffix}.{test_domain}");
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // First check if HTTPRoute was created
+        let httproute_api_resource = kube::api::ApiResource {
+            group: "gateway.networking.k8s.io".to_string(),
+            version: "v1".to_string(),
+            kind: "HTTPRoute".to_string(),
+            api_version: "gateway.networking.k8s.io/v1".to_string(),
+            plural: "httproutes".to_string(),
+        };
+        let httproute_api: Api<kube::core::DynamicObject> =
+            Api::namespaced_with(kube_client.clone(), namespace, &httproute_api_resource);
+        let httproutes =
+            retry_list_gateway_api_resources(&httproute_api).expect("Failed to list HTTPRoutes after retries");
+
+        println!("Found {} HTTPRoutes in namespace {}", httproutes.items.len(), namespace);
+        for route in &httproutes.items {
+            println!("  - HTTPRoute: {:?}", route.metadata.name);
+        }
+
+        // Verify BackendTrafficPolicy was created with circuit breaker settings
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        println!(
+            "Found {} BackendTrafficPolicies in namespace {}",
+            backend_traffic_policies.items.len(),
+            namespace
+        );
+        for policy in &backend_traffic_policies.items {
+            println!("  - BackendTrafficPolicy: {:?}", policy.metadata.name);
+        }
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(
+            policy.is_some(),
+            "BackendTrafficPolicy should be created. HTTPRoutes: {}, BackendTrafficPolicies: {}",
+            httproutes.items.len(),
+            backend_traffic_policies.items.len()
+        );
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(circuit_breaker) = spec.get("circuitBreaker") {
+                let max_connections = circuit_breaker.get("maxConnections").and_then(|v| v.as_u64());
+                let max_pending_requests = circuit_breaker.get("maxPendingRequests").and_then(|v| v.as_u64());
+                let max_parallel_requests = circuit_breaker.get("maxParallelRequests").and_then(|v| v.as_u64());
+
+                assert_eq!(max_connections, Some(100), "maxConnections should be 100");
+                assert_eq!(max_pending_requests, Some(50), "maxPendingRequests should be 50");
+                assert_eq!(max_parallel_requests, Some(200), "maxParallelRequests should be 200");
+            } else {
+                panic!("BackendTrafficPolicy should have circuitBreaker");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_container_with_circuit_breaker_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let container_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: container_id,
+            name: "circuit-breaker-test-container".to_string(),
+            kube_name: format!("container-{suffix}"),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:3000,fork EXEC:/bin/cat".to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_milli: 100,
+            cpu_limit_in_milli: 100,
+            ram_request_in_mib: 100,
+            ram_limit_in_mib: 100,
+            gpu_request: None,
+            gpu_limit: None,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("container-{suffix}.{test_domain}"),
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 3000,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+            storages: vec![],
+            environment_vars_with_infos: BTreeMap::new(),
+            mounted_files: vec![],
+            advanced_settings: ContainerAdvancedSettings {
+                network_gateway_api_circuit_breaker_max_connections: Some(150),
+                network_gateway_api_circuit_breaker_max_pending_requests: Some(75),
+                network_gateway_api_circuit_breaker_max_parallel_requests: Some(300),
+                ..Default::default()
+            },
+            readiness_probe: None,
+            liveness_probe: None,
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "circuit-breaker-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: container_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // Verify BackendTrafficPolicy was created with circuit breaker settings
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(policy.is_some(), "BackendTrafficPolicy should be created");
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(circuit_breaker) = spec.get("circuitBreaker") {
+                let max_connections = circuit_breaker.get("maxConnections").and_then(|v| v.as_u64());
+                let max_pending_requests = circuit_breaker.get("maxPendingRequests").and_then(|v| v.as_u64());
+                let max_parallel_requests = circuit_breaker.get("maxParallelRequests").and_then(|v| v.as_u64());
+
+                assert_eq!(max_connections, Some(150), "maxConnections should be 150");
+                assert_eq!(max_pending_requests, Some(75), "maxPendingRequests should be 75");
+                assert_eq!(max_parallel_requests, Some(300), "maxParallelRequests should be 300");
+            } else {
+                panic!("BackendTrafficPolicy should have circuitBreaker");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_helm_with_circuit_breaker_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let helm_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![];
+        environment.helms = vec![HelmChart {
+            long_id: helm_id,
+            name: "circuit-breaker-test-helm".to_string(),
+            kube_name: format!("helm-{suffix}"),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "values.yaml".to_string(),
+                    content: "nameOverride: circuit-breaker-test".to_string(),
+                }],
+            },
+            set_values: vec![],
+            set_string_values: vec![("serviceId".to_string(), helm_id.to_string())],
+            set_json_values: vec![],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: BTreeMap::new(),
+            advanced_settings: HelmChartAdvancedSettings {
+                network_gateway_api_circuit_breaker_max_connections: Some(250),
+                network_gateway_api_circuit_breaker_max_pending_requests: Some(125),
+                network_gateway_api_circuit_breaker_max_parallel_requests: Some(500),
+                ..Default::default()
+            },
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "circuit-breaker-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: helm_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        // Verify BackendTrafficPolicy was created with circuit breaker settings
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let backend_traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        let policy = backend_traffic_policies.items.iter().find(|p| {
+            p.metadata
+                .name
+                .as_ref()
+                .map(|name| name.contains("traffic-policy"))
+                .unwrap_or(false)
+        });
+
+        assert!(policy.is_some(), "BackendTrafficPolicy should be created");
+
+        let btp = policy.unwrap();
+
+        if let Some(spec) = btp.data.get("spec") {
+            if let Some(circuit_breaker) = spec.get("circuitBreaker") {
+                let max_connections = circuit_breaker.get("maxConnections").and_then(|v| v.as_u64());
+                let max_pending_requests = circuit_breaker.get("maxPendingRequests").and_then(|v| v.as_u64());
+                let max_parallel_requests = circuit_breaker.get("maxParallelRequests").and_then(|v| v.as_u64());
+
+                assert_eq!(max_connections, Some(250), "maxConnections should be 250");
+                assert_eq!(max_pending_requests, Some(125), "maxPendingRequests should be 125");
+                assert_eq!(max_parallel_requests, Some(500), "maxParallelRequests should be 500");
+            } else {
+                panic!("BackendTrafficPolicy should have circuitBreaker");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
