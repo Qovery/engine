@@ -1,6 +1,7 @@
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, QoveryGatewayClass,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    QoveryGatewayClass,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
@@ -15,13 +16,17 @@ use std::collections::HashSet;
 pub struct QoveryGatewayClassChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    namespace: HelmChartNamespaces,
     gateway_classes_to_be_installed: HashSet<QoveryGatewayClass>,
+    access_log_format: Option<String>,
 }
 
 impl QoveryGatewayClassChart {
     pub fn new(
         chart_prefix_path: Option<&str>,
+        namespace: HelmChartNamespaces,
         gateway_classes_to_be_checked_after_install: HashSet<QoveryGatewayClass>,
+        access_log_format: Option<String>,
     ) -> Self {
         QoveryGatewayClassChart {
             chart_path: HelmChartPath::new(
@@ -34,7 +39,9 @@ impl QoveryGatewayClassChart {
                 HelmChartDirectoryLocation::CommonFolder,
                 QoveryGatewayClassChart::chart_name(),
             ),
+            namespace,
             gateway_classes_to_be_installed: gateway_classes_to_be_checked_after_install,
+            access_log_format,
         }
     }
 
@@ -45,27 +52,42 @@ impl QoveryGatewayClassChart {
 
 impl ToCommonHelmChart for QoveryGatewayClassChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values = vec![
+            ChartSetValue {
+                key: "gatewayClass.qoveryPublic.enable".to_string(),
+                value: self
+                    .gateway_classes_to_be_installed
+                    .contains(&QoveryGatewayClass::PublicGateway)
+                    .to_string(),
+            },
+            ChartSetValue {
+                key: "gatewayClass.qoveryPrivate.enable".to_string(),
+                value: self
+                    .gateway_classes_to_be_installed
+                    .contains(&QoveryGatewayClass::PrivateGateway)
+                    .to_string(),
+            },
+        ];
+
+        // Add access log format if provided
+        if let Some(ref format) = self.access_log_format {
+            values.push(ChartSetValue {
+                key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
+                value: format.clone(),
+            });
+            values.push(ChartSetValue {
+                key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
+                value: format.clone(),
+            });
+        }
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: QoveryGatewayClassChart::chart_name(),
+                namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
-                values: vec![
-                    ChartSetValue {
-                        key: "gatewayClass.qoveryPublic.enable".to_string(),
-                        value: self
-                            .gateway_classes_to_be_installed
-                            .contains(&QoveryGatewayClass::PublicGateway)
-                            .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "gatewayClass.qoveryPrivate.enable".to_string(),
-                        value: self
-                            .gateway_classes_to_be_installed
-                            .contains(&QoveryGatewayClass::PrivateGateway)
-                            .to_string(),
-                    },
-                ],
+                values,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryGatewayClassChartInstallationChecker::new(
@@ -140,6 +162,7 @@ impl ChartInstallationChecker for QoveryGatewayClassChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::helm::HelmChartNamespaces;
     use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -152,7 +175,7 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_directory_exists_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HashSet::new());
+        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -175,7 +198,7 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_values_file_exists_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HashSet::new());
+        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -202,7 +225,7 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HashSet::new());
+        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

@@ -576,7 +576,12 @@ pub(super) fn eks_helm_charts(
         qovery_gateway_class_chart = Some(
             QoveryGatewayClassChart::new(
                 chart_prefix_path,
+                HelmChartNamespaces::Qovery,
                 HashSet::from_iter(vec![QoveryGatewayClass::PublicGateway, QoveryGatewayClass::PrivateGateway]),
+                chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .envoy_access_log_format
+                    .clone(),
             )
             .to_common_helm_chart()?,
         );

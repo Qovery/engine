@@ -314,11 +314,11 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "nginx.controller.enable_client_ip")]
     pub nginx_controller_enable_client_ip: bool, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.use_forwarded_headers")]
-    pub nginx_controller_use_forwarded_headers: bool,
+    pub nginx_controller_use_forwarded_headers: bool, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.compute_full_forwarded_for")]
-    pub nginx_controller_compute_full_forwarded_for: bool,
+    pub nginx_controller_compute_full_forwarded_for: bool, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.log_format_upstream")]
-    pub nginx_controller_log_format_upstream: Option<String>,
+    pub nginx_controller_log_format_upstream: Option<String>, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(
         alias = "nginx.controller.log_format_escaping",
         default = "default_nginx_controller_log_format_escaping"
@@ -388,6 +388,8 @@ pub struct ClusterAdvancedSettings {
     pub envoy_memory_limit_in_mib: u32,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
+    #[serde(alias = "envoy.access_log.format")]
+    pub envoy_access_log_format: Option<String>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -467,6 +469,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_memory_request_in_mib: 256,
             envoy_memory_limit_in_mib: 1024,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
+            envoy_access_log_format: None,
         }
     }
 }
