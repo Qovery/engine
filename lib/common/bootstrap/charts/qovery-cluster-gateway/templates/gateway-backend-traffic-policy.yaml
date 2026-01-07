@@ -1,0 +1,31 @@
+{{- if .Values.gateway.qoveryPublic.enable }}
+{{- if .Values.gateway.qoveryPublic.customHttpErrors.default }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: qovery-cluster-public-gateway-backend-traffic-policy
+  namespace: {{ .Release.Namespace }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: qovery-cluster-public-gateway
+  responseOverride:
+    {{- range $code := split "," .Values.gateway.qoveryPublic.customHttpErrors.default }}
+    - match:
+        statusCodes:
+          - type: Value
+            value: {{ $code | trim }}
+      response:
+        contentType: text/html
+        body:
+          type: ValueRef
+          valueRef:
+            group: ""
+            kind: ConfigMap
+            name: qovery-cluster-gateway-default-error-pages
+            key: {{ $code | trim }}.html
+    {{- end }}
+{{- end }}
+{{- end }}

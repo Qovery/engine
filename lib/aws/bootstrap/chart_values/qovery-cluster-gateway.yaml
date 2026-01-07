@@ -6,6 +6,8 @@ gateway:
     enable: true
     xForwardedFor:
       numberTrustedHops: null
+    customHttpErrors:
+      default: null
 
 infrastructure:
   annotations:
