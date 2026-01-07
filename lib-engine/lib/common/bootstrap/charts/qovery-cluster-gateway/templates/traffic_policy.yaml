@@ -4,7 +4,14 @@ metadata:
   name: qovery-cluster-public-gateway-client-traffic-policy
   namespace: {{ .Values.namespace }}
 spec:
-  {{- $numHops := dig "qoveryPublic" "xforwardedFor" "numberTrustedHops" -1 .Values }}
+  {{- $numHops := -1 }}
+  {{- if .Values.qoveryPublic }}
+    {{- if .Values.qoveryPublic.xforwardedFor }}
+      {{- if hasKey .Values.qoveryPublic.xforwardedFor "numberTrustedHops" }}
+        {{- $numHops = .Values.qoveryPublic.xforwardedFor.numberTrustedHops }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
   {{- if ge $numHops 0 }}
   clientIPDetection:
     xForwardedFor:
