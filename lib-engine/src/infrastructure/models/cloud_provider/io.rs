@@ -340,11 +340,11 @@ pub struct ClusterAdvancedSettings {
     #[serde(alias = "nginx.controller.enable_compression")]
     pub nginx_controller_enable_compression: bool, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.default_backend.enabled")]
-    pub nginx_default_backend_enabled: Option<bool>,
+    pub nginx_default_backend_enabled: Option<bool>, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.default_backend.image_repository")]
-    pub nginx_default_backend_image_repository: Option<String>,
+    pub nginx_default_backend_image_repository: Option<String>, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.default_backend.image_tag")]
-    pub nginx_default_backend_image_tag: Option<String>,
+    pub nginx_default_backend_image_tag: Option<String>, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
 
     #[serde(alias = "scaleway.enable_private_network_migration")]
     pub scaleway_enable_private_network_migration: bool,
@@ -398,6 +398,12 @@ pub struct ClusterAdvancedSettings {
     pub envoy_custom_http_errors_default: Option<Vec<u16>>,
     #[serde(alias = "envoy.enable_compression")]
     pub envoy_enable_compression: bool,
+    #[serde(alias = "envoy.default_backend.enable")]
+    pub envoy_default_backend_enable: bool,
+    #[serde(alias = "envoy.default_backend.image")]
+    pub envoy_default_backend_image: Option<String>,
+    #[serde(alias = "envoy.default_backend.tag")]
+    pub envoy_default_backend_tag: Option<String>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -480,6 +486,9 @@ impl Default for ClusterAdvancedSettings {
             envoy_access_log_format: None,
             envoy_custom_http_errors_default: None,
             envoy_enable_compression: true,
+            envoy_default_backend_enable: false,
+            envoy_default_backend_image: None,
+            envoy_default_backend_tag: None,
         }
     }
 }

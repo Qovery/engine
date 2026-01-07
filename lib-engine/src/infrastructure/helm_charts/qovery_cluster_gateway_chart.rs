@@ -26,6 +26,9 @@ pub struct QoveryClusterGatewayChartOptions {
     pub x_forwarded_for_number_truster_hops: Option<u8>, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
     pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
     pub compression_enable: bool, // enable response compression (brotli quality=6 and gzip level=6, matching nginx defaults)
+    pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
+    pub default_backend_image: Option<String>, // default backend container image (e.g., "registry.k8s.io/ingress-nginx/custom-error-pages")
+    pub default_backend_tag: Option<String>,   // default backend container image tag (e.g., "v1.1.1")
 }
 
 pub struct QoveryClusterGatewayChart {
@@ -99,6 +102,25 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             key: "gateway.qoveryPublic.compression.enable".to_string(),
             value: self.chart_options.compression_enable.to_string(),
         });
+
+        chart_set_values.push(ChartSetValue {
+            key: "gateway.qoveryPublic.defaultBackend.enable".to_string(),
+            value: self.chart_options.default_backend_enable.to_string(),
+        });
+
+        if let Some(ref image) = self.chart_options.default_backend_image {
+            chart_set_values.push(ChartSetValue {
+                key: "gateway.qoveryPublic.defaultBackend.image".to_string(),
+                value: image.clone(),
+            });
+        }
+
+        if let Some(ref tag) = self.chart_options.default_backend_tag {
+            chart_set_values.push(ChartSetValue {
+                key: "gateway.qoveryPublic.defaultBackend.tag".to_string(),
+                value: tag.clone(),
+            });
+        }
 
         match self.kubernetes_provider_options {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks

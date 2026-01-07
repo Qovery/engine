@@ -10,6 +10,10 @@ gateway:
       default: null
     compression:
       enable: true
+    defaultBackend:
+      enable: false
+      image: null
+      tag: null
 
 infrastructure:
   annotations:

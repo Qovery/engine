@@ -1,0 +1,87 @@
+{{- if .Values.gateway.qoveryPublic.enable }}
+{{- if .Values.gateway.qoveryPublic.defaultBackend.enable }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qovery-cluster-public-gateway-default-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: qovery-cluster-public-gateway-default-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: qovery-cluster-public-gateway-default-backend
+  template:
+    metadata:
+      labels:
+        app: qovery-cluster-public-gateway-default-backend
+    spec:
+      containers:
+        - name: default-backend
+          image: {{ .Values.gateway.qoveryPublic.defaultBackend.image }}:{{ .Values.gateway.qoveryPublic.defaultBackend.tag }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+          resources:
+            limits:
+              cpu: 10m
+              memory: 20Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qovery-cluster-public-gateway-default-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: qovery-cluster-public-gateway-default-backend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: qovery-cluster-public-gateway-default-backend
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: qovery-cluster-public-gateway-default-backend
+  namespace: {{ .Release.Namespace }}
+spec:
+  parentRefs:
+    - name: qovery-cluster-public-gateway
+      namespace: {{ .Release.Namespace }}
+  rules:
+    # Catch-all rule - matches all requests that don't match any other HTTPRoute
+    # No hostname matching means it catches ALL hostnames
+    # PathPrefix "/" means it catches ALL paths
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: qovery-cluster-public-gateway-default-backend
+          namespace: {{ .Release.Namespace }}
+          port: 8080
+{{- end }}
+{{- end }}
