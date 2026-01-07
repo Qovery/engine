@@ -9504,19 +9504,15 @@ fn deploy_application_with_custom_http_errors_on_aws_eks() {
 
                 // Verify ConfigMap reference
                 for override_entry in response_override {
-                    if let Some(response) = override_entry.get("response") {
-                        if let Some(body) = response.get("body") {
-                            let body_type = body.get("type").and_then(|t| t.as_str());
-                            assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
+                    if let Some(response) = override_entry.get("response")
+                        && let Some(body) = response.get("body")
+                    {
+                        let body_type = body.get("type").and_then(|t| t.as_str());
+                        assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
 
-                            if let Some(value_ref) = body.get("valueRef") {
-                                let cm_name = value_ref.get("name").and_then(|n| n.as_str());
-                                assert_eq!(
-                                    cm_name,
-                                    Some(configmap_name.as_str()),
-                                    "Should reference correct ConfigMap"
-                                );
-                            }
+                        if let Some(value_ref) = body.get("valueRef") {
+                            let cm_name = value_ref.get("name").and_then(|n| n.as_str());
+                            assert_eq!(cm_name, Some(configmap_name.as_str()), "Should reference correct ConfigMap");
                         }
                     }
                 }
@@ -9630,6 +9626,7 @@ fn deploy_container_with_custom_http_errors_on_aws_eks() {
             },
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),
+            autoscaling: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -9922,22 +9919,18 @@ fn deploy_helm_with_custom_http_errors_on_aws_eks() {
 
                 // Verify ConfigMap reference in each response override
                 for override_entry in response_override {
-                    if let Some(response) = override_entry.get("response") {
-                        if let Some(body) = response.get("body") {
-                            let body_type = body.get("type").and_then(|t| t.as_str());
-                            assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
+                    if let Some(response) = override_entry.get("response")
+                        && let Some(body) = response.get("body")
+                    {
+                        let body_type = body.get("type").and_then(|t| t.as_str());
+                        assert_eq!(body_type, Some("ValueRef"), "Should use ValueRef for body");
 
-                            if let Some(value_ref) = body.get("valueRef") {
-                                let cm_name = value_ref.get("name").and_then(|n| n.as_str());
-                                assert_eq!(
-                                    cm_name,
-                                    Some(configmap_name.as_str()),
-                                    "Should reference correct ConfigMap"
-                                );
+                        if let Some(value_ref) = body.get("valueRef") {
+                            let cm_name = value_ref.get("name").and_then(|n| n.as_str());
+                            assert_eq!(cm_name, Some(configmap_name.as_str()), "Should reference correct ConfigMap");
 
-                                let kind = value_ref.get("kind").and_then(|k| k.as_str());
-                                assert_eq!(kind, Some("ConfigMap"), "Should reference ConfigMap kind");
-                            }
+                            let kind = value_ref.get("kind").and_then(|k| k.as_str());
+                            assert_eq!(kind, Some("ConfigMap"), "Should reference ConfigMap kind");
                         }
                     }
                 }
@@ -10198,6 +10191,7 @@ fn deploy_container_with_circuit_breaker_on_aws_eks() {
             liveness_probe: None,
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),
+            autoscaling: None,
         }];
 
         let router_id = Uuid::new_v4();

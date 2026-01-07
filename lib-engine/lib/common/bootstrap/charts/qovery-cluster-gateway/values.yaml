@@ -9,6 +9,8 @@ gateway:
       numberTrustedHops: null
     customHttpErrors:
       default: ""
+    compression:
+      enable: true
 
 infrastructure:
   annotations: {}

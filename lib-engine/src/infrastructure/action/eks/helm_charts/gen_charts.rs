@@ -611,6 +611,9 @@ pub(super) fn eks_helm_charts(
                         .envoy_custom_http_errors_default
                         .as_ref()
                         .map(|codes| codes.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",")),
+                    compression_enable: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_enable_compression,
                 },
             )
             .to_common_helm_chart()?,
