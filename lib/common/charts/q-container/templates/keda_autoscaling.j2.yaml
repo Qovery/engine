@@ -63,14 +63,14 @@ spec:
   triggers:
   {%- for scaler in service.autoscaling.scalers %}
     - type: {{ scaler.scaler_type }}
+      {%- if scaler.metadata %}
       metadata:
-        {%- if scaler.metadata %}
         {%- for key, value in scaler.metadata %}
         {{ key }}: {{ value | json_encode }}
         {%- endfor %}
-        {%- elif scaler.raw_yaml %}
-        {{ scaler.raw_yaml | indent(prefix="        ") }}
-        {%- endif %}
+      {%- elif scaler.raw_yaml %}
+      {{ scaler.raw_yaml | indent(prefix="      ") }}
+      {%- endif %}
       {%- if scaler.authentication_ref %}
       authenticationRef:
         name: {{ scaler.authentication_ref.name }}
