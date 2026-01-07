@@ -48,5 +48,9 @@ spec:
         {%- elif scaler.raw_yaml %}
         {{ scaler.raw_yaml | indent(prefix="        ") }}
         {%- endif %}
+      {%- if scaler.authentication_ref %}
+      authenticationRef:
+        name: {{ scaler.authentication_ref.name }}
+      {%- endif %}
   {%- endfor %}
 {%- endif %}

@@ -1,0 +1,28 @@
+{%- if service.autoscaling and service.autoscaling.type == "keda" and service.autoscaling.trigger_authentications | length > 0 %}
+{%- for trigger_auth in service.autoscaling.trigger_authentications %}
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ trigger_auth.name }}
+  namespace: {{ namespace }}
+  labels:
+    envId: {{ environment_short_id }}
+    qovery.com/service-id: {{ service.long_id }}
+    qovery.com/service-type: {{ service.type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  {%- if trigger_auth.spec %}
+  {%- for key, value in trigger_auth.spec %}
+  {{ key }}: {{ value | to_nice_yaml | indent(width=2) }}
+  {%- endfor %}
+  {%- elif trigger_auth.raw_yaml %}
+  {{ trigger_auth.raw_yaml | indent(prefix="  ") }}
+  {%- endif %}
+{%- endfor %}
+{%- endif %}
