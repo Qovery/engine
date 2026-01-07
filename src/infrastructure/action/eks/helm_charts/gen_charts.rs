@@ -614,6 +614,17 @@ pub(super) fn eks_helm_charts(
                     compression_enable: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_enable_compression,
+                    default_backend_enable: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_default_backend_enable,
+                    default_backend_image: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_default_backend_image
+                        .clone(),
+                    default_backend_tag: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_default_backend_tag
+                        .clone(),
                 },
             )
             .to_common_helm_chart()?,
