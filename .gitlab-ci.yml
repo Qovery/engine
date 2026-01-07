@@ -931,7 +931,7 @@ gitlab-release:
     # Prepare public branch of engine
     mv dist/CHANGELOG.md /tmp/
     git filter-repo --subdirectory-filter lib-engine --force --partial
-    mv CHANGELOG.md /tmp/CHANGELOG.md.old
+    curl -s https://raw.githubusercontent.com/Qovery/engine/refs/heads/engine-public/CHANGELOG.md > /tmp/CHANGELOG.md.old
     cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
     git add *
     git commit -m "chore(ci): public release"
