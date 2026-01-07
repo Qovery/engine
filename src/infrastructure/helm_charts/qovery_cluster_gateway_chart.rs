@@ -94,7 +94,8 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
         if let Some(ref custom_http_errors) = self.chart_options.custom_http_errors_default {
             chart_set_values.push(ChartSetValue {
                 key: "gateway.qoveryPublic.customHttpErrors.default".to_string(),
-                value: custom_http_errors.clone(),
+                // Escape commas for Helm --set syntax
+                value: custom_http_errors.replace(',', "\\,"),
             });
         }
 
