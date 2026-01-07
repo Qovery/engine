@@ -1,5 +1,9 @@
 gatewayClass:
   qoveryPublic:
     enable: true
+    accessLog:
+      format: ""
   qoveryPrivate:
     enable: true
+    accessLog:
+      format: ""

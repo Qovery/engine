@@ -1,0 +1,47 @@
+{{ if .Values.gatewayClass.qoveryPublic.enable }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: qovery-public-envoy-proxy-config
+  namespace: {{ .Values.namespace }}
+spec:
+  {{- if .Values.gatewayClass.qoveryPublic.accessLog }}
+  {{- if .Values.gatewayClass.qoveryPublic.accessLog.format }}
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: Text
+            text: {{ .Values.gatewayClass.qoveryPublic.accessLog.format | quote }}
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout
+  {{- end }}
+  {{- end }}
+{{ end }}
+
+{{ if .Values.gatewayClass.qoveryPrivate.enable }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: qovery-private-envoy-proxy-config
+  namespace: {{ .Values.namespace }}
+spec:
+  {{- if .Values.gatewayClass.qoveryPrivate.accessLog }}
+  {{- if .Values.gatewayClass.qoveryPrivate.accessLog.format }}
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: Text
+            text: {{ .Values.gatewayClass.qoveryPrivate.accessLog.format | quote }}
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout
+  {{- end }}
+  {{- end }}
+{{ end }}
