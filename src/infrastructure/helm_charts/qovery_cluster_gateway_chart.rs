@@ -25,6 +25,7 @@ pub enum QoveryClusterGatewayOptionsPerKubernetesKind {
 pub struct QoveryClusterGatewayChartOptions {
     pub x_forwarded_for_number_truster_hops: Option<u8>, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
     pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
+    pub compression_enable: bool, // enable response compression (brotli quality=6 and gzip level=6, matching nginx defaults)
 }
 
 pub struct QoveryClusterGatewayChart {
@@ -93,6 +94,11 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 value: custom_http_errors.clone(),
             });
         }
+
+        chart_set_values.push(ChartSetValue {
+            key: "gateway.qoveryPublic.compression.enable".to_string(),
+            value: self.chart_options.compression_enable.to_string(),
+        });
 
         match self.kubernetes_provider_options {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks

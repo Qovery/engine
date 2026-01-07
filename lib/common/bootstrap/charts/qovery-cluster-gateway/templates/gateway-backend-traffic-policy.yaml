@@ -1,5 +1,5 @@
 {{- if .Values.gateway.qoveryPublic.enable }}
-{{- if .Values.gateway.qoveryPublic.customHttpErrors.default }}
+{{- if or .Values.gateway.qoveryPublic.customHttpErrors.default .Values.gateway.qoveryPublic.compression.enable }}
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
@@ -11,6 +11,7 @@ spec:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: qovery-cluster-public-gateway
+  {{- if .Values.gateway.qoveryPublic.customHttpErrors.default }}
   responseOverride:
     {{- range $code := split "," .Values.gateway.qoveryPublic.customHttpErrors.default }}
     - match:
@@ -27,5 +28,21 @@ spec:
             name: qovery-cluster-gateway-default-error-pages
             key: {{ $code | trim }}.html
     {{- end }}
+  {{- end }}
+  {{- if .Values.gateway.qoveryPublic.compression.enable }}
+  compressor:
+    # Brotli compression with quality=6 (matches nginx brotli-level: 6)
+    - type: Brotli
+      brotli:
+        quality: 6
+    # Zstd compression with level=6 (default is 3)
+    - type: Zstd
+      zstd:
+        compression_level: 6
+    # Gzip compression with level=6 (matches nginx gzip-level: 6)
+    - type: Gzip
+      gzip:
+        compression_level: COMPRESSION_LEVEL_6
+  {{- end }}
 {{- end }}
 {{- end }}
