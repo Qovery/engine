@@ -443,12 +443,28 @@ impl Default for ContainerAdvancedSettings {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct KedaAuthenticationRef {
+    pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct KedaTriggerAuthentication {
+    pub name: String,
+    #[serde(default)]
+    pub spec: Option<BTreeMap<String, serde_json::Value>>,
+    #[serde(default)]
+    pub raw_yaml: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct KedaScaler {
     pub scaler_type: String,
     #[serde(default)]
     pub metadata: Option<BTreeMap<String, String>>,
     #[serde(default)]
     pub raw_yaml: Option<String>,
+    #[serde(default)]
+    pub authentication_ref: Option<KedaAuthenticationRef>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
@@ -471,6 +487,8 @@ pub enum AutoscalingConfig {
         cooldown_period_seconds: Option<u32>,
         #[serde(default)]
         scalers: Vec<KedaScaler>,
+        #[serde(default)]
+        trigger_authentications: Vec<KedaTriggerAuthentication>,
     },
 }
 
@@ -757,11 +775,13 @@ mod tests {
                 polling_interval_seconds,
                 cooldown_period_seconds,
                 scalers,
+                trigger_authentications,
             } => {
                 assert_eq!(polling_interval_seconds, Some(30));
                 assert_eq!(cooldown_period_seconds, Some(300));
                 assert_eq!(scalers.len(), 1);
                 assert_eq!(scalers[0].scaler_type, "prometheus");
+                assert_eq!(trigger_authentications.len(), 0);
             }
         }
     }
@@ -775,7 +795,9 @@ mod tests {
                 scaler_type: "prometheus".to_string(),
                 metadata: None,
                 raw_yaml: Some("serverAddress: http://test.com".to_string()),
+                authentication_ref: None,
             }],
+            trigger_authentications: vec![],
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -792,5 +814,59 @@ mod tests {
         let result: Result<Option<AutoscalingConfig>, _> = serde_json::from_str(json);
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
+    }
+
+    #[test]
+    fn test_autoscaling_config_with_trigger_authentications() {
+        let json = r#"{
+            "type": "keda",
+            "polling_interval_seconds": 30,
+            "cooldown_period_seconds": 300,
+            "scalers": [
+                {
+                    "scaler_type": "aws-sqs-queue",
+                    "raw_yaml": "queueURL: https://sqs.eu-west-3.amazonaws.com/843237546537/qovery-z3f50657b\nawsRegion: eu-west-3\nqueueLength: \"5\"",
+                    "authentication_ref": {
+                        "name": "gaffotron-scaler-1-trigger-auth"
+                    }
+                }
+            ],
+            "trigger_authentications": [
+                {
+                    "name": "gaffotron-scaler-1-trigger-auth",
+                    "raw_yaml": "podIdentity:\n  provider: aws\n  roleArn: arn:aws:iam::843237546537:role/keda-sqs-app1"
+                }
+            ]
+        }"#;
+
+        let result: Result<AutoscalingConfig, _> = serde_json::from_str(json);
+        assert!(result.is_ok(), "Failed to deserialize: {:?}", result.err());
+
+        let config = result.unwrap();
+        match config {
+            AutoscalingConfig::Keda {
+                polling_interval_seconds,
+                cooldown_period_seconds,
+                scalers,
+                trigger_authentications,
+            } => {
+                assert_eq!(polling_interval_seconds, Some(30));
+                assert_eq!(cooldown_period_seconds, Some(300));
+
+                // Check scalers
+                assert_eq!(scalers.len(), 1);
+                assert_eq!(scalers[0].scaler_type, "aws-sqs-queue");
+                assert!(scalers[0].authentication_ref.is_some());
+                assert_eq!(
+                    scalers[0].authentication_ref.as_ref().unwrap().name,
+                    "gaffotron-scaler-1-trigger-auth"
+                );
+
+                // Check trigger_authentications
+                assert_eq!(trigger_authentications.len(), 1);
+                assert_eq!(trigger_authentications[0].name, "gaffotron-scaler-1-trigger-auth");
+                assert!(trigger_authentications[0].raw_yaml.is_some());
+            }
+        }
     }
 }
