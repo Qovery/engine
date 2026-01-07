@@ -606,6 +606,11 @@ pub(super) fn eks_helm_charts(
                     x_forwarded_for_number_truster_hops: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    custom_http_errors_default: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_custom_http_errors_default
+                        .as_ref()
+                        .map(|codes| codes.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",")),
                 },
             )
             .to_common_helm_chart()?,

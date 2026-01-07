@@ -336,7 +336,7 @@ pub struct ClusterAdvancedSettings {
     pub nginx_hpa_max_number_instances: u32, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
 
     #[serde(alias = "nginx.controller.custom_http_errors")]
-    pub nginx_controller_custom_http_errors: Option<String>,
+    pub nginx_controller_custom_http_errors: Option<String>, // TODO(benjaminch QOV-1400): deprecated, to be removed once envoy is default
     #[serde(alias = "nginx.controller.enable_compression")]
     pub nginx_controller_enable_compression: bool,
     #[serde(alias = "nginx.default_backend.enabled")]
@@ -390,6 +390,12 @@ pub struct ClusterAdvancedSettings {
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
     #[serde(alias = "envoy.access_log.format")]
     pub envoy_access_log_format: Option<String>,
+    #[serde(
+        alias = "envoy.custom_http_errors.default",
+        serialize_with = "crate::io_models::types::http_status_codes::serialize",
+        deserialize_with = "crate::io_models::types::http_status_codes::deserialize"
+    )]
+    pub envoy_custom_http_errors_default: Option<Vec<u16>>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -470,6 +476,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_memory_limit_in_mib: 1024,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
             envoy_access_log_format: None,
+            envoy_custom_http_errors_default: None,
         }
     }
 }

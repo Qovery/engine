@@ -1,0 +1,139 @@
+{{- if .Values.gateway.qoveryPublic.enable }}
+{{- if .Values.gateway.qoveryPublic.customHttpErrors.default }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: qovery-cluster-gateway-default-error-pages
+  namespace: {{ .Release.Namespace }}
+data:
+  {{- range $code := split "," .Values.gateway.qoveryPublic.customHttpErrors.default }}
+  {{ $code | trim }}.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Error {{ $code | trim }}</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            }
+            .error-container {
+                background: white;
+                border-radius: 20px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                padding: 60px 40px;
+                text-align: center;
+                max-width: 600px;
+                width: 100%;
+            }
+            .error-code {
+                font-size: 120px;
+                font-weight: 800;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
+                line-height: 1;
+                margin-bottom: 20px;
+            }
+            .error-title {
+                font-size: 32px;
+                color: #2d3748;
+                margin-bottom: 16px;
+                font-weight: 700;
+            }
+            .error-message {
+                font-size: 18px;
+                color: #718096;
+                margin-bottom: 40px;
+                line-height: 1.6;
+            }
+            .back-link {
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 16px 40px;
+                border-radius: 50px;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 16px;
+                transition: transform 0.2s, box-shadow 0.2s;
+                box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            }
+            .back-link:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+            }
+            @media (max-width: 480px) {
+                .error-code {
+                    font-size: 80px;
+                }
+                .error-title {
+                    font-size: 24px;
+                }
+                .error-message {
+                    font-size: 16px;
+                }
+                .error-container {
+                    padding: 40px 20px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="error-container">
+            <div class="error-code">{{ $code | trim }}</div>
+            {{- if eq ($code | trim) "400" }}
+            <h1 class="error-title">Bad Request</h1>
+            <p class="error-message">The request could not be understood by the server. Please check your input and try again.</p>
+            {{- else if eq ($code | trim) "401" }}
+            <h1 class="error-title">Unauthorized</h1>
+            <p class="error-message">Authentication is required to access this resource. Please log in and try again.</p>
+            {{- else if eq ($code | trim) "403" }}
+            <h1 class="error-title">Forbidden</h1>
+            <p class="error-message">You don't have permission to access this resource.</p>
+            {{- else if eq ($code | trim) "404" }}
+            <h1 class="error-title">Page Not Found</h1>
+            <p class="error-message">The page you are looking for might have been removed, had its name changed, or is temporarily unavailable.</p>
+            {{- else if eq ($code | trim) "408" }}
+            <h1 class="error-title">Request Timeout</h1>
+            <p class="error-message">The server timed out waiting for the request. Please try again.</p>
+            {{- else if eq ($code | trim) "429" }}
+            <h1 class="error-title">Too Many Requests</h1>
+            <p class="error-message">You have sent too many requests in a given amount of time. Please slow down and try again later.</p>
+            {{- else if eq ($code | trim) "500" }}
+            <h1 class="error-title">Internal Server Error</h1>
+            <p class="error-message">Something went wrong on our end. We're working to fix the issue. Please try again later.</p>
+            {{- else if eq ($code | trim) "502" }}
+            <h1 class="error-title">Bad Gateway</h1>
+            <p class="error-message">The server received an invalid response. Please try again in a few moments.</p>
+            {{- else if eq ($code | trim) "503" }}
+            <h1 class="error-title">Service Unavailable</h1>
+            <p class="error-message">The service is temporarily unavailable. Please try again later.</p>
+            {{- else if eq ($code | trim) "504" }}
+            <h1 class="error-title">Gateway Timeout</h1>
+            <p class="error-message">The server didn't respond in time. Please try again later.</p>
+            {{- else }}
+            <h1 class="error-title">Error</h1>
+            <p class="error-message">An error occurred while processing your request.</p>
+            {{- end }}
+            <a href="javascript:history.back()" class="back-link">Go Back</a>
+        </div>
+    </body>
+    </html>
+  {{- end }}
+{{- end }}
+{{- end }}

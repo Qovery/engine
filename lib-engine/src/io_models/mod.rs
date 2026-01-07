@@ -32,7 +32,7 @@ pub mod models;
 pub mod probe;
 pub mod router;
 pub mod terraform;
-mod types;
+pub mod types;
 pub mod variable_utils;
 
 #[derive(Clone, Copy, Eq, PartialEq, Serialize, Deserialize, Hash, Debug, Default)]

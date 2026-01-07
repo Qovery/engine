@@ -24,6 +24,7 @@ pub enum QoveryClusterGatewayOptionsPerKubernetesKind {
 #[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
     pub x_forwarded_for_number_truster_hops: Option<u8>, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
+    pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
 }
 
 pub struct QoveryClusterGatewayChart {
@@ -83,6 +84,13 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             chart_set_values.push(ChartSetValue {
                 key: "gateway.qoveryPublic.xForwardedFor.numberTrustedHops".to_string(),
                 value: num_hops.to_string(),
+            });
+        }
+
+        if let Some(ref custom_http_errors) = self.chart_options.custom_http_errors_default {
+            chart_set_values.push(ChartSetValue {
+                key: "gateway.qoveryPublic.customHttpErrors.default".to_string(),
+                value: custom_http_errors.clone(),
             });
         }
 
