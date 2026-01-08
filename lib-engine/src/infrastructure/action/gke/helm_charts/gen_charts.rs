@@ -127,10 +127,10 @@ pub(super) fn gke_helm_charts(
                 true,
                 Some(500), // GCP need at least 500m for pod with antiAffinity
                 HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                 }),
                 HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
                 false,
@@ -205,26 +205,26 @@ pub(super) fn gke_helm_charts(
     let nginx_ingress = NginxIngressChart::new(
         chart_prefix_path,
         HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(
+            request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_vcpu_request_in_milli_cpu,
-            ),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(
+            )),
+            request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_memory_request_in_mib,
-            ),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
+            )),
+            limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_vcpu_limit_in_milli_cpu,
-            ),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(
+            )),
+            limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_memory_limit_in_mib,
-            ),
+            )),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.metrics_parameters.is_some(),

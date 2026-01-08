@@ -3,7 +3,9 @@ use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
     UpdateStrategy,
 };
-use crate::infrastructure::helm_charts::{HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart};
+use crate::infrastructure::helm_charts::{
+    HelmChartDirectoryLocation, HelmChartPath, ToCommonHelmChart, ToHelmChartValue,
+};
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
@@ -59,10 +61,10 @@ impl ToCommonHelmChart for QoveryShellAgentChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
         let resources = match &self.chart_resources {
             HelmChartResourcesConstraintType::ChartDefault => &HelmChartResources {
-                limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                limit_memory: KubernetesMemoryResourceUnit::MebiByte(100),
-                request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-                request_memory: KubernetesMemoryResourceUnit::MebiByte(100),
+                limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
+                request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(100)),
             },
             HelmChartResourcesConstraintType::Constrained(x) => x,
         };
@@ -111,19 +113,19 @@ impl ToCommonHelmChart for QoveryShellAgentChart {
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: resources.limit_cpu.to_string(),
+                        value: resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: resources.request_cpu.to_string(),
+                        value: resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: resources.limit_memory.to_string(),
+                        value: resources.limit_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
-                        value: resources.request_memory.to_string(),
+                        value: resources.request_memory.to_helm_chart_value(),
                     },
                 ],
                 ..Default::default()

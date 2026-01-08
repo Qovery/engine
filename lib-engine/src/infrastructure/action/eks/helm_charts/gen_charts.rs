@@ -458,26 +458,26 @@ pub(super) fn eks_helm_charts(
     let nginx_ingress = NginxIngressChart::new(
         chart_prefix_path,
         HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: KubernetesCpuResourceUnit::MilliCpu(
+            request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_vcpu_request_in_milli_cpu,
-            ),
-            request_memory: KubernetesMemoryResourceUnit::MebiByte(
+            )),
+            request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_memory_request_in_mib,
-            ),
-            limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
+            )),
+            limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_vcpu_limit_in_milli_cpu,
-            ),
-            limit_memory: KubernetesMemoryResourceUnit::MebiByte(
+            )),
+            limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                 chart_config_prerequisites
                     .cluster_advanced_settings
                     .nginx_memory_limit_in_mib,
-            ),
+            )),
         }),
         HelmChartResourcesConstraintType::ChartDefault,
         chart_config_prerequisites.metrics_parameters.is_some(),
@@ -607,26 +607,26 @@ pub(super) fn eks_helm_charts(
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Default,
                 HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                         chart_config_prerequisites
                             .cluster_advanced_settings
                             .envoy_vcpu_request_in_milli_cpu,
-                    ),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(
+                    )),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                         chart_config_prerequisites
                             .cluster_advanced_settings
                             .envoy_memory_request_in_mib,
-                    ),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(
+                    )),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
                         chart_config_prerequisites
                             .cluster_advanced_settings
                             .envoy_vcpu_limit_in_milli_cpu,
-                    ),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(
+                    )),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
                         chart_config_prerequisites
                             .cluster_advanced_settings
                             .envoy_memory_limit_in_mib,
-                    ),
+                    )),
                 }),
                 EnvoyGatewayOptions {
                     hpa_mode: HpaMode::Enabled {

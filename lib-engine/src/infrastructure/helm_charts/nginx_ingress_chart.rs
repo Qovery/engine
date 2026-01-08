@@ -13,7 +13,7 @@ use crate::helm::{
     HelmChartNamespaces,
 };
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
@@ -197,19 +197,19 @@ impl NginxIngressChart {
             ),
             controller_resources: match controller_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(768),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(700),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(768),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(768)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(700)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(768)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             default_backend_resources: match default_backend_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(20),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(10)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(20)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(32)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -296,35 +296,35 @@ defaultBackend:
         let mut context = Context::new();
         context.insert(
             "controller_resources_limits_cpu",
-            &self.controller_resources.limit_cpu.to_string(),
+            &self.controller_resources.limit_cpu.to_helm_chart_value(),
         );
         context.insert(
             "controller_resources_limits_memory",
-            &self.controller_resources.limit_memory.to_string(),
+            &self.controller_resources.limit_memory.to_helm_chart_value(),
         );
         context.insert(
             "controller_resources_requests_cpu",
-            &self.controller_resources.request_cpu.to_string(),
+            &self.controller_resources.request_cpu.to_helm_chart_value(),
         );
         context.insert(
             "controller_resources_requests_memory",
-            &self.controller_resources.request_memory.to_string(),
+            &self.controller_resources.request_memory.to_helm_chart_value(),
         );
         context.insert(
             "default_backend_resources_limits_cpu",
-            &self.default_backend_resources.limit_cpu.to_string(),
+            &self.default_backend_resources.limit_cpu.to_helm_chart_value(),
         );
         context.insert(
             "default_backend_resources_limits_memory",
-            &self.default_backend_resources.limit_memory.to_string(),
+            &self.default_backend_resources.limit_memory.to_helm_chart_value(),
         );
         context.insert(
             "default_backend_resources_requests_cpu",
-            &self.default_backend_resources.request_cpu.to_string(),
+            &self.default_backend_resources.request_cpu.to_helm_chart_value(),
         );
         context.insert(
             "default_backend_resources_requests_memory",
-            &self.default_backend_resources.request_memory.to_string(),
+            &self.default_backend_resources.request_memory.to_helm_chart_value(),
         );
         let rendered_nginx_override = ChartValuesGenerated::new(
             "qovery_nginx_ingress".to_string(),

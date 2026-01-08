@@ -11,6 +11,7 @@ use crate::infrastructure::action::metrics_resource_profile::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
+    ToHelmChartValue,
 };
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::metrics::AlertManagerConfig;
@@ -91,19 +92,19 @@ impl KubePrometheusStackChart {
         vec![
             ChartSetValue {
                 key: format!("{prefix}.resources.requests.cpu"),
-                value: resources.request_cpu.to_string(),
+                value: resources.request_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: format!("{prefix}.resources.limits.cpu"),
-                value: resources.limit_cpu.to_string(),
+                value: resources.limit_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: format!("{prefix}.resources.requests.memory"),
-                value: resources.request_memory.to_string(),
+                value: resources.request_memory.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: format!("{prefix}.resources.limits.memory"),
-                value: resources.limit_memory.to_string(),
+                value: resources.limit_memory.to_helm_chart_value(),
             },
         ]
     }
@@ -125,43 +126,50 @@ impl KubePrometheusStackChart {
         // Convert ResourceProfile to HelmChartResources
         let prometheus_res = PrometheusResources::get(resource_profile);
         let prometheus_resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_request).unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_limit).unwrap()),
+            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_limit).unwrap()),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_res.cpu_request).unwrap()),
+            request_memory: Some(KubernetesMemoryResourceUnit::from_str(&prometheus_res.memory_request).unwrap()),
         };
 
         let prometheus_node_exporter_res = PrometheusNodeExporterResources::get(resource_profile);
         let prometheus_node_exporter_resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_request)
-                .unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_limit).unwrap()),
+            limit_memory: Some(
+                KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_limit).unwrap(),
+            ),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_node_exporter_res.cpu_request).unwrap()),
+            request_memory: Some(
+                KubernetesMemoryResourceUnit::from_str(&prometheus_node_exporter_res.memory_request).unwrap(),
+            ),
         };
 
         let prometheus_operator_res = PrometheusOperatorResources::get(resource_profile);
         let prometheus_operator_resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_request).unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_limit).unwrap()),
+            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_limit).unwrap()),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&prometheus_operator_res.cpu_request).unwrap()),
+            request_memory: Some(
+                KubernetesMemoryResourceUnit::from_str(&prometheus_operator_res.memory_request).unwrap(),
+            ),
         };
 
         let kube_state_metrics_res = KubeStateMetricsResources::get(resource_profile);
         let kube_state_metrics_resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_request).unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_limit).unwrap()),
+            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_limit).unwrap()),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&kube_state_metrics_res.cpu_request).unwrap()),
+            request_memory: Some(
+                KubernetesMemoryResourceUnit::from_str(&kube_state_metrics_res.memory_request).unwrap(),
+            ),
         };
 
         let alertmanager_res = AlertManagerResources::get(resource_profile);
         let alertmanager_resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_request).unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_limit).unwrap()),
+            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_limit).unwrap()),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&alertmanager_res.cpu_request).unwrap()),
+            request_memory: Some(KubernetesMemoryResourceUnit::from_str(&alertmanager_res.memory_request).unwrap()),
         };
 
         KubePrometheusStackChart {

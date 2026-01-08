@@ -3,7 +3,7 @@ use crate::errors::CommandError;
 use crate::helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
-    HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -73,10 +73,10 @@ impl AwsIamEksUserMapperChart {
             ),
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(10),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(32),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(20),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(32),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(10)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(32)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(20)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(32)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -116,19 +116,19 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
                     // resources limits
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
+                        value: self.chart_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
+                        value: self.chart_resources.limit_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
+                        value: self.chart_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
+                        value: self.chart_resources.request_memory.to_helm_chart_value(),
                     },
                 ],
                 ..Default::default()
