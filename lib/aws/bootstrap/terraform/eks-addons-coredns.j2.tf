@@ -18,5 +18,24 @@ resource "aws_eks_addon" "aws_coredns" {
         effect = "NoSchedule"
       }
     ]
+    replicaCount = {{ eks_addon_coredns.replica_count }}
+    resources = {
+      limits = {
+        {% if eks_addon_coredns.resources.limit_cpu -%}
+        cpu    = "{{ eks_addon_coredns.resources.limit_cpu }}"
+        {% endif -%}
+        {% if eks_addon_coredns.resources.limit_memory -%}
+        memory = "{{ eks_addon_coredns.resources.limit_memory }}"
+        {% endif -%}
+      }
+      requests = {
+        {% if eks_addon_coredns.resources.request_cpu -%}
+        cpu    = "{{ eks_addon_coredns.resources.request_cpu }}"
+        {% endif -%}
+        {% if eks_addon_coredns.resources.request_memory -%}
+        memory = "{{ eks_addon_coredns.resources.request_memory }}"
+        {% endif -%}
+      }
+    }
   })
 }

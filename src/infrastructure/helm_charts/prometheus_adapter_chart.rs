@@ -10,6 +10,7 @@ use crate::helm::{
 use crate::infrastructure::action::metrics_resource_profile::{PrometheusAdapterResources, ResourceProfile};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
+    ToHelmChartValue,
 };
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
@@ -43,10 +44,10 @@ impl PrometheusAdapterChart {
         // Convert ResourceProfile to HelmChartResources
         let adapter_res = PrometheusAdapterResources::get(resource_profile);
         let resources = HelmChartResources {
-            limit_cpu: KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_limit).unwrap(),
-            limit_memory: KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_limit).unwrap(),
-            request_cpu: KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_request).unwrap(),
-            request_memory: KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_request).unwrap(),
+            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_limit).unwrap()),
+            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_limit).unwrap()),
+            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_request).unwrap()),
+            request_memory: Some(KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_request).unwrap()),
         };
 
         PrometheusAdapterChart {
@@ -106,19 +107,19 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: self.resources.request_cpu.to_string(),
+                        value: self.resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: self.resources.limit_cpu.to_string(),
+                        value: self.resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
-                        value: self.resources.request_memory.to_string(),
+                        value: self.resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: self.resources.limit_memory.to_string(),
+                        value: self.resources.limit_memory.to_helm_chart_value(),
                     },
                 ],
                 yaml_files_content: match self.customer_helm_chart_override.clone() {

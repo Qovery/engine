@@ -6,7 +6,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
-    HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
@@ -52,10 +52,10 @@ impl MetricsServerChart {
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(250),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(250),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(250)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(250)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                 },
             },
             customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
@@ -87,19 +87,19 @@ impl ToCommonHelmChart for MetricsServerChart {
                     },
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
+                        value: self.chart_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
+                        value: self.chart_resources.limit_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
+                        value: self.chart_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
+                        value: self.chart_resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "replicas".to_string(),

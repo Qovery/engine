@@ -5,7 +5,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
-    HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::infrastructure::models::dns_provider::qoverydns::QoveryDnsConfig;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -44,10 +44,10 @@ impl QoveryCertManagerWebhookChart {
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(96),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(96),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(96)),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(96)),
                 },
             },
             qovery_dns_config,
@@ -90,19 +90,19 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                     // Resources
                     ChartSetValue {
                         key: "resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
+                        value: self.chart_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
+                        value: self.chart_resources.limit_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
+                        value: self.chart_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
+                        value: self.chart_resources.request_memory.to_helm_chart_value(),
                     },
                 ],
                 ..Default::default()

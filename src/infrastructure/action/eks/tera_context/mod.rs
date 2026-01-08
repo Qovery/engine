@@ -40,6 +40,7 @@ pub fn eks_tera_context(
         .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not AWS")))?;
     let mut context = TeraContext::new();
 
+    let cluster_profile = advanced_settings.cluster_profile;
     let public_access_cidrs = generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
 
     context.insert("public_access_cidrs", &public_access_cidrs);
@@ -498,9 +499,9 @@ pub fn eks_tera_context(
     context.insert(
         "eks_addon_coredns",
         &(match &options.aws_addon_coredns_version_override {
-            None => core_dns_addon::AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version()),
+            None => core_dns_addon::AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version(), cluster_profile),
             Some(overridden_version) => {
-                core_dns_addon::AwsCoreDnsAddon::new_with_overridden_version(overridden_version)
+                core_dns_addon::AwsCoreDnsAddon::new_with_overridden_version(overridden_version, cluster_profile)
             }
         }),
     );

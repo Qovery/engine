@@ -8,7 +8,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
-    HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
@@ -114,10 +114,10 @@ impl LokiChart {
             vpa_min_mcpu,
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(300),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(8000),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(2),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(300)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(8000)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(2)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -216,19 +216,19 @@ impl ToCommonHelmChart for LokiChart {
                     // resources limits
                     ChartSetValue {
                         key: "singleBinary.resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_string(),
+                        value: self.chart_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "singleBinary.resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_string(),
+                        value: self.chart_resources.limit_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "singleBinary.resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_string(),
+                        value: self.chart_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "singleBinary.resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_string(),
+                        value: self.chart_resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "loki.storage.type".to_string(),

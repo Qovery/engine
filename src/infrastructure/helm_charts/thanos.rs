@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use super::{
     HelmChartAutoscaling, HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath,
-    ToCommonHelmChart, kube_prometheus_stack_chart::StorageClassName,
+    ToCommonHelmChart, ToHelmChartValue, kube_prometheus_stack_chart::StorageClassName,
 };
 use crate::environment::models::ToCloudProviderFormat;
 use crate::helm::HelmAction;
@@ -93,10 +93,12 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosQueryResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
-                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
-                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
-                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
+                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
+                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
+                        request_memory: Some(
+                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        ),
                     }
                 }
             },
@@ -108,10 +110,10 @@ impl ThanosChart {
             query_frontend_resources: match query_frontend_resources {
                 Some(resources) => resources,
                 None => HelmChartResources {
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(256),
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
                 },
             },
             query_frontend_autoscaling: HelmChartAutoscaling {
@@ -124,10 +126,12 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosCompactorResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
-                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
-                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
-                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
+                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
+                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
+                        request_memory: Some(
+                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        ),
                     }
                 }
             },
@@ -136,10 +140,12 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosStoreResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap(),
-                        limit_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap(),
-                        request_cpu: KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap(),
-                        request_memory: KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
+                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
+                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
+                        request_memory: Some(
+                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
+                        ),
                     }
                 }
             },
@@ -185,19 +191,19 @@ impl ToCommonHelmChart for ThanosChart {
                 },
                 ChartSetValue {
                     key: "query.resources.limits.cpu".to_string(),
-                    value: self.query_resources.limit_cpu.to_string(),
+                    value: self.query_resources.limit_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "query.resources.limits.memory".to_string(),
-                    value: self.query_resources.limit_memory.to_string(),
+                    value: self.query_resources.limit_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "query.resources.requests.cpu".to_string(),
-                    value: self.query_resources.request_cpu.to_string(),
+                    value: self.query_resources.request_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "query.resources.requests.memory".to_string(),
-                    value: self.query_resources.request_memory.to_string(),
+                    value: self.query_resources.request_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "query.autoscaling.minReplicas".to_string(),
@@ -234,19 +240,19 @@ impl ToCommonHelmChart for ThanosChart {
                 },
                 ChartSetValue {
                     key: "queryFrontend.resources.limits.cpu".to_string(),
-                    value: self.query_frontend_resources.limit_cpu.to_string(),
+                    value: self.query_frontend_resources.limit_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "queryFrontend.resources.limits.memory".to_string(),
-                    value: self.query_frontend_resources.limit_memory.to_string(),
+                    value: self.query_frontend_resources.limit_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "queryFrontend.resources.requests.cpu".to_string(),
-                    value: self.query_frontend_resources.request_cpu.to_string(),
+                    value: self.query_frontend_resources.request_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "queryFrontend.resources.requests.memory".to_string(),
-                    value: self.query_frontend_resources.request_memory.to_string(),
+                    value: self.query_frontend_resources.request_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "queryFrontend.autoscaling.minReplicas".to_string(),
@@ -286,19 +292,19 @@ impl ToCommonHelmChart for ThanosChart {
                 },
                 ChartSetValue {
                     key: "compactor.resources.limits.cpu".to_string(),
-                    value: self.compactor_resources.limit_cpu.to_string(),
+                    value: self.compactor_resources.limit_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "compactor.resources.limits.memory".to_string(),
-                    value: self.compactor_resources.limit_memory.to_string(),
+                    value: self.compactor_resources.limit_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "compactor.resources.requests.cpu".to_string(),
-                    value: self.compactor_resources.request_cpu.to_string(),
+                    value: self.compactor_resources.request_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "compactor.resources.requests.memory".to_string(),
-                    value: self.compactor_resources.request_memory.to_string(),
+                    value: self.compactor_resources.request_memory.to_helm_chart_value(),
                 },
                 // store gateway
                 ChartSetValue {
@@ -307,19 +313,19 @@ impl ToCommonHelmChart for ThanosChart {
                 },
                 ChartSetValue {
                     key: "storegateway.resources.limits.cpu".to_string(),
-                    value: self.store_gateway_resources.limit_cpu.to_string(),
+                    value: self.store_gateway_resources.limit_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "storegateway.resources.limits.memory".to_string(),
-                    value: self.store_gateway_resources.limit_memory.to_string(),
+                    value: self.store_gateway_resources.limit_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "storegateway.resources.requests.cpu".to_string(),
-                    value: self.store_gateway_resources.request_cpu.to_string(),
+                    value: self.store_gateway_resources.request_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "storegateway.resources.requests.memory".to_string(),
-                    value: self.store_gateway_resources.request_memory.to_string(),
+                    value: self.store_gateway_resources.request_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "storegateway.autoscaling.minReplicas".to_string(),

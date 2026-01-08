@@ -4,6 +4,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartCRDsPath, HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+    ToHelmChartValue,
 };
 use std::ops::Add;
 use std::sync::Arc;
@@ -59,28 +60,28 @@ impl VpaChart {
             helm_chart_crds_path: HelmChartCRDsPath::new(chart_path, "crds/"),
             recommender_resources: match recommended_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             updater_resources: match updater_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             admission_controller_resources: match admission_controller_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(500),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(500),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(500)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(500)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -116,53 +117,53 @@ impl ToCommonHelmChart for VpaChart {
                     // recommender
                     ChartSetValue {
                         key: "recommender.resources.requests.cpu".to_string(),
-                        value: self.recommender_resources.request_cpu.to_string(),
+                        value: self.recommender_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.requests.memory".to_string(),
-                        value: self.recommender_resources.request_memory.to_string(),
+                        value: self.recommender_resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.limits.cpu".to_string(),
-                        value: self.recommender_resources.limit_cpu.to_string(),
+                        value: self.recommender_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "recommender.resources.limits.memory".to_string(),
-                        value: self.recommender_resources.limit_memory.to_string(),
+                        value: self.recommender_resources.limit_memory.to_helm_chart_value(),
                     },
                     // updater
                     ChartSetValue {
                         key: "updater.resources.requests.cpu".to_string(),
-                        value: self.updater_resources.request_cpu.to_string(),
+                        value: self.updater_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "updater.resources.requests.memory".to_string(),
-                        value: self.updater_resources.request_memory.to_string(),
+                        value: self.updater_resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "updater.resources.limits.cpu".to_string(),
-                        value: self.updater_resources.limit_cpu.to_string(),
+                        value: self.updater_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "updater.resources.limits.memory".to_string(),
-                        value: self.updater_resources.limit_memory.to_string(),
+                        value: self.updater_resources.limit_memory.to_helm_chart_value(),
                     },
                     // admission controller
                     ChartSetValue {
                         key: "admissionController.resources.requests.cpu".to_string(),
-                        value: self.admission_controller_resources.request_cpu.to_string(),
+                        value: self.admission_controller_resources.request_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "admissionController.resources.requests.memory".to_string(),
-                        value: self.admission_controller_resources.request_memory.to_string(),
+                        value: self.admission_controller_resources.request_memory.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "admissionController.resources.limits.cpu".to_string(),
-                        value: self.admission_controller_resources.limit_cpu.to_string(),
+                        value: self.admission_controller_resources.limit_cpu.to_helm_chart_value(),
                     },
                     ChartSetValue {
                         key: "admissionController.resources.limits.memory".to_string(),
-                        value: self.admission_controller_resources.limit_memory.to_string(),
+                        value: self.admission_controller_resources.limit_memory.to_helm_chart_value(),
                     },
                 ],
                 crds_update: Some(CRDSUpdate {

@@ -53,6 +53,21 @@ pub enum HelmChartResourcesConstraintType {
     Constrained(HelmChartResources),
 }
 
+/// Trait for converting values to Helm chart value strings.
+/// When implemented for Option types, it provides a way to represent None as "null"
+/// which Helm will interpret as a YAML null value in chart templates.
+pub trait ToHelmChartValue {
+    fn to_helm_chart_value(&self) -> String;
+}
+
+impl<T: ToString> ToHelmChartValue for Option<T> {
+    fn to_helm_chart_value(&self) -> String {
+        self.as_ref()
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "null".to_string())
+    }
+}
+
 /// Represents Helm chart resources such as:
 /// resources:
 //   limits:
@@ -61,12 +76,36 @@ pub enum HelmChartResourcesConstraintType {
 //   requests:
 //     cpu: [request_cpu_m]
 //     memory: [request_memory_mi]
-#[derive(Serialize)]
+#[derive(Serialize, Debug, PartialEq)]
 pub struct HelmChartResources {
-    pub limit_cpu: KubernetesCpuResourceUnit,
-    pub limit_memory: KubernetesMemoryResourceUnit,
-    pub request_cpu: KubernetesCpuResourceUnit,
-    pub request_memory: KubernetesMemoryResourceUnit,
+    #[serde(serialize_with = "serialize_cpu_resource")]
+    pub limit_cpu: Option<KubernetesCpuResourceUnit>,
+    #[serde(serialize_with = "serialize_memory_resource")]
+    pub limit_memory: Option<KubernetesMemoryResourceUnit>,
+    #[serde(serialize_with = "serialize_cpu_resource")]
+    pub request_cpu: Option<KubernetesCpuResourceUnit>,
+    #[serde(serialize_with = "serialize_memory_resource")]
+    pub request_memory: Option<KubernetesMemoryResourceUnit>,
+}
+
+fn serialize_cpu_resource<S>(value: &Option<KubernetesCpuResourceUnit>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(v) => serializer.serialize_str(&v.to_string()),
+        None => serializer.serialize_none(),
+    }
+}
+
+fn serialize_memory_resource<S>(value: &Option<KubernetesMemoryResourceUnit>, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(v) => serializer.serialize_str(&v.to_string()),
+        None => serializer.serialize_none(),
+    }
 }
 
 pub struct HelmChartAutoscaling {
@@ -333,6 +372,7 @@ pub fn get_helm_path_kubernetes_provider_sub_folder_name(helm_path: &HelmPath, c
 mod tests {
     use super::*;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+    use serde_json;
 
     #[test]
     fn test_helm_chart_path_to_string() {
@@ -488,5 +528,84 @@ mod tests {
             // verify:
             assert_eq!(tc.expected_sub_folder, res);
         }
+    }
+
+    #[test]
+    fn test_to_helm_chart_value_with_some() {
+        // setup:
+        let cpu_value: Option<KubernetesCpuResourceUnit> = Some(KubernetesCpuResourceUnit::MilliCpu(250));
+        let memory_value: Option<KubernetesMemoryResourceUnit> = Some(KubernetesMemoryResourceUnit::MebiByte(512));
+
+        // execute:
+        let cpu_result = cpu_value.to_helm_chart_value();
+        let memory_result = memory_value.to_helm_chart_value();
+
+        // verify:
+        assert_eq!(cpu_result, "250m");
+        assert_eq!(memory_result, "512Mi");
+    }
+
+    #[test]
+    fn test_to_helm_chart_value_with_none() {
+        // setup:
+        let cpu_value: Option<KubernetesCpuResourceUnit> = None;
+        let memory_value: Option<KubernetesMemoryResourceUnit> = None;
+
+        // execute:
+        let cpu_result = cpu_value.to_helm_chart_value();
+        let memory_result = memory_value.to_helm_chart_value();
+
+        // verify:
+        assert_eq!(cpu_result, "null");
+        assert_eq!(memory_result, "null");
+    }
+
+    #[test]
+    fn test_to_helm_chart_value_with_helm_chart_resources() {
+        // setup:
+        let resources_with_values = HelmChartResources {
+            limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+            limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(1024)),
+            request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+            request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+        };
+
+        let resources_with_none = HelmChartResources {
+            limit_cpu: None,
+            limit_memory: None,
+            request_cpu: None,
+            request_memory: None,
+        };
+
+        // execute & verify:
+        assert_eq!(resources_with_values.limit_cpu.to_helm_chart_value(), "500m");
+        assert_eq!(resources_with_values.limit_memory.to_helm_chart_value(), "1024Mi");
+        assert_eq!(resources_with_values.request_cpu.to_helm_chart_value(), "100m");
+        assert_eq!(resources_with_values.request_memory.to_helm_chart_value(), "256Mi");
+
+        assert_eq!(resources_with_none.limit_cpu.to_helm_chart_value(), "null");
+        assert_eq!(resources_with_none.limit_memory.to_helm_chart_value(), "null");
+        assert_eq!(resources_with_none.request_cpu.to_helm_chart_value(), "null");
+        assert_eq!(resources_with_none.request_memory.to_helm_chart_value(), "null");
+    }
+
+    #[test]
+    fn test_helm_chart_resources_serialization_to_json() {
+        // setup:
+        let resources = HelmChartResources {
+            limit_cpu: None,
+            limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(170)),
+            request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+            request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(70)),
+        };
+
+        // execute:
+        let json = serde_json::to_value(&resources).unwrap();
+
+        // verify: fields should be strings, not objects
+        assert_eq!(json["limit_cpu"], serde_json::Value::Null);
+        assert_eq!(json["limit_memory"], "170Mi");
+        assert_eq!(json["request_cpu"], "100m");
+        assert_eq!(json["request_memory"], "70Mi");
     }
 }

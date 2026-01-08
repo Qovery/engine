@@ -6,6 +6,7 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
 };
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2AmiModel;
+use crate::infrastructure::models::cluster_profile::ClusterProfile as ClusterProfileModel;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
@@ -181,9 +182,58 @@ impl Ec2Ami {
     }
 }
 
+#[derive(Copy, Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+pub enum ClusterProfile {
+    /// Node count: 3-5 nodes
+    /// Total cluster capacity: 12-20 vCPUs, 24-40 GB RAM
+    /// Per-node size: 2-4 vCPUs, 4-8 GB RAM
+    /// Workload characteristics: Dev/test environments, low-traffic applications
+    /// Concurrent pods: ~50-100
+    /// Use cases: Development, staging, small internal tools
+    Small,
+    /// Node count: 6-10 nodes
+    /// Total cluster capacity: 48-80 vCPUs, 96-160 GB RAM
+    /// Per-node size: 4-8 vCPUs, 8-16 GB RAM
+    /// Workload characteristics: Production workloads with moderate traffic
+    /// Concurrent pods: ~200-400
+    /// Use cases: Small to medium production apps, multi-tenant dev environments
+    Medium,
+    /// Node count: 11-20 nodes
+    /// Total cluster capacity: 176-320 vCPUs, 352-640 GB RAM
+    /// Per-node size: 8-16 vCPUs, 16-32 GB RAM
+    /// Workload characteristics: High-traffic production workloads
+    /// Concurrent pods: ~500-1000
+    /// Use cases: Enterprise production applications, microservices architectures
+    Large,
+    /// Node count: 20+ nodes
+    /// Total cluster capacity: 400+ vCPUs, 800+ GB RAM
+    /// Per-node size: 16-32+ vCPUs, 32-64+ GB RAM
+    /// Workload characteristics: Mission-critical, high-scale applications
+    /// Concurrent pods: 1000+
+    /// Use cases: Large-scale production, ML/AI workloads, data processing
+    ExtraLarge,
+}
+
+impl ClusterProfile {
+    pub fn to_model(&self) -> ClusterProfileModel {
+        match self {
+            ClusterProfile::Small => ClusterProfileModel::Small,
+            ClusterProfile::Medium => ClusterProfileModel::Medium,
+            ClusterProfile::Large => ClusterProfileModel::Large,
+            ClusterProfile::ExtraLarge => ClusterProfileModel::ExtraLarge,
+        }
+    }
+}
+
+fn default_cluster_profile() -> ClusterProfile {
+    ClusterProfile::Medium
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
+    #[serde(alias = "cluster.profile", default = "default_cluster_profile")]
+    pub cluster_profile: ClusterProfile,
     #[serde(alias = "load_balancer.size")]
     pub load_balancer_size: String,
     #[serde(alias = "registry.image_retention_time")]
@@ -343,6 +393,7 @@ impl Default for ClusterAdvancedSettings {
         let default_database_cirds = vec!["0.0.0.0/0".to_string()];
 
         ClusterAdvancedSettings {
+            cluster_profile: ClusterProfile::Medium,
             load_balancer_size: "lb-s".to_string(),
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
@@ -496,6 +547,34 @@ mod tests {
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(0));
         assert!(validate_aws_cloudwatch_eks_logs_retention_days(90));
         assert!(!validate_aws_cloudwatch_eks_logs_retention_days(2));
+    }
+
+    #[test]
+    fn test_default_cluster_profile() {
+        // Test that cluster_profile defaults to Medium when not specified
+        let settings = ClusterAdvancedSettings::default();
+        assert_eq!(settings.cluster_profile, super::ClusterProfile::Medium);
+
+        // Test that cluster_profile defaults to Medium when deserializing empty JSON
+        let data = r#"{}"#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(settings.cluster_profile, super::ClusterProfile::Medium);
+    }
+
+    #[test]
+    fn test_cluster_profile_can_be_overridden() {
+        // Test that cluster_profile can be overridden via deserialization
+        let test_cases = vec![
+            (r#"{"cluster.profile": "Small"}"#, super::ClusterProfile::Small),
+            (r#"{"cluster.profile": "Medium"}"#, super::ClusterProfile::Medium),
+            (r#"{"cluster.profile": "Large"}"#, super::ClusterProfile::Large),
+            (r#"{"cluster.profile": "ExtraLarge"}"#, super::ClusterProfile::ExtraLarge),
+        ];
+
+        for (json, expected_profile) in test_cases {
+            let settings: ClusterAdvancedSettings = serde_json::from_str(json).unwrap();
+            assert_eq!(settings.cluster_profile, expected_profile);
+        }
     }
 
     #[test]

@@ -9,7 +9,7 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
-    HelmChartValuesFilePath, ToCommonHelmChart,
+    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::io_models::models::CustomerHelmChartsOverride;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
@@ -64,28 +64,28 @@ impl CertManagerChart {
             ),
             chart_resources: match chart_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             webhook_resources: match webhook_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(50),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(128),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(200),
-                    limit_memory: KubernetesMemoryResourceUnit::MebiByte(128),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(50)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(128)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(200)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(128)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             ca_injector_resources: match ca_injector_resources {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    request_memory: KubernetesMemoryResourceUnit::GibiByte(1),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(500),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -135,19 +135,19 @@ impl ToCommonHelmChart for CertManagerChart {
             // resources limits
             ChartSetValue {
                 key: "resources.limits.cpu".to_string(),
-                value: self.chart_resources.limit_cpu.to_string(),
+                value: self.chart_resources.limit_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "resources.limits.memory".to_string(),
-                value: self.chart_resources.limit_memory.to_string(),
+                value: self.chart_resources.limit_memory.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "resources.requests.cpu".to_string(),
-                value: self.chart_resources.request_cpu.to_string(),
+                value: self.chart_resources.request_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "resources.requests.memory".to_string(),
-                value: self.chart_resources.request_memory.to_string(),
+                value: self.chart_resources.request_memory.to_helm_chart_value(),
             },
             // Webhooks
             ChartSetValue {
@@ -156,19 +156,19 @@ impl ToCommonHelmChart for CertManagerChart {
             },
             ChartSetValue {
                 key: "webhook.resources.limits.cpu".to_string(),
-                value: self.webhook_resources.limit_cpu.to_string(),
+                value: self.webhook_resources.limit_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "webhook.resources.limits.memory".to_string(),
-                value: self.webhook_resources.limit_memory.to_string(),
+                value: self.webhook_resources.limit_memory.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "webhook.resources.requests.cpu".to_string(),
-                value: self.webhook_resources.request_cpu.to_string(),
+                value: self.webhook_resources.request_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "webhook.resources.requests.memory".to_string(),
-                value: self.webhook_resources.request_memory.to_string(),
+                value: self.webhook_resources.request_memory.to_helm_chart_value(),
             },
             // Cainjector
             ChartSetValue {
@@ -177,19 +177,19 @@ impl ToCommonHelmChart for CertManagerChart {
             },
             ChartSetValue {
                 key: "cainjector.resources.limits.cpu".to_string(),
-                value: self.ca_injector_resources.limit_cpu.to_string(),
+                value: self.ca_injector_resources.limit_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "cainjector.resources.limits.memory".to_string(),
-                value: self.ca_injector_resources.limit_memory.to_string(),
+                value: self.ca_injector_resources.limit_memory.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "cainjector.resources.requests.cpu".to_string(),
-                value: self.ca_injector_resources.request_cpu.to_string(),
+                value: self.ca_injector_resources.request_cpu.to_helm_chart_value(),
             },
             ChartSetValue {
                 key: "cainjector.resources.requests.memory".to_string(),
-                value: self.ca_injector_resources.request_memory.to_string(),
+                value: self.ca_injector_resources.request_memory.to_helm_chart_value(),
             },
         ];
 

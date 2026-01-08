@@ -7,7 +7,7 @@ use crate::{
     errors::CommandError,
     helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, PriorityClass},
     infrastructure::helm_charts::{
-        HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
+        HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
     },
 };
 
@@ -58,10 +58,10 @@ impl EnvoyGatewayChart {
             priority_class,
             chart_resources: match chart_resources_constraint_type {
                 HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: KubernetesCpuResourceUnit::MilliCpu(100),
-                    limit_cpu: KubernetesCpuResourceUnit::MilliCpu(1000),
-                    request_memory: KubernetesMemoryResourceUnit::MebiByte(256),
-                    limit_memory: KubernetesMemoryResourceUnit::GibiByte(1),
+                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(100)),
+                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)),
+                    request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(256)),
+                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
                 },
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
@@ -85,19 +85,19 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
                 // resources limits
                 ChartSetValue {
                     key: "deployment.envoyGateway.resources.limits.cpu".to_string(),
-                    value: self.chart_resources.limit_cpu.to_string(),
+                    value: self.chart_resources.limit_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "deployment.envoyGateway.resources.limits.memory".to_string(),
-                    value: self.chart_resources.limit_memory.to_string(),
+                    value: self.chart_resources.limit_memory.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "deployment.envoyGateway.resources.requests.cpu".to_string(),
-                    value: self.chart_resources.request_cpu.to_string(),
+                    value: self.chart_resources.request_cpu.to_helm_chart_value(),
                 },
                 ChartSetValue {
                     key: "deployment.envoyGateway.resources.requests.memory".to_string(),
-                    value: self.chart_resources.request_memory.to_string(),
+                    value: self.chart_resources.request_memory.to_helm_chart_value(),
                 },
             ],
             ..Default::default()
