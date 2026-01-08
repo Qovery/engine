@@ -62,4 +62,12 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - keda.sh
+    resources:
+      - scaledobjects
+    verbs:
+      - get
+      - list
+      - watch
 {{- end }}
