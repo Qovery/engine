@@ -39,10 +39,6 @@ resource "aws_launch_template" "karpenter_nodegroup" {
       }
     )
   }
-
-  lifecycle {
-    create_before_destroy = true
-  }
 }
 
 resource "aws_eks_node_group" "karpenter_controller" {
@@ -90,10 +86,6 @@ resource "aws_eks_node_group" "karpenter_controller" {
 
   labels = {
     "node.qovery.com/infrastructure" = "true"
-  }
-
-  lifecycle {
-    create_before_destroy = true
   }
 
   update_config {
