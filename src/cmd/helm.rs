@@ -182,7 +182,7 @@ impl Helm {
         }
     }
 
-    pub fn rollback(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    fn rollback(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
         if self.check_release_exist(chart, envs)?.version <= 1 {
             return Err(CannotRollback(chart.name.clone()));
         }
@@ -278,7 +278,14 @@ impl Helm {
             }
             Ok(release) if release.is_locked() => {
                 info!("Helm lock detected. Forcing rollback to previous version");
-                self.rollback(chart, envs)?;
+                // We want to rollback only to unlock the release.
+                // So we don't care to wait for its success or not
+                let chart = {
+                    let mut chart = chart.clone();
+                    chart.timeout_in_seconds = 10;
+                    chart
+                };
+                self.rollback(&chart, envs)?;
             }
             Ok(release) => {
                 // Happy path nothing to do
