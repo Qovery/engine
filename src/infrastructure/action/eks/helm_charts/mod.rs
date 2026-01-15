@@ -4,6 +4,7 @@ use crate::helm::HelmChart;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
+use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion};
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::models::{CpuArchitecture, StorageClass};
@@ -65,6 +66,8 @@ pub struct EksChartsConfigPrerequisites {
     pub is_karpenter_enabled: bool,
     pub karpenter_parameters: Option<KarpenterParameters>,
     pub is_keda_enabled: bool,
+    pub keda_resource_profile: KedaResourceProfile,
+    pub keda_availability: KedaAvailability,
     pub aws_iam_keda_operator_role_arn: Option<String>,
     pub aws_iam_keda_metrics_server_role_arn: Option<String>,
     pub aws_iam_eks_user_mapper_role_arn: String,
@@ -120,6 +123,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
         let dns_provider = infra_ctx.dns_provider();
         let cluster = self.cluster;
+        let keda_params = cluster.get_keda_parameters();
         EksChartsConfigPrerequisites {
             organization_id: infra_ctx.context().organization_short_id().to_string(),
             organization_long_id: *infra_ctx.context().organization_long_id(),
@@ -147,10 +151,15 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             cluster_advanced_settings: cluster.advanced_settings().clone(),
             is_karpenter_enabled: cluster.is_karpenter_enabled(),
             karpenter_parameters: cluster.get_karpenter_parameters(),
-            is_keda_enabled: cluster
-                .get_keda_parameters()
-                .map(|params| params.enabled)
-                .unwrap_or(false),
+            is_keda_enabled: keda_params.as_ref().map(|params| params.enabled).unwrap_or(false),
+            keda_resource_profile: keda_params
+                .as_ref()
+                .map(|params| params.resource_profile)
+                .unwrap_or_default(),
+            keda_availability: keda_params
+                .as_ref()
+                .map(|params| params.availability)
+                .unwrap_or_default(),
             aws_iam_keda_operator_role_arn: self.terraform_output.aws_iam_keda_operator_role_arn.clone(),
             aws_iam_keda_metrics_server_role_arn: self.terraform_output.aws_iam_keda_metrics_server_role_arn.clone(),
             aws_iam_eks_user_mapper_role_arn: self.terraform_output.aws_iam_eks_user_mapper_role_arn.clone(),

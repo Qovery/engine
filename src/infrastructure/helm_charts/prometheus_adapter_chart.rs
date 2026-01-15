@@ -1,5 +1,4 @@
 use std::ops::Add;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::errors::CommandError;
@@ -44,10 +43,10 @@ impl PrometheusAdapterChart {
         // Convert ResourceProfile to HelmChartResources
         let adapter_res = PrometheusAdapterResources::get(resource_profile);
         let resources = HelmChartResources {
-            limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_limit).unwrap()),
-            limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_limit).unwrap()),
-            request_cpu: Some(KubernetesCpuResourceUnit::from_str(&adapter_res.cpu_request).unwrap()),
-            request_memory: Some(KubernetesMemoryResourceUnit::from_str(&adapter_res.memory_request).unwrap()),
+            limit_cpu: adapter_res.limit_cpu,
+            limit_memory: adapter_res.limit_memory,
+            request_cpu: adapter_res.request_cpu,
+            request_memory: adapter_res.request_memory,
         };
 
         PrometheusAdapterChart {
