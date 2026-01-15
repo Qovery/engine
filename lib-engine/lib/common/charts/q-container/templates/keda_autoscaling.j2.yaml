@@ -60,6 +60,14 @@ spec:
   {%- endif %}
   minReplicaCount: {{ service.min_instances }}
   maxReplicaCount: {{ service.max_instances }}
+  {%- if service.autoscaling.fallback %}
+  fallback:
+    failureThreshold: {{ service.autoscaling.fallback.failure_threshold }}
+    replicas: {{ service.autoscaling.fallback.replicas }}
+    {%- if service.autoscaling.fallback.behavior %}
+    behavior: {{ service.autoscaling.fallback.behavior }}
+    {%- endif %}
+  {%- endif %}
   triggers:
   {%- for scaler in service.autoscaling.scalers %}
     - type: {{ scaler.scaler_type }}
