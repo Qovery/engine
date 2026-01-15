@@ -9,6 +9,7 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use itertools::Itertools;
 use kube::Client;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
@@ -17,7 +18,7 @@ use std::hash::{Hash, Hasher};
 use std::ops::Add;
 use std::sync::Arc;
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ExternalDNSSource {
     GatewayHttpRoute,
     GatewayTcpRoute,
@@ -221,7 +222,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
         }
 
         // Set proper sources based on selected mode
-        for (index, source) in self.sources.iter().enumerate() {
+        for (index, source) in self.sources.iter().sorted().enumerate() {
             values.push(ChartSetValue {
                 key: format!("sources[{index}]",),
                 value: source.to_string(),
@@ -798,6 +799,41 @@ mod tests {
             missing_fields.is_none(),
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
+        );
+    }
+
+    /// Verify that ExternalDNSSource enum variants maintain their declaration order when sorted.
+    /// This is critical because the enum derives Ord/PartialOrd, and the ordering is used
+    /// when generating helm chart sources (see line 225 where .sorted() is called).
+    /// It prevents from useless helm diffs when the order of sources changes unexpectedly.
+    #[test]
+    fn external_dns_source_enum_preserves_variant_order() {
+        use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSSource;
+
+        // Create a vec with all variants in reverse order
+        let mut sources = vec![
+            ExternalDNSSource::Service,
+            ExternalDNSSource::Ingress,
+            ExternalDNSSource::GatewayTlsRoute,
+            ExternalDNSSource::GatewayUdpRoute,
+            ExternalDNSSource::GatewayTcpRoute,
+            ExternalDNSSource::GatewayHttpRoute,
+        ];
+
+        // Sort the variants
+        sources.sort();
+
+        // Verify the sorted order matches the declaration order
+        assert_eq!(
+            sources,
+            vec![
+                ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayTcpRoute,
+                ExternalDNSSource::GatewayUdpRoute,
+                ExternalDNSSource::GatewayTlsRoute,
+                ExternalDNSSource::Ingress,
+                ExternalDNSSource::Service,
+            ]
         );
     }
 }
