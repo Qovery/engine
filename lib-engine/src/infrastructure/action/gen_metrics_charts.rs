@@ -414,6 +414,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::KubernetesVersion;
     use crate::infrastructure::models::kubernetes::aws::Options;
     use crate::infrastructure::models::kubernetes::gcp::VpcMode;
+    use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
     use crate::io_models::engine_location::EngineLocation;
     use crate::io_models::models::{StorageClass, VpcQoveryNetworkMode};
     use std::sync::Arc;
@@ -659,6 +660,8 @@ mod tests {
             is_karpenter_enabled: false,
             karpenter_parameters: None,
             is_keda_enabled: false,
+            keda_resource_profile: KedaResourceProfile::Normal,
+            keda_availability: KedaAvailability::Normal,
             aws_iam_keda_operator_role_arn: None,
             aws_iam_keda_metrics_server_role_arn: None,
             aws_iam_eks_user_mapper_role_arn: String::new(),

@@ -1,5 +1,4 @@
 use derive_more::Display;
-use std::str::FromStr;
 
 use super::{
     HelmChartAutoscaling, HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath,
@@ -93,12 +92,10 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosQueryResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
-                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
-                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
-                        request_memory: Some(
-                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
-                        ),
+                        limit_memory: resources.limit_memory,
+                        limit_cpu: resources.limit_cpu,
+                        request_cpu: resources.request_cpu,
+                        request_memory: resources.request_memory,
                     }
                 }
             },
@@ -126,12 +123,10 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosCompactorResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
-                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
-                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
-                        request_memory: Some(
-                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
-                        ),
+                        limit_cpu: resources.limit_cpu,
+                        limit_memory: resources.limit_memory,
+                        request_cpu: resources.request_cpu,
+                        request_memory: resources.request_memory,
                     }
                 }
             },
@@ -140,12 +135,10 @@ impl ThanosChart {
                 None => {
                     let resources = ThanosStoreResources::get(resource_profile);
                     HelmChartResources {
-                        limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_limit).unwrap()),
-                        limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&resources.memory_limit).unwrap()),
-                        request_cpu: Some(KubernetesCpuResourceUnit::from_str(&resources.cpu_request).unwrap()),
-                        request_memory: Some(
-                            KubernetesMemoryResourceUnit::from_str(&resources.memory_request).unwrap(),
-                        ),
+                        limit_cpu: resources.limit_cpu,
+                        limit_memory: resources.limit_memory,
+                        request_cpu: resources.request_cpu,
+                        request_memory: resources.request_memory,
                     }
                 }
             },

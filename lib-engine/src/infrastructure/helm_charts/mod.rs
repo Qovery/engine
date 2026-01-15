@@ -6,6 +6,7 @@ use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResour
 use std::env;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use std::str::FromStr;
 use time::Duration;
 
 pub mod alert_config_chart;
@@ -86,6 +87,17 @@ pub struct HelmChartResources {
     pub request_cpu: Option<KubernetesCpuResourceUnit>,
     #[serde(serialize_with = "serialize_memory_resource")]
     pub request_memory: Option<KubernetesMemoryResourceUnit>,
+}
+
+impl HelmChartResources {
+    pub fn new(request_cpu: &str, limit_cpu: &str, request_memory: &str, limit_memory: &str) -> Self {
+        Self {
+            request_cpu: KubernetesCpuResourceUnit::from_str(request_cpu).ok(),
+            limit_cpu: KubernetesCpuResourceUnit::from_str(limit_cpu).ok(),
+            request_memory: KubernetesMemoryResourceUnit::from_str(request_memory).ok(),
+            limit_memory: KubernetesMemoryResourceUnit::from_str(limit_memory).ok(),
+        }
+    }
 }
 
 fn serialize_cpu_resource<S>(value: &Option<KubernetesCpuResourceUnit>, serializer: S) -> Result<S::Ok, S::Error>

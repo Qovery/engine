@@ -8,9 +8,7 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartValuesFilePath, ToCommonHelmChart,
     ToHelmChartValue,
 };
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
-use std::str::FromStr;
 
 pub struct YaceChart {
     action: HelmAction,
@@ -51,10 +49,10 @@ impl YaceChart {
             aws_region,
             cluster_short_id,
             query_resources: HelmChartResources {
-                limit_cpu: Some(KubernetesCpuResourceUnit::from_str(&yace_resources.cpu_limit).unwrap()),
-                limit_memory: Some(KubernetesMemoryResourceUnit::from_str(&yace_resources.memory_limit).unwrap()),
-                request_cpu: Some(KubernetesCpuResourceUnit::from_str(&yace_resources.cpu_request).unwrap()),
-                request_memory: Some(KubernetesMemoryResourceUnit::from_str(&yace_resources.memory_request).unwrap()),
+                limit_cpu: yace_resources.limit_cpu,
+                limit_memory: yace_resources.limit_memory,
+                request_cpu: yace_resources.request_cpu,
+                request_memory: yace_resources.request_memory,
             },
         }
     }
