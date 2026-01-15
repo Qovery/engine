@@ -483,6 +483,14 @@ pub struct KedaScaler {
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct KedaFallback {
+    pub failure_threshold: i32,
+    pub replicas: i32,
+    #[serde(default)]
+    pub behavior: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct KedaConfig {
     #[serde(default)]
     pub polling_interval_seconds: Option<u32>,
@@ -504,6 +512,8 @@ pub enum AutoscalingConfig {
         scalers: Vec<KedaScaler>,
         #[serde(default)]
         trigger_authentications: Vec<KedaTriggerAuthentication>,
+        #[serde(default)]
+        fallback: Option<KedaFallback>,
     },
 }
 
@@ -791,6 +801,7 @@ mod tests {
                 cooldown_period_seconds,
                 scalers,
                 trigger_authentications,
+                ..
             } => {
                 assert_eq!(polling_interval_seconds, Some(30));
                 assert_eq!(cooldown_period_seconds, Some(300));
@@ -813,6 +824,7 @@ mod tests {
                 authentication_ref: None,
             }],
             trigger_authentications: vec![],
+            fallback: None,
         };
 
         let json = serde_json::to_string_pretty(&config).unwrap();
@@ -864,6 +876,7 @@ mod tests {
                 cooldown_period_seconds,
                 scalers,
                 trigger_authentications,
+                ..
             } => {
                 assert_eq!(polling_interval_seconds, Some(30));
                 assert_eq!(cooldown_period_seconds, Some(300));
