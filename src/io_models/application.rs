@@ -498,6 +498,8 @@ impl Application {
             .cloned()
             .collect_vec();
 
+        let autoscaling_domain = self.autoscaling.as_ref().map(|a| a.to_domain(&self.kube_name));
+
         match cloud_provider.kind() {
             CPKind::Aws => {
                 // Note: we check if kubernetes is EC2 to map to the proper implementation
@@ -536,7 +538,7 @@ impl Application {
                     self.gpu_request.map(KubernetesGpuResourceUnit),
                     self.gpu_limit.map(KubernetesGpuResourceUnit),
                     self.should_delete_shared_registry,
-                    self.autoscaling.clone(),
+                    autoscaling_domain.clone(),
                 )?))
             }
             CPKind::Azure => Ok(Box::new(models::application::Application::<Azure>::new(
@@ -572,7 +574,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
-                self.autoscaling.clone(),
+                autoscaling_domain.clone(),
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
@@ -607,7 +609,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
-                self.autoscaling.clone(),
+                autoscaling_domain.clone(),
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -642,7 +644,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
-                self.autoscaling.clone(),
+                autoscaling_domain.clone(),
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -677,7 +679,7 @@ impl Application {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 self.should_delete_shared_registry,
-                self.autoscaling.clone(),
+                autoscaling_domain.clone(),
             )?)),
         }
     }

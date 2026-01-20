@@ -1,6 +1,7 @@
 pub mod abort;
 mod annotations_group;
 pub mod application;
+pub mod autoscaling;
 pub mod aws;
 pub mod azure;
 pub mod container;
