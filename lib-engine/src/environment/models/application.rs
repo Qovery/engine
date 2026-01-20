@@ -454,10 +454,10 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
 }
 
+use crate::environment::models::autoscaling::AutoscalingConfig;
 use crate::environment::models::port::Port;
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterNodePoolType;
-use crate::io_models::container::AutoscalingConfig;
 use tera::Context as TeraContext;
 
 impl<T: CloudProvider> ToTeraContext for Application<T> {

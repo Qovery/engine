@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
+use crate::environment::models::autoscaling::AutoscalingConfig;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::probe::Probe;
 use crate::environment::models::registry_image_source::RegistryImageSource;
@@ -29,7 +30,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol;
 use crate::io_models::application::Protocol::{TCP, UDP};
-use crate::io_models::container::{AutoscalingConfig, ContainerAdvancedSettings, Registry};
+use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
