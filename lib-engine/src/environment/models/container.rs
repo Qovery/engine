@@ -154,7 +154,7 @@ impl<T: CloudProvider> Container<T> {
             ));
         }
 
-        if min_instances == 0 {
+        if min_instances == 0 && !matches!(autoscaling, Some(AutoscalingConfig::Keda { .. })) {
             return Err(ContainerError::InvalidConfig(
                 "min_instances must be greater than 0".to_string(),
             ));
