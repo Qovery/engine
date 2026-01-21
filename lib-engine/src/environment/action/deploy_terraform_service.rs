@@ -236,24 +236,6 @@ where
         let pod_name = pod.metadata.name.unwrap_or_default();
         info!("Targeting job pod name: {}", pod_name);
 
-        let job = block_on(crate::environment::action::deploy_job::job::await_job_to_complete(
-            self.kube_name(),
-            max_execution_duration,
-            target.environment.namespace(),
-            target.kube.client(),
-            target.abort,
-        ))
-        .map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
-
-        if let Some(crate::environment::action::deploy_job::job::ConditionStatus { reason, message }) =
-            crate::environment::action::deploy_job::job::job_is_failed(&job)
-        {
-            let msg = format!("Job failed to correctly run due to {reason} {message}");
-            debug!(msg);
-            debug!("Job pod: {:?}", job);
-            return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
-        }
-
         // STEP 1: Retrieve terraform resources first (before terminating the container)
         let should_retrieve_terraform_resources_and_output = matches!(
             self.terraform_action,
@@ -311,6 +293,8 @@ where
         }
 
         // STEP 2: Retrieve terraform outputs and terminate the waiting container
+        // CRITICAL: Must be called BEFORE await_job_to_complete() to avoid deadlock
+        // (Job won't complete until sidecar terminates, and sidecar can't terminate until this is called)
         if should_retrieve_terraform_resources_and_output {
             match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(
                 target.kube.client(),
@@ -329,6 +313,25 @@ where
                     log_job_output_error(logger, event_details, err);
                 }
             }
+        }
+
+        // STEP 3: Wait for job to complete (after sidecar has been terminated)
+        let job = block_on(crate::environment::action::deploy_job::job::await_job_to_complete(
+            self.kube_name(),
+            max_execution_duration,
+            target.environment.namespace(),
+            target.kube.client(),
+            target.abort,
+        ))
+        .map_err(|err| Box::new(EngineError::new_job_error(event_details.clone(), err.to_string())))?;
+
+        if let Some(crate::environment::action::deploy_job::job::ConditionStatus { reason, message }) =
+            crate::environment::action::deploy_job::job::job_is_failed(&job)
+        {
+            let msg = format!("Job failed to correctly run due to {reason} {message}");
+            debug!(msg);
+            debug!("Job pod: {:?}", job);
+            return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
         }
 
         Ok((state, helm))
