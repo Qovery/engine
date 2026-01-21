@@ -1,3 +1,4 @@
+use crate::environment::resource_extraction::parser::TerraformResource;
 use crate::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::application::GitCredentials;
@@ -12,10 +13,24 @@ pub enum EngineServiceType {
     Engine,
 }
 
+#[derive(Debug, Clone)]
+pub struct VersionedId {
+    pub id: Uuid,
+    pub version: i32,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerraformResourcesRequest {
+    pub terraform_id: Uuid,
+    pub execution_id: String,
+    pub resources: Vec<TerraformResource>,
+}
+
 pub trait QoveryApi: Send + Sync {
     fn service_version(&self, service_type: EngineServiceType) -> anyhow::Result<String>;
     fn git_token(&self, service_type: ServiceType, service_id: &Uuid) -> anyhow::Result<GitCredentials>;
     fn update_cluster_outputs(&self, cluster_state_request: &ClusterOutputsRequest) -> anyhow::Result<()>;
+    fn send_terraform_resources(&self, request: &TerraformResourcesRequest) -> anyhow::Result<()>;
 }
 
 pub struct FakeQoveryApi {}
@@ -30,6 +45,10 @@ impl QoveryApi for FakeQoveryApi {
     }
 
     fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn send_terraform_resources(&self, _request: &TerraformResourcesRequest) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -52,6 +71,10 @@ impl QoveryApi for StaticQoveryApi {
     }
 
     fn update_cluster_outputs(&self, _cluster_outputs_request: &ClusterOutputsRequest) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn send_terraform_resources(&self, _request: &TerraformResourcesRequest) -> anyhow::Result<()> {
         Ok(())
     }
 }

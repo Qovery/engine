@@ -7,6 +7,7 @@ use crate::environment::models::types::CloudProvider;
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::errors::EngineError;
 use crate::events::EventDetails;
+use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::runtime::block_on;
@@ -87,4 +88,19 @@ where
             ImageSource::Build { .. } => {}
         };
     })
+}
+
+/// Builds ChartInfo for a job with common settings
+pub(super) fn build_job_chart_info<T: CloudProvider>(job: &Job<T>, target: &DeploymentTarget) -> ChartInfo
+where
+    Job<T>: JobService,
+{
+    ChartInfo {
+        name: job.helm_release_name(),
+        path: job.workspace_directory().to_string(),
+        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+        timeout_in_seconds: job.startup_timeout().as_secs() as i64,
+        k8s_selector: Some(job.kube_label_selector()),
+        ..Default::default()
+    }
 }

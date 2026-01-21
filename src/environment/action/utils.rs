@@ -2,7 +2,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::ContainerImage;
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::{CommandError, EngineError};
-use crate::events::EventDetails;
+use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::io::RegistryMirroringMode;
@@ -504,4 +504,16 @@ pub fn update_pvcs(
     are_pvcs_bound(service, namespace, event_details, client)?;
 
     Ok(())
+}
+
+/// Logs a warning for job output errors (validation or serialization)
+pub fn log_job_output_error(logger: &EnvProgressLogger, event_details: &EventDetails, err: impl std::fmt::Display) {
+    let error_msg = err.to_string();
+    let engine_error = if error_msg.contains("Validation error") {
+        EngineError::new_invalid_job_output_variable_validation_failed(event_details.clone(), error_msg)
+    } else {
+        EngineError::new_invalid_job_output_cannot_be_serialized(event_details.clone(), error_msg)
+    };
+
+    logger.log(EngineEvent::Warning(event_details.clone(), EventMessage::from(engine_error)));
 }

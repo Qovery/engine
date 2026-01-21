@@ -1,17 +1,15 @@
-use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::action::{JobRun, TaskContext};
 use crate::environment::action::deploy_job::job_output::{
     JobOutputSerializationError, JobOutputVariable, serialize_job_output,
 };
+use crate::environment::action::{DeploymentAction, log_job_output_error};
 use crate::environment::models::abort::Abort;
 use crate::environment::models::job::{Job, JobService};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::EngineError;
-use crate::events::EngineEvent;
-use crate::events::{EventDetails, EventMessage};
-use crate::helm::{ChartInfo, HelmChartNamespaces};
+use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::Service;
 use crate::runtime::block_on;
@@ -65,14 +63,7 @@ fn run_job_task<'a, T: CloudProvider>(
 where
     Job<T>: JobService,
 {
-    let chart = ChartInfo {
-        name: job.helm_release_name(),
-        path: job.workspace_directory().to_string(),
-        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
-        timeout_in_seconds: job.startup_timeout().as_secs() as i64,
-        k8s_selector: Some(job.kube_label_selector()),
-        ..Default::default()
-    };
+    let chart = super::common::build_job_chart_info(job, target);
 
     let helm = HelmDeployment::new(
         event_details.clone(),
@@ -122,17 +113,7 @@ where
             serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
         ),
         Err(err) => {
-            logger.log(EngineEvent::Warning(
-                event_details.clone(),
-                EventMessage::from(if err.to_string().contains("Validation error") {
-                    EngineError::new_invalid_job_output_variable_validation_failed(
-                        event_details.clone(),
-                        err.to_string(),
-                    )
-                } else {
-                    EngineError::new_invalid_job_output_cannot_be_serialized(event_details.clone(), err.to_string())
-                }),
-            ));
+            log_job_output_error(logger, event_details, err);
         }
     }
 
@@ -164,7 +145,7 @@ pub async fn retrieve_output_and_terminate_pod(
 ) -> Result<Option<HashMap<String, JobOutputVariable>>, JobRunError> {
     let pod_api: Api<Pod> = Api::namespaced(kube_client.clone(), namespace);
 
-    // Write file in shared volume to let the waiting container terminate
+    // Retrieve job outputs and terminate the waiting container
     let mut process = pod_api
         .exec(
             pod_name,
@@ -213,6 +194,61 @@ pub async fn retrieve_output_and_terminate_pod(
         .collect::<HashMap<String, JobOutputVariable>>();
 
     Ok(Some(json))
+}
+
+/// Retrieves terraform resources JSON from the pod's shared volume.
+///
+/// Returns None if file doesn't exist or is empty (non-fatal).
+pub async fn retrieve_terraform_resources(
+    kube_client: kube::Client,
+    namespace: &str,
+    pod_name: &str,
+) -> Result<Option<serde_json::Value>, JobRunError> {
+    let pod_api: Api<Pod> = Api::namespaced(kube_client, namespace);
+    // Read terraform-resources.json via qovery-job-output-waiter (job sidecar)
+    let mut process = pod_api
+        .exec(
+            pod_name,
+            vec![
+                "/qovery-job-output-waiter",
+                "--output-file",
+                "/qovery-output/terraform-resources.json",
+                "--display-output-file",
+            ],
+            &AttachParams::default().container("qovery-wait-container-output"),
+        )
+        .await
+        .with_context(|| format!("Cannot retrieve terraform-resources.json from pod {}", &pod_name))?;
+
+    let mut stdout = process
+        .stdout()
+        .with_context(|| format!("Cannot get stdout from container for pod {}", &pod_name))?;
+
+    // Read file content into buffer
+    let mut json_bytes = Vec::with_capacity(8192);
+    stdout
+        .read_to_end(&mut json_bytes)
+        .await
+        .with_context(|| "cannot read terraform resources from terraform-resources.json")?;
+
+    let Ok(_) = process.join().await else {
+        debug!("No terraform resources available");
+        return Ok(None);
+    };
+
+    if json_bytes.is_empty() {
+        debug!("No terraform resources JSON available");
+        return Ok(None);
+    }
+
+    // Parse JSON from bytes
+    match serde_json::from_slice::<serde_json::Value>(&json_bytes) {
+        Ok(json_value) => Ok(Some(json_value)),
+        Err(e) => {
+            debug!("Invalid terraform resources JSON: {}", e);
+            Ok(None)
+        }
+    }
 }
 
 pub async fn kill_job(kube_client: kube::Client, namespace: &str, job_name: &str) -> anyhow::Result<()> {
@@ -302,14 +338,14 @@ pub async fn await_job_pod_to_terminate(
     kube_client: kube::Client,
     abort_handle: impl Abort,
 ) -> Result<Pod, JobRunError> {
+    // We want the job to be half running. Meaning the task/job of the user is terminated,
+    // but our qovery-wait-container-output is still running, waiting for us.
+    // If the pod is not present anymore, we want to unstuck the loop.
     let should_process_pod = |pod: Option<&Pod>| -> bool {
-        // if the pod is not present anymore, we want to unstuck the loop
         let Some(pod) = pod else {
             return true;
         };
 
-        // We want the job to be half running. Meaning the task/job of the user is terminated,
-        // but our qovery-wait-container-output is still running, waiting for us.
         if user_job_terminated_exit_code(pod).is_some() {
             return true;
         }

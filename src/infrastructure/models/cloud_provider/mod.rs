@@ -158,6 +158,7 @@ pub struct DeploymentTarget<'a> {
     pub abort: &'a dyn Abort,
     logger: Arc<Box<dyn Logger>>,
     pub metrics_registry: Arc<dyn MetricsRegistry>,
+    pub qovery_api: Arc<dyn crate::engine_task::qovery_api::QoveryApi>,
     pub is_dry_run_deploy: bool,
     pub is_test_cluster: bool,
 }
@@ -203,6 +204,7 @@ impl<'a> DeploymentTarget<'a> {
             is_dry_run_deploy: kubernetes.context().is_dry_run_deploy(),
             is_test_cluster: kubernetes.context().is_test_cluster(),
             metrics_registry: Arc::from(infra_ctx.metrics_registry().clone_dyn()),
+            qovery_api: infra_ctx.context().qovery_api.clone(),
         })
     }
 

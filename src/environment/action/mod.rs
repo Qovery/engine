@@ -20,7 +20,7 @@ mod restart_service;
 pub mod test_utils;
 mod utils;
 
-pub use utils::update_pvcs;
+pub use utils::{log_job_output_error, update_pvcs};
 
 pub trait DeploymentAction: Send + Sync {
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>>;
