@@ -482,7 +482,8 @@ mod test {
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
         ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx,
-        GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse, engine_message_rx,
+        GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse, TerraformResourcesRequest,
+        engine_message_rx,
     };
     use crate::grpc::test::new_engine_client_test;
     use crate::models::TaskSelector;
@@ -553,6 +554,13 @@ mod test {
             _request: Request<ClusterOutputsUpdateRequest>,
         ) -> Result<Response<()>, Status> {
             Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn send_terraform_resources(
+            &self,
+            _request: Request<TerraformResourcesRequest>,
+        ) -> Result<Response<()>, Status> {
+            Ok(Response::new(()))
         }
     }
 
@@ -812,6 +820,13 @@ mod test {
             _request: Request<ClusterOutputsUpdateRequest>,
         ) -> Result<Response<()>, Status> {
             Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn send_terraform_resources(
+            &self,
+            _request: Request<TerraformResourcesRequest>,
+        ) -> Result<Response<()>, Status> {
+            Ok(Response::new(()))
         }
     }
 

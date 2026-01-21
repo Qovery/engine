@@ -463,6 +463,9 @@ pub enum EnvironmentStep {
 
     /// TerraformServiceOutput: contains the environment variables to upsert
     TerraformServiceOutput,
+
+    /// TerraformResources: contains the terraform resources extracted from state
+    TerraformResources,
 }
 
 impl EnvironmentStep {
@@ -479,7 +482,13 @@ impl EnvironmentStep {
     }
 
     pub fn is_core_output(&self) -> bool {
-        matches!(self, EnvironmentStep::JobOutput | EnvironmentStep::DatabaseOutput)
+        matches!(
+            self,
+            EnvironmentStep::JobOutput
+                | EnvironmentStep::DatabaseOutput
+                | EnvironmentStep::TerraformServiceOutput
+                | EnvironmentStep::TerraformResources
+        )
     }
 }
 
@@ -520,6 +529,7 @@ impl Display for EnvironmentStep {
                 EnvironmentStep::Recap => "recap",
                 EnvironmentStep::GlobalError => "global-error",
                 EnvironmentStep::TerraformServiceOutput => "terraform-service-output",
+                EnvironmentStep::TerraformResources => "terraform-resources",
             },
         )
     }
@@ -700,7 +710,8 @@ impl EventDetails {
                 | EnvironmentStep::JobOutput
                 | EnvironmentStep::Recap
                 | EnvironmentStep::DatabaseOutput
-                | EnvironmentStep::TerraformServiceOutput => return,
+                | EnvironmentStep::TerraformServiceOutput
+                | EnvironmentStep::TerraformResources => return,
             },
         };
     }

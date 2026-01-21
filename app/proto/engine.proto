@@ -19,6 +19,7 @@ service Engine {
   rpc GetServiceVersion(ServiceVersionRequest) returns (ServiceVersionResponse) {}
   rpc GetGitToken(GitTokenRequest) returns (GitTokenResponse) {}
   rpc updateClusterOutputs(ClusterOutputsUpdateRequest) returns (google.protobuf.Empty) {}
+  rpc sendTerraformResources(TerraformResourcesRequest) returns (google.protobuf.Empty) {}
 }
 
 enum DeploymentType {
@@ -154,4 +155,11 @@ message ClusterOutputsUpdateRequest {
   optional string vpcId = 9;
   optional string network = 10;
   optional string privateNetworkId = 11;
+}
+
+message TerraformResourcesRequest {
+  string jwt_token = 1;
+  string terraform_id = 2;        // Service ID (UUID)
+  string execution_id = 3;         // Execution ID in format "{environmentId}-{version}"
+  string resources_json = 4;       // JSON array of resources
 }

@@ -25,6 +25,19 @@ log() {
   printf "\n[==> %s]: %s\n" "${TF_COMMAND}" "$1"
 }
 
+extract_terraform_resources() {
+  log "${TF_COMMAND} show -json (extracting resources)"
+  # Extract terraform resources and save to output directory
+  # Non-blocking: if this fails, deployment still succeeds
+  if ${TF_COMMAND} show -json > /qovery-output/terraform-resources.json 2>/dev/null; then
+    log "Successfully extracted terraform resources"
+  else
+    log "Warning: Failed to extract terraform resources (non-fatal)"
+    # Create empty resources file so processing continues
+    echo '{"resources": []}' > /qovery-output/terraform-resources.json
+  fi
+}
+
 
 run_terraform_init() {
   log "${TF_COMMAND} init $TF_CLI_ARGS_init"
@@ -59,6 +72,7 @@ case "$CMD" in
         ${TF_COMMAND} apply -input=false -auto-approve "$@"
         log "${TF_COMMAND} output"
         ${TF_COMMAND} output -json > /qovery-output/qovery-output.json
+        extract_terraform_resources
         ;;
     "plan_only")
         run_terraform_init
@@ -75,6 +89,7 @@ case "$CMD" in
         ${TF_COMMAND} apply -input=false /persistent-volume/terraform-plan-output/"${PLAN_NAME}"-tf.plan
         log "${TF_COMMAND} output $TF_CLI_ARGS_output"
         ${TF_COMMAND} output -json > /qovery-output/qovery-output.json
+        extract_terraform_resources
         ;;
     "destroy")
         log "${TF_COMMAND} destroy $TF_CLI_ARGS_destroy"

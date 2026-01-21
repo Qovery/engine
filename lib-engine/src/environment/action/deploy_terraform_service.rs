@@ -1,22 +1,13 @@
-#![allow(unused_imports, unused_variables, dead_code)]
-
-use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job::JobRunError;
-use crate::environment::action::deploy_job::job_output::JobOutputSerializationError;
-use crate::environment::action::utils::{
-    KubeObjectKind, delete_cached_image, get_last_deployed_image, mirror_image_if_necessary,
-};
-use crate::environment::models::job::{ImageSource, Job, JobService};
-use crate::environment::models::terraform_service::{
-    TerraformAction, TerraformFilesSource, TerraformService, TerraformServiceTrait,
-};
+use crate::environment::action::{DeploymentAction, log_job_output_error};
+use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
-use crate::environment::report::{DeploymentTaskMut, DeploymentTaskRef, execute_long_deployment};
-use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
+use crate::environment::report::{DeploymentTaskMut, execute_long_deployment};
+use crate::errors::{CommandError, EngineError};
+use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
@@ -26,7 +17,6 @@ use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::api::core::v1::Secret;
 use kube::Api;
 use kube::api::{DeleteParams, ListParams};
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -221,7 +211,6 @@ where
             let _ = delete_backend_config_secret(secret_name, event_details, target);
         });
 
-        let job_pod_selector = format!("job-name={}", self.kube_name());
         let max_execution_duration = Duration::from_secs(60) + self.timeout;
         let pod = block_on(super::deploy_job::job::await_job_pod_to_start(
             self.kube_name(),
@@ -247,44 +236,6 @@ where
         let pod_name = pod.metadata.name.unwrap_or_default();
         info!("Targeting job pod name: {}", pod_name);
 
-        match self.terraform_action {
-            TerraformAction::TerraformPlanOnly { execution_id: _ }
-            | TerraformAction::TerraformDestroy
-            | TerraformAction::TerraformInit
-            | TerraformAction::TerraformUnlockState
-            | TerraformAction::TerraformNoop => {}
-            TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply => {
-                match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(
-                    target.kube.client(),
-                    target.environment.namespace(),
-                    &pod_name,
-                    "^[a-zA-Z_][a-zA-Z0-9_]*$",
-                )) {
-                    Ok(None) => {}
-                    Ok(Some(output)) => logger.core_configuration_for_terraform_service(
-                        "Terraform output succeeded. Environment variables will be synchronized.".to_string(),
-                        serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
-                    ),
-                    Err(err) => {
-                        logger.log(EngineEvent::Warning(
-                            event_details.clone(),
-                            EventMessage::from(if err.to_string().contains("Validation error") {
-                                EngineError::new_invalid_job_output_variable_validation_failed(
-                                    event_details.clone(),
-                                    err.to_string(),
-                                )
-                            } else {
-                                EngineError::new_invalid_job_output_cannot_be_serialized(
-                                    event_details.clone(),
-                                    err.to_string(),
-                                )
-                            }),
-                        ));
-                    }
-                }
-            }
-        }
-
         let job = block_on(crate::environment::action::deploy_job::job::await_job_to_complete(
             self.kube_name(),
             max_execution_duration,
@@ -301,6 +252,83 @@ where
             debug!(msg);
             debug!("Job pod: {:?}", job);
             return Err(Box::new(EngineError::new_job_error(event_details.clone(), msg)));
+        }
+
+        // STEP 1: Retrieve terraform resources first (before terminating the container)
+        let should_retrieve_terraform_resources_and_output = matches!(
+            self.terraform_action,
+            TerraformAction::TerraformApplyFromPlan { execution_id: _ } | TerraformAction::TerraformPlanAndApply
+        );
+
+        if should_retrieve_terraform_resources_and_output {
+            match block_on(super::deploy_job::job::retrieve_terraform_resources(
+                target.kube.client(),
+                target.environment.namespace(),
+                &pod_name,
+            )) {
+                Ok(Some(resources_json)) => {
+                    // Parse and filter resources using TerraformResourceParser
+                    use crate::engine_task::qovery_api::TerraformResourcesRequest;
+                    use crate::environment::resource_extraction::parser::TerraformResourceParser;
+
+                    let parser = TerraformResourceParser::new();
+                    match parser.parse_from_value(resources_json) {
+                        Ok(resources) => {
+                            let resource_count = resources.len();
+                            info!(
+                                "Successfully extracted {} terraform resource(s) from deployment",
+                                resource_count
+                            );
+
+                            // Send resources to core via gRPC instead of logging
+                            let request = TerraformResourcesRequest {
+                                terraform_id: *self.long_id(),
+                                execution_id: event_details.execution_id().to_string(),
+                                resources,
+                            };
+
+                            match target.qovery_api.send_terraform_resources(&request) {
+                                Ok(()) => {
+                                    info!("Successfully sent {} terraform resources to core via gRPC", resource_count);
+                                }
+                                Err(e) => {
+                                    info!("Warning: Failed to send terraform resources via gRPC (non-fatal): {}", e);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            info!("Warning: Failed to parse terraform resources (non-fatal): {}", e);
+                        }
+                    }
+                }
+                Ok(None) => {
+                    debug!("No terraform resources available");
+                }
+                Err(e) => {
+                    info!("Warning: Failed to retrieve terraform resources (non-fatal): {}", e);
+                }
+            }
+        }
+
+        // STEP 2: Retrieve terraform outputs and terminate the waiting container
+        if should_retrieve_terraform_resources_and_output {
+            match block_on(super::deploy_job::job::retrieve_output_and_terminate_pod(
+                target.kube.client(),
+                target.environment.namespace(),
+                &pod_name,
+                "^[a-zA-Z_][a-zA-Z0-9_]*$",
+            )) {
+                Ok(Some(output)) => {
+                    logger.core_configuration_for_terraform_service(
+                        "Terraform output succeeded. Environment variables will be synchronized.".to_string(),
+                        serde_json::to_string(&output).unwrap_or_else(|_| "{}".to_string()),
+                    );
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    log_job_output_error(logger, event_details, err);
+                }
+            }
         }
 
         Ok((state, helm))
@@ -373,19 +401,19 @@ fn delete_backend_config_secret(
 }
 
 pub(super) fn mk_deploy_pre_run<'a, T: CloudProvider>(
-    terraform: &'a TerraformService<T>,
-    target: &'a DeploymentTarget,
-    event_details: EventDetails,
+    _terraform: &'a TerraformService<T>,
+    _target: &'a DeploymentTarget,
+    _event_details: EventDetails,
 ) -> TerraformPreRun<'a> {
-    Box::new(move |logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) })
+    Box::new(move |_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) })
 }
 
 pub(super) fn mk_deploy_post_run<'a, T: CloudProvider>(
-    terraform: &'a TerraformService<T>,
-    target: &'a DeploymentTarget,
+    _terraform: &'a TerraformService<T>,
+    _target: &'a DeploymentTarget,
 ) -> TerraformPostRun<'a>
 where
     TerraformService<T>: TerraformServiceTrait,
 {
-    Box::new(move |logger: &EnvSuccessLogger, state: TaskContext| {})
+    Box::new(move |_logger: &EnvSuccessLogger, _state: TaskContext| {})
 }

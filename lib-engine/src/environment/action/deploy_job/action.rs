@@ -11,7 +11,6 @@ use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::{DeploymentTaskRef, execute_long_deployment};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage};
-use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::job::JobSchedule;
@@ -169,14 +168,7 @@ where
     };
 
     let task = move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
-        let chart = ChartInfo {
-            name: job.helm_release_name(),
-            path: job.workspace_directory().to_string(),
-            namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
-            timeout_in_seconds: job.startup_timeout().as_secs() as i64,
-            k8s_selector: Some(job.kube_label_selector()),
-            ..Default::default()
-        };
+        let chart = super::common::build_job_chart_info(job, target);
 
         let helm = HelmDeployment::new(
             event_details.clone(),

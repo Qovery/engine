@@ -1,11 +1,14 @@
 use super::GrpcEngineClient;
 use crate::grpc::engine::{
     ClusterOutputsUpdateRequest, GitTokenRequest, KubernetesProviderKind, ServiceVersionRequest,
+    TerraformResourcesRequest,
 };
 use crate::tokio_utils::block_on;
 use anyhow::{Context, anyhow};
 use chrono::DateTime;
-use qovery_engine::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use qovery_engine::engine_task::qovery_api::{
+    EngineServiceType, QoveryApi, TerraformResourcesRequest as EngineResourcesRequest,
+};
 use qovery_engine::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::infrastructure::models::kubernetes::Kind;
@@ -24,6 +27,22 @@ impl GrpcCoreServiceApi {
     pub fn new(jwt_token: String, client: GrpcEngineClient) -> Self {
         GrpcCoreServiceApi { jwt_token, client }
     }
+}
+
+/// Remove the timestamp suffix from execution_id
+/// Format: {uuid}-{version}-{timestamp} -> {uuid}-{version}
+fn clean_execution_id(execution_id: &str) -> String {
+    // Find the last dash and check if what follows is a numeric timestamp
+    if let Some(last_dash_pos) = execution_id.rfind('-') {
+        let potential_timestamp = &execution_id[last_dash_pos + 1..];
+        // Unix timestamps are typically 10 digits (seconds) or 13+ (milliseconds)
+        // Version numbers are usually 1-3 digits, so a long numeric suffix indicates a timestamp
+        if potential_timestamp.chars().all(|c| c.is_ascii_digit()) && potential_timestamp.len() >= 10 {
+            return execution_id[..last_dash_pos].to_string();
+        }
+    }
+    // If not in expected format, return as-is
+    execution_id.to_string()
 }
 
 fn with_max_retry<T, F, Fut>(f: F, max_retry: usize) -> anyhow::Result<T>
@@ -140,6 +159,34 @@ impl QoveryApi for GrpcCoreServiceApi {
 
         with_max_retry(call, 5)
     }
+
+    fn send_terraform_resources(&self, request: &EngineResourcesRequest) -> anyhow::Result<()> {
+        info!(
+            "send_terraform_resources for terraform {} with execution_id {}",
+            request.terraform_id, request.execution_id
+        );
+
+        let terraform_resources_request = TerraformResourcesRequest {
+            jwt_token: self.jwt_token.clone(),
+            terraform_id: request.terraform_id.to_string(),
+            execution_id: clean_execution_id(&request.execution_id),
+            resources_json: serde_json::to_string(&request.resources)
+                .context("Failed to serialize terraform resources to JSON")?,
+        };
+
+        let call = || async {
+            info!("Sending {} terraform resources to core", request.resources.len());
+            self.client
+                .clone()
+                .send_terraform_resources(terraform_resources_request.clone())
+                .await?;
+
+            info!("Successfully sent terraform resources to core");
+            Ok(())
+        };
+
+        with_max_retry(call, 5)
+    }
 }
 
 fn to_kubernetes_provider_kind(kubernetes_kind: Kind) -> anyhow::Result<KubernetesProviderKind> {
@@ -154,5 +201,29 @@ fn to_kubernetes_provider_kind(kubernetes_kind: Kind) -> anyhow::Result<Kubernet
         | Kind::ScwSelfManaged
         | Kind::OnPremiseSelfManaged
         | Kind::EksAnywhere => Err(anyhow!(format!("kubernetes_kind is not supported: {}", kubernetes_kind))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_clean_execution_id_removes_timestamp() {
+        let input = "bb1d1f62-a078-4a0f-9766-d135f904903a-8-1768511080";
+        let expected = "bb1d1f62-a078-4a0f-9766-d135f904903a-8";
+        assert_eq!(clean_execution_id(input), expected);
+    }
+
+    #[test]
+    fn test_clean_execution_id_without_timestamp() {
+        let input = "bb1d1f62-a078-4a0f-9766-d135f904903a-8";
+        assert_eq!(clean_execution_id(input), input);
+    }
+
+    #[test]
+    fn test_clean_execution_id_with_non_numeric_suffix() {
+        let input = "bb1d1f62-a078-4a0f-9766-d135f904903a-abc";
+        assert_eq!(clean_execution_id(input), input);
     }
 }
