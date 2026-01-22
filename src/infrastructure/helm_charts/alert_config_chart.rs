@@ -197,6 +197,65 @@ fn build_receiver_values(index: usize, receiver: &AlertConfigReceiver) -> Vec<Ch
                 value: api_url.clone(),
             },
         ],
+        AlertConfigReceiver::EmailConfig {
+            long_id,
+            name,
+            to,
+            from,
+            smarthost,
+            auth_username,
+            auth_password,
+            require_tls,
+            send_resolved,
+        } => {
+            let mut values = vec![
+                ChartSetValue {
+                    key: format!("receivers[{index}].id"),
+                    value: format_receiver_id_k8s(long_id),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].matcher_label"),
+                    value: format_receiver_id_label(long_id),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].name"),
+                    value: name.clone(),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.to"),
+                    value: to.clone(),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.from"),
+                    value: from.clone(),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.smarthost"),
+                    value: smarthost.clone(),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.authUsername"),
+                    value: auth_username.clone().unwrap_or_else(|| from.clone()),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.requireTLS"),
+                    value: require_tls.unwrap_or(true).to_string(),
+                },
+                ChartSetValue {
+                    key: format!("receivers[{index}].email.sendResolved"),
+                    value: send_resolved.unwrap_or(true).to_string(),
+                },
+            ];
+
+            if let Some(password) = auth_password {
+                values.push(ChartSetValue {
+                    key: format!("receivers[{index}].email.authPassword"),
+                    value: password.clone(),
+                });
+            }
+
+            values
+        }
     }
 }
 
@@ -966,6 +1025,367 @@ mod tests {
                 .iter()
                 .any(|v| v.key == "targets[0].alerts[0].annotations.runbook_url"),
             "Should not have runbook_url annotation when None"
+        );
+    }
+
+    #[test]
+    fn test_build_email_receiver_values() {
+        use crate::io_models::metrics::AlertConfigReceiver;
+        use uuid::Uuid;
+
+        let receiver_id = Uuid::parse_str("5f60758c-1263-4eef-c817-5e6f938f4d10").unwrap();
+        let receiver = AlertConfigReceiver::EmailConfig {
+            long_id: receiver_id,
+            name: "ops-email".to_string(),
+            to: "ops@example.com".to_string(),
+            from: "alerts@example.com".to_string(),
+            smarthost: "smtp.gmail.com:587".to_string(),
+            auth_username: Some("alerts@example.com".to_string()),
+            auth_password: Some("app-password".to_string()),
+            require_tls: Some(true),
+            send_resolved: Some(true),
+        };
+
+        let values = super::build_receiver_values(0, &receiver);
+
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].name" && v.value == "ops-email")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.to" && v.value == "ops@example.com")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.from" && v.value == "alerts@example.com")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.smarthost" && v.value == "smtp.gmail.com:587")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.authUsername" && v.value == "alerts@example.com")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.authPassword" && v.value == "app-password")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.requireTLS" && v.value == "true")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.sendResolved" && v.value == "true")
+        );
+    }
+
+    #[test]
+    fn test_build_email_receiver_values_minimal() {
+        use crate::io_models::metrics::AlertConfigReceiver;
+        use uuid::Uuid;
+
+        let receiver_id = Uuid::parse_str("6f70859d-2374-5efe-d928-6f7a049e5e21").unwrap();
+        let receiver = AlertConfigReceiver::EmailConfig {
+            long_id: receiver_id,
+            name: "minimal-email".to_string(),
+            to: "alerts@example.com".to_string(),
+            from: "noreply@example.com".to_string(),
+            smarthost: "smtp.example.com:25".to_string(),
+            auth_username: None,
+            auth_password: None,
+            require_tls: None,
+            send_resolved: None,
+        };
+
+        let values = super::build_receiver_values(0, &receiver);
+
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].name" && v.value == "minimal-email")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.to" && v.value == "alerts@example.com")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.from" && v.value == "noreply@example.com")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.smarthost" && v.value == "smtp.example.com:25")
+        );
+        // auth_username should default to 'from'
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.authUsername" && v.value == "noreply@example.com")
+        );
+        // authPassword should not be present when None
+        assert!(!values.iter().any(|v| v.key == "receivers[0].email.authPassword"));
+        // require_tls should default to true
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.requireTLS" && v.value == "true")
+        );
+        // send_resolved should default to true
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.sendResolved" && v.value == "true")
+        );
+    }
+
+    #[test]
+    fn test_integration_email_receiver() {
+        use crate::io_models::metrics::{
+            AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig, AlertTarget, AlertTargetType,
+        };
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        // Create email receiver
+        let receiver_id = Uuid::parse_str("fa370bf5-d8a0-46fb-9066-e092cf5a37f1").unwrap();
+        let receiver = AlertConfigReceiver::EmailConfig {
+            long_id: receiver_id,
+            name: "ops-team".to_string(),
+            to: "ops@example.com".to_string(),
+            from: "alerts@qovery.com".to_string(),
+            smarthost: "smtp.gmail.com:587".to_string(),
+            auth_username: Some("alerts@qovery.com".to_string()),
+            auth_password: Some("secret-password".to_string()),
+            require_tls: Some(true),
+            send_resolved: Some(true),
+        };
+
+        // Create target
+        let target = AlertTarget {
+            id: Uuid::parse_str("3f50657b-1162-4dde-b706-4d5e937f3c09").unwrap(),
+            r#type: AlertTargetType::Application,
+            name: "my-app".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
+        };
+
+        // Create alert
+        let alert = AlertConfigAlert {
+            long_id: Uuid::parse_str("89bf371f-1162-4dde-b706-4d5e937f3c01").unwrap(),
+            name: "HighCPU".to_string(),
+            expr: "cpu_usage > 80".to_string(),
+            for_duration_minutes: 5,
+            labels: HashMap::new(),
+            summary: Some("CPU usage is high".to_string()),
+            description: None,
+            severity: Some("Warning".to_string()),
+            runbook_url: None,
+            receivers: vec![receiver_id],
+            target: target.clone(),
+            version_tag: Some("1".to_string()),
+            tag: None,
+        };
+
+        let alert_config = AlertManagerConfig {
+            enabled: true,
+            default_rule_labels: None,
+            spec_config_secret: None,
+            spec_external_url: None,
+            receivers: vec![receiver],
+            alerts: vec![alert],
+            config_name: Some("test-email-config".to_string()),
+        };
+
+        let chart = AlertConfigChart::new(
+            HelmAction::Deploy,
+            HelmChartNamespaces::Prometheus,
+            None,
+            "test-cluster",
+            Some(alert_config),
+            Uuid::new_v4(),
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // Verify receiver values
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].name" && v.value == "ops-team"),
+            "Should contain receiver name"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.to" && v.value == "ops@example.com"),
+            "Should contain email to"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.from" && v.value == "alerts@qovery.com"),
+            "Should contain email from"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.smarthost" && v.value == "smtp.gmail.com:587"),
+            "Should contain smarthost"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].email.authPassword" && v.value == "secret-password"),
+            "Should contain auth password"
+        );
+    }
+
+    #[test]
+    fn test_integration_mixed_receivers() {
+        use crate::io_models::metrics::{
+            AlertConfigAlert, AlertConfigReceiver, AlertManagerConfig, AlertTarget, AlertTargetType,
+        };
+        use std::collections::HashMap;
+        use uuid::Uuid;
+
+        // Create Slack receiver
+        let slack_receiver_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let slack_receiver = AlertConfigReceiver::SlackConfig {
+            long_id: slack_receiver_id,
+            name: "slack-alerts".to_string(),
+            api_url: "https://hooks.slack.com/test".to_string(),
+            channel: "#alerts".to_string(),
+        };
+
+        // Create Email receiver
+        let email_receiver_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let email_receiver = AlertConfigReceiver::EmailConfig {
+            long_id: email_receiver_id,
+            name: "email-alerts".to_string(),
+            to: "team@example.com".to_string(),
+            from: "noreply@example.com".to_string(),
+            smarthost: "smtp.example.com:587".to_string(),
+            auth_username: None,
+            auth_password: Some("password123".to_string()),
+            require_tls: Some(true),
+            send_resolved: Some(false),
+        };
+
+        let target = AlertTarget {
+            id: Uuid::new_v4(),
+            r#type: AlertTargetType::Application,
+            name: "test-app".to_string(),
+            organization_id: Default::default(),
+            project_id: None,
+            project_name: None,
+            environment_id: None,
+            environment_name: None,
+        };
+
+        let alert = AlertConfigAlert {
+            long_id: Uuid::new_v4(),
+            name: "TestAlert".to_string(),
+            expr: "up == 0".to_string(),
+            for_duration_minutes: 5,
+            labels: HashMap::new(),
+            summary: None,
+            description: None,
+            severity: None,
+            runbook_url: None,
+            receivers: vec![slack_receiver_id, email_receiver_id],
+            target: target.clone(),
+            version_tag: Some("1".to_string()),
+            tag: None,
+        };
+
+        let alert_config = AlertManagerConfig {
+            enabled: true,
+            default_rule_labels: None,
+            spec_config_secret: None,
+            spec_external_url: None,
+            receivers: vec![slack_receiver, email_receiver],
+            alerts: vec![alert],
+            config_name: None,
+        };
+
+        let chart = AlertConfigChart::new(
+            HelmAction::Deploy,
+            HelmChartNamespaces::Prometheus,
+            None,
+            "test-cluster",
+            Some(alert_config),
+            Uuid::new_v4(),
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // Verify both receivers are present
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].name" && v.value == "slack-alerts"),
+            "Should contain Slack receiver"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[0].slack.channel"),
+            "Should contain Slack config"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[1].name" && v.value == "email-alerts"),
+            "Should contain Email receiver"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[1].email.to"),
+            "Should contain Email config"
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|v| v.key == "receivers[1].email.sendResolved" && v.value == "false"),
+            "Should contain sendResolved=false"
         );
     }
 }
