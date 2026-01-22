@@ -62,6 +62,7 @@ tracing-appender = "0.2.3"
 dotenv = "0.15.0"
 # To get build info (commit, version, ...) at runtime
 shadow-rs = { version = "1.1.1", features = [] }
+serde_path_to_error = "0.1.17"
 
 [dev-dependencies]
 reqwest = { version = "0.12.15", features = ["blocking"] }

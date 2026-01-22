@@ -187,15 +187,17 @@ pub fn using_json_path_parameter(
 
     let task: Box<dyn Task> = match deployment_type {
         TaskSelector::Environment => {
-            let mut req: EnvironmentEngineRequest = serde_json::from_reader(file)
+            let mut deserialized_req = serde_json::Deserializer::from_reader(file);
+            let mut request: EnvironmentEngineRequest = serde_path_to_error::deserialize(&mut deserialized_req)
                 .map_err(|err| {
                     error!("Impossible to parse json file: {}", err);
                     process::exit(1);
                 })
                 .unwrap();
-            req.test_cluster = test_cluster;
+
+            request.test_cluster = test_cluster;
             Box::new(EnvironmentTask::new(
-                req,
+                request,
                 workspace_root_dir,
                 lib_root_dir,
                 docker,
@@ -206,15 +208,17 @@ pub fn using_json_path_parameter(
             ))
         }
         TaskSelector::Infrastructure => {
-            let mut req: InfrastructureEngineRequest = serde_json::from_reader(file)
+            let mut deserialized_request = serde_json::Deserializer::from_reader(file);
+            let mut request: InfrastructureEngineRequest = serde_path_to_error::deserialize(&mut deserialized_request)
                 .map_err(|err| {
                     error!("Impossible to parse json file: {}", err);
                     process::exit(1);
                 })
                 .unwrap();
-            req.test_cluster = test_cluster;
+
+            request.test_cluster = test_cluster;
             Box::new(InfrastructureTask::new(
-                req,
+                request,
                 workspace_root_dir,
                 lib_root_dir,
                 docker,

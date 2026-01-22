@@ -146,6 +146,7 @@ dependencies = [
  "scopeguard",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "shadow-rs",
  "tokio",
  "tokio-stream",
