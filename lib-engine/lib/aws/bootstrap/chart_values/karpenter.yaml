@@ -51,3 +51,5 @@ podLabels:
 
 additionalLabels:
   qovery.com/managed: "true"
+
+priorityClassName: system-node-critical
