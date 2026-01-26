@@ -69,22 +69,28 @@ spec:
         - type: ResponseHeaderModifier
           responseHeaderModifier:
             add:
-            {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
-            {%- endfor %}
+              {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+              - name: "{{ header_name }}"
+                value: "{{ header_value }}"
+              {%- endfor %}
         {%- endif %}
-        {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
-        # Add custom request headers (proxy_set_header equivalent)
         - type: RequestHeaderModifier
           requestHeaderModifier:
+            {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+            # Add custom request headers (proxy_set_header equivalent)
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
             - name: "{{ header_name }}"
               value: "{{ header_value }}"
             {%- endfor %}
-        {%- endif %}
-    # Rule 2: Service name prefix path (for pre-migration compatibility)
+            {%- endif %}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: "{{ environment_long_id }}"
+            - name: "x-qovery-com-associated-service-id"
+              value: "{{ associated_service_long_id }}"
+     # Rule 2: Service name prefix path (for pre-migration compatibility)
     - backendRefs:
         - group: ""
           kind: Service
@@ -106,22 +112,28 @@ spec:
         - type: ResponseHeaderModifier
           responseHeaderModifier:
             add:
-            {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
-            {%- endfor %}
+              {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
+              - name: "{{ header_name }}"
+                value: "{{ header_value }}"
+              {%- endfor %}
         {%- endif %}
-        {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
-        # Add custom request headers (proxy_set_header equivalent)
         - type: RequestHeaderModifier
           requestHeaderModifier:
+            {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+            # Add custom request headers (proxy_set_header equivalent)
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
             - name: "{{ header_name }}"
               value: "{{ header_value }}"
             {%- endfor %}
-        {%- endif %}
-    {%- endfor %}
+            {%- endif %}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: "{{ environment_long_id }}"
+            - name: "x-qovery-com-associated-service-id"
+              value: "{{ associated_service_long_id }}"
+     {%- endfor %}
 {%- if advanced_settings.network_gateway_api_force_ssl_redirect and advanced_settings.network_gateway_api_force_ssl_redirect != "false" %}
 ---
 # SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)

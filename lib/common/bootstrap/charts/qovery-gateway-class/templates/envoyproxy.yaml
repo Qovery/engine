@@ -4,21 +4,50 @@ apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
   name: qovery-public-envoy-proxy-config
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   {{- if .Values.gatewayClass.qoveryPublic.accessLog }}
-  {{- if .Values.gatewayClass.qoveryPublic.accessLog.format }}
   telemetry:
     accessLog:
       settings:
         - format:
-            type: Text
-            text: {{ .Values.gatewayClass.qoveryPublic.accessLog.format | quote }}
+            type: "JSON"
+            {{- $customFormat := .Values.gatewayClass.qoveryPublic.accessLog.format | trim }}
+            {{- if and (ne $customFormat "") (ne $customFormat "set-by-engine") }}
+            json: {{ $customFormat | fromJson | toYaml | nindent 14 }}
+            {{- else }}
+            json:
+              start_time: "%START_TIME%"
+              method: "%REQ(:METHOD)%"
+              x-envoy-origin-path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              protocol: "%PROTOCOL%"
+              response_code: "%RESPONSE_CODE%"
+              response_flags: "%RESPONSE_FLAGS%"
+              response_code_details: "%RESPONSE_CODE_DETAILS%"
+              connection_termination_details: "%CONNECTION_TERMINATION_DETAILS%"
+              upstream_transport_failure_reason: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+              bytes_received: "%BYTES_RECEIVED%"
+              bytes_sent: "%BYTES_SENT%"
+              duration: "%DURATION%"
+              x-envoy-upstream-service-time: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
+              x-forwarded-for: "%REQ(X-FORWARDED-FOR)%"
+              user-agent: "%REQ(USER-AGENT)%"
+              x-request-id: "%REQ(X-REQUEST-ID)%"
+              ":authority": "%REQ(:AUTHORITY)%"
+              upstream_host: "%UPSTREAM_HOST%"
+              upstream_cluster: "%UPSTREAM_CLUSTER%"
+              upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+              downstream_local_address: "%DOWNSTREAM_LOCAL_ADDRESS%"
+              downstream_remote_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+              requested_server_name: "%REQUESTED_SERVER_NAME%"
+              route_name: "%ROUTE_NAME%"
+              qovery_com_associated_service_id: "%REQ(x-qovery-com-associated-service-id)%"
+              qovery_com_environment_id: "%REQ(x-qovery-com-environment-id)%"
+            {{- end }}
           sinks:
             - type: File
               file:
                 path: /dev/stdout
-  {{- end }}
   {{- end }}
 {{ end }}
 
@@ -28,20 +57,49 @@ apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
   name: qovery-private-envoy-proxy-config
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
 spec:
   {{- if .Values.gatewayClass.qoveryPrivate.accessLog }}
-  {{- if .Values.gatewayClass.qoveryPrivate.accessLog.format }}
   telemetry:
     accessLog:
       settings:
         - format:
-            type: Text
-            text: {{ .Values.gatewayClass.qoveryPrivate.accessLog.format | quote }}
+            type: "JSON"
+            {{- $customFormat := .Values.gatewayClass.qoveryPrivate.accessLog.format | trim }}
+            {{- if ne $customFormat "" }}
+            json: {{ $customFormat | fromJson | toYaml | nindent 14 }}
+            {{- else }}
+            json:
+              start_time: "%START_TIME%"
+              method: "%REQ(:METHOD)%"
+              x-envoy-origin-path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              protocol: "%PROTOCOL%"
+              response_code: "%RESPONSE_CODE%"
+              response_flags: "%RESPONSE_FLAGS%"
+              response_code_details: "%RESPONSE_CODE_DETAILS%"
+              connection_termination_details: "%CONNECTION_TERMINATION_DETAILS%"
+              upstream_transport_failure_reason: "%UPSTREAM_TRANSPORT_FAILURE_REASON%"
+              bytes_received: "%BYTES_RECEIVED%"
+              bytes_sent: "%BYTES_SENT%"
+              duration: "%DURATION%"
+              x-envoy-upstream-service-time: "%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%"
+              x-forwarded-for: "%REQ(X-FORWARDED-FOR)%"
+              user-agent: "%REQ(USER-AGENT)%"
+              x-request-id: "%REQ(X-REQUEST-ID)%"
+              ":authority": "%REQ(:AUTHORITY)%"
+              upstream_host: "%UPSTREAM_HOST%"
+              upstream_cluster: "%UPSTREAM_CLUSTER%"
+              upstream_local_address: "%UPSTREAM_LOCAL_ADDRESS%"
+              downstream_local_address: "%DOWNSTREAM_LOCAL_ADDRESS%"
+              downstream_remote_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+              requested_server_name: "%REQUESTED_SERVER_NAME%"
+              route_name: "%ROUTE_NAME%"
+              qovery_com_associated_service_id: "%REQ(x-qovery-com-associated-service-id)%"
+              qovery_com_environment_id: "%REQ(x-qovery-com-environment-id)%"
+            {{- end }}
           sinks:
             - type: File
               file:
                 path: /dev/stdout
-  {{- end }}
   {{- end }}
 {{ end }}

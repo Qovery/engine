@@ -66,7 +66,7 @@ spec:
       {%- endif %}
       {%- if advanced_settings.network_gateway_api_add_headers or advanced_settings.network_gateway_api_proxy_set_headers %}
       filters:
-       {%- if advanced_settings.network_gateway_api_add_headers %}
+        {%- if advanced_settings.network_gateway_api_add_headers %}
         # Add custom response headers
         - type: ResponseHeaderModifier
           responseHeaderModifier:
@@ -75,17 +75,23 @@ spec:
             - name: "{{ header_name }}"
               value: "{{ header_value }}"
             {%- endfor %}
-       {%- endif %}
-       {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
-        # Add custom request headers (proxy_set_header equivalent)
+        {%- endif %}
         - type: RequestHeaderModifier
           requestHeaderModifier:
+            {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
+            # Add custom request headers (proxy_set_header equivalent)
             add:
             {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
             - name: "{{ header_name }}"
               value: "{{ header_value }}"
             {%- endfor %}
-       {%- endif %}
+            {%- endif %}
+            # Add Qovery specific headers for logging and tracing
+            set:
+            - name: "x-qovery-com-environment-id"
+              value: "{{ environment_long_id }}"
+            - name: "x-qovery-com-associated-service-id"
+              value: "{{ associated_service_long_id }}"
       {%- endif %}
     {%- endfor %}
 {%- endif %}

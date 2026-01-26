@@ -26,6 +26,17 @@ config:
             - labels:
                 qovery_com_associated_service_id: null
                 qovery_com_environment_id: null
+      # SPECIAL: Special gateway-api enrichment
+      - match:
+          selector: '{namespace="qovery", container="envoy"}'
+          stages:
+            - json:
+                expressions:
+                  qovery_com_associated_service_id: qovery_com_associated_service_id
+                  qovery_com_environment_id: qovery_com_environment_id
+            - labels:
+                qovery_com_associated_service_id: null
+                qovery_com_environment_id: null
 
       - match:
           selector: '{app="k8s-event-logger"}'
