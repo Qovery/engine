@@ -20,10 +20,9 @@ webhook:
 controller:
   resources:
     requests:
-      cpu: 1
+      cpu: 100m
       memory: 1Gi
     limits:
-      cpu: 1
       memory: 1Gi
 
 # Tolerations for the dedicated infrastructure nodegroup
