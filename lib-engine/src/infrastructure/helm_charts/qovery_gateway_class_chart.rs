@@ -79,6 +79,15 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
                 key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
                 value: format.clone(),
             });
+        } else {
+            values.push(ChartSetValue {
+                key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
+                value: "".to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
+                value: "".to_string(),
+            });
         }
 
         Ok(CommonChart {
