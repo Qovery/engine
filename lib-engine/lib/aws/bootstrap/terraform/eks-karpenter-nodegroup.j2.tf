@@ -54,7 +54,7 @@ resource "aws_eks_node_group" "karpenter_controller" {
   subnet_ids             = flatten([aws_subnet.eks_zone_a[*].id, aws_subnet.eks_zone_b[*].id, aws_subnet.eks_zone_c[*].id])
   {%- endif %}
 
-  instance_types         = ["t4g.medium", "c6g.medium", "m6g.medium"]
+  instance_types         = ["t4g.medium", "m6g.medium"]
   ami_type               = "BOTTLEROCKET_ARM_64"
 
   tags = merge(
