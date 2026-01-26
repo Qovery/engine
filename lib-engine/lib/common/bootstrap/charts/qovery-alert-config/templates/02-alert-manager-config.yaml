@@ -7,6 +7,9 @@ metadata:
   namespace: {{ $root.Values.namespace | default $root.Release.Namespace }}
   labels:
     alertmanager: main
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
 spec:
   route:
     receiver: default
@@ -87,15 +90,46 @@ spec:
             <html>
             <head>
               <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .alert { padding: 15px; margin: 10px 0; border-radius: 5px; }
-                .firing { background-color: #ffebee; border-left: 4px solid #f44336; }
-                .resolved { background-color: #e8f5e9; border-left: 4px solid #4caf50; }
-                .alert-title { font-weight: bold; font-size: 16px; margin-bottom: 10px; }
-                .alert-description { margin: 5px 0; }
-                .alert-summary { margin: 5px 0; color: #666; }
-                .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #ccc; color: #666; font-size: 12px; }
-                .button { display: inline-block; padding: 10px 20px; margin: 5px; background-color: #5e35b1; color: white; text-decoration: none; border-radius: 4px; }
+                body {
+                  font-family: Arial, sans-serif;
+                  margin: 0;
+                  padding: 20px;
+                  background-color: #1e1e1e;
+                  color: #e0e0e0;
+                }
+                h2 {
+                  color: #ffffff;
+                  margin-top: 0;
+                }
+                .alert {
+                  padding: 15px;
+                  margin: 10px 0;
+                  border-radius: 5px;
+                  border-left: 4px solid;
+                }
+                .firing {
+                  background-color: #4a1f1f;
+                  border-color: #ff5252;
+                  color: #ffcccc;
+                }
+                .resolved {
+                  background-color: #1f4a1f;
+                  border-color: #69f0ae;
+                  color: #ccffcc;
+                }
+                .alert-title {
+                  font-weight: bold;
+                  font-size: 16px;
+                  margin-bottom: 10px;
+                }
+                .firing .alert-title { color: #ff6b6b; }
+                .resolved .alert-title { color: #69f0ae; }
+                .alert-description { margin: 5px 0; line-height: 1.5; }
+                .alert-summary { margin: 5px 0; opacity: 0.8; font-size: 14px; line-height: 1.5; }
+                .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #555; color: #999; font-size: 12px; }
+                .footer a { color: #9575cd; text-decoration: none; margin-right: 15px; font-weight: 500; }
+                .footer a:hover { text-decoration: underline; }
+                .footer p { margin: 10px 0; }
               </style>
             </head>
             <body>
@@ -116,11 +150,15 @@ spec:
               </div>
               {{ end }}
               <div class="footer">
-                <p>View all issues in the Qovery console:</p>
-                <a href="https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues" class="button">View All Issues</a>
+                {{ if .CommonAnnotations.qovery_organization_long_id }}
+                <p>View all alerts in the Qovery console:</p>
+                <a href="https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues">View All Alerts</a>
+                {{ end }}
+                {{ if and .CommonAnnotations.qovery_target_base_url .CommonLabels.qovery_target_id }}
                 {{ $alert := index .Alerts 0 }}
-                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom" class="button">Service Monitoring</a>
-                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom" class="button">Service Logs</a>
+                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Monitoring</a>
+                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Logs</a>
+                {{ end }}
               </div>
             </body>
             </html>`}}
