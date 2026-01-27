@@ -1,9 +1,12 @@
 dns:
   domain: set-by-engine-code
 
+certManagerNamespace: "cert-manager"
+
 gateway:
   qoveryPublic:
     enable: true
+    enableProxyProtocol: true
     xForwardedFor:
       numberTrustedHops: null
     customHttpErrors:

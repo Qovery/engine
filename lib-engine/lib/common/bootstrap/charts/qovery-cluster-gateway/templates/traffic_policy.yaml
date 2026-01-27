@@ -5,10 +5,10 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   {{- $numHops := -1 }}
-  {{- if .Values.qoveryPublic }}
-    {{- if .Values.qoveryPublic.xforwardedFor }}
-      {{- if hasKey .Values.qoveryPublic.xforwardedFor "numberTrustedHops" }}
-        {{- $numHops = .Values.qoveryPublic.xforwardedFor.numberTrustedHops }}
+  {{- if .Values.gateway.qoveryPublic }}
+    {{- if .Values.gateway.qoveryPublic.xforwardedFor }}
+      {{- if hasKey .Values.gateway.qoveryPublic.xforwardedFor "numberTrustedHops" }}
+        {{- $numHops = .Values.gateway.qoveryPublic.xforwardedFor.numberTrustedHops }}
       {{- end }}
     {{- end }}
   {{- end }}
@@ -21,5 +21,4 @@ spec:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: qovery-cluster-public-gateway
-  enableProxyProtocol: true
-
+  enableProxyProtocol: {{ .Values.gateway.qoveryPublic.enableProxyProtocol | default false }}

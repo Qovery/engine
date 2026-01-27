@@ -1,0 +1,26 @@
+dns:
+  domain: set-by-engine-code
+
+certManagerNamespace: "qovery"
+
+gateway:
+  qoveryPublic:
+    enable: true
+    enableProxyProtocol: false # Proxy protocol disabled - not working correctly with Envoy Gateway v1.6.1, X-Forwarded-For header are still sent to the service
+    xForwardedFor:
+      numberTrustedHops: null
+    customHttpErrors:
+      default: null
+    compression:
+      enable: true
+    defaultBackend:
+      enable: false
+      image: null
+      tag: null
+
+infrastructure:
+  annotations:
+    # Proxy protocol is disabled due to compatibility issues with Envoy Gateway v1.6.1
+    # The ClientTrafficPolicy.enableProxyProtocol feature doesn't properly configure Envoy listeners
+    # Use X-Forwarded-For headers for client IP preservation instead
+    service.beta.kubernetes.io/azure-load-balancer-enable-proxy-protocol: "false"

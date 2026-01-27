@@ -386,13 +386,15 @@ where
     let mut need_backup = false;
     let root_dir_path = std::env::temp_dir();
 
-    if chart.backup_resources.is_some() && installed_version.le(&get_common_helm_chart_version(&chart)?) {
+    if let Some(backup_resources) = &chart.backup_resources
+        && installed_version.le(&get_common_helm_chart_version(&chart)?)
+    {
         prepare_chart_backup(
             kubernetes_config,
             root_dir_path.as_path(),
             &chart,
             envs,
-            chart.backup_resources.as_ref().unwrap().to_vec(),
+            backup_resources.to_vec(),
         )?;
         need_backup = true;
     }
