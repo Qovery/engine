@@ -113,10 +113,10 @@ pub(super) fn get_node_group_info(cluster: &Kapsule, pool_id: &str) -> Result<Sc
     match ScwNodeGroup::new(
         pool.id,
         pool.name.unwrap(),
-        pool.min_size.unwrap() as i32,
-        pool.max_size.unwrap() as i32,
+        pool.min_size.unwrap() as u32,
+        pool.max_size.unwrap() as u32,
         pool.node_type,
-        pool.size as i32,
+        pool.size as u32,
         pool.status.unwrap(),
     ) {
         Ok(x) => Ok(x),

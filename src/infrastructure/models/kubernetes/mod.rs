@@ -1,5 +1,6 @@
 pub mod aws;
 pub mod azure;
+pub mod disk;
 pub mod eksanywhere;
 pub mod gcp;
 pub mod karpenter;
@@ -784,7 +785,7 @@ where
 impl NodeGroupsWithDesiredState {
     pub fn new_from_node_groups(
         nodegroup: &NodeGroups,
-        desired_nodes: i32,
+        desired_nodes: u32,
         enable_desired_nodes: bool,
     ) -> NodeGroupsWithDesiredState {
         NodeGroupsWithDesiredState {
@@ -796,6 +797,8 @@ impl NodeGroupsWithDesiredState {
             enable_desired_size: enable_desired_nodes,
             instance_type: nodegroup.instance_type.clone(),
             disk_size_in_gib: nodegroup.disk_size_in_gib,
+            disk_iops: nodegroup.disk_iops,
+            disk_throughput: nodegroup.disk_throughput,
             instance_architecture: nodegroup.instance_architecture,
         }
     }
@@ -1247,10 +1250,12 @@ pub trait InstanceType {
 impl NodeGroups {
     pub fn new(
         group_name: String,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         instance_type: String,
-        disk_size_in_gib: i32,
+        disk_size_in_gib: u32,
+        disk_iops: Option<u32>,
+        disk_throughput: Option<u32>,
         instance_architecture: CpuArchitecture,
         zone: Option<String>,
     ) -> Result<Self, CommandError> {
@@ -1261,6 +1266,16 @@ impl NodeGroups {
             )));
         }
 
+        // Validate and convert disk_iops
+        let validated_disk_iops = disk_iops
+            .map(|iops| disk::DiskIops::new(iops).map_err(CommandError::new_from_safe_message))
+            .transpose()?;
+
+        // Validate and convert disk_throughput
+        let validated_disk_throughput = disk_throughput
+            .map(|throughput| disk::DiskThroughput::new(throughput).map_err(CommandError::new_from_safe_message))
+            .transpose()?;
+
         Ok(NodeGroups {
             name: group_name,
             id: None,
@@ -1268,6 +1283,8 @@ impl NodeGroups {
             max_nodes,
             instance_type,
             disk_size_in_gib,
+            disk_iops: validated_disk_iops,
+            disk_throughput: validated_disk_throughput,
             desired_nodes: None,
             instance_architecture,
             zone,
@@ -1282,7 +1299,7 @@ impl NodeGroups {
         }
     }
 
-    pub fn set_desired_nodes(&mut self, desired_nodes: i32) {
+    pub fn set_desired_nodes(&mut self, desired_nodes: u32) {
         // desired nodes can't be lower than min nodes
         if desired_nodes < self.min_nodes {
             self.desired_nodes = Some(self.min_nodes)
@@ -1296,7 +1313,7 @@ impl NodeGroups {
 }
 
 impl InstanceEc2 {
-    pub fn new(instance_type: String, disk_size_in_gib: i32, instance_architecture: CpuArchitecture) -> InstanceEc2 {
+    pub fn new(instance_type: String, disk_size_in_gib: u32, instance_architecture: CpuArchitecture) -> InstanceEc2 {
         InstanceEc2 {
             instance_type,
             disk_size_in_gib,

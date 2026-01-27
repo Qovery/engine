@@ -7862,12 +7862,12 @@ mod tests {
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "Standard_DS2_v2".to_string(), 20, CpuArchitecture::AMD64,Some("1".to_string())).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "Standard_DS2_v2".to_string(), 20, CpuArchitecture::AMD64,Some("1".to_string())).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "Standard_DS2_v2".to_string(), 20, CpuArchitecture::AMD64,Some("1".to_string())).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "Standard_DS2_v2".to_string(), 20, None, None, CpuArchitecture::AMD64,Some("1".to_string())).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "Standard_DS2_v2".to_string(), 20, None, None, CpuArchitecture::AMD64,Some("1".to_string())).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "Standard_DS2_v2".to_string(), 20, None, None, CpuArchitecture::AMD64,Some("1".to_string())).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "Standard_DS2_v2".to_string(), 20, CpuArchitecture::AMD64,Some("1".to_string())).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "Standard_DS2_v2".to_string(), 20, None, None, CpuArchitecture::AMD64,Some("1".to_string())).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 id: None,
@@ -7875,6 +7875,8 @@ mod tests {
                 max_nodes: 2,
                 instance_type: "Standard_DS2_v2".to_string(),
                 disk_size_in_gib: 20,
+                disk_iops: None,
+                disk_throughput: None,
                 desired_nodes: None,
                 instance_architecture: CpuArchitecture::AMD64,
                 zone: Some("1".to_string()),

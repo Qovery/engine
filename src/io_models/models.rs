@@ -1,6 +1,7 @@
 use crate::environment::models::domain::ToTerraformString;
 use crate::helm::ChartValuesGenerated;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
+use crate::infrastructure::models::kubernetes::disk::{DiskIops, DiskThroughput};
 use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -206,11 +207,13 @@ pub struct CpuLimits {
 pub struct NodeGroups {
     pub name: String,
     pub id: Option<String>,
-    pub min_nodes: i32,
-    pub max_nodes: i32,
-    pub desired_nodes: Option<i32>,
+    pub min_nodes: u32,
+    pub max_nodes: u32,
+    pub desired_nodes: Option<u32>,
     pub instance_type: String,
-    pub disk_size_in_gib: i32,
+    pub disk_size_in_gib: u32,
+    pub disk_iops: Option<DiskIops>,
+    pub disk_throughput: Option<DiskThroughput>,
     pub instance_architecture: CpuArchitecture,
     pub zone: Option<String>,
 }
@@ -234,12 +237,14 @@ impl Display for CpuArchitecture {
 pub struct NodeGroupsWithDesiredState {
     pub name: String,
     pub id: Option<String>,
-    pub min_nodes: i32,
-    pub max_nodes: i32,
-    pub desired_size: i32,
+    pub min_nodes: u32,
+    pub max_nodes: u32,
+    pub desired_size: u32,
     pub enable_desired_size: bool,
     pub instance_type: String,
-    pub disk_size_in_gib: i32,
+    pub disk_size_in_gib: u32,
+    pub disk_iops: Option<DiskIops>,
+    pub disk_throughput: Option<DiskThroughput>,
     pub instance_architecture: CpuArchitecture,
 }
 
@@ -250,21 +255,23 @@ pub struct NodeGroupsFormat {
     pub max_nodes: String,
     pub instance_type: String,
     pub disk_size_in_gib: String,
+    pub disk_iops: Option<String>,
+    pub disk_throughput: Option<String>,
 }
 
 pub struct InstanceEc2 {
     pub instance_type: String,
-    pub disk_size_in_gib: i32,
+    pub disk_size_in_gib: u32,
     pub instance_architecture: CpuArchitecture,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum KubernetesClusterAction {
     Bootstrap,
-    Update(Option<i32>),
-    Upgrade(Option<i32>),
+    Update(Option<u32>),
+    Upgrade(Option<u32>),
     Pause,
-    Resume(Option<i32>),
+    Resume(Option<u32>),
     Delete,
     CleanKarpenterMigration,
 }

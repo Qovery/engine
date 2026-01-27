@@ -5598,12 +5598,12 @@ mod tests {
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "t2.large".to_string(), 20, CpuArchitecture::AMD64,None).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string(), 20, CpuArchitecture::AMD64,None).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "t2.large".to_string(), 20, CpuArchitecture::AMD64,None).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "t2.large".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "t2.large".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string(), 20, CpuArchitecture::AMD64,None).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "t2.large".to_string(), 20, None, None, CpuArchitecture::AMD64,None).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 id: None,
@@ -5611,6 +5611,8 @@ mod tests {
                 max_nodes: 2,
                 instance_type: "t2.large".to_string(),
                 disk_size_in_gib: 20,
+                disk_iops: None,
+                disk_throughput: None,
                 desired_nodes: None,
                 instance_architecture: CpuArchitecture::AMD64,
                 zone: None,

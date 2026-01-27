@@ -28,6 +28,12 @@ spec:
       ebs:
         volumeSize: {{ .Values.diskSize }}
         volumeType: {{ .Values.storageClass }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskIops }}
+        iops: {{ .Values.diskIops }}
+        {{- end }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskThroughput }}
+        throughput: {{ .Values.diskThroughput }}
+        {{- end }}
         encrypted: true
         deleteOnTermination: true
 

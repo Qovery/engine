@@ -118,8 +118,8 @@ impl Cluster<AWS, Options> for AWS {
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
@@ -206,15 +206,25 @@ impl Cluster<AWS, Options> for AWS {
         ))
     }
 
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: u32, max_nodes: u32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
         let node_type = match cpu_archi {
             CpuArchitecture::AMD64 => "t3a.large".to_string(),
             CpuArchitecture::ARM64 => "m6g.xlarge".to_string(),
         };
 
         vec![
-            NodeGroups::new("groupeks0".to_string(), min_nodes, max_nodes, node_type, 100, cpu_archi, None)
-                .expect("Problem while setup EKS nodes"),
+            NodeGroups::new(
+                "groupeks0".to_string(),
+                min_nodes,
+                max_nodes,
+                node_type,
+                100,
+                None,
+                None,
+                cpu_archi,
+                None,
+            )
+            .expect("Problem while setup EKS nodes"),
         ]
     }
 

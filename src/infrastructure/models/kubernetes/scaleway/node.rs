@@ -585,10 +585,10 @@ impl FromStr for ScwInstancesType {
 pub struct ScwNodeGroup {
     pub name: String,
     pub id: Option<String>,
-    pub min_nodes: i32,
-    pub max_nodes: i32,
+    pub min_nodes: u32,
+    pub max_nodes: u32,
     pub instance_type: String,
-    pub disk_size_in_gib: i32,
+    pub disk_size_in_gib: u32,
     pub status: scaleway_api_rs::models::scaleway_period_k8s_period_v1_period_pool::Status,
 }
 
@@ -596,10 +596,10 @@ impl ScwNodeGroup {
     pub fn new(
         id: Option<String>,
         group_name: String,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         instance_type: String,
-        disk_size_in_gib: i32,
+        disk_size_in_gib: u32,
         status: scaleway_api_rs::models::scaleway_period_k8s_period_v1_period_pool::Status,
     ) -> Result<Self, CommandError> {
         if min_nodes > max_nodes {
@@ -729,12 +729,12 @@ mod tests {
 
     #[test]
     fn test_groups_nodes() {
-        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20, CpuArchitecture::AMD64,None).is_err());
-        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64,None).is_ok());
-        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20, CpuArchitecture::AMD64,None).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 1, "dev1-l".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_err());
+        assert!(NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_ok());
+        assert!(NodeGroups::new("".to_string(), 2, 3, "dev1-l".to_string(), 20, None, None, CpuArchitecture::AMD64,None).is_ok());
 
         assert_eq!(
-            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, CpuArchitecture::AMD64,None).unwrap(),
+            NodeGroups::new("".to_string(), 2, 2, "dev1-l".to_string(), 20, None, None, CpuArchitecture::AMD64,None).unwrap(),
             NodeGroups {
                 name: "".to_string(),
                 id: None,
@@ -742,6 +742,8 @@ mod tests {
                 max_nodes: 2,
                 instance_type: "dev1-l".to_string(),
                 disk_size_in_gib: 20,
+                disk_iops: None,
+                disk_throughput: None,
                 desired_nodes: None,
                 instance_architecture: CpuArchitecture::AMD64,
                 zone: None,

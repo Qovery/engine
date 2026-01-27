@@ -57,8 +57,8 @@ pub trait Cluster<T, U> {
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
@@ -66,7 +66,7 @@ pub trait Cluster<T, U> {
         actionable_features: Vec<ActionableFeature>,
     ) -> InfrastructureContext;
     fn cloud_provider(context: &Context, kubernetes_kind: KubernetesKind, localisation: &str) -> Box<T>;
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;
+    fn kubernetes_nodes(min_nodes: u32, max_nodes: u32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups>;
     fn kubernetes_cluster_options(
         secrets: FuncTestsSecrets,
         cluster_id: QoveryIdentifier,

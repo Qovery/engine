@@ -29,6 +29,12 @@ spec:
       ebs:
         volumeSize: "{{ .Values.gpuNodePool.diskSize }}"
         volumeType: gp3
+        {{- if .Values.gpuNodePool.diskIops }}
+        iops: {{ .Values.gpuNodePool.diskIops }}
+        {{- end }}
+        {{- if .Values.gpuNodePool.diskThroughput }}
+        throughput: {{ .Values.gpuNodePool.diskThroughput }}
+        {{- end }}
         encrypted: true
         deleteOnTermination: true
   tags:

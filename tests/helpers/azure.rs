@@ -152,8 +152,8 @@ impl Cluster<Azure, AksOptions> for Azure {
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
@@ -228,7 +228,7 @@ impl Cluster<Azure, AksOptions> for Azure {
         ))
     }
 
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: u32, max_nodes: u32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
         vec![
             NodeGroups::new(
                 "default1".to_string(),
@@ -236,6 +236,8 @@ impl Cluster<Azure, AksOptions> for Azure {
                 max_nodes,
                 "standard_ds2_v2".to_string(),
                 100,
+                None,
+                None,
                 cpu_archi,
                 Some("1".to_string()),
             )
@@ -246,6 +248,8 @@ impl Cluster<Azure, AksOptions> for Azure {
                 max_nodes,
                 "standard_ds2_v2".to_string(),
                 100,
+                None,
+                None,
                 cpu_archi,
                 Some("2".to_string()),
             )
@@ -256,6 +260,8 @@ impl Cluster<Azure, AksOptions> for Azure {
                 max_nodes,
                 "standard_ds2_v2".to_string(),
                 100,
+                None,
+                None,
                 cpu_archi,
                 Some("3".to_string()),
             )
@@ -308,7 +314,7 @@ pub fn clean_environments(
     Ok(())
 }
 
-pub fn azure_nodes_groups(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> AzureNodeGroups {
+pub fn azure_nodes_groups(min_nodes: u32, max_nodes: u32, cpu_archi: CpuArchitecture) -> AzureNodeGroups {
     AzureNodeGroups::new(
         Azure::kubernetes_nodes(min_nodes, max_nodes, cpu_archi)
             .into_iter()

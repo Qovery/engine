@@ -6,10 +6,10 @@ use serde_derive::Serialize;
 #[derive(Serialize, Clone)]
 pub struct AzureNodeGroup {
     pub name: String,
-    pub min_nodes: i32,
-    pub max_nodes: i32,
+    pub min_nodes: u32,
+    pub max_nodes: u32,
     pub instance_type: AzureInstancesType,
-    pub disk_size_in_gib: i32,
+    pub disk_size_in_gib: u32,
     pub instance_architecture: CpuArchitecture,
     pub zone: AzureZone,
 }
