@@ -89,3 +89,5 @@ affinity:
             - key: eks.amazonaws.com/compute-type
               operator: NotIn
               values: ["fargate"]
+            - key: karpenter.sh/nodepool
+              operator: Exists
