@@ -34,4 +34,4 @@ spec:
       certificateRefs:
       - kind: Secret
         name: letsencrypt-acme-qovery-cert
-        namespace: cert-manager
+        namespace: "{{ .Values.certManagerNamespace }}"

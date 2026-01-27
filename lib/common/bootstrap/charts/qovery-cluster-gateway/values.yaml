@@ -1,10 +1,13 @@
 dns:
   domain: ""
 
+certManagerNamespace: "cert-manager"
+
 gateway:
   qoveryPublic:
     enable: true
     annotations: {}
+    enableProxyProtocol: true
     xForwardedFor:
       numberTrustedHops: null
     customHttpErrors:
@@ -18,4 +21,3 @@ gateway:
 
 infrastructure:
   annotations: {}
-

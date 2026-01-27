@@ -853,6 +853,7 @@ pub(super) fn eks_helm_charts(
     if let Some(chart) = qovery_gateway_class_chart {
         level_1.push(Box::new(chart));
     }
+
     let mut level_2: Vec<Box<dyn HelmChart>> = vec![];
 
     let mut level_3: Vec<Box<dyn HelmChart>> = vec![
