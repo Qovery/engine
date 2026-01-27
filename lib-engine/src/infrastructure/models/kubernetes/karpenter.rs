@@ -1,5 +1,6 @@
 use crate::environment::models::domain::ToHelmString;
 use crate::infrastructure::models::disk_size::DiskSize;
+use crate::infrastructure::models::kubernetes::disk::{DiskIops, DiskThroughput};
 use crate::io_models::models::{CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use duration_str::deserialize_duration;
 use itertools::Itertools;
@@ -33,6 +34,8 @@ pub struct KarpenterParameters {
     #[serde(default)]
     #[serde(alias = "disk_size_in_gib")]
     pub disk_size: DiskSize,
+    pub disk_iops: Option<DiskIops>,
+    pub disk_throughput: Option<DiskThroughput>,
     pub default_service_architecture: CpuArchitecture,
     pub qovery_node_pools: KarpenterNodePool,
 }
@@ -127,6 +130,8 @@ pub struct KarpenterGpuNodePoolOverride {
     #[serde(default)]
     #[serde(alias = "disk_size_in_gib")]
     pub disk_size: DiskSize,
+    pub disk_iops: Option<DiskIops>,
+    pub disk_throughput: Option<DiskThroughput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]

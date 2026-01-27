@@ -283,6 +283,8 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                     spot_enabled: true,
                     max_node_drain_time_in_secs: None,
                     disk_size: DiskSize::Gib(50),
+                    disk_iops: None,
+                    disk_throughput: None,
                     default_service_architecture: CpuArchitecture::AMD64,
                     qovery_node_pools: KarpenterNodePool {
                         requirements: vec![
@@ -317,6 +319,8 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                         gpu_override: Some(KarpenterGpuNodePoolOverride {
                             spot_enabled: true,
                             disk_size: DiskSize::Gib(100),
+                            disk_iops: None,
+                            disk_throughput: None,
                             requirements: Some(vec![
                                 KarpenterNodePoolRequirement {
                                     key: KarpenterNodePoolRequirementKey::InstanceFamily,

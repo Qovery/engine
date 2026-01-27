@@ -7,6 +7,8 @@ clusterName: ""
 securityGroupId: ""
 
 diskSize: 0Gi
+diskIops: null
+diskThroughput: null
 storageClass: gp3
 
 capacity_type: []
@@ -46,3 +48,5 @@ gpuNodePool:
     maxCpu: ""
     maxMemory: ""
   diskSize: 100Gi
+  diskIops: null
+  diskThroughput: null

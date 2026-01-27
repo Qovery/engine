@@ -130,8 +130,8 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         _cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
@@ -211,7 +211,7 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
         ))
     }
 
-    fn kubernetes_nodes(min_nodes: i32, max_nodes: i32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+    fn kubernetes_nodes(min_nodes: u32, max_nodes: u32, cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
         let instance = ScwInstancesType::DEV1_L;
         let node_type = match cpu_archi {
             CpuArchitecture::AMD64 => instance.to_string(),
@@ -220,8 +220,18 @@ impl Cluster<Scaleway, KapsuleOptions> for Scaleway {
 
         // Note: Dev1M is a bit too small to handle engine + local docker, hence using Dev1L
         vec![
-            NodeGroups::new("groupscw0".to_string(), min_nodes, max_nodes, node_type, 0, cpu_archi, None)
-                .expect("Problem while setup SCW nodes"),
+            NodeGroups::new(
+                "groupscw0".to_string(),
+                min_nodes,
+                max_nodes,
+                node_type,
+                0,
+                None,
+                None,
+                cpu_archi,
+                None,
+            )
+            .expect("Problem while setup SCW nodes"),
         ]
     }
 

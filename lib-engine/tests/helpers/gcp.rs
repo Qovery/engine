@@ -147,8 +147,8 @@ pub fn gcp_infra_config(
             cluster_id: context.cluster_short_id().to_string(),
         },
         None,
-        i32::MAX, // NA on GKE due to autopilot
-        i32::MAX, // NA on GKE due to autopilot
+        u32::MAX, // NA on GKE due to autopilot
+        u32::MAX, // NA on GKE due to autopilot
         CpuArchitecture::AMD64,
         EngineLocation::ClientSide,
         match targeted_cluster {
@@ -170,8 +170,8 @@ impl Cluster<Google, GkeOptions> for Gke {
         kubernetes_version: KubernetesVersion,
         cluster_domain: &ClusterDomain,
         vpc_network_mode: Option<VpcQoveryNetworkMode>,
-        min_nodes: i32,
-        max_nodes: i32,
+        min_nodes: u32,
+        max_nodes: u32,
         cpu_archi: CpuArchitecture,
         engine_location: EngineLocation,
         kubeconfig: Option<String>,
@@ -251,7 +251,7 @@ impl Cluster<Google, GkeOptions> for Gke {
         ))
     }
 
-    fn kubernetes_nodes(_min_nodes: i32, _max_nodes: i32, _cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
+    fn kubernetes_nodes(_min_nodes: u32, _max_nodes: u32, _cpu_archi: CpuArchitecture) -> Vec<NodeGroups> {
         Vec::with_capacity(0) // NA for GKE due to autopilot
     }
 

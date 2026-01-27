@@ -44,8 +44,8 @@ use qovery_engine::io_models::metrics::MetricsParameters;
 use std::str::FromStr;
 use tracing::{Level, span};
 
-pub const KUBERNETES_MIN_NODES: i32 = 3;
-pub const KUBERNETES_MAX_NODES: i32 = 10;
+pub const KUBERNETES_MIN_NODES: u32 = 3;
+pub const KUBERNETES_MAX_NODES: u32 = 10;
 
 #[derive(Clone)]
 pub enum TargetCluster {
@@ -350,8 +350,8 @@ fn create_infrastructure_context(
                 kubernetes_boot_version.clone(),
                 cluster_domain,
                 vpc_network_mode.clone(),
-                i32::MIN, // NA due to GKE autopilot
-                i32::MAX, // NA due to GKE autopilot
+                0,        // NA due to GKE autopilot
+                u32::MAX, // NA due to GKE autopilot
                 cpu_archi,
                 EngineLocation::ClientSide,
                 None, // <- no kubeconfig provided, new cluster
@@ -394,8 +394,8 @@ pub fn get_environment_test_kubernetes(
     localisation: &str,
     vpc_network_mode: Option<VpcQoveryNetworkMode>,
     nat_gateway_parameters: Option<NatGatewayParameters>,
-    min_nodes: i32,
-    max_nodes: i32,
+    min_nodes: u32,
+    max_nodes: u32,
     cpu_archi: CpuArchitecture,
     engine_location: EngineLocation,
     default_kubernetes_storage_class: StorageClass,

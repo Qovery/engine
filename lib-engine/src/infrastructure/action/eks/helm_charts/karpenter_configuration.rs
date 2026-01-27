@@ -198,6 +198,23 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
         ];
 
+        // Only set IOPS and throughput for gp3 volumes
+        if matches!(self.aws_storage_type, AwsStorageType::GP3) {
+            if let Some(iops) = self.karpenter_parameters.disk_iops {
+                values.push(ChartSetValue {
+                    key: "diskIops".to_string(),
+                    value: iops.to_string(),
+                });
+            }
+
+            if let Some(throughput) = self.karpenter_parameters.disk_throughput {
+                values.push(ChartSetValue {
+                    key: "diskThroughput".to_string(),
+                    value: throughput.to_string(),
+                });
+            }
+        }
+
         if !self.explicit_subnet_ids.is_empty() {
             values.push(ChartSetValue {
                 key: "explicitSubnetIds".to_string(),
@@ -356,6 +373,21 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                     key: "gpuNodePool.diskSize".to_string(),
                     value: gpu_pool_override.disk_size.to_gib_string(),
                 });
+
+                // Disk IOPS and throughput (GPU nodes always use gp3 storage)
+                if let Some(iops) = gpu_pool_override.disk_iops {
+                    values.push(ChartSetValue {
+                        key: "gpuNodePool.diskIops".to_string(),
+                        value: iops.to_string(),
+                    });
+                }
+
+                if let Some(throughput) = gpu_pool_override.disk_throughput {
+                    values.push(ChartSetValue {
+                        key: "gpuNodePool.diskThroughput".to_string(),
+                        value: throughput.to_string(),
+                    });
+                }
             }
             None => {
                 values.push(ChartSetValue {
@@ -736,6 +768,8 @@ mod tests {
                         }],
                         limits: None,
                         disk_size: DiskSize::Gib(100),
+                        disk_iops: None,
+                        disk_throughput: None,
                         requirements: Some(vec![
                             KarpenterNodePoolRequirement {
                                 key: KarpenterNodePoolRequirementKey::InstanceCategory,
@@ -862,6 +896,8 @@ mod tests {
                 spot_enabled: with_spot,
                 max_node_drain_time_in_secs: None,
                 disk_size: DiskSize::Gib(50),
+                disk_iops: None,
+                disk_throughput: None,
                 default_service_architecture: ARM64,
                 qovery_node_pools,
             },
@@ -1064,6 +1100,8 @@ mod tests {
                 spot_enabled: false,
                 max_node_drain_time_in_secs: None,
                 disk_size: DiskSize::Gib(50),
+                disk_iops: None,
+                disk_throughput: None,
                 default_service_architecture: ARM64,
                 qovery_node_pools: KarpenterNodePool {
                     requirements: vec![],
@@ -1150,6 +1188,8 @@ mod tests {
                 spot_enabled: false,
                 max_node_drain_time_in_secs: None,
                 disk_size: DiskSize::Gib(50),
+                disk_iops: None,
+                disk_throughput: None,
                 default_service_architecture: ARM64,
                 qovery_node_pools: KarpenterNodePool {
                     requirements: vec![],

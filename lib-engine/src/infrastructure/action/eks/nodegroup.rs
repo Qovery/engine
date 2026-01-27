@@ -80,7 +80,7 @@ pub fn should_update_desired_nodes(
     aws_eks_client: Option<EksClient>,
 ) -> Result<Vec<NodeGroupsWithDesiredState>, Box<EngineError>> {
     let get_autoscaling_config =
-        |node_group: &NodeGroups, eks_client: EksClient| -> Result<Option<i32>, Box<EngineError>> {
+        |node_group: &NodeGroups, eks_client: EksClient| -> Result<Option<u32>, Box<EngineError>> {
             let current_nodes = get_nodegroup_autoscaling_config_from_aws(
                 event_details.clone(),
                 kubernetes,
@@ -89,7 +89,7 @@ pub fn should_update_desired_nodes(
             )?;
             match current_nodes {
                 Some(x) => match x.desired_size {
-                    Some(n) => Ok(Some(n as i32)),
+                    Some(n) => Ok(Some(n as u32)),
                     None => Ok(None),
                 },
                 None => Ok(None),
@@ -384,12 +384,12 @@ mod tests {
         fn new(
             name: String,
             id: Option<String>,
-            min_nodes: i32,
-            max_nodes: i32,
-            desired_size: i32,
+            min_nodes: u32,
+            max_nodes: u32,
+            desired_size: u32,
             enable_desired_size: bool,
             instance_type: String,
-            disk_size_in_gib: i32,
+            disk_size_in_gib: u32,
         ) -> NodeGroupsWithDesiredState {
             NodeGroupsWithDesiredState {
                 name,
@@ -400,6 +400,8 @@ mod tests {
                 enable_desired_size,
                 instance_type,
                 disk_size_in_gib,
+                disk_iops: None,
+                disk_throughput: None,
                 instance_architecture: CpuArchitecture::AMD64,
             }
         }
@@ -575,6 +577,8 @@ mod tests {
             10,
             "t1000.xlarge".to_string(),
             20,
+            None,
+            None,
             CpuArchitecture::AMD64,
             None,
         )
