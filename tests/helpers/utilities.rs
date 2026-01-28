@@ -11,18 +11,17 @@ use curl::easy::Easy;
 use dirs::home_dir;
 use dotenv::dotenv;
 use gethostname;
-use hashicorp_vault;
 use passwords::PasswordGenerator;
 use reqwest::header;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
-use std::io::{Error, ErrorKind};
+use std::io::ErrorKind;
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{env, io};
-use tracing::{info, warn};
+use tracing::info;
 use tracing_subscriber::EnvFilter;
 use url::Url;
 use uuid::Uuid;
@@ -68,7 +67,7 @@ pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineSe
     }
 
     let mut headers = header::HeaderMap::new();
-    headers.insert("Content-Type", "application/json".parse().unwrap());
+    headers.insert("Content-Type", "application/json".parse()?);
     let http = reqwest::blocking::Client::new();
 
     let services_version = vec![
@@ -172,6 +171,7 @@ pub fn obfuscation_service() -> Box<dyn ObfuscationService> {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[allow(non_snake_case)]
+#[derive(Default)]
 pub struct FuncTestsSecrets {
     pub AWS_ACCESS_KEY_ID: Option<String>,
     pub AWS_DEFAULT_REGION: Option<String>,
@@ -243,313 +243,102 @@ pub struct FuncTestsSecrets {
     pub QOVERY_DNS_DOMAIN: Option<String>,
 }
 
-struct VaultConfig {
-    address: String,
-    token: String,
-}
-
-impl Default for FuncTestsSecrets {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl FuncTestsSecrets {
     pub fn new() -> Self {
         dotenv().ok();
+        dotenv::from_filename("test_secrets.env")
+            .map(|_| ())
+            .or_else(|_| dotenv::from_path("/tmp/engine_test_secrets.env"))
+            .expect("Failed to load test_secrets.env");
         Self::get_all_secrets()
     }
 
-    fn get_vault_config() -> Result<VaultConfig, Error> {
-        let vault_addr = match env::var_os("VAULT_ADDR") {
-            Some(x) => x.into_string().unwrap(),
-            None => {
-                return Err(Error::new(
-                    ErrorKind::NotFound,
-                    "VAULT_ADDR environment variable is missing".to_string(),
-                ));
-            }
-        };
-
-        let vault_token = match env::var_os("VAULT_TOKEN") {
-            Some(x) => x.into_string().unwrap(),
-            None => {
-                return Err(Error::new(
-                    ErrorKind::NotFound,
-                    "VAULT_TOKEN environment variable is missing".to_string(),
-                ));
-            }
-        };
-
-        Ok(VaultConfig {
-            address: vault_addr,
-            token: vault_token,
-        })
-    }
-
-    fn get_secrets_from_vault() -> FuncTestsSecrets {
-        let secret_name = "functional-tests";
-        let empty_secrets = FuncTestsSecrets {
-            AWS_ACCESS_KEY_ID: None,
-            AWS_DEFAULT_REGION: None,
-            AWS_TEST_KUBECONFIG_b64: None,
-            AWS_SECRET_ACCESS_KEY: None,
-            AWS_SESSION_TOKEN: None,
-            AWS_TEST_CLUSTER_ID: None,
-            AWS_TEST_CLUSTER_LONG_ID: None,
-            AWS_TEST_ORGANIZATION_ID: None,
-            AWS_TEST_ORGANIZATION_LONG_ID: None,
-            AWS_TEST_CLUSTER_REGION: None,
-            AZURE_TEST_ORGANIZATION_ID: None,
-            AZURE_TEST_ORGANIZATION_LONG_ID: None,
-            AZURE_TEST_CLUSTER_ID: None,
-            AZURE_TEST_CLUSTER_LONG_ID: None,
-            AZURE_STORAGE_ACCOUNT: None,
-            AZURE_STORAGE_ACCESS_KEY: None,
-            AZURE_CLIENT_ID: None,
-            AZURE_CLIENT_SECRET: None,
-            AZURE_SUBSCRIPTION_ID: None,
-            AZURE_TENANT_ID: None,
-            AZURE_TEST_KUBECONFIG_b64: None,
-            AZURE_DEFAULT_REGION: None,
-            BIN_VERSION_FILE: None,
-            CLOUDFLARE_DOMAIN: None,
-            CLOUDFLARE_ID: None,
-            CLOUDFLARE_TOKEN: None,
-            CUSTOM_TEST_DOMAIN: None,
-            DEFAULT_TEST_DOMAIN: None,
-            DISCORD_API_URL: None,
-            GCP_CREDENTIALS: None,
-            GCP_PROJECT_NAME: None,
-            GCP_TEST_ORGANIZATION_ID: None,
-            GCP_TEST_ORGANIZATION_LONG_ID: None,
-            GCP_TEST_CLUSTER_ID: None,
-            GCP_TEST_CLUSTER_LONG_ID: None,
-            GCP_DEFAULT_REGION: None,
-            GCP_TEST_KUBECONFIG_b64: None,
-            GITHUB_ACCESS_TOKEN: None,
-            HTTP_LISTEN_ON: None,
-            LETS_ENCRYPT_EMAIL_REPORT: None,
-            LIB_ROOT_DIR: None,
-            QOVERY_AGENT_CONTROLLER_TOKEN: None,
-            QOVERY_API_URL: None,
-            QOVERY_ENGINE_CONTROLLER_TOKEN: None,
-            QOVERY_SSH_USER: None,
-            RUST_LOG: None,
-            SCALEWAY_DEFAULT_PROJECT_ID: None,
-            SCALEWAY_ACCESS_KEY: None,
-            SCALEWAY_SECRET_KEY: None,
-            SCALEWAY_DEFAULT_REGION: None,
-            SCALEWAY_TEST_CLUSTER_ID: None,
-            SCALEWAY_TEST_CLUSTER_LONG_ID: None,
-            SCALEWAY_TEST_ORGANIZATION_ID: None,
-            SCALEWAY_TEST_ORGANIZATION_LONG_ID: None,
-            SCALEWAY_TEST_CLUSTER_REGION: None,
-            SCALEWAY_TEST_KUBECONFIG_b64: None,
-            TERRAFORM_AWS_ACCESS_KEY_ID: None,
-            TERRAFORM_AWS_SECRET_ACCESS_KEY: None,
-            TERRAFORM_AWS_REGION: None,
-            TERRAFORM_AWS_BUCKET: None,
-            TERRAFORM_AWS_DYNAMODB_TABLE: None,
-            QOVERY_GRPC_URL: None,
-            ENGINE_SERVER_URL: None,
-            QOVERY_CLUSTER_SECRET_TOKEN: None,
-            QOVERY_CLUSTER_JWT_TOKEN: None,
-            QOVERY_DNS_API_URL: None,
-            QOVERY_DNS_API_KEY: None,
-            QOVERY_DNS_DOMAIN: None,
-        };
-
-        let vault_config = match Self::get_vault_config() {
-            Ok(vault_config) => vault_config,
-            Err(_) => {
-                warn!(
-                    "Empty config is returned as no VAULT connection can be established. If not not expected, check your environment variables"
-                );
-                return empty_secrets;
-            }
-        };
-
-        let client = match hashicorp_vault::Client::new(vault_config.address, vault_config.token) {
-            Ok(x) => x,
-            Err(e) => {
-                println!("error: wasn't able to contact Vault server. {e:?}");
-                return empty_secrets;
-            }
-        };
-        let res: Result<FuncTestsSecrets, _> = client.get_custom_secret(secret_name);
-        match res {
-            Ok(x) => x,
-            Err(_) => {
-                println!("Couldn't connect to Vault, check your connectivity");
-                empty_secrets
-            }
-        }
-    }
-
-    fn select_secret<T: for<'a> TryFrom<&'a str>>(name: &str, vault_fallback: Option<T>) -> Option<T> {
+    fn parse_secret<T: for<'a> TryFrom<&'a str>>(name: &str) -> Option<T> {
         match env::var(name) {
-            Ok(x) => T::try_from(x.as_str()).ok(),
-            Err(_) if vault_fallback.is_some() => vault_fallback,
+            Ok(x) => {
+                if name.ends_with("_b64") {
+                    let x = general_purpose::STANDARD
+                        .decode(x)
+                        .unwrap_or_else(|_| panic!("cannot decode secret `{}` from base64", name));
+                    T::try_from(String::from_utf8_lossy(x.as_slice()).as_ref()).ok()
+                } else {
+                    T::try_from(x.as_str()).ok()
+                }
+            }
             Err(_) => None,
         }
     }
 
     fn get_all_secrets() -> FuncTestsSecrets {
-        let secrets = Self::get_secrets_from_vault();
-
         FuncTestsSecrets {
-            AWS_ACCESS_KEY_ID: Self::select_secret("AWS_ACCESS_KEY_ID", secrets.AWS_ACCESS_KEY_ID),
-            AWS_DEFAULT_REGION: Self::select_secret("AWS_DEFAULT_REGION", secrets.AWS_DEFAULT_REGION),
-            AWS_TEST_KUBECONFIG_b64: Self::select_secret(
-                "AWS_TEST_KUBECONFIG",
-                String::from_utf8(
-                    general_purpose::STANDARD
-                        .decode(secrets.AWS_TEST_KUBECONFIG_b64.as_ref().unwrap())
-                        .unwrap(),
-                )
-                .ok(),
-            ),
-            AWS_SECRET_ACCESS_KEY: Self::select_secret("AWS_SECRET_ACCESS_KEY", secrets.AWS_SECRET_ACCESS_KEY),
-            AWS_SESSION_TOKEN: Self::select_secret("AWS_SESSION_TOKEN", secrets.AWS_SESSION_TOKEN),
-            AWS_TEST_ORGANIZATION_ID: Self::select_secret("AWS_TEST_ORGANIZATION_ID", secrets.AWS_TEST_ORGANIZATION_ID),
-            AWS_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
-                "AWS_TEST_ORGANIZATION_LONG_ID",
-                secrets.AWS_TEST_ORGANIZATION_LONG_ID,
-            ),
-            AWS_TEST_CLUSTER_REGION: Self::select_secret("AWS_TEST_CLUSTER_REGION", secrets.AWS_TEST_CLUSTER_REGION),
-            AWS_TEST_CLUSTER_ID: Self::select_secret("AWS_TEST_CLUSTER_ID", secrets.AWS_TEST_CLUSTER_ID),
-            AWS_TEST_CLUSTER_LONG_ID: Self::select_secret("AWS_TEST_CLUSTER_LONG_ID", secrets.AWS_TEST_CLUSTER_LONG_ID),
-            AZURE_TEST_ORGANIZATION_ID: Self::select_secret(
-                "AZURE_TEST_ORGANIZATION_ID",
-                secrets.AZURE_TEST_ORGANIZATION_ID,
-            ),
-            AZURE_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
-                "AZURE_TEST_ORGANIZATION_LONG_ID",
-                secrets.AZURE_TEST_ORGANIZATION_LONG_ID,
-            ),
-            AZURE_TEST_CLUSTER_ID: Self::select_secret("AZURE_TEST_CLUSTER_ID", secrets.AZURE_TEST_CLUSTER_ID),
-            AZURE_TEST_CLUSTER_LONG_ID: Self::select_secret(
-                "AZURE_TEST_CLUSTER_LONG_ID",
-                secrets.AZURE_TEST_CLUSTER_LONG_ID,
-            ),
-            AZURE_STORAGE_ACCOUNT: Self::select_secret("AZURE_STORAGE_ACCOUNT", secrets.AZURE_STORAGE_ACCOUNT),
-            AZURE_STORAGE_ACCESS_KEY: Self::select_secret("AZURE_STORAGE_ACCESS_KEY", secrets.AZURE_STORAGE_ACCESS_KEY),
-            AZURE_CLIENT_ID: Self::select_secret("AZURE_CLIENT_ID", secrets.AZURE_CLIENT_ID),
-            AZURE_CLIENT_SECRET: Self::select_secret("AZURE_CLIENT_SECRET", secrets.AZURE_CLIENT_SECRET),
-            AZURE_TENANT_ID: Self::select_secret("AZURE_TENANT_ID", secrets.AZURE_TENANT_ID),
-            AZURE_SUBSCRIPTION_ID: Self::select_secret("AZURE_SUBSCRIPTION_ID", secrets.AZURE_SUBSCRIPTION_ID),
-            AZURE_TEST_KUBECONFIG_b64: Self::select_secret(
-                "AZURE_TEST_KUBECONFIG",
-                String::from_utf8(
-                    general_purpose::STANDARD
-                        .decode(secrets.AZURE_TEST_KUBECONFIG_b64.as_ref().unwrap())
-                        .unwrap(),
-                )
-                .ok(),
-            ),
-            AZURE_DEFAULT_REGION: Self::select_secret("AZURE_DEFAULT_REGION", secrets.AZURE_DEFAULT_REGION),
-            BIN_VERSION_FILE: Self::select_secret("BIN_VERSION_FILE", secrets.BIN_VERSION_FILE),
-            CLOUDFLARE_DOMAIN: Self::select_secret("CLOUDFLARE_DOMAIN", secrets.CLOUDFLARE_DOMAIN),
-            CLOUDFLARE_ID: Self::select_secret("CLOUDFLARE_ID", secrets.CLOUDFLARE_ID),
-            CLOUDFLARE_TOKEN: Self::select_secret("CLOUDFLARE_TOKEN", secrets.CLOUDFLARE_TOKEN),
-            CUSTOM_TEST_DOMAIN: Self::select_secret("CUSTOM_TEST_DOMAIN", secrets.CUSTOM_TEST_DOMAIN),
-            DEFAULT_TEST_DOMAIN: Self::select_secret("DEFAULT_TEST_DOMAIN", secrets.DEFAULT_TEST_DOMAIN),
-            DISCORD_API_URL: Self::select_secret("DISCORD_API_URL", secrets.DISCORD_API_URL),
-            GCP_CREDENTIALS: Self::select_secret("GCP_CREDENTIALS", secrets.GCP_CREDENTIALS),
-            GCP_PROJECT_NAME: Self::select_secret("GCP_PROJECT_NAME", secrets.GCP_PROJECT_NAME),
-            GCP_DEFAULT_REGION: Self::select_secret("GCP_DEFAULT_REGION", secrets.GCP_DEFAULT_REGION),
-            GCP_TEST_ORGANIZATION_ID: Self::select_secret("GCP_TEST_ORGANIZATION_ID", secrets.GCP_TEST_ORGANIZATION_ID),
-            GCP_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
-                "GCP_TEST_ORGANIZATION_LONG_ID",
-                secrets.GCP_TEST_ORGANIZATION_LONG_ID,
-            ),
-            GCP_TEST_CLUSTER_ID: Self::select_secret("GCP_TEST_CLUSTER_ID", secrets.GCP_TEST_CLUSTER_ID),
-            GCP_TEST_CLUSTER_LONG_ID: Self::select_secret("GCP_TEST_CLUSTER_LONG_ID", secrets.GCP_TEST_CLUSTER_LONG_ID),
-            GITHUB_ACCESS_TOKEN: Self::select_secret("GITHUB_ACCESS_TOKEN", secrets.GITHUB_ACCESS_TOKEN),
-            HTTP_LISTEN_ON: Self::select_secret("HTTP_LISTEN_ON", secrets.HTTP_LISTEN_ON),
-            LETS_ENCRYPT_EMAIL_REPORT: Self::select_secret(
-                "LETS_ENCRYPT_EMAIL_REPORT",
-                secrets.LETS_ENCRYPT_EMAIL_REPORT,
-            ),
-            LIB_ROOT_DIR: Self::select_secret("LIB_ROOT_DIR", secrets.LIB_ROOT_DIR),
-            QOVERY_AGENT_CONTROLLER_TOKEN: Self::select_secret(
-                "QOVERY_AGENT_CONTROLLER_TOKEN",
-                secrets.QOVERY_AGENT_CONTROLLER_TOKEN,
-            ),
-            QOVERY_API_URL: Self::select_secret("QOVERY_API_URL", secrets.QOVERY_API_URL),
-            QOVERY_ENGINE_CONTROLLER_TOKEN: Self::select_secret(
-                "QOVERY_ENGINE_CONTROLLER_TOKEN",
-                secrets.QOVERY_ENGINE_CONTROLLER_TOKEN,
-            ),
-            QOVERY_SSH_USER: Self::select_secret("QOVERY_SSH_USER", secrets.QOVERY_SSH_USER),
-            RUST_LOG: Self::select_secret("RUST_LOG", secrets.RUST_LOG),
-            SCALEWAY_ACCESS_KEY: Self::select_secret("SCALEWAY_ACCESS_KEY", secrets.SCALEWAY_ACCESS_KEY),
-            SCALEWAY_DEFAULT_PROJECT_ID: Self::select_secret(
-                "SCALEWAY_DEFAULT_PROJECT_ID",
-                secrets.SCALEWAY_DEFAULT_PROJECT_ID,
-            ),
-            SCALEWAY_SECRET_KEY: Self::select_secret("SCALEWAY_SECRET_KEY", secrets.SCALEWAY_SECRET_KEY),
-            SCALEWAY_DEFAULT_REGION: Self::select_secret("SCALEWAY_DEFAULT_REGION", secrets.SCALEWAY_DEFAULT_REGION),
-            SCALEWAY_TEST_ORGANIZATION_ID: Self::select_secret(
-                "SCALEWAY_TEST_ORGANIZATION_ID",
-                secrets.SCALEWAY_TEST_ORGANIZATION_ID,
-            ),
-            SCALEWAY_TEST_ORGANIZATION_LONG_ID: Self::select_secret(
-                "SCALEWAY_TEST_ORGANIZATION_LONG_ID",
-                secrets.SCALEWAY_TEST_ORGANIZATION_LONG_ID,
-            ),
-            SCALEWAY_TEST_CLUSTER_ID: Self::select_secret("SCALEWAY_TEST_CLUSTER_ID", secrets.SCALEWAY_TEST_CLUSTER_ID),
-            SCALEWAY_TEST_CLUSTER_LONG_ID: Self::select_secret(
-                "SCALEWAY_TEST_CLUSTER_LONG_ID",
-                secrets.SCALEWAY_TEST_CLUSTER_LONG_ID,
-            ),
-            SCALEWAY_TEST_CLUSTER_REGION: Self::select_secret(
-                "SCALEWAY_TEST_CLUSTER_REGION",
-                secrets.SCALEWAY_TEST_CLUSTER_REGION,
-            ),
-            SCALEWAY_TEST_KUBECONFIG_b64: Self::select_secret(
-                "SCALEWAY_TEST_KUBECONFIG",
-                String::from_utf8(
-                    general_purpose::STANDARD
-                        .decode(secrets.SCALEWAY_TEST_KUBECONFIG_b64.as_ref().unwrap())
-                        .unwrap(),
-                )
-                .ok(),
-            ),
-            TERRAFORM_AWS_ACCESS_KEY_ID: Self::select_secret(
-                "TERRAFORM_AWS_ACCESS_KEY_ID",
-                secrets.TERRAFORM_AWS_ACCESS_KEY_ID,
-            ),
-            TERRAFORM_AWS_SECRET_ACCESS_KEY: Self::select_secret(
-                "TERRAFORM_AWS_SECRET_ACCESS_KEY",
-                secrets.TERRAFORM_AWS_SECRET_ACCESS_KEY,
-            ),
-            TERRAFORM_AWS_REGION: Self::select_secret("TERRAFORM_AWS_REGION", secrets.TERRAFORM_AWS_REGION),
-            TERRAFORM_AWS_BUCKET: Self::select_secret("TERRAFORM_AWS_BUCKET", secrets.TERRAFORM_AWS_BUCKET),
-            TERRAFORM_AWS_DYNAMODB_TABLE: Self::select_secret(
-                "TERRAFORM_AWS_DYNAMODB_TABLE",
-                secrets.TERRAFORM_AWS_DYNAMODB_TABLE,
-            ),
-            QOVERY_GRPC_URL: Self::select_secret("QOVERY_GRPC_URL", secrets.QOVERY_GRPC_URL),
-            ENGINE_SERVER_URL: Self::select_secret("ENGINE_SERVER_URL", secrets.ENGINE_SERVER_URL),
-            QOVERY_CLUSTER_SECRET_TOKEN: Self::select_secret(
-                "QOVERY_CLUSTER_SECRET_TOKEN",
-                secrets.QOVERY_CLUSTER_SECRET_TOKEN,
-            ),
-            QOVERY_CLUSTER_JWT_TOKEN: Self::select_secret("QOVERY_CLUSTER_JWT_TOKEN", secrets.QOVERY_CLUSTER_JWT_TOKEN),
-            QOVERY_DNS_API_URL: Self::select_secret("QOVERY_DNS_API_URL", secrets.QOVERY_DNS_API_URL),
-            QOVERY_DNS_API_KEY: Self::select_secret("QOVERY_DNS_API_KEY", secrets.QOVERY_DNS_API_KEY),
-            QOVERY_DNS_DOMAIN: Self::select_secret("QOVERYDNS_DOMAIN", secrets.QOVERY_DNS_DOMAIN),
-            GCP_TEST_KUBECONFIG_b64: Self::select_secret(
-                "GCP_TEST_KUBECONFIG",
-                String::from_utf8(
-                    general_purpose::STANDARD
-                        .decode(secrets.GCP_TEST_KUBECONFIG_b64.as_ref().unwrap())
-                        .unwrap(),
-                )
-                .ok(),
-            ),
+            AWS_ACCESS_KEY_ID: Self::parse_secret("AWS_ACCESS_KEY_ID"),
+            AWS_DEFAULT_REGION: Self::parse_secret("AWS_DEFAULT_REGION"),
+            AWS_TEST_KUBECONFIG_b64: Self::parse_secret("AWS_TEST_KUBECONFIG_b64"),
+            AWS_SECRET_ACCESS_KEY: Self::parse_secret("AWS_SECRET_ACCESS_KEY"),
+            AWS_SESSION_TOKEN: Self::parse_secret("AWS_SESSION_TOKEN"),
+            AWS_TEST_ORGANIZATION_ID: Self::parse_secret("AWS_TEST_ORGANIZATION_ID"),
+            AWS_TEST_ORGANIZATION_LONG_ID: Self::parse_secret("AWS_TEST_ORGANIZATION_LONG_ID"),
+            AWS_TEST_CLUSTER_REGION: Self::parse_secret("AWS_TEST_CLUSTER_REGION"),
+            AWS_TEST_CLUSTER_ID: Self::parse_secret("AWS_TEST_CLUSTER_ID"),
+            AWS_TEST_CLUSTER_LONG_ID: Self::parse_secret("AWS_TEST_CLUSTER_LONG_ID"),
+            AZURE_TEST_ORGANIZATION_ID: Self::parse_secret("AZURE_TEST_ORGANIZATION_ID"),
+            AZURE_TEST_ORGANIZATION_LONG_ID: Self::parse_secret("AZURE_TEST_ORGANIZATION_LONG_ID"),
+            AZURE_TEST_CLUSTER_ID: Self::parse_secret("AZURE_TEST_CLUSTER_ID"),
+            AZURE_TEST_CLUSTER_LONG_ID: Self::parse_secret("AZURE_TEST_CLUSTER_LONG_ID"),
+            AZURE_STORAGE_ACCOUNT: Self::parse_secret("AZURE_STORAGE_ACCOUNT"),
+            AZURE_STORAGE_ACCESS_KEY: Self::parse_secret("AZURE_STORAGE_ACCESS_KEY"),
+            AZURE_CLIENT_ID: Self::parse_secret("AZURE_CLIENT_ID"),
+            AZURE_CLIENT_SECRET: Self::parse_secret("AZURE_CLIENT_SECRET"),
+            AZURE_TENANT_ID: Self::parse_secret("AZURE_TENANT_ID"),
+            AZURE_SUBSCRIPTION_ID: Self::parse_secret("AZURE_SUBSCRIPTION_ID"),
+            AZURE_TEST_KUBECONFIG_b64: Self::parse_secret("AZURE_TEST_KUBECONFIG_b64"),
+            AZURE_DEFAULT_REGION: Self::parse_secret("AZURE_DEFAULT_REGION"),
+            BIN_VERSION_FILE: Self::parse_secret("BIN_VERSION_FILE"),
+            CLOUDFLARE_DOMAIN: Self::parse_secret("CLOUDFLARE_DOMAIN"),
+            CLOUDFLARE_ID: Self::parse_secret("CLOUDFLARE_ID"),
+            CLOUDFLARE_TOKEN: Self::parse_secret("CLOUDFLARE_TOKEN"),
+            CUSTOM_TEST_DOMAIN: Self::parse_secret("CUSTOM_TEST_DOMAIN"),
+            DEFAULT_TEST_DOMAIN: Self::parse_secret("DEFAULT_TEST_DOMAIN"),
+            DISCORD_API_URL: Self::parse_secret("DISCORD_API_URL"),
+            GCP_CREDENTIALS: Self::parse_secret("GCP_CREDENTIALS_b64"),
+            GCP_PROJECT_NAME: Self::parse_secret("GCP_PROJECT_NAME"),
+            GCP_DEFAULT_REGION: Self::parse_secret("GCP_DEFAULT_REGION"),
+            GCP_TEST_ORGANIZATION_ID: Self::parse_secret("GCP_TEST_ORGANIZATION_ID"),
+            GCP_TEST_ORGANIZATION_LONG_ID: Self::parse_secret("GCP_TEST_ORGANIZATION_LONG_ID"),
+            GCP_TEST_CLUSTER_ID: Self::parse_secret("GCP_TEST_CLUSTER_ID"),
+            GCP_TEST_CLUSTER_LONG_ID: Self::parse_secret("GCP_TEST_CLUSTER_LONG_ID"),
+            GITHUB_ACCESS_TOKEN: Self::parse_secret("GITHUB_ACCESS_TOKEN"),
+            HTTP_LISTEN_ON: Self::parse_secret("HTTP_LISTEN_ON"),
+            LETS_ENCRYPT_EMAIL_REPORT: Self::parse_secret("LETS_ENCRYPT_EMAIL_REPORT"),
+            LIB_ROOT_DIR: Self::parse_secret("LIB_ROOT_DIR"),
+            QOVERY_AGENT_CONTROLLER_TOKEN: Self::parse_secret("QOVERY_AGENT_CONTROLLER_TOKEN"),
+            QOVERY_API_URL: Self::parse_secret("QOVERY_API_URL"),
+            QOVERY_ENGINE_CONTROLLER_TOKEN: Self::parse_secret("QOVERY_ENGINE_CONTROLLER_TOKEN"),
+            QOVERY_SSH_USER: Self::parse_secret("QOVERY_SSH_USER"),
+            RUST_LOG: Self::parse_secret("RUST_LOG"),
+            SCALEWAY_ACCESS_KEY: Self::parse_secret("SCALEWAY_ACCESS_KEY"),
+            SCALEWAY_DEFAULT_PROJECT_ID: Self::parse_secret("SCALEWAY_DEFAULT_PROJECT_ID"),
+            SCALEWAY_SECRET_KEY: Self::parse_secret("SCALEWAY_SECRET_KEY"),
+            SCALEWAY_DEFAULT_REGION: Self::parse_secret("SCALEWAY_DEFAULT_REGION"),
+            SCALEWAY_TEST_ORGANIZATION_ID: Self::parse_secret("SCALEWAY_TEST_ORGANIZATION_ID"),
+            SCALEWAY_TEST_ORGANIZATION_LONG_ID: Self::parse_secret("SCALEWAY_TEST_ORGANIZATION_LONG_ID"),
+            SCALEWAY_TEST_CLUSTER_ID: Self::parse_secret("SCALEWAY_TEST_CLUSTER_ID"),
+            SCALEWAY_TEST_CLUSTER_LONG_ID: Self::parse_secret("SCALEWAY_TEST_CLUSTER_LONG_ID"),
+            SCALEWAY_TEST_CLUSTER_REGION: Self::parse_secret("SCALEWAY_TEST_CLUSTER_REGION"),
+            SCALEWAY_TEST_KUBECONFIG_b64: Self::parse_secret("SCALEWAY_TEST_KUBECONFIG_b64"),
+            TERRAFORM_AWS_ACCESS_KEY_ID: Self::parse_secret("TERRAFORM_AWS_ACCESS_KEY_ID"),
+            TERRAFORM_AWS_SECRET_ACCESS_KEY: Self::parse_secret("TERRAFORM_AWS_SECRET_ACCESS_KEY"),
+            TERRAFORM_AWS_REGION: Self::parse_secret("TERRAFORM_AWS_REGION"),
+            TERRAFORM_AWS_BUCKET: Self::parse_secret("TERRAFORM_AWS_BUCKET"),
+            TERRAFORM_AWS_DYNAMODB_TABLE: Self::parse_secret("TERRAFORM_AWS_DYNAMODB_TABLE"),
+            QOVERY_GRPC_URL: Self::parse_secret("QOVERY_GRPC_URL"),
+            ENGINE_SERVER_URL: Self::parse_secret("ENGINE_SERVER_URL"),
+            QOVERY_CLUSTER_SECRET_TOKEN: Self::parse_secret("QOVERY_CLUSTER_SECRET_TOKEN"),
+            QOVERY_CLUSTER_JWT_TOKEN: Self::parse_secret("QOVERY_CLUSTER_JWT_TOKEN"),
+            QOVERY_DNS_API_URL: Self::parse_secret("QOVERY_DNS_API_URL"),
+            QOVERY_DNS_API_KEY: Self::parse_secret("QOVERY_DNS_API_KEY"),
+            QOVERY_DNS_DOMAIN: Self::parse_secret("QOVERYDNS_DOMAIN"),
+            GCP_TEST_KUBECONFIG_b64: Self::parse_secret("GCP_TEST_KUBECONFIG_b64"),
         }
     }
 }
@@ -587,7 +376,7 @@ pub fn init() -> Instant {
 
     info!(
         "running from current directory: {}",
-        std::env::current_dir().unwrap().to_str().unwrap()
+        env::current_dir().unwrap().to_str().unwrap()
     );
 
     Instant::now()
@@ -604,7 +393,6 @@ where
     T: FnOnce() -> String,
 {
     let start = init();
-
     let test_name = test();
 
     teardown(start, test_name);
