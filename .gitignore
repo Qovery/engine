@@ -22,7 +22,7 @@ bin_versions
 .vscode/
 .env
 firedbg/
-CLAUDE.md
-
+*.env
+age_*.txt
 dist/
 .speckit/

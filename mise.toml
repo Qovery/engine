@@ -1,0 +1,24 @@
+[tools]
+
+
+[tasks.get-test-secrets]
+description = "get test secrets to be able to launch the engine tests"
+tools.glab = "latest"
+tools.sops = "latest"
+tools.age = "latest"
+run = '''
+  glab auth login
+  AGE_KEY=$(glab variable get AGE_ENGINE_TEST_SECRET_KEY)
+  SOPS_AGE_KEY=$AGE_KEY sops decrypt test_secrets.enc.env > /tmp/engine_test_secrets.env
+'''
+
+[tasks.edit-test-secrets]
+description = "get test secrets to be able to launch the engine tests"
+tools.glab = "latest"
+tools.sops = "latest"
+tools.age = "latest"
+run = '''
+  glab auth login
+  AGE_KEY=$(glab variable get AGE_ENGINE_TEST_SECRET_KEY)
+  SOPS_AGE_KEY=$AGE_KEY sops test_secrets.enc.env
+'''
