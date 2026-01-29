@@ -1,4 +1,5 @@
 use super::GkeChartsConfigPrerequisites;
+use super::gen_keda_charts::generate_keda_charts;
 use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
@@ -376,16 +377,26 @@ pub(super) fn gke_helm_charts(
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
+    let keda_charts = generate_keda_charts(
+        chart_prefix_path,
+        chart_config_prerequisites,
+        chart_config_prerequisites.is_keda_enabled,
+    )?;
+
     // chart deployment order matters!!!
     // Helm chart deployment order
 
-    // Add prometheus CRDs early to avoid issues with other charts
-    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![prometheus_operator_crds_chart];
+    // Add prometheus CRDs and KEDA CRDs early to avoid issues with other charts
+    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![
+        prometheus_operator_crds_chart,
+        Some(Box::new(keda_charts.keda_crd_chart)),
+    ];
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
+        Some(Box::new(keda_charts.keda_chart)),
     ];
     let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];

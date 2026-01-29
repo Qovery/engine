@@ -5,6 +5,7 @@ use crate::events::{EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, ProviderOptions};
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
@@ -125,6 +126,7 @@ pub struct GkeOptions {
     // Other
     pub tls_email_report: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub keda_parameters: Option<KedaParameters>,
 }
 
 impl GkeOptions {
@@ -144,6 +146,7 @@ impl GkeOptions {
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
         metrics_parameters: Option<MetricsParameters>,
+        keda_parameters: Option<KedaParameters>,
     ) -> Self {
         GkeOptions {
             qovery_api_url,
@@ -161,6 +164,7 @@ impl GkeOptions {
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,
             metrics_parameters,
+            keda_parameters,
         }
     }
 }
@@ -298,6 +302,10 @@ impl Gke {
         format!("qovery-prometheus-{}", self.id)
     }
 
+    pub fn get_keda_parameters(&self) -> Option<KedaParameters> {
+        self.options.keda_parameters.clone()
+    }
+
     pub fn configure_gcloud_for_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
@@ -392,6 +400,14 @@ impl Kubernetes for Gke {
 
     fn as_infra_actions(&self) -> &dyn InfrastructureAction {
         self
+    }
+
+    fn is_keda_enabled(&self) -> bool {
+        self.options
+            .keda_parameters
+            .as_ref()
+            .map(|keda| keda.enabled)
+            .unwrap_or(false)
     }
 }
 

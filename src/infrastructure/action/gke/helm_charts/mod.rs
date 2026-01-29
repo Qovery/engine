@@ -12,12 +12,14 @@ use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::gcp::{Gke, GkeOptions};
+use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
 pub mod gen_charts;
+pub mod gen_keda_charts;
 
 pub struct GkeChartsConfigPrerequisites {
     pub organization_id: String,
@@ -40,6 +42,11 @@ pub struct GkeChartsConfigPrerequisites {
 
     pub thanos_service_account_email: String,
     pub prometheus_bucket_name: String,
+    pub is_keda_enabled: bool,
+    pub keda_resource_profile: KedaResourceProfile,
+    pub keda_availability: KedaAvailability,
+    pub gcp_keda_operator_service_account_email: Option<String>,
+    pub gcp_keda_metrics_server_service_account_email: Option<String>,
 }
 
 impl GkeChartsConfigPrerequisites {
@@ -62,6 +69,11 @@ impl GkeChartsConfigPrerequisites {
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         thanos_service_account_email: String,
         prometheus_bucket_name: String,
+        is_keda_enabled: bool,
+        keda_resource_profile: KedaResourceProfile,
+        keda_availability: KedaAvailability,
+        gcp_keda_operator_service_account_email: Option<String>,
+        gcp_keda_metrics_server_service_account_email: Option<String>,
     ) -> Self {
         Self {
             organization_id,
@@ -82,6 +94,11 @@ impl GkeChartsConfigPrerequisites {
             customer_helm_charts_override,
             thanos_service_account_email,
             prometheus_bucket_name,
+            is_keda_enabled,
+            keda_resource_profile,
+            keda_availability,
+            gcp_keda_operator_service_account_email,
+            gcp_keda_metrics_server_service_account_email,
         }
     }
 }
@@ -110,6 +127,8 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
     }
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
+        let keda_params = self.cluster.get_keda_parameters();
+
         GkeChartsConfigPrerequisites::new(
             infra_ctx.context().organization_short_id().to_string(),
             *infra_ctx.context().organization_long_id(),
@@ -132,6 +151,11 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             self.cluster.customer_helm_charts_override.clone(),
             self.terraform_output.thanos_service_account_email.clone(),
             self.cluster.prometheus_bucket_name(),
+            keda_params.as_ref().map(|p| p.enabled).unwrap_or(false),
+            keda_params.as_ref().map(|p| p.resource_profile).unwrap_or_default(),
+            keda_params.as_ref().map(|p| p.availability).unwrap_or_default(),
+            self.terraform_output.keda_operator_service_account_email.clone(),
+            self.terraform_output.keda_metrics_server_service_account_email.clone(),
         )
     }
 
