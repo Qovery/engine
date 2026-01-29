@@ -1,0 +1,22 @@
+dns:
+  domain: set-by-engine-code
+
+certManagerNamespace: "qovery"
+
+gateway:
+  qoveryPublic:
+    enable: true
+    enableProxyProtocol: false
+    xForwardedFor:
+      numberTrustedHops: null
+    customHttpErrors:
+      default: null
+    compression:
+      enable: true
+    defaultBackend:
+      enable: false
+      image: null
+      tag: null
+
+infrastructure:
+  annotations:
