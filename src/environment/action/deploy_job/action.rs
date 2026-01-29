@@ -32,7 +32,13 @@ where
     fn on_create(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         let event_details = self.get_event_details(Stage::Environment(self.action().to_environment_step()));
 
-        match self.schedule() {
+        let effective_schedule = if self.should_force_trigger() {
+            &effective_schedule_for_create(self.schedule())
+        } else {
+            self.schedule()
+        };
+
+        match &effective_schedule {
             JobSchedule::OnStart { .. } => {
                 let pre_run = mk_deploy_pre_run(self, target, &event_details);
                 let post_run = mk_deploy_post_run(self, target);
@@ -229,4 +235,105 @@ where
     };
 
     (Box::new(pre_run), Box::new(task), Box::new(post_run))
+}
+
+/// Converts lifecycle schedules (OnPause/OnDelete) to OnStart so they execute during on_create.
+/// OnStart and Cron schedules are returned unchanged.
+fn effective_schedule_for_create(schedule: &JobSchedule) -> JobSchedule {
+    match schedule {
+        JobSchedule::OnPause { lifecycle_type } | JobSchedule::OnDelete { lifecycle_type } => JobSchedule::OnStart {
+            lifecycle_type: *lifecycle_type,
+        },
+        JobSchedule::OnStart { .. } | JobSchedule::Cron { .. } => schedule.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::io_models::job::LifecycleType;
+
+    // Tests verify the behavior of effective_schedule_for_create.
+    // OnPause and OnDelete schedules are converted to OnStart.
+    // OnStart and Cron schedules are returned unchanged.
+
+    #[test]
+    fn on_start_remains_unchanged() {
+        let schedule = JobSchedule::OnStart {
+            lifecycle_type: LifecycleType::GENERIC,
+        };
+        let effective = effective_schedule_for_create(&schedule);
+        assert!(matches!(effective, JobSchedule::OnStart { .. }));
+    }
+
+    #[test]
+    fn cron_remains_unchanged() {
+        let schedule = JobSchedule::Cron {
+            schedule: "0 * * * *".to_string(),
+            timezone: "UTC".to_string(),
+        };
+        let effective = effective_schedule_for_create(&schedule);
+        assert!(matches!(effective, JobSchedule::Cron { .. }));
+    }
+
+    #[test]
+    fn on_pause_converts_to_on_start() {
+        let schedule = JobSchedule::OnPause {
+            lifecycle_type: LifecycleType::GENERIC,
+        };
+        let effective = effective_schedule_for_create(&schedule);
+
+        match effective {
+            JobSchedule::OnStart { lifecycle_type } => {
+                assert_eq!(lifecycle_type, LifecycleType::GENERIC);
+            }
+            _ => panic!("Expected OnStart, got {:?}", effective),
+        }
+    }
+
+    #[test]
+    fn on_delete_converts_to_on_start() {
+        let schedule = JobSchedule::OnDelete {
+            lifecycle_type: LifecycleType::GENERIC,
+        };
+        let effective = effective_schedule_for_create(&schedule);
+
+        match effective {
+            JobSchedule::OnStart { lifecycle_type } => {
+                assert_eq!(lifecycle_type, LifecycleType::GENERIC);
+            }
+            _ => panic!("Expected OnStart, got {:?}", effective),
+        }
+    }
+
+    #[test]
+    fn lifecycle_type_is_preserved() {
+        for lifecycle_type in [
+            LifecycleType::GENERIC,
+            LifecycleType::TERRAFORM,
+            LifecycleType::CLOUDFORMATION,
+        ] {
+            let on_delete = JobSchedule::OnDelete { lifecycle_type };
+            let effective = effective_schedule_for_create(&on_delete);
+            match effective {
+                JobSchedule::OnStart {
+                    lifecycle_type: result_type,
+                } => {
+                    assert_eq!(result_type, lifecycle_type);
+                }
+                _ => panic!("Expected OnStart for OnDelete"),
+            }
+
+            let on_pause = JobSchedule::OnPause { lifecycle_type };
+            let effective = effective_schedule_for_create(&on_pause);
+            match effective {
+                JobSchedule::OnStart {
+                    lifecycle_type: result_type,
+                } => {
+                    assert_eq!(result_type, lifecycle_type);
+                }
+                _ => panic!("Expected OnStart for OnPause"),
+            }
+        }
+    }
 }

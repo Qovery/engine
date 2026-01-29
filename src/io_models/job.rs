@@ -111,7 +111,7 @@ pub enum LifecycleType {
     GENERIC,
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum JobSchedule {
     OnStart { lifecycle_type: LifecycleType },
