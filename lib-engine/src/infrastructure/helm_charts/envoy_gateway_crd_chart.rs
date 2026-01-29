@@ -1,5 +1,6 @@
 use kube::Client;
 
+use crate::helm::ChartSetValue;
 use crate::{
     errors::CommandError,
     helm::{ChartInfo, ChartInstallationChecker, CommonChart},
@@ -12,10 +13,17 @@ use crate::{
 pub struct EnvoyGatewayCrdChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    include_gateway_api_crds: bool,
+    include_envoy_proxy_crds: bool,
 }
 
 impl EnvoyGatewayCrdChart {
-    pub fn new(chart_prefix_path: Option<&str>, chart_values_location: HelmChartDirectoryLocation) -> Self {
+    pub fn new(
+        chart_prefix_path: Option<&str>,
+        chart_values_location: HelmChartDirectoryLocation,
+        include_gateway_api_crds: bool,
+        include_envoy_proxy_crds: bool,
+    ) -> Self {
         Self {
             chart_path: HelmChartPath::new(
                 chart_prefix_path,
@@ -27,6 +35,8 @@ impl EnvoyGatewayCrdChart {
                 chart_values_location,
                 EnvoyGatewayCrdChart::chart_name(),
             ),
+            include_envoy_proxy_crds,
+            include_gateway_api_crds,
         }
     }
 
@@ -41,7 +51,16 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
             name: EnvoyGatewayCrdChart::chart_name(),
             path: self.chart_path.to_string(),
             values_files: vec![self.chart_values_path.to_string()],
-            values: vec![],
+            values: vec![
+                ChartSetValue {
+                    key: "crds.gatewayAPI.enabled".to_string(),
+                    value: self.include_gateway_api_crds.to_string(),
+                },
+                ChartSetValue {
+                    key: "crds.envoyGateway.enabled".to_string(),
+                    value: self.include_envoy_proxy_crds.to_string(),
+                },
+            ],
 
             requires_server_side_apply: true,
             ..Default::default()
@@ -94,7 +113,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_directory_exists_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -117,7 +136,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_values_file_exists_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -144,7 +163,7 @@ mod tests {
     #[test]
     fn envoy_gateway_crd_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder);
+        let chart = EnvoyGatewayCrdChart::new(None, HelmChartDirectoryLocation::CommonFolder, true, true);
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 
         // Filter out extraArgs.* values since extraArgs is an empty object {} in the YAML
