@@ -35,6 +35,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         "metrics_history_enabled",
         &cluster.context.is_feature_enabled(&Features::MetricsHistory),
     );
+    context.insert("enable_keda", &cluster.is_keda_enabled());
 
     // Advanced settings
     context.insert(

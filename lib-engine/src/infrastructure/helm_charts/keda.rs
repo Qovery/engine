@@ -9,6 +9,18 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
 use kube::Client;
 
+#[derive(Clone)]
+pub enum KedaIamConfiguration {
+    Aws {
+        operator_role_arn: String,
+        metrics_server_role_arn: String,
+    },
+    Gcp {
+        operator_service_account_email: String,
+        metrics_server_service_account_email: String,
+    },
+}
+
 pub struct KedaChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
@@ -16,8 +28,7 @@ pub struct KedaChart {
     action: HelmAction,
     resource_profile: KedaResourceProfile,
     availability: KedaAvailability,
-    keda_operator_role_arn: Option<String>,
-    keda_metrics_server_role_arn: Option<String>,
+    iam_configuration: Option<KedaIamConfiguration>,
 }
 
 impl KedaChart {
@@ -27,8 +38,7 @@ impl KedaChart {
         action: HelmAction,
         resource_profile: KedaResourceProfile,
         availability: KedaAvailability,
-        keda_operator_role_arn: Option<String>,
-        keda_metrics_server_role_arn: Option<String>,
+        iam_configuration: Option<KedaIamConfiguration>,
     ) -> Self {
         KedaChart {
             chart_path: HelmChartPath::new(
@@ -45,8 +55,7 @@ impl KedaChart {
             action,
             resource_profile,
             availability,
-            keda_operator_role_arn,
-            keda_metrics_server_role_arn,
+            iam_configuration,
         }
     }
 
@@ -176,27 +185,46 @@ impl ToCommonHelmChart for KedaChart {
             },
         ];
 
-        // Add KEDA operator role ARN if provided
-        if let Some(operator_role_arn) = &self.keda_operator_role_arn {
-            values.push(ChartSetValue {
-                key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
-                value: operator_role_arn.clone(),
-            });
-        }
-
-        // Add KEDA metrics server role ARN if provided
-        if let Some(metrics_server_role_arn) = &self.keda_metrics_server_role_arn {
-            values.push(ChartSetValue {
-                key: r"metricsServer.serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
-                value: metrics_server_role_arn.clone(),
-            });
+        // Add IAM annotations based on cloud provider
+        if let Some(iam_config) = &self.iam_configuration {
+            match iam_config {
+                KedaIamConfiguration::Aws {
+                    operator_role_arn,
+                    metrics_server_role_arn,
+                } => {
+                    values.push(ChartSetValue {
+                        key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                        value: operator_role_arn.clone(),
+                    });
+                    values.push(ChartSetValue {
+                        key: r"metricsServer.serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                        value: metrics_server_role_arn.clone(),
+                    });
+                }
+                KedaIamConfiguration::Gcp {
+                    operator_service_account_email,
+                    metrics_server_service_account_email,
+                } => {
+                    values.push(ChartSetValue {
+                        key: r"serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                        value: operator_service_account_email.clone(),
+                    });
+                    values.push(ChartSetValue {
+                        key: r"metricsServer.serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                        value: metrics_server_service_account_email.clone(),
+                    });
+                }
+            }
         }
 
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: KedaChart::chart_name(),
                 action: self.action.clone(),
-                namespace: HelmChartNamespaces::KubeSystem,
+                namespace: match &self.iam_configuration {
+                    Some(KedaIamConfiguration::Aws { .. }) | None => HelmChartNamespaces::KubeSystem, // AWS or default
+                    Some(KedaIamConfiguration::Gcp { .. }) => HelmChartNamespaces::Qovery,            // GCP
+                },
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
@@ -251,7 +279,6 @@ mod tests {
             HelmAction::Deploy,
             KedaResourceProfile::High,
             KedaAvailability::High,
-            None,
             None,
         );
 

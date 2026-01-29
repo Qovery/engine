@@ -582,11 +582,17 @@ mod tests {
                 cluster_maintenance_end_time: None,
                 tls_email_report: String::new(),
                 metrics_parameters: None,
+                keda_parameters: None,
             },
             cluster_advanced_settings: Default::default(),
             customer_helm_charts_override: None,
             thanos_service_account_email: String::new(),
             prometheus_bucket_name: String::new(),
+            is_keda_enabled: false,
+            keda_resource_profile: Default::default(),
+            keda_availability: Default::default(),
+            gcp_keda_operator_service_account_email: None,
+            gcp_keda_metrics_server_service_account_email: None,
         }
     }
 

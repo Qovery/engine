@@ -1,6 +1,6 @@
 use crate::errors::CommandError;
-use crate::helm::{CommonChart, HelmAction};
-use crate::infrastructure::action::eks::helm_charts::EksChartsConfigPrerequisites;
+use crate::helm::{CommonChart, HelmAction, HelmChartNamespaces};
+use crate::infrastructure::action::gke::helm_charts::GkeChartsConfigPrerequisites;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::helm_charts::keda::{KedaChart, KedaIamConfiguration};
 use crate::infrastructure::helm_charts::keda_crd::KedaCrdChart;
@@ -12,7 +12,7 @@ pub struct KedaCharts {
 
 pub fn generate_keda_charts(
     chart_prefix_path: Option<&str>,
-    chart_config_prerequisites: &EksChartsConfigPrerequisites,
+    chart_config_prerequisites: &GkeChartsConfigPrerequisites,
     is_keda_enabled: bool,
 ) -> Result<KedaCharts, CommandError> {
     let action = match is_keda_enabled {
@@ -20,17 +20,17 @@ pub fn generate_keda_charts(
         false => HelmAction::Destroy,
     };
 
-    // KEDA CRD Chart
-    let keda_crd_chart = KedaCrdChart::new(chart_prefix_path, action.clone()).to_common_helm_chart()?;
+    // KEDA CRD Chart - For GCP, must be in the qovery namespace
+    let mut keda_crd_chart = KedaCrdChart::new(chart_prefix_path, action.clone()).to_common_helm_chart()?;
+    keda_crd_chart.chart_info.namespace = HelmChartNamespaces::Qovery;
 
-    // KEDA Main Chart
     let iam_configuration = match (
-        &chart_config_prerequisites.aws_iam_keda_operator_role_arn,
-        &chart_config_prerequisites.aws_iam_keda_metrics_server_role_arn,
+        &chart_config_prerequisites.gcp_keda_operator_service_account_email,
+        &chart_config_prerequisites.gcp_keda_metrics_server_service_account_email,
     ) {
-        (Some(operator_role_arn), Some(metrics_server_role_arn)) => Some(KedaIamConfiguration::Aws {
-            operator_role_arn: operator_role_arn.clone(),
-            metrics_server_role_arn: metrics_server_role_arn.clone(),
+        (Some(operator_sa_email), Some(metrics_server_sa_email)) => Some(KedaIamConfiguration::Gcp {
+            operator_service_account_email: operator_sa_email.clone(),
+            metrics_server_service_account_email: metrics_server_sa_email.clone(),
         }),
         _ => None,
     };

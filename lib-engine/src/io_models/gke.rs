@@ -1,4 +1,5 @@
 use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
+use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::VpcQoveryNetworkMode;
@@ -57,6 +58,8 @@ pub struct GkeOptions {
     // Other
     pub tls_email_report: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    #[serde(default)]
+    pub keda_parameters: Option<KedaParameters>,
 }
 
 impl GkeOptions {
@@ -126,6 +129,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
                 ),
             },
             value.metrics_parameters,
+            value.keda_parameters,
         ))
     }
 }
@@ -159,6 +163,7 @@ mod tests {
             user_provided_network: None,
             vpc_qovery_network_mode: None,
             metrics_parameters: None,
+            keda_parameters: None,
         };
 
         // execute & validate:

@@ -1,6 +1,10 @@
 {%- if log_history_enabled %}
 output "loki_logging_service_account_email" { value = resource.google_service_account.loki_service_account.email }
 {%- endif %}
+{%- if enable_keda %}
+output "keda_operator_service_account_email" { value = resource.google_service_account.keda_operator_service_account.email }
+output "keda_metrics_server_service_account_email" { value = resource.google_service_account.keda_metrics_server_service_account.email }
+{%- endif %}
 output "gke_cluster_public_hostname" { value = google_container_cluster.primary.endpoint  }
 output "thanos_service_account_email" { value = resource.google_service_account.thanos_service_account.email }
 output "cluster_name" {value = google_container_cluster.primary.name }
