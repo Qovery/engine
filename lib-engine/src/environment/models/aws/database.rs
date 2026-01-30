@@ -388,6 +388,7 @@ where
         context.insert("final_snapshot_name", &format!("qovery-{}-final-snap", self.id));
         context.insert("delete_automated_backups", &target.kubernetes.context().is_test_cluster());
         context.insert("publicly_accessible", &options.publicly_accessible);
+        context.insert("apply_changes_now", &options.apply_immediately);
         context.insert("labels_group", &self.labels_group);
 
         // NLB or ALB controller annotation
