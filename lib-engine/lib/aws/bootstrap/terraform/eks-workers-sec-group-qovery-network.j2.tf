@@ -19,7 +19,7 @@ resource "aws_security_group" "eks_cluster_workers" {
   tags = merge(
     local.tags_eks,
     {
-      Name = "qovery-eks-workers",
+      Name = "qovery-${var.kubernetes_cluster_id}-sg-workers",
       "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "owned",
     }
   )
