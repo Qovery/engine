@@ -58,6 +58,8 @@ pub struct Database {
     pub activate_backups: bool,
     pub publicly_accessible: bool,
     pub mode: DatabaseMode,
+    #[serde(default)] // => false if not present in input
+    pub apply_immediately: bool,
     #[serde(default)]
     pub annotations_group_ids: BTreeSet<Uuid>,
     #[serde(default)]
@@ -88,6 +90,7 @@ impl Database {
             activate_high_availability: self.activate_high_availability,
             activate_backups: self.activate_backups,
             publicly_accessible: self.publicly_accessible,
+            apply_immediately: self.apply_immediately,
         };
 
         let annotations_groups = self
@@ -957,4 +960,5 @@ pub struct DatabaseOptions {
     pub activate_high_availability: bool,
     pub activate_backups: bool,
     pub publicly_accessible: bool,
+    pub apply_immediately: bool,
 }

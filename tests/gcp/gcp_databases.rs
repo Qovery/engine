@@ -336,6 +336,7 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             publicly_accessible: false,
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
+            apply_immediately: false,
         }];
         environment.applications = environment
             .applications
