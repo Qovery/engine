@@ -25,7 +25,7 @@ resource "aws_vpc_endpoint" "s3" {
   tags = merge(
     local.tags_eks_vpc,
     {
-      Name = "qovery-eks-s3-gateway"
+      Name = "qovery-${var.kubernetes_cluster_id}-s3-endpoint"
     }
   )
 }
@@ -41,7 +41,7 @@ resource "aws_vpc_endpoint" "s3" {
   tags = merge(
     local.tags_eks_vpc,
     {
-      Name = "qovery-eks-s3-gateway"
+      Name = "qovery-${var.kubernetes_cluster_id}-s3-endpoint"
     }
   )
 }

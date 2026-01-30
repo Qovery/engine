@@ -13,7 +13,12 @@ resource "aws_security_group" "eks_cluster" {
     ipv6_cidr_blocks = ["::/0"]
   }
 
-  tags = local.tags_eks
+  tags = merge(
+    local.tags_eks,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-sg-master"
+    }
+  )
 }
 
 {%- endif -%}

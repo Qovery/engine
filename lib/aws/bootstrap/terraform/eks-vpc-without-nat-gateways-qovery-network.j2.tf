@@ -30,6 +30,7 @@ resource "aws_subnet" "eks_zone_a" {
   tags = merge(
     local.tags_eks_vpc,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[0]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -46,6 +47,7 @@ resource "aws_subnet" "eks_zone_b" {
   tags = merge(
     local.tags_eks_vpc,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[1]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -62,6 +64,7 @@ resource "aws_subnet" "eks_zone_c" {
   tags = merge(
     local.tags_eks_vpc,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[2]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -83,7 +86,12 @@ resource "aws_route_table" "eks_cluster" {
   }
   {% endfor %}
 
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-rt-public"
+    }
+  )
 }
 
 resource "aws_route_table_association" "eks_cluster_zone_a" {

@@ -40,17 +40,32 @@ variable "eks_subnets_zone_c_public" {
 # External IPs
 resource "aws_eip" "eip_zone_a" {
   domain = "vpc"
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-${var.aws_availability_zones[0]}"
+    }
+  )
 }
 
 resource "aws_eip" "eip_zone_b" {
   domain = "vpc"
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-${var.aws_availability_zones[1]}"
+    }
+  )
 }
 
 resource "aws_eip" "eip_zone_c" {
   domain = "vpc"
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-${var.aws_availability_zones[2]}"
+    }
+  )
 }
 
 # Public subnets
@@ -62,7 +77,12 @@ resource "aws_subnet" "eks_zone_a_public" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[0]}"
+    }
+  )
 }
 
 resource "aws_subnet" "eks_zone_b_public" {
@@ -73,7 +93,12 @@ resource "aws_subnet" "eks_zone_b_public" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[1]}"
+    }
+  )
 }
 
 resource "aws_subnet" "eks_zone_c_public" {
@@ -84,7 +109,12 @@ resource "aws_subnet" "eks_zone_c_public" {
   vpc_id = aws_vpc.eks.id
   map_public_ip_on_launch = true
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-public-${var.aws_availability_zones[2]}"
+    }
+  )
 }
 
 # Public Nat gateways
@@ -94,7 +124,12 @@ resource "aws_nat_gateway" "eks_zone_a_public" {
   allocation_id = aws_eip.eip_zone_a.id
   subnet_id     = aws_subnet.eks_zone_a_public[count.index].id
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-${var.aws_availability_zones[0]}"
+    }
+  )
 }
 
 resource "aws_nat_gateway" "eks_zone_b_public" {
@@ -103,7 +138,12 @@ resource "aws_nat_gateway" "eks_zone_b_public" {
   allocation_id = aws_eip.eip_zone_b.id
   subnet_id     = aws_subnet.eks_zone_b_public[count.index].id
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-${var.aws_availability_zones[1]}"
+    }
+  )
 }
 
 resource "aws_nat_gateway" "eks_zone_c_public" {
@@ -112,7 +152,12 @@ resource "aws_nat_gateway" "eks_zone_c_public" {
   allocation_id = aws_eip.eip_zone_c.id
   subnet_id = aws_subnet.eks_zone_c_public[count.index].id
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-${var.aws_availability_zones[2]}"
+    }
+  )
 }
 
 # Public Routing table
@@ -131,7 +176,12 @@ resource "aws_route_table" "eks_cluster" {
   }
   {% endfor %}
 
-  tags = local.tags_eks_vpc_public
+  tags = merge(
+    local.tags_eks_vpc_public,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-rt-public"
+    }
+  )
 }
 
 resource "aws_route_table_association" "eks_cluster_zone_a_public" {
@@ -168,6 +218,7 @@ resource "aws_subnet" "eks_zone_a" {
   tags = merge(
     local.tags_eks_vpc_private,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[0]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -184,6 +235,7 @@ resource "aws_subnet" "eks_zone_b" {
   tags = merge(
     local.tags_eks_vpc_private,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[1]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -200,6 +252,7 @@ resource "aws_subnet" "eks_zone_c" {
   tags = merge(
     local.tags_eks_vpc_private,
     {
+      Name = "qovery-${var.kubernetes_cluster_id}-private-${var.aws_availability_zones[2]}"
       "karpenter.sh/discovery" = var.kubernetes_cluster_name
     }
   )
@@ -216,7 +269,12 @@ resource "aws_route_table" "eks_cluster_zone_a_private" {
     nat_gateway_id = aws_nat_gateway.eks_zone_a_public[count.index].id
   }
 
-  tags = local.tags_eks_vpc_private
+  tags = merge(
+    local.tags_eks_vpc_private,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-rt-private-${var.aws_availability_zones[0]}"
+    }
+  )
 }
 
 resource "aws_route_table" "eks_cluster_zone_b_private" {
@@ -229,7 +287,12 @@ resource "aws_route_table" "eks_cluster_zone_b_private" {
     nat_gateway_id = aws_nat_gateway.eks_zone_b_public[count.index].id
   }
 
-  tags = local.tags_eks_vpc_private
+  tags = merge(
+    local.tags_eks_vpc_private,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-rt-private-${var.aws_availability_zones[1]}"
+    }
+  )
 }
 
 resource "aws_route_table" "eks_cluster_zone_c_private" {
@@ -242,7 +305,12 @@ resource "aws_route_table" "eks_cluster_zone_c_private" {
     nat_gateway_id = aws_nat_gateway.eks_zone_c_public[count.index].id
   }
 
-  tags = local.tags_eks_vpc_private
+  tags = merge(
+    local.tags_eks_vpc_private,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-rt-private-${var.aws_availability_zones[2]}"
+    }
+  )
 }
 
 resource "aws_route_table_association" "eks_cluster_zone_a" {

@@ -2,7 +2,6 @@ locals {
   tags_eks_vpc = merge(
   local.tags_common,
   {
-    Name = "qovery-eks-workers",
     "kubernetes.io/cluster/qovery-${var.kubernetes_cluster_id}" = "shared",
     "kubernetes.io/role/elb" = 1,
     "kubernetes.io/role/internal-elb" = "",
@@ -47,7 +46,12 @@ data "aws_vpc" "eks" {
 resource "aws_vpc" "eks" {
   cidr_block = var.vpc_cidr_block
   enable_dns_hostnames = true
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}"
+    }
+  )
 }
 
 # To delete ALLOW ALL rules in the default security group of the VPC
@@ -60,7 +64,12 @@ resource "aws_default_security_group" "default_sg" {
 resource "aws_internet_gateway" "eks_cluster" {
   vpc_id = aws_vpc.eks.id
 
-  tags = local.tags_eks_vpc
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-igw"
+    }
+  )
 }
 
 

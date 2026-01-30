@@ -8,8 +8,8 @@ data "aws_vpc" "selected" {
 data "aws_security_group" "selected" {
   {% if not user_provided_network %}
   filter {
-    name = "tag:Name"
-    values = ["qovery-eks-workers"]
+    name   = "tag:Name"
+    values = ["qovery-${var.kubernetes_cluster_id}-sg-workers", "qovery-eks-workers"]
   }
   {% endif %}
 
