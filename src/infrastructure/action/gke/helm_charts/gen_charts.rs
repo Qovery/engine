@@ -377,6 +377,10 @@ pub(super) fn gke_helm_charts(
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
+    let alert_config = metrics_config
+        .alert_config_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
     let keda_charts = generate_keda_charts(
         chart_prefix_path,
         chart_config_prerequisites,
@@ -398,7 +402,7 @@ pub(super) fn gke_helm_charts(
         promtail,
         Some(Box::new(keda_charts.keda_chart)),
     ];
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart];
+    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
     let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
     let level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
