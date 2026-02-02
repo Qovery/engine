@@ -620,6 +620,9 @@ pub(super) fn aks_helm_charts(
     if let Some(thanos_chart) = metrics_config.thanos_chart {
         level_4.push(Some(Box::new(thanos_chart)));
     }
+    if let Some(alert_config_chart) = metrics_config.alert_config_chart {
+        level_4.push(Some(Box::new(alert_config_chart)));
+    }
 
     Ok(vec![
         level_0.into_iter().flatten().collect(),

@@ -81,6 +81,10 @@ pub fn kapsule_helm_charts(
         .thanos_chart
         .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
 
+    let alert_config_chart = metrics_config
+        .alert_config_chart
+        .map(|chart| Box::new(chart) as Box<dyn HelmChart>);
+
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
         chart_prefix_path,
@@ -590,6 +594,9 @@ pub fn kapsule_helm_charts(
     }
     if let Some(thanos_chart) = thanos_chart {
         level_2.push(thanos_chart)
+    }
+    if let Some(alert_config_chart) = alert_config_chart {
+        level_2.push(alert_config_chart)
     }
     if let Some(loki_chart) = loki {
         level_2.push(Box::new(loki_chart));
