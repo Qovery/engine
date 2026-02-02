@@ -2,6 +2,9 @@ extern crate derivative;
 extern crate url;
 pub mod io;
 
+use once_cell::sync::Lazy;
+use regex::Regex;
+
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
@@ -41,6 +44,49 @@ use url::Url;
 use uuid::Uuid;
 
 const DEFAULT_HINT_MESSAGE: &str = "Need Help ? Please consult our FAQ to troubleshoot your deployment https://hub.qovery.com/docs/using-qovery/troubleshoot/ and visit the forum https://discuss.qovery.com/";
+
+/// Pre-compiled regex for detecting transient network error patterns.
+///
+/// This regex matches common network-related error messages that indicate
+/// temporary failures which may succeed on retry.
+static TRANSIENT_ERROR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?ix)  # case-insensitive, ignore whitespace in pattern
+        (?:
+            # Connection errors
+            connection\ refused |
+            connection\ reset |
+
+            # Network errors
+            network\ is\ unreachable |
+            no\ such\ host |
+
+            # Timeout errors
+            i/o\ timeout |
+            tls\ handshake\ timeout |
+            deadline\ exceeded |
+            context\ deadline\ exceeded |
+
+            # Service availability errors
+            temporary\ failure |
+            service\ unavailable |
+            too\ many\ requests |
+
+            # Stream/pipe errors
+            eof |
+            broken\ pipe
+        )",
+    )
+    .expect("Failed to compile transient error regex")
+});
+
+/// Checks if the given message contains transient network error patterns.
+///
+/// These patterns indicate temporary issues that may resolve on retry,
+/// such as connection failures, timeouts, or service unavailability.
+pub fn has_transient_error_pattern(message: &str) -> bool {
+    TRANSIENT_ERROR_REGEX.is_match(message)
+}
 
 /// ErrorMessageVerbosity: represents command error message's verbosity from minimal to full verbosity.
 pub enum ErrorMessageVerbosity {
@@ -181,6 +227,19 @@ impl CommandError {
         }
 
         CommandError::new(message, Some(unsafe_message), Some(envs))
+    }
+
+    /// Checks if this error represents a transient network-related issue.
+    ///
+    /// Returns `true` if the error message contains patterns indicating
+    /// temporary network failures that may succeed on retry.
+    pub fn is_transient_network_error(&self) -> bool {
+        // Check both safe and raw messages for network error patterns
+        has_transient_error_pattern(&self.message_safe)
+            || self
+                .full_details
+                .as_ref()
+                .is_some_and(|details| has_transient_error_pattern(details))
     }
 }
 
@@ -5352,11 +5411,90 @@ impl Display for EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
+    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, has_transient_error_pattern};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
+
+    #[test]
+    fn test_has_transient_error_pattern_connection_errors() {
+        // Connection refused
+        assert!(has_transient_error_pattern("connection refused"));
+        assert!(has_transient_error_pattern("Error: connection refused to server"));
+        assert!(has_transient_error_pattern("dial tcp 10.0.0.1:443: connection refused"));
+
+        // Connection reset
+        assert!(has_transient_error_pattern("connection reset"));
+        assert!(has_transient_error_pattern("connection reset by peer"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_network_errors() {
+        assert!(has_transient_error_pattern("network is unreachable"));
+        assert!(has_transient_error_pattern("no such host"));
+        assert!(has_transient_error_pattern("dial tcp: lookup example.com: no such host"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_timeout_errors() {
+        assert!(has_transient_error_pattern("i/o timeout"));
+        assert!(has_transient_error_pattern("dial tcp: I/O timeout"));
+        assert!(has_transient_error_pattern("tls handshake timeout"));
+        assert!(has_transient_error_pattern("deadline exceeded"));
+        assert!(has_transient_error_pattern("context deadline exceeded"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_service_availability_errors() {
+        assert!(has_transient_error_pattern("temporary failure in name resolution"));
+        assert!(has_transient_error_pattern("service unavailable"));
+        assert!(has_transient_error_pattern("503 service unavailable"));
+        assert!(has_transient_error_pattern("too many requests"));
+        assert!(has_transient_error_pattern("429 too many requests"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_stream_errors() {
+        assert!(has_transient_error_pattern("unexpected eof"));
+        assert!(has_transient_error_pattern("EOF"));
+        assert!(has_transient_error_pattern("broken pipe"));
+        assert!(has_transient_error_pattern("write: broken pipe"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_case_insensitive() {
+        assert!(has_transient_error_pattern("CONNECTION REFUSED"));
+        assert!(has_transient_error_pattern("Connection Refused"));
+        assert!(has_transient_error_pattern("SERVICE UNAVAILABLE"));
+        assert!(has_transient_error_pattern("Broken Pipe"));
+    }
+
+    #[test]
+    fn test_has_transient_error_pattern_non_transient_errors() {
+        // These should NOT match
+        assert!(!has_transient_error_pattern("invalid configuration"));
+        assert!(!has_transient_error_pattern("syntax error in values.yaml"));
+        assert!(!has_transient_error_pattern("permission denied"));
+        assert!(!has_transient_error_pattern("not found"));
+        assert!(!has_transient_error_pattern("authentication failed"));
+        assert!(!has_transient_error_pattern(""));
+    }
+
+    #[test]
+    fn test_command_error_is_transient_network_error() {
+        // Test with transient error in safe message
+        let err = CommandError::new("connection refused".to_string(), None, None);
+        assert!(err.is_transient_network_error());
+
+        // Test with transient error in full details
+        let err = CommandError::new("error occurred".to_string(), Some("dial tcp: i/o timeout".to_string()), None);
+        assert!(err.is_transient_network_error());
+
+        // Test with non-transient error
+        let err = CommandError::new("invalid configuration".to_string(), Some("syntax error".to_string()), None);
+        assert!(!err.is_transient_network_error());
+    }
 
     #[test]
     fn test_command_error_test_hidding_env_vars_in_message_safe_only() {

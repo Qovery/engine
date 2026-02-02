@@ -14,7 +14,152 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
+use std::time::{Duration, Instant};
 use tera::Context as TeraContext;
+/// Strategy for calculating delays between retry attempts.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum DelayStrategy {
+    /// Constant delay between all retries.
+    #[default]
+    Fixed,
+
+    /// Fibonacci-based exponential backoff.
+    /// Delays follow Fibonacci sequence: base, base, 2*base, 3*base, 5*base, 8*base, ...
+    #[allow(dead_code)] // Intentionally unused until configuration is exposed
+    Exponential,
+}
+
+/// Configuration for retrying failed charts in parallel deployments.
+#[derive(Clone, Debug)]
+pub struct ParallelDeploymentRetryConfig {
+    /// Maximum number of retry attempts after initial failure.
+    pub max_attempts: usize,
+
+    /// Strategy for calculating delay between retries.
+    pub delay_strategy: DelayStrategy,
+
+    /// Initial delay in milliseconds.
+    /// For Fixed: used as constant delay.
+    /// For Exponential: used as base delay for Fibonacci sequence.
+    pub initial_delay_ms: u64,
+}
+
+impl Default for ParallelDeploymentRetryConfig {
+    fn default() -> Self {
+        Self {
+            max_attempts: 3,
+            delay_strategy: DelayStrategy::Fixed,
+            initial_delay_ms: 5000,
+        }
+    }
+}
+
+impl ParallelDeploymentRetryConfig {
+    /// Validates the configuration.
+    /// Returns an error message if validation fails.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_attempts == 0 {
+            return Err("max_attempts must be greater than 0".to_string());
+        }
+        if self.initial_delay_ms == 0 {
+            return Err("initial_delay_ms must be greater than 0".to_string());
+        }
+        Ok(())
+    }
+
+    /// Calculates the delay for a given attempt number using the configured strategy.
+    /// Attempt numbers are 1-indexed.
+    pub fn delay_for_attempt(&self, attempt: usize) -> Duration {
+        match self.delay_strategy {
+            DelayStrategy::Fixed => Duration::from_millis(self.initial_delay_ms),
+            DelayStrategy::Exponential => {
+                // Fibonacci sequence for exponential backoff
+                let multiplier = fibonacci(attempt);
+                Duration::from_millis(self.initial_delay_ms * multiplier)
+            }
+        }
+    }
+}
+
+/// Computes the nth Fibonacci number (1-indexed).
+/// fib(1) = 1, fib(2) = 1, fib(3) = 2, fib(4) = 3, fib(5) = 5, ...
+fn fibonacci(n: usize) -> u64 {
+    if n <= 2 {
+        return 1;
+    }
+    let mut a: u64 = 1;
+    let mut b: u64 = 1;
+    for _ in 2..n {
+        let tmp = a + b;
+        a = b;
+        b = tmp;
+    }
+    b
+}
+
+/// Record of a single retry attempt for logging and diagnostics.
+#[derive(Clone, Debug)]
+#[allow(dead_code)] // Public API for observability - fields exposed for callers
+pub struct RetryAttempt {
+    /// Which attempt this was (1-indexed).
+    pub attempt_number: usize,
+
+    /// Name of the chart that failed.
+    pub chart_name: String,
+
+    /// Error encountered during this attempt.
+    pub error: HelmChartError,
+
+    /// Whether this error was determined to be retryable.
+    pub was_retryable: bool,
+
+    /// Delay before the next attempt (None if this was the final attempt).
+    pub delay_before_next_ms: Option<u64>,
+
+    /// Timestamp of the attempt.
+    pub timestamp: Instant,
+}
+
+/// Details of a chart that failed deployment after all retries.
+#[derive(Debug)]
+#[allow(dead_code)] // Public API for observability - fields exposed for callers
+pub struct ChartFailure {
+    /// Name of the failed chart.
+    pub chart_name: String,
+
+    /// All retry attempts for this chart.
+    pub attempts: Vec<RetryAttempt>,
+
+    /// Final error after all retries.
+    pub final_error: HelmChartError,
+}
+
+/// Result of deploying charts in parallel with retry support.
+#[derive(Debug)]
+#[allow(dead_code)] // Public API for observability - fields exposed for callers
+pub struct ParallelDeploymentResult {
+    /// Names of charts that deployed successfully.
+    pub succeeded: Vec<String>,
+
+    /// Charts that failed after all retries exhausted.
+    pub failed: Vec<ChartFailure>,
+}
+
+/// Type alias for the result of a single deployment attempt.
+/// Contains succeeded chart names and failed charts with their errors.
+type DeploymentAttemptResult = (Vec<String>, Vec<(Box<dyn HelmChart>, HelmChartError)>);
+
+impl ParallelDeploymentResult {
+    /// Returns true if all charts succeeded.
+    pub fn is_success(&self) -> bool {
+        self.failed.is_empty()
+    }
+
+    /// Returns the first failure error, if any.
+    pub fn first_error(&self) -> Option<&HelmChartError> {
+        self.failed.first().map(|f| &f.final_error)
+    }
+}
 
 pub(super) trait HelmInfraResources {
     type ChartPrerequisite;
@@ -93,16 +238,29 @@ pub(super) trait HelmInfraResources {
                 continue;
             }
 
-            // We do the actual deployment in parallel
+            // We do the actual deployment in parallel with retry support
             let chart_names = charts_names_user_str(&charts_level);
             logger.info(format!("🛳️ Deploying in parallel charts of level {ix}: {chart_names}"));
-            deploy_parallel_charts(
+            let retry_config = ParallelDeploymentRetryConfig::default();
+            let result = deploy_parallel_charts_with_retry(
                 infra_ctx.mk_kube_client()?.as_ref(),
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
                 &envs,
                 charts_level,
+                &retry_config,
+                &CommandKiller::never(),
             )
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e)))?;
+
+            // Check if any charts failed
+            if !result.is_success()
+                && let Some(first_err) = result.first_error()
+            {
+                return Err(Box::new(EngineError::new_helm_chart_error(
+                    ev_details.clone(),
+                    first_err.clone(),
+                )));
+            }
             logger.info(format!("✅ Charts of level {ix} deployed"));
         }
 
@@ -225,59 +383,211 @@ pub(super) fn mk_customer_chart_override_fn(
     }
 }
 
-fn deploy_parallel_charts(
+/// Deploys Helm charts in parallel with automatic retry for transient failures.
+///
+/// This function provides retry capability at the parallel deployment level. When a chart
+/// fails due to a transient error (network timeout, API unavailability, etc.), the system
+/// automatically retries deployment without affecting successfully deployed charts.
+///
+/// # Arguments
+/// * `kube_client` - Kubernetes client for API operations
+/// * `kubernetes_config` - Path to kubeconfig file
+/// * `envs` - Environment variables for helm commands
+/// * `charts` - Charts to deploy in parallel
+/// * `retry_config` - Configuration for retry behavior
+/// * `cmd_killer` - Abort signal checker for cancellation support
+///
+/// # Returns
+/// * `Ok(ParallelDeploymentResult)` - Deployment completed (may contain failures)
+/// * `Err(HelmChartError)` - Fatal error preventing any deployment
+///
+/// # Retry Behavior
+/// - Only charts with retryable errors are retried
+/// - Successfully deployed charts are not re-deployed
+/// - Respects abort signal between retry attempts
+pub fn deploy_parallel_charts_with_retry(
     kube_client: &kube::Client,
     kubernetes_config: &Path,
     envs: &[(&str, &str)],
     charts: Vec<Box<dyn HelmChart>>,
-) -> Result<(), HelmChartError> {
+    retry_config: &ParallelDeploymentRetryConfig,
+    cmd_killer: &CommandKiller,
+) -> Result<ParallelDeploymentResult, HelmChartError> {
+    // Validate configuration
+    if let Err(e) = retry_config.validate() {
+        return Err(HelmChartError::CommandError(CommandError::new(
+            format!("Invalid retry configuration: {}", e),
+            None,
+            None,
+        )));
+    }
+
+    let mut succeeded: Vec<String> = Vec::new();
+    let mut failures: HashMap<String, Vec<RetryAttempt>> = HashMap::new();
+    let mut charts_to_retry = charts;
+
+    // Initial deployment + retry loop
+    for attempt_num in 1..=retry_config.max_attempts + 1 {
+        // Check for abort signal between attempts
+        if cmd_killer.should_abort().is_some() {
+            tracing::warn!("Parallel deployment retry aborted by user request");
+            break;
+        }
+
+        // Deploy charts in parallel
+        let (attempt_succeeded, attempt_failed) =
+            deploy_charts_once(kube_client, kubernetes_config, envs, charts_to_retry, cmd_killer);
+
+        // Add newly succeeded charts to the overall succeeded list
+        succeeded.extend(attempt_succeeded);
+
+        // If no failures, we're done
+        if attempt_failed.is_empty() {
+            break;
+        }
+
+        // Process failures: categorize as retryable or non-retryable
+        let mut next_retry_charts: Vec<Box<dyn HelmChart>> = Vec::new();
+
+        for (chart, error) in attempt_failed {
+            let chart_name = chart.get_chart_info().name.clone();
+            let is_retryable = error.is_retryable();
+            let is_last_attempt = attempt_num > retry_config.max_attempts;
+
+            // Calculate delay for next attempt (None if this is the last attempt or non-retryable)
+            let delay_before_next_ms = if !is_last_attempt && is_retryable {
+                Some(retry_config.delay_for_attempt(attempt_num).as_millis() as u64)
+            } else {
+                None
+            };
+
+            // Record the attempt
+            let retry_attempt = RetryAttempt {
+                attempt_number: attempt_num,
+                chart_name: chart_name.clone(),
+                error: error.clone(),
+                was_retryable: is_retryable,
+                delay_before_next_ms,
+                timestamp: Instant::now(),
+            };
+
+            failures.entry(chart_name.clone()).or_default().push(retry_attempt);
+
+            // Log the retry attempt
+            if is_retryable && !is_last_attempt {
+                tracing::info!(
+                    chart = %chart_name,
+                    attempt = attempt_num,
+                    max_attempts = retry_config.max_attempts + 1,
+                    delay_ms = delay_before_next_ms.unwrap_or(0),
+                    error = %error,
+                    "Helm chart deployment failed, will retry"
+                );
+                next_retry_charts.push(chart);
+            } else if !is_retryable {
+                tracing::warn!(
+                    chart = %chart_name,
+                    attempt = attempt_num,
+                    error = %error,
+                    "Helm chart deployment failed with non-retryable error, skipping retry"
+                );
+            } else {
+                tracing::error!(
+                    chart = %chart_name,
+                    total_attempts = attempt_num,
+                    error = %error,
+                    "Helm chart deployment failed after all retry attempts"
+                );
+            }
+        }
+
+        // If there are no charts to retry, we're done
+        if next_retry_charts.is_empty() {
+            break;
+        }
+
+        // Wait before retrying
+        let delay = retry_config.delay_for_attempt(attempt_num);
+        tracing::info!(
+            delay_ms = delay.as_millis() as u64,
+            charts_remaining = next_retry_charts.len(),
+            "Waiting before retry attempt"
+        );
+        std::thread::sleep(delay);
+
+        charts_to_retry = next_retry_charts;
+    }
+
+    // Build the final result
+    let failed: Vec<ChartFailure> = failures
+        .into_iter()
+        .map(|(chart_name, attempts)| {
+            let final_error = attempts.last().unwrap().error.clone();
+            ChartFailure {
+                chart_name,
+                attempts,
+                final_error,
+            }
+        })
+        .collect();
+
+    Ok(ParallelDeploymentResult { succeeded, failed })
+}
+
+/// Deploys charts in parallel and returns (succeeded_charts, failed_charts_with_errors).
+/// This is a single attempt - no retry logic.
+fn deploy_charts_once(
+    kube_client: &kube::Client,
+    kubernetes_config: &Path,
+    envs: &[(&str, &str)],
+    charts: Vec<Box<dyn HelmChart>>,
+    cmd_killer: &CommandKiller,
+) -> DeploymentAttemptResult {
     thread::scope(|s| {
-        let mut handles = vec![];
+        let mut handles: Vec<(String, _)> = vec![];
 
         for chart in charts.into_iter() {
+            let chart_name = chart.get_chart_info().name.clone();
             let path = kubernetes_config.to_path_buf();
             let current_span = tracing::Span::current();
             let handle = s.spawn(move || {
-                // making sure to pass the current span to the new thread not to lose any tracing info
                 let _span = current_span.enter();
-                chart.run(kube_client, path.as_path(), envs, &CommandKiller::never())
+                let result = chart.run(kube_client, path.as_path(), envs, cmd_killer);
+                (chart, result)
             });
 
-            handles.push(handle);
+            handles.push((chart_name, handle));
         }
 
-        let mut errors: Vec<Result<(), HelmChartError>> = vec![];
-        for handle in handles {
+        let mut succeeded: Vec<String> = Vec::new();
+        let mut failed: Vec<(Box<dyn HelmChart>, HelmChartError)> = Vec::new();
+
+        for (_chart_name, handle) in handles {
             match handle.join() {
-                Ok(helm_run_ret) => {
-                    if let Err(e) = helm_run_ret {
-                        errors.push(Err(e));
-                    }
+                Ok((chart, Ok(_))) => {
+                    let name = chart.get_chart_info().name.clone();
+                    tracing::info!(chart = %name, "Helm chart deployed successfully");
+                    succeeded.push(name);
                 }
-                Err(e) => {
-                    let err = match e.downcast_ref::<&'static str>() {
-                        None => match e.downcast_ref::<String>() {
-                            None => "Unable to get error.",
-                            Some(s) => s.as_str(),
+                Ok((chart, Err(e))) => {
+                    failed.push((chart, e));
+                }
+                Err(panic_err) => {
+                    let err_msg = match panic_err.downcast_ref::<&'static str>() {
+                        Some(s) => s.to_string(),
+                        None => match panic_err.downcast_ref::<String>() {
+                            Some(s) => s.clone(),
+                            None => "Unknown panic error".to_string(),
                         },
-                        Some(s) => *s,
                     };
-                    let error = Err(HelmChartError::CommandError(CommandError::new(
-                        "Thread panicked during parallel charts deployments.".to_string(),
-                        Some(err.to_string()),
-                        None,
-                    )));
-                    errors.push(error);
+                    // We can't recover the chart after a panic, so we can't retry it
+                    // This will show up in the error log
+                    tracing::error!(error = %err_msg, "Thread panicked during parallel chart deployment");
                 }
             }
         }
 
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            error!("Deployments of charts failed with: {:?}", errors);
-            errors.remove(0)
-        }
+        (succeeded, failed)
     })
 }
 

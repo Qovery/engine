@@ -84,6 +84,42 @@ pub enum HelmError {
     KubernetesApplyError(errors::CommandError),
 }
 
+impl HelmError {
+    /// Determines if this error represents a transient condition that may succeed on retry.
+    ///
+    /// Returns `true` for errors caused by temporary issues like network timeouts,
+    /// connection failures, or API server unavailability. Returns `false` for
+    /// permanent errors like invalid configurations or user cancellations.
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            // Retryable: transient conditions
+            HelmError::Timeout(_, _, _) => true,
+            HelmError::ReleaseLocked(_) => true,
+            HelmError::CannotGetCredentials(_) => true,
+            HelmError::Rollbacked(_, _) => true, // Deployment may have failed due to transient issues
+
+            // Non-retryable: configuration errors
+            HelmError::InvalidKubeConfig(_) => false,
+            HelmError::ReleaseDoesNotExist(_) => false,
+            HelmError::CannotRollback(_) => false,
+            HelmError::InvalidRepositoryConfig(_) => false,
+            HelmError::ReleaseNameInvalid(_) => false,
+            HelmError::Killed(_, _) => false,
+            HelmError::UnsupportedPrometheusObjectBucketConfiguration => false,
+
+            // CmdError and KubernetesApplyError: check message for network patterns
+            HelmError::CmdError(_, _, _) | HelmError::KubernetesApplyError(_) => self.has_transient_error_pattern(),
+        }
+    }
+
+    /// Checks the error message for known transient network error patterns.
+    ///
+    /// These patterns indicate temporary issues that may resolve on retry.
+    pub fn has_transient_error_pattern(&self) -> bool {
+        errors::has_transient_error_pattern(&self.to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Helm {
     common_envs: Vec<(String, String)>,
