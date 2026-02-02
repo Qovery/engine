@@ -6,20 +6,7 @@ use crate::helm::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::io_models::QoveryIdentifier;
-
-pub enum QoveryClusterGatewayOptionsPerKubernetesKind {
-    Eks,
-    EksSelfManaged,
-    EksAnywhere,
-    ScwKapsule,
-    ScwSelfManaged,
-    Gke,
-    GkeSelfManaged,
-    Aks,
-    AksSelfManaged,
-    OnPremiseSelfManaged,
-}
+use crate::infrastructure::models::load_balancer::{InteractWithLoadBalancer, LoadBalancer};
 
 #[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
@@ -36,9 +23,7 @@ pub struct QoveryClusterGatewayChart {
     chart_values_path: HelmChartValuesFilePath,
     namespace: HelmChartNamespaces,
     domain: Domain,
-    kubernetes_provider_options: QoveryClusterGatewayOptionsPerKubernetesKind,
-    cluster_id: QoveryIdentifier,
-    organization_id: QoveryIdentifier,
+    load_balancer: LoadBalancer,
     chart_options: QoveryClusterGatewayChartOptions,
     metrics_enabled: bool,
 }
@@ -48,9 +33,7 @@ impl QoveryClusterGatewayChart {
         chart_prefix_path: Option<&str>,
         namespace: HelmChartNamespaces,
         domain: Domain,
-        kubernetes_provider_options: QoveryClusterGatewayOptionsPerKubernetesKind,
-        cluster_id: QoveryIdentifier,
-        organization_id: QoveryIdentifier,
+        load_balancer: LoadBalancer,
         chart_options: QoveryClusterGatewayChartOptions,
         metrics_enabled: bool,
     ) -> Self {
@@ -67,9 +50,7 @@ impl QoveryClusterGatewayChart {
             ),
             namespace,
             domain,
-            kubernetes_provider_options,
-            cluster_id,
-            organization_id,
+            load_balancer,
             chart_options,
             metrics_enabled,
         }
@@ -126,54 +107,13 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             });
         }
 
-        // enable metrics only if prometheus is installed
-        chart_set_values.push(ChartSetValue {
-            key: "metrics.enabled".to_string(),
-            value: self.metrics_enabled.to_string(),
-        });
-
-        chart_set_values.push(ChartSetValue {
-            key: "metrics.podMonitor.enabled".to_string(),
-            value: self.metrics_enabled.to_string(),
-        });
-
-        match self.kubernetes_provider_options {
-            QoveryClusterGatewayOptionsPerKubernetesKind::Eks
-            | QoveryClusterGatewayOptionsPerKubernetesKind::EksAnywhere
-            | QoveryClusterGatewayOptionsPerKubernetesKind::EksSelfManaged => {
+        if let Some(annotations) = self.load_balancer.annotations() {
+            for (key, value) in annotations {
                 chart_set_values.push(ChartSetValue {
-                    key: "infrastructure.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-name"
-                        .to_string(),
-                    value: format!("qovery-{}-envoy-gateway", self.cluster_id.short()),
-                });
-
-                chart_set_values.push(
-                ChartSetValue {
-                    key:
-                    "infrastructure.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags"
-                        .to_string(),
-                    value: format!(
-                        "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
-                        self.organization_id,
-                        self.organization_id.short(),
-                        self.cluster_id,
-                        self.cluster_id.short(),
-                    ),
+                    key: format!("infrastructure.annotations.{}", key),
+                    value,
                 });
             }
-            QoveryClusterGatewayOptionsPerKubernetesKind::Gke
-            | QoveryClusterGatewayOptionsPerKubernetesKind::GkeSelfManaged => {
-                // No specific values for GKE at the moment
-            }
-            QoveryClusterGatewayOptionsPerKubernetesKind::Aks
-            | QoveryClusterGatewayOptionsPerKubernetesKind::AksSelfManaged => {
-                // No specific values for AKS at the moment
-            }
-            QoveryClusterGatewayOptionsPerKubernetesKind::ScwKapsule
-            | QoveryClusterGatewayOptionsPerKubernetesKind::ScwSelfManaged => {
-                // No specific values for SCW at the moment
-            }
-            QoveryClusterGatewayOptionsPerKubernetesKind::OnPremiseSelfManaged => {}
         }
 
         Ok(CommonChart {
@@ -220,13 +160,15 @@ mod tests {
     use crate::environment::models::domain::Domain;
     use crate::helm::HelmChartNamespaces;
     use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, QoveryClusterGatewayOptionsPerKubernetesKind,
+        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::kubernetes::Kind;
+    use crate::infrastructure::models::load_balancer::LoadBalancer;
+    use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::AwsAlbLoadBalancer;
     use crate::io_models::QoveryIdentifier;
     use std::env;
 
@@ -242,9 +184,10 @@ mod tests {
             None,
             HelmChartNamespaces::Qovery,
             get_domain(),
-            QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
-            QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+            }),
             QoveryClusterGatewayChartOptions::default(),
             false,
         );
@@ -274,9 +217,10 @@ mod tests {
             None,
             HelmChartNamespaces::Qovery,
             get_domain(),
-            QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
-            QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+            }),
             QoveryClusterGatewayChartOptions::default(),
             false,
         );
@@ -310,9 +254,10 @@ mod tests {
             None,
             HelmChartNamespaces::Qovery,
             get_domain(),
-            QoveryClusterGatewayOptionsPerKubernetesKind::Eks,
-            QoveryIdentifier::new_random(),
-            QoveryIdentifier::new_random(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+            }),
             QoveryClusterGatewayChartOptions::default(),
             false,
         );

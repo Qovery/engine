@@ -25,7 +25,7 @@ use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, QoveryClusterGatewayOptionsPerKubernetesKind,
+    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
 };
 use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
@@ -39,6 +39,8 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::{Kind as CloudProviderKind, Kind};
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use crate::infrastructure::models::load_balancer::LoadBalancer;
+use crate::infrastructure::models::load_balancer::azure_load_balancer::AzureLoadBalancer;
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
@@ -363,9 +365,7 @@ pub(super) fn aks_helm_charts(
                     // to avoid conflict with API Gateway which will declare *.cluster_id.domain.root
                     false => new_gateway_api_domain,
                 },
-                QoveryClusterGatewayOptionsPerKubernetesKind::Aks,
-                QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
-                QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+                LoadBalancer::Azure(AzureLoadBalancer {}),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_number_truster_hops: chart_config_prerequisites
                         .cluster_advanced_settings
