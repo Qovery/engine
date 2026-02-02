@@ -26,4 +26,17 @@ mod tests {
     fn test_gcp_load_balancer_can_be_created() {
         let _lb = GcpLoadBalancer {};
     }
+
+    #[test]
+    fn test_gcp_load_balancer_respects_max_8_annotations() {
+        let lb = GcpLoadBalancer {};
+
+        if let Some(annotations) = lb.annotations() {
+            assert!(
+                annotations.len() <= 8,
+                "GCP load balancer must have at most 8 annotations for Gateway API compatibility, got {}",
+                annotations.len()
+            );
+        }
+    }
 }

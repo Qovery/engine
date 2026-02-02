@@ -110,11 +110,23 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
         if let Some(annotations) = self.load_balancer.annotations() {
             for (key, value) in annotations {
                 chart_set_values.push(ChartSetValue {
-                    key: format!("infrastructure.annotations.{}", key),
+                    // Escape dots in annotation keys to prevent Helm from treating them as nested maps
+                    key: format!("infrastructure.annotations.{}", key.replace('.', "\\.")),
                     value,
                 });
             }
         }
+
+        // enable metrics only if prometheus is installed
+        chart_set_values.push(ChartSetValue {
+            key: "metrics.enabled".to_string(),
+            value: self.metrics_enabled.to_string(),
+        });
+
+        chart_set_values.push(ChartSetValue {
+            key: "metrics.podMonitor.enabled".to_string(),
+            value: self.metrics_enabled.to_string(),
+        });
 
         Ok(CommonChart {
             chart_info: ChartInfo {
