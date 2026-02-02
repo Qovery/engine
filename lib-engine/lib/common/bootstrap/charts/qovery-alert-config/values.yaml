@@ -1,4 +1,4 @@
-namespace: prometheus
+namespace: set-by-engine
 alertManagerConfigName: set-by-engine
 labels:
   alertmanager: main

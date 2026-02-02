@@ -71,6 +71,10 @@ impl ToCommonHelmChart for AlertConfigChart {
             && alert_config.enabled
         {
             values.push(ChartSetValue {
+                key: "namespace".to_string(),
+                value: self.prometheus_namespace.to_string(),
+            });
+            values.push(ChartSetValue {
                 key: "alertManagerConfigName".to_string(),
                 value: alert_config
                     .config_name
