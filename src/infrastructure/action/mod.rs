@@ -14,6 +14,11 @@ mod scaleway;
 mod self_managed;
 mod utils;
 
+// Re-export parallel deployment retry types for external use
+pub use deploy_helms::{
+    ChartFailure, DelayStrategy, ParallelDeploymentResult, ParallelDeploymentRetryConfig, RetryAttempt,
+};
+
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};

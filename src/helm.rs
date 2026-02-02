@@ -45,6 +45,27 @@ pub enum HelmChartError {
     CannotUpdateCrds { crd_path: String },
 }
 
+impl HelmChartError {
+    /// Determines if this error represents a transient condition that may succeed on retry.
+    ///
+    /// Returns `true` for transient errors (network issues, temporary unavailability).
+    /// Returns `false` for permanent errors (configuration problems, template errors).
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            // Non-retryable: configuration and template errors
+            HelmChartError::CreateTemplateError { .. } => false,
+            HelmChartError::RenderingError { .. } => false,
+            HelmChartError::CannotUpdateCrds { .. } => false,
+
+            // Potentially retryable: delegate to HelmError
+            HelmChartError::HelmError(helm_err) => helm_err.is_retryable(),
+
+            // Potentially retryable: check if it's a network-related command error
+            HelmChartError::CommandError(cmd_err) => cmd_err.is_transient_network_error(),
+        }
+    }
+}
+
 impl<E> From<(EventDetails, E)> for Box<EngineError>
 where
     HelmChartError: From<E>,
