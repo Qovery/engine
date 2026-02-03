@@ -31,7 +31,7 @@ impl Google {
         Google {
             long_id,
             json_credentials,
-            json_credentials_raw_json: serde_json::to_string(&credentials_io).unwrap_or_default(),
+            json_credentials_raw_json: credentials_io.try_raw().unwrap_or_default(),
             region,
             terraform_state_credentials,
         }
