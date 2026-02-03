@@ -602,20 +602,27 @@ impl Helm {
             return match err {
                 CommandError::TimeoutError(_) => Err(HelmError::Timeout(chart_name.to_string(), PULL, stderr_msg)),
                 CommandError::Killed(_) => Err(HelmError::Killed(chart_name.to_string(), PULL)),
-                _ => Err(CmdError(
-                    chart_name.to_string(),
-                    PULL,
-                    errors::CommandError::new(
-                        format!(
-                            "Helm failed to pull chart {} at version {} from {}",
-                            chart_name,
-                            chart_version,
-                            url_with_credentials.as_str()
+                _ => {
+                    let url = {
+                        let mut url = url_with_credentials.clone();
+                        let _ = url.set_password(None);
+                        url
+                    };
+                    Err(CmdError(
+                        chart_name.to_string(),
+                        PULL,
+                        errors::CommandError::new(
+                            format!(
+                                "Helm failed to pull chart {} at version {} from {}",
+                                chart_name,
+                                chart_version,
+                                url.as_str()
+                            ),
+                            Some(stderr_msg),
+                            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
                         ),
-                        Some(stderr_msg),
-                        Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                    ),
-                )),
+                    ))
+                }
             };
         };
         Ok(())
