@@ -49,6 +49,10 @@ impl JsonCredentials {
         let cleaned_raw = json_str.replace('\n', "\\n").to_string(); // escape newlines from keys strings
         serde_json::from_str(&cleaned_raw).map_err(|e| e.to_string())
     }
+    // Returns the [JsonCredentials] as String without escaping "\n"
+    pub fn try_raw(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
 }
 
 impl TryFrom<JsonCredentials> for GkeJsonCredentials {

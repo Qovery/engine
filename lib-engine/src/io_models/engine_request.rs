@@ -1006,14 +1006,14 @@ pub enum GithubCrRepoType {
 pub struct GcpCrOptions {
     #[derivative(Debug = "ignore")]
     #[serde(alias = "json_credentials")]
-    #[serde(deserialize_with = "gcp_credentials_from_str")]
+    #[serde(deserialize_with = "try_gcp_credentials_from_str")]
     // Allow to deserialize string field to its struct counterpart
     pub gcp_credentials: Option<JsonCredentialsIo>,
     region: String,
 }
 
 /// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings
-fn gcp_credentials_from_str<'de, D>(
+fn try_gcp_credentials_from_str<'de, D>(
     deserializer: D,
 ) -> Result<Option<crate::environment::models::gcp::io::JsonCredentials>, D::Error>
 where
@@ -1029,6 +1029,7 @@ where
     }
 }
 
+///  Deserializes JSON credentials from string,and escapes '\n'
 fn gcp_credentials_from<'de, D>(
     deserializer: D,
 ) -> Result<crate::environment::models::gcp::io::JsonCredentials, D::Error>

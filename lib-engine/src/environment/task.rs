@@ -421,6 +421,13 @@ impl EnvironmentTask {
             .chain(
                 request
                     .target_environment
+                    .terraform_services
+                    .iter()
+                    .flat_map(|x| x.environment_vars_with_infos.values()),
+            )
+            .chain(
+                request
+                    .target_environment
                     .helms
                     .iter()
                     .flat_map(|x| x.environment_vars_with_infos.values()),
@@ -448,6 +455,10 @@ impl EnvironmentTask {
             }
             CloudProviderOptions::Gcp { gcp_credentials } => {
                 secrets.push(gcp_credentials.private_key.to_string());
+
+                if let Ok(json_credentials_raw) = gcp_credentials.try_raw() {
+                    secrets.push(json_credentials_raw);
+                }
             }
             CloudProviderOptions::Azure { .. } => {}
             CloudProviderOptions::OnPremise { .. } => {}
