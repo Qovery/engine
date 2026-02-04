@@ -40,6 +40,7 @@ pub struct QoveryClusterGatewayChart {
     cluster_id: QoveryIdentifier,
     organization_id: QoveryIdentifier,
     chart_options: QoveryClusterGatewayChartOptions,
+    metrics_enabled: bool,
 }
 
 impl QoveryClusterGatewayChart {
@@ -51,6 +52,7 @@ impl QoveryClusterGatewayChart {
         cluster_id: QoveryIdentifier,
         organization_id: QoveryIdentifier,
         chart_options: QoveryClusterGatewayChartOptions,
+        metrics_enabled: bool,
     ) -> Self {
         QoveryClusterGatewayChart {
             chart_path: HelmChartPath::new(
@@ -69,6 +71,7 @@ impl QoveryClusterGatewayChart {
             cluster_id,
             organization_id,
             chart_options,
+            metrics_enabled,
         }
     }
 
@@ -122,6 +125,17 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 value: tag.clone(),
             });
         }
+
+        // enable metrics only if prometheus is installed
+        chart_set_values.push(ChartSetValue {
+            key: "metrics.enabled".to_string(),
+            value: self.metrics_enabled.to_string(),
+        });
+
+        chart_set_values.push(ChartSetValue {
+            key: "metrics.podMonitor.enabled".to_string(),
+            value: self.metrics_enabled.to_string(),
+        });
 
         match self.kubernetes_provider_options {
             QoveryClusterGatewayOptionsPerKubernetesKind::Eks
@@ -232,6 +246,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             QoveryClusterGatewayChartOptions::default(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -263,6 +278,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             QoveryClusterGatewayChartOptions::default(),
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -298,6 +314,7 @@ mod tests {
             QoveryIdentifier::new_random(),
             QoveryIdentifier::new_random(),
             QoveryClusterGatewayChartOptions::default(),
+            false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

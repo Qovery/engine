@@ -21,3 +21,11 @@ gateway:
 
 infrastructure:
   annotations: {}
+
+metrics:
+  enabled: false
+  podMonitor:
+    enabled: false
+    additionalLabels:
+      release: kube-prometheus-stack
+

@@ -40,6 +40,40 @@ kube-state-metrics:
       cpu: set-by-engine-code
       memory: set-by-engine-code
 
+  # Enable RBAC for Gateway API resources
+  rbac:
+    extraRules:
+      - apiGroups: [ "gateway.networking.k8s.io" ]
+        resources:
+          - gatewayclasses
+          - gateways
+          - httproutes
+        verbs: [ "list", "watch" ]
+
+  # Enable custom resource monitoring for HTTPRoute (envoy)
+  customResourceState:
+    enabled: true
+    config:
+      spec:
+        resources:
+          - groupVersionKind:
+              group: gateway.networking.k8s.io
+              version: v1
+              kind: HTTPRoute
+            metricNamePrefix: kube_httproute
+            labelsFromPath:
+              httproute_name: [ metadata, name ]
+              httproute_namespace: [ metadata, namespace ]
+            metrics:
+              - name: labels
+                help: "Kubernetes labels converted to Prometheus labels"
+                each:
+                  type: Info
+                  info:
+                    labelsFromPath:
+                      # Export all HTTPRoute labels including qovery.com/*
+                      "*": [ metadata, labels ]
+
 crds:
   enabled: false
 
@@ -223,3 +257,53 @@ additionalPrometheusRules:
             expr: nginx:req_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
           - record: nginx:resp_size_avg_bytes:5m
             expr: nginx:resp_bytes_rate:5m / clamp_min(nginx:req_rate:5m, 1)
+
+  - name: envoy-proxy.rules
+    groups:
+      - name: envoy-proxy-quantiles
+        interval: 30s
+        rules:
+          - record: envoy_proxy:request_duration:rate5m
+            expr: sum by (le, httproute_name, envoy_response_code_class) (rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+          - record: envoy_proxy:request_p50:5m
+            expr: histogram_quantile(0.5, envoy_proxy:request_duration:rate5m)
+          - record: envoy_proxy:request_p95:5m
+            expr: histogram_quantile(0.95, envoy_proxy:request_duration:rate5m)
+          - record: envoy_proxy:request_p99:5m
+            expr: histogram_quantile(0.99, envoy_proxy:request_duration:rate5m)
+
+  - name: envoy-proxy.core
+    groups:
+      - name: envoy-proxy-requests-rates
+        interval: 30s
+        rules:
+          - record: envoy_proxy:req_rate:5m
+            expr: sum by (httproute_name) (rate(envoy_cluster_upstream_rq_total{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+          - record: envoy_proxy:req_rate:5m_by_status
+            expr: sum by (httproute_name, envoy_response_code) (rate(envoy_cluster_upstream_rq{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+      - name: envoy-proxy-requests-increase
+        interval: 5m
+        rules:
+          - record: envoy_proxy:req_inc:5m
+            expr: sum by (httproute_name) (increase(envoy_cluster_upstream_rq_total{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+          - record: envoy_proxy:req_inc:5m_by_status
+            expr: sum by (httproute_name, envoy_response_code) (increase(envoy_cluster_upstream_rq{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+
+      - name: envoy-proxy-sizes
+        interval: 30s
+        rules:
+          - record: envoy_proxy:req_bytes_rate:5m
+            expr: sum by (httproute_name) (rate(envoy_cluster_upstream_cx_tx_bytes_total{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+          - record: envoy_proxy:resp_bytes_rate:5m
+            expr: sum by (httproute_name) (rate(envoy_cluster_upstream_cx_rx_bytes_total{envoy_cluster_name=~"httproute/.*", httproute_name!~".*-ssl-redirect"}[5m]))
+
+          - record: envoy_proxy:req_size_avg_bytes:5m
+            expr: envoy_proxy:req_bytes_rate:5m / clamp_min(envoy_proxy:req_rate:5m, 1)
+
+          - record: envoy_proxy:resp_size_avg_bytes:5m
+            expr: envoy_proxy:resp_bytes_rate:5m / clamp_min(envoy_proxy:req_rate:5m, 1)
