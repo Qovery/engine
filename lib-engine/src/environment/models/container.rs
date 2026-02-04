@@ -275,7 +275,8 @@ impl<T: CloudProvider> Container<T> {
 
         let registry_info = target.container_registry.registry_info();
         let registry_endpoint = registry_info.get_registry_endpoint(Some(target.kubernetes.cluster_name().as_str()));
-        let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default();
+        // Docker registry names must be lowercase
+        let registry_endpoint_host = registry_endpoint.host_str().unwrap_or_default().to_lowercase();
         let repository: Cow<str> = if let Some(port) = registry_endpoint.port() {
             format!("{registry_endpoint_host}:{port}").into()
         } else {
@@ -505,12 +506,15 @@ where
     }
 
     fn image_full(&self) -> String {
-        format!(
-            "{}{}:{}",
-            self.source.registry.url().to_string().trim_start_matches("https://"),
-            self.source.image,
-            self.source.tag
-        )
+        // Docker registry names must be lowercase
+        let registry_url = self
+            .source
+            .registry
+            .url()
+            .to_string()
+            .trim_start_matches("https://")
+            .to_lowercase();
+        format!("{}{}:{}", registry_url, self.source.image, self.source.tag)
     }
 
     fn startup_timeout(&self) -> Duration {
