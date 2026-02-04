@@ -24,3 +24,11 @@ infrastructure:
     # The ClientTrafficPolicy.enableProxyProtocol feature doesn't properly configure Envoy listeners
     # Use X-Forwarded-For headers for client IP preservation instead
     service.beta.kubernetes.io/azure-load-balancer-enable-proxy-protocol: "false"
+
+# metrics are enabled only when prometheus is installed
+metrics:
+  enabled: set-by-engine-code
+  podMonitor:
+    enabled: set-by-engine-code
+    additionalLabels:
+      release: kube-prometheus-stack

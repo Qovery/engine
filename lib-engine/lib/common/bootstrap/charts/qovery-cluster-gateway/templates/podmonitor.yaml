@@ -1,0 +1,83 @@
+{{- if and .Values.metrics.enabled .Values.metrics.podMonitor.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: qovery-cluster-gateway-envoy
+  namespace: {{ .Values.metrics.podMonitor.namespace | default .Release.Namespace }}
+  labels:
+    release: kube-prometheus-stack
+    {{- if .Values.metrics.podMonitor.additionalLabels }}
+    {{- toYaml .Values.metrics.podMonitor.additionalLabels | nindent 4 }}
+    {{- end }}
+  {{- if .Values.metrics.podMonitor.annotations }}
+  annotations: {{ toYaml .Values.metrics.podMonitor.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.metrics.podMonitor.namespaceSelector }}
+  namespaceSelector: {{ toYaml .Values.metrics.podMonitor.namespaceSelector | nindent 4 }}
+  {{- else }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: proxy
+      gateway.envoyproxy.io/owning-gateway-name: qovery-cluster-public-gateway
+      gateway.envoyproxy.io/owning-gateway-namespace: {{ .Release.Namespace }}
+  podMetricsEndpoints:
+    - port: metrics
+      path: /stats/prometheus
+      interval: {{ .Values.metrics.podMonitor.scrapeInterval | default "30s" }}
+    {{- if .Values.metrics.podMonitor.honorLabels }}
+      honorLabels: true
+    {{- end }}
+    {{- if .Values.metrics.podMonitor.relabelings }}
+      relabelings: {{ toYaml .Values.metrics.podMonitor.relabelings | nindent 4 }}
+    {{- end }}
+    {{- if .Values.metrics.podMonitor.metricRelabelings }}
+      metricRelabelings: {{ toYaml .Values.metrics.podMonitor.metricRelabelings | nindent 4 }}
+    {{- else }}
+      metricRelabelings:
+        # Extract HTTPRoute namespace from envoy_cluster_name
+        # Pattern: httproute/<namespace>/<httproute-name>/rule/<n>
+        - sourceLabels: [envoy_cluster_name]
+          regex: 'httproute/([^/]+)/([^/]+)/.*'
+          targetLabel: httproute_namespace
+          replacement: '$1'
+
+        # Extract HTTPRoute name from envoy_cluster_name
+        - sourceLabels: [envoy_cluster_name]
+          regex: 'httproute/([^/]+)/([^/]+)/.*'
+          targetLabel: httproute_name
+          replacement: '$2'
+
+        # Extract rule number (optional, useful for debugging)
+        - sourceLabels: [envoy_cluster_name]
+          regex: 'httproute/[^/]+/[^/]+/rule/([0-9]+)'
+          targetLabel: httproute_rule
+          replacement: '$1'
+    {{- end }}
+  {{- if .Values.metrics.podMonitor.jobLabel }}
+  jobLabel: {{ .Values.metrics.podMonitor.jobLabel | quote }}
+  {{- end }}
+  {{- if .Values.metrics.podMonitor.podTargetLabels }}
+  podTargetLabels: {{ toYaml .Values.metrics.podMonitor.podTargetLabels | nindent 2 }}
+  {{- else }}
+  podTargetLabels:
+    - gateway.envoyproxy.io/owning-gateway-name
+    - gateway.envoyproxy.io/owning-gateway-namespace
+  {{- end }}
+  {{- if .Values.metrics.podMonitor.labelLimit }}
+  labelLimit: {{ .Values.metrics.podMonitor.labelLimit }}
+  {{- end }}
+  {{- if .Values.metrics.podMonitor.labelNameLengthLimit }}
+  labelNameLengthLimit: {{ .Values.metrics.podMonitor.labelNameLengthLimit }}
+  {{- end }}
+  {{- if .Values.metrics.podMonitor.labelValueLengthLimit }}
+  labelValueLengthLimit: {{ .Values.metrics.podMonitor.labelValueLengthLimit }}
+  {{- end }}
+  {{- if .Values.metrics.podMonitor.sampleLimit }}
+  sampleLimit: {{ .Values.metrics.podMonitor.sampleLimit }}
+  {{- end }}
+{{- end }}

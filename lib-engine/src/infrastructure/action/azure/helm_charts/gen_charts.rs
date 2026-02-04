@@ -372,6 +372,7 @@ pub(super) fn aks_helm_charts(
                         .envoy_default_backend_tag
                         .clone(),
                 },
+                chart_config_prerequisites.metrics_parameters.is_some(),
             )
             .to_common_helm_chart()?,
         );
