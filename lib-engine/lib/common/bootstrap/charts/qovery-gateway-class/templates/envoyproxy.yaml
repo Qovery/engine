@@ -6,6 +6,34 @@ metadata:
   name: qovery-public-envoy-proxy-config
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if .Values.gatewayClass.qoveryPublic.hpa.enabled }}
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        hpa:
+          minReplicas: {{ .Values.gatewayClass.qoveryPublic.hpa.minReplicas }}
+          maxReplicas: {{ .Values.gatewayClass.qoveryPublic.hpa.maxReplicas }}
+          {{- if or .Values.gatewayClass.qoveryPublic.hpa.targetCPUUtilizationPercentage .Values.gatewayClass.qoveryPublic.hpa.targetMemoryUtilizationPercentage }}
+          metrics:
+          {{- if .Values.gatewayClass.qoveryPublic.hpa.targetCPUUtilizationPercentage }}
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: {{ .Values.gatewayClass.qoveryPublic.hpa.targetCPUUtilizationPercentage }}
+          {{- end }}
+          {{- if .Values.gatewayClass.qoveryPublic.hpa.targetMemoryUtilizationPercentage }}
+            - type: Resource
+              resource:
+                name: memory
+                target:
+                  type: Utilization
+                  averageUtilization: {{ .Values.gatewayClass.qoveryPublic.hpa.targetMemoryUtilizationPercentage }}
+          {{- end }}
+          {{- end }}
+  {{- end }}
   {{- if .Values.gatewayClass.qoveryPublic.accessLog }}
   telemetry:
     accessLog:
@@ -59,6 +87,34 @@ metadata:
   name: qovery-private-envoy-proxy-config
   namespace: {{ .Release.Namespace }}
 spec:
+  {{- if .Values.gatewayClass.qoveryPrivate.hpa.enabled }}
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        hpa:
+          minReplicas: {{ .Values.gatewayClass.qoveryPrivate.hpa.minReplicas }}
+          maxReplicas: {{ .Values.gatewayClass.qoveryPrivate.hpa.maxReplicas }}
+          {{- if or .Values.gatewayClass.qoveryPrivate.hpa.targetCPUUtilizationPercentage .Values.gatewayClass.qoveryPrivate.hpa.targetMemoryUtilizationPercentage }}
+          metrics:
+          {{- if .Values.gatewayClass.qoveryPrivate.hpa.targetCPUUtilizationPercentage }}
+            - type: Resource
+              resource:
+                name: cpu
+                target:
+                  type: Utilization
+                  averageUtilization: {{ .Values.gatewayClass.qoveryPrivate.hpa.targetCPUUtilizationPercentage }}
+          {{- end }}
+          {{- if .Values.gatewayClass.qoveryPrivate.hpa.targetMemoryUtilizationPercentage }}
+            - type: Resource
+              resource:
+                name: memory
+                target:
+                  type: Utilization
+                  averageUtilization: {{ .Values.gatewayClass.qoveryPrivate.hpa.targetMemoryUtilizationPercentage }}
+          {{- end }}
+          {{- end }}
+  {{- end }}
   {{- if .Values.gatewayClass.qoveryPrivate.accessLog }}
   telemetry:
     accessLog:

@@ -378,6 +378,14 @@ pub struct ClusterAdvancedSettings {
     pub envoy_hpa_min_number_instances: u32,
     #[serde(alias = "envoy.hpa.max_number_instances")]
     pub envoy_hpa_max_number_instances: u32,
+    #[serde(alias = "envoy.gateway.hpa.cpu_average_utilization_percentage_threshold")]
+    pub envoy_gateway_hpa_cpu_average_utilization_percentage_threshold: Option<Percentage>,
+    #[serde(alias = "envoy.gateway.hpa.memory_average_utilization_percentage_threshold")]
+    pub envoy_gateway_hpa_memory_average_utilization_percentage_threshold: Option<Percentage>,
+    #[serde(alias = "envoy.gateway.hpa.min_number_instances")]
+    pub envoy_gateway_hpa_min_number_instances: u32,
+    #[serde(alias = "envoy.gateway.hpa.max_number_instances")]
+    pub envoy_gateway_hpa_max_number_instances: u32,
     #[serde(alias = "envoy.vcpu.request_in_milli_cpu")]
     pub envoy_vcpu_request_in_milli_cpu: u32,
     #[serde(alias = "envoy.vcpu.limit_in_milli_cpu")]
@@ -476,8 +484,12 @@ impl Default for ClusterAdvancedSettings {
             k8s_deploy_api_gateway: None,
             envoy_hpa_cpu_average_utilization_percentage_threshold: None,
             envoy_hpa_memory_average_utilization_percentage_threshold: None,
-            envoy_hpa_min_number_instances: 2,
-            envoy_hpa_max_number_instances: 25,
+            envoy_hpa_min_number_instances: 1,
+            envoy_hpa_max_number_instances: 5,
+            envoy_gateway_hpa_cpu_average_utilization_percentage_threshold: None,
+            envoy_gateway_hpa_memory_average_utilization_percentage_threshold: None,
+            envoy_gateway_hpa_min_number_instances: 2,
+            envoy_gateway_hpa_max_number_instances: 25,
             envoy_vcpu_request_in_milli_cpu: 100,
             envoy_vcpu_limit_in_milli_cpu: 1000,
             envoy_memory_request_in_mib: 256,

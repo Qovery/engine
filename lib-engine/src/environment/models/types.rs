@@ -253,8 +253,17 @@ pub enum PercentageError {
 pub struct Percentage(f64);
 
 impl Percentage {
+    /// Returns the percentage as a f64 value between 0.0 and 1.0
     pub fn as_f64(&self) -> f64 {
         self.0
+    }
+
+    /// Returns the percentage as a u8 value between 0 and 100
+    pub fn as_u8_percent(&self) -> u8 {
+        let clamped = &self.0.clamp(0.0, 1.0);
+        let percent = (clamped * 100.0).round() as u8;
+
+        percent.clamp(0, 100)
     }
 
     pub fn min() -> Self {
@@ -503,6 +512,209 @@ mod tests {
 
             // validate:
             assert_eq!(test_case.expected, result);
+        }
+    }
+
+    #[test]
+    fn test_percentage_as_u8_percent_normal_values() {
+        // setup:
+        struct TestCase {
+            input: f64,
+            expected: u8,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: 0.0,
+                expected: 0,
+            },
+            TestCase {
+                input: 0.5,
+                expected: 50,
+            },
+            TestCase {
+                input: 1.0,
+                expected: 100,
+            },
+            TestCase {
+                input: 0.25,
+                expected: 25,
+            },
+            TestCase {
+                input: 0.75,
+                expected: 75,
+            },
+            TestCase {
+                input: 0.01,
+                expected: 1,
+            },
+            TestCase {
+                input: 0.99,
+                expected: 99,
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let percentage = Percentage::try_from(test_case.input).unwrap();
+            let result = percentage.as_u8_percent();
+
+            // validate:
+            assert_eq!(
+                test_case.expected, result,
+                "Expected {} for input {}, got {}",
+                test_case.expected, test_case.input, result
+            );
+        }
+    }
+
+    #[test]
+    fn test_percentage_as_u8_percent_rounding() {
+        // setup:
+        struct TestCase {
+            input: f64,
+            expected: u8,
+            description: &'static str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: 0.445,
+                expected: 45,
+                description: "0.445 should round to 45 (rounds up at 0.5)",
+            },
+            TestCase {
+                input: 0.444,
+                expected: 44,
+                description: "0.444 should round to 44",
+            },
+            TestCase {
+                input: 0.455,
+                expected: 46,
+                description: "0.455 should round to 46",
+            },
+            TestCase {
+                input: 0.005,
+                expected: 1,
+                description: "0.005 should round to 1",
+            },
+            TestCase {
+                input: 0.004,
+                expected: 0,
+                description: "0.004 should round to 0",
+            },
+            TestCase {
+                input: 0.995,
+                expected: 100,
+                description: "0.995 should round to 100",
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let percentage = Percentage::try_from(test_case.input).unwrap();
+            let result = percentage.as_u8_percent();
+
+            // validate:
+            assert_eq!(test_case.expected, result, "{} - got {}", test_case.description, result);
+        }
+    }
+
+    #[test]
+    fn test_percentage_as_u8_percent_clamping() {
+        // setup:
+        struct TestCase {
+            input: Percentage,
+            expected: u8,
+            description: &'static str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: Percentage(-0.5),
+                expected: 0,
+                description: "Negative value should clamp to 0",
+            },
+            TestCase {
+                input: Percentage(-1.0),
+                expected: 0,
+                description: "Negative value should clamp to 0",
+            },
+            TestCase {
+                input: Percentage(1.5),
+                expected: 100,
+                description: "Value > 1.0 should clamp to 100",
+            },
+            TestCase {
+                input: Percentage(2.0),
+                expected: 100,
+                description: "Value > 1.0 should clamp to 100",
+            },
+            TestCase {
+                input: Percentage(f64::INFINITY),
+                expected: 100,
+                description: "Infinity should clamp to 100",
+            },
+            TestCase {
+                input: Percentage(f64::NEG_INFINITY),
+                expected: 0,
+                description: "Negative infinity should clamp to 0",
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let result = test_case.input.as_u8_percent();
+
+            // validate:
+            assert_eq!(test_case.expected, result, "{} - got {}", test_case.description, result);
+        }
+    }
+
+    #[test]
+    fn test_percentage_as_u8_percent_edge_cases() {
+        // setup:
+        struct TestCase {
+            input: f64,
+            expected: u8,
+            description: &'static str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                input: 0.0001,
+                expected: 0,
+                description: "Very small value should round to 0",
+            },
+            TestCase {
+                input: 0.9999,
+                expected: 100,
+                description: "Very close to 1.0 should round to 100",
+            },
+            TestCase {
+                input: 0.001,
+                expected: 0,
+                description: "0.1% should round to 0",
+            },
+            TestCase {
+                input: 0.009,
+                expected: 1,
+                description: "0.9% should round to 1",
+            },
+            TestCase {
+                input: f64::EPSILON,
+                expected: 0,
+                description: "Smallest positive f64 should be 0",
+            },
+        ];
+
+        for test_case in test_cases {
+            // execute:
+            let percentage = Percentage::try_from(test_case.input).unwrap();
+            let result = percentage.as_u8_percent();
+
+            // validate:
+            assert_eq!(test_case.expected, result, "{} - got {}", test_case.description, result);
         }
     }
 }
