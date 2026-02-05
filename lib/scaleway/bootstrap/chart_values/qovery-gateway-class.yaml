@@ -3,11 +3,23 @@ gatewayClass:
     enable: set-by-engine
     accessLog:
       format: set-by-engine
+    hpa:
+      enabled: set-by-engine
+      minReplicas: set-by-engine
+      maxReplicas: set-by-engine
+      targetCPUUtilizationPercentage: set-by-engine
+      targetMemoryUtilizationPercentage: set-by-engine
     affinity: null
     tolerations: null
   qoveryPrivate:
     enable: set-by-engine
     accessLog:
       format: set-by-engine
+    hpa:
+      enabled: set-by-engine
+      minReplicas: set-by-engine
+      maxReplicas: set-by-engine
+      targetCPUUtilizationPercentage: set-by-engine
+      targetMemoryUtilizationPercentage: set-by-engine
     affinity: null
     tolerations: null
