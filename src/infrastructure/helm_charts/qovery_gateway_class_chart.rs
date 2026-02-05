@@ -1,6 +1,6 @@
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces, HpaMode,
     QoveryGatewayClass,
 };
 use crate::infrastructure::helm_charts::{
@@ -19,6 +19,7 @@ pub struct QoveryGatewayClassChart {
     namespace: HelmChartNamespaces,
     gateway_classes_to_be_installed: HashSet<QoveryGatewayClass>,
     access_log_format: Option<String>,
+    hpa_mode: HpaMode,
 }
 
 impl QoveryGatewayClassChart {
@@ -27,6 +28,7 @@ impl QoveryGatewayClassChart {
         namespace: HelmChartNamespaces,
         gateway_classes_to_be_checked_after_install: HashSet<QoveryGatewayClass>,
         access_log_format: Option<String>,
+        hpa_mode: HpaMode,
     ) -> Self {
         QoveryGatewayClassChart {
             chart_path: HelmChartPath::new(
@@ -42,11 +44,70 @@ impl QoveryGatewayClassChart {
             namespace,
             gateway_classes_to_be_installed: gateway_classes_to_be_checked_after_install,
             access_log_format,
+            hpa_mode,
         }
     }
 
     pub fn chart_name() -> String {
         "qovery-gateway-class".to_string()
+    }
+
+    /// Helper function to add HPA configuration values for a specific gateway
+    fn add_hpa_values(values: &mut Vec<ChartSetValue>, gateway_prefix: &str, hpa_mode: &HpaMode) {
+        match hpa_mode {
+            HpaMode::Enabled { config } => {
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.enabled"),
+                    value: "true".to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.minReplicas"),
+                    value: config.min_replicas.to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.maxReplicas"),
+                    value: config.max_replicas.to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.targetCPUUtilizationPercentage"),
+                    value: config
+                        .cpu_average_utilization_percentage
+                        .as_ref()
+                        .map(|cpu| cpu.as_u8_percent().to_string())
+                        .unwrap_or_else(|| "null".to_string()),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.targetMemoryUtilizationPercentage"),
+                    value: config
+                        .memory_average_utilization_percentage
+                        .as_ref()
+                        .map(|mem| mem.as_u8_percent().to_string())
+                        .unwrap_or_else(|| "null".to_string()),
+                });
+            }
+            HpaMode::Disabled => {
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.enabled"),
+                    value: "false".to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.minReplicas"),
+                    value: "1".to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.maxReplicas"),
+                    value: "1".to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.targetCPUUtilizationPercentage"),
+                    value: "null".to_string(),
+                });
+                values.push(ChartSetValue {
+                    key: format!("{gateway_prefix}.hpa.targetMemoryUtilizationPercentage"),
+                    value: "null".to_string(),
+                });
+            }
+        }
     }
 }
 
@@ -89,6 +150,10 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
                 value: "".to_string(),
             });
         }
+
+        // Configure HPA for both public and private gateways
+        Self::add_hpa_values(&mut values, "gatewayClass.qoveryPublic", &self.hpa_mode);
+        Self::add_hpa_values(&mut values, "gatewayClass.qoveryPrivate", &self.hpa_mode);
 
         Ok(CommonChart {
             chart_info: ChartInfo {
@@ -171,7 +236,7 @@ impl ChartInstallationChecker for QoveryGatewayClassChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
-    use crate::helm::HelmChartNamespaces;
+    use crate::helm::{HelmChartNamespaces, HpaMode};
     use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -184,7 +249,15 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_directory_exists_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            None,
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_path = format!(
@@ -207,7 +280,15 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_values_file_exists_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            None,
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
         let chart_values_path = format!(
@@ -234,7 +315,15 @@ mod tests {
     #[test]
     fn qovery_gateway_class_chart_rust_overridden_values_exists_in_values_yaml_test() {
         // setup:
-        let chart = QoveryGatewayClassChart::new(None, HelmChartNamespaces::Qovery, HashSet::new(), None);
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            None,
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
         // execute:

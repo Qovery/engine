@@ -14,6 +14,12 @@ gatewayClass:
       #     "response_code": "%RESPONSE_CODE%"
       #   }
       format: ""
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 25
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
   qoveryPrivate:
     enable: true
     accessLog:
@@ -29,3 +35,10 @@ gatewayClass:
       #     "response_code": "%RESPONSE_CODE%"
       #   }
       format: ""
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 25
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
+
