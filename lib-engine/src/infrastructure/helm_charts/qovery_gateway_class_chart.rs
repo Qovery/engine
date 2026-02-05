@@ -38,7 +38,7 @@ impl QoveryGatewayClassChart {
             ),
             chart_values_path: HelmChartValuesFilePath::new(
                 chart_prefix_path,
-                HelmChartDirectoryLocation::CommonFolder,
+                HelmChartDirectoryLocation::CloudProviderFolder,
                 QoveryGatewayClassChart::chart_name(),
             ),
             namespace,
@@ -242,6 +242,7 @@ mod tests {
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::kubernetes::Kind;
     use std::collections::HashSet;
     use std::env;
 
@@ -298,7 +299,7 @@ mod tests {
                 .expect("Impossible to convert current directory to string"),
             get_helm_path_kubernetes_provider_sub_folder_name(
                 chart.chart_values_path.helm_path(),
-                HelmChartType::Shared,
+                HelmChartType::CloudProviderSpecific(Kind::Eks),
             ),
             QoveryGatewayClassChart::chart_name(),
         );
@@ -333,9 +334,9 @@ mod tests {
                 "/lib/{}/bootstrap/chart_values/{}.yaml",
                 get_helm_path_kubernetes_provider_sub_folder_name(
                     chart.chart_values_path.helm_path(),
-                    HelmChartType::Shared,
+                    HelmChartType::CloudProviderSpecific(Kind::Eks),
                 ),
-                QoveryGatewayClassChart::chart_name()
+                QoveryGatewayClassChart::chart_name(),
             ),
         );
 

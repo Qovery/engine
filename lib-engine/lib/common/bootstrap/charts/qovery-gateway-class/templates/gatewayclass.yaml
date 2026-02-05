@@ -8,13 +8,11 @@ metadata:
     qovery-type: "qovery-public-gateway"
 spec:
   controllerName: "qovery.com/gateway-controller"
-  {{- if .Values.gatewayClass.qoveryPublic.accessLog }}
   parametersRef:
     group: gateway.envoyproxy.io
     kind: EnvoyProxy
     name: qovery-public-envoy-proxy-config
     namespace: {{ .Release.Namespace }}
-  {{- end }}
 {{ end }}
 
 {{ if .Values.gatewayClass.qoveryPrivate.enable }}
@@ -27,11 +25,9 @@ metadata:
     qovery-type: "qovery-private-gateway"
 spec:
   controllerName: "qovery.com/gateway-controller"
-  {{- if .Values.gatewayClass.qoveryPrivate.accessLog }}
   parametersRef:
     group: gateway.envoyproxy.io
     kind: EnvoyProxy
     name: qovery-private-envoy-proxy-config
     namespace: {{ .Release.Namespace }}
-  {{- end }}
 {{ end }}
