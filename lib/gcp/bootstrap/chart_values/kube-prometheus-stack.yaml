@@ -32,6 +32,29 @@ kube-state-metrics:
     - statefulsets=[qovery.com/service-id]
     - ingresses=[qovery.com/associated-service-id]
     - persistentvolumeclaims=[qovery.com/service-id]
+  collectors:
+    - certificatesigningrequests
+    - cronjobs
+    - daemonsets
+    - deployments
+    - endpoints
+    - horizontalpodautoscalers
+    - ingresses
+    - jobs
+    - limitranges
+    - namespaces
+    - networkpolicies
+    - nodes
+    - persistentvolumeclaims
+    - persistentvolumes
+    - poddisruptionbudgets
+    - pods
+    - replicasets
+    - replicationcontrollers
+    - resourcequotas
+    - services
+    - statefulsets
+    - storageclasses
   resources:
     limits:
       cpu: set-by-engine-code
