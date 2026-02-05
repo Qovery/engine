@@ -1,0 +1,13 @@
+gatewayClass:
+  qoveryPublic:
+    enable: set-by-engine
+    accessLog:
+      format: set-by-engine
+    affinity: null
+    tolerations: null
+  qoveryPrivate:
+    enable: set-by-engine
+    accessLog:
+      format: set-by-engine
+    affinity: null
+    tolerations: null
