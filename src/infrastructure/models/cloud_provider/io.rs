@@ -277,6 +277,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
     pub aws_eks_encrypt_secrets_kms_key_arn: String,
+    #[serde(alias = "aws.eks.enable_pod_identity_addon")]
+    pub aws_eks_enable_pod_identity_addon: bool,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
     #[serde(alias = "database.postgresql.deny_any_access")]
@@ -463,6 +465,7 @@ impl Default for ClusterAdvancedSettings {
             nginx_controller_limit_request_status_code: None,
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
+            aws_eks_enable_pod_identity_addon: false,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,

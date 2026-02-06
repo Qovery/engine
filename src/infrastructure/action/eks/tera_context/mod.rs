@@ -20,6 +20,7 @@ use tera::Context as TeraContext;
 mod core_dns_addon;
 mod ebs_csi_addon;
 mod kube_proxy_addon;
+mod pod_identity_addon;
 mod vpc_cni_addon;
 
 pub fn eks_tera_context(
@@ -502,6 +503,20 @@ pub fn eks_tera_context(
             None => core_dns_addon::AwsCoreDnsAddon::new_from_k8s_version(kubernetes.version(), cluster_profile),
             Some(overridden_version) => {
                 core_dns_addon::AwsCoreDnsAddon::new_with_overridden_version(overridden_version, cluster_profile)
+            }
+        }),
+    );
+    // Pod Identity Agent
+    context.insert(
+        "eks_pod_identity_addon_enabled",
+        &kubernetes.advanced_settings().aws_eks_enable_pod_identity_addon,
+    );
+    context.insert(
+        "eks_addon_pod_identity",
+        &(match &options.aws_addon_pod_identity_version_override {
+            None => pod_identity_addon::AwsPodIdentityAddon::new_from_k8s_version(kubernetes.version()),
+            Some(overridden_version) => {
+                pod_identity_addon::AwsPodIdentityAddon::new_with_overridden_version(overridden_version)
             }
         }),
     );

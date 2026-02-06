@@ -657,6 +657,7 @@ mod tests {
                 aws_addon_kube_proxy_version_override: None,
                 aws_addon_ebs_csi_version_override: None,
                 aws_addon_coredns_version_override: None,
+                aws_addon_pod_identity_version_override: None,
                 ec2_exposed_port: None,
                 karpenter_parameters: None,
                 keda_parameters: None,
