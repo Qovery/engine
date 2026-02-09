@@ -530,6 +530,7 @@ fn create_and_destroy_eks_cluster_with_all_gateway_api_envoy_settings_in_eu_west
                 None,
                 temp_dir,
                 None,
+                hashmap! {},
             )
             .unwrap(),
         );

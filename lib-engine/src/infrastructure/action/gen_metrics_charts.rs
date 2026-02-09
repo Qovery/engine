@@ -417,6 +417,7 @@ mod tests {
     use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
     use crate::io_models::engine_location::EngineLocation;
     use crate::io_models::models::{StorageClass, VpcQoveryNetworkMode};
+    use maplit::hashmap;
     use std::sync::Arc;
     use time::Time;
 
@@ -662,6 +663,7 @@ mod tests {
                 karpenter_parameters: None,
                 keda_parameters: None,
                 metrics_parameters: None,
+                resource_tags: hashmap! {},
             },
             cluster_advanced_settings: Default::default(),
             is_karpenter_enabled: false,

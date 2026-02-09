@@ -80,6 +80,8 @@ pub struct Options {
     pub keda_parameters: Option<KedaParameters>,
     #[serde(default)]
     pub metrics_parameters: Option<MetricsParameters>,
+    #[serde(default)]
+    pub resource_tags: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

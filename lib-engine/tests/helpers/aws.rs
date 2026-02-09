@@ -311,6 +311,7 @@ impl Cluster<AWS, Options> for AWS {
             karpenter_parameters: None,
             keda_parameters: None,
             metrics_parameters: None,
+            resource_tags: hashmap! {},
         }
     }
 }
