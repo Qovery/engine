@@ -277,6 +277,10 @@ pub struct ContainerAdvancedSettings {
     #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
     pub deployment_lifecycle_pre_stop_exec_command: Vec<String>,
 
+    // Network DNS
+    #[serde(alias = "network.dns.ndots")]
+    pub network_dns_ndots: Option<u8>,
+
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
@@ -404,6 +408,7 @@ impl Default for ContainerAdvancedSettings {
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
+            network_dns_ndots: None,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
