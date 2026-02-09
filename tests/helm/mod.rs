@@ -324,6 +324,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
+            network_dns_ndots: None,
             build_timeout_max_sec: 2,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
@@ -462,6 +463,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
+            network_dns_ndots: None,
             network_ingress_proxy_body_size_mb: 11,
             network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: true,
@@ -715,19 +717,12 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         btreeset![test_mounted_file()],
         JobAdvancedSettings {
             job_delete_ttl_seconds_after_finished: Some(8),
-            deployment_termination_grace_period_seconds: 60,
-            deployment_affinity_node_required: BTreeMap::new(),
             cronjob_concurrency_policy: "my_cronjob_concurrency_policy".to_string(),
             cronjob_failed_jobs_history_limit: 9,
             cronjob_success_jobs_history_limit: 10,
-            build_timeout_max_sec: 30 * 60,
             build_cpu_max_in_milli: 2000,
             build_ram_max_in_gib: 4,
-            build_ephemeral_storage_in_gib: None,
-            build_disable_buildkit_cache: false,
-            security_service_account_name: "".to_string(),
-            security_read_only_root_filesystem: false,
-            security_automount_service_account_token: false,
+            ..Default::default()
         },
         Some(Probe {
             r#type: ProbeType::Http {
@@ -812,6 +807,216 @@ pub fn application_context() -> TestInfo {
     }
 }
 
+fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: u8) -> Application<AWSType> {
+    let long_id = Uuid::new_v4();
+    let advanced_settings = ApplicationAdvancedSettings {
+        security_service_account_name: "".to_string(),
+        security_read_only_root_filesystem: false,
+        security_automount_service_account_token: false,
+        deployment_termination_grace_period_seconds: 60,
+        deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
+        deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
+        deployment_update_strategy_rolling_update_max_surge_percent: 25,
+        deployment_lifecycle_post_start_exec_command: vec![],
+        deployment_lifecycle_pre_stop_exec_command: vec![],
+        network_dns_ndots: Some(ndots),
+        build_timeout_max_sec: 2,
+        build_cpu_max_in_milli: 2000,
+        build_ram_max_in_gib: 4,
+        build_ephemeral_storage_in_gib: None,
+        build_disable_buildkit_cache: false,
+        network_ingress_proxy_body_size_mb: 3,
+        network_ingress_force_ssl_redirect: true,
+        network_gateway_api_force_ssl_redirect: true,
+        network_ingress_cors_enable: true,
+        network_ingress_sticky_session_enable: false,
+        network_gateway_api_sticky_session_enable: false,
+        network_gateway_api_enable_cors: false,
+        network_gateway_api_cors_allow_origin: "*".to_string(),
+        network_gateway_api_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
+        network_gateway_api_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+        network_gateway_api_whitelist_source_range: "0.0.0.0/0".to_string(),
+        network_gateway_api_denylist_source_range: "".to_string(),
+        network_gateway_api_basic_auth_env_var: "".to_string(),
+        network_gateway_api_route_limit_rpm: None,
+        network_gateway_api_route_limit_rps: None,
+        network_gateway_api_route_limit_source_cidrs: "".to_string(),
+        network_gateway_api_route_limit_headers: "".to_string(),
+        network_gateway_api_add_headers: BTreeMap::new(),
+        network_gateway_api_proxy_set_headers: BTreeMap::new(),
+        network_gateway_api_custom_http_errors: None,
+        network_gateway_api_circuit_breaker_max_connections: None,
+        network_gateway_api_circuit_breaker_max_pending_requests: None,
+        network_gateway_api_circuit_breaker_max_parallel_requests: None,
+        network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
+        network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
+        network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
+        network_ingress_keepalive_time_seconds: 4,
+        network_ingress_keepalive_timeout_seconds: 5,
+        network_ingress_send_timeout_seconds: 6,
+        network_ingress_add_headers: BTreeMap::new(),
+        network_ingress_proxy_set_headers: BTreeMap::new(),
+        network_ingress_proxy_connect_timeout_seconds: 7,
+        network_ingress_proxy_send_timeout_seconds: 8,
+        network_ingress_proxy_read_timeout_seconds: 9,
+        network_ingress_proxy_request_buffering: "on".to_string(),
+        network_ingress_proxy_buffering: "on".to_string(),
+        network_ingress_proxy_buffer_size_kb: 10,
+        network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+        network_ingress_denylist_source_range: "".to_string(),
+        network_ingress_basic_auth_env_var: "".to_string(),
+        network_ingress_grpc_send_timeout_seconds: 60,
+        network_ingress_grpc_read_timeout_seconds: 60,
+        network_ingress_nginx_controller_server_snippet: None,
+        network_ingress_nginx_controller_configuration_snippet: None,
+        network_ingress_nginx_limit_rpm: None,
+        network_ingress_nginx_limit_rps: None,
+        network_ingress_nginx_limit_burst_multiplier: None,
+        network_ingress_nginx_limit_connections: None,
+        network_ingress_nginx_custom_http_errors: None,
+        hpa_cpu_average_utilization_percent: 31,
+        hpa_memory_average_utilization_percent: None,
+        deployment_affinity_node_required: BTreeMap::new(),
+        deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+    };
+
+    Application::new(
+        test_kube.context(),
+        long_id,
+        Action::Create,
+        "my_application_name",
+        "my-application-name".to_string(),
+        format!("{long_id}.{domain}"),
+        vec![test_port()],
+        4,
+        5,
+        Build {
+            git_repository: GitRepository {
+                url: Url::parse("https://my_git_url.com").unwrap(),
+                get_credentials: None,
+                ssh_keys: vec![SshKey {
+                    private_key: "my_private_ssh_key".to_string(),
+                    passphrase: Some("my_ssh_passphrase".to_string()),
+                    public_key: Some("my_public_ssh_key".to_string()),
+                }],
+                commit_id: "my_commit_id".to_string(),
+                dockerfile_path: Some(PathBuf::from("my_dockerfile_path")),
+                dockerfile_content: None,
+                root_path: PathBuf::from("my_root_path"),
+                extra_files_to_inject: vec![],
+                docker_target_build_stage: None,
+            },
+            image: Image {
+                service_id: "my_application_id".to_string(),
+                service_long_id: long_id,
+                service_name: "my_application_name".to_string(),
+                name: "my_image_shared_name".to_string(),
+                tag: "my_image_tag".to_string(),
+                commit_id: "my_image_commit".to_string(),
+                registry_name: "my_image_registry_name".to_string(),
+                registry_docker_json_config: Some("my_image_registry_docker_json_config".to_string()),
+                registry_url: Url::parse("https://my_image_registry_url.com").unwrap(),
+                registry_insecure: false,
+                repository_name: "my_image_repository_name".to_string(),
+                shared_repository_name: "my_image_shared_repository_name".to_string(),
+                shared_image_feature_enabled: false,
+            },
+            environment_variables: BTreeMap::new(),
+            disable_buildkit_cache: false,
+            timeout: Duration::from_secs(42),
+            architectures: test_kube.cpu_architectures(),
+            max_cpu_in_milli: 2000,
+            max_ram_in_gib: 4,
+            ephemeral_storage_in_gib: None,
+            registries: vec![],
+            dockerfile_fragment: None,
+        },
+        vec![],
+        None,
+        vec![test_storage()],
+        vec![test_env_var()],
+        btreeset![test_mounted_file()],
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        advanced_settings,
+        AwsAppExtraSettings {},
+        |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
+        get_labels_group(),
+        KubernetesCpuResourceUnit::MilliCpu(1),
+        KubernetesCpuResourceUnit::MilliCpu(2),
+        KubernetesMemoryResourceUnit::MebiByte(3),
+        KubernetesMemoryResourceUnit::MebiByte(3),
+        None,
+        None,
+        true,
+        None,
+    )
+    .unwrap()
+}
+
+pub fn application_context_with_ndots(ndots: u8) -> TestInfo {
+    let test_kube = test_kubernetes();
+    let infra_ctx = infra_ctx(test_kube.as_ref());
+    let domain = infra_ctx.dns_provider().domain().to_string();
+    let app = test_application_with_ndots(test_kube.as_ref(), &domain, ndots);
+    let app_id = *app.long_id();
+    let env_id = Uuid::new_v4();
+    let test_env = Environment::new(
+        Uuid::new_v4(),
+        "my_test_environment".to_string(),
+        format!("env-{}-my-test-environment", to_short_id(&env_id)),
+        Uuid::new_v4(),
+        env_id,
+        Action::Create,
+        test_kube.context(),
+        1,
+        1,
+        vec![Box::new(app)],
+        vec![],
+        vec![Box::new(test_router(test_kube.as_ref(), app_id))],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    );
+    let target = deployment_target(&test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
+
+    TestInfo {
+        context: test_env.applications[0]
+            .to_tera_context(&target)
+            .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "applications".to_string(),
+        service_id: *test_env.applications[0].long_id(),
+    }
+}
+
 pub fn container_context() -> TestInfo {
     let test_kube = test_kubernetes();
     let infra_ctx = infra_ctx(test_kube.as_ref());
@@ -827,6 +1032,177 @@ pub fn container_context() -> TestInfo {
         context: test_env.containers[0]
             .to_tera_context(&target)
             .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "containers".to_string(),
+        service_id: *test_env.containers[0].long_id(),
+    }
+}
+
+fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container<AWSType> {
+    let service_id = Uuid::new_v4();
+    let advanced_settings = ContainerAdvancedSettings {
+        deployment_termination_grace_period_seconds: 60,
+        deployment_update_strategy_type: UpdateStrategy::RollingUpdate,
+        deployment_update_strategy_rolling_update_max_unavailable_percent: 25,
+        deployment_update_strategy_rolling_update_max_surge_percent: 25,
+        deployment_affinity_node_required: BTreeMap::new(),
+        deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+        deployment_lifecycle_post_start_exec_command: vec![],
+        deployment_lifecycle_pre_stop_exec_command: vec![],
+        network_dns_ndots: Some(ndots),
+        network_ingress_proxy_body_size_mb: 11,
+        network_ingress_force_ssl_redirect: true,
+        network_ingress_cors_enable: true,
+        network_ingress_sticky_session_enable: false,
+        network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
+        network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
+        network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
+        network_ingress_keepalive_time_seconds: 12,
+        network_ingress_keepalive_timeout_seconds: 13,
+        network_ingress_send_timeout_seconds: 14,
+        network_ingress_add_headers: BTreeMap::new(),
+        network_ingress_proxy_set_headers: BTreeMap::new(),
+        network_ingress_proxy_connect_timeout_seconds: 15,
+        network_ingress_proxy_send_timeout_seconds: 16,
+        network_ingress_proxy_read_timeout_seconds: 17,
+        network_ingress_proxy_request_buffering: "on".to_string(),
+        network_ingress_proxy_buffering: "on".to_string(),
+        network_ingress_proxy_buffer_size_kb: 18,
+        network_ingress_whitelist_source_range: "my_network_ingress_whitelist_source_range".to_string(),
+        network_ingress_denylist_source_range: "".to_string(),
+        network_ingress_basic_auth_env_var: "".to_string(),
+        network_ingress_grpc_send_timeout_seconds: 60,
+        network_ingress_grpc_read_timeout_seconds: 60,
+        network_ingress_nginx_limit_rpm: None,
+        network_ingress_nginx_limit_rps: None,
+        network_ingress_nginx_limit_burst_multiplier: None,
+        network_ingress_nginx_limit_connections: None,
+        network_ingress_nginx_controller_server_snippet: None,
+        network_ingress_nginx_controller_configuration_snippet: None,
+        network_ingress_nginx_custom_http_errors: None,
+        hpa_cpu_average_utilization_percent: 41,
+        hpa_memory_average_utilization_percent: None,
+        security_service_account_name: "".to_string(),
+        security_read_only_root_filesystem: false,
+        security_automount_service_account_token: false,
+        network_gateway_api_sticky_session_enable: false,
+        network_gateway_api_force_ssl_redirect: false,
+        network_gateway_api_enable_cors: false,
+        network_gateway_api_cors_allow_origin: "*".to_string(),
+        network_gateway_api_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
+        network_gateway_api_cors_allow_headers: "DNT,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization".to_string(),
+        network_gateway_api_whitelist_source_range: "0.0.0.0/0".to_string(),
+        network_gateway_api_denylist_source_range: "".to_string(),
+        network_gateway_api_basic_auth_env_var: "".to_string(),
+        network_gateway_api_route_limit_rpm: None,
+        network_gateway_api_route_limit_rps: None,
+        network_gateway_api_route_limit_source_cidrs: "".to_string(),
+        network_gateway_api_route_limit_headers: "".to_string(),
+        network_gateway_api_add_headers: BTreeMap::new(),
+        network_gateway_api_proxy_set_headers: BTreeMap::new(),
+        network_gateway_api_custom_http_errors: None,
+        network_gateway_api_circuit_breaker_max_connections: None,
+        network_gateway_api_circuit_breaker_max_pending_requests: None,
+        network_gateway_api_circuit_breaker_max_parallel_requests: None,
+    };
+
+    Container::new(
+        test_kube.context(),
+        service_id,
+        "my_container_name".to_string(),
+        "my-application-name".to_string(),
+        Action::Create,
+        RegistryImageSource {
+            registry: Registry::DockerHub {
+                long_id: Default::default(),
+                url: Url::parse("https://my_registry_url.com").unwrap(),
+                credentials: None,
+            },
+            image: "my_image".to_string(),
+            tag: "my_tag".to_string(),
+            registry_mirroring_mode: RegistryMirroringMode::Service,
+        },
+        vec![test_cmd_arg()],
+        Some("my_entrypoint".to_string()),
+        KubernetesCpuResourceUnit::MilliCpu(1),
+        KubernetesCpuResourceUnit::MilliCpu(2),
+        KubernetesMemoryResourceUnit::MebiByte(3),
+        KubernetesMemoryResourceUnit::MebiByte(4),
+        None,
+        None,
+        5,
+        6,
+        format!("{}.{}", service_id, "example.com"),
+        vec![test_port()],
+        vec![test_storage()],
+        vec![test_env_var()],
+        btreeset![test_mounted_file()],
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: test_port().port as u32,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        advanced_settings,
+        AwsAppExtraSettings {},
+        |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_app(),
+        get_labels_group(),
+        None,
+    )
+    .unwrap()
+}
+
+pub fn container_context_with_ndots(ndots: u8) -> TestInfo {
+    let test_kube = test_kubernetes();
+    let infra_ctx = infra_ctx(test_kube.as_ref());
+    let container = test_container_with_ndots(test_kube.as_ref(), ndots);
+    let env_id = Uuid::new_v4();
+    let test_env = Environment::new(
+        Uuid::new_v4(),
+        "my_test_environment".to_string(),
+        format!("env-{}-my-test-environment", to_short_id(&env_id)),
+        Uuid::new_v4(),
+        env_id,
+        Action::Create,
+        test_kube.context(),
+        1,
+        1,
+        vec![],
+        vec![Box::new(container)],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    );
+    let target = deployment_target(&test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
+
+    TestInfo {
+        context: test_env.containers[0]
+            .to_tera_context(&target)
+            .expect("Unable to get container context"),
         event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
         temp_dir,
         service_folder_type: "containers".to_string(),
@@ -915,6 +1291,134 @@ pub fn job_context() -> TestInfo {
         context: test_env.jobs[0]
             .to_tera_context(&target)
             .expect("Unable to get application context"),
+        event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
+        temp_dir,
+        service_folder_type: "jobs".to_string(),
+        service_id: *test_env.jobs[0].long_id(),
+    }
+}
+
+fn test_job_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Job<AWSType> {
+    let advanced_settings = JobAdvancedSettings {
+        job_delete_ttl_seconds_after_finished: Some(8),
+        deployment_termination_grace_period_seconds: 60,
+        deployment_affinity_node_required: BTreeMap::new(),
+        network_dns_ndots: Some(ndots),
+        cronjob_concurrency_policy: "my_cronjob_concurrency_policy".to_string(),
+        cronjob_failed_jobs_history_limit: 9,
+        cronjob_success_jobs_history_limit: 10,
+        build_timeout_max_sec: 30 * 60,
+        build_cpu_max_in_milli: 2000,
+        build_ram_max_in_gib: 4,
+        build_ephemeral_storage_in_gib: None,
+        build_disable_buildkit_cache: false,
+        security_service_account_name: "".to_string(),
+        security_read_only_root_filesystem: false,
+        security_automount_service_account_token: false,
+    };
+
+    Job::new(
+        test_kube.context(),
+        Uuid::new_v4(),
+        "my_job_name".to_string(),
+        "my-application-name".to_string(),
+        Action::Create,
+        ImageSource::Registry {
+            source: Box::new(RegistryImageSource {
+                registry: Registry::DockerHub {
+                    long_id: Default::default(),
+                    url: Url::parse("https://my_registry_url.com").unwrap(),
+                    credentials: None,
+                },
+                image: "my_image".to_string(),
+                tag: "my_tag".to_string(),
+                registry_mirroring_mode: RegistryMirroringMode::Service,
+            }),
+        },
+        JobSchedule::Cron {
+            schedule: "my_schedule".to_string(),
+            timezone: "Etc/UTC".to_string(),
+        },
+        1,
+        Duration::from_secs(2),
+        Some(3),
+        vec![test_cmd_arg()],
+        None,
+        false,
+        KubernetesCpuResourceUnit::MilliCpu(4),
+        KubernetesCpuResourceUnit::MilliCpu(5),
+        KubernetesMemoryResourceUnit::MebiByte(6),
+        KubernetesMemoryResourceUnit::MebiByte(7),
+        None,
+        None,
+        vec![test_env_var()],
+        btreeset![test_mounted_file()],
+        advanced_settings,
+        Some(Probe {
+            r#type: ProbeType::Http {
+                path: "/".to_string(),
+                scheme: "HTTP".to_string(),
+            },
+            port: 3,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        Some(Probe {
+            r#type: ProbeType::Tcp { host: None },
+            port: 3,
+            initial_delay_seconds: 1,
+            timeout_seconds: 2,
+            period_seconds: 3,
+            success_threshold: 1,
+            failure_threshold: 5,
+        }),
+        AwsAppExtraSettings {},
+        |transmitter| test_kube.context().get_event_details(transmitter),
+        get_annotations_group_for_job(),
+        get_labels_group(),
+        true,
+        "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+    )
+    .unwrap()
+}
+
+pub fn job_context_with_ndots(ndots: u8) -> TestInfo {
+    let test_kube = test_kubernetes();
+    let infra_ctx = infra_ctx(test_kube.as_ref());
+    let job = test_job_with_ndots(test_kube.as_ref(), ndots);
+    let env_id = Uuid::new_v4();
+    let test_env = Environment::new(
+        Uuid::new_v4(),
+        "my_test_environment".to_string(),
+        format!("env-{}-my-test-environment", to_short_id(&env_id)),
+        Uuid::new_v4(),
+        env_id,
+        Action::Create,
+        test_kube.context(),
+        1,
+        1,
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![Box::new(job)],
+        vec![],
+        vec![],
+    );
+    let target = deployment_target(&test_env, &infra_ctx);
+    let temp_dir = format!(
+        "{}/.qovery-workspace/{}",
+        test_kube.context().workspace_root_dir(),
+        test_kube.context().execution_id()
+    );
+
+    TestInfo {
+        context: test_env.jobs[0]
+            .to_tera_context(&target)
+            .expect("Unable to get job context"),
         event_details: test_kube.get_event_details(Stage::Environment(EnvironmentStep::LoadConfiguration)),
         temp_dir,
         service_folder_type: "jobs".to_string(),

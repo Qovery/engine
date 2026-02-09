@@ -60,6 +60,10 @@ pub struct JobAdvancedSettings {
     #[serde(alias = "deployment.affinity.node.required")]
     pub deployment_affinity_node_required: BTreeMap<String, String>,
 
+    // Network DNS
+    #[serde(alias = "network.dns.ndots")]
+    pub network_dns_ndots: Option<u8>,
+
     // Build
     #[serde(alias = "build.timeout_max_sec")]
     pub build_timeout_max_sec: u32,
@@ -88,6 +92,7 @@ impl Default for JobAdvancedSettings {
             job_delete_ttl_seconds_after_finished: None,
             deployment_termination_grace_period_seconds: 60,
             deployment_affinity_node_required: BTreeMap::new(),
+            network_dns_ndots: None,
             cronjob_concurrency_policy: "Forbid".to_string(),
             cronjob_failed_jobs_history_limit: 1,
             cronjob_success_jobs_history_limit: 1,

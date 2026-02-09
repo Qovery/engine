@@ -8,6 +8,7 @@ use crate::helpers::utilities::{
 use base64::Engine;
 use base64::engine::general_purpose;
 use function_name::named;
+use qovery_engine::cmd::structs::KubernetesPodStatusPhase;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
@@ -21,6 +22,7 @@ use qovery_engine::io_models::probe::{Probe, ProbeType};
 use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use tracing::Level;
 use tracing::log::warn;
@@ -710,6 +712,146 @@ fn gcp_gke_deploy_container_with_router() {
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
         assert!(ret.is_ok());
+
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        test_name.to_string()
+    })
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[named]
+#[test]
+fn gcp_gke_deploy_container_with_ndots() {
+    let test_name = function_name!();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .GCP_TEST_ORGANIZATION_LONG_ID
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+        environment.applications = vec![];
+
+        let service_id = Uuid::new_v4();
+        let ndots_value = 2u8;
+        let advanced_settings = qovery_engine::io_models::container::ContainerAdvancedSettings {
+            network_dns_ndots: Some(ndots_value),
+            ..Default::default()
+        };
+
+        environment.containers = vec![Container {
+            long_id: service_id,
+            name: "container-with-ndots".to_string(),
+            kube_name: "container-with-ndots".to_string(),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                r#"
+                apt-get update;
+                apt-get install -y socat procps;
+                echo listening on port 8080;
+                socat TCP-LISTEN:8080,bind=0.0.0.0,reuseaddr,fork STDOUT
+                "#
+                .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            gpu_request: None,
+            gpu_limit: None,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", service_id, infra_ctx.dns_provider().domain()),
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 8080,
+                is_default: true,
+                name: "http".to_string(),
+                publicly_accessible: false,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: None,
+                path_rewrite: None,
+            }],
+            readiness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            liveness_probe: Some(Probe {
+                r#type: ProbeType::Tcp { host: None },
+                port: 8080,
+                initial_delay_seconds: 1,
+                timeout_seconds: 2,
+                period_seconds: 3,
+                success_threshold: 1,
+                failure_threshold: 5,
+            }),
+            storages: vec![],
+            environment_vars_with_infos: BTreeMap::default(),
+            mounted_files: vec![],
+            advanced_settings,
+            annotations_group_ids: btreeset! {},
+            labels_group_ids: btreeset! {},
+            autoscaling: None,
+        }];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok());
+
+        // Verify that the pod deployed successfully with ndots configuration
+        // Note: The helm unit tests already verify that dnsConfig is correctly rendered in templates
+        // This integration test confirms the deployment succeeds end-to-end with ndots configured
+        let pods = get_pods(&infra_ctx, Kind::Gcp, &environment, &environment.containers[0].long_id)
+            .expect("Failed to get pods");
+        assert!(!pods.items.is_empty(), "No pods found for container");
+        assert_eq!(
+            pods.items[0].status.phase,
+            KubernetesPodStatusPhase::Running,
+            "Pod should be running"
+        );
 
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());

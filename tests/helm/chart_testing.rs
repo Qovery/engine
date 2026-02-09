@@ -1,6 +1,7 @@
 use crate::helm::{
-    TestInfo, application_context, chart_path, container_context, container_database_context, job_context,
-    kubeconfig_path, lib_dir, managed_database_context,
+    TestInfo, application_context, application_context_with_ndots, chart_path, container_context,
+    container_context_with_ndots, container_database_context, job_context, job_context_with_ndots, kubeconfig_path,
+    lib_dir, managed_database_context,
 };
 use kube::core::DynamicObject;
 use qovery_engine::cmd::helm::Helm;
@@ -368,4 +369,310 @@ fn q_job_test() {
         assert_eq!(annotations.get("annotation_key"), Some(&"annotation_value".to_string()));
     }
     assert!(!resources.is_empty());
+}
+
+#[cfg(feature = "test-local-kube")]
+#[test]
+#[ignore = "Ignored to not overload CI"]
+fn q_application_with_ndots_test() {
+    dotenv::dotenv().ok();
+    let ndots_value = 3u8;
+    let test_info = application_context_with_ndots(ndots_value);
+
+    // First, verify that the Tera context actually contains the ndots value from advanced_settings
+    let service_from_context = test_info.context.get("service");
+    assert!(service_from_context.is_some(), "service not found in context");
+    let advanced_settings_from_context = service_from_context
+        .and_then(|s| s.get("advanced_settings"))
+        .expect("advanced_settings not found in context");
+    let ndots_from_context = advanced_settings_from_context
+        .get("network_dns_ndots")
+        .expect("network_dns_ndots not found in advanced_settings context");
+    assert_eq!(
+        ndots_from_context.as_u64().unwrap() as u8,
+        ndots_value,
+        "ndots value in context doesn't match expected value"
+    );
+
+    let chart_name = "q-container";
+    let uuid = test_info.service_id;
+    let chart = CommonChart {
+        chart_info: ChartInfo {
+            name: chart_name.to_string(),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
+            namespace: HelmChartNamespaces::KubeSystem,
+            action: HelmAction::Deploy,
+            atomic: false,
+            force_upgrade: false,
+            recreate_pods: false,
+            reinstall_chart_if_installed_version_is_below_than: None,
+            timeout_in_seconds: 0,
+            dry_run: false,
+            wait: false,
+            values: vec![],
+            values_string: vec![],
+            values_files: vec![],
+            yaml_files_content: vec![],
+            parse_stderr_for_error: false,
+            k8s_selector: None,
+            backup_resources: None,
+            crds_update: None,
+            skip_if_already_installed: false,
+            upgrade_retry: None,
+            requires_server_side_apply: false,
+        },
+        chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
+    };
+    let resources = get_kube_resources(
+        format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
+        chart.chart_info,
+        None,
+        &test_info,
+        &uuid,
+    );
+    assert!(!resources.is_empty());
+
+    // Now check that the Helm template correctly rendered the dnsConfig with ndots
+    let deployment = resources
+        .values()
+        .find(|r| r.types.as_ref().map(|t| t.kind.as_str()) == Some("Deployment"));
+    assert!(deployment.is_some(), "Deployment resource not found");
+    let deployment = deployment.unwrap();
+    let dns_config = deployment
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("template"))
+        .and_then(|template| template.get("spec"))
+        .and_then(|spec| spec.get("dnsConfig"));
+    assert!(dns_config.is_some(), "dnsConfig not found in deployment spec");
+
+    let dns_options = dns_config.unwrap().get("options");
+    assert!(dns_options.is_some(), "dnsConfig options not found");
+    let dns_options = dns_options
+        .unwrap()
+        .as_array()
+        .expect("dnsConfig options should be an array");
+
+    let ndots_option = dns_options
+        .iter()
+        .find(|opt| opt.get("name").and_then(|v| v.as_str()) == Some("ndots"));
+    assert!(ndots_option.is_some(), "ndots option not found in dnsConfig");
+
+    let ndots_value_str = ndots_option
+        .unwrap()
+        .get("value")
+        .and_then(|v| v.as_str())
+        .expect("ndots value should be a string");
+    assert_eq!(ndots_value_str, ndots_value.to_string(), "ndots value mismatch");
+}
+
+#[cfg(feature = "test-local-kube")]
+#[test]
+#[ignore = "Ignored to not overload CI"]
+fn q_container_with_ndots_test() {
+    dotenv::dotenv().ok();
+    let ndots_value = 2u8;
+    let test_info = container_context_with_ndots(ndots_value);
+
+    // First, verify that the Tera context actually contains the ndots value from advanced_settings
+    let service_from_context = test_info.context.get("service");
+    assert!(service_from_context.is_some(), "service not found in context");
+    let advanced_settings_from_context = service_from_context
+        .and_then(|s| s.get("advanced_settings"))
+        .expect("advanced_settings not found in context");
+    let ndots_from_context = advanced_settings_from_context
+        .get("network_dns_ndots")
+        .expect("network_dns_ndots not found in advanced_settings context");
+    assert_eq!(
+        ndots_from_context.as_u64().unwrap() as u8,
+        ndots_value,
+        "ndots value in context doesn't match expected value"
+    );
+
+    let chart_name = "q-container";
+    let uuid = test_info.service_id;
+    let chart = CommonChart {
+        chart_info: ChartInfo {
+            name: chart_name.to_string(),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
+            namespace: HelmChartNamespaces::KubeSystem,
+            action: HelmAction::Deploy,
+            atomic: false,
+            force_upgrade: false,
+            recreate_pods: false,
+            reinstall_chart_if_installed_version_is_below_than: None,
+            timeout_in_seconds: 0,
+            dry_run: false,
+            wait: false,
+            values: vec![],
+            values_string: vec![],
+            values_files: vec![],
+            yaml_files_content: vec![],
+            parse_stderr_for_error: false,
+            k8s_selector: None,
+            backup_resources: None,
+            crds_update: None,
+            skip_if_already_installed: false,
+            upgrade_retry: None,
+            requires_server_side_apply: false,
+        },
+        chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
+    };
+    let resources = get_kube_resources(
+        format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
+        chart.chart_info,
+        None,
+        &test_info,
+        &uuid,
+    );
+    assert!(!resources.is_empty());
+
+    // Now check that the Helm template correctly rendered the dnsConfig with ndots
+    let deployment = resources
+        .values()
+        .find(|r| r.types.as_ref().map(|t| t.kind.as_str()) == Some("Deployment"));
+    assert!(deployment.is_some(), "Deployment resource not found");
+    let deployment = deployment.unwrap();
+    let dns_config = deployment
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("template"))
+        .and_then(|template| template.get("spec"))
+        .and_then(|spec| spec.get("dnsConfig"));
+    assert!(dns_config.is_some(), "dnsConfig not found in deployment spec");
+
+    let dns_options = dns_config.unwrap().get("options");
+    assert!(dns_options.is_some(), "dnsConfig options not found");
+    let dns_options = dns_options
+        .unwrap()
+        .as_array()
+        .expect("dnsConfig options should be an array");
+
+    let ndots_option = dns_options
+        .iter()
+        .find(|opt| opt.get("name").and_then(|v| v.as_str()) == Some("ndots"));
+    assert!(ndots_option.is_some(), "ndots option not found in dnsConfig");
+
+    let ndots_value_str = ndots_option
+        .unwrap()
+        .get("value")
+        .and_then(|v| v.as_str())
+        .expect("ndots value should be a string");
+    assert_eq!(ndots_value_str, ndots_value.to_string(), "ndots value mismatch");
+}
+
+#[cfg(feature = "test-local-kube")]
+#[test]
+#[ignore = "Ignored to not overload CI"]
+fn q_job_with_ndots_test() {
+    dotenv::dotenv().ok();
+    let ndots_value = 1u8;
+    let test_info = job_context_with_ndots(ndots_value);
+
+    // First, verify that the Tera context actually contains the ndots value from advanced_settings
+    let service_from_context = test_info.context.get("service");
+    assert!(service_from_context.is_some(), "service not found in context");
+    let advanced_settings_from_context = service_from_context
+        .and_then(|s| s.get("advanced_settings"))
+        .expect("advanced_settings not found in context");
+    let ndots_from_context = advanced_settings_from_context
+        .get("network_dns_ndots")
+        .expect("network_dns_ndots not found in advanced_settings context");
+    assert_eq!(
+        ndots_from_context.as_u64().unwrap() as u8,
+        ndots_value,
+        "ndots value in context doesn't match expected value"
+    );
+
+    let chart_name = "q-job";
+    let uuid = test_info.service_id;
+    let chart = CommonChart {
+        chart_info: ChartInfo {
+            name: chart_name.to_string(),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
+            namespace: HelmChartNamespaces::KubeSystem,
+            action: HelmAction::Deploy,
+            atomic: false,
+            force_upgrade: false,
+            recreate_pods: false,
+            reinstall_chart_if_installed_version_is_below_than: None,
+            timeout_in_seconds: 0,
+            dry_run: false,
+            wait: false,
+            values: vec![],
+            values_string: vec![],
+            values_files: vec![],
+            yaml_files_content: vec![],
+            parse_stderr_for_error: false,
+            k8s_selector: None,
+            backup_resources: None,
+            crds_update: None,
+            skip_if_already_installed: false,
+            upgrade_retry: None,
+            requires_server_side_apply: false,
+        },
+        chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
+    };
+    let resources = get_kube_resources(
+        format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
+        chart.chart_info,
+        None,
+        &test_info,
+        &uuid,
+    );
+    assert!(!resources.is_empty());
+
+    // Now check that the Helm template correctly rendered the dnsConfig with ndots
+    let job_or_cronjob = resources.values().find(|r| {
+        r.types
+            .as_ref()
+            .map(|t| t.kind.as_str())
+            .map(|k| k == "Job" || k == "CronJob")
+            .unwrap_or(false)
+    });
+    assert!(job_or_cronjob.is_some(), "Job or CronJob resource not found");
+    let resource = job_or_cronjob.unwrap();
+
+    // For CronJob, spec is nested under spec.jobTemplate.spec
+    let spec_path = if resource.types.as_ref().map(|t| t.kind.as_str()) == Some("CronJob") {
+        resource
+            .data
+            .get("spec")
+            .and_then(|spec| spec.get("jobTemplate"))
+            .and_then(|jt| jt.get("spec"))
+            .and_then(|spec| spec.get("template"))
+            .and_then(|template| template.get("spec"))
+    } else {
+        resource
+            .data
+            .get("spec")
+            .and_then(|spec| spec.get("template"))
+            .and_then(|template| template.get("spec"))
+    };
+
+    assert!(spec_path.is_some(), "Job/CronJob spec.template.spec not found");
+    let dns_config = spec_path.unwrap().get("dnsConfig");
+    assert!(dns_config.is_some(), "dnsConfig not found in job spec");
+
+    let dns_options = dns_config.unwrap().get("options");
+    assert!(dns_options.is_some(), "dnsConfig options not found");
+    let dns_options = dns_options
+        .unwrap()
+        .as_array()
+        .expect("dnsConfig options should be an array");
+
+    let ndots_option = dns_options
+        .iter()
+        .find(|opt| opt.get("name").and_then(|v| v.as_str()) == Some("ndots"));
+    assert!(ndots_option.is_some(), "ndots option not found in dnsConfig");
+
+    let ndots_value_str = ndots_option
+        .unwrap()
+        .get("value")
+        .and_then(|v| v.as_str())
+        .expect("ndots value should be a string");
+    assert_eq!(ndots_value_str, ndots_value.to_string(), "ndots value mismatch");
 }
