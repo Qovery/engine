@@ -24,7 +24,9 @@ resource "aws_launch_template" "karpenter_nodegroup" {
     ebs {
       volume_size = 20
       encrypted   = true
-      volume_type = "gp2"
+      volume_type = "gp3"
+      iops        = 3000
+      throughput  = 125
     }
   }
 
