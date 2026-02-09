@@ -18,6 +18,16 @@ resource "aws_launch_template" "karpenter_nodegroup" {
   # Add security group configuration for proper EKS communication
   vpc_security_group_ids = [aws_eks_cluster.eks_cluster.vpc_config[0].cluster_security_group_id]
 
+  # Bottlerocket user data is merged with Amazon EKS managed user data (not replaced).
+  # The configuration provided here overrides any settings configured by Amazon EKS.
+  # See: https://docs.aws.amazon.com/eks/latest/userguide/launch-templates.html
+  user_data = base64encode(<<-TOML
+    [settings.kubernetes]
+    max-pods = 17
+    TOML
+  )
+
+
   block_device_mappings {
     device_name = "/dev/xvda"
 
