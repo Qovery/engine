@@ -46,6 +46,9 @@ pub fn eks_tera_context(
 
     context.insert("public_access_cidrs", &public_access_cidrs);
 
+    // Insert custom resource tags for AWS resources
+    context.insert("resource_tags", &options.resource_tags);
+
     context.insert("user_provided_network", &false);
     if let Some(user_network_cfg) = &options.user_provided_network {
         context.insert("user_provided_network", &true);

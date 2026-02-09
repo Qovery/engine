@@ -460,29 +460,34 @@ impl KubernetesDto {
             };
 
         match self.kind {
-            kubernetes::Kind::Eks => match EKS::new(
-                context.clone(),
-                self.long_id,
-                self.name.as_str(),
-                KubernetesVersion::from_str(&self.version)
-                    .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
-                zones.to_vec(),
-                cloud_provider,
-                self.created_at,
-                serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
-                    .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
-                self.nodes_groups.clone(),
-                logger,
-                self.advanced_settings.clone(),
-                decoded_helm_charts_override,
-                self.kubeconfig.clone(),
-                temp_dir,
-                self.qovery_allowed_public_access_cidrs.clone(),
-            ) {
-                Ok(res) => Ok(Box::new(res)),
-                Err(e) => Err(e),
-            },
+            kubernetes::Kind::Eks => {
+                let options = serde_json::from_value::<kubernetes::aws::Options>(self.options.clone())
+                    .expect("What's wronnnnng -- JSON Options payload is not the expected one");
+
+                match EKS::new(
+                    context.clone(),
+                    self.long_id,
+                    self.name.as_str(),
+                    KubernetesVersion::from_str(&self.version)
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
+                    zones.to_vec(),
+                    cloud_provider,
+                    self.created_at,
+                    options.clone(),
+                    self.nodes_groups.clone(),
+                    logger,
+                    self.advanced_settings.clone(),
+                    decoded_helm_charts_override,
+                    self.kubeconfig.clone(),
+                    temp_dir,
+                    self.qovery_allowed_public_access_cidrs.clone(),
+                    options.resource_tags.clone(),
+                ) {
+                    Ok(res) => Ok(Box::new(res)),
+                    Err(e) => Err(e),
+                }
+            }
             kubernetes::Kind::ScwKapsule => match Kapsule::new(
                 context.clone(),
                 self.long_id,

@@ -1,20 +1,29 @@
 locals {
   additional_tags = {
-
+    {% for key, value in resource_tags %}
+    {{ key }} = "{{ value }}"
+    {% endfor %}
   }
 }
 
 locals {
-  tags_common = {
-    ClusterId = var.kubernetes_cluster_id
-    ClusterLongId = var.kubernetes_cluster_long_id
-    OrganizationId = var.organization_id,
-    OrganizationLongId = var.organization_long_id,
-    Region = var.region
-    creationDate = time_static.on_cluster_create.rfc3339
-    QoveryProduct = "EKS"
-    {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
-  }
+  # Merge custom tags with system tags.
+  # Custom tags are merged first, then system tags are applied on top.
+  # This ensures system tags (ClusterId, OrganizationId, etc.) always take precedence
+  # and cannot be overridden by user-provided tags, protecting cluster metadata integrity.
+  tags_common = merge(
+    local.additional_tags,
+    {
+      ClusterId = var.kubernetes_cluster_id
+      ClusterLongId = var.kubernetes_cluster_long_id
+      OrganizationId = var.organization_id,
+      OrganizationLongId = var.organization_long_id,
+      Region = var.region
+      creationDate = time_static.on_cluster_create.rfc3339
+      QoveryProduct = "EKS"
+      {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
+    }
+  )
 
   tags_eks = merge(
   local.tags_common,

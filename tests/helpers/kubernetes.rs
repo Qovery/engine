@@ -27,6 +27,7 @@ use qovery_engine::io_models::environment::EnvironmentRequest;
 use qovery_engine::io_models::models::{CpuArchitecture, NatGatewayParameters, StorageClass, VpcQoveryNetworkMode};
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
+use std::collections::HashMap;
 
 use crate::helpers::azure::{AZURE_KUBERNETES_VERSION, AZURE_RESOURCE_TTL_IN_SECONDS, azure_nodes_groups};
 use crate::helpers::on_premise::ON_PREMISE_KUBERNETES_VERSION;
@@ -465,8 +466,7 @@ pub fn get_environment_test_kubernetes(
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
-                        aws_eks_ec2_metadata_imds:
-                            qovery_engine::infrastructure::models::cloud_provider::io::AwsEc2MetadataImds::Required,
+                        aws_eks_ec2_metadata_imds: cloud_provider::io::AwsEc2MetadataImds::Required,
                         aws_eks_enable_alb_controller: true,
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
@@ -478,6 +478,7 @@ pub fn get_environment_test_kubernetes(
                     kubeconfig,
                     temp_dir,
                     None,
+                    HashMap::new(),
                 )
                 .unwrap(),
             )

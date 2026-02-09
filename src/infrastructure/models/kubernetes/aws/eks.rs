@@ -44,6 +44,7 @@ pub struct EKS {
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
+    pub resource_tags: HashMap<String, String>,
 }
 
 impl EKS {
@@ -64,6 +65,7 @@ impl EKS {
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
         qovery_allowed_public_access_cidrs: Option<Vec<String>>,
+        resource_tags: HashMap<String, String>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = event_details(cloud_provider, long_id, name.to_string(), &context);
         let template_directory = PathBuf::from(format!("{}/aws/bootstrap", context.lib_root_dir()));
@@ -98,6 +100,7 @@ impl EKS {
             kubeconfig,
             temp_dir,
             qovery_allowed_public_access_cidrs,
+            resource_tags,
         };
 
         // kubeconfig may be missing if it is the first time we create the cluster
