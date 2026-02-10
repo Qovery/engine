@@ -83,10 +83,19 @@ controller:
           - -c
           - (sleep 30 | nc localhost 80)&  sleep 1 ; /wait-shutdown
   topologySpreadConstraints:
+    # Spread across availability zones for better high availability
+    - labelSelector:
+        matchLabels:
+          app.kubernetes.io/instance: nginx-ingress
+          app.kubernetes.io/component: controller
+      topologyKey: topology.kubernetes.io/zone
+      maxSkew: 1
+      whenUnsatisfiable: ScheduleAnyway
+    # Spread across nodes within zones (best-effort, won't block scheduling)
     - labelSelector:
         matchLabels:
           app.kubernetes.io/instance: nginx-ingress
           app.kubernetes.io/component: controller
       topologyKey: kubernetes.io/hostname
-      maxSkew: 1
-      whenUnsatisfiable: DoNotSchedule
+      maxSkew: 2
+      whenUnsatisfiable: ScheduleAnyway
