@@ -330,6 +330,7 @@ impl<T: CloudProvider> Router<T> {
 
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
+        context.insert("k8s_remove_nginx", &kubernetes.advanced_settings().k8s_remove_nginx);
 
         Ok(context)
     }
