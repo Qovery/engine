@@ -466,7 +466,8 @@ pub fn get_environment_test_kubernetes(
                     ClusterAdvancedSettings {
                         pleco_resources_ttl: AWS_RESOURCE_TTL_IN_SECONDS as i32,
                         aws_vpc_enable_flow_logs: true,
-                        aws_eks_ec2_metadata_imds: cloud_provider::io::AwsEc2MetadataImds::Required,
+                        aws_eks_ec2_metadata_imds:
+                            qovery_engine::infrastructure::models::cloud_provider::io::AwsEc2MetadataImds::Required,
                         aws_eks_enable_alb_controller: true,
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
@@ -508,7 +509,6 @@ pub fn get_environment_test_kubernetes(
                             default_kubernetes_storage_class,
                         ),
                         k8s_deploy_api_gateway: Some(true),
-                        // k8s_deploy_api_gateway: Some(true),
                         ..Default::default()
                     },
                     None,

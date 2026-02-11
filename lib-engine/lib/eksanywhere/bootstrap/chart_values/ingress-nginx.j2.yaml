@@ -3,6 +3,7 @@ controller:
   admissionWebhooks:
     enabled: false
   allowSnippetAnnotations: true
+  replicaCount: 1 # set-by-engine-code
   # enable if you want metrics scrapped by prometheus
   metrics:
     enabled: true # set-by-customer
