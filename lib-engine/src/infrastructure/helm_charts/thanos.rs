@@ -374,8 +374,24 @@ impl ToCommonHelmChart for ThanosChart {
                     value: aws_iam_prometheus_role_arn.clone(),
                 });
 
-                // INFO (ENG-1986) Pass the whole objstoreConfig as a string, as it is expected to be the content of a generated secret
+                // HACK: Use Thanos 0.40.1 for newer regions like mx-central-1
+                // Version 0.39.1 does not support these newly added AWS regions
                 let region_str = region.to_cloud_provider_format();
+                if region_str == "mx-central-1" {
+                    chart_info.values_string.push(ChartSetValue {
+                        key: "image.registry".to_string(),
+                        value: "quay.io".to_string(),
+                    });
+                    chart_info.values_string.push(ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: "thanos/thanos".to_string(),
+                    });
+                    chart_info.values.push(ChartSetValue {
+                        key: "image.tag".to_string(),
+                        value: "v0.40.1".to_string(),
+                    });
+                }
+
                 chart_info.values_string.push(ChartSetValue {
                     key: "objstoreConfig".to_string(),
                     value: format!(
