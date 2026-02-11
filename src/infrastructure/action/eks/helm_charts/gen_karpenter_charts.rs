@@ -69,6 +69,7 @@ pub fn generate_karpenter_charts(
             },
         )?,
         chart_config_prerequisites.cluster_advanced_settings.pleco_resources_ttl,
+        chart_config_prerequisites.infra_options.resource_tags.clone(),
     )
     .to_common_helm_chart()?;
 

@@ -13,6 +13,7 @@ use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::{StorageClass, VpcCustomRoutingTable, VpcQoveryNetworkMode};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 // https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html
 
@@ -81,7 +82,7 @@ pub struct Options {
     #[serde(default)]
     pub metrics_parameters: Option<MetricsParameters>,
     #[serde(default)]
-    pub resource_tags: std::collections::HashMap<String, String>,
+    pub resource_tags: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

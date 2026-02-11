@@ -16,6 +16,7 @@ use crate::infrastructure::models::kubernetes::karpenter::{
 };
 use itertools::Itertools;
 use kube::Client;
+use std::collections::HashMap;
 
 pub struct KarpenterConfigurationChart {
     chart_path: HelmChartPath,
@@ -34,6 +35,7 @@ pub struct KarpenterConfigurationChart {
     eks_ec2_ami: Ec2Ami,
     aws_storage_type: AwsStorageType,
     pleco_resources_ttl: i32,
+    resource_tags: HashMap<String, String>,
 }
 
 impl KarpenterConfigurationChart {
@@ -53,6 +55,7 @@ impl KarpenterConfigurationChart {
         eks_ec2_ami: Ec2Ami,
         aws_storage_type: AwsStorageType,
         pleco_resources_ttl: i32,
+        resource_tags: HashMap<String, String>,
     ) -> Self {
         KarpenterConfigurationChart {
             chart_path: HelmChartPath::new(
@@ -117,6 +120,7 @@ impl KarpenterConfigurationChart {
             },
             aws_storage_type,
             pleco_resources_ttl,
+            resource_tags,
         }
     }
 
@@ -176,6 +180,20 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 key: "storageClass".to_string(),
                 value: self.aws_storage_type.to_cloud_provider_format().to_string(),
             },
+        ];
+
+        // Add custom resource tags first (before system tags).
+        // This ensures system tags (ClusterId, OrganizationId, etc.) take precedence
+        // and cannot be overridden by user-provided tags, similar to Terraform merge logic.
+        for (key, value) in &self.resource_tags {
+            values.push(ChartSetValue {
+                key: format!("tags.{}", key),
+                value: value.clone(),
+            });
+        }
+
+        // System tags are added after custom tags to ensure they take precedence
+        values.extend(vec![
             ChartSetValue {
                 key: "tags.ClusterId".to_string(),
                 value: self.cluster_id.clone(),
@@ -196,7 +214,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 key: "tags.Region".to_string(),
                 value: self.region.clone(),
             },
-        ];
+        ]);
 
         // Only set IOPS and throughput for gp3 volumes
         if matches!(self.aws_storage_type, AwsStorageType::GP3) {
@@ -905,6 +923,7 @@ mod tests {
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
             0,
+            std::collections::HashMap::new(),
         )
     }
 
@@ -1117,6 +1136,7 @@ mod tests {
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
             0,
+            std::collections::HashMap::new(),
         );
 
         // verify:
@@ -1205,6 +1225,7 @@ mod tests {
             Ec2Ami::AmazonLinux2023,
             AwsStorageType::GP3,
             0,
+            std::collections::HashMap::new(),
         );
 
         // verify:

@@ -191,6 +191,7 @@ fn install_karpenter_charts(
         kubernetes.advanced_settings.aws_eks_ec2_ami.to_model(),
         aws_storage_type,
         kubernetes.advanced_settings.pleco_resources_ttl,
+        kubernetes.options.resource_tags.clone(),
     )
     .to_common_helm_chart()
     .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
