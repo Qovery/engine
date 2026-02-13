@@ -10439,3 +10439,165 @@ fn deploy_helm_with_circuit_breaker_on_scw_kapsule() {
         "".to_string()
     })
 }
+
+#[cfg(feature = "test-scw-minimal")]
+#[named]
+#[test]
+fn deploy_application_with_timeout_settings_on_scw_kapsule() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .SCALEWAY_TEST_ORGANIZATION_LONG_ID
+                .expect("SCALEWAY_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .SCALEWAY_TEST_CLUSTER_LONG_ID
+                .expect("SCALEWAY_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_scw_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .SCALEWAY_TEST_KUBECONFIG_b64
+                .expect("SCALEWAY_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = scw_infra_config(&target_cluster_scw_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = scw_infra_config(
+            &target_cluster_scw_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_tcp_keepalive_idle_time_seconds = Some(7200);
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_tcp_keepalive_interval_seconds = Some(120);
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_http_request_timeout_seconds = Some(90);
+
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "timeout-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+
+        let backend_api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let backend_api: Api<kube::core::DynamicObject> =
+            Api::namespaced_with(kube_client.clone(), namespace, &backend_api_resource);
+
+        let backend_policies =
+            retry_list_gateway_api_resources(&backend_api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!backend_policies.items.is_empty());
+
+        let backend_policy = backend_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(backend_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = backend_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(timeout) = spec.get("timeout") {
+                if let Some(http) = timeout.get("http") {
+                    let request_timeout = http.get("requestTimeout").and_then(|v| v.as_str()).unwrap_or("");
+                    assert_eq!(request_timeout, "90s");
+                } else {
+                    panic!("BackendTrafficPolicy should have timeout.http");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have timeout");
+            }
+
+            if let Some(tcp_keepalive) = spec.get("tcpKeepalive") {
+                let idle_time = tcp_keepalive.get("idleTime").and_then(|v| v.as_str()).unwrap_or("");
+                assert_eq!(idle_time, "7200s");
+
+                let interval = tcp_keepalive.get("interval").and_then(|v| v.as_str()).unwrap_or("");
+                assert_eq!(interval, "120s");
+
+                let probes = tcp_keepalive.get("probes").and_then(|v| v.as_u64()).unwrap_or(0);
+                assert_eq!(probes, 3);
+            } else {
+                panic!("BackendTrafficPolicy should have tcpKeepalive");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}

@@ -323,6 +323,12 @@ pub struct ContainerAdvancedSettings {
     pub network_gateway_api_circuit_breaker_max_pending_requests: Option<u32>,
     #[serde(alias = "network.gateway_api.circuit_breaker.max_parallel_requests")]
     pub network_gateway_api_circuit_breaker_max_parallel_requests: Option<u32>,
+    #[serde(alias = "network.gateway_api.tcp_keepalive_idle_time_seconds")]
+    pub network_gateway_api_tcp_keepalive_idle_time_seconds: Option<u32>,
+    #[serde(alias = "network.gateway_api.tcp_keepalive_interval_seconds")]
+    pub network_gateway_api_tcp_keepalive_interval_seconds: Option<u32>,
+    #[serde(alias = "network.gateway_api.http_request_timeout_seconds")]
+    pub network_gateway_api_http_request_timeout_seconds: Option<u32>,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -458,6 +464,9 @@ impl Default for ContainerAdvancedSettings {
             network_gateway_api_circuit_breaker_max_connections: None,
             network_gateway_api_circuit_breaker_max_pending_requests: None,
             network_gateway_api_circuit_breaker_max_parallel_requests: None,
+            network_gateway_api_tcp_keepalive_idle_time_seconds: None,
+            network_gateway_api_tcp_keepalive_interval_seconds: None,
+            network_gateway_api_http_request_timeout_seconds: None,
             hpa_cpu_average_utilization_percent: 60,
             hpa_memory_average_utilization_percent: None,
         }
