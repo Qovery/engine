@@ -91,6 +91,21 @@ spec:
         {%- endif %}
       {%- endif %}
   {%- endif %}
+  {%- if advanced_settings.network_gateway_api_http_request_timeout_seconds %}
+  timeout:
+    http:
+      requestTimeout: {{ advanced_settings.network_gateway_api_http_request_timeout_seconds }}s
+  {%- endif %}
+  {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds or advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
+  tcpKeepalive:
+    {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds %}
+    idleTime: {{ advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds }}s
+    {%- endif %}
+    {%- if advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
+    interval: {{ advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds }}s
+    {%- endif %}
+    probes: 3
+  {%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
