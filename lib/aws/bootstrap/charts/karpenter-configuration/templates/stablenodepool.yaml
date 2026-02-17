@@ -28,7 +28,7 @@ spec:
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
-    consolidateAfter: 30s
+    consolidateAfter: {{ .Values.stableNodePool.consolidateAfter }}
     budgets:
       # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
       - nodes: 10%

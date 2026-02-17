@@ -428,7 +428,7 @@ pub fn get_environment_test_kubernetes(
             }
 
             match node_manager {
-                NodeManager::Karpenter { config } => options.karpenter_parameters = Some(config),
+                NodeManager::Karpenter { config } => options.karpenter_parameters = Some(*config),
                 NodeManager::Default => {}
                 NodeManager::AutoPilot => {}
             }

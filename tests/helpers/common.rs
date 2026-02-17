@@ -35,7 +35,7 @@ pub enum ClusterDomain {
 #[derive(Clone)]
 pub enum NodeManager {
     Default,
-    Karpenter { config: KarpenterParameters },
+    Karpenter { config: Box<KarpenterParameters> },
     AutoPilot,
 }
 

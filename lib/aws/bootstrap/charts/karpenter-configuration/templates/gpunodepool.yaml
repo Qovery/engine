@@ -35,7 +35,7 @@ spec:
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
     consolidationPolicy: WhenEmpty # Better not to break long GPU jobs running
-    consolidateAfter: 30s
+    consolidateAfter: {{ .Values.gpuNodePool.consolidateAfter }}
     budgets:
       # By default, we allow to remove all nodes at once to limit costs.
       # If not set, defaults to 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
