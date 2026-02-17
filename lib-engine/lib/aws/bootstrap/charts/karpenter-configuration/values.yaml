@@ -30,17 +30,20 @@ global_node_pools:
   requirements: []
   terminationGracePeriod: 1h
 stableNodePool:
+  consolidateAfter: 30s
   consolidation:
     budgets: []
   limits:
     maxCpu: ""
     maxMemory: ""
 defaultNodePool:
+  consolidateAfter: 1m
   limits:
     maxCpu: ""
     maxMemory: ""
 gpuNodePool:
   enable: false
+  consolidateAfter: 30s
   requirements: []
   consolidation:
     budgets: []

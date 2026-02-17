@@ -279,7 +279,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Karpenter {
-                config: KarpenterParameters {
+                config: Box::new(KarpenterParameters {
                     spot_enabled: true,
                     max_node_drain_time_in_secs: None,
                     disk_size: DiskSize::Gib(50),
@@ -315,6 +315,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                                 max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                                 max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                             }),
+                            consolidate_after_in_seconds: None,
                         },
                         gpu_override: Some(KarpenterGpuNodePoolOverride {
                             spot_enabled: true,
@@ -348,15 +349,17 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                                 max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                                 max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                             }),
+                            consolidate_after_in_seconds: None,
                         }),
                         default_override: Some(KarpenterDefaultNodePoolOverride {
                             limits: Some(KarpenterNodePoolLimits {
                                 max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                                 max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                             }),
+                            consolidate_after_in_seconds: None,
                         }),
                     },
-                },
+                }),
             },
             vec![],
         )

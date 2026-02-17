@@ -24,7 +24,7 @@ spec:
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
-    consolidateAfter: 0s
+    consolidateAfter: {{ .Values.defaultNodePool.consolidateAfter }}
     consolidationPolicy: WhenEmptyOrUnderutilized
     budgets:
     - nodes: 10%

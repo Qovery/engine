@@ -311,6 +311,14 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             });
         }
 
+        // Stable node pool consolidateAfter
+        if let Some(consolidate_after_in_seconds) = stable_pool_override.consolidate_after_in_seconds {
+            values.push(ChartSetValue {
+                key: "stableNodePool.consolidateAfter".to_string(),
+                value: format!("{}s", consolidate_after_in_seconds),
+            });
+        }
+
         // GPU node pool
         match &self.karpenter_parameters.qovery_node_pools.gpu_override {
             Some(gpu_pool_override) => {
@@ -406,6 +414,14 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                         value: throughput.to_string(),
                     });
                 }
+
+                // GPU node pool consolidateAfter
+                if let Some(consolidate_after_in_seconds) = gpu_pool_override.consolidate_after_in_seconds {
+                    values.push(ChartSetValue {
+                        key: "gpuNodePool.consolidateAfter".to_string(),
+                        value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
             }
             None => {
                 values.push(ChartSetValue {
@@ -430,6 +446,16 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             values.push(ChartSetValue {
                 key: "defaultNodePool.limits.maxMemory".to_string(),
                 value: default_node_pool_limits.max_memory.to_string(),
+            });
+        }
+
+        // Default node pool consolidateAfter
+        if let Some(default_override) = &self.karpenter_parameters.qovery_node_pools.default_override
+            && let Some(consolidate_after_in_seconds) = default_override.consolidate_after_in_seconds
+        {
+            values.push(ChartSetValue {
+                key: "defaultNodePool.consolidateAfter".to_string(),
+                value: format!("{}s", consolidate_after_in_seconds),
             });
         }
 
@@ -537,6 +563,7 @@ mod tests {
                 stable_override: KarpenterStableNodePoolOverride {
                     budgets: vec![],
                     limits: None,
+                    consolidate_after_in_seconds: None,
                 },
                 default_override: None,
                 gpu_override: None,
@@ -575,6 +602,7 @@ mod tests {
                 stable_override: KarpenterStableNodePoolOverride {
                     budgets: vec![],
                     limits: None,
+                    consolidate_after_in_seconds: None,
                 },
                 default_override: None,
                 gpu_override: None,
@@ -614,6 +642,7 @@ mod tests {
                 stable_override: KarpenterStableNodePoolOverride {
                     budgets: vec![],
                     limits: None,
+                    consolidate_after_in_seconds: None,
                 },
                 default_override: None,
                 gpu_override: None,
@@ -669,6 +698,7 @@ mod tests {
                             schedule: "0 1 * * 3".to_string(),
                         }],
                         limits: None,
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: None,
                     gpu_override: None,
@@ -698,6 +728,7 @@ mod tests {
                             schedule: "0 1 * * 3".to_string(),
                         }],
                         limits: None,
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: None,
                     gpu_override: None,
@@ -735,6 +766,7 @@ mod tests {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                         }),
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: None,
                     gpu_override: None,
@@ -769,12 +801,14 @@ mod tests {
                             schedule: "0 1 * * 3".to_string(),
                         }],
                         limits: None,
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: Some(KarpenterDefaultNodePoolOverride {
                         limits: Some(KarpenterNodePoolLimits {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
                         }),
+                        consolidate_after_in_seconds: None,
                     }),
                     gpu_override: Some(KarpenterGpuNodePoolOverride {
                         spot_enabled: true,
@@ -805,6 +839,7 @@ mod tests {
                                 values: vec!["on-demand".to_string()],
                             },
                         ]),
+                        consolidate_after_in_seconds: None,
                     }),
                 },
                 verify_fn: verify_custom_node_pools,
@@ -1127,6 +1162,7 @@ mod tests {
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![],
                         limits: None,
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: None,
                     gpu_override: None,
@@ -1216,6 +1252,7 @@ mod tests {
                     stable_override: KarpenterStableNodePoolOverride {
                         budgets: vec![],
                         limits: None,
+                        consolidate_after_in_seconds: None,
                     },
                     default_override: None,
                     gpu_override: None,

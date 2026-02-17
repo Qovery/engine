@@ -119,6 +119,8 @@ impl fmt::Display for KarpenterRequirementOperator {
 pub struct KarpenterStableNodePoolOverride {
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -132,6 +134,8 @@ pub struct KarpenterGpuNodePoolOverride {
     pub disk_size: DiskSize,
     pub disk_iops: Option<DiskIops>,
     pub disk_throughput: Option<DiskThroughput>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -183,6 +187,8 @@ impl fmt::Display for KarpenterNodePoolDisruptionReason {
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterDefaultNodePoolOverride {
     pub limits: Option<KarpenterNodePoolLimits>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
 }
 
 #[serde_with::serde_as]
@@ -282,6 +288,7 @@ mod tests {
                     }
                 ],
                 limits: None,
+                consolidate_after_in_seconds: None,
             }
         )
     }
@@ -436,7 +443,8 @@ mod tests {
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                })
+                }),
+                consolidate_after_in_seconds: None,
             }
         )
     }
@@ -511,7 +519,8 @@ mod tests {
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
-                })
+                }),
+                consolidate_after_in_seconds: None,
             }
         )
     }
@@ -577,6 +586,12 @@ mod tests {
             .qovery_node_pools
             .default_override
             .expect("default_override should be present");
-        assert_eq!(default_node_pool_override, KarpenterDefaultNodePoolOverride { limits: None })
+        assert_eq!(
+            default_node_pool_override,
+            KarpenterDefaultNodePoolOverride {
+                limits: None,
+                consolidate_after_in_seconds: None,
+            }
+        )
     }
 }

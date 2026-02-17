@@ -272,12 +272,14 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             },
             default_override: Some(KarpenterDefaultNodePoolOverride {
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             }),
             gpu_override: None,
         },
@@ -288,7 +290,7 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Karpenter {
-            config: karpenter_parameters,
+            config: Box::new(karpenter_parameters),
         },
         vec![],
     );
@@ -335,6 +337,7 @@ fn create_and_destroy_eks_cluster_karpenter_with_gpu_node_pool_in_eu_west_3() {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             },
             gpu_override: Some(KarpenterGpuNodePoolOverride {
                 spot_enabled: true,
@@ -368,12 +371,14 @@ fn create_and_destroy_eks_cluster_karpenter_with_gpu_node_pool_in_eu_west_3() {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             }),
             default_override: Some(KarpenterDefaultNodePoolOverride {
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             }),
         },
     };
@@ -383,7 +388,7 @@ fn create_and_destroy_eks_cluster_karpenter_with_gpu_node_pool_in_eu_west_3() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Karpenter {
-            config: karpenter_parameters,
+            config: Box::new(karpenter_parameters),
         },
         vec![],
     );
@@ -425,12 +430,14 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             },
             default_override: Some(KarpenterDefaultNodePoolOverride {
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
                 }),
+                consolidate_after_in_seconds: None,
             }),
             gpu_override: None,
         },
@@ -441,7 +448,7 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
         WithNatGateways,
         function_name!(),
         NodeManager::Karpenter {
-            config: karpenter_parameters,
+            config: Box::new(karpenter_parameters),
         },
         vec![],
     );
@@ -486,6 +493,7 @@ fn create_upgrade_and_destroy_eks_cluster_karpenter_with_nat_gw_in_eu_west_3() {
                     schedule: "0 0 * * *".to_string(),
                 }],
                 limits: None,
+                consolidate_after_in_seconds: None,
             },
             default_override: None,
             gpu_override: None,
@@ -497,7 +505,7 @@ fn create_upgrade_and_destroy_eks_cluster_karpenter_with_nat_gw_in_eu_west_3() {
         WithoutNatGateways,
         function_name!(),
         NodeManager::Karpenter {
-            config: karpenter_parameters,
+            config: Box::new(karpenter_parameters),
         },
         vec![],
     );
