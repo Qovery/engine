@@ -6,8 +6,6 @@ crds:
 serviceAccount:
   create: true
   name: keda-operator
-  annotations:
-     eks.amazonaws.com/role-arn: set-by-engine-code
 
 resources:
   operator: { }
@@ -41,8 +39,6 @@ metricsServer:
   serviceAccount:
     create: true
     name: keda-metrics-server
-    annotations:
-       eks.amazonaws.com/role-arn: set-by-engine-code
   tolerations:
     - key: "node.qovery.com/infrastructure"
       operator: "Equal"
