@@ -102,7 +102,7 @@ spec:
           args:
             {%- for arg in service.command_args %}
             - |-
-              {{ arg }}
+              {{ arg | indent(prefix="              ", first=false) }}
             {%- endfor %}
           volumeMounts:
             - name: output
