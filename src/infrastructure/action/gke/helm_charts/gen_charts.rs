@@ -568,34 +568,35 @@ pub(super) fn gke_helm_charts(
         level_0.push(Some(Box::new(chart)));
     }
 
-    let mut level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
     ];
     // Add Qovery gateway class
+    let mut level_2: Vec<Option<Box<dyn HelmChart>>> = vec![];
     if let Some(chart) = qovery_gateway_class_chart {
-        level_1.push(Some(Box::new(chart)));
+        level_2.push(Some(Box::new(chart)));
     }
 
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
-    let level_3: Vec<Option<Box<dyn HelmChart>>> =
+    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
+    let level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(cert_manager)), Some(Box::new(keda_charts.keda_chart))];
-    let mut level_4: Vec<Option<Box<dyn HelmChart>>> =
+    let mut level_5: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
     // Add Qovery cluster gateway - must be deployed after cert-manager since it creates resources in cert-manager namespace
     if let Some(chart) = qovery_cluster_gateway {
-        level_4.push(Some(Box::new(chart)));
+        level_5.push(Some(Box::new(chart)));
     }
-    let level_5: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
-    let mut level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
+    let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
+    let mut level_7: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(nginx_ingress))];
     // Add Envoy gateway
     if let Some(chart) = envoy_gateway {
-        level_6.push(Some(Box::new(chart)));
+        level_7.push(Some(Box::new(chart)));
     }
 
-    let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let level_8: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(cert_manager_config)),
         Some(Box::new(qovery_cluster_agent)),
         Some(Box::new(qovery_shell_agent)),
@@ -611,5 +612,6 @@ pub(super) fn gke_helm_charts(
         level_5.into_iter().flatten().collect(),
         level_6.into_iter().flatten().collect(),
         level_7.into_iter().flatten().collect(),
+        level_8.into_iter().flatten().collect(),
     ])
 }
