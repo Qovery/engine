@@ -362,14 +362,6 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 value: "true".to_string(),
             },
             ChartSetValue {
-                key: "prometheus.thanosService.enabled".to_string(),
-                value: "true".to_string(),
-            },
-            ChartSetValue {
-                key: "prometheus.thanosService.enabled".to_string(),
-                value: "true".to_string(),
-            },
-            ChartSetValue {
                 key: "alertmanager.enabled".to_string(),
                 value: self
                     .alert_config
