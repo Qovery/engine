@@ -573,7 +573,6 @@ pub(super) fn gke_helm_charts(
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
-        Some(Box::new(keda_charts.keda_chart)),
     ];
     // Add Qovery gateway class
     if let Some(chart) = qovery_gateway_class_chart {
@@ -581,7 +580,8 @@ pub(super) fn gke_helm_charts(
     }
 
     let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
-    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(cert_manager))];
+    let level_3: Vec<Option<Box<dyn HelmChart>>> =
+        vec![Some(Box::new(cert_manager)), Some(Box::new(keda_charts.keda_chart))];
     let mut level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
     // Add Qovery cluster gateway - must be deployed after cert-manager since it creates resources in cert-manager namespace
