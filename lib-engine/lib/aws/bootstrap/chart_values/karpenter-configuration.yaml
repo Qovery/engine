@@ -9,6 +9,8 @@ amiSelectorTermsAlias: set-by-engine-code
 gpuAmiSelectorTermsName: set-by-engine-code
 
 kubernetesVersion: set-by-engine-code
+isBottlerocket: set-by-engine-code
+amiFamily: set-by-engine-code
 
 tags:
   ClusterId: set-by-engine-code

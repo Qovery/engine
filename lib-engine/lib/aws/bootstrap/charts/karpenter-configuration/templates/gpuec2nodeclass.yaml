@@ -4,7 +4,7 @@ kind: EC2NodeClass
 metadata:
   name: gpu
 spec:
-  amiFamily: AL2023
+  amiFamily: {{ .Values.amiFamily }}
   metadataOptions:
     httpPutResponseHopLimit: 2
   amiSelectorTerms:
@@ -37,6 +37,21 @@ spec:
         {{- end }}
         encrypted: true
         deleteOnTermination: true
+    {{- if .Values.isBottlerocket }}
+    # Bottlerocket uses a second volume for container data (images, logs)
+    - deviceName: /dev/xvdb
+      ebs:
+        volumeSize: "{{ .Values.gpuNodePool.diskSize }}"
+        volumeType: gp3
+        {{- if .Values.gpuNodePool.diskIops }}
+        iops: {{ .Values.gpuNodePool.diskIops }}
+        {{- end }}
+        {{- if .Values.gpuNodePool.diskThroughput }}
+        throughput: {{ .Values.gpuNodePool.diskThroughput }}
+        {{- end }}
+        encrypted: true
+        deleteOnTermination: true
+    {{- end }}
   tags:
     {{- range $key, $value := .Values.tags }}
     {{ $key }}: {{ $value | quote }}
