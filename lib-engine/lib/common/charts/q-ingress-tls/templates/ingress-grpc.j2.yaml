@@ -1,4 +1,3 @@
-{%- if not k8s_remove_nginx or k8s_remove_nginx == false %}
 {% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
 {%- if grpc_hosts|length >= 1  %}
 {%- set path_rewrite = grpc_hosts|map(attribute="path_rewrite")|first %}
@@ -138,4 +137,3 @@ spec:
     {%- endfor %}
 {%- endif %}
 {%- endfor %}
-{%- endif %}

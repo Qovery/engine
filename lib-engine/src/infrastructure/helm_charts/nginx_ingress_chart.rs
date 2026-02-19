@@ -119,8 +119,6 @@ pub struct NginxIngressChart {
     cluster_short_id: String,
     kubernetes_kind: KubernetesKind,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
-    nginx_controller_default_replicas: u32,
-    nginx_hpa_enabled: bool,
     nginx_hpa_minimum_replicas: Option<u32>,
     nginx_hpa_maximum_replicas: Option<u32>,
     nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
@@ -146,8 +144,6 @@ pub struct NginxIngressChart {
 }
 
 pub struct NginxOptions {
-    pub nginx_controller_default_replicas: u32,
-    pub nginx_hpa_enabled: bool,
     pub nginx_hpa_minimum_replicas: Option<u32>,
     pub nginx_hpa_maximum_replicas: Option<u32>,
     pub nginx_hpa_target_cpu_utilization_percentage: Option<u32>,
@@ -226,8 +222,6 @@ impl NginxIngressChart {
             cluster_long_id,
             cluster_short_id,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
-            nginx_controller_default_replicas: options.nginx_controller_default_replicas,
-            nginx_hpa_enabled: options.nginx_hpa_enabled,
             nginx_hpa_minimum_replicas: options.nginx_hpa_minimum_replicas,
             nginx_hpa_maximum_replicas: options.nginx_hpa_maximum_replicas,
             nginx_hpa_target_cpu_utilization_percentage: options.nginx_hpa_target_cpu_utilization_percentage,
@@ -361,12 +355,8 @@ defaultBackend:
                 value: self.ff_metrics_history_enabled.to_string(),
             },
             ChartSetValue {
-                key: "controller.replicaCount".to_string(),
-                value: self.nginx_controller_default_replicas.to_string(),
-            },
-            ChartSetValue {
                 key: "controller.autoscaling.enabled".to_string(),
-                value: self.nginx_hpa_enabled.to_string(),
+                value: true.to_string(),
             },
             ChartSetValue {
                 key: "controller.config.enable-real-ip".to_string(),
@@ -708,8 +698,6 @@ mod tests {
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
-                nginx_controller_default_replicas: 1,
-                nginx_hpa_enabled: true,
                 nginx_hpa_minimum_replicas: Some(1),
                 nginx_hpa_maximum_replicas: Some(10),
                 nginx_hpa_target_cpu_utilization_percentage: Some(50),
@@ -771,8 +759,6 @@ mod tests {
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
-                nginx_controller_default_replicas: 1,
-                nginx_hpa_enabled: true,
                 nginx_hpa_minimum_replicas: Some(1),
                 nginx_hpa_maximum_replicas: Some(10),
                 nginx_hpa_target_cpu_utilization_percentage: Some(50),
@@ -836,8 +822,6 @@ mod tests {
                 KubernetesKind::Eks,
                 Utc::now(),
                 NginxOptions {
-                    nginx_controller_default_replicas: 1,
-                    nginx_hpa_enabled: true,
                     nginx_hpa_minimum_replicas: None,
                     nginx_hpa_maximum_replicas: None,
                     nginx_hpa_target_cpu_utilization_percentage: None,
@@ -907,8 +891,6 @@ mod tests {
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
-                nginx_controller_default_replicas: 1,
-                nginx_hpa_enabled: true,
                 nginx_hpa_minimum_replicas: Some(1),
                 nginx_hpa_maximum_replicas: Some(10),
                 nginx_hpa_target_cpu_utilization_percentage: Some(50),
