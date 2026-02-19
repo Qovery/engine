@@ -173,6 +173,14 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 value: self.kubernetes_version.to_string(),
             },
             ChartSetValue {
+                key: "isBottlerocket".to_string(),
+                value: (self.eks_ec2_ami == Ec2Ami::Bottlerocket).to_string(),
+            },
+            ChartSetValue {
+                key: "amiFamily".to_string(),
+                value: self.eks_ec2_ami.to_string(),
+            },
+            ChartSetValue {
                 key: "diskSize".to_string(),
                 value: self.karpenter_parameters.disk_size.to_gib_string(),
             },

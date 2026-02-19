@@ -17,6 +17,8 @@ explicitSubnetIds: []
 amiSelectorTermsAlias: ""
 gpuAmiSelectorTermsName: ""
 kubernetesVersion: ""
+isBottlerocket: false
+amiFamily: AL2023
 
 tags:
   ClusterId: ""

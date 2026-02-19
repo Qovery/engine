@@ -36,6 +36,21 @@ spec:
         {{- end }}
         encrypted: true
         deleteOnTermination: true
+    {{- if .Values.isBottlerocket }}
+    # Bottlerocket uses a second volume for container data (images, logs)
+    - deviceName: /dev/xvdb
+      ebs:
+        volumeSize: {{ .Values.diskSize }}
+        volumeType: {{ .Values.storageClass }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskIops }}
+        iops: {{ .Values.diskIops }}
+        {{- end }}
+        {{- if and (eq .Values.storageClass "gp3") .Values.diskThroughput }}
+        throughput: {{ .Values.diskThroughput }}
+        {{- end }}
+        encrypted: true
+        deleteOnTermination: true
+    {{- end }}
 
   # Optional, propagates tags to underlying EC2 resources
   tags:
