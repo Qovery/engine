@@ -9,6 +9,19 @@ controller:
     enabled: true # set-by-engine-code
     serviceMonitor:
       enabled: false # set-by-engine-code
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "nginx_ingress_controller_.*"
+          targetLabel: host
+          replacement: ""
+        - sourceLabels: [__name__]
+          regex: "nginx_ingress_controller_.*"
+          targetLabel: exported_namespace
+          replacement: ""
+        - sourceLabels: [__name__]
+          regex: "nginx_ingress_controller_.*"
+          targetLabel: exported_service
+          replacement: ""
   config:
     # set global default file size limit to 100m
     proxy-body-size: 100m
