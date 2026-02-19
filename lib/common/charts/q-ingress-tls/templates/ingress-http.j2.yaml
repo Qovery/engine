@@ -1,3 +1,4 @@
+{%- if not k8s_remove_nginx or k8s_remove_nginx == false %}
 {% for namespace_key, http_hosts in http_hosts_per_namespace %}
 {%- if http_hosts|length >= 1  %}
 {%- set path_rewrite = http_hosts|map(attribute="path_rewrite")|first %}
@@ -144,3 +145,4 @@ spec:
     {%- endfor %}
 {%- endif %}
 {%- endfor %}
+{%- endif %}

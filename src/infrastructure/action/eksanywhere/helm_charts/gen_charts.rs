@@ -149,143 +149,147 @@ pub(super) fn eks_anywhere_helm_charts(
     .to_common_helm_chart()?;
 
     // Nginx ingress
-    let nginx_ingress = NginxIngressChart::new(
-        chart_prefix_path,
-        HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-            request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
-                chart_config_prerequisites
+    let nginx_ingress = Some(
+        NginxIngressChart::new(
+            chart_prefix_path,
+            HelmChartResourcesConstraintType::Constrained(HelmChartResources {
+                request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_vcpu_request_in_milli_cpu,
+                )),
+                request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_memory_request_in_mib,
+                )),
+                limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_vcpu_limit_in_milli_cpu,
+                )),
+                limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_memory_limit_in_mib,
+                )),
+            }),
+            HelmChartResourcesConstraintType::ChartDefault,
+            chart_config_prerequisites.metrics_parameters.is_some(),
+            get_chart_override_fn.clone(),
+            domain.clone(),
+            Kind::OnPremise,
+            chart_config_prerequisites.organization_long_id.to_string(),
+            chart_config_prerequisites.organization_id.clone(),
+            chart_config_prerequisites.cluster_long_id.to_string(),
+            chart_config_prerequisites.cluster_id.clone(),
+            KubernetesKind::EksAnywhere,
+            chart_config_prerequisites.cluster_creation_date,
+            NginxOptions {
+                nginx_controller_default_replicas: 1,
+                nginx_hpa_enabled: true,
+                nginx_hpa_minimum_replicas: Some(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_hpa_min_number_instances,
+                ),
+                nginx_hpa_maximum_replicas: Some(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_hpa_max_number_instances,
+                ),
+                nginx_hpa_target_cpu_utilization_percentage: Some(
+                    chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .nginx_hpa_cpu_utilization_percentage_threshold,
+                ),
+                namespace: HelmChartNamespaces::Qovery,
+                loadbalancer_size: None,
+                enable_real_ip: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_vcpu_request_in_milli_cpu,
-            )),
-            request_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
-                chart_config_prerequisites
+                    .nginx_controller_enable_client_ip,
+                use_forwarded_headers: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_memory_request_in_mib,
-            )),
-            limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
-                chart_config_prerequisites
+                    .nginx_controller_use_forwarded_headers,
+                compute_full_forwarded_for: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_vcpu_limit_in_milli_cpu,
-            )),
-            limit_memory: Some(KubernetesMemoryResourceUnit::MebiByte(
-                chart_config_prerequisites
+                    .nginx_controller_compute_full_forwarded_for,
+                log_format_escaping: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_memory_limit_in_mib,
-            )),
-        }),
-        HelmChartResourcesConstraintType::ChartDefault,
-        chart_config_prerequisites.metrics_parameters.is_some(),
-        get_chart_override_fn.clone(),
-        domain.clone(),
-        Kind::OnPremise,
-        chart_config_prerequisites.organization_long_id.to_string(),
-        chart_config_prerequisites.organization_id.clone(),
-        chart_config_prerequisites.cluster_long_id.to_string(),
-        chart_config_prerequisites.cluster_id.clone(),
-        KubernetesKind::EksAnywhere,
-        chart_config_prerequisites.cluster_creation_date,
-        NginxOptions {
-            nginx_hpa_minimum_replicas: Some(
-                chart_config_prerequisites
+                    .nginx_controller_log_format_escaping
+                    .to_model(),
+                is_alb_enabled: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_hpa_min_number_instances,
-            ),
-            nginx_hpa_maximum_replicas: Some(
-                chart_config_prerequisites
+                    .aws_eks_enable_alb_controller,
+                server_snippet: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_hpa_max_number_instances,
-            ),
-            nginx_hpa_target_cpu_utilization_percentage: Some(
-                chart_config_prerequisites
+                    .nginx_controller_server_snippet
+                    .as_ref()
+                    .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
+                limit_request_status_code: chart_config_prerequisites
                     .cluster_advanced_settings
-                    .nginx_hpa_cpu_utilization_percentage_threshold,
-            ),
-            namespace: HelmChartNamespaces::Qovery,
-            loadbalancer_size: None,
-            enable_real_ip: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_enable_client_ip,
-            use_forwarded_headers: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_use_forwarded_headers,
-            compute_full_forwarded_for: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_compute_full_forwarded_for,
-            log_format_escaping: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_log_format_escaping
-                .to_model(),
-            is_alb_enabled: chart_config_prerequisites
-                .cluster_advanced_settings
-                .aws_eks_enable_alb_controller,
-            server_snippet: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_server_snippet
-                .as_ref()
-                .map(|nginx_controller_server_snippet_io| nginx_controller_server_snippet_io.to_model()),
-            limit_request_status_code: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_limit_request_status_code
-                .as_ref()
-                .map(|v| v.to_model().map_err(CommandError::from))
-                .transpose()?,
-            nginx_controller_custom_http_errors: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_controller_custom_http_errors
-                .clone(),
-            nginx_default_backend_enabled: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_default_backend_enabled,
-            nginx_default_backend_image_repository: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_default_backend_image_repository
-                .clone(),
-            nginx_default_backend_image_tag: chart_config_prerequisites
-                .cluster_advanced_settings
-                .nginx_default_backend_image_tag
-                .clone(),
-            default_ssl_certificate: Some(
-                chart_config_prerequisites
-                    .infra_options
-                    .infrastructure_charts_parameters
-                    .nginx_parameters
-                    .default_ssl_certificate
+                    .nginx_controller_limit_request_status_code
+                    .as_ref()
+                    .map(|v| v.to_model().map_err(CommandError::from))
+                    .transpose()?,
+                nginx_controller_custom_http_errors: chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_controller_custom_http_errors
                     .clone(),
-            ),
-            publish_status_address: Some(
-                chart_config_prerequisites
-                    .infra_options
-                    .infrastructure_charts_parameters
-                    .nginx_parameters
-                    .publish_status_address
+                nginx_default_backend_enabled: chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_default_backend_enabled,
+                nginx_default_backend_image_repository: chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_default_backend_image_repository
                     .clone(),
-            ),
-            replica_count: Some(
-                chart_config_prerequisites
-                    .infra_options
-                    .infrastructure_charts_parameters
-                    .nginx_parameters
-                    .replica_count,
-            ),
-            metal_lb_load_balancer_ip: Some(
-                chart_config_prerequisites
-                    .infra_options
-                    .infrastructure_charts_parameters
-                    .nginx_parameters
-                    .annotation_metal_lb_load_balancer_ips
+                nginx_default_backend_image_tag: chart_config_prerequisites
+                    .cluster_advanced_settings
+                    .nginx_default_backend_image_tag
                     .clone(),
-            ),
-            external_dns_target: Some(
-                chart_config_prerequisites
-                    .infra_options
-                    .infrastructure_charts_parameters
-                    .nginx_parameters
-                    .annotation_external_dns_kubernetes_target
-                    .clone(),
-            ),
-        },
-    )
-    .to_common_helm_chart()?;
+                default_ssl_certificate: Some(
+                    chart_config_prerequisites
+                        .infra_options
+                        .infrastructure_charts_parameters
+                        .nginx_parameters
+                        .default_ssl_certificate
+                        .clone(),
+                ),
+                publish_status_address: Some(
+                    chart_config_prerequisites
+                        .infra_options
+                        .infrastructure_charts_parameters
+                        .nginx_parameters
+                        .publish_status_address
+                        .clone(),
+                ),
+                replica_count: Some(
+                    chart_config_prerequisites
+                        .infra_options
+                        .infrastructure_charts_parameters
+                        .nginx_parameters
+                        .replica_count,
+                ),
+                metal_lb_load_balancer_ip: Some(
+                    chart_config_prerequisites
+                        .infra_options
+                        .infrastructure_charts_parameters
+                        .nginx_parameters
+                        .annotation_metal_lb_load_balancer_ips
+                        .clone(),
+                ),
+                external_dns_target: Some(
+                    chart_config_prerequisites
+                        .infra_options
+                        .infrastructure_charts_parameters
+                        .nginx_parameters
+                        .annotation_external_dns_kubernetes_target
+                        .clone(),
+                ),
+            },
+        )
+        .to_common_helm_chart()?,
+    );
 
     // Qovery cluster agent
     let cluster_agent = QoveryClusterAgentChart::new(
@@ -423,7 +427,11 @@ pub(super) fn eks_anywhere_helm_charts(
 
     let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metrics_server)), Some(Box::new(external_dns))];
     let level_7: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metal_lb))];
-    let level_8: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metal_lb_config)), Some(Box::new(nginx_ingress))];
+    let mut level_8: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(metal_lb_config))];
+    // Add Nginx
+    if let Some(chart) = nginx_ingress {
+        level_8.push(Some(Box::new(chart)));
+    }
 
     let level_9: Vec<Option<Box<dyn HelmChart>>> = vec![];
 

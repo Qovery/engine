@@ -2,6 +2,7 @@ fullnameOverride: ingress-nginx
 controller:
   useComponentLabel: true
   allowSnippetAnnotations: true
+  replicaCount: 1
   ingressClass: nginx-qovery
   ingressClassResource:
     name: nginx-qovery
