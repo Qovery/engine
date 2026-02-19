@@ -371,6 +371,8 @@ pub struct ClusterAdvancedSettings {
     pub k8s_deploy_api_gateway: Option<bool>,
     #[serde(alias = "k8s.use_api_gateway", default)]
     pub k8s_use_api_gateway: Option<bool>,
+    #[serde(alias = "k8s.remove_nginx", default)]
+    pub k8s_remove_nginx: Option<bool>,
 
     #[serde(alias = "envoy.hpa.cpu_average_utilization_percentage_threshold")]
     pub envoy_hpa_cpu_average_utilization_percentage_threshold: Option<Percentage>,
@@ -485,6 +487,7 @@ impl Default for ClusterAdvancedSettings {
             aws_metrics_server_replicas: None,
             k8s_use_api_gateway: None,
             k8s_deploy_api_gateway: None,
+            k8s_remove_nginx: None,
             envoy_hpa_cpu_average_utilization_percentage_threshold: None,
             envoy_hpa_memory_average_utilization_percentage_threshold: None,
             envoy_hpa_min_number_instances: 1,
