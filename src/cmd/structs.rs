@@ -400,7 +400,7 @@ pub struct HelmListItem {
     pub app_version: String,
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HelmChart {
     pub name: String,
     pub namespace: String,

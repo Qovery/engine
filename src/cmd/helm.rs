@@ -1,8 +1,11 @@
+use std::collections::HashMap;
 use std::fmt::Write as FmtWrite;
 use std::io::{Error, Write};
+use std::panic::Location;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
@@ -120,9 +123,69 @@ impl HelmError {
     }
 }
 
+/// Cache for helm deployed releases per namespace during parallel chart deployment.
+///
+/// Ensures `list_release` is called at most once per namespace concurrently,
+/// preventing N parallel `helm list -a` calls to avoid OOM.
+///
+type HelmListCacheEntry = Arc<Mutex<Option<Vec<HelmChart>>>>;
+type HelmListCacheMap = Arc<Mutex<HashMap<String, HelmListCacheEntry>>>;
+
+#[derive(Clone, Debug, Default)]
+pub struct HelmListCache {
+    inner: HelmListCacheMap,
+}
+
+impl HelmListCache {
+    pub fn new() -> Self {
+        HelmListCache {
+            inner: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    fn id(&self) -> usize {
+        Arc::as_ptr(&self.inner) as usize
+    }
+
+    fn get_or_fetch<F>(&self, namespace: &str, fetch: F) -> Result<Vec<HelmChart>, HelmError>
+    where
+        F: FnOnce() -> Result<Vec<HelmChart>, HelmError>,
+    {
+        // Step 1: Briefly lock the outer map to get or create the per-namespace lock.
+        let ns_lock = {
+            let mut map = self.inner.lock().expect("HelmListCache outer lock poisoned");
+            map.entry(namespace.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(None)))
+                .clone()
+        };
+
+        // Step 2: Lock the per-namespace mutex. This serializes concurrent fetches
+        // for the same namespace while different namespaces proceed independently.
+        let mut cached = ns_lock.lock().expect("HelmListCache namespace lock poisoned");
+        match cached.as_ref() {
+            Some(releases) => Ok(releases.clone()),
+            None => {
+                debug!(cache_id = self.id(), namespace, "Helm list cache miss; fetching releases");
+                // Global lock only for deploy-parallel cache fetches (OOM risk).
+                let _guard = LIST_RELEASE_LOCK
+                    .get_or_init(|| Mutex::new(()))
+                    .lock()
+                    .expect("Helm list release lock poisoned");
+                let releases = fetch()?;
+                *cached = Some(releases.clone());
+                Ok(releases)
+            }
+        }
+    }
+}
+
+// Global throttle for `helm list` during deploy-parallel cache fetches.
+static LIST_RELEASE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
 #[derive(Debug, Clone)]
 pub struct Helm {
     common_envs: Vec<(String, String)>,
+    list_cache: Option<HelmListCache>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -189,7 +252,20 @@ impl Helm {
             common_envs.push(("KUBECONFIG".to_string(), kubernetes_config.to_string_lossy().to_string()));
         }
 
-        Ok(Helm { common_envs })
+        Ok(Helm {
+            common_envs,
+            list_cache: None,
+        })
+    }
+
+    pub fn new_with_cache<P: AsRef<Path>>(
+        kubernetes_config: Option<P>,
+        common_envs: &[(&str, &str)],
+        cache: HelmListCache,
+    ) -> Result<Helm, HelmError> {
+        let mut helm = Self::new(kubernetes_config, common_envs)?;
+        helm.list_cache = Some(cache);
+        Ok(helm)
     }
 
     pub fn check_release_exist(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<ReleaseStatus, HelmError> {
@@ -339,7 +415,18 @@ impl Helm {
     ///
     /// * `envs` - environment variables required for kubernetes connection
     /// * `namespace` - list charts from a kubernetes namespace or use None to select all namespaces
+    #[track_caller]
     pub fn list_release(&self, namespace: Option<&str>, envs: &[(&str, &str)]) -> Result<Vec<HelmChart>, HelmError> {
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let caller = Location::caller();
+            debug!(
+                caller_file = caller.file(),
+                caller_line = caller.line(),
+                namespace = namespace.unwrap_or_default(),
+                "list_release called; use list_deployed_charts for deploy-path lookups"
+            );
+        }
+
         let mut helm_args = vec!["list", "-a", "-o", "json"];
         match namespace {
             Some(ns) => helm_args.append(&mut vec!["-n", ns]),
@@ -407,7 +494,13 @@ impl Helm {
         namespace: Option<&str>,
         envs: &[(&str, &str)],
     ) -> Result<Option<HelmChartVersions>, HelmError> {
-        let deployed_charts = self.list_release(namespace, envs)?;
+        let deployed_charts = match (&self.list_cache, namespace) {
+            (Some(cache), Some(ns)) => {
+                let ns = ns.to_string();
+                cache.get_or_fetch(&ns, || self.list_release(Some(&ns), envs))?
+            }
+            _ => self.list_release(namespace, envs)?,
+        };
         for chart in deployed_charts {
             if chart.name == chart_name {
                 return Ok(Some(HelmChartVersions {
