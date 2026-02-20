@@ -21,19 +21,20 @@ impl InteractWithLoadBalancer for ScalewayLoadBalancer {
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2".to_string(),
-                "true".to_string(),
+                "false".to_string(),
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-health-check-type".to_string(),
-                "80:http;443:https".to_string(),
+                "80:tcp;443:tcp".to_string(),
             ),
+            // HTTP URI not needed for TCP health checks, but kept for backward compatibility
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-health-check-http-uri".to_string(),
                 "80:/healthz;443:/healthz".to_string(),
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy".to_string(),
-                "true".to_string(),
+                "false".to_string(),
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-use-hostname".to_string(),
@@ -126,16 +127,16 @@ mod tests {
             Some(&"true".to_string())
         );
 
-        // Verify proxy protocol settings
+        // Verify proxy protocol settings (disabled due to Envoy Gateway v1.6.1 compatibility issues)
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2"),
-            Some(&"true".to_string())
+            Some(&"false".to_string())
         );
 
-        // Verify health check configuration
+        // Verify health check configuration (TCP-based for Envoy Gateway compatibility)
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-health-check-type"),
-            Some(&"80:http;443:https".to_string())
+            Some(&"80:tcp;443:tcp".to_string())
         );
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-health-check-http-uri"),
@@ -143,7 +144,7 @@ mod tests {
         );
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy"),
-            Some(&"true".to_string())
+            Some(&"false".to_string())
         );
 
         // Verify timeout settings
