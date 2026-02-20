@@ -106,6 +106,10 @@ impl HelmChart for CoreDNSConfigChart {
         &self.chart_info
     }
 
+    fn get_chart_info_mut(&mut self) -> &mut ChartInfo {
+        &mut self.chart_info
+    }
+
     fn pre_exec(
         &self,
         kube_client: &kube::Client,

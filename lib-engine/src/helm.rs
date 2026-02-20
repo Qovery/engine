@@ -1,4 +1,4 @@
-use crate::cmd::helm::{Helm, HelmError};
+use crate::cmd::helm::{Helm, HelmError, HelmListCache};
 use crate::cmd::helm_utils::{
     BackupStatus, CRDSUpdate, apply_chart_backup, delete_unused_chart_backup, prepare_chart_backup_on_upgrade,
     update_crds_on_upgrade,
@@ -452,6 +452,9 @@ pub struct ChartInfo {
     /// until we rollout helm version 4 which will have server side apply by default
     /// we use helm template + kubectl apply --server-side to mimic server side apply
     pub requires_server_side_apply: bool,
+    /// Shared cache injected before parallel deployment to ensure `helm list` is called
+    /// at most once per namespace across all chart threads in the same level.
+    pub helm_list_cache: Option<HelmListCache>,
 }
 
 impl ChartInfo {
@@ -531,6 +534,7 @@ impl Default for ChartInfo {
             skip_if_already_installed: false,
             upgrade_retry: None,
             requires_server_side_apply: false,
+            helm_list_cache: None,
         }
     }
 }
@@ -557,6 +561,7 @@ pub trait HelmChart: Send {
     }
 
     fn get_chart_info(&self) -> &ChartInfo;
+    fn get_chart_info_mut(&mut self) -> &mut ChartInfo;
 
     fn namespace(&self) -> String {
         self.get_chart_info().get_namespace_string()
@@ -629,7 +634,10 @@ pub trait HelmChart: Send {
         cmd_killer: &CommandKiller,
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart_info = self.get_chart_info();
-        let helm = Helm::new(Some(kubernetes_config), envs)?;
+        let helm = match &chart_info.helm_list_cache {
+            Some(cache) => Helm::new_with_cache(Some(kubernetes_config), envs, cache.clone())?,
+            None => Helm::new(Some(kubernetes_config), envs)?,
+        };
 
         match chart_info.action {
             Deploy => {
@@ -930,6 +938,10 @@ impl HelmChart for CommonChart {
         &self.chart_info
     }
 
+    fn get_chart_info_mut(&mut self) -> &mut ChartInfo {
+        &mut self.chart_info
+    }
+
     fn pre_exec(
         &self,
         kube_client: &kube::Client,
@@ -1018,6 +1030,10 @@ impl HelmChart for ServiceChart {
 
     fn get_chart_info(&self) -> &ChartInfo {
         &self.chart_info
+    }
+
+    fn get_chart_info_mut(&mut self) -> &mut ChartInfo {
+        &mut self.chart_info
     }
 
     fn pre_exec(

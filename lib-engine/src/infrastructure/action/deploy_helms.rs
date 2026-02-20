@@ -1,6 +1,6 @@
 use super::InfraLogger;
 use crate::cmd::command::CommandKiller;
-use crate::cmd::helm::Helm;
+use crate::cmd::helm::{Helm, HelmListCache};
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EventDetails, InfrastructureDiffType};
 use crate::helm::{HelmAction, HelmChart, HelmChartError};
@@ -202,6 +202,8 @@ pub(super) trait HelmInfraResources {
         let helm = Helm::new(Some(infra_ctx.kubernetes().kubeconfig_local_file_path()), &envs)
             .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e.into())))?;
 
+        let list_cache = HelmListCache::new();
+
         for (ix, charts_level) in charts_to_deploy.into_iter().enumerate() {
             logger.info("");
             logger.info(format!("🏁 Starting level {ix}"));
@@ -247,6 +249,7 @@ pub(super) trait HelmInfraResources {
                 &infra_ctx.kubernetes().kubeconfig_local_file_path(),
                 &envs,
                 charts_level,
+                list_cache.clone(),
                 &retry_config,
                 &CommandKiller::never(),
             )
@@ -410,6 +413,7 @@ pub fn deploy_parallel_charts_with_retry(
     kubernetes_config: &Path,
     envs: &[(&str, &str)],
     charts: Vec<Box<dyn HelmChart>>,
+    list_cache: HelmListCache,
     retry_config: &ParallelDeploymentRetryConfig,
     cmd_killer: &CommandKiller,
 ) -> Result<ParallelDeploymentResult, HelmChartError> {
@@ -421,6 +425,14 @@ pub fn deploy_parallel_charts_with_retry(
             None,
         )));
     }
+
+    let charts: Vec<Box<dyn HelmChart>> = charts
+        .into_iter()
+        .map(|mut chart| {
+            chart.get_chart_info_mut().helm_list_cache = Some(list_cache.clone());
+            chart
+        })
+        .collect();
 
     let mut succeeded: Vec<String> = Vec::new();
     let mut failures: HashMap<String, Vec<RetryAttempt>> = HashMap::new();
