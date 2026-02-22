@@ -15,7 +15,7 @@ use qovery_engine::io_models::context::CloneForTest;
 use qovery_engine::io_models::helm_chart::{
     HelmChart, HelmChartAdvancedSettings, HelmChartSource, HelmRawValues, HelmValueSource,
 };
-use qovery_engine::io_models::router::{Route, Router};
+use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::runtime::block_on;
@@ -10592,6 +10592,172 @@ fn deploy_application_with_timeout_settings_on_gcp_gke() {
             }
         } else {
             panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[named]
+#[test]
+fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .GCP_TEST_ORGANIZATION_LONG_ID
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        let router_name = format!("router-{suffix}");
+
+        // Create 10 custom domains to trigger route splitting
+        let custom_domains: Vec<CustomDomain> = (0..10)
+            .map(|i| CustomDomain {
+                domain: format!("custom-{i}-{suffix}.{test_domain}"),
+                target_domain: format!("custom-{i}-{suffix}.{}.{}", context.cluster_short_id(), test_domain),
+                generate_certificate: true,
+                use_cdn: true, // speed-up DNS propagation for tests
+            })
+            .collect();
+
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "multi-domain-router".to_string(),
+            kube_name: router_name.clone(),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains,
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.networking.k8s.io".to_string(),
+            version: "v1".to_string(),
+            kind: "HTTPRoute".to_string(),
+            api_version: "gateway.networking.k8s.io/v1".to_string(),
+            plural: "httproutes".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let http_routes =
+            retry_list_gateway_api_resources(&api).expect("Failed to list HTTPRoute resources after retries");
+
+        assert!(!http_routes.items.is_empty(), "HTTPRoutes should exist");
+
+        // Find all route parts with the qovery.com/router-name label
+        let router_routes: Vec<_> = http_routes
+            .items
+            .iter()
+            .filter(|route| {
+                route
+                    .metadata
+                    .labels
+                    .as_ref()
+                    .and_then(|labels| labels.get("qovery.com/router-name"))
+                    .map(|name| name == &router_name)
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        // With 10 custom domains, should create 3 route parts
+        // Each domain generates 2 http_hosts entries (port-prefixed + bare domain);
+        // default domain also generates 2 entries → total 22 entries; ceil(22/8) = 3 routes.
+        assert_eq!(router_routes.len(), 3, "Should have 3 HTTPRoute parts for 10 custom domains");
+
+        // Verify route names
+        let route_names: Vec<String> = router_routes.iter().map(|route| route.name_any()).collect();
+
+        assert!(
+            route_names.contains(&format!("{router_name}-1")),
+            "Should have {router_name}-1 route"
+        );
+        assert!(
+            route_names.contains(&format!("{router_name}-2")),
+            "Should have {router_name}-2 route"
+        );
+        assert!(
+            route_names.contains(&format!("{router_name}-3")),
+            "Should have {router_name}-3 route"
+        );
+
+        // Verify qovery.com/router-name label exists on all routes
+        for route in &router_routes {
+            let labels = route.metadata.labels.as_ref().expect("Route should have labels");
+            assert_eq!(
+                labels.get("qovery.com/router-name").map(|s| s.as_str()),
+                Some(router_name.as_str()),
+                "Route should have router-name label"
+            );
         }
 
         // clean up:

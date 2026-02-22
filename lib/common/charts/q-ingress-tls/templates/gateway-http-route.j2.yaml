@@ -1,15 +1,41 @@
 {%- if k8s_deploy_api_gateway == true %}
 {% for namespace_key, http_hosts in http_hosts_per_namespace %}
 {%- if http_hosts|length >= 1  %}
+{#
+  Split routes to comply with Kubernetes Gateway API limits:
+  - Maximum 16 hostnames per HTTPRoute
+  - Maximum 16 rules per HTTPRoute
+
+  Why 8 hosts per route?
+  - Each host generates 2 hostnames (original + new-gateway-api variant)
+  - Each host generates 2 rules (main path + service prefix path for backward compatibility)
+  - 8 hosts × 2 = 16 hostnames and 16 rules (at the Kubernetes limit)
+
+  When you have >8 hosts, multiple HTTPRoute resources are created:
+  - router-name (for 1-8 hosts)
+  - router-name-1, router-name-2, ... (for >8 hosts)
+#}
+{%- set max_hosts_per_route = 8 %}
+{%- set total_hosts = http_hosts|length %}
+{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
+{%- for route_index in range(end=num_routes) %}
+{%- set start_idx = route_index * max_hosts_per_route %}
+{%- set end_idx_calc = start_idx + max_hosts_per_route %}
+{%- if end_idx_calc > total_hosts %}
+{%- set end_idx = total_hosts %}
+{%- else %}
+{%- set end_idx = end_idx_calc %}
+{%- endif %}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ sanitized_name }}
+  name: {{ sanitized_name }}{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
     qovery.com/associated-service-id: {{ associated_service_long_id }}
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
@@ -39,12 +65,15 @@ spec:
     {%- endif %}
   hostnames:
     {%- for host in http_hosts %}
+    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
     - "{{ host.domain_name }}"
     # TODO(QOV-1400): remove this code used for Gateway API double stack migration
     - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endif %}
     {%- endfor %}
   rules:
     {%- for host in http_hosts %}
+    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
     # Rule 1: Main path with optional rewrite
     - backendRefs:
         - group: ""
@@ -133,18 +162,33 @@ spec:
               value: "{{ environment_long_id }}"
             - name: "x-qovery-com-associated-service-id"
               value: "{{ associated_service_long_id }}"
-     {%- endfor %}
+    {%- endif %}
+    {%- endfor %}
+{%- endfor %}
 {%- if advanced_settings.network_gateway_api_force_ssl_redirect and advanced_settings.network_gateway_api_force_ssl_redirect != "false" %}
+{#
+  SSL redirect routes are also split using the same logic.
+  Each SSL redirect route matches the corresponding HTTPS route part.
+#}
+{%- for route_index in range(end=num_routes) %}
+{%- set start_idx = route_index * max_hosts_per_route %}
+{%- set end_idx_calc = start_idx + max_hosts_per_route %}
+{%- if end_idx_calc > total_hosts %}
+{%- set end_idx = total_hosts %}
+{%- else %}
+{%- set end_idx = end_idx_calc %}
+{%- endif %}
 ---
 # SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ sanitized_name }}-ssl-redirect
+  name: {{ sanitized_name }}-ssl-redirect{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
     qovery.com/associated-service-id: {{ associated_service_long_id }}
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
@@ -168,9 +212,11 @@ spec:
       sectionName: http
   hostnames:
     {%- for host in http_hosts %}
+    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
     - "{{ host.domain_name }}"
     # TODO(QOV-1400): remove this code used for Gateway API double stack migration
     - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endif %}
     {%- endfor %}
   rules:
   - filters:
@@ -178,6 +224,7 @@ spec:
       requestRedirect:
         scheme: https
         statusCode: 301
+{%- endfor %}
 {%- endif %}
 {%- endif %}
 {%- endfor %}

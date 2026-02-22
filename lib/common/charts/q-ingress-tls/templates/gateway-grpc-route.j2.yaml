@@ -1,15 +1,41 @@
 {%- if k8s_deploy_api_gateway == true %}
 {% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
 {%- if grpc_hosts|length >= 1  %}
+{#
+  Split routes to comply with Kubernetes Gateway API limits:
+  - Maximum 16 hostnames per GRPCRoute
+  - Maximum 16 rules per GRPCRoute
+
+  Why 8 hosts per route?
+  - Each host generates 2 hostnames (original + new-gateway-api variant)
+  - Each host generates 1 rule
+  - 8 hosts × 2 hostnames = 16 hostnames (at the Kubernetes limit)
+
+  When you have >8 hosts, multiple GRPCRoute resources are created:
+  - router-name-grpc (for 1-8 hosts)
+  - router-name-grpc-1, router-name-grpc-2, ... (for >8 hosts)
+#}
+{%- set max_hosts_per_route = 8 %}
+{%- set total_hosts = grpc_hosts|length %}
+{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
+{%- for route_index in range(end=num_routes) %}
+{%- set start_idx = route_index * max_hosts_per_route %}
+{%- set end_idx_calc = start_idx + max_hosts_per_route %}
+{%- if end_idx_calc > total_hosts %}
+{%- set end_idx = total_hosts %}
+{%- else %}
+{%- set end_idx = end_idx_calc %}
+{%- endif %}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: GRPCRoute
 metadata:
-  name: {{ sanitized_name }}-grpc
+  name: {{ sanitized_name }}-grpc{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
     qovery.com/associated-service-id: {{ associated_service_long_id }}
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
@@ -39,12 +65,15 @@ spec:
     {%- endif %}
   hostnames:
     {%- for host in grpc_hosts %}
+    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
     - "{{ host.domain_name }}"
     # TODO(QOV-1400): remove this code used for Gateway API double stack migration
     - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
+    {%- endif %}
     {%- endfor %}
   rules:
     {%- for host in grpc_hosts %}
+    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
     - backendRefs:
         - group: ""
           kind: Service
@@ -93,7 +122,9 @@ spec:
             - name: "x-qovery-com-associated-service-id"
               value: "{{ associated_service_long_id }}"
       {%- endif %}
+    {%- endif %}
     {%- endfor %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

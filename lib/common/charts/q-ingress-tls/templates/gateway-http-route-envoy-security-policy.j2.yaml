@@ -1,15 +1,24 @@
 {%- if k8s_deploy_api_gateway == true %}
 {% for namespace_key, http_hosts in http_hosts_per_namespace %}
 {%- if http_hosts|length >= 1  %}
+{#
+  Create one SecurityPolicy per HTTPRoute part.
+  See gateway-http-route.j2.yaml for details on why routes are split.
+#}
+{%- set max_hosts_per_route = 8 %}
+{%- set total_hosts = http_hosts|length %}
+{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
+{%- for route_index in range(end=num_routes) %}
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:
-  name: {{ sanitized_name }}-traffic-policy
+  name: {{ sanitized_name }}-security-policy{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
     qovery.com/associated-service-id: {{ associated_service_long_id }}
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
@@ -22,7 +31,7 @@ spec:
   targetRef:
     group: gateway.networking.k8s.io
     kind: HTTPRoute
-    name: {{ sanitized_name }}
+    name: {{ sanitized_name }}{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   {%- if advanced_settings.network_gateway_api_enable_cors == true %}
   cors:
     allowOrigins:
@@ -68,6 +77,7 @@ spec:
     users:
       name: htaccess-{{ sanitized_name }}
   {%- endif %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}

@@ -1,15 +1,24 @@
 {%- if k8s_deploy_api_gateway == true %}
 {% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
 {%- if grpc_hosts|length >= 1  %}
+{#
+  Create one SecurityPolicy per GRPCRoute part.
+  See gateway-grpc-route.j2.yaml for details on why routes are split.
+#}
+{%- set max_hosts_per_route = 8 %}
+{%- set total_hosts = grpc_hosts|length %}
+{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
+{%- for route_index in range(end=num_routes) %}
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:
-  name: {{ sanitized_name }}-grpc-traffic-policy
+  name: {{ sanitized_name }}-grpc-security-policy{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
     qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
     qovery.com/associated-service-id: {{ associated_service_long_id }}
     qovery.com/associated-service-type: {{ associated_service_type }}
     qovery.com/environment-id: {{ environment_long_id }}
@@ -21,8 +30,8 @@ metadata:
 spec:
   targetRef:
     group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: {{ sanitized_name }}
+    kind: GRPCRoute
+    name: {{ sanitized_name }}-grpc{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   {%- if (advanced_settings.network_gateway_api_whitelist_source_range and advanced_settings.network_gateway_api_whitelist_source_range != "0.0.0.0/0") or advanced_settings.network_gateway_api_denylist_source_range %}
   authorization:
     {%- if advanced_settings.network_gateway_api_whitelist_source_range and advanced_settings.network_gateway_api_whitelist_source_range != "0.0.0.0/0" %}
@@ -53,6 +62,7 @@ spec:
     users:
       name: htaccess-{{ sanitized_name }}
   {%- endif %}
+{%- endfor %}
 {%- endif %}
 {%- endfor %}
 {%- endif %}
