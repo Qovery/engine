@@ -29,6 +29,7 @@ use base64::engine::general_purpose;
 use itertools::Itertools;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -538,8 +539,9 @@ impl TerraformService {
                 ),
             };
 
-        // Use root_module_path as the Docker build context so only necessary files are copied
-        let (root_path, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
+        // Use repository root as Docker build context to include all modules (incl. sibling modules)
+        let root_path = PathBuf::from(".");
+        let (_, dockerfile_path) = normalize_root_and_dockerfile_path(root_module_path, dockerfile_path);
         let mut disable_build_cache = false;
 
         let build_env_vars = self
@@ -640,13 +642,11 @@ terraform {{
     }
 
     fn build_extra_files(&self, root_module_path: &str) -> Result<Vec<GitRepositoryExtraFile>, TerraformServiceError> {
-        // Place entrypoint.sh in root_module_path so it ends up at /data/entrypoint.sh in the Docker image
-        let (_, entry_point_file_path) =
-            normalize_root_and_dockerfile_path(root_module_path, &Some("entrypoint.sh".to_string()));
+        // entrypoint.sh goes at repo root → ends up at /data/entrypoint.sh in Docker image
+        let entry_point_file_path = PathBuf::from("entrypoint.sh");
 
         let mut extra_files = vec![GitRepositoryExtraFile {
-            path: entry_point_file_path
-                .ok_or_else(|| TerraformServiceError::InvalidConfig("entrypoint.sh path is not defined".to_string()))?,
+            path: entry_point_file_path,
             content: self.get_entry_point_sh(),
         }];
 
@@ -844,5 +844,49 @@ mod tests {
         assert!(!dockerfile.contains("{{provider_version}}"));
         // Should be OpenTofu image
         assert!(dockerfile.contains("opentofu"));
+    }
+
+    #[test]
+    fn test_build_extra_files_places_entrypoint_sh_at_repo_root() {
+        // Given a service with a non-trivial root_module_path
+        let service = create_test_terraform_service("terraform-service");
+        let root_module_path = "modules/root";
+
+        // When we build the extra files
+        let extra_files = service.build_extra_files(root_module_path).unwrap();
+
+        // Then entrypoint.sh should be at the repo root (not inside root_module_path)
+        // so that it ends up at /data/entrypoint.sh in the Docker image
+        let entrypoint = extra_files
+            .iter()
+            .find(|f| f.path.file_name().unwrap_or_default() == "entrypoint.sh");
+        assert!(entrypoint.is_some(), "entrypoint.sh should be present");
+        assert_eq!(
+            entrypoint.unwrap().path,
+            PathBuf::from("entrypoint.sh"),
+            "entrypoint.sh must be at repo root, not inside root_module_path"
+        );
+    }
+
+    #[test]
+    fn test_build_extra_files_places_backend_tf_under_root_module_path() {
+        // Given a service with a non-trivial root_module_path and Kubernetes backend
+        let service = create_test_terraform_service("terraform-service");
+        let root_module_path = "modules/root";
+
+        // When we build the extra files
+        let extra_files = service.build_extra_files(root_module_path).unwrap();
+
+        // Then backend.tf should be placed inside root_module_path (relative to repo root)
+        // so that it ends up at /data/modules/root/backend.tf in the Docker image
+        let backend = extra_files
+            .iter()
+            .find(|f| f.path.file_name().unwrap_or_default() == "backend.tf");
+        assert!(backend.is_some(), "backend.tf should be present for Kubernetes backend");
+        assert_eq!(
+            backend.unwrap().path,
+            PathBuf::from("modules/root/backend.tf"),
+            "backend.tf must be placed inside root_module_path"
+        );
     }
 }

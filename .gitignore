@@ -18,6 +18,7 @@ bin_versions
 .DS_Store
 /dist/
 /engine_*/
+.worktrees/
 .internal/
 .vscode/
 .env
