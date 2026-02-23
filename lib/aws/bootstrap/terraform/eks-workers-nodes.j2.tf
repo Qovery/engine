@@ -10,6 +10,26 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
     instance_metadata_tags = "enabled"
   }
 
+  {% if eks_ec2_ami_use_bottlerocket %}
+  # Bottlerocket: xvda is OS only (fixed size), xvdb carries user data
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size = 4
+      encrypted   = true
+    }
+  }
+
+  block_device_mappings {
+    device_name = "/dev/xvdb"
+
+    ebs {
+      volume_size = {{ eks_worker_node.disk_size_in_gib }}
+      encrypted   = true
+    }
+  }
+  {%- else %}
   block_device_mappings {
     device_name = "/dev/xvda"
 
@@ -18,6 +38,7 @@ resource "aws_launch_template" "eks_workers_nodes_{{ loop.index }}" {
       encrypted   = true
     }
   }
+  {%- endif %}
 
   tags = local.tags_eks
   tag_specifications {
