@@ -26,7 +26,13 @@ spec:
   blockDeviceMappings:
     - deviceName: /dev/xvda
       ebs:
+        # Bottlerocket uses xvda for OS only: keep it small and fixed
+        # User data goes to xvdb (see below)
+        {{- if .Values.isBottlerocket }}
+        volumeSize: 4Gi
+        {{- else }}
         volumeSize: {{ .Values.diskSize }}
+        {{- end }}
         volumeType: {{ .Values.storageClass }}
         {{- if and (eq .Values.storageClass "gp3") .Values.diskIops }}
         iops: {{ .Values.diskIops }}
