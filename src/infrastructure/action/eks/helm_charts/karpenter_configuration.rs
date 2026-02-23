@@ -102,6 +102,8 @@ impl KarpenterConfigurationChart {
             eks_ec2_ami: match eks_ec2_ami {
                 Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
                 Ec2Ami::Bottlerocket => Ec2Ami::Bottlerocket,
+                // Custom AMIs bypass version-based downgrade logic
+                Ec2Ami::Custom(v) => Ec2Ami::Custom(v),
                 // Just making sure not to switch to AmazonLinux2023 for earlier k8s versions avoiding node replacement
                 // AL2023 is the new default
                 Ec2Ami::AmazonLinux2023 => match kubernetes_version {
@@ -149,6 +151,21 @@ impl KarpenterConfigurationChart {
 
 impl ToCommonHelmChart for KarpenterConfigurationChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        // GPU nodes always use the standard AMI (not affected by custom AMI setting)
+        let gpu_ec2_ami = if self.eks_ec2_ami.is_custom() {
+            match self.kubernetes_version {
+                KubernetesVersion::V1_33 { .. } => Ec2Ami::AmazonLinux2023,
+                _ => Ec2Ami::AmazonLinux2,
+            }
+        } else {
+            match &self.eks_ec2_ami {
+                Ec2Ami::AmazonLinux2 => Ec2Ami::AmazonLinux2,
+                Ec2Ami::AmazonLinux2023 => Ec2Ami::AmazonLinux2023,
+                Ec2Ami::Bottlerocket => Ec2Ami::Bottlerocket,
+                Ec2Ami::Custom(_) => unreachable!(),
+            }
+        };
+
         let mut values = vec![
             ChartSetValue {
                 key: "clusterName".to_string(),
@@ -160,13 +177,19 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
             ChartSetValue {
                 key: "amiSelectorTermsAlias".to_string(),
-                value: self.eks_ec2_ami.ami_selector_terms_alias().to_string(),
+                value: self.eks_ec2_ami.ami_selector_terms_alias().unwrap_or("").to_string(),
             },
             ChartSetValue {
                 key: "gpuAmiSelectorTermsName".to_string(),
-                value: self
-                    .eks_ec2_ami
-                    .ami_selector_terms_name(&self.kubernetes_version, None, true),
+                value: gpu_ec2_ami.ami_selector_terms_name(&self.kubernetes_version, None, true),
+            },
+            ChartSetValue {
+                key: "gpuAmiFamily".to_string(),
+                value: gpu_ec2_ami.karpenter_ami_family().to_string(),
+            },
+            ChartSetValue {
+                key: "gpuIsBottlerocket".to_string(),
+                value: gpu_ec2_ami.is_bottlerocket().to_string(),
             },
             ChartSetValue {
                 key: "kubernetesVersion".to_string(),
@@ -174,7 +197,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
             ChartSetValue {
                 key: "isBottlerocket".to_string(),
-                value: (self.eks_ec2_ami == Ec2Ami::Bottlerocket).to_string(),
+                value: self.eks_ec2_ami.is_bottlerocket().to_string(),
             },
             ChartSetValue {
                 key: "amiFamily".to_string(),
@@ -188,7 +211,31 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 key: "storageClass".to_string(),
                 value: self.aws_storage_type.to_cloud_provider_format().to_string(),
             },
+            ChartSetValue {
+                key: "isCustomAmi".to_string(),
+                value: self.eks_ec2_ami.is_custom().to_string(),
+            },
         ];
+
+        // Custom AMI: set either customAmiId or customAmiName using the reference (without family prefix)
+        if let Some(ami_ref) = self.eks_ec2_ami.custom_ami_reference() {
+            if self.eks_ec2_ami.is_ami_id() {
+                values.push(ChartSetValue {
+                    key: "customAmiId".to_string(),
+                    value: ami_ref.to_string(),
+                });
+            } else {
+                values.push(ChartSetValue {
+                    key: "customAmiName".to_string(),
+                    value: ami_ref.to_string(),
+                });
+            }
+            // Override amiFamily for custom AMIs (Karpenter needs explicit amiFamily when using id/name selectors)
+            values.push(ChartSetValue {
+                key: "amiFamily".to_string(),
+                value: self.eks_ec2_ami.karpenter_ami_family().to_string(),
+            });
+        }
 
         // Add custom resource tags first (before system tags).
         // This ensures system tags (ClusterId, OrganizationId, etc.) take precedence
@@ -1300,6 +1347,199 @@ mod tests {
             explicit_subnet_value.value,
             "{subnet-public-a-1,subnet-public-a-2,subnet-public-b-1,subnet-public-b-2,subnet-public-c-1,subnet-public-c-2}",
             "explicitSubnetIds helm value should be formatted correctly with public subnets"
+        );
+    }
+
+    // --- EC2NodeClass template rendering tests for custom AMI ---
+
+    #[derive(Debug, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Ec2NodeClassSpec {
+        ami_selector_terms: Vec<AmiSelectorTerm>,
+        ami_family: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct AmiSelectorTerm {
+        alias: Option<String>,
+        id: Option<String>,
+        name: Option<String>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct Ec2NodeClass {
+        #[allow(dead_code)]
+        kind: String,
+        metadata: Metadata,
+        spec: Ec2NodeClassSpec,
+    }
+
+    fn generate_chart_yaml_with_ami(ec2_ami: Ec2Ami) -> String {
+        let chart = KarpenterConfigurationChart::new(
+            None,
+            "test-cluster".to_string(),
+            true,
+            "sg-12345".to_string(),
+            "cluster-id",
+            Uuid::new_v4(),
+            "org-id",
+            Uuid::new_v4(),
+            KUBERNETES_VERSION,
+            "us-east-1",
+            KarpenterParameters {
+                spot_enabled: false,
+                max_node_drain_time_in_secs: None,
+                disk_size: DiskSize::Gib(50),
+                disk_iops: None,
+                disk_throughput: None,
+                default_service_architecture: ARM64,
+                qovery_node_pools: KarpenterNodePool {
+                    requirements: vec![],
+                    stable_override: KarpenterStableNodePoolOverride {
+                        budgets: vec![],
+                        limits: None,
+                        consolidate_after_in_seconds: None,
+                    },
+                    default_override: None,
+                    gpu_override: None,
+                },
+            },
+            None,
+            ec2_ami,
+            AwsStorageType::GP3,
+            0,
+            std::collections::HashMap::new(),
+        );
+
+        let current_directory = env::current_dir().expect("Impossible to get current directory");
+        let chart_path = format!(
+            "{}/lib/{}/bootstrap/charts/{}",
+            current_directory
+                .to_str()
+                .expect("Impossible to convert current directory to string"),
+            get_helm_path_kubernetes_provider_sub_folder_name(
+                chart.chart_path.helm_path(),
+                HelmChartType::CloudProviderSpecific(KubernetesKind::Eks)
+            ),
+            KarpenterConfigurationChart::chart_name(),
+        );
+
+        let helm = Helm::new::<String>(None, &[]).expect("Failed to initialize Helm");
+        let common_chart = chart.to_common_helm_chart().expect("Failed to convert to common chart");
+
+        helm.get_template(&chart_path, &common_chart.chart_info)
+            .expect("Failed to get Helm template")
+    }
+
+    fn parse_ec2_node_classes(yaml: &str) -> Vec<Ec2NodeClass> {
+        serde_yaml::Deserializer::from_str(yaml)
+            .filter_map(|doc| {
+                let value: Value = Value::deserialize(doc).ok()?;
+                // Only keep EC2NodeClass documents
+                if value.get("kind")?.as_str()? == "EC2NodeClass" {
+                    serde_yaml::from_value::<Ec2NodeClass>(value).ok()
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_standard_ami_uses_alias() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::AmazonLinux2023);
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        // Standard AMI: should use alias, no amiFamily
+        assert!(default.spec.ami_family.is_none(), "Standard AMI should not set amiFamily");
+        assert_eq!(default.spec.ami_selector_terms.len(), 1);
+        assert_eq!(default.spec.ami_selector_terms[0].alias.as_deref(), Some("al2023@latest"));
+        assert!(default.spec.ami_selector_terms[0].id.is_none());
+        assert!(default.spec.ami_selector_terms[0].name.is_none());
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_bottlerocket_uses_alias() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Bottlerocket);
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        assert!(default.spec.ami_family.is_none(), "Standard AMI should not set amiFamily");
+        assert_eq!(default.spec.ami_selector_terms[0].alias.as_deref(), Some("bottlerocket@latest"));
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_custom_ami_id() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Custom("ami-0123456789abcdef0".to_string()));
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        // Custom AMI ID: should use id selector + explicit amiFamily, no alias
+        assert_eq!(default.spec.ami_family.as_deref(), Some("AL2023"));
+        assert_eq!(default.spec.ami_selector_terms.len(), 1);
+        assert!(default.spec.ami_selector_terms[0].alias.is_none());
+        assert_eq!(default.spec.ami_selector_terms[0].id.as_deref(), Some("ami-0123456789abcdef0"));
+        assert!(default.spec.ami_selector_terms[0].name.is_none());
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_custom_ami_name_pattern() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Custom("my-hardened-ami-*".to_string()));
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        // Custom AMI name: should use name selector + explicit amiFamily, no alias
+        assert_eq!(default.spec.ami_family.as_deref(), Some("AL2023"));
+        assert_eq!(default.spec.ami_selector_terms.len(), 1);
+        assert!(default.spec.ami_selector_terms[0].alias.is_none());
+        assert!(default.spec.ami_selector_terms[0].id.is_none());
+        assert_eq!(default.spec.ami_selector_terms[0].name.as_deref(), Some("my-hardened-ami-*"));
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_custom_ami_with_al2_prefix() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Custom("al2:ami-0123456789abcdef0".to_string()));
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        // al2: prefix → amiFamily should be AL2, reference without prefix
+        assert_eq!(default.spec.ami_family.as_deref(), Some("AL2"));
+        assert_eq!(default.spec.ami_selector_terms[0].id.as_deref(), Some("ami-0123456789abcdef0"));
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_custom_ami_with_bottlerocket_prefix() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Custom("bottlerocket:ami-0123456789abcdef0".to_string()));
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+
+        // bottlerocket: prefix → amiFamily should be Bottlerocket
+        assert_eq!(default.spec.ami_family.as_deref(), Some("Bottlerocket"));
+        assert_eq!(default.spec.ami_selector_terms[0].id.as_deref(), Some("ami-0123456789abcdef0"));
+    }
+
+    #[test]
+    fn test_ec2nodeclass_template_custom_ami_does_not_affect_gpu() {
+        let yaml = generate_chart_yaml_with_ami(Ec2Ami::Custom("bottlerocket:ami-custom123".to_string()));
+        let node_classes = parse_ec2_node_classes(&yaml);
+
+        // GPU nodeclass should not exist (gpu_override is None), but if it did,
+        // let's at least verify the default nodeclass uses the custom AMI
+        let default = node_classes.iter().find(|nc| nc.metadata.name == "default").unwrap();
+        assert_eq!(default.spec.ami_family.as_deref(), Some("Bottlerocket"));
+        assert_eq!(default.spec.ami_selector_terms[0].id.as_deref(), Some("ami-custom123"));
+
+        // No GPU nodeclass should be rendered (gpu not enabled)
+        assert!(
+            node_classes.iter().all(|nc| nc.metadata.name != "gpu"),
+            "GPU nodeclass should not be rendered when gpu_override is None"
         );
     }
 }

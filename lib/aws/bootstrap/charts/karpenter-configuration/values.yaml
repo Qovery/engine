@@ -20,6 +20,13 @@ kubernetesVersion: ""
 isBottlerocket: false
 amiFamily: AL2023
 
+isCustomAmi: false
+customAmiId: ""
+customAmiName: ""
+
+gpuAmiFamily: AL2023
+gpuIsBottlerocket: false
+
 tags:
   ClusterId: ""
   ClusterLongId: ""

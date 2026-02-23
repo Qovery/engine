@@ -7,8 +7,18 @@ spec:
     # https://github.com/kubernetes/autoscaler/issues/3592
     # hop limit should be set to 2 for https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#using-the-amazon-ec2-instance-metadata-server-version-2-imdsv2
     httpPutResponseHopLimit: 2
+  {{- if .Values.isCustomAmi }}
+  amiFamily: {{ .Values.amiFamily }}
+  amiSelectorTerms:
+    {{- if .Values.customAmiId }}
+    - id: {{ .Values.customAmiId }}
+    {{- else }}
+    - name: {{ .Values.customAmiName | quote }}
+    {{- end }}
+  {{- else }}
   amiSelectorTerms:
     - alias: {{ .Values.amiSelectorTermsAlias }}
+  {{- end }}
   role: "KarpenterNodeRole-{{ .Values.clusterName }}"
   subnetSelectorTerms:
     {{- if .Values.explicitSubnetIds }}

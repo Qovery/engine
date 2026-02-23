@@ -12,6 +12,10 @@ kubernetesVersion: set-by-engine-code
 isBottlerocket: set-by-engine-code
 amiFamily: set-by-engine-code
 
+isCustomAmi: set-by-engine-code
+customAmiId: ""
+customAmiName: ""
+
 tags:
   ClusterId: set-by-engine-code
   ClusterLongId: set-by-engine-code
@@ -23,6 +27,9 @@ global_node_pools:
   requirements: []
 
 # GPUs
+gpuAmiFamily: set-by-engine-code
+gpuIsBottlerocket: set-by-engine-code
+
 gpuNodePool:
   enable: set-by-engine-code
   requirements: []

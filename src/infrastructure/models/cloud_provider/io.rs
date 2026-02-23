@@ -12,6 +12,7 @@ use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
 use base64::engine::general_purpose;
 use reqwest::StatusCode;
+use serde::Deserialize as SerdeDeserialize;
 use serde_derive::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
@@ -165,11 +166,12 @@ impl NginxLimitRequestStatusCode {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Ec2Ami {
     AmazonLinux2,
     AmazonLinux2023,
     Bottlerocket,
+    Custom(String),
 }
 
 impl Ec2Ami {
@@ -178,6 +180,42 @@ impl Ec2Ami {
             Ec2Ami::AmazonLinux2 => Ec2AmiModel::AmazonLinux2,
             Ec2Ami::AmazonLinux2023 => Ec2AmiModel::AmazonLinux2023,
             Ec2Ami::Bottlerocket => Ec2AmiModel::Bottlerocket,
+            Ec2Ami::Custom(v) => Ec2AmiModel::Custom(v.clone()),
+        }
+    }
+}
+
+impl serde::Serialize for Ec2Ami {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Ec2Ami::AmazonLinux2 => serializer.serialize_str("AmazonLinux2"),
+            Ec2Ami::AmazonLinux2023 => serializer.serialize_str("AmazonLinux2023"),
+            Ec2Ami::Bottlerocket => serializer.serialize_str("Bottlerocket"),
+            Ec2Ami::Custom(v) => serializer.serialize_str(v),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Ec2Ami {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = <String as SerdeDeserialize>::deserialize(deserializer)?;
+        match s.as_str() {
+            "AmazonLinux2" => Ok(Ec2Ami::AmazonLinux2),
+            "AmazonLinux2023" => Ok(Ec2Ami::AmazonLinux2023),
+            "Bottlerocket" => Ok(Ec2Ami::Bottlerocket),
+            other => {
+                // Validate: must be an AMI ID (ami-xxx) or a name pattern (non-empty)
+                if other.is_empty() {
+                    return Err(serde::de::Error::custom("custom AMI value cannot be empty"));
+                }
+                Ok(Ec2Ami::Custom(other.to_string()))
+            }
         }
     }
 }
@@ -792,5 +830,87 @@ mod tests {
             },
             res.err().expect("Should be an error")
         );
+    }
+
+    #[test]
+    fn test_ec2_ami_serde_standard_variants() {
+        use super::Ec2Ami;
+
+        let test_cases = vec![
+            (Ec2Ami::AmazonLinux2, "\"AmazonLinux2\""),
+            (Ec2Ami::AmazonLinux2023, "\"AmazonLinux2023\""),
+            (Ec2Ami::Bottlerocket, "\"Bottlerocket\""),
+        ];
+
+        for (variant, expected_json) in test_cases {
+            // Serialize
+            let serialized = serde_json::to_string(&variant).unwrap();
+            assert_eq!(serialized, expected_json);
+
+            // Deserialize back
+            let deserialized: Ec2Ami = serde_json::from_str(&serialized).unwrap();
+            assert_eq!(deserialized, variant);
+        }
+    }
+
+    #[test]
+    fn test_ec2_ami_serde_custom_ami_id() {
+        use super::Ec2Ami;
+
+        let ami = Ec2Ami::Custom("ami-0123456789abcdef0".to_string());
+        let serialized = serde_json::to_string(&ami).unwrap();
+        assert_eq!(serialized, "\"ami-0123456789abcdef0\"");
+
+        let deserialized: Ec2Ami = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, ami);
+    }
+
+    #[test]
+    fn test_ec2_ami_serde_custom_ami_name_pattern() {
+        use super::Ec2Ami;
+
+        let ami = Ec2Ami::Custom("my-custom-ami-*".to_string());
+        let serialized = serde_json::to_string(&ami).unwrap();
+        assert_eq!(serialized, "\"my-custom-ami-*\"");
+
+        let deserialized: Ec2Ami = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, ami);
+    }
+
+    #[test]
+    fn test_ec2_ami_deserialize_unknown_string_becomes_custom() {
+        use super::Ec2Ami;
+
+        let deserialized: Ec2Ami = serde_json::from_str("\"my-hardened-ami-v2\"").unwrap();
+        assert_eq!(deserialized, Ec2Ami::Custom("my-hardened-ami-v2".to_string()));
+    }
+
+    #[test]
+    fn test_ec2_ami_deserialize_empty_string_fails() {
+        use super::Ec2Ami;
+
+        let result = serde_json::from_str::<Ec2Ami>("\"\"");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ec2_ami_in_cluster_advanced_settings() {
+        // Test custom AMI ID via advanced settings JSON
+        let data = r#"{"aws.eks.ec2.ami": "ami-0123456789abcdef0"}"#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(
+            settings.aws_eks_ec2_ami,
+            super::Ec2Ami::Custom("ami-0123456789abcdef0".to_string())
+        );
+
+        // Test custom AMI name pattern via advanced settings JSON
+        let data = r#"{"aws.eks.ec2.ami": "my-custom-ami-*"}"#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(settings.aws_eks_ec2_ami, super::Ec2Ami::Custom("my-custom-ami-*".to_string()));
+
+        // Test standard variant still works
+        let data = r#"{"aws.eks.ec2.ami": "AmazonLinux2023"}"#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(settings.aws_eks_ec2_ami, super::Ec2Ami::AmazonLinux2023);
     }
 }
