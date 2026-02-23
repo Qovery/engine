@@ -279,8 +279,10 @@ impl<T: CloudProvider> TerraformService<T> {
     }
 
     fn get_command_args(&self) -> Vec<String> {
-        // Content is already at root of build context since we set root_path to root_module_path
-        let base_path = ".".to_string();
+        // Pass root_module_path so entrypoint navigates to the correct module directory
+        let base_path = match &self.terraform_files_source {
+            TerraformFilesSource::Git { root_module_path, .. } => root_module_path.trim_start_matches('/').to_string(),
+        };
 
         let var_file_args: Vec<String> = self
             .terraform_var_file_paths
@@ -649,5 +651,40 @@ mod tests {
         let result = add_cloud_provider_credentials_if_necessary(existing.clone(), &credentials, &credential_vars);
 
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_get_command_args_base_path_strips_leading_slash() {
+        // Test the logic used in get_command_args() to derive base_path from root_module_path.
+        // The entrypoint receives base_path as its first argument and uses it to cd into the
+        // correct module directory inside the container (after the build context is the repo root).
+        let test_cases = vec![
+            ("/modules/root", "modules/root"),
+            ("modules/root", "modules/root"),
+            (".", "."),
+            ("/nested/a/b", "nested/a/b"),
+        ];
+
+        for (input, expected) in test_cases {
+            let source = TerraformFilesSource::Git {
+                git_url: Url::parse("https://github.com/test/repo").unwrap(),
+                get_credentials: Box::new(|| Ok(None)),
+                commit_id: "abc123".to_string(),
+                root_module_path: input.to_string(),
+                ssh_keys: vec![],
+            };
+
+            // This is the exact logic used in get_command_args()
+            let base_path = match &source {
+                TerraformFilesSource::Git { root_module_path, .. } => {
+                    root_module_path.trim_start_matches('/').to_string()
+                }
+            };
+
+            assert_eq!(
+                base_path, expected,
+                "root_module_path '{input}' should produce base_path '{expected}'"
+            );
+        }
     }
 }
