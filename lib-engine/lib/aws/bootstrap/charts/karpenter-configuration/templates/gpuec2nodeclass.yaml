@@ -4,7 +4,7 @@ kind: EC2NodeClass
 metadata:
   name: gpu
 spec:
-  amiFamily: {{ .Values.amiFamily }}
+  amiFamily: {{ .Values.gpuAmiFamily }}
   metadataOptions:
     httpPutResponseHopLimit: 2
   amiSelectorTerms:
@@ -43,7 +43,7 @@ spec:
         {{- end }}
         encrypted: true
         deleteOnTermination: true
-    {{- if .Values.isBottlerocket }}
+    {{- if .Values.gpuIsBottlerocket }}
     # Bottlerocket uses a second volume for container data (images, logs)
     - deviceName: /dev/xvdb
       ebs:
