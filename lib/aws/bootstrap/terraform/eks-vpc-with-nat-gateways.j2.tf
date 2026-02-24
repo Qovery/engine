@@ -269,6 +269,13 @@ resource "aws_route_table" "eks_cluster_zone_a_private" {
     nat_gateway_id = aws_nat_gateway.eks_zone_a_public[count.index].id
   }
 
+  {% for route in vpc_custom_routing_table %}
+  route {
+    cidr_block = "{{ route.destination }}"
+    gateway_id = "{{ route.target }}"
+  }
+  {% endfor %}
+
   tags = merge(
     local.tags_eks_vpc_private,
     {
@@ -287,6 +294,13 @@ resource "aws_route_table" "eks_cluster_zone_b_private" {
     nat_gateway_id = aws_nat_gateway.eks_zone_b_public[count.index].id
   }
 
+  {% for route in vpc_custom_routing_table %}
+  route {
+    cidr_block = "{{ route.destination }}"
+    gateway_id = "{{ route.target }}"
+  }
+  {% endfor %}
+
   tags = merge(
     local.tags_eks_vpc_private,
     {
@@ -304,6 +318,13 @@ resource "aws_route_table" "eks_cluster_zone_c_private" {
     cidr_block = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.eks_zone_c_public[count.index].id
   }
+
+  {% for route in vpc_custom_routing_table %}
+  route {
+    cidr_block = "{{ route.destination }}"
+    gateway_id = "{{ route.target }}"
+  }
+  {% endfor %}
 
   tags = merge(
     local.tags_eks_vpc_private,
