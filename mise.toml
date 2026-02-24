@@ -1,8 +1,13 @@
 [tools]
 
+[env]
+RUST_LOG = "info"
+WORKSPACE_ROOT_DIR = "{{config_root}}/lib-engine"
+LIB_ROOT_DIR = "{{config_root}}/lib-engine/lib"
+CI_PROJECT_TITLE = "test"
 
 [tasks.get-test-secrets]
-description = "get test secrets to be able to launch the engine tests"
+description = "Get test secrets to be able to launch the engine tests"
 tools.glab = "latest"
 tools.sops = "latest"
 tools.age = "latest"
@@ -13,7 +18,7 @@ run = '''
 '''
 
 [tasks.edit-test-secrets]
-description = "get test secrets to be able to launch the engine tests"
+description = "Edit test secrets"
 tools.glab = "latest"
 tools.sops = "latest"
 tools.age = "latest"
@@ -22,3 +27,247 @@ run = '''
   AGE_KEY=$(glab variable get AGE_ENGINE_TEST_SECRET_KEY)
   SOPS_AGE_KEY=$AGE_KEY sops test_secrets.enc.env
 '''
+
+[tasks.build]
+description = "Build engine app with engine lib"
+run = '''
+  echo "=> Run app tests"
+  cargo test --manifest-path app/Cargo.toml
+
+  echo "=> Run build"
+  cargo build --all-features --tests --color=always
+'''
+
+[tasks.lint]
+description = "Run cargo fmt and clippy"
+run = '''
+  set -e
+  echo "=== CARGO FMT ==="
+  cargo fmt --all -- --check --color=always || { echo "Use cargo fmt to format your code"; exit 1; }
+
+  echo "=== CLIPPY ==="
+  cargo clippy --all --all-features --tests --locked -- -D warnings || { echo "Solve your clippy errors to succeed"; exit 1; }
+'''
+
+[tasks.fmt]
+description = "Run cargo fmt to format code"
+run = "cargo fmt --all"
+
+[tasks.unused-deps]
+description = "Check for unused Rust dependencies"
+run = "find . -name Cargo.toml ! -path '*/.cargo/*' -exec cargo machete {} \\;"
+
+
+[tasks.unit-tests]
+description = "Run unit tests"
+dir = "lib-engine"
+run = '''
+  cargo nextest run \
+    --lib --bins \
+    --message-format human \
+    --manifest-path Cargo.toml \
+    --no-fail-fast \
+    --profile default \
+    --no-tests=pass
+'''
+
+[tasks.test]
+description = "Run integration tests for a given feature"
+usage = 'arg "<feature>" help="Feature flag to test (e.g. test-aws-minimal)"'
+dir = "lib-engine"
+run = '''
+  set -e
+  feature="${usage_feature:?Provide a feature flag, e.g.: mise run test test-aws-minimal}"
+
+  cargo nextest run \
+    --lib --tests \
+    -E 'kind(test)' \
+    --features "$feature" \
+    --no-default-features \
+    --message-format human \
+    --manifest-path Cargo.toml \
+    --no-fail-fast \
+    --profile default \
+    --no-tests=pass
+'''
+
+[tasks.single-test]
+description = "Run a single test by exact name"
+usage = 'arg "<name>" help="Exact test name"'
+dir = "lib-engine"
+run = '''
+  set -e
+  test_name="${usage_name:?Provide a test name}"
+  cargo test --package qovery-engine --test lib "$test_name" -- --ignored --exact
+'''
+
+[tasks.test-local-stack]
+description = "Run tests on a local k3d cluster"
+run = '''
+  set -e
+  if [ -z "$DOCKER_HOST" ]; then unset DOCKER_HOST; fi
+  docker run -d --rm -p 5000:5000 --name engine-registry -e REGISTRY_STORAGE_DELETE_ENABLED=true public.ecr.aws/r3m4q3r9/pub-mirror-registry:2.8.1
+
+  kube_cluster_name="kube-test-cluster-$(date +%S%N)"
+
+  k3d cluster create -a 0 \
+      --agents 0 \
+      --image rancher/k3s:v1.33.4-k3s1 \
+      --no-lb \
+      --k3s-arg "--disable=traefik" \
+      --wait "$kube_cluster_name" || k3d cluster start --wait "$kube_cluster_name"
+
+  sleep 60
+  kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner || sleep 60
+  kubectl -n kube-system wait pod --for=condition=Ready --selector app=local-path-provisioner
+
+  echo "==========================TEST WITH LOCAL STACK==========================="
+  destroy_cluster() { docker kill engine-registry; k3d cluster delete "$kube_cluster_name"; }
+  trap "destroy_cluster" EXIT
+
+  if [ -z "$DOCKER_HOST" ]; then unset DOCKER_HOST; fi
+
+  cargo nextest run \
+    --lib --tests \
+    --features test-all-local \
+    --no-default-features \
+    --message-format human \
+    --manifest-path lib-engine/Cargo.toml \
+    --tool-config-file "ci:$(pwd)/lib-engine/nextest.config.toml" \
+    --no-fail-fast \
+    --profile default \
+    --no-tests=pass
+'''
+
+[tasks.install-hook]
+description = "Install git pre-commit hook that runs lint"
+run = '''
+  echo "mise run lint" > .git/hooks/pre-commit
+  chmod 755 .git/hooks/pre-commit
+  echo "Pre-commit hook installed"
+'''
+
+[tasks.cargo-version]
+description = "Print cargo version"
+run = "cargo --version"
+
+# Cloud provider test aliases
+[tasks."test:aws-minimal"]
+description = "Run AWS minimal tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:aws-self-hosted"]
+description = "Run AWS self-hosted tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:aws-managed-services"]
+description = "Run AWS managed services tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:aws-whole-enchilada"]
+description = "Run AWS whole enchilada tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:aws-infra"]
+description = "Run AWS infra tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-aws-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:azure-minimal"]
+description = "Run Azure minimal tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:azure-self-hosted"]
+description = "Run Azure self-hosted tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:azure-managed-services"]
+description = "Run Azure managed services tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:azure-whole-enchilada"]
+description = "Run Azure whole enchilada tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:azure-infra"]
+description = "Run Azure infra tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-azure-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:scw-minimal"]
+description = "Run Scaleway minimal tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:scw-self-hosted"]
+description = "Run Scaleway self-hosted tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:scw-managed-services"]
+description = "Run Scaleway managed services tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:scw-whole-enchilada"]
+description = "Run Scaleway whole enchilada tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:scw-infra"]
+description = "Run Scaleway infra tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-scw-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:gcp-minimal"]
+description = "Run GCP minimal tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-minimal --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:gcp-self-hosted"]
+description = "Run GCP self-hosted tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:gcp-managed-services"]
+description = "Run GCP managed services tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:gcp-whole-enchilada"]
+description = "Run GCP whole enchilada tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-whole-enchilada --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:gcp-infra"]
+description = "Run GCP infra tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-gcp-infra --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:all"]
+description = "Run all tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:all-self-hosted"]
+description = "Run all self-hosted tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all-self-hosted --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:all-managed-services"]
+description = "Run all managed services tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-all-managed-services --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'
+
+[tasks."test:quarantine"]
+description = "Run quarantine tests"
+dir = "lib-engine"
+run = 'cargo nextest run --lib --tests -E "kind(test)" --features test-quarantine --no-default-features --message-format human --manifest-path Cargo.toml --no-fail-fast --profile default --no-tests=pass'

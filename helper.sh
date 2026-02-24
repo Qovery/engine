@@ -136,11 +136,6 @@ function set_release_ga() { ## Release a new engine version and mark it as globa
   curl -s -X PUT -H 'Content-Type: application/json' -H "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" "https://${QOVERY_ADMIN_DEV_API}/engine/serviceVersion?serviceType=ENGINE&version=${tag}" || exit 1
 }
 
-function get_release_ga() { ## Get globally available release version
-  echo -e "Last defined GA version: "
-  curl -s -H 'Content-Type: application/json' "https://${QOVERY_API}/engine/serviceVersion?serviceType=ENGINE"  || exit 1
-}
-
 function deploy_engines_infra_static_ip() { ## Release GA to prod
   tag=$(generate_image_tag)
   case $1 in
@@ -234,34 +229,6 @@ engineResources.requests.ephemeral-storage="20Gi"
 
 ## Tests
 
-function prepare_tests() { ## Update all CHANGE-ME fields from lib-engine
-  set -e
-
-  print_title "Generating Vault Token"
-  if [ ! -z $CI_VAULT_ADDR ] ; then
-    export VAULT_ADDR=$CI_VAULT_ADDR
-  else
-    if [ -z $VAULT_ADDR ] ; then
-      echo "VAULT_ADDR or CI_VAULT_ADDR were not found, can't continue"
-      exit 1
-    fi
-  fi
-
-  # if VAULT_TOKEN env var is already present, skip
-  if [ -z $VAULT_TOKEN ] ; then
-    export VAULT_TOKEN=$(vault write -format=json auth/approle/login role_id=$CI_VAULT_ROLE_ID secret_id=$CI_VAULT_SECRET_ID | jq -r ".auth.client_token")
-  fi
-}
-
-function single_test() { ## Run a single test. Arg, test name: aws::aws_environment::deploy_a_working_environment_with_domain
-  test_name=$1
-  export RUST_LOG=info prepare_tests
-
-  cargo build --color=always --all --all-targets --tests
-  sccache -s
-  cd $ENGINE_DIR
-  cargo test --package qovery-engine --test lib $test_name -- --ignored --exact
-}
 
 function use_sccache() {
   if [ ! -z $DISABLE_SCCACHE ] && [ $DISABLE_SCCACHE -eq 1 ]; then
@@ -287,7 +254,6 @@ function destroy_kube_cluster() {
 }
 
 function test_local_stack() {
-    prepare_tests
     use_sccache
     if [ -z $DOCKER_HOST ]; then unset $DOCKER_HOST; fi
     docker run -d --rm -p 5000:5000 --name engine-registry -e REGISTRY_STORAGE_DELETE_ENABLED=true public.ecr.aws/r3m4q3r9/pub-mirror-registry:2.8.1
@@ -330,7 +296,6 @@ function run_tests(){ ## Run tests on qovery-engine. Args: cargo filter, GH bran
   nb_treads=$3
   print_title "RUNNING TESTS - $filter_tests"
   export RUST_LOG=info
-  prepare_tests
   use_sccache
 
   if [ "$filter_tests" = "unit-tests" ]; then
@@ -410,20 +375,7 @@ function unused_dependencies() { ## Check rust unused dependencies
   find . -name Cargo.toml ! -path '*/.cargo/*' -exec cargo machete {} \;
 }
 
-function await_docker() {
-    if [ ! -z $DOCKER_HOST ] ; then
-      return_code=1
-      while [ $return_code -ne 0 ] ; do
-      echo "waiting docker port 2375 to be available..."
-      sleep 2
-      nc -zv localhost 2375 2>/dev/null
-      return_code=$?
-      done
-    fi
-}
-
 function update_qovery_chart() {
-  prepare_tests
   use_sccache
   set -e
 
@@ -509,10 +461,7 @@ case $2 in
 esac
 
 case $1 in
-await_docker)
-  await_docker
-  ;;
-build)
+build) 
   build
   ;;
 set_release_ga)
@@ -526,14 +475,8 @@ deploy_engines_infra_static_ip)
 deploy_engines_environment_static_ip)
   deploy_engines_environment_static_ip
   ;;
-get_release_ga)
-  get_release_ga
-  ;;
 aws_self_hosted)
   run_tests test-aws-self-hosted $commit_id 20
-  ;;
-aws_ec2_self_hosted)
-  run_tests test-aws-ec2-self-hosted $commit_id 1
   ;;
 azure_self_hosted)
   run_tests test-azure-self-hosted $commit_id 20
@@ -544,17 +487,11 @@ scw_self_hosted)
 gcp_self_hosted)
   run_tests test-gcp-self-hosted $commit_id 20
   ;;
-all_self_hosted)
-  run_tests test-all-self-hosted $commit_id 20
-  ;;
 aws_minimal_tests)
   run_tests test-aws-minimal $commit_id 20
   ;;
-aws_ec2_minimal_tests)
-  run_tests test-aws-ec2-minimal $commit_id 20
-  ;;
 azure_minimal_tests)
-  run_tests test-azure-minimal $commit_id 20
+  run_tests test-azure-minimal $commit_id 20 
   ;;
 gcp_minimal_tests)
   run_tests test-gcp-minimal $commit_id 20
@@ -565,9 +502,6 @@ scw_minimal_tests)
 aws_managed_services)
   run_tests test-aws-managed-services $commit_id 20
   ;;
-aws_ec2_managed_services)
-  run_tests test-aws-ec2-managed-services $commit_id 1
-  ;;
 azure_managed_services)
   run_tests test-azure-managed-services $commit_id 20
   ;;
@@ -577,17 +511,11 @@ scw_managed_services)
 gcp_managed_services)
   run_tests test-gcp-managed-services $commit_id 20
   ;;
-all_managed_services)
-  run_tests test-all-managed-services $commit_id 20
-  ;;
 aws_whole_enchilada)
   run_tests test-aws-whole-enchilada $commit_id 20
   ;;
 aws_whole_enchilada_gpu)
   run_tests test-aws-whole-enchilada-gpu $commit_id 20
-  ;;
-aws_ec2_whole_enchilada)
-  run_tests test-aws-whole-enchilada $commit_id 20
   ;;
 azure_whole_enchilada)
   run_tests test-azure-whole-enchilada $commit_id 20
@@ -612,9 +540,6 @@ aws_infra_nat_gateway)
   ;;
 aws_infra_upgrade)
   run_tests test-aws-infra-upgrade $commit_id 20
-  ;;
-aws_ec2_infra)
-  run_tests test-aws-ec2-infra $commit_id 20
   ;;
 azure_infra)
   run_tests test-azure-infra $commit_id 20
@@ -643,18 +568,8 @@ gcp_infra_upgrade)
 quarantine)
   run_tests test-quarantine $commit_id 20
   ;;
-test_all)
-  run_tests test-all $commit_id 20
-  ;;
 unit_tests)
   run_tests unit-tests $commit_id 20
-  ;;
-single_test)
-  check_num_args 2
-  single_test $commit_id
-  ;;
-prepare_tests)
-  prepare_tests
   ;;
 cargo_version)
   cargo_version
@@ -664,9 +579,6 @@ lint)
   ;;
 unused_dependencies)
   unused_dependencies
-  ;;
-install_hook)
-  install_hook
   ;;
 test_local_stack)
   test_local_stack "$2"
