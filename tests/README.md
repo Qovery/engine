@@ -12,21 +12,9 @@ The option "Use all features in test" must be enabled.
 
 # Usage
 
-In order to perform functional tests, you can use environment variables or Vault. Environment variables always overrides vault values.
-
-In order to run functional tests, here are the minimum environment variables:
-* LIB_ROOT_DIR=<projects_dir>/engine/lib-engine/lib
-* RUST_LOG=info
-* WORKSPACE_ROOT_DIR=<projects_dir>/engine
-
-## Other options
-
-### Vault
-Others option will also be necessary and can be found in the `FuncTestsSecrets` struct in `test_utilities` folder.
-
-(Qovery internal) As a lot of them are requested, the simplest way to use them is to use Vault:
-* VAULT_ADDR=https://<vault_address>
-* VAULT_TOKEN=<vault_token>
+In order to perform functional tests, you must run the following command in order.
+1. `mise get-test-secrets`: This will export your secret in `/tmp/engine_test_secrets.env` and will be loaded in `FuncTestsSecrets::new()`
+2. `mise your-test-suite`
 
 ### TTL
 By default, all deployed tests resources are going to be tagged with a TTL, to be automatically cleaned with [Pleco](https://github.com/Qovery/pleco) if a test fail for some reasons.
