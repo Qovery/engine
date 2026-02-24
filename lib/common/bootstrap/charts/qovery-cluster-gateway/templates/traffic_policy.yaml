@@ -21,4 +21,7 @@ spec:
     - group: gateway.networking.k8s.io
       kind: Gateway
       name: qovery-cluster-public-gateway
-  enableProxyProtocol: {{ .Values.gateway.qoveryPublic.enableProxyProtocol | default false }}
+  {{- if .Values.gateway.qoveryPublic.enableProxyProtocol }}
+  proxyProtocol:
+    optional: false
+  {{- end }}
