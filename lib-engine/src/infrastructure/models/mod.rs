@@ -4,6 +4,7 @@ pub mod cluster_profile;
 pub mod container_registry;
 pub mod disk_size;
 pub mod dns_provider;
+pub mod external_secrets;
 pub mod kubernetes;
 pub mod load_balancer;
 pub mod object_storage;

@@ -23,6 +23,7 @@ pub mod database;
 pub mod engine_location;
 pub mod engine_request;
 pub mod environment;
+pub mod eso;
 mod gke;
 pub mod helm_chart;
 pub mod job;

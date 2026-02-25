@@ -164,6 +164,9 @@ charts:
     dest_folder_override: envoy-gateway-crd
     repo_name: oci://docker.io/envoyproxy
     version: 1.6.1
+  - name: external-secrets
+    repo_name: external-secrets
+    version: 1.3.2
 
 repos:
   - name: stable
@@ -209,6 +212,8 @@ repos:
     url: https://github.com/Qovery/k8s-event-logger.git
   - name: kedacore
     url: https://kedacore.github.io/charts
+  - name: external-secrets
+    url: https://charts.external-secrets.io/
 
 destinations:
   - name: default

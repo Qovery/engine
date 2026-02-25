@@ -7,6 +7,10 @@ use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProvider;
+use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
+    AwsAuthenticationMode, AwsSecretsManagerSource,
+};
+use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::Options;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
@@ -175,7 +179,7 @@ pub fn eks_tera_context(
         VpcQoveryNetworkMode::WithNatGateways => {
             let max_subnet_zone_a = check_odd_subnets(event_details.clone(), "a", &ec2_zone_a_subnet_blocks_private)?;
             let max_subnet_zone_b = check_odd_subnets(event_details.clone(), "b", &ec2_zone_b_subnet_blocks_private)?;
-            let max_subnet_zone_c = check_odd_subnets(event_details, "c", &ec2_zone_c_subnet_blocks_private)?;
+            let max_subnet_zone_c = check_odd_subnets(event_details.clone(), "c", &ec2_zone_c_subnet_blocks_private)?;
 
             let ec2_zone_a_subnet_blocks_public: Vec<String> =
                 ec2_zone_a_subnet_blocks_private.drain(max_subnet_zone_a..).collect();
@@ -531,6 +535,18 @@ pub fn eks_tera_context(
     context.insert("thanos_nodepool_stable", &obs_config.thanos_on_stable);
     context.insert("enable_cloudwatch_exporter", &obs_config.enable_cloudwatch_exporter);
 
+    // External Secrets Operator
+    let secrets_manager_accesses = kubernetes.options.secrets_manager_accesses().map_err(|e| {
+        Box::new(EngineError::new_bad_cast(
+            event_details,
+            format!("Cannot deserialize {e}").as_str(),
+        ))
+    })?;
+    let eso_config = compute_secrets_manager_config(&secrets_manager_accesses);
+    context.insert("enable_automatic_external_secrets_access", &eso_config.enable_automatic_eso);
+    context.insert("enable_secrets_manager_iam_permissions", &eso_config.enable_secrets_manager_iam);
+    context.insert("enable_parameter_store_iam_permissions", &eso_config.enable_parameter_store_iam);
+
     Ok(context)
 }
 
@@ -607,12 +623,67 @@ fn compute_observability_config(metrics_parameters: &Option<MetricsParameters>) 
     }
 }
 
+#[derive(Debug, PartialEq)]
+struct SecretsManagerConfig {
+    enable_automatic_eso: bool,
+    enable_secrets_manager_iam: bool,
+    enable_parameter_store_iam: bool,
+}
+
+fn compute_secrets_manager_config(accesses: &[SecretsManagerAccess]) -> SecretsManagerConfig {
+    let automatic_accesses: Vec<_> = accesses
+        .iter()
+        .filter(|a| {
+            if let SecretsManagerConnection::Aws(conn) = &a.connection {
+                conn.authentication_mode == AwsAuthenticationMode::Automatic
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    if automatic_accesses.is_empty() {
+        return SecretsManagerConfig {
+            enable_automatic_eso: false,
+            enable_secrets_manager_iam: false,
+            enable_parameter_store_iam: false,
+        };
+    }
+
+    SecretsManagerConfig {
+        enable_automatic_eso: true,
+        enable_secrets_manager_iam: automatic_accesses.iter().any(|a| {
+            if let SecretsManagerConnection::Aws(conn) = &a.connection {
+                conn.source == AwsSecretsManagerSource::AwsSecretsManager
+            } else {
+                false
+            }
+        }),
+        enable_parameter_store_iam: automatic_accesses.iter().any(|a| {
+            if let SecretsManagerConnection::Aws(conn) = &a.connection {
+                conn.source == AwsSecretsManagerSource::AwsParameterStore
+            } else {
+                false
+            }
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::generate_public_access_cidrs;
-    use crate::infrastructure::action::eks::tera_context::{ObservabilityConfig, compute_observability_config};
+    use crate::infrastructure::action::eks::tera_context::{
+        ObservabilityConfig, SecretsManagerConfig, compute_observability_config, compute_secrets_manager_config,
+    };
     use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
     use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+    use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
+        AwsAuthenticationMode, AwsConnection, AwsSecretsManagerSource,
+    };
+    use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::{
+        GcpAuthenticationMode, GcpConnection,
+    };
+    use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
     use crate::io_models::metrics::{CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters};
 
     #[test]
@@ -864,6 +935,165 @@ mod tests {
                 prometheus_enabled: true,
                 thanos_on_stable: true,
                 enable_cloudwatch_exporter: true,
+            }
+        );
+    }
+
+    fn make_aws_access(source: AwsSecretsManagerSource, auth: AwsAuthenticationMode) -> SecretsManagerAccess {
+        SecretsManagerAccess {
+            id: "test-id".to_string(),
+            connection: SecretsManagerConnection::Aws(AwsConnection {
+                source,
+                region: "eu-west-3".to_string(),
+                authentication_mode: auth,
+            }),
+        }
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_no_accesses() {
+        let result = compute_secrets_manager_config(&[]);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: false,
+                enable_secrets_manager_iam: false,
+                enable_parameter_store_iam: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_only_non_automatic_accesses() {
+        let accesses = vec![
+            make_aws_access(
+                AwsSecretsManagerSource::AwsSecretsManager,
+                AwsAuthenticationMode::ArnRole {
+                    arn_role: "arn:aws:iam::123:role/r".to_string(),
+                },
+            ),
+            make_aws_access(
+                AwsSecretsManagerSource::AwsParameterStore,
+                AwsAuthenticationMode::AwsStaticCredentials {
+                    access_key_id: "AK".to_string(),
+                    secret_access_key: "SK".to_string(),
+                },
+            ),
+        ];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: false,
+                enable_secrets_manager_iam: false,
+                enable_parameter_store_iam: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_automatic_secret_manager_only() {
+        let accesses = vec![make_aws_access(
+            AwsSecretsManagerSource::AwsSecretsManager,
+            AwsAuthenticationMode::Automatic,
+        )];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: true,
+                enable_secrets_manager_iam: true,
+                enable_parameter_store_iam: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_automatic_parameter_store_only() {
+        let accesses = vec![make_aws_access(
+            AwsSecretsManagerSource::AwsParameterStore,
+            AwsAuthenticationMode::Automatic,
+        )];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: true,
+                enable_secrets_manager_iam: false,
+                enable_parameter_store_iam: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_both_automatic_sources() {
+        let accesses = vec![
+            make_aws_access(AwsSecretsManagerSource::AwsSecretsManager, AwsAuthenticationMode::Automatic),
+            make_aws_access(AwsSecretsManagerSource::AwsParameterStore, AwsAuthenticationMode::Automatic),
+        ];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: true,
+                enable_secrets_manager_iam: true,
+                enable_parameter_store_iam: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_mixed_automatic_and_non_automatic() {
+        let accesses = vec![
+            make_aws_access(AwsSecretsManagerSource::AwsSecretsManager, AwsAuthenticationMode::Automatic),
+            make_aws_access(
+                AwsSecretsManagerSource::AwsParameterStore,
+                AwsAuthenticationMode::ArnRole {
+                    arn_role: "arn:aws:iam::123:role/r".to_string(),
+                },
+            ),
+        ];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: true,
+                enable_secrets_manager_iam: true,
+                enable_parameter_store_iam: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_secrets_manager_config_with_gcp_accesses_only() {
+        let accesses = vec![SecretsManagerAccess {
+            id: "gcp-id".to_string(),
+            connection: SecretsManagerConnection::Gcp(GcpConnection {
+                region: "europe-west1".to_string(),
+                project_id: "my-project".to_string(),
+                authentication_mode: GcpAuthenticationMode::Automatic,
+            }),
+        }];
+
+        let result = compute_secrets_manager_config(&accesses);
+
+        assert_eq!(
+            result,
+            SecretsManagerConfig {
+                enable_automatic_eso: false,
+                enable_secrets_manager_iam: false,
+                enable_parameter_store_iam: false,
             }
         );
     }

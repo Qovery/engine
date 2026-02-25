@@ -441,6 +441,7 @@ pub struct ChartInfo {
     pub values: Vec<ChartSetValue>,
     pub values_string: Vec<ChartSetValue>,
     pub values_files: Vec<String>,
+    pub values_json: Vec<ChartSetValue>,
     pub yaml_files_content: Vec<ChartValuesGenerated>,
     pub parse_stderr_for_error: bool,
     pub k8s_selector: Option<String>,
@@ -526,6 +527,7 @@ impl Default for ChartInfo {
             values: vec![],
             values_string: vec![], // values to force string usage
             values_files: vec![],
+            values_json: vec![],
             yaml_files_content: vec![],
             parse_stderr_for_error: true,
             k8s_selector: None,

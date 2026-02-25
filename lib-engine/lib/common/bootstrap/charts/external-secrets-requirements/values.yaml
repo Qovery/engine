@@ -1,0 +1,6 @@
+crds:
+  install: true
+
+webhook:
+  createSelfSignedIssuer: true
+

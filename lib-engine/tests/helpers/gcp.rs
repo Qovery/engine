@@ -290,6 +290,7 @@ impl Cluster<Google, GkeOptions> for Gke {
             Some(Time::from_hms(7, 0, 0).expect("Cannot instantiate time")),
             None,
             None,
+            vec![],
         )
     }
 }

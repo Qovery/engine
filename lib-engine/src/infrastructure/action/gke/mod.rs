@@ -84,4 +84,7 @@ pub struct GkeQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub keda_metrics_server_service_account_email: Option<String>,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub external_secrets_operator_service_account_email: Option<String>,
 }

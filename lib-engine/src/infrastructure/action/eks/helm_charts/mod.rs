@@ -31,6 +31,7 @@ pub mod aws_iam_eks_user_mapper_chart;
 pub mod aws_node_term_handler_chart;
 pub mod cluster_autoscaler_chart;
 mod gen_charts;
+pub mod gen_eso_charts;
 pub mod gen_karpenter_charts;
 pub mod gen_keda_charts;
 pub mod karpenter;
@@ -85,6 +86,7 @@ pub struct EksChartsConfigPrerequisites {
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
     pub kubernetes_storage_class_fast_ssd: StorageClass,
+    pub aws_iam_external_secrets_operator_role_arn: Option<String>,
 }
 
 pub struct EksHelmsDeployment<'a> {
@@ -180,6 +182,10 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             aws_s3_prometheus_bucket_name: self.terraform_output.aws_s3_prometheus_bucket_name.clone(),
             cluster_creation_date: cluster.created_at,
             aws_iam_cloudwatch_exporter_role_arn: self.terraform_output.aws_iam_cloudwatch_exporter_role_arn.clone(),
+            aws_iam_external_secrets_operator_role_arn: self
+                .terraform_output
+                .aws_iam_external_secrets_operator_role_arn
+                .clone(),
         }
     }
 

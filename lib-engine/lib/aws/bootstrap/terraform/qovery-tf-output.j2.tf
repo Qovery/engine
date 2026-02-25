@@ -22,6 +22,9 @@ output "aws_iam_cloudwatch_exporter_role_arn" { value = aws_iam_role.cloudwatch_
 output "aws_iam_keda_operator_role_arn" { value = aws_iam_role.keda_operator.arn }
 output "aws_iam_keda_metrics_server_role_arn" { value = aws_iam_role.keda_metrics_server.arn }
 {% endif -%}
+{% if enable_automatic_external_secrets_access -%}
+output "aws_iam_external_secrets_operator_role_arn" { value = aws_iam_role.external_secrets_operator_role.arn }
+{% endif -%}
 {% if not user_provided_network -%}
 output "s3_vpc_endpoint_id" {
   description = "ID of the S3 VPC Gateway endpoint"
