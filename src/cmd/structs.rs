@@ -179,6 +179,26 @@ pub struct KubernetesIngressStatusLoadBalancerIngress {
 pub struct KubernetesPod {
     pub status: KubernetesPodStatus,
     pub metadata: KubernetesPodMetadata,
+    pub spec: Option<KubernetesPodSpec>,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesPodSpec {
+    pub dns_config: Option<KubernetesPodDnsConfig>,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesPodDnsConfig {
+    pub options: Option<Vec<KubernetesPodDnsConfigOption>>,
+}
+
+#[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct KubernetesPodDnsConfigOption {
+    pub name: Option<String>,
+    pub value: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Eq, PartialEq, Debug)]
