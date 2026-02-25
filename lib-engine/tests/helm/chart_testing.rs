@@ -694,3 +694,84 @@ fn q_job_with_ndots_test() {
         .expect("ndots value should be a string");
     assert_eq!(ndots_value_str, ndots_value.to_string(), "ndots value mismatch");
 }
+#[cfg(feature = "test-local-kube")]
+#[test]
+#[ignore = "Ignored to not overload CI"]
+fn q_container_with_none_ndots_test() {
+    dotenv::dotenv().ok();
+    // Use the regular container_context which sets network_dns_ndots to None
+    let test_info = container_context();
+
+    // Verify that the Tera context has network_dns_ndots as None
+    let service_from_context = test_info.context.get("service");
+    assert!(service_from_context.is_some(), "service not found in context");
+    let advanced_settings_from_context = service_from_context
+        .and_then(|s| s.get("advanced_settings"))
+        .expect("advanced_settings not found in context");
+    let ndots_from_context = advanced_settings_from_context.get("network_dns_ndots");
+    // Verify it's either not present or is null
+    assert!(
+        ndots_from_context.is_none() || ndots_from_context.unwrap().is_null(),
+        "network_dns_ndots should be None/null in context"
+    );
+
+    let chart_name = "q-container";
+    let uuid = test_info.service_id;
+    let chart = CommonChart {
+        chart_info: ChartInfo {
+            name: chart_name.to_string(),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
+            namespace: HelmChartNamespaces::KubeSystem,
+            action: HelmAction::Deploy,
+            atomic: false,
+            force_upgrade: false,
+            recreate_pods: false,
+            reinstall_chart_if_installed_version_is_below_than: None,
+            timeout_in_seconds: 0,
+            dry_run: false,
+            wait: false,
+            values: vec![],
+            values_string: vec![],
+            values_files: vec![],
+            values_json: vec![],
+            yaml_files_content: vec![],
+            parse_stderr_for_error: false,
+            k8s_selector: None,
+            backup_resources: None,
+            crds_update: None,
+            skip_if_already_installed: false,
+            upgrade_retry: None,
+            requires_server_side_apply: false,
+            helm_list_cache: None,
+        },
+        chart_installation_checker: None,
+        vertical_pod_autoscaler: None,
+    };
+    let resources = get_kube_resources(
+        format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
+        chart.chart_info,
+        None,
+        &test_info,
+        &uuid,
+    );
+    assert!(!resources.is_empty());
+
+    // Verify that dnsConfig is NOT rendered in the deployment when ndots is None
+    let deployment = resources
+        .values()
+        .find(|r| r.types.as_ref().map(|t| t.kind.as_str()) == Some("Deployment"));
+    assert!(deployment.is_some(), "Deployment resource not found");
+    let deployment = deployment.unwrap();
+    let dns_config = deployment
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("template"))
+        .and_then(|template| template.get("spec"))
+        .and_then(|spec| spec.get("dnsConfig"));
+
+    // The critical assertion: dnsConfig should NOT be present when network_dns_ndots is None
+    assert!(
+        dns_config.is_none(),
+        "dnsConfig should not be rendered when network_dns_ndots is None"
+    );
+}
