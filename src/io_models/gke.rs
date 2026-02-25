@@ -1,6 +1,8 @@
+use crate::infrastructure::models::external_secrets::SecretsManagerAccess;
 use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
 use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::eso::SecretsManagerAccessDto;
 use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use ipnet::IpNet;
@@ -60,6 +62,8 @@ pub struct GkeOptions {
     pub metrics_parameters: Option<MetricsParameters>,
     #[serde(default)]
     pub keda_parameters: Option<KedaParameters>,
+    #[serde(default)]
+    pub secrets_manager_accesses: Option<Vec<SecretsManagerAccessDto>>,
 }
 
 impl GkeOptions {
@@ -103,6 +107,18 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             .to_gke_vpc_mode()
             .map_err(|e| format!("cannot parse VPCMode: `{e}`"))?;
 
+        let secrets_manager_accesses = value
+            .secrets_manager_accesses
+            .as_ref()
+            .map(|dtos| {
+                dtos.iter()
+                    .map(SecretsManagerAccess::try_from)
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()
+            .map_err(|e| format!("Failed to convert to secret manager access: {e}"))?
+            .unwrap_or_default();
+
         Ok(GkeOptionsModel::new(
             value.qovery_api_url,
             value.qovery_grpc_url,
@@ -130,6 +146,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             },
             value.metrics_parameters,
             value.keda_parameters,
+            secrets_manager_accesses,
         ))
     }
 }
@@ -164,6 +181,7 @@ mod tests {
             vpc_qovery_network_mode: None,
             metrics_parameters: None,
             keda_parameters: None,
+            secrets_manager_accesses: None,
         };
 
         // execute & validate:

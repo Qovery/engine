@@ -584,6 +584,7 @@ mod tests {
                 tls_email_report: String::new(),
                 metrics_parameters: None,
                 keda_parameters: None,
+                secrets_manager_accesses: Default::default(),
             },
             cluster_advanced_settings: Default::default(),
             customer_helm_charts_override: None,
@@ -594,6 +595,7 @@ mod tests {
             keda_availability: Default::default(),
             gcp_keda_operator_service_account_email: None,
             gcp_keda_metrics_server_service_account_email: None,
+            gcp_external_secrets_operator_service_account_email: None,
         }
     }
 
@@ -664,6 +666,7 @@ mod tests {
                 keda_parameters: None,
                 metrics_parameters: None,
                 resource_tags: hashmap! {},
+                secrets_manager_accesses: None,
             },
             cluster_advanced_settings: Default::default(),
             is_karpenter_enabled: false,
@@ -688,6 +691,7 @@ mod tests {
             customer_helm_charts_override: None,
             aws_iam_cloudwatch_exporter_role_arn: None,
             kubernetes_storage_class_fast_ssd: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
+            aws_iam_external_secrets_operator_role_arn: None,
         }
     }
 }

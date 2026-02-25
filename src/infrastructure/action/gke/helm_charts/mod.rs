@@ -19,6 +19,7 @@ use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
 pub mod gen_charts;
+pub mod gen_eso_charts;
 pub mod gen_keda_charts;
 
 pub struct GkeChartsConfigPrerequisites {
@@ -47,6 +48,7 @@ pub struct GkeChartsConfigPrerequisites {
     pub keda_availability: KedaAvailability,
     pub gcp_keda_operator_service_account_email: Option<String>,
     pub gcp_keda_metrics_server_service_account_email: Option<String>,
+    pub gcp_external_secrets_operator_service_account_email: Option<String>,
 }
 
 impl GkeChartsConfigPrerequisites {
@@ -74,6 +76,7 @@ impl GkeChartsConfigPrerequisites {
         keda_availability: KedaAvailability,
         gcp_keda_operator_service_account_email: Option<String>,
         gcp_keda_metrics_server_service_account_email: Option<String>,
+        gcp_external_secrets_operator_service_account_email: Option<String>,
     ) -> Self {
         Self {
             organization_id,
@@ -99,6 +102,7 @@ impl GkeChartsConfigPrerequisites {
             keda_availability,
             gcp_keda_operator_service_account_email,
             gcp_keda_metrics_server_service_account_email,
+            gcp_external_secrets_operator_service_account_email,
         }
     }
 }
@@ -156,6 +160,9 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             keda_params.as_ref().map(|p| p.availability).unwrap_or_default(),
             self.terraform_output.keda_operator_service_account_email.clone(),
             self.terraform_output.keda_metrics_server_service_account_email.clone(),
+            self.terraform_output
+                .external_secrets_operator_service_account_email
+                .clone(),
         )
     }
 

@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bitwarden-sdk-server.fullname" . }}
+  namespace: {{ template "bitwarden-sdk-server.namespace" . }}
+  {{- with .Values.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    {{- include "bitwarden-sdk-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "bitwarden-sdk-server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "bitwarden-sdk-server.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "bitwarden-sdk-server.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.podDnsPolicy }}
+      dnsPolicy: {{ .Values.podDnsPolicy }}
+      {{- end }}
+      {{- with .Values.podDnsConfig }}
+      dnsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- if not .Values.image.tls.enabled }}
+          args:
+            - --insecure
+          {{- end }}
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.image.tls.enabled }}
+          volumeMounts:
+          {{- if .Values.image.tls.volumeMounts }}
+          {{- toYaml .Values.image.tls.volumeMounts | nindent 12 }}
+          {{- else }}
+            - mountPath: /certs
+              name: {{ .Values.image.tls.secretName }}
+          {{- end}}
+          {{- end}}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: http
+              {{- if .Values.image.tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+              {{- if .Values.image.tls.enabled }}
+              scheme: HTTPS
+              {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.image.tls.enabled }}
+      volumes:
+      {{- if .Values.image.tls.volumes }}
+      {{- toYaml .Values.image.tls.volumes | nindent 8 }}
+      {{- else }}
+        - name: {{ .Values.image.tls.secretName }}
+          secret:
+            secretName: {{ .Values.image.tls.secretName }}
+            items:
+              - key: tls.crt
+                path: cert.pem
+              - key: tls.key
+                path: key.pem
+              - key: ca.crt
+                path: ca.pem
+      {{- end}}
+      {{- end}}

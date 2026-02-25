@@ -5,11 +5,13 @@ use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::aws::regions::{AwsRegion, AwsZone};
+use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConversionError};
 use crate::infrastructure::models::kubernetes::ProviderOptions;
 use crate::infrastructure::models::kubernetes::karpenter::KarpenterParameters;
 use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::database::DiskIOPS;
 use crate::io_models::engine_location::EngineLocation;
+use crate::io_models::eso::SecretsManagerAccessDto;
 use crate::io_models::metrics::MetricsParameters;
 use crate::io_models::models::{StorageClass, VpcCustomRoutingTable, VpcQoveryNetworkMode};
 use serde::{Deserialize, Serialize};
@@ -83,6 +85,8 @@ pub struct Options {
     pub metrics_parameters: Option<MetricsParameters>,
     #[serde(default)]
     pub resource_tags: HashMap<String, String>,
+    #[serde(default)]
+    pub secrets_manager_accesses: Option<Vec<SecretsManagerAccessDto>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +116,16 @@ pub struct UserNetworkConfig {
     pub eks_private_subnets_zone_b_ids: Vec<String>,
     pub eks_private_subnets_zone_c_ids: Vec<String>,
     pub eks_create_nodes_in_private_subnet: bool,
+}
+
+impl Options {
+    pub fn secrets_manager_accesses(&self) -> Result<Vec<SecretsManagerAccess>, SecretsManagerConversionError> {
+        let Some(dtos) = &self.secrets_manager_accesses else {
+            return Ok(vec![]);
+        };
+
+        dtos.iter().map(SecretsManagerAccess::try_from).collect()
+    }
 }
 
 impl ProviderOptions for Options {}
@@ -198,6 +212,98 @@ impl AwsStorageType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io_models::eso::SecretsManagerAccessDto;
+
+    fn create_minimal_options(accesses: Option<Vec<SecretsManagerAccessDto>>) -> Options {
+        Options {
+            ec2_zone_a_subnet_blocks: vec![],
+            ec2_zone_b_subnet_blocks: vec![],
+            ec2_zone_c_subnet_blocks: vec![],
+            eks_zone_a_subnet_blocks: vec![],
+            eks_zone_b_subnet_blocks: vec![],
+            eks_zone_c_subnet_blocks: vec![],
+            rds_zone_a_subnet_blocks: vec![],
+            rds_zone_b_subnet_blocks: vec![],
+            rds_zone_c_subnet_blocks: vec![],
+            documentdb_zone_a_subnet_blocks: vec![],
+            documentdb_zone_b_subnet_blocks: vec![],
+            documentdb_zone_c_subnet_blocks: vec![],
+            elasticache_zone_a_subnet_blocks: vec![],
+            elasticache_zone_b_subnet_blocks: vec![],
+            elasticache_zone_c_subnet_blocks: vec![],
+            vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
+            vpc_cidr_block: String::new(),
+            eks_cidr_subnet: String::new(),
+            ec2_cidr_subnet: String::new(),
+            vpc_custom_routing_table: vec![],
+            rds_cidr_subnet: String::new(),
+            documentdb_cidr_subnet: String::new(),
+            elasticache_cidr_subnet: String::new(),
+            qovery_api_url: String::new(),
+            qovery_grpc_url: String::new(),
+            qovery_engine_url: String::new(),
+            jwt_token: String::new(),
+            qovery_engine_location: EngineLocation::ClientSide,
+            grafana_admin_user: String::new(),
+            grafana_admin_password: String::new(),
+            qovery_ssh_key: String::new(),
+            user_ssh_keys: vec![],
+            tls_email_report: String::new(),
+            user_provided_network: None,
+            aws_addon_cni_version_override: None,
+            aws_addon_kube_proxy_version_override: None,
+            aws_addon_ebs_csi_version_override: None,
+            aws_addon_coredns_version_override: None,
+            aws_addon_pod_identity_version_override: None,
+            ec2_exposed_port: None,
+            karpenter_parameters: None,
+            keda_parameters: None,
+            metrics_parameters: None,
+            resource_tags: HashMap::new(),
+            secrets_manager_accesses: accesses,
+        }
+    }
+
+    #[test]
+    fn should_return_empty_vec_when_secrets_manager_accesses_is_not_present() {
+        let result = create_minimal_options(None).secrets_manager_accesses();
+        assert_eq!(result.unwrap(), vec![]);
+    }
+
+    #[test]
+    fn should_return_empty_vec_when_secrets_manager_accesses_is_empty() {
+        let result = create_minimal_options(Some(vec![])).secrets_manager_accesses();
+        assert_eq!(result.unwrap(), vec![]);
+    }
+
+    #[test]
+    fn should_return_error_if_deserialization_fails() {
+        let invalid_dto = SecretsManagerAccessDto {
+            id: "bad".to_string(),
+            endpoint: HashMap::new(), // missing "type"
+            authentication: [("mode".to_string(), "AUTOMATIC".to_string())].into(),
+        };
+
+        let result = create_minimal_options(Some(vec![invalid_dto])).secrets_manager_accesses();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().message.contains("missing endpoint.type"));
+    }
+
+    #[test]
+    fn should_create_secret_manager_accesses_when_deserialization_succeeds() {
+        let dto = SecretsManagerAccessDto {
+            id: "id".to_string(),
+            endpoint: [
+                ("type".to_string(), "AWS_SECRETS_MANAGER".to_string()),
+                ("region".to_string(), "eu-west-3".to_string()),
+            ]
+            .into(),
+            authentication: [("mode".to_string(), "AUTOMATIC".to_string())].into(),
+        };
+
+        let result = create_minimal_options(Some(vec![dto])).secrets_manager_accesses();
+        assert!(result.is_ok());
+    }
 
     #[test]
     fn test_aws_storage_type_to_cloud_provider_format() {

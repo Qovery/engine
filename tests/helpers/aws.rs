@@ -312,6 +312,7 @@ impl Cluster<AWS, Options> for AWS {
             keda_parameters: None,
             metrics_parameters: None,
             resource_tags: hashmap! {},
+            secrets_manager_accesses: None,
         }
     }
 }

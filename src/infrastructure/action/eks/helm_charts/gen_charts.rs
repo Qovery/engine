@@ -36,6 +36,7 @@ use crate::infrastructure::action::eks::helm_charts::aws_iam_eks_user_mapper_cha
 };
 use crate::infrastructure::action::eks::helm_charts::aws_node_term_handler_chart::AwsNodeTermHandlerChart;
 use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::ClusterAutoscalerChart;
+use crate::infrastructure::action::eks::helm_charts::gen_eso_charts::generate_eso_charts;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
 use crate::infrastructure::action::eks::helm_charts::gen_keda_charts::generate_keda_charts;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
@@ -720,6 +721,9 @@ pub(super) fn eks_helm_charts(
         );
     }
 
+    // ESO (External Secrets Operator)
+    let eso_charts = generate_eso_charts(chart_prefix_path, chart_config_prerequisites)?;
+
     // Qovery cluster agent
     let cluster_agent = QoveryClusterAgentChart::new(
         chart_prefix_path,
@@ -885,6 +889,8 @@ pub(super) fn eks_helm_charts(
     if let Some(chart) = envoy_gateway_crd {
         level_0.push(Box::new(chart));
     }
+    // Add ESO CRDs
+    level_0.push(Box::new(eso_charts.eso_requirements_chart));
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
     // Add Qovery gateway class
@@ -918,9 +924,10 @@ pub(super) fn eks_helm_charts(
         level_3.push(Box::new(aws_iam_eks_user_mapper));
     }
 
-    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
+    let mut level_4: Vec<Box<dyn HelmChart>> =
+        vec![Box::new(q_storage_class), Box::new(vpa), Box::new(eso_charts.eso_chart)];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager), Box::new(eso_charts.eso_config_chart)];
 
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![];
     // Add Qovery cluster gateway - must be deployed after cert-manager since it creates resources in cert-manager namespace

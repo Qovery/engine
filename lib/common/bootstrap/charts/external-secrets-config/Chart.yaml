@@ -1,0 +1,7 @@
+apiVersion: v2
+name: external-secrets-config
+description: A Helm chart for managing ClusterSecretStores with various authentication methods
+type: application
+version: 0.1.0
+appVersion: "1.0"
+maintainers:

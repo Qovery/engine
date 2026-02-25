@@ -9,6 +9,7 @@ use crate::helm::{
 };
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
+use crate::infrastructure::action::gke::helm_charts::gen_eso_charts::generate_eso_charts;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
@@ -570,6 +571,8 @@ pub(super) fn gke_helm_charts(
         chart_config_prerequisites.is_keda_enabled,
     )?;
 
+    let eso_charts = generate_eso_charts(chart_prefix_path, chart_config_prerequisites)?;
+
     // chart deployment order matters!!!
     // Helm chart deployment order
 
@@ -577,6 +580,7 @@ pub(super) fn gke_helm_charts(
     let mut level_0: Vec<Option<Box<dyn HelmChart>>> = vec![
         prometheus_operator_crds_chart,
         Some(Box::new(keda_charts.keda_crd_chart)),
+        Some(Box::new(eso_charts.eso_requirements_chart)),
     ];
     // GKE has a predeployed gateway api crds, so we skip deploying them
     // Add envoy gateway api CRDs
@@ -589,6 +593,7 @@ pub(super) fn gke_helm_charts(
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
+        Some(Box::new(eso_charts.eso_chart)),
     ];
     // Add Qovery gateway class
     let mut level_2: Vec<Option<Box<dyn HelmChart>>> = vec![];
@@ -596,7 +601,12 @@ pub(super) fn gke_helm_charts(
         level_2.push(Some(Box::new(chart)));
     }
 
-    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
+    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![
+        loki,
+        thanos_chart,
+        alert_config,
+        Some(Box::new(eso_charts.eso_config_chart)),
+    ];
     let level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(cert_manager)), Some(Box::new(keda_charts.keda_chart))];
     let mut level_5: Vec<Option<Box<dyn HelmChart>>> =

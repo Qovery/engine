@@ -26,6 +26,7 @@ use crate::services::gcp::object_storage_service::ObjectStorageService;
 use crate::environment::models::gcp::JsonCredentials;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use crate::infrastructure::models::external_secrets::SecretsManagerAccess;
 use crate::io_models::metrics::MetricsParameters;
 use crate::utilities::to_short_id;
 use chrono::{DateTime, Utc};
@@ -127,6 +128,7 @@ pub struct GkeOptions {
     pub tls_email_report: String,
     pub metrics_parameters: Option<MetricsParameters>,
     pub keda_parameters: Option<KedaParameters>,
+    pub secrets_manager_accesses: Vec<SecretsManagerAccess>,
 }
 
 impl GkeOptions {
@@ -147,6 +149,7 @@ impl GkeOptions {
         cluster_maintenance_end_time: Option<Time>,
         metrics_parameters: Option<MetricsParameters>,
         keda_parameters: Option<KedaParameters>,
+        secrets_manager_accesses: Vec<SecretsManagerAccess>,
     ) -> Self {
         GkeOptions {
             qovery_api_url,
@@ -165,6 +168,7 @@ impl GkeOptions {
             cluster_maintenance_end_time,
             metrics_parameters,
             keda_parameters,
+            secrets_manager_accesses,
         }
     }
 }

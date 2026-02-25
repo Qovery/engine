@@ -4,6 +4,8 @@ use crate::environment::models::types::Percentage;
 use crate::errors::EngineError;
 use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpAuthenticationMode;
+use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::gcp::{Gke, VpcMode};
 use crate::io_models::context::Features;
@@ -330,5 +332,27 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
 
     context.insert("prometheus_enabled", &cluster.options.metrics_parameters.is_some());
 
+    // External Secrets Operator
+    let eso_config = compute_secrets_manager_config(&cluster.options.secrets_manager_accesses);
+    context.insert("enable_automatic_external_secrets_access", &eso_config.enable_automatic_eso);
+
     Ok(context)
+}
+
+#[derive(Debug, PartialEq)]
+struct SecretsManagerConfig {
+    enable_automatic_eso: bool,
+}
+
+fn compute_secrets_manager_config(accesses: &[SecretsManagerAccess]) -> SecretsManagerConfig {
+    let has_automatic_accesses = accesses.iter().any(|a| {
+        if let SecretsManagerConnection::Gcp(conn) = &a.connection {
+            conn.authentication_mode == GcpAuthenticationMode::Automatic
+        } else {
+            false
+        }
+    });
+    SecretsManagerConfig {
+        enable_automatic_eso: has_automatic_accesses,
+    }
 }

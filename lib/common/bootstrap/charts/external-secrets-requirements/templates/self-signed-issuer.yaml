@@ -1,0 +1,10 @@
+# This is to reference the Issuer for the certificate for External Secret Operator
+{{- if .Values.webhook.createSelfSignedIssuer }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  namespace: qovery
+  name: self-signed-eso-webhook-issuer
+spec:
+  selfSigned: {}
+{{- end }}
