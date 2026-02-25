@@ -9,7 +9,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
 use crate::io_models::context::Features;
-use crate::io_models::models::VpcQoveryNetworkMode;
+use crate::io_models::models::{NodeGroups, VpcQoveryNetworkMode};
 use crate::string::terraform_list_format;
 use reqwest::header;
 use serde_derive::{Deserialize, Serialize};
@@ -153,7 +153,16 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
     context.insert("grafana_admin_password", cluster.options.grafana_admin_password.as_str());
 
     // Kubernetes workers
-    context.insert("scw_ks_worker_nodes", &cluster.nodes_groups);
+    // Ensure each node group has a zone set (Core sends it for multi-zone, fallback to cluster zone)
+    let worker_nodes: Vec<NodeGroups> = cluster
+        .nodes_groups
+        .iter()
+        .map(|ng| NodeGroups {
+            zone: Some(ng.zone.clone().unwrap_or_else(|| cluster.zone.as_str().to_string())),
+            ..ng.clone()
+        })
+        .collect();
+    context.insert("scw_ks_worker_nodes", &worker_nodes);
     context.insert("scw_ks_pool_autoscale", &true);
 
     // Advanced settings

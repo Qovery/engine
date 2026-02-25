@@ -6,14 +6,14 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   {% if create_private_network and enable_public_gateway_nat %}
   # when activating static IP, the node group will be recreated, hence we need a unique name
   # name to include instance type and disk size, because such changes requires creating a new pool and name should be unique
-  name          = "${var.kubernetes_cluster_id}_{{ scw_ks_worker_node.instance_type }}_{{ scw_ks_worker_node.disk_size_in_gib }}_with_public_gateway_{{ loop.index }}"
+  name          = "${var.kubernetes_cluster_id}_{{ scw_ks_worker_node.instance_type }}_{{ scw_ks_worker_node.disk_size_in_gib }}_with_public_gateway_{{ scw_ks_worker_node.zone }}_{{ loop.index }}"
   {%else %}
   # name to include instance type and disk size, because such changes requires creating a new pool and name should be unique
-  name          = "${var.kubernetes_cluster_id}_{{ scw_ks_worker_node.instance_type }}_{{ scw_ks_worker_node.disk_size_in_gib }}_{{ loop.index }}"
+  name          = "${var.kubernetes_cluster_id}_{{ scw_ks_worker_node.instance_type }}_{{ scw_ks_worker_node.disk_size_in_gib }}_{{ scw_ks_worker_node.zone }}_{{ loop.index }}"
   {% endif %}
 
   region        = var.region
-  zone          = var.zone
+  zone          = "{{ scw_ks_worker_node.zone }}"
 
   # use Scaleway built-in cluster autoscaler
   autoscaling         = {{ scw_ks_pool_autoscale }}
