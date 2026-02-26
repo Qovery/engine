@@ -1,4 +1,5 @@
-use json_patch::PatchOperation;
+use json_patch::{AddOperation, PatchOperation};
+use jsonptr::Pointer;
 use k8s_openapi::api::admissionregistration::v1::MutatingWebhookConfiguration;
 use k8s_openapi::api::autoscaling::v1::Scale;
 use k8s_openapi::api::core::v1::{Node, Service};
@@ -55,6 +56,14 @@ pub struct GatewayClassSpec {}
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
+
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[kube(group = "karpenter.sh", version = "v1", kind = "NodePool")]
+pub struct NodePoolSpec {}
+
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[kube(group = "karpenter.sh", version = "v1", kind = "NodeClaim")]
+pub struct NodeClaimSpec {}
 
 impl Deref for QubeClient {
     type Target = kube::Client;
@@ -214,6 +223,61 @@ impl QubeClient {
         }
 
         Ok(())
+    }
+
+    /// Cordons a node by setting `spec.unschedulable = true`.
+    /// This prevents the scheduler from placing new pods on the node.
+    pub async fn cordon_node(&self, event_details: EventDetails, node: Node) -> Result<(), Box<EngineError>> {
+        let patch_operations = vec![PatchOperation::Add(AddOperation {
+            path: Pointer::from_static("/spec/unschedulable").to_buf(),
+            value: serde_json::Value::Bool(true),
+        })];
+        self.patch_node(event_details, node, &patch_operations).await
+    }
+
+    /// Lists all pods scheduled on a specific node using a field selector.
+    /// Returns raw `Vec<Pod>` (not `K8sPod`) to preserve access to `ownerReferences`.
+    pub async fn get_pods_on_node(
+        &self,
+        event_details: &EventDetails,
+        node_name: &str,
+    ) -> Result<Vec<Pod>, Box<EngineError>> {
+        let client: Api<Pod> = Api::all(self.client.clone());
+        let params = ListParams::default().fields(&format!("spec.nodeName={node_name}"));
+
+        match client.list(&params).await {
+            Ok(pod_list) => Ok(pod_list.items),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+            Err(e) => Err(Box::new(EngineError::new_k8s_cannot_get_pods(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!(
+                    "Error while trying to get pods on node `{node_name}`. {e}"
+                )),
+            ))),
+        }
+    }
+
+    /// Deletes a single pod by namespace and name using graceful deletion.
+    /// Returns Ok(()) if the pod was deleted or already does not exist (404).
+    pub async fn delete_pod(
+        &self,
+        event_details: &EventDetails,
+        namespace: &str,
+        name: &str,
+    ) -> Result<(), Box<EngineError>> {
+        let client: Api<Pod> = Api::namespaced(self.client.clone(), namespace);
+
+        match client.delete(name, &Default::default()).await {
+            Ok(_) => Ok(()),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(()),
+            Err(e) => Err(Box::new(EngineError::new_k8s_cannot_delete_pod(
+                event_details.clone(),
+                name.to_string(),
+                CommandError::new_from_safe_message(format!(
+                    "Error while trying to delete pod `{name}` in namespace `{namespace}`. {e}"
+                )),
+            ))),
+        }
     }
 
     pub async fn get_pods(
@@ -626,6 +690,53 @@ impl QubeClient {
         }
     }
 
+    /// Lists all Karpenter NodePool custom resources in the cluster.
+    pub async fn get_node_pools(&self, event_details: &EventDetails) -> Result<Vec<NodePool>, Box<EngineError>> {
+        let client: Api<NodePool> = Api::all(self.client.clone());
+        let params = ListParams::default();
+
+        match client.list(&params).await {
+            Ok(x) => Ok(x.items),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+            Err(e) => Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!("Error while trying to list Karpenter NodePools. {e}")),
+            ))),
+        }
+    }
+
+    /// Deletes a specific Karpenter NodePool custom resource by name.
+    /// Returns Ok(()) if the NodePool was deleted or already does not exist (404).
+    pub async fn delete_node_pool(&self, event_details: &EventDetails, name: &str) -> Result<(), Box<EngineError>> {
+        let client: Api<NodePool> = Api::all(self.client.clone());
+
+        match client.delete(name, &Default::default()).await {
+            Ok(_) => Ok(()),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(()),
+            Err(e) => Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!(
+                    "Error while trying to delete Karpenter NodePool '{name}'. {e}"
+                )),
+            ))),
+        }
+    }
+
+    /// Lists all Karpenter NodeClaim custom resources in the cluster.
+    pub async fn get_node_claims(&self, event_details: &EventDetails) -> Result<Vec<NodeClaim>, Box<EngineError>> {
+        let client: Api<NodeClaim> = Api::all(self.client.clone());
+        let params = ListParams::default();
+
+        match client.list(&params).await {
+            Ok(x) => Ok(x.items),
+            Err(e) if Self::is_error_code(&e, 404) => Ok(vec![]),
+            Err(e) => Err(Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!("Error while trying to list Karpenter NodeClaims. {e}")),
+            ))),
+        }
+    }
+
     fn is_error_code(e: &kube::Error, http_code_number: u16) -> bool {
         matches!(e, kube::Error::Api(x) if x.code == http_code_number)
     }
@@ -723,6 +834,50 @@ mod tests {
     }
 
     #[test]
+    fn test_karpenter_crds_have_correct_metadata() {
+        use super::{EC2NodeClass, NodeClaim, NodePool};
+        use kube::CustomResourceExt;
+
+        let test_cases = vec![
+            (NodePool::crd(), "karpenter.sh", "NodePool"),
+            (NodeClaim::crd(), "karpenter.sh", "NodeClaim"),
+            (EC2NodeClass::crd(), "karpenter.k8s.aws", "EC2NodeClass"),
+        ];
+
+        for (crd, expected_group, expected_kind) in test_cases {
+            assert_eq!(crd.spec.group, expected_group, "{expected_kind} CRD has wrong group");
+            assert_eq!(crd.spec.names.kind, expected_kind, "{expected_kind} CRD has wrong kind");
+            assert!(
+                crd.spec.versions.iter().any(|v| v.name == "v1"),
+                "{expected_kind} CRD must have a v1 version"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_error_code_matches_correctly() {
+        let test_cases = vec![
+            (404, 404, true, "matching 404"),
+            (200, 404, false, "200 does not match 404"),
+            (500, 500, true, "matching 500"),
+        ];
+
+        for (response_code, check_code, expected, description) in test_cases {
+            let error = kube::Error::Api(kube::error::ErrorResponse {
+                code: response_code,
+                message: "".to_string(),
+                reason: "".to_string(),
+                status: "".to_string(),
+            });
+            assert_eq!(
+                QubeClient::is_error_code(&error, check_code),
+                expected,
+                "Failed for case: {description}"
+            );
+        }
+    }
+
+    #[test]
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_get_deployments() {
         // by default, there are deployments, so we should fine things
@@ -781,6 +936,35 @@ mod tests {
         let all_secrets = block_on(qube_client.get_secrets(event_details, None, SelectK8sResourceBy::All)).unwrap();
         // there are secrets by default on a fresh K8s cluster, so it shouldn't be empty
         assert!(!all_secrets.is_empty());
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_get_node_pools_returns_empty_when_crd_not_installed() {
+        // On a local cluster without Karpenter CRDs, get_node_pools should return empty vec (404 handled)
+        let (qube_client, event_details) = get_qube_client();
+        let node_pools = block_on(qube_client.get_node_pools(&event_details));
+        assert!(node_pools.is_ok());
+        assert!(node_pools.unwrap().is_empty());
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_delete_node_pool_returns_ok_when_not_found() {
+        // Deleting a non-existent NodePool should succeed (404 handled as Ok)
+        let (qube_client, event_details) = get_qube_client();
+        let result = block_on(qube_client.delete_node_pool(&event_details, "non-existent-nodepool"));
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    #[cfg(feature = "test-local-kube")]
+    pub fn k8s_get_node_claims_returns_empty_when_crd_not_installed() {
+        // On a local cluster without Karpenter CRDs, get_node_claims should return empty vec (404 handled)
+        let (qube_client, event_details) = get_qube_client();
+        let node_claims = block_on(qube_client.get_node_claims(&event_details));
+        assert!(node_claims.is_ok());
+        assert!(node_claims.unwrap().is_empty());
     }
 
     #[test]

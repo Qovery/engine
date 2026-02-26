@@ -131,6 +131,9 @@ pub fn delete_eks_cluster(
         logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
     }
 
+    // Delete all helm charts (except karpenter-* for Karpenter clusters) before draining nodes.
+    // This ensures workload controllers are cleanly removed while nodes are still alive,
+    // preventing finalizer hangs and making the subsequent node drain trivially fast.
     let skip_helm_release = if kubernetes.is_karpenter_enabled() {
         HashSet::from([
             KarpenterChart::chart_name(),
@@ -142,15 +145,17 @@ pub fn delete_eks_cluster(
     };
     delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger, skip_helm_release)?;
 
+    if kubernetes.is_karpenter_enabled() {
+        let kube_client = infra_ctx.mk_kube_client()?;
+        block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+    }
+
     logger.info(format!(
         "Deleting Kubernetes cluster {}/{}",
         kubernetes.name(),
         kubernetes.short_id()
     ));
-    if kubernetes.is_karpenter_enabled() {
-        let kube_client = infra_ctx.mk_kube_client()?;
-        block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
-    } else {
+    if !kubernetes.is_karpenter_enabled() {
         // remove all node groups to avoid issues because of nodegroups manually added by user, making terraform unable to delete the EKS cluster
         block_on(delete_eks_nodegroups(
             aws_conn,
