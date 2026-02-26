@@ -162,7 +162,7 @@ message ClusterOutputsUpdateRequest {
   optional string vpcId = 9;
   optional string network = 10;
   optional string privateNetworkId = 11;
-  optional ExternalSecretsAuthentication externalSecretsAuthentication = 12;
+  optional ExternalSecretsAuthentication externalSecretsAutomaticAuthentication = 12;
 }
 
 message TerraformResourcesRequest {
