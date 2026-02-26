@@ -80,7 +80,8 @@ impl AKS {
 
         // check credentials
         // azure credentials propagation can take some time, so we need to ensure that the credentials are valid before proceeding
-        send_progress_on_long_task_with_message(
+        // We make the check not failing, it is best effort as some client remove permissions
+        let _ = send_progress_on_long_task_with_message(
             logger.clone(),
             event_details.clone(),
             Some("Checking Azure credentials, those can take some time to propagate...".to_string()),
@@ -94,7 +95,7 @@ impl AKS {
             Duration::from_secs(10),
             Some(Duration::from_secs(60 * 10)), // 10 minutes max
         )
-        .map_err(|_e| Box::new(EngineError::new_client_invalid_cloud_provider_credentials(event_details)))?;
+        .map_err(|_e| Box::new(EngineError::new_client_invalid_cloud_provider_credentials(event_details)));
 
         let short_id = to_short_id(&long_id);
 
