@@ -41,6 +41,12 @@ pub trait IntoClusterOutputsRequest {
 }
 
 #[derive(Debug)]
+pub enum ExternalSecretsAuthentication {
+    EksRoleArn(String),
+    GkeServiceAccount(String),
+}
+
+#[derive(Debug)]
 pub struct ClusterOutputsRequest {
     pub kubernetes_kind: Kind,
     pub kubeconfig: String,
@@ -52,6 +58,7 @@ pub struct ClusterOutputsRequest {
     pub cluster_self_link: Option<String>,
     pub network: Option<String>,
     pub private_network_id: Option<String>,
+    pub external_secrets_authentication: Option<ExternalSecretsAuthentication>,
 }
 
 impl IntoClusterOutputsRequest for AwsEksQoveryTerraformOutput {
@@ -67,6 +74,10 @@ impl IntoClusterOutputsRequest for AwsEksQoveryTerraformOutput {
             cluster_self_link: None,
             network: None,
             private_network_id: None,
+            external_secrets_authentication: self
+                .aws_iam_external_secrets_operator_role_arn
+                .as_ref()
+                .map(|arn| ExternalSecretsAuthentication::EksRoleArn(arn.clone())),
         }
     }
 }
@@ -84,6 +95,7 @@ impl IntoClusterOutputsRequest for ScalewayQoveryTerraformOutput {
             cluster_vpc_id: None,
             cluster_self_link: None,
             network: None,
+            external_secrets_authentication: None,
         }
     }
 }
@@ -101,6 +113,10 @@ impl IntoClusterOutputsRequest for GkeQoveryTerraformOutput {
             cluster_oidc_issuer: None,
             cluster_vpc_id: None,
             private_network_id: None,
+            external_secrets_authentication: self
+                .external_secrets_operator_service_account_email
+                .as_ref()
+                .map(|sa| ExternalSecretsAuthentication::GkeServiceAccount(sa.clone())),
         }
     }
 }
@@ -118,6 +134,7 @@ impl IntoClusterOutputsRequest for AksQoveryTerraformOutput {
             cluster_self_link: None,
             network: None,
             private_network_id: None,
+            external_secrets_authentication: None,
         }
     }
 }
