@@ -27,8 +27,7 @@ use crate::services::kube_client::{QubeClient, SelectK8sResourceBy};
 use crate::utilities::envs_to_string;
 use aws_types::SdkConfig;
 use chrono::Duration as ChronoDuration;
-use jsonptr::Pointer;
-use k8s_openapi::api::core::v1::Node;
+use k8s_openapi::api::core::v1::{Node, Pod};
 use retry::OperationResult;
 use retry::delay::Fixed;
 use std::path::PathBuf;
@@ -40,7 +39,15 @@ const KARPENTER_NAMESPACE: &str = "kube-system";
 const KARPENTER_LABEL_SELECTOR: &str = "app.kubernetes.io/instance=karpenter";
 const KARPENTER_EXPECTED_POD_COUNT: u32 = 2;
 const KARPENTER_DEPLOYMENT_NAME: &str = "karpenter";
-const KARPENTER_MIN_NODES_DRAIN_TIMEOUT: ChronoDuration = ChronoDuration::seconds(300);
+const KARPENTER_POLLING_INTERVAL_SECS: u64 = 30;
+const KARPENTER_NODE_WAIT_RETRIES: usize = 5;
+const EC2NODECLASS_CLEANUP_MAX_RETRIES: usize = 20;
+/// Overall timeout for the delete path (15 minutes).
+const KARPENTER_DELETE_TIMEOUT: Duration = Duration::from_secs(900);
+/// Overall timeout for the pause path (10 minutes).
+const KARPENTER_PAUSE_TIMEOUT: Duration = Duration::from_secs(600);
+/// Timeout for the karpenter-configuration chart uninstall during delete.
+const KARPENTER_CHART_UNINSTALL_TIMEOUT: ChronoDuration = ChronoDuration::seconds(300);
 
 // Terraform resources for karpenter nodegroup (used for pause/resume)
 const KARPENTER_NODEGROUP_TERRAFORM_RESOURCES: &[&str] = &[
@@ -57,10 +64,9 @@ impl Karpenter {
         client: &QubeClient,
         logger: &impl InfraLogger,
     ) -> Result<(), Box<EngineError>> {
-        let cloud_provider = infra_ctx.cloud_provider();
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Pause));
 
-        Self::delete_nodes_spawned_by_karpenter(kubernetes, cloud_provider, client, &event_details).await?;
+        Self::drain_karpenter_nodes(client, &event_details).await?;
 
         // scale down the karpenter deployment
         client
@@ -157,7 +163,7 @@ impl Karpenter {
     ) -> Result<(), Box<EngineError>> {
         let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Delete));
 
-        Self::delete_nodes_spawned_by_karpenter(kubernetes, cloud_provider, client, &event_details).await?;
+        Self::delete_karpenter_nodes_for_cluster_deletion(kubernetes, cloud_provider, client, &event_details).await?;
 
         // uninstall Karpenter
         if let Err(e) = uninstall_chart(
@@ -231,89 +237,286 @@ impl Karpenter {
             .await
     }
 
-    async fn delete_nodes_spawned_by_karpenter(
+    /// Drain path for cluster **pause**: cordon nodes, delete evictable pods, delete NodePools,
+    /// then wait for NodeClaims and nodes to disappear. Skips chart uninstall and EC2NodeClass
+    /// verification (resume will reinstall the chart, and EC2NodeClasses are harmless during pause).
+    /// Wrapped in an overall timeout as a safety net.
+    async fn drain_karpenter_nodes(client: &QubeClient, event_details: &EventDetails) -> Result<(), Box<EngineError>> {
+        let result = tokio::time::timeout(KARPENTER_PAUSE_TIMEOUT, async {
+            // Step 1: Early exit if no Karpenter nodes exist
+            let nodes = Self::get_nodes_spawned_by_karpenter(client, event_details).await?;
+            if nodes.is_empty() {
+                return Ok(());
+            }
+
+            // Step 2: Cordon all Karpenter nodes to prevent pod rescheduling back to them
+            Self::cordon_karpenter_nodes(client, event_details, &nodes).await;
+
+            // Step 3: Delete all non-DaemonSet pods on Karpenter nodes.
+            // This empties the nodes before triggering NodePool deletion, so Karpenter's
+            // drain has little left to evict — avoiding the double-wait pattern.
+            Self::delete_evictable_pods_on_karpenter_nodes(client, event_details, &nodes).await;
+
+            // Step 4: Delete NodePool CRs to trigger Karpenter drain on near-empty nodes
+            Self::delete_all_node_pools(client, event_details).await?;
+
+            // Step 5: Wait for NodeClaims to be fully deleted
+            Self::wait_for_node_claims_deletion(client, event_details, KARPENTER_NODE_WAIT_RETRIES).await;
+
+            // Step 6: Wait for Karpenter-spawned nodes to be gone
+            Self::wait_for_karpenter_nodes_deletion(client, event_details).await;
+
+            Ok(())
+        })
+        .await;
+
+        match result {
+            Ok(inner) => inner,
+            Err(_) => {
+                warn!(
+                    "Karpenter node drain timed out after {}s during pause",
+                    KARPENTER_PAUSE_TIMEOUT.as_secs()
+                );
+                Ok(())
+            }
+        }
+    }
+
+    /// Cleanup path for cluster **delete**: cordon nodes, delete evictable pods, delete NodePools,
+    /// wait for NodeClaims/nodes, uninstall karpenter-configuration chart, and verify EC2NodeClasses
+    /// are cleaned up. Wrapped in an overall timeout as a safety net.
+    async fn delete_karpenter_nodes_for_cluster_deletion(
         kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
         client: &QubeClient,
         event_details: &EventDetails,
     ) -> Result<(), Box<EngineError>> {
-        let karpenter_parameters = kubernetes.get_karpenter_parameters().ok_or_else(|| {
-            Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
-                event_details.clone(),
-                CommandError::new_from_safe_message("Karpenter parameters are missing".to_string()),
-            ))
-        })?;
+        let result = tokio::time::timeout(KARPENTER_DELETE_TIMEOUT, async {
+            // Step 1: Early exit if no Karpenter nodes exist
+            let _karpenter_parameters = kubernetes.get_karpenter_parameters().ok_or_else(|| {
+                Box::new(EngineError::new_k8s_delete_karpenter_nodes_error(
+                    event_details.clone(),
+                    CommandError::new_from_safe_message("Karpenter parameters are missing".to_string()),
+                ))
+            })?;
 
-        let nodes = Self::get_nodes_spawned_by_karpenter(client, event_details).await?;
-        if nodes.is_empty() {
-            return Ok(());
+            let nodes = Self::get_nodes_spawned_by_karpenter(client, event_details).await?;
+            if nodes.is_empty() {
+                return Ok(());
+            }
+
+            // Step 2: Cordon all Karpenter nodes to prevent pod rescheduling back to them
+            Self::cordon_karpenter_nodes(client, event_details, &nodes).await;
+
+            // Step 3: Delete all non-DaemonSet pods on Karpenter nodes
+            Self::delete_evictable_pods_on_karpenter_nodes(client, event_details, &nodes).await;
+
+            // Step 4: Delete NodePool CRs to trigger Karpenter drain on near-empty nodes
+            Self::delete_all_node_pools(client, event_details).await?;
+
+            // Step 5: Wait for NodeClaims to be fully deleted
+            Self::wait_for_node_claims_deletion(client, event_details, KARPENTER_NODE_WAIT_RETRIES).await;
+
+            // Step 6: Wait for Karpenter-spawned nodes to be gone
+            Self::wait_for_karpenter_nodes_deletion(client, event_details).await;
+
+            // Step 7: Uninstall karpenter-configuration chart.
+            // At this point only EC2NodeClasses remain (no NodeClaims referencing them).
+            if let Err(e) = uninstall_chart(
+                kubernetes,
+                cloud_provider,
+                event_details,
+                &KarpenterConfigurationChart::chart_name(),
+                &HelmChartNamespaces::KubeSystem.to_string(),
+                Some(KARPENTER_CHART_UNINSTALL_TIMEOUT),
+            ) {
+                kubernetes
+                    .logger()
+                    .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
+            }
+
+            // Step 8: Verify EC2NodeClasses are cleaned up
+            Self::wait_for_ec2_node_classes_cleanup(client, event_details).await
+        })
+        .await;
+
+        match result {
+            Ok(inner) => inner,
+            Err(_) => {
+                warn!(
+                    "Karpenter node cleanup timed out after {}s during delete",
+                    KARPENTER_DELETE_TIMEOUT.as_secs()
+                );
+                Ok(())
+            }
         }
+    }
 
-        let max_nodes_drain_in_sec = karpenter_parameters
-            .max_node_drain_time_in_secs
-            .map(|duration| ChronoDuration::seconds(duration as i64));
-        let nodes_drain_timeout = get_nodes_drain_timeout(client, event_details, max_nodes_drain_in_sec).await?;
-
-        // Uninstall karpenter-configuration chart then Karpenter will delete the nodes
-        // The Ec2nodeclasses has a finalizer that wait for the NodeClaims to be terminated
-        // The NodeClaims has a finalizer that wait for the Nodes to be terminated
-        if let Err(e) = uninstall_chart(
-            kubernetes,
-            cloud_provider,
-            event_details,
-            &KarpenterConfigurationChart::chart_name(),
-            &HelmChartNamespaces::KubeSystem.to_string(),
-            Some(nodes_drain_timeout),
-        ) {
-            // this error is not blocking because it will be the case if some PDB prevent the nodes to be stopped
-            kubernetes
-                .logger()
-                .log(EngineEvent::Warning(event_details.clone(), EventMessage::from(*e)));
-        }
-
-        // remove finalizer of the remaining nodes
-        let nodes = client
-            .get_nodes(
-                event_details.clone(),
-                SelectK8sResourceBy::LabelsSelector("karpenter.sh/nodepool".to_string()),
-            )
-            .await?;
-
-        let patch_operations = vec![json_patch::PatchOperation::Remove(json_patch::RemoveOperation {
-            path: Pointer::from_static("/metadata/finalizers").to_buf(),
-        })];
+    /// Cordons all provided Karpenter nodes by setting `spec.unschedulable = true`.
+    /// Failures are logged as warnings but do not abort the cleanup process.
+    async fn cordon_karpenter_nodes(client: &QubeClient, event_details: &EventDetails, nodes: &[Node]) {
+        info!("Cordoning {} Karpenter node(s)...", nodes.len());
 
         for node in nodes {
-            match client.patch_node(event_details.clone(), node, &patch_operations).await {
-                Ok(_) => {}
-                Err(error) => warn!(
-                    "Error while removing node finalizers: {}",
-                    error.message(ErrorMessageVerbosity::FullDetails)
+            let node_name = match node.metadata.name.as_deref() {
+                Some(name) => name,
+                None => continue,
+            };
+
+            match client.cordon_node(event_details.clone(), node.clone()).await {
+                Ok(()) => info!("Cordoned node '{}'", node_name),
+                Err(e) => warn!("Failed to cordon node '{}': {}", node_name, e),
+            }
+        }
+    }
+
+    /// Deletes all non-DaemonSet pods on the provided Karpenter nodes.
+    /// This clears the nodes before triggering NodePool deletion, so Karpenter's
+    /// drain encounters near-empty nodes and completes in a single wait cycle.
+    async fn delete_evictable_pods_on_karpenter_nodes(
+        client: &QubeClient,
+        event_details: &EventDetails,
+        nodes: &[Node],
+    ) {
+        info!(
+            "Deleting evictable pods on {} Karpenter node(s) to speed up drain...",
+            nodes.len()
+        );
+
+        for node in nodes {
+            let node_name = match node.metadata.name.as_deref() {
+                Some(name) => name,
+                None => continue,
+            };
+
+            let pods = match client.get_pods_on_node(event_details, node_name).await {
+                Ok(pods) => pods,
+                Err(e) => {
+                    warn!("Error listing pods on node '{}': {}", node_name, e);
+                    continue;
+                }
+            };
+
+            for pod in &pods {
+                if !is_evictable_pod(pod) {
+                    continue;
+                }
+
+                let pod_name = pod.metadata.name.as_deref().unwrap_or("<unknown>");
+                let namespace = pod.metadata.namespace.as_deref().unwrap_or("default");
+
+                match client.delete_pod(event_details, namespace, pod_name).await {
+                    Ok(()) => info!("Deleted pod '{}/{}' from node '{}'", namespace, pod_name, node_name),
+                    Err(e) => warn!(
+                        "Failed to delete pod '{}/{}' from node '{}': {}",
+                        namespace, pod_name, node_name, e
+                    ),
+                }
+            }
+        }
+    }
+
+    async fn delete_all_node_pools(client: &QubeClient, event_details: &EventDetails) -> Result<(), Box<EngineError>> {
+        info!("Deleting Karpenter NodePools to trigger node drain...");
+        let node_pools = client.get_node_pools(event_details).await?;
+
+        for node_pool in &node_pools {
+            let name = node_pool.metadata.name.as_deref().unwrap_or("<unknown>");
+            match client.delete_node_pool(event_details, name).await {
+                Ok(_) => info!("NodePool '{}' deletion requested", name),
+                Err(e) => warn!(
+                    "Failed to delete NodePool '{}', will be cleaned up by chart uninstall: {}",
+                    name,
+                    e.message(ErrorMessageVerbosity::FullDetails)
                 ),
             }
         }
 
-        // wait for Ec2NodeClasses to be deleted
-        let mut nb_retry = 0;
-        let ec2_node_classes = loop {
-            let result = client.get_ec2_node_classes(event_details).await;
-            if nb_retry > 20 {
-                break result;
-            } else {
-                match result {
-                    Ok(items) if items.is_empty() => break Ok(items),
-                    Ok(items) => {
-                        info!("nb of EC2NodeClass {}", items.len());
-                    }
-                    Err(e) => {
-                        warn!("Error when trying to get EC2NodeClass {}", e)
-                    }
-                }
-                tokio::time::sleep(Duration::from_secs(30)).await;
-                nb_retry += 1;
-            }
-        }?;
+        Ok(())
+    }
 
+    async fn wait_for_node_claims_deletion(client: &QubeClient, event_details: &EventDetails, max_retries: usize) {
+        info!(
+            "Waiting for NodeClaims to be deleted (max {} retries, {}s interval)...",
+            max_retries, KARPENTER_POLLING_INTERVAL_SECS
+        );
+
+        for retry in 0..max_retries {
+            match client.get_node_claims(event_details).await {
+                Ok(items) if items.is_empty() => {
+                    info!("All NodeClaims have been deleted");
+                    return;
+                }
+                Ok(items) => {
+                    info!(
+                        "Waiting for {} NodeClaim(s) to be deleted (retry {}/{})...",
+                        items.len(),
+                        retry + 1,
+                        max_retries
+                    );
+                }
+                Err(e) => {
+                    warn!("Error when trying to get NodeClaims: {}", e);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(KARPENTER_POLLING_INTERVAL_SECS)).await;
+        }
+
+        warn!("Timed out waiting for NodeClaims to be deleted after {} retries", max_retries);
+    }
+
+    async fn wait_for_karpenter_nodes_deletion(client: &QubeClient, event_details: &EventDetails) {
+        for retry in 0..KARPENTER_NODE_WAIT_RETRIES {
+            match Self::get_nodes_spawned_by_karpenter(client, event_details).await {
+                Ok(nodes) if nodes.is_empty() => {
+                    info!("All Karpenter-spawned nodes are gone");
+                    return;
+                }
+                Ok(nodes) => {
+                    info!(
+                        "Waiting for {} Karpenter node(s) to be removed (retry {}/{})...",
+                        nodes.len(),
+                        retry + 1,
+                        KARPENTER_NODE_WAIT_RETRIES
+                    );
+                }
+                Err(e) => {
+                    warn!("Error when trying to get Karpenter nodes: {}", e);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(KARPENTER_POLLING_INTERVAL_SECS)).await;
+        }
+
+        warn!(
+            "Timed out waiting for Karpenter nodes to disappear after {} retries",
+            KARPENTER_NODE_WAIT_RETRIES
+        );
+    }
+
+    async fn wait_for_ec2_node_classes_cleanup(
+        client: &QubeClient,
+        event_details: &EventDetails,
+    ) -> Result<(), Box<EngineError>> {
+        for retry in 0..EC2NODECLASS_CLEANUP_MAX_RETRIES {
+            match client.get_ec2_node_classes(event_details).await {
+                Ok(items) if items.is_empty() => return Ok(()),
+                Ok(items) => {
+                    info!(
+                        "Waiting for {} EC2NodeClass(es) to be cleaned up (retry {}/{})...",
+                        items.len(),
+                        retry + 1,
+                        EC2NODECLASS_CLEANUP_MAX_RETRIES
+                    );
+                }
+                Err(e) => {
+                    warn!("Error when trying to get EC2NodeClass: {}", e);
+                }
+            }
+            tokio::time::sleep(Duration::from_secs(KARPENTER_POLLING_INTERVAL_SECS)).await;
+        }
+
+        // Final check after all retries
+        let ec2_node_classes = client.get_ec2_node_classes(event_details).await?;
         if !ec2_node_classes.is_empty() {
             return Err(Box::new(EngineError::new_nodegroup_delete_error(
                 event_details.clone(),
@@ -479,33 +682,16 @@ impl Karpenter {
     }
 }
 
-async fn get_nodes_drain_timeout(
-    kube_client: &QubeClient,
-    event_details: &EventDetails,
-    max_nodes_drain_duration: Option<ChronoDuration>,
-) -> Result<ChronoDuration, Box<EngineError>> {
-    let pods_list = kube_client
-        .get_pods(event_details.clone(), None, SelectK8sResourceBy::All)
-        .await
-        .unwrap_or_else(|_| Vec::with_capacity(0));
-
-    let max_termination_grace_period_seconds = pods_list
-        .iter()
-        .map(|pod| {
-            pod.metadata
-                .termination_grace_period_seconds
-                .unwrap_or(ChronoDuration::seconds(0))
-        })
-        .max();
-    let timeout = match max_termination_grace_period_seconds {
-        None => KARPENTER_MIN_NODES_DRAIN_TIMEOUT,
-        Some(duration) => ChronoDuration::max(duration, KARPENTER_MIN_NODES_DRAIN_TIMEOUT),
-    };
-
-    match max_nodes_drain_duration {
-        None => Ok(timeout),
-        Some(max_duration) => Ok(ChronoDuration::min(timeout, max_duration)),
-    }
+/// Returns `true` if the pod can be evicted (is not owned by a DaemonSet).
+/// DaemonSet pods are managed by the DaemonSet controller and will be recreated on the
+/// same node, so deleting them would be counterproductive.
+fn is_evictable_pod(pod: &Pod) -> bool {
+    let owned_by_daemonset = pod
+        .metadata
+        .owner_references
+        .as_ref()
+        .is_some_and(|refs| refs.iter().any(|r| r.kind == "DaemonSet"));
+    !owned_by_daemonset
 }
 
 fn uninstall_chart(
@@ -563,5 +749,68 @@ pub fn node_groups_when_karpenter_is_enabled<'a>(
             Ok(&[])
         }
         KubernetesClusterAction::Update(_) => Ok(node_groups),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use k8s_openapi::api::core::v1::Pod;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+    use k8s_openapi::apimachinery::pkg::apis::meta::v1::OwnerReference;
+
+    fn pod_with_owner(kind: &str) -> Pod {
+        Pod {
+            metadata: ObjectMeta {
+                name: Some("test-pod".to_string()),
+                namespace: Some("default".to_string()),
+                owner_references: Some(vec![OwnerReference {
+                    kind: kind.to_string(),
+                    name: "owner".to_string(),
+                    api_version: "v1".to_string(),
+                    uid: "uid-123".to_string(),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    fn pod_without_owner() -> Pod {
+        Pod {
+            metadata: ObjectMeta {
+                name: Some("standalone-pod".to_string()),
+                namespace: Some("default".to_string()),
+                owner_references: None,
+                ..Default::default()
+            },
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn daemonset_pod_is_not_evictable() {
+        assert!(!is_evictable_pod(&pod_with_owner("DaemonSet")));
+    }
+
+    #[test]
+    fn replicaset_pod_is_evictable() {
+        assert!(is_evictable_pod(&pod_with_owner("ReplicaSet")));
+    }
+
+    #[test]
+    fn statefulset_pod_is_evictable() {
+        assert!(is_evictable_pod(&pod_with_owner("StatefulSet")));
+    }
+
+    #[test]
+    fn job_pod_is_evictable() {
+        assert!(is_evictable_pod(&pod_with_owner("Job")));
+    }
+
+    #[test]
+    fn standalone_pod_is_evictable() {
+        assert!(is_evictable_pod(&pod_without_owner()));
     }
 }

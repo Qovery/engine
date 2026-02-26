@@ -209,6 +209,17 @@ mod tests {
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
     #[test]
+    fn test_karpenter_nodepool_type_display_matches_k8s_resource_names() {
+        use super::KarpenterNodePoolType;
+
+        // These Display values are used as K8s resource names when deleting NodePools via the API.
+        // Changing them would break the delete_all_node_pools() flow in karpenter.rs.
+        assert_eq!(KarpenterNodePoolType::Default.to_string(), "default");
+        assert_eq!(KarpenterNodePoolType::Stable.to_string(), "stable");
+        assert_eq!(KarpenterNodePoolType::Gpu.to_string(), "gpu");
+    }
+
+    #[test]
     fn should_deserialize_correctly_when_stable_node_pool_override_is_present_with_consolidation() {
         // given
         let karpenter_parameters_json = r#"
