@@ -18,6 +18,11 @@ spec:
       - http01:
           ingress:
             class: nginx-qovery
+            ingressTemplate:
+              metadata:
+                annotations:
+                  # Ensure ACME HTTP01 challenges are not blocked by user-defined IP whitelist/denylist
+                  nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0, ::/0"
       - dns01:
           {{ if eq .Values.externalDnsProvider "cloudflare" }}
           cloudflare:
