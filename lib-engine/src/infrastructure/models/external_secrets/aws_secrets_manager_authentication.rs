@@ -40,7 +40,7 @@ impl TryFrom<&str> for AwsAuthenticationModeKey {
         match s {
             "AUTOMATIC" => Ok(Self::Automatic),
             "ARN_ROLE" => Ok(Self::ArnRole),
-            "STATIC_CREDS" => Ok(Self::StaticCreds),
+            "STATIC_CREDENTIALS" => Ok(Self::StaticCreds),
             _ => Err(SecretsManagerConversionError {
                 message: format!("unknown AWS authentication mode: {}", s),
             }),
@@ -99,13 +99,13 @@ impl AwsAuthenticationMode {
                 let access_key_id = auth
                     .get("access_key_id")
                     .ok_or_else(|| SecretsManagerConversionError {
-                        message: "missing authentication.access_key_id for STATIC_CREDS mode".to_string(),
+                        message: "missing authentication.access_key_id for STATIC_CREDENTIALS mode".to_string(),
                     })?
                     .clone();
                 let secret_access_key = auth
                     .get("secret_access_key")
                     .ok_or_else(|| SecretsManagerConversionError {
-                        message: "missing authentication.secret_access_key for STATIC_CREDS mode".to_string(),
+                        message: "missing authentication.secret_access_key for STATIC_CREDENTIALS mode".to_string(),
                     })?
                     .clone();
                 Ok(AwsAuthenticationMode::AwsStaticCredentials {
@@ -137,7 +137,7 @@ mod tests {
             AwsAuthenticationModeKey::ArnRole
         );
         assert_eq!(
-            AwsAuthenticationModeKey::try_from("STATIC_CREDS").unwrap(),
+            AwsAuthenticationModeKey::try_from("STATIC_CREDENTIALS").unwrap(),
             AwsAuthenticationModeKey::StaticCreds
         );
     }
@@ -178,7 +178,7 @@ mod tests {
             ("access_key_id", "AKIAIOSFODNN7EXAMPLE"),
             ("secret_access_key", "SECRET_KEYEMI/K7MDENG/bPxRfiCY"),
         ]);
-        let result = AwsAuthenticationMode::try_parse("STATIC_CREDS", &auth).unwrap();
+        let result = AwsAuthenticationMode::try_parse("STATIC_CREDENTIALS", &auth).unwrap();
         assert_eq!(
             result,
             AwsAuthenticationMode::AwsStaticCredentials {
@@ -191,14 +191,14 @@ mod tests {
     #[test]
     fn test_parse_authentication_static_creds_missing_access_key_id() {
         let auth = auth_map(&[("secret_access_key", "SK")]);
-        let err = AwsAuthenticationMode::try_parse("STATIC_CREDS", &auth).unwrap_err();
+        let err = AwsAuthenticationMode::try_parse("STATIC_CREDENTIALS", &auth).unwrap_err();
         assert!(err.message.contains("missing authentication.access_key_id"));
     }
 
     #[test]
     fn test_parse_authentication_static_creds_missing_secret_access_key() {
         let auth = auth_map(&[("access_key_id", "AK")]);
-        let err = AwsAuthenticationMode::try_parse("STATIC_CREDS", &auth).unwrap_err();
+        let err = AwsAuthenticationMode::try_parse("STATIC_CREDENTIALS", &auth).unwrap_err();
         assert!(err.message.contains("missing authentication.secret_access_key"));
     }
 
@@ -288,7 +288,7 @@ mod tests {
             ("access_key_id", "AKIAIOSFODNN7EXAMPLE"),
             ("secret_access_key", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
         ]);
-        let result = AwsConnection::try_parse("AWS_PARAMETER_STORE", &endpoint, "STATIC_CREDS", &auth).unwrap();
+        let result = AwsConnection::try_parse("AWS_PARAMETER_STORE", &endpoint, "STATIC_CREDENTIALS", &auth).unwrap();
         assert_eq!(result.source, AwsSecretsManagerSource::AwsParameterStore);
         assert_eq!(
             result.authentication_mode,
