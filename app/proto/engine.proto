@@ -142,6 +142,13 @@ enum KubernetesProviderKind {
   AKS = 3;
 }
 
+message ExternalSecretsAuthentication {
+  oneof authentication {
+    string eks_role_arn        = 1;
+    string gke_service_account = 2;
+  }
+}
+
 message ClusterOutputsUpdateRequest {
   string jwt_token = 1;
   string kubeconfig = 2;
@@ -155,6 +162,7 @@ message ClusterOutputsUpdateRequest {
   optional string vpcId = 9;
   optional string network = 10;
   optional string privateNetworkId = 11;
+  optional ExternalSecretsAuthentication externalSecretsAuthentication = 12;
 }
 
 message TerraformResourcesRequest {

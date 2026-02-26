@@ -1,7 +1,8 @@
 use super::GrpcEngineClient;
 use crate::grpc::engine::{
-    ClusterOutputsUpdateRequest, GitTokenRequest, KubernetesProviderKind, ServiceVersionRequest,
-    TerraformResourcesRequest,
+    ClusterOutputsUpdateRequest, ExternalSecretsAuthentication as ProtoEsa, GitTokenRequest, KubernetesProviderKind,
+    ServiceVersionRequest, TerraformResourcesRequest,
+    external_secrets_authentication::Authentication as ProtoEsaAuthentication,
 };
 use crate::tokio_utils::block_on;
 use anyhow::{Context, anyhow};
@@ -9,7 +10,9 @@ use chrono::DateTime;
 use qovery_engine::engine_task::qovery_api::{
     EngineServiceType, QoveryApi, TerraformResourcesRequest as EngineResourcesRequest,
 };
-use qovery_engine::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
+use qovery_engine::infrastructure::action::cluster_outputs_helper::{
+    ClusterOutputsRequest, ExternalSecretsAuthentication,
+};
 use qovery_engine::infrastructure::models::cloud_provider::service::ServiceType;
 use qovery_engine::infrastructure::models::kubernetes::Kind;
 use qovery_engine::io_models::application::GitCredentials;
@@ -151,6 +154,19 @@ impl QoveryApi for GrpcCoreServiceApi {
                     vpc_id: cluster_outputs_request.cluster_vpc_id.clone(),
                     network: cluster_outputs_request.network.clone(),
                     private_network_id: cluster_outputs_request.private_network_id.clone(),
+                    external_secrets_authentication: cluster_outputs_request
+                        .external_secrets_authentication
+                        .as_ref()
+                        .map(|auth| ProtoEsa {
+                            authentication: Some(match auth {
+                                ExternalSecretsAuthentication::EksRoleArn(arn) => {
+                                    ProtoEsaAuthentication::EksRoleArn(arn.clone())
+                                }
+                                ExternalSecretsAuthentication::GkeServiceAccount(sa) => {
+                                    ProtoEsaAuthentication::GkeServiceAccount(sa.clone())
+                                }
+                            }),
+                        }),
                 })
                 .await?;
 
