@@ -130,22 +130,27 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
             },
         ];
 
+        let mut values_string = vec![];
+
         // Add access log format if provided
+        // We base64 encode the JSON string to avoid issues with special characters in Helm --set-string
         if let Some(ref format) = self.access_log_format {
-            values.push(ChartSetValue {
+            use base64::Engine;
+            let encoded = base64::engine::general_purpose::STANDARD.encode(format);
+            values_string.push(ChartSetValue {
                 key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
-                value: format.clone(),
+                value: encoded.clone(),
             });
-            values.push(ChartSetValue {
+            values_string.push(ChartSetValue {
                 key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
-                value: format.clone(),
+                value: encoded,
             });
         } else {
-            values.push(ChartSetValue {
+            values_string.push(ChartSetValue {
                 key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
                 value: "".to_string(),
             });
-            values.push(ChartSetValue {
+            values_string.push(ChartSetValue {
                 key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
                 value: "".to_string(),
             });
@@ -162,6 +167,7 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
+                values_string,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryGatewayClassChartInstallationChecker::new(
