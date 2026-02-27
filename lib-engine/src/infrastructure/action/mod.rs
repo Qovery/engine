@@ -19,7 +19,7 @@ pub use deploy_helms::{
     ChartFailure, DelayStrategy, ParallelDeploymentResult, ParallelDeploymentRetryConfig, RetryAttempt,
 };
 
-use crate::errors::{EngineError, ErrorMessageVerbosity};
+use crate::errors::{EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
 use crate::infrastructure::action::utils::mk_logger;
@@ -177,8 +177,32 @@ pub trait InfrastructureAction: Send + Sync {
             Ok(v) if v.required_upgrade_on.is_some() => Some(v),
             Ok(_) => None,
             Err(e) => {
+                let reason = match e.tag() {
+                    Tag::CannotExecuteK8sVersion => {
+                        "Could not connect to the cluster to check its version (kubectl version failed). \
+                         This can happen if the cluster is unreachable or the kubeconfig is invalid."
+                    }
+                    Tag::CannotGetClusterNodes => {
+                        "Could not retrieve the list of cluster nodes (kubectl get nodes failed). \
+                         The cluster may be starting up or nodes may not be ready yet."
+                    }
+                    Tag::CannotDetermineK8sMasterVersion => {
+                        "Could not parse the Kubernetes control plane version returned by the cluster."
+                    }
+                    Tag::CannotDetermineK8sKubeletWorkerVersion => {
+                        "Could not parse the kubelet version on one or more worker nodes."
+                    }
+                    Tag::CannotDetermineK8sKubeProxyVersion => {
+                        "Could not parse the kube-proxy version on one or more worker nodes."
+                    }
+                    Tag::K8sUpgradeDeployedVsRequestedVersionsInconsistency => {
+                        "Version mismatch between the deployed cluster version and the requested version. \
+                         The cluster may have been manually upgraded or downgraded outside of Qovery."
+                    }
+                    _ => "An unexpected error occurred while checking if a Kubernetes upgrade is needed.",
+                };
                 logger.warn(EventMessage::new(
-                    "Error detected, upgrade won't occurs, but standard deployment.".to_string(),
+                    format!("Skipping Kubernetes upgrade, proceeding with standard deployment. Reason: {reason}"),
                     Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                 ));
                 None
