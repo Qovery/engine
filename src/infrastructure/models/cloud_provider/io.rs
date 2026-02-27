@@ -438,7 +438,7 @@ pub struct ClusterAdvancedSettings {
     pub envoy_memory_limit_in_mib: u32,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
-    #[serde(alias = "envoy.access_log.format")]
+    #[serde(alias = "envoy.access_log.format", alias = "envoy.log_format")]
     pub envoy_access_log_format: Option<String>,
     #[serde(
         alias = "envoy.custom_http_errors.default",

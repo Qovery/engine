@@ -25,7 +25,8 @@ spec:
             type: "JSON"
             {{- $customFormat := .Values.gatewayClass.qoveryPublic.accessLog.format | trim }}
             {{- if and (ne $customFormat "") (ne $customFormat "set-by-engine") }}
-            json: {{ $customFormat | fromJson | toYaml | nindent 14 }}
+            {{- $decodedFormat := $customFormat | b64dec }}
+            json: {{ $decodedFormat | fromJson | toYaml | nindent 14 }}
             {{- else }}
             json:
               start_time: "%START_TIME%"
@@ -89,7 +90,8 @@ spec:
             type: "JSON"
             {{- $customFormat := .Values.gatewayClass.qoveryPrivate.accessLog.format | trim }}
             {{- if ne $customFormat "" }}
-            json: {{ $customFormat | fromJson | toYaml | nindent 14 }}
+            {{- $decodedFormat := $customFormat | b64dec }}
+            json: {{ $decodedFormat | fromJson | toYaml | nindent 14 }}
             {{- else }}
             json:
               start_time: "%START_TIME%"
