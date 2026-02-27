@@ -8,9 +8,11 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::runtime::block_on;
 use crate::services::kube_client::GatewayClass;
+use base64::Engine;
 use kube::Api;
 use kube::core::params::ListParams;
 use kube::core::{Expression, Selector};
+use serde_json::Value;
 use std::collections::HashSet;
 
 pub struct QoveryGatewayClassChart {
@@ -50,6 +52,42 @@ impl QoveryGatewayClassChart {
 
     pub fn chart_name() -> String {
         "qovery-gateway-class".to_string()
+    }
+
+    /// Helper function to handle log format processing and encoding, ensuring it is valid JSON and properly minified before encoding
+    fn encode_access_log_format(format: &str) -> Result<String, HelmChartError> {
+        // Strip surrounding quotes if present (some configs store it as "\"{ ... }\"")
+        // First attempt: try to parse as a JSON string (handles escaped quotes)
+        let mut unquoted = serde_json::from_str::<String>(format).unwrap_or_else(|_| format.to_string());
+
+        // Second attempt: if still starts/ends with quotes, strip them manually (handles double-escaping)
+        while unquoted.len() > 2 && unquoted.starts_with('"') && unquoted.ends_with('"') {
+            unquoted = unquoted[1..unquoted.len() - 1].to_string();
+        }
+
+        // Normalize the input: replace literal newlines, tabs, and carriage returns with spaces
+        // This handles cases where the JSON comes with actual line breaks from config files
+        let normalized: String = unquoted
+            .chars()
+            .map(|c| match c {
+                '\n' | '\r' | '\t' => ' ',
+                _ => c,
+            })
+            .collect();
+
+        // Parse the JSON to validate it and minify it (remove extra whitespace)
+        let json_value = serde_json::from_str::<Value>(&normalized).map_err(|e| HelmChartError::RenderingError {
+            chart_name: Self::chart_name(),
+            msg: format!("Invalid JSON format for envoy access log format: {}", e),
+        })?;
+
+        // Re-serialize without pretty-printing to get a one-line JSON string
+        let minified = serde_json::to_string(&json_value).map_err(|e| HelmChartError::RenderingError {
+            chart_name: Self::chart_name(),
+            msg: format!("Failed to serialize envoy access log format: {}", e),
+        })?;
+
+        Ok(base64::engine::general_purpose::STANDARD.encode(minified))
     }
 
     /// Helper function to add HPA configuration values for a specific gateway
@@ -132,29 +170,25 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
 
         let mut values_string = vec![];
 
-        // Add access log format if provided
-        // We base64 encode the JSON string to avoid issues with special characters in Helm --set-string
-        if let Some(ref format) = self.access_log_format {
-            use base64::Engine;
-            let encoded = base64::engine::general_purpose::STANDARD.encode(format);
-            values_string.push(ChartSetValue {
-                key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
-                value: encoded.clone(),
-            });
-            values_string.push(ChartSetValue {
-                key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
-                value: encoded,
-            });
-        } else {
-            values_string.push(ChartSetValue {
-                key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
-                value: "".to_string(),
-            });
-            values_string.push(ChartSetValue {
-                key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
-                value: "".to_string(),
-            });
-        }
+        // Process access log format if provided (base64 encode for safe Helm transmission)
+        let encoded_format = self
+            .access_log_format
+            .as_ref()
+            .map(|f| f.trim())
+            .filter(|f| !f.is_empty())
+            .map(Self::encode_access_log_format)
+            .transpose()?
+            .unwrap_or_default();
+
+        // Set the same format for both public and private gateways
+        values_string.push(ChartSetValue {
+            key: "gatewayClass.qoveryPublic.accessLog.format".to_string(),
+            value: encoded_format.clone(),
+        });
+        values_string.push(ChartSetValue {
+            key: "gatewayClass.qoveryPrivate.accessLog.format".to_string(),
+            value: encoded_format,
+        });
 
         // Configure HPA for both public and private gateways
         Self::add_hpa_values(&mut values, "gatewayClass.qoveryPublic", &self.hpa_mode);
@@ -352,5 +386,257 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    /// Test that valid JSON access log format is properly base64 encoded
+    #[test]
+    fn qovery_gateway_class_chart_valid_json_access_log_format_test() {
+        // setup: valid compact JSON
+        let json_format = r#"{"time":"%START_TIME%","method":"%REQ(:METHOD)%"}"#.to_string();
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some(json_format.clone()),
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify: should have base64 encoded values
+        use base64::Engine;
+
+        let public_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPublic.accessLog.format")
+            .expect("Public gateway access log format should exist");
+
+        // Decode and verify it's valid JSON with correct values
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&public_value.value)
+            .expect("Should be valid base64");
+        let decoded_str = String::from_utf8(decoded).expect("Should be valid UTF-8");
+        let decoded_json: serde_json::Value = serde_json::from_str(&decoded_str).expect("Should be valid JSON");
+
+        // Verify the JSON contains the expected fields
+        assert_eq!(decoded_json["time"], "%START_TIME%");
+        assert_eq!(decoded_json["method"], "%REQ(:METHOD)%");
+
+        // Verify private gateway has the same value
+        let private_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPrivate.accessLog.format")
+            .expect("Private gateway access log format should exist");
+
+        assert_eq!(
+            public_value.value, private_value.value,
+            "Public and private gateways should have the same access log format"
+        );
+    }
+
+    /// Test that multi-line JSON is minified before base64 encoding
+    #[test]
+    fn qovery_gateway_class_chart_multiline_json_access_log_format_test() {
+        // setup: multi-line formatted JSON
+        let multiline_json = r#"{
+  "time": "%START_TIME%",
+  "method": "%REQ(:METHOD)%",
+  "path": "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+}"#
+        .to_string();
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some(multiline_json),
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify: should be minified (no newlines) and base64 encoded
+        use base64::Engine;
+
+        let public_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPublic.accessLog.format")
+            .expect("Public gateway access log format should exist");
+
+        // Verify the decoded value doesn't contain newlines
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&public_value.value)
+            .expect("Should be valid base64");
+        let decoded_str = String::from_utf8(decoded).expect("Should be valid UTF-8");
+        assert!(!decoded_str.contains('\n'), "Decoded JSON should not contain newlines");
+
+        // Verify it's valid JSON with the correct fields
+        let decoded_json: serde_json::Value = serde_json::from_str(&decoded_str).expect("Should be valid JSON");
+        assert_eq!(decoded_json["time"], "%START_TIME%");
+        assert_eq!(decoded_json["method"], "%REQ(:METHOD)%");
+        assert_eq!(decoded_json["path"], "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%");
+    }
+
+    /// Test with real-world format from local.json (as it appears after JSON parsing)
+    #[test]
+    fn qovery_gateway_class_chart_real_world_access_log_format_test() {
+        // setup: realistic format from local.json
+        // In the JSON file it's stored as: "envoy.log_format": "\"{\n  \"start_time\": ...\n}\""
+        // After JSON parsing, this becomes a string with actual newlines, which is what we receive
+        let json_format = "{\n  \"start_time\": \"%START_TIME%\",\n  \"method\": \"%REQ(:METHOD)%\",\n  \"x-envoy-origin-path\": \"%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%\",\n  \"protocol\": \"%PROTOCOL%\",\n  \"response_code\": \"%RESPONSE_CODE%\",\n  \"response_flags\": \"%RESPONSE_FLAGS%\",\n  \"response_code_details\": \"%RESPONSE_CODE_DETAILS%\",\n  \"connection_termination_details\": \"%CONNECTION_TERMINATION_DETAILS%\",\n  \"upstream_transport_failure_reason\": \"%UPSTREAM_TRANSPORT_FAILURE_REASON%\",\n  \"bytes_received\": \"%BYTES_RECEIVED%\",\n  \"bytes_sent\": \"%BYTES_SENT%\",\n  \"duration\": \"%DURATION%\",\n  \"x-envoy-upstream-service-time\": \"%RESP(X-ENVOY-UPSTREAM-SERVICE-TIME)%\",\n  \"x-forwarded-for\": \"%REQ(X-FORWARDED-FOR)%\",\n  \"user-agent\": \"%REQ(USER-AGENT)%\",\n  \"x-request-id\": \"%REQ(X-REQUEST-ID)%\",\n  \":authority\": \"%REQ(:AUTHORITY)%\",\n  \"upstream_host\": \"%UPSTREAM_HOST%\",\n  \"upstream_cluster\": \"%UPSTREAM_CLUSTER%\",\n  \"upstream_local_address\": \"%UPSTREAM_LOCAL_ADDRESS%\",\n  \"downstream_local_address\": \"%DOWNSTREAM_LOCAL_ADDRESS%\",\n  \"downstream_remote_address\": \"%DOWNSTREAM_REMOTE_ADDRESS%\",\n  \"requested_server_name\": \"%REQUESTED_SERVER_NAME%\",\n  \"route_name\": \"%ROUTE_NAME%\"\n}".to_string();
+
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some(json_format),
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify: should be minified and base64 encoded
+        use base64::Engine;
+
+        let public_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPublic.accessLog.format")
+            .expect("Public gateway access log format should exist");
+
+        // Decode and verify
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&public_value.value)
+            .expect("Should be valid base64");
+        let decoded_str = String::from_utf8(decoded).expect("Should be valid UTF-8");
+
+        // Should not contain newlines (minified)
+        assert!(!decoded_str.contains('\n'), "Decoded JSON should not contain newlines");
+
+        // Verify it's valid JSON with all expected fields
+        let decoded_json: serde_json::Value = serde_json::from_str(&decoded_str).expect("Should be valid JSON");
+
+        // Check a few key fields to ensure they're all present
+        assert_eq!(decoded_json["start_time"], "%START_TIME%");
+        assert_eq!(decoded_json["method"], "%REQ(:METHOD)%");
+        assert_eq!(decoded_json["response_code"], "%RESPONSE_CODE%");
+        assert_eq!(decoded_json[":authority"], "%REQ(:AUTHORITY)%");
+        assert_eq!(decoded_json["upstream_cluster"], "%UPSTREAM_CLUSTER%");
+        assert_eq!(decoded_json["route_name"], "%ROUTE_NAME%");
+    }
+
+    /// Test with quoted JSON format (as it might come from some config parsers)
+    #[test]
+    fn qovery_gateway_class_chart_quoted_json_access_log_format_test() {
+        // setup: JSON wrapped in quotes (with escaped quotes inside)
+        let json_format =
+            r#""{\n  \"start_time\": \"%START_TIME%\",\n  \"method\": \"%REQ(:METHOD)%\"\n}""#.to_string();
+
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some(json_format),
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify: should properly unwrap the quotes and parse the JSON
+        use base64::Engine;
+
+        let public_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPublic.accessLog.format")
+            .expect("Public gateway access log format should exist");
+
+        // Decode and verify
+        let decoded = base64::engine::general_purpose::STANDARD
+            .decode(&public_value.value)
+            .expect("Should be valid base64");
+        let decoded_str = String::from_utf8(decoded).expect("Should be valid UTF-8");
+        let decoded_json: serde_json::Value = serde_json::from_str(&decoded_str).expect("Should be valid JSON");
+
+        // Verify the fields are correct
+        assert_eq!(decoded_json["start_time"], "%START_TIME%");
+        assert_eq!(decoded_json["method"], "%REQ(:METHOD)%");
+    }
+
+    /// Test that empty or whitespace-only format is treated as no format
+    #[test]
+    fn qovery_gateway_class_chart_empty_access_log_format_test() {
+        // setup: empty string
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some("   \n  \t  ".to_string()), // whitespace only
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify: should have empty values (not base64 encoded)
+        let public_value = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|v| v.key == "gatewayClass.qoveryPublic.accessLog.format")
+            .expect("Public gateway access log format should exist");
+
+        assert_eq!(public_value.value, "", "Empty/whitespace format should result in empty value");
+    }
+
+    /// Test that invalid JSON returns an error
+    #[test]
+    fn qovery_gateway_class_chart_invalid_json_access_log_format_test() {
+        // setup: invalid JSON
+        let invalid_json = r#"{"time": "%START_TIME%", invalid}"#.to_string();
+        let chart = QoveryGatewayClassChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HashSet::new(),
+            Some(invalid_json),
+            HpaMode::Enabled {
+                config: Default::default(),
+            },
+        );
+
+        // execute:
+        let result = chart.to_common_helm_chart();
+
+        // verify: should return an error
+        assert!(result.is_err(), "Invalid JSON should return an error");
+        if let Err(e) = result {
+            let error_message = format!("{}", e);
+            assert!(
+                error_message.contains("Invalid JSON format for envoy access log format"),
+                "Error message should indicate invalid JSON format, got: {}",
+                error_message
+            );
+        }
     }
 }
