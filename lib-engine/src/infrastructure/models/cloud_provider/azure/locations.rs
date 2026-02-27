@@ -155,13 +155,6 @@ pub enum AzureLocation {
     WestUS3,
 }
 
-impl AzureLocation {
-    pub fn zones(&self) -> Vec<AzureZone> {
-        // TODO(benjaminch): Azure integration, make sure to check if the location supports zones
-        vec![AzureZone::One, AzureZone::Two, AzureZone::Three]
-    }
-}
-
 impl ToCloudProviderFormat for AzureLocation {
     fn to_cloud_provider_format(&self) -> &str {
         match self {
@@ -296,7 +289,6 @@ impl FromStr for AzureLocation {
 mod tests {
     use crate::environment::models::ToCloudProviderFormat;
     use crate::infrastructure::models::cloud_provider::azure::locations::{AzureLocation, AzureZone};
-    use std::collections::HashSet;
     use std::str::FromStr;
     use strum::IntoEnumIterator;
 
@@ -441,11 +433,51 @@ mod tests {
 
     #[test]
     fn test_azure_location_zones() {
-        let expected: HashSet<_> = [AzureZone::One, AzureZone::Two, AzureZone::Three].into_iter().collect();
+        let three_zones: &[AzureZone] = &[AzureZone::One, AzureZone::Two, AzureZone::Three];
+        let single_zone: &[AzureZone] = &[AzureZone::One];
+
+        let three_zone_regions = [
+            AzureLocation::AustraliaEast,
+            AzureLocation::AustriaEast,
+            AzureLocation::BrazilSouth,
+            AzureLocation::CanadaCentral,
+            AzureLocation::CentralIndia,
+            AzureLocation::CentralUS,
+            AzureLocation::EastAsia,
+            AzureLocation::EastUS,
+            AzureLocation::EastUS2,
+            AzureLocation::FranceCentral,
+            AzureLocation::GermanyWestCentral,
+            AzureLocation::IndonesiaCentral,
+            AzureLocation::IsraelCentral,
+            AzureLocation::ItalyNorth,
+            AzureLocation::JapanEast,
+            AzureLocation::KoreaCentral,
+            AzureLocation::MexicoCentral,
+            AzureLocation::NewZealandNorth,
+            AzureLocation::NorthEurope,
+            AzureLocation::NorwayEast,
+            AzureLocation::PolandCentral,
+            AzureLocation::QatarCentral,
+            AzureLocation::SouthAfricaNorth,
+            AzureLocation::SouthCentralUS,
+            AzureLocation::SoutheastAsia,
+            AzureLocation::SpainCentral,
+            AzureLocation::SwedenCentral,
+            AzureLocation::SwitzerlandNorth,
+            AzureLocation::UAENorth,
+            AzureLocation::UKSouth,
+            AzureLocation::WestEurope,
+            AzureLocation::WestUS2,
+            AzureLocation::WestUS3,
+        ];
 
         for location in AzureLocation::iter() {
-            let actual: HashSet<_> = location.zones().into_iter().collect();
-            assert_eq!(expected, actual, "Mismatch for location {location:?}");
+            if three_zone_regions.contains(&location) {
+                assert_eq!(location.zones(), three_zones, "Expected 3 zones for {location:?}");
+            } else {
+                assert_eq!(location.zones(), single_zone, "Expected single zone for {location:?}");
+            }
         }
     }
 

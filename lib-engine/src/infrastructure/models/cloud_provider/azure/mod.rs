@@ -6,6 +6,7 @@ use crate::infrastructure::models::cloud_provider::{
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use uuid::Uuid;
 
+pub mod azure_zone_data;
 pub mod locations;
 
 pub struct Azure {
