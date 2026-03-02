@@ -337,12 +337,7 @@ fn build_target_values(
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.expr"),
-                value: alert
-                    .expr
-                    .replace("\\", "\\\\")
-                    .replace("\"", "\\\"")
-                    .replace(",", "\\,")
-                    .clone(),
+                value: escape_helm_strval(&alert.expr),
             },
             ChartSetValue {
                 key: format!("{alert_prefix}.for"),
@@ -365,7 +360,7 @@ fn build_target_values(
         if let Some(summary) = &alert.summary {
             values_string.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.summary"),
-                value: summary.clone(),
+                value: escape_helm_strval(summary),
             })
         }
 
@@ -379,7 +374,7 @@ fn build_target_values(
         if let Some(description) = &alert.description {
             values_string.push(ChartSetValue {
                 key: format!("{alert_prefix}.annotations.description"),
-                value: description.clone(),
+                value: escape_helm_strval(description),
             })
         }
 
@@ -409,6 +404,10 @@ fn build_target_values(
     }
 
     AlertChartValues { values, values_string }
+}
+
+fn escape_helm_strval(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"").replace(',', "\\,")
 }
 
 fn capitalize(s: &str) -> String {
