@@ -168,14 +168,17 @@ impl<'m> Kubent {
         match self.kubent_cmd.get_deprecations(kubeconfig, target_version, envs) {
             Ok(out) => Ok(match out.stdout {
                 None => Vec::with_capacity(0),
-                Some(ref stdout) => match stdout.is_empty() {
-                    true => Vec::with_capacity(0),
-                    false => serde_json::from_str(stdout)
-                        .map_err(|e| KubentError::InvalidCmdOutputError { output: e.to_string() })?,
-                },
+                Some(ref stdout) => parse_deprecations(stdout)?,
             }),
             Err(err) => Err(KubentError::CmdError { error: err }),
         }
+    }
+}
+
+fn parse_deprecations(stdout: &str) -> Result<Vec<Deprecation>, KubentError> {
+    match stdout.is_empty() {
+        true => Ok(Vec::with_capacity(0)),
+        false => serde_json::from_str(stdout).map_err(|e| KubentError::InvalidCmdOutputError { output: e.to_string() }),
     }
 }
 
@@ -358,5 +361,32 @@ mod tests {
             },
             deprecations_err
         );
+    }
+
+    #[test]
+    fn test_parse_deprecations_with_real_kubent_output() {
+        let payload = r#"
+[
+  {
+    "Name": "legacy-ingress",
+    "Namespace": "<undefined>",
+    "Kind": "Ingress",
+    "ApiVersion": "networking.k8s.io/v1beta1",
+    "RuleSet": "Deprecated APIs removed in 1.22",
+    "ReplaceWith": "networking.k8s.io/v1",
+    "Since": "1.19.0"
+  }
+]
+"#;
+
+        let parsed = parse_deprecations(payload).expect("payload should parse");
+        assert_eq!(1, parsed.len());
+        assert_eq!(Some("legacy-ingress".to_string()), parsed[0].name);
+        assert_eq!(None, parsed[0].namespace);
+        assert_eq!(Some("Ingress".to_string()), parsed[0].kind);
+        assert_eq!(Some("networking.k8s.io/v1beta1".to_string()), parsed[0].api_version);
+        assert_eq!(Some("Deprecated APIs removed in 1.22".to_string()), parsed[0].rule_set);
+        assert_eq!(Some("networking.k8s.io/v1".to_string()), parsed[0].replace_with);
+        assert_eq!(Some("1.19.0".to_string()), parsed[0].since);
     }
 }

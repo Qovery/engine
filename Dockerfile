@@ -14,6 +14,7 @@ ARG PACK_VERSION="0.35.1"
 ARG CONTAINERD_VERSION="1.7.29-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG KUBENT_VERSION=0.7.3
+ARG PLUTO_VERSION=5.22.8
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.92.0-2026-01-05T18-08-48"
@@ -41,6 +42,7 @@ ARG DOCKER_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG KUBENT_VERSION
+ARG PLUTO_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
@@ -53,6 +55,7 @@ RUN apt-get update && \
   helm=$HELM_VERSION \
   vault=$VAULT_VERSION && \
   curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
@@ -213,6 +216,7 @@ ARG PACK_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG KUBENT_VERSION
+ARG PLUTO_VERSION
 
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
@@ -237,6 +241,7 @@ RUN apt-get update && apt-get install -y \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
   curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
@@ -305,6 +310,7 @@ ARG PACK_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG KUBENT_VERSION
+ARG PLUTO_VERSION
 
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
@@ -323,6 +329,7 @@ RUN apt-get update && apt-get install -y \
   helm=$HELM_VERSION \
   dumb-init git-lfs && \
   curl -sSL "https://github.com/doitintl/kube-no-trouble/releases/download/${KUBENT_VERSION}/kubent-${KUBENT_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv kubent && \
+  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
   curl -sSL "https://github.com/buildpacks/pack/releases/download/v$PACK_VERSION/pack-v$PACK_VERSION-linux$(dpkg --print-architecture | sed -e 's/amd64//' -e 's/arm64/-arm64/').tgz" | tar -C /usr/local/bin/ --no-same-owner -xzv pack && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
