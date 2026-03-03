@@ -6,6 +6,7 @@ pub mod helm;
 pub mod helm_utils;
 pub mod kubectl;
 pub mod kubent;
+pub mod pluto;
 pub mod skopeo;
 pub mod structs;
 pub mod terraform;

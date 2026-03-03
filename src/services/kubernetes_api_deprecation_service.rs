@@ -3,6 +3,7 @@ use crate::io_models::QoveryIdentifierError;
 use crate::runtime::block_on;
 use crate::{
     cmd::kubent::{Deprecation as CmdDeprecation, Kubent, KubentError},
+    cmd::pluto::{Pluto, PlutoError},
     io_models::QoveryIdentifier,
 };
 use kube::api::{ApiResource, DynamicObject};
@@ -19,6 +20,8 @@ use std::{
 pub enum KubernetesDeprecationServiceError {
     #[error("Client (kubent) error: {client_error}")]
     ClientError { client_error: KubentError },
+    #[error("Client (pluto) error: {client_error}")]
+    PlutoClientError { client_error: PlutoError },
     #[error(
         "Error while trying to parse kubernetes API version, it seems to be an invalid version: `{invalid_version}`"
     )]
@@ -385,12 +388,16 @@ pub enum KubernetesApiDeprecationServiceGranuality<'a> {
 
 #[derive(Default)]
 pub struct KubernetesApiDeprecationService {
-    client: Kubent,
+    kubent_client: Kubent,
+    pluto_client: Pluto,
 }
 
 impl KubernetesApiDeprecationService {
     pub fn new(client: Kubent) -> Self {
-        Self { client }
+        Self {
+            kubent_client: client,
+            pluto_client: Pluto::default(),
+        }
     }
 
     pub fn get_deprecated_kubernetes_apis(
@@ -400,9 +407,29 @@ impl KubernetesApiDeprecationService {
         envs: &[(&str, &str)],
         granularity: KubernetesApiDeprecationServiceGranuality,
     ) -> Result<Vec<Deprecation>, KubernetesDeprecationServiceError> {
-        self.client
+        self.kubent_client
             .get_deprecations(kubeconfig, target_version.map(|v| v.to_string()), envs)
             .map_err(|e| KubernetesDeprecationServiceError::ClientError { client_error: e })?
+            .into_iter()
+            .map(|d| match granularity {
+                KubernetesApiDeprecationServiceGranuality::Default => Deprecation::try_from(d),
+                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata { kube_client } => {
+                    Deprecation::try_from_with_qovery_metadata(kube_client, d)
+                }
+            })
+            .collect()
+    }
+
+    pub fn get_deprecated_kubernetes_apis_with_pluto(
+        &self,
+        kubeconfig: &Path,
+        target_version: Option<&VersionsNumber>,
+        envs: &[(&str, &str)],
+        granularity: KubernetesApiDeprecationServiceGranuality,
+    ) -> Result<Vec<Deprecation>, KubernetesDeprecationServiceError> {
+        self.pluto_client
+            .get_deprecations(kubeconfig, target_version.map(|v| v.to_string()), envs)
+            .map_err(|e| KubernetesDeprecationServiceError::PlutoClientError { client_error: e })?
             .into_iter()
             .map(|d| match granularity {
                 KubernetesApiDeprecationServiceGranuality::Default => Deprecation::try_from(d),
@@ -423,13 +450,7 @@ impl KubernetesApiDeprecationService {
         let deprecations = self
             .get_deprecated_kubernetes_apis(kubeconfig, target_kubernetes_version, envs, granularity)?
             .into_iter()
-            .filter(|deprecation| match target_kubernetes_version {
-                Some(tv) => match deprecation.since {
-                    Some(ref version) => version <= tv,
-                    None => true, // if deprecation doesn't have any version, we consider it as deprecated
-                },
-                None => true,
-            })
+            .filter(|deprecation| should_report_deprecation(deprecation, target_kubernetes_version, true))
             .collect::<Vec<_>>();
         if !deprecations.is_empty() {
             return Err(KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound {
@@ -437,6 +458,40 @@ impl KubernetesApiDeprecationService {
             });
         }
         Ok(())
+    }
+
+    pub fn is_cluster_fully_compatible_with_kubernetes_version_with_pluto(
+        &self,
+        kubeconfig: &Path,
+        target_kubernetes_version: Option<&VersionsNumber>,
+        envs: &[(&str, &str)],
+        granularity: KubernetesApiDeprecationServiceGranuality,
+    ) -> Result<(), KubernetesDeprecationServiceError> {
+        let deprecations = self
+            .get_deprecated_kubernetes_apis_with_pluto(kubeconfig, target_kubernetes_version, envs, granularity)?
+            .into_iter()
+            .filter(|deprecation| should_report_deprecation(deprecation, target_kubernetes_version, false))
+            .collect::<Vec<_>>();
+        if !deprecations.is_empty() {
+            return Err(KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound {
+                deprecations: Deprecations(deprecations),
+            });
+        }
+        Ok(())
+    }
+}
+
+fn should_report_deprecation(
+    deprecation: &Deprecation,
+    target_kubernetes_version: Option<&VersionsNumber>,
+    report_when_since_is_missing: bool,
+) -> bool {
+    match target_kubernetes_version {
+        Some(tv) => match deprecation.since {
+            Some(ref version) => version <= tv,
+            None => report_when_since_is_missing,
+        },
+        None => true,
     }
 }
 
@@ -714,6 +769,40 @@ mod tests {
             },
             result.expect_err("Should have error")
         );
+    }
+
+    #[test]
+    fn test_should_report_deprecation_with_missing_since_for_pluto_path() {
+        let target_version = VersionsNumberBuilder::new().major(1).minor(31).build();
+        let deprecation = ServiceDeprecation::new(
+            Some("ingress".to_string()),
+            Some("default".to_string()),
+            Some("Ingress".to_string()),
+            Some("networking.k8s.io/v1beta1".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(!should_report_deprecation(&deprecation, Some(&target_version), false));
+    }
+
+    #[test]
+    fn test_should_report_deprecation_with_missing_since_for_kubent_path() {
+        let target_version = VersionsNumberBuilder::new().major(1).minor(31).build();
+        let deprecation = ServiceDeprecation::new(
+            Some("ingress".to_string()),
+            Some("default".to_string()),
+            Some("Ingress".to_string()),
+            Some("networking.k8s.io/v1beta1".to_string()),
+            None,
+            None,
+            None,
+            None,
+        );
+
+        assert!(should_report_deprecation(&deprecation, Some(&target_version), true));
     }
 
     #[test]
