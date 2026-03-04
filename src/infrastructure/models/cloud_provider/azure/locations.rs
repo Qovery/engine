@@ -452,6 +452,7 @@ mod tests {
             AzureLocation::IsraelCentral,
             AzureLocation::ItalyNorth,
             AzureLocation::JapanEast,
+            AzureLocation::JapanWest,
             AzureLocation::KoreaCentral,
             AzureLocation::MexicoCentral,
             AzureLocation::NewZealandNorth,
