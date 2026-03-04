@@ -2,6 +2,7 @@ use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
 use crate::events::{EventDetails, InfrastructureStep, Stage};
+use crate::infrastructure::action::utils::generate_public_access_cidrs;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::cloud_provider::aws::regions::AwsZone;
@@ -550,28 +551,6 @@ pub fn eks_tera_context(
     Ok(context)
 }
 
-fn generate_public_access_cidrs(
-    advanced_settings: &ClusterAdvancedSettings,
-    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
-) -> Vec<String> {
-    match (
-        advanced_settings.qovery_static_ip_mode.unwrap_or(false),
-        qovery_allowed_public_access_cidrs,
-    ) {
-        (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
-            match &advanced_settings.k8s_api_allowed_public_access_cidrs {
-                Some(k8s_api_allowed_public_access_cidrs) => [
-                    qovery_allowed_public_access_cidrs.clone(),
-                    k8s_api_allowed_public_access_cidrs.clone(),
-                ]
-                .concat(),
-                None => qovery_allowed_public_access_cidrs.clone(),
-            }
-        }
-        _ => vec!["0.0.0.0/0".to_string()],
-    }
-}
-
 /// divide by 2 the total number of subnet to get the exact same number as private and public
 fn check_odd_subnets(
     event_details: EventDetails,
@@ -671,12 +650,10 @@ fn compute_secrets_manager_config(accesses: &[SecretsManagerAccess]) -> SecretsM
 
 #[cfg(test)]
 mod tests {
-    use super::generate_public_access_cidrs;
     use crate::infrastructure::action::eks::tera_context::{
         ObservabilityConfig, SecretsManagerConfig, compute_observability_config, compute_secrets_manager_config,
     };
     use crate::infrastructure::action::metrics_resource_profile::ResourceProfile;
-    use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
     use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
         AwsAuthenticationMode, AwsConnection, AwsSecretsManagerSource,
     };
@@ -685,97 +662,6 @@ mod tests {
     };
     use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
     use crate::io_models::metrics::{CloudWatchExporterConfig, MetricsConfiguration, MetricsParameters};
-
-    #[test]
-    fn test_public_access_cidrs_with_any_parameters_set() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: None,
-            k8s_api_allowed_public_access_cidrs: None,
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = None;
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
-
-        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-    }
-
-    #[test]
-    fn test_public_access_cidrs_with_static_ip_mode_disabled() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: Some(false),
-            k8s_api_allowed_public_access_cidrs: None,
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = None;
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
-
-        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-    }
-
-    #[test]
-    fn test_public_access_cidrs_with_static_ip_mode_disabled_and_qovey_cidr() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: Some(false),
-            k8s_api_allowed_public_access_cidrs: None,
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
-
-        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-    }
-
-    #[test]
-    fn test_public_access_cidrs_with_static_ip_mode_enabled_but_without_qovery_cidr() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: Some(true),
-            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.1/32".to_string()]),
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = Some(vec![]);
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
-
-        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
-    }
-
-    #[test]
-    fn test_public_access_cidrs_with_static_ip_mode_enabled() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: Some(true),
-            k8s_api_allowed_public_access_cidrs: Some(vec![]),
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
-
-        assert_eq!(cidrs, vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-    }
-
-    #[test]
-    fn test_public_access_cidrs_with_static_ip_mode_enabled_and_custom_cidr() {
-        let advanced_settings = ClusterAdvancedSettings {
-            qovery_static_ip_mode: Some(true),
-            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.4/32".to_string()]),
-            ..Default::default()
-        };
-        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
-
-        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
-
-        assert_eq!(
-            cidrs,
-            vec![
-                "1.1.1.2/32".to_string(),
-                "1.1.1.3/32".to_string(),
-                "1.1.1.4/32".to_string()
-            ]
-        );
-    }
 
     #[test]
     fn test_observability_config_when_no_metrics_parameters() {

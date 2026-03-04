@@ -56,6 +56,12 @@ resource "azurerm_kubernetes_cluster" "primary" {
     dns_service_ip      = local.dns_service_ip
   }
 
+  {% if enable_api_server_ip_whitelist %}
+  api_server_access_profile {
+    authorized_ip_ranges = var.authorized_ip_ranges
+  }
+  {% endif %}
+
   # TODO(benjaminch): Azure integration, to be variabilized
   maintenance_window {
     allowed {
@@ -97,6 +103,11 @@ resource "azurerm_kubernetes_cluster_node_pool" "node_pool_zone_{{ node_group.zo
   node_public_ip_enabled = false
   orchestrator_version   = var.kubernetes_version # Keep nodes up to date with control plane
   temporary_name_for_rotation = "{{ node_group.name }}temp"
+  upgrade_settings {
+    drain_timeout_in_minutes      = 0
+    max_surge                     = "10%"
+    node_soak_duration_in_minutes = 0
+  }
 
   tags = local.tags_aks
 }
