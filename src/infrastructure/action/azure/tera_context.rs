@@ -3,6 +3,7 @@ use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::errors::EngineError;
 use crate::helm::HelmChartNamespaces;
 use crate::infrastructure::action::ToInfraTeraContext;
+use crate::infrastructure::action::utils::{generate_public_access_cidrs, is_api_access_restricted};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::azure::SkuTier;
@@ -40,6 +41,15 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
         "resource_expiration_in_seconds",
         &cluster.advanced_settings().pleco_resources_ttl,
     );
+
+    // API server IP whitelist
+    let public_access_cidrs =
+        generate_public_access_cidrs(cluster.advanced_settings(), cluster.qovery_allowed_public_access_cidrs.as_ref());
+    let enable_api_server_ip_whitelist = is_api_access_restricted(&public_access_cidrs);
+    context.insert("enable_api_server_ip_whitelist", &enable_api_server_ip_whitelist);
+    if enable_api_server_ip_whitelist {
+        context.insert("authorized_ip_ranges", &public_access_cidrs);
+    }
 
     // Kubernetes
     context.insert("test_cluster", &cluster.context.is_test_cluster());

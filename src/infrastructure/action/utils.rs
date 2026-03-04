@@ -1,6 +1,7 @@
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::{InfraLogger, InfraLoggerImpl};
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use serde::de::DeserializeOwned;
 
@@ -19,6 +20,41 @@ where
     TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
 }
 
+/// CIDR that allows unrestricted access (all IPs).
+const UNRESTRICTED_CIDR: &str = "0.0.0.0/0";
+
+/// Returns `true` when the CIDRs restrict API server access to specific IPs
+/// (i.e. not the default unrestricted `0.0.0.0/0`).
+pub fn is_api_access_restricted(public_access_cidrs: &[String]) -> bool {
+    !(public_access_cidrs.len() == 1 && public_access_cidrs[0] == UNRESTRICTED_CIDR)
+}
+
+/// Generates the list of CIDRs allowed to access the Kubernetes API server.
+///
+/// When static IP mode is enabled and Qovery CIDRs are provided, merges them with any
+/// user-specified CIDRs from advanced settings. Otherwise, returns `0.0.0.0/0` (unrestricted).
+pub fn generate_public_access_cidrs(
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+) -> Vec<String> {
+    match (
+        advanced_settings.qovery_static_ip_mode.unwrap_or(false),
+        qovery_allowed_public_access_cidrs,
+    ) {
+        (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
+            match &advanced_settings.k8s_api_allowed_public_access_cidrs {
+                Some(k8s_api_allowed_public_access_cidrs) => [
+                    qovery_allowed_public_access_cidrs.clone(),
+                    k8s_api_allowed_public_access_cidrs.clone(),
+                ]
+                .concat(),
+                None => qovery_allowed_public_access_cidrs.clone(),
+            }
+        }
+        _ => vec![UNRESTRICTED_CIDR.to_string()],
+    }
+}
+
 pub fn mk_logger(kube: &dyn Kubernetes, step: InfrastructureStep) -> impl InfraLogger {
     let event_details = kube.get_event_details(Infrastructure(step));
 
@@ -31,6 +67,116 @@ pub fn mk_logger(kube: &dyn Kubernetes, step: InfrastructureStep) -> impl InfraL
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+
+    #[test]
+    fn test_public_access_cidrs_with_any_parameters_set() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: None,
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = None;
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_disabled() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(false),
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = None;
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs);
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_disabled_and_qovey_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(false),
+            k8s_api_allowed_public_access_cidrs: None,
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled_but_without_qovery_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.1/32".to_string()]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec![]);
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["0.0.0.0/0".to_string()]);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec![]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(cidrs, vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+    }
+
+    #[test]
+    fn test_public_access_cidrs_with_static_ip_mode_enabled_and_custom_cidr() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec!["1.1.1.4/32".to_string()]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = Some(vec!["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]);
+
+        let cidrs = generate_public_access_cidrs(&advanced_settings, qovery_allowed_public_access_cidrs.as_ref());
+
+        assert_eq!(
+            cidrs,
+            vec![
+                "1.1.1.2/32".to_string(),
+                "1.1.1.3/32".to_string(),
+                "1.1.1.4/32".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_is_api_access_restricted_unrestricted() {
+        assert!(!is_api_access_restricted(&[UNRESTRICTED_CIDR.to_string()]));
+    }
+
+    #[test]
+    fn test_is_api_access_restricted_with_specific_cidrs() {
+        assert!(is_api_access_restricted(&["1.1.1.2/32".to_string(), "1.1.1.3/32".to_string()]));
+    }
+
+    #[test]
+    fn test_is_api_access_restricted_with_mixed_cidrs() {
+        assert!(is_api_access_restricted(&[
+            UNRESTRICTED_CIDR.to_string(),
+            "1.1.1.2/32".to_string()
+        ]));
+    }
 
     #[test]
     pub fn test_terraform_value_parsing() {
