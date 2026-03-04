@@ -21,7 +21,7 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   size                = "{{ scw_ks_worker_node.min_nodes }}"
   min_size            = "{{ scw_ks_worker_node.min_nodes }}"
   max_size            = "{{ scw_ks_worker_node.max_nodes }}"
-  wait_for_pool_ready = false
+  wait_for_pool_ready = true
 
   root_volume_size_in_gb = {{ scw_ks_worker_node.disk_size_in_gib }}
 
