@@ -296,6 +296,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_vpc_enable_flow_logs: bool,
     #[serde(alias = "aws.vpc.flow_logs_retention_days")]
     pub aws_vpc_flow_logs_retention_days: u32,
+    #[serde(alias = "aws.vpc.enable_nat_gateway_secondary_eip")]
+    pub aws_vpc_enable_nat_gateway_secondary_eip: bool,
     #[serde(alias = "aws.eks.enable_alb_controller")]
     pub aws_eks_enable_alb_controller: bool,
     #[serde(
@@ -475,6 +477,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_ec2_ami: Ec2Ami::AmazonLinux2023,
             aws_vpc_enable_flow_logs: false,
             aws_vpc_flow_logs_retention_days: 365,
+            aws_vpc_enable_nat_gateway_secondary_eip: false,
             aws_eks_enable_alb_controller: false,
             aws_cloudwatch_eks_logs_retention_days: 90,
             database_postgresql_deny_any_access: false,
