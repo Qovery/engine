@@ -68,6 +68,39 @@ resource "aws_eip" "eip_zone_c" {
   )
 }
 
+{% if aws_enable_nat_gateway_secondary_eip %}
+# Secondary External IPs for NAT Gateways
+resource "aws_eip" "eip_secondary_zone_a" {
+  domain = "vpc"
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-secondary-${var.aws_availability_zones[0]}"
+    }
+  )
+}
+
+resource "aws_eip" "eip_secondary_zone_b" {
+  domain = "vpc"
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-secondary-${var.aws_availability_zones[1]}"
+    }
+  )
+}
+
+resource "aws_eip" "eip_secondary_zone_c" {
+  domain = "vpc"
+  tags = merge(
+    local.tags_eks_vpc,
+    {
+      Name = "qovery-${var.kubernetes_cluster_id}-nat-eip-secondary-${var.aws_availability_zones[2]}"
+    }
+  )
+}
+{% endif %}
+
 # Public subnets
 resource "aws_subnet" "eks_zone_a_public" {
   count = length(var.eks_subnets_zone_a_public)
@@ -122,6 +155,9 @@ resource "aws_nat_gateway" "eks_zone_a_public" {
   count = length(var.eks_subnets_zone_a_public)
 
   allocation_id = aws_eip.eip_zone_a.id
+{% if aws_enable_nat_gateway_secondary_eip %}
+  secondary_allocation_ids = [aws_eip.eip_secondary_zone_a.id]
+{% endif %}
   subnet_id     = aws_subnet.eks_zone_a_public[count.index].id
 
   tags = merge(
@@ -136,6 +172,9 @@ resource "aws_nat_gateway" "eks_zone_b_public" {
   count = length(var.eks_subnets_zone_b_public)
 
   allocation_id = aws_eip.eip_zone_b.id
+{% if aws_enable_nat_gateway_secondary_eip %}
+  secondary_allocation_ids = [aws_eip.eip_secondary_zone_b.id]
+{% endif %}
   subnet_id     = aws_subnet.eks_zone_b_public[count.index].id
 
   tags = merge(
@@ -150,6 +189,9 @@ resource "aws_nat_gateway" "eks_zone_c_public" {
   count = length(var.eks_subnets_zone_c_public)
 
   allocation_id = aws_eip.eip_zone_c.id
+{% if aws_enable_nat_gateway_secondary_eip %}
+  secondary_allocation_ids = [aws_eip.eip_secondary_zone_c.id]
+{% endif %}
   subnet_id = aws_subnet.eks_zone_c_public[count.index].id
 
   tags = merge(

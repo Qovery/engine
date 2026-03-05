@@ -148,6 +148,10 @@ pub fn eks_tera_context(
         &kubernetes.advanced_settings().aws_vpc_flow_logs_retention_days,
     );
     context.insert(
+        "aws_enable_nat_gateway_secondary_eip",
+        &kubernetes.advanced_settings().aws_vpc_enable_nat_gateway_secondary_eip,
+    );
+    context.insert(
         "s3_flow_logs_bucket_name",
         format!("qovery-vpc-flow-logs-{}", kubernetes.short_id()).as_str(),
     );
