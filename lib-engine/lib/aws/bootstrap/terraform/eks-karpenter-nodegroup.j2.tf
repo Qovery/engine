@@ -40,6 +40,19 @@ resource "aws_launch_template" "karpenter_nodegroup" {
     }
   }
 
+  # Bottlerocket uses a second volume for container data (images, logs)
+  block_device_mappings {
+    device_name = "/dev/xvdb"
+
+    ebs {
+      volume_size = 20
+      encrypted   = true
+      volume_type = "gp3"
+      iops        = 3000
+      throughput  = 125
+    }
+  }
+
   tags = local.tags_eks
   tag_specifications {
     resource_type = "instance"
