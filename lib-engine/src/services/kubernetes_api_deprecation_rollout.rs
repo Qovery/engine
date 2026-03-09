@@ -2,7 +2,10 @@ use uuid::Uuid;
 
 // Temporary rollout gate: only clusters in this list use Pluto.
 // Remove this allowlist once Pluto rollout is complete.
-const PLUTO_CLUSTER_ALLOWLIST: &[&str] = &["be9e22b0-d05a-4330-b5b5-547667d380fd"]; // Qovery AWS Test
+const PLUTO_CLUSTER_ALLOWLIST: &[&str] = &[
+    "be9e22b0-d05a-4330-b5b5-547667d380fd", // Qovery AWS Test
+    "f6b6e9ca-8c26-4c9d-88c5-aca5076f82d5",
+];
 
 pub fn is_pluto_enabled_for_cluster(cluster_id: &Uuid) -> bool {
     is_pluto_enabled_for_cluster_with_allowlist(cluster_id, PLUTO_CLUSTER_ALLOWLIST)
