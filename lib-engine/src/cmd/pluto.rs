@@ -153,22 +153,15 @@ fn parse_deprecations(stdout: &str) -> Result<Vec<Deprecation>, PlutoError> {
         .items
         .into_iter()
         .map(|entry| {
-            let deprecated_in = entry.api.deprecated_in.as_deref();
-            let removed_in = entry.api.removed_in.as_deref();
-            let since = deprecated_in
-                .or(removed_in)
-                .map(normalize_semver)
-                .filter(|v| !v.is_empty());
+            let since = normalized_semver_opt(entry.api.deprecated_in.as_deref().or(entry.api.removed_in.as_deref()));
+            let rule_set = build_rule_set(entry.api.removed_in.as_deref(), entry.api.deprecated_in.as_deref());
 
             Deprecation {
                 name: normalize_output_value(entry.name),
                 namespace: normalize_output_value(entry.namespace),
                 kind: Some(entry.api.kind),
                 api_version: Some(entry.api.version),
-                rule_set: entry
-                    .api
-                    .component
-                    .or_else(|| since.as_ref().map(|v| format!("Deprecated APIs removed in {v}"))),
+                rule_set,
                 replace_with: normalize_output_value(entry.api.replacement_api),
                 since,
             }
@@ -178,6 +171,18 @@ fn parse_deprecations(stdout: &str) -> Result<Vec<Deprecation>, PlutoError> {
 
 fn normalize_semver(version: &str) -> String {
     version.trim().trim_start_matches('v').to_string()
+}
+
+fn normalized_semver_opt(version: Option<&str>) -> Option<String> {
+    version.map(normalize_semver).filter(|v| !v.is_empty())
+}
+
+fn build_rule_set(removed_in: Option<&str>, deprecated_in: Option<&str>) -> Option<String> {
+    if let Some(removed_in) = normalized_semver_opt(removed_in) {
+        return Some(format!("Deprecated APIs removed in {removed_in}"));
+    }
+
+    normalized_semver_opt(deprecated_in).map(|deprecated_in| format!("Deprecated in {deprecated_in}"))
 }
 
 fn normalize_output_value(input: Option<String>) -> Option<String> {
@@ -232,7 +237,8 @@ struct PlutoJsonApi {
     replacement_api: Option<String>,
     #[serde(rename = "replacement-available-in")]
     _replacement_available_in: Option<String>,
-    component: Option<String>,
+    #[serde(rename = "component")]
+    _component: Option<String>,
 }
 
 #[cfg(test)]
@@ -271,6 +277,7 @@ mod tests {
         assert_eq!(1, result.len());
         assert_eq!(Some("ingress-nginx".to_string()), result[0].name);
         assert_eq!(Some("1.19.0".to_string()), result[0].since);
+        assert_eq!(Some("Deprecated APIs removed in 1.22.0".to_string()), result[0].rule_set);
     }
 
     #[test]
@@ -330,7 +337,7 @@ mod tests {
         assert_eq!(Some("networking.k8s.io/v1beta1".to_string()), result[0].api_version);
         assert_eq!(Some("networking.k8s.io/v1".to_string()), result[0].replace_with);
         assert_eq!(Some("1.19.0".to_string()), result[0].since);
-        assert_eq!(Some("k8s".to_string()), result[0].rule_set);
+        assert_eq!(Some("Deprecated APIs removed in 1.22.0".to_string()), result[0].rule_set);
     }
 
     #[test]
@@ -369,7 +376,7 @@ mod tests {
         assert_eq!(Some("admissionregistration.k8s.io/v1beta1".to_string()), result[0].api_version);
         assert_eq!(Some("admissionregistration.k8s.io/v1".to_string()), result[0].replace_with);
         assert_eq!(Some("1.16.0".to_string()), result[0].since);
-        assert_eq!(Some("k8s".to_string()), result[0].rule_set);
+        assert_eq!(Some("Deprecated APIs removed in 1.19.0".to_string()), result[0].rule_set);
     }
 
     #[test]
