@@ -29,7 +29,7 @@ resource "aws_iam_role" "external_secrets_operator_role" {
 }
 
 resource "aws_iam_policy" "external_secrets_operator_iam_policy" {
-  name = aws_iam_role.external-secrets-operator-role.name
+  name = aws_iam_role.external_secrets_operator_role.name
   description = "Policy for External Secrets Operator"
 
   policy = jsonencode({
@@ -53,8 +53,6 @@ resource "aws_iam_policy" "external_secrets_operator_iam_policy" {
           {% if enable_parameter_store_iam_permissions -%}
           [
             "ssm:GetParameter*",
-#             "ssm:PutParameter*",
-#             "ssm:AddTagsToResource",
             "ssm:ListTagsForResource"
           ],
           {% else -%}
@@ -68,7 +66,7 @@ resource "aws_iam_policy" "external_secrets_operator_iam_policy" {
 }
 
 resource "aws_iam_role_policy_attachment" "external_secrets_operator_policy_attachment" {
-  role       = aws_iam_role.external-secrets-operator-role.name
+  role       = aws_iam_role.external_secrets_operator_role.name
   policy_arn = aws_iam_policy.external_secrets_operator_iam_policy.arn
 }
 
