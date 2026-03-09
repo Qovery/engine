@@ -89,11 +89,11 @@ impl ChartInstallationChecker for EsoRequirementsChartChecker {
 
         let required_crds = [
             "clusterexternalsecrets.external-secrets.io",
-            "clustergenerators.external-secrets.io",
+            "clustergenerators.generators.external-secrets.io",
             "clusterpushsecrets.external-secrets.io",
             "clustersecretstores.external-secrets.io",
             "externalsecrets.external-secrets.io",
-            "generatorstates.external-secrets.io",
+            "generatorstates.generators.external-secrets.io",
             "pushsecrets.external-secrets.io",
             "secretstores.external-secrets.io",
         ];
