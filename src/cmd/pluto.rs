@@ -1,4 +1,4 @@
-use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{CommandError as RawCommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::kubent::Deprecation;
 use crate::errors::CommandError;
 use serde::Deserialize;
@@ -48,7 +48,15 @@ impl PlutoCmd {
         }
 
         let args_ref = args.iter().map(String::as_str).collect::<Vec<_>>();
-        let mut cmd = QoveryCommand::new("pluto", args_ref.as_slice(), envs);
+        let mut envs_with_soft_memory_limit = envs.to_vec();
+        if !envs.iter().any(|(k, _v)| k == &"GOMEMLIMIT") {
+            // Set a soft memory limit of 64MiB for pluto since it can eventually OOM.
+            // This is not a hard limit, it's just a hint to the Go runtime trying to keep
+            // memory under the limit by triggering GC more often.
+            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "64MiB"));
+        }
+
+        let mut cmd = QoveryCommand::new("pluto", args_ref.as_slice(), envs_with_soft_memory_limit.as_slice());
         let mut stdout_output: Vec<String> = Vec::new();
 
         let stdout_output_formatter = &mut |line| {
@@ -67,12 +75,28 @@ impl PlutoCmd {
                     Some(stdout_output.join(""))
                 },
             }),
+            Err(err) if is_expected_pluto_result_exit_status(&err) => Ok(PlutoCmdOutput {
+                stdout: if stdout_output.is_empty() {
+                    None
+                } else {
+                    Some(stdout_output.join(""))
+                },
+            }),
             Err(err) => Err(CommandError::new(
-                "Cannot get deprecations from pluto".to_string(),
-                Some(format!("Pluto command failed: {err:?}")),
+                "Cannot get deprecations".to_string(),
+                Some(format!("command failed: {err:?}")),
                 None,
             )),
         }
+    }
+}
+
+fn is_expected_pluto_result_exit_status(error: &RawCommandError) -> bool {
+    match error {
+        RawCommandError::ExitStatusError(exit_status) => {
+            matches!(exit_status.code(), Some(2..=4))
+        }
+        _ => false,
     }
 }
 
@@ -213,7 +237,9 @@ struct PlutoJsonApi {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_deprecations;
+    use super::{is_expected_pluto_result_exit_status, parse_deprecations};
+    use crate::cmd::command::CommandError as RawCommandError;
+    use std::os::unix::process::ExitStatusExt;
 
     #[test]
     fn test_parse_deprecations_with_valid_strict_json() {
@@ -388,5 +414,21 @@ mod tests {
 
         let result = parse_deprecations(payload);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_is_expected_pluto_result_exit_status() {
+        assert!(is_expected_pluto_result_exit_status(&RawCommandError::ExitStatusError(
+            std::process::ExitStatus::from_raw(2 << 8),
+        )));
+        assert!(is_expected_pluto_result_exit_status(&RawCommandError::ExitStatusError(
+            std::process::ExitStatus::from_raw(3 << 8),
+        )));
+        assert!(is_expected_pluto_result_exit_status(&RawCommandError::ExitStatusError(
+            std::process::ExitStatus::from_raw(4 << 8),
+        )));
+        assert!(!is_expected_pluto_result_exit_status(&RawCommandError::ExitStatusError(
+            std::process::ExitStatus::from_raw(1 << 8),
+        )));
     }
 }
