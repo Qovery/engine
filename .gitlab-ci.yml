@@ -233,6 +233,31 @@ release-image-slim:
       when: always
       allow_failure: false
 
+release-image-eksctl:
+  stage: build-and-lint
+  extends: [.buildx, .resources-image]
+  retry: 0
+  script:
+    - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - docker buildx build --platform=linux/${IMAGE_ARCH}
+      --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksctl-${IMAGE_ARCH}"
+      --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksctl-${IMAGE_ARCH}"
+      --target=run-eksctl
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl-${IMAGE_ARCH}
+      --push .
+  parallel:
+    matrix:
+      - IMAGE_ARCH: [amd64, arm64]
+  tags:
+    - k8s-runner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_BRANCH =~ /^hot-fix/'
+      when: always
+      allow_failure: false
+
 #################
 # MINIMAL TESTS #
 #################
@@ -879,6 +904,7 @@ create-multi-arch-image:
   script:
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-arm64
     - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-arm64
+    - docker buildx imagetools create -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl-amd64 public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl-arm64
   tags:
     - k8s-runner
   rules:
@@ -900,6 +926,7 @@ docker-tag:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7} --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}
     - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}-slim
+    - docker buildx imagetools create public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl --tag public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_TAG}-eksctl
   tags:
     - k8s-runner
   rules:
