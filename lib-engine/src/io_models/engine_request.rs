@@ -35,6 +35,7 @@ use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::infrastructure::models::kubernetes::azure::AksOptions;
 use crate::infrastructure::models::kubernetes::azure::node::AzureInstancesType;
 use crate::infrastructure::models::kubernetes::azure::node_group::{AzureNodeGroup, AzureNodeGroups};
+use crate::infrastructure::models::kubernetes::eksanywhere::EksAnywhereOptions;
 use crate::infrastructure::models::kubernetes::gcp::GkeOptions;
 use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion, event_details};
@@ -655,6 +656,15 @@ impl KubernetesDto {
                     None => return Err(Box::new(EngineError::new_missing_kubeconfig_error(event_details.clone()))),
                     Some(value) => value,
                 };
+                let options = serde_json::from_value::<EksAnywhereOptions>(self.options.clone()).map_err(
+                    |e: serde_json::Error| {
+                        Box::new(EngineError::new_invalid_engine_payload(
+                            event_details.clone(),
+                            &e.to_string(),
+                            None,
+                        ))
+                    },
+                )?;
                 match kubernetes::eksanywhere::EksAnywhere::new(
                     context.clone(),
                     self.long_id,
@@ -664,8 +674,7 @@ impl KubernetesDto {
                     self.region.to_string(),
                     KubernetesVersion::from_str(&self.version)
                         .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
-                    serde_json::from_value::<kubernetes::eksanywhere::EksAnywhereOptions>(self.options.clone())
-                        .expect("What's wronnnnng -- JSON Options payload is not the expected one"),
+                    options,
                     logger,
                     self.advanced_settings.clone(),
                     kubeconfig,
