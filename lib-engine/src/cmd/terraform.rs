@@ -329,7 +329,7 @@ impl TerraformError {
             };
         }
         if let Ok(aws_quotas_exceeded_re) = Regex::new(
-            r" creating EC2 (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached",
+            r" creating EC2 (?P<resource_type>[\w?\s]+): [^\n]+: The maximum number of [\w?\s]+ has been reached",
         ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
             && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
         {
@@ -342,9 +342,9 @@ impl TerraformError {
                 raw_message: raw_terraform_error_output.to_string(),
             };
         }
-        if let Ok(aws_quotas_exceeded_re) =
-            Regex::new(r" creating (?P<resource_type>[\w?\s]+): \w+: The maximum number of [\w?\s]+ has been reached")
-            && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
+        if let Ok(aws_quotas_exceeded_re) = Regex::new(
+            r" creating (?P<resource_type>[\w?\s]+): [^\n]+: The maximum number of [\w?\s]+ has been reached",
+        ) && let Some(cap) = aws_quotas_exceeded_re.captures(raw_terraform_error_output.as_str())
             && let Some(resource_type) = cap.name("resource_type").map(|e| e.as_str())
         {
             return TerraformError::QuotasExceeded {
@@ -1913,6 +1913,50 @@ terraform {
                     },
                     raw_message:
                     "Error creating EIP: AddressLimitExceeded: The maximum number of addresses has been reached."
+                        .to_string(),
+                },
+            },
+            TestCase {
+                input_raw_message:
+                r#"Error: waiting for EKS Add-On (qovery-z604bbe0f:coredns) create: timeout while waiting for state to become 'ACTIVE' (last state: 'DEGRADED', timeout: 20m0s)
+  with aws_eks_addon.aws_coredns,
+  on eks-addons-coredns.tf line 1, in resource "aws_eks_addon" "aws_coredns":
+   1: resource "aws_eks_addon" "aws_coredns" {
+Error: waiting for EKS Add-On (qovery-z604bbe0f:aws-ebs-csi-driver) create: timeout while waiting for state to become 'ACTIVE' (last state: 'DEGRADED', timeout: 20m0s)
+  with aws_eks_addon.aws_ebs_csi_driver,
+  on eks-addons-ebs-csi-driver.tf line 1, in resource "aws_eks_addon" "aws_ebs_csi_driver":
+   1: resource "aws_eks_addon" "aws_ebs_csi_driver" {
+Error: waiting for EKS Node Group (qovery-z604bbe0f:karpenter-controller-z604bbe0f) create: timeout while waiting for state to become 'ACTIVE' (last state: 'CREATING', timeout: 10m0s)
+  with aws_eks_node_group.karpenter_controller,
+  on eks-karpenter-nodegroup.tf line 44, in resource "aws_eks_node_group" "karpenter_controller":
+  44: resource "aws_eks_node_group" "karpenter_controller" {
+Error: creating EC2 EIP: operation error EC2: AllocateAddress, https response error StatusCode: 400, RequestID: d3fd029f-9d89-42ca-8d6d-72fcc8879fbb, api error AddressLimitExceeded: The maximum number of addresses has been reached.
+  with aws_eip.eip_zone_b,
+  on eks-vpc-with-nat-gateways.tf line 46, in resource "aws_eip" "eip_zone_b":
+  46: resource "aws_eip" "eip_zone_b" {"#,
+                expected_terraform_error: TerraformError::QuotasExceeded {
+                    sub_type: QuotaExceededError::ResourceLimitExceeded {
+                        resource_type: "EIP".to_string(),
+                        current_resource_count: None,
+                        max_resource_count: None,
+                    },
+                    raw_message:
+                    r#"Error: waiting for EKS Add-On (qovery-z604bbe0f:coredns) create: timeout while waiting for state to become 'ACTIVE' (last state: 'DEGRADED', timeout: 20m0s)
+  with aws_eks_addon.aws_coredns,
+  on eks-addons-coredns.tf line 1, in resource "aws_eks_addon" "aws_coredns":
+   1: resource "aws_eks_addon" "aws_coredns" {
+Error: waiting for EKS Add-On (qovery-z604bbe0f:aws-ebs-csi-driver) create: timeout while waiting for state to become 'ACTIVE' (last state: 'DEGRADED', timeout: 20m0s)
+  with aws_eks_addon.aws_ebs_csi_driver,
+  on eks-addons-ebs-csi-driver.tf line 1, in resource "aws_eks_addon" "aws_ebs_csi_driver":
+   1: resource "aws_eks_addon" "aws_ebs_csi_driver" {
+Error: waiting for EKS Node Group (qovery-z604bbe0f:karpenter-controller-z604bbe0f) create: timeout while waiting for state to become 'ACTIVE' (last state: 'CREATING', timeout: 10m0s)
+  with aws_eks_node_group.karpenter_controller,
+  on eks-karpenter-nodegroup.tf line 44, in resource "aws_eks_node_group" "karpenter_controller":
+  44: resource "aws_eks_node_group" "karpenter_controller" {
+Error: creating EC2 EIP: operation error EC2: AllocateAddress, https response error StatusCode: 400, RequestID: d3fd029f-9d89-42ca-8d6d-72fcc8879fbb, api error AddressLimitExceeded: The maximum number of addresses has been reached.
+  with aws_eip.eip_zone_b,
+  on eks-vpc-with-nat-gateways.tf line 46, in resource "aws_eip" "eip_zone_b":
+  46: resource "aws_eip" "eip_zone_b" {"#
                         .to_string(),
                 },
             },
