@@ -233,17 +233,17 @@ release-image-slim:
       when: always
       allow_failure: false
 
-release-image-eksctl:
+release-image-eksanywhere:
   stage: build-and-lint
   extends: [.buildx, .resources-image]
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
     - docker buildx build --platform=linux/${IMAGE_ARCH}
-      --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksctl-${IMAGE_ARCH}"
-      --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksctl-${IMAGE_ARCH}"
-      --target=run-eksctl
-      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksctl-${IMAGE_ARCH}
+      --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksanywhere-${IMAGE_ARCH}"
+      --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksanywhere-${IMAGE_ARCH}"
+      --target=run-eksanywhere
+      -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksanywhere-${IMAGE_ARCH}
       --push .
   parallel:
     matrix:

@@ -352,10 +352,10 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 
 ###########################################
 #
-#  ENGINE + EKSCTL FINAL IMAGE
+#  ENGINE + EKS ANYWHERE FINAL IMAGE
 #
 ###########################################
-FROM run AS run-eksctl
+FROM run AS run-eksanywhere
 
 ARG EKSCTL_VERSION
 
