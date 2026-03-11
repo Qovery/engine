@@ -459,9 +459,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_domain() {
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
-                .DEFAULT_TEST_DOMAIN
+                .SCALEWAY_DEFAULT_TEST_DOMAIN
                 .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
 
@@ -1215,9 +1215,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_sticky_session() {
         let environment = helpers::environment::environment_only_http_server_router_with_sticky_session(
             &context,
             secrets
-                .DEFAULT_TEST_DOMAIN
+                .SCALEWAY_DEFAULT_TEST_DOMAIN
                 .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
 
@@ -1345,9 +1345,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_allowing_all(
             helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
                 &context,
                 secrets
-                    .DEFAULT_TEST_DOMAIN
+                    .SCALEWAY_DEFAULT_TEST_DOMAIN
                     .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
                     .as_str(),
                 Some("0.0.0.0/0".to_string()), // <- Allow all IPs
             );
@@ -1486,9 +1486,9 @@ fn scaleway_kapsule_deploy_a_working_environment_with_ip_whitelist_deny_all() {
             helpers::environment::environment_only_http_server_router_with_ip_whitelist_source_range(
                 &context,
                 secrets
-                    .DEFAULT_TEST_DOMAIN
+                    .SCALEWAY_DEFAULT_TEST_DOMAIN
                     .as_ref()
-                    .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                    .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
                     .as_str(),
                 Some("0.0.0.0/32".to_string()), // <- deny all IPs
             );
@@ -1925,9 +1925,9 @@ fn deploy_container_with_router_on_scw() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         environment.applications = vec![];

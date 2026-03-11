@@ -730,11 +730,33 @@ pub fn test_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN must be set")
-                .to_string()
+            match kubernetes_kind.get_cloud_provider_kind() {
+                Kind::Aws => secrets
+                    .AWS_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Azure => secrets
+                    .AZURE_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AZURE_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Scw => secrets
+                    .SCALEWAY_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("SCALEWAY_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Gcp => secrets
+                    .GCP_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("GCP_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::OnPremise => secrets
+                    .AWS_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+            },
         )
     );
 
@@ -1113,11 +1135,33 @@ pub fn test_pause_managed_db(
         database_host,
         compute_test_cluster_endpoint(
             &cluster_domain,
-            secrets
-                .DEFAULT_TEST_DOMAIN
-                .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN must be set")
-                .to_string(),
+            match kubernetes_kind.get_cloud_provider_kind() {
+                Kind::Aws => secrets
+                    .AWS_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Azure => secrets
+                    .AZURE_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AZURE_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Scw => secrets
+                    .SCALEWAY_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("SCALEWAY_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::Gcp => secrets
+                    .GCP_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("GCP_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+                Kind::OnPremise => secrets
+                    .AWS_DEFAULT_TEST_DOMAIN
+                    .as_ref()
+                    .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                    .to_string(),
+            },
         )
     );
 
@@ -1429,10 +1473,33 @@ pub fn test_db_on_upgrade(
         "{}.{}.{}",
         database_host,
         context.cluster_short_id(),
-        secrets
-            .DEFAULT_TEST_DOMAIN
-            .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+        match provider_kind {
+            Kind::Aws => secrets
+                .AWS_DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
+            Kind::Azure => secrets
+                .AZURE_DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("AZURE_DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
+            Kind::Scw => secrets
+                .SCALEWAY_DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("SCALEWAY_DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
+            Kind::Gcp => secrets
+                .GCP_DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("GCP_DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
+            Kind::OnPremise => secrets
+                .AWS_DEFAULT_TEST_DOMAIN
+                .as_ref()
+                .expect("AWS_DEFAULT_TEST_DOMAIN must be set")
+                .to_string(),
+        },
     );
 
     let db_infos = db_infos(

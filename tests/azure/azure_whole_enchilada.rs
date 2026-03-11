@@ -28,9 +28,9 @@ fn create_and_destroy_aks_cluster_with_env_in_france_central() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 

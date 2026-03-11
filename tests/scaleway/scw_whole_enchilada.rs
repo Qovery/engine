@@ -27,9 +27,9 @@ fn create_and_destroy_kapsule_cluster_with_env_in_waw_1() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -73,9 +73,9 @@ fn create_and_destroy_kapsule_cluster_with_env_in_par_2() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -119,9 +119,9 @@ fn create_pause_and_destroy_kapsule_cluster_with_env_in_par_2() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -165,9 +165,9 @@ fn create_upgrade_and_destroy_kapsule_cluster_with_env_in_par_2() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 

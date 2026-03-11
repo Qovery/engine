@@ -112,8 +112,8 @@ fn deploy_an_environment_with_db_and_pause_it() {
                 .to_string(),
         };
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+            .GCP_DEFAULT_TEST_DOMAIN
+            .expect("GCP_DEFAULT_TEST_DOMAIN is not set in secrets");
 
         let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();
@@ -188,8 +188,8 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
         )
         .expect("Unknown GCP region");
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+            .GCP_DEFAULT_TEST_DOMAIN
+            .expect("GCP_DEFAULT_TEST_DOMAIN is not set in secrets");
 
         let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry.clone());
         let context_for_deletion = context.clone_not_same_execution_id();

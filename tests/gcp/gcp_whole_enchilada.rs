@@ -28,9 +28,9 @@ fn create_and_destroy_gke_cluster_with_env_in_europe_west9() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .GCP_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("GCP_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -73,9 +73,9 @@ fn create_and_destroy_gke_cluster_with_static_ip_in_europe_west12() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .GCP_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("GCP_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 

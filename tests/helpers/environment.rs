@@ -29,7 +29,8 @@ pub fn working_environment(
 ) -> EnvironmentRequest {
     let application_id = QoveryIdentifier::new_random();
     let application_name = application_id.short().to_string();
-    let router_name = "main".to_string();
+    let router_id = QoveryIdentifier::new_random();
+    let router_name = format!("router-{}", router_id.short());
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let settings = ApplicationAdvancedSettings {
         network_ingress_sticky_session_enable: with_sticky,
@@ -135,7 +136,7 @@ pub fn working_environment(
 
     if with_router {
         req.routers = vec![Router {
-            long_id: Uuid::new_v4(),
+            long_id: router_id.to_uuid(),
             name: router_name.clone(),
             kube_name: router_name,
             action: Action::Create,
@@ -267,10 +268,10 @@ pub fn environment_2_app_2_routers_1_psql(
     let database_name = "pg".to_string();
 
     let suffix = QoveryIdentifier::new_random().short().to_string();
-    let application_id1 = Uuid::new_v4();
-    let application_id2 = Uuid::new_v4();
-    let router_1 = Uuid::new_v4();
-    let router_2 = Uuid::new_v4();
+    let application_id1 = QoveryIdentifier::new_random();
+    let application_id2 = QoveryIdentifier::new_random();
+    let router_1 = QoveryIdentifier::new_random();
+    let router_2 = QoveryIdentifier::new_random();
 
     let env_id = Uuid::new_v4();
     EnvironmentRequest {
@@ -313,7 +314,7 @@ pub fn environment_2_app_2_routers_1_psql(
         }],
         applications: vec![
             Application {
-                long_id: application_id1,
+                long_id: application_id1.to_uuid(),
                 name: format!("{}-{}", "pg-pg-app1", &suffix),
                 kube_name: format!("{}-{}", "pg-pg-app1", &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -386,7 +387,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 autoscaling: None,
             },
             Application {
-                long_id: application_id2,
+                long_id: application_id2.to_uuid(),
                 name: format!("{}-{}", "pg-pg-app2", &suffix),
                 kube_name: format!("{}-{}", "pg-pg-app2", &suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
@@ -463,8 +464,8 @@ pub fn environment_2_app_2_routers_1_psql(
         jobs: vec![],
         routers: vec![
             Router {
-                long_id: router_1,
-                name: "main".to_string(),
+                long_id: router_1.to_uuid(),
+                name: format!("router-1-{}", router_1.short()),
                 kube_name: format!("router-{router_1}"),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
@@ -472,12 +473,12 @@ pub fn environment_2_app_2_routers_1_psql(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/".to_string(),
-                    service_long_id: application_id1,
+                    service_long_id: application_id1.to_uuid(),
                 }],
             },
             Router {
-                long_id: router_2,
-                name: "second-router".to_string(),
+                long_id: router_2.to_uuid(),
+                name: format!("router-2-{}", router_1.short()),
                 kube_name: format!("router-{router_2}"),
                 action: Action::Create,
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
@@ -485,7 +486,7 @@ pub fn environment_2_app_2_routers_1_psql(
                 custom_domains: vec![],
                 routes: vec![Route {
                     path: "/coco".to_string(),
-                    service_long_id: application_id2,
+                    service_long_id: application_id2.to_uuid(),
                 }],
             },
         ],
@@ -519,6 +520,7 @@ pub fn non_working_environment(context: &Context) -> EnvironmentRequest {
 pub fn echo_app_environment(context: &Context, test_domain: &str) -> EnvironmentRequest {
     let suffix = generate_id();
     let application_id = Uuid::new_v4();
+    let router_id = QoveryIdentifier::new_random();
     let env_id = Uuid::new_v4();
     EnvironmentRequest {
         execution_id: context.execution_id().to_string(),
@@ -603,9 +605,9 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         containers: vec![],
         jobs: vec![],
         routers: vec![Router {
-            long_id: Uuid::new_v4(),
-            name: "main".to_string(),
-            kube_name: "main".to_string(),
+            long_id: router_id.to_uuid(),
+            name: format!("router-{}", router_id.short()),
+            kube_name: format!("router-{router_id}"),
             action: Action::Create,
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
             public_port: 443,
@@ -630,7 +632,8 @@ pub fn environment_only_http_server(
     with_sticky: bool,
     with_ip_whitelist_source_range: Option<String>,
 ) -> EnvironmentRequest {
-    let router_name = "main".to_string();
+    let router_id = QoveryIdentifier::new_random();
+    let router_name = format!("router-{}", router_id.short());
     let suffix = generate_id();
     let application_id = Uuid::new_v4();
     let application_name = format!("{}-{}", "mini-http", &suffix);
@@ -732,9 +735,9 @@ pub fn environment_only_http_server(
 
     if with_router {
         req.routers = vec![Router {
-            long_id: Uuid::new_v4(),
+            long_id: router_id.to_uuid(),
             name: router_name,
-            kube_name: "main".to_string(),
+            kube_name: format!("router-{router_id}"),
             action: Action::Create,
             default_domain: application_domain,
             public_port: 443,

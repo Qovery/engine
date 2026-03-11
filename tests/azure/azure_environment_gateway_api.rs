@@ -81,9 +81,9 @@ fn deploy_application_with_cors_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -254,9 +254,9 @@ fn deploy_application_with_sticky_session_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -415,9 +415,9 @@ fn deploy_application_with_ip_whitelist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -581,9 +581,9 @@ fn deploy_application_with_ip_denylist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -750,9 +750,9 @@ fn deploy_application_with_both_whitelist_and_denylist_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -939,9 +939,9 @@ fn deploy_application_with_basic_auth_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -1086,9 +1086,9 @@ fn deploy_application_with_rate_limit_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -1312,9 +1312,9 @@ fn deploy_application_with_custom_headers_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -1538,9 +1538,9 @@ fn deploy_application_with_sticky_session_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -1701,9 +1701,9 @@ fn deploy_application_with_ip_whitelist_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -1869,9 +1869,9 @@ fn deploy_application_with_ip_denylist_enabled_on_azure_aks_grp() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -2039,9 +2039,9 @@ fn deploy_application_with_both_whitelist_and_denylist_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -2229,9 +2229,9 @@ fn deploy_application_with_basic_auth_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -2378,9 +2378,9 @@ fn deploy_application_with_rate_limit_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -2561,9 +2561,9 @@ fn deploy_application_with_custom_headers_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -2786,9 +2786,9 @@ fn deploy_container_with_cors_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -2989,9 +2989,9 @@ fn deploy_container_with_sticky_session_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -3186,9 +3186,9 @@ fn deploy_container_with_ip_whitelist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -3388,9 +3388,9 @@ fn deploy_container_with_ip_denylist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -3589,9 +3589,9 @@ fn deploy_container_with_both_whitelist_and_denylist_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -3808,9 +3808,9 @@ fn deploy_container_with_basic_auth_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -3991,9 +3991,9 @@ fn deploy_container_with_rate_limit_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -4247,9 +4247,9 @@ fn deploy_container_with_custom_headers_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -4508,9 +4508,9 @@ fn deploy_container_with_sticky_session_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -4707,9 +4707,9 @@ fn deploy_container_with_ip_whitelist_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -4911,9 +4911,9 @@ fn deploy_container_with_ip_denylist_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -5114,9 +5114,9 @@ fn deploy_container_with_both_whitelist_and_denylist_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -5335,9 +5335,9 @@ fn deploy_container_with_basic_auth_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -5520,9 +5520,9 @@ fn deploy_container_with_rate_limit_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -5778,9 +5778,9 @@ fn deploy_container_with_custom_headers_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -6037,9 +6037,9 @@ fn deploy_application_with_force_ssl_redirect_on_azure_aks_http() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -6269,9 +6269,9 @@ fn deploy_container_with_force_ssl_redirect_on_azure_aks_http() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -6537,9 +6537,9 @@ fn deploy_helm_with_cors_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -6730,9 +6730,9 @@ fn deploy_helm_with_sticky_session_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -6917,9 +6917,9 @@ fn deploy_helm_with_ip_whitelist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -7100,9 +7100,9 @@ fn deploy_helm_with_ip_denylist_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -7283,9 +7283,9 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -7466,9 +7466,9 @@ fn deploy_helm_with_basic_auth_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -7640,9 +7640,9 @@ fn deploy_helm_with_rate_limit_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -7839,9 +7839,9 @@ fn deploy_helm_with_custom_headers_enabled_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8047,9 +8047,9 @@ fn deploy_helm_with_sticky_session_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8236,9 +8236,9 @@ fn deploy_helm_with_ip_whitelist_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8421,9 +8421,9 @@ fn deploy_helm_with_ip_denylist_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8606,9 +8606,9 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8791,9 +8791,9 @@ fn deploy_helm_with_basic_auth_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -8967,9 +8967,9 @@ fn deploy_helm_with_rate_limit_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -9168,9 +9168,9 @@ fn deploy_helm_with_custom_headers_enabled_on_azure_aks_grpc() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -9371,9 +9371,9 @@ fn deploy_application_with_custom_http_errors_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -9569,9 +9569,9 @@ fn deploy_container_with_custom_http_errors_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -9770,9 +9770,9 @@ fn deploy_helm_with_custom_http_errors_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -9984,9 +9984,9 @@ fn deploy_application_with_circuit_breaker_on_azure_aks() {
         // setup:
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let mut environment = helpers::environment::working_minimal_environment_with_router(&context, test_domain);
@@ -10133,9 +10133,9 @@ fn deploy_container_with_circuit_breaker_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let container_id = Uuid::new_v4();
@@ -10310,9 +10310,9 @@ fn deploy_helm_with_circuit_breaker_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let helm_id = Uuid::new_v4();
@@ -10478,9 +10478,9 @@ fn deploy_application_with_timeout_settings_on_azure_aks() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
@@ -10640,9 +10640,9 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_azure_aks(
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let app_id = environment.applications[0].long_id;
