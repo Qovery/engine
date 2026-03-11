@@ -6,7 +6,7 @@ metadata:
     {{- with .Values.additionalAnnotations }}
       {{- toYaml . | nindent 4 }}
     {{- end }}
-    controller-gen.kubebuilder.io/version: v0.18.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: ec2nodeclasses.karpenter.k8s.aws
 spec:
   group: karpenter.k8s.aws
@@ -75,6 +75,7 @@ spec:
                     - Custom
                     - Windows2019
                     - Windows2022
+                    - Windows2025
                   type: string
                 amiSelectorTerms:
                   description: AMISelectorTerms is a list of or ami selector terms. The terms are ORed.
@@ -87,7 +88,7 @@ spec:
                         description: |-
                           Alias specifies which EKS optimized AMI to select.
                           Each alias consists of a family and an AMI version, specified as "family@version".
-                          Valid families include: al2, al2023, bottlerocket, windows2019, and windows2022.
+                          Valid families include: al2, al2023, bottlerocket, windows2019, windows2022, windows2025.
                           The version can either be pinned to a specific AMI release, with that AMIs version format (ex: "al2023@v20240625" or "bottlerocket@v1.10.0").
                           The version can also be set to "latest" for any family. Setting the version to latest will result in drift when a new AMI is released. This is **not** recommended for production environments.
                           Note: The Windows families do **not** support version pinning, and only latest may be used.
@@ -96,10 +97,10 @@ spec:
                         x-kubernetes-validations:
                           - message: '''alias'' is improperly formatted, must match the format ''family@version'''
                             rule: self.matches('^[a-zA-Z0-9]+@.+$')
-                          - message: 'family is not supported, must be one of the following: ''al2'', ''al2023'', ''bottlerocket'', ''windows2019'', ''windows2022'''
-                            rule: self.split('@')[0] in ['al2','al2023','bottlerocket','windows2019','windows2022']
+                          - message: 'family is not supported, must be one of the following: ''al2'', ''al2023'', ''bottlerocket'', ''windows2019'', ''windows2022'', ''windows2025'''
+                            rule: self.split('@')[0] in ['al2','al2023','bottlerocket','windows2019','windows2022','windows2025']
                           - message: windows families may only specify version 'latest'
-                            rule: 'self.split(''@'')[0] in [''windows2019'',''windows2022''] ? self.split(''@'')[1] == ''latest'' : true'
+                            rule: 'self.split(''@'')[0] in [''windows2019'',''windows2022'',''windows2025''] ? self.split(''@'')[1] == ''latest'' : true'
                       id:
                         description: ID is the ami id in EC2
                         pattern: ami-[0-9a-z]+
@@ -265,6 +266,12 @@ spec:
                         description: ID is the capacity reservation id in EC2
                         pattern: ^cr-[0-9a-z]+$
                         type: string
+                      instanceMatchCriteria:
+                        description: InstanceMatchCriteria specifies how instances are matched to capacity reservations.
+                        enum:
+                          - open
+                          - targeted
+                        type: string
                       ownerID:
                         description: Owner is the owner id for the ami.
                         pattern: ^[0-9]{12}$
@@ -284,10 +291,10 @@ spec:
                   maxItems: 30
                   type: array
                   x-kubernetes-validations:
-                    - message: expected at least one, got none, ['tags', 'id']
-                      rule: self.all(x, has(x.tags) || has(x.id))
-                    - message: '''id'' is mutually exclusive, cannot be set along with tags in a capacity reservation selector term'
-                      rule: '!self.all(x, has(x.id) && (has(x.tags) || has(x.ownerID)))'
+                    - message: expected at least one, got none, ['tags', 'id', 'instanceMatchCriteria']
+                      rule: self.all(x, has(x.tags) || has(x.id) || has(x.instanceMatchCriteria))
+                    - message: '''id'' is mutually exclusive, cannot be set along with other fields in a capacity reservation selector term'
+                      rule: '!self.all(x, has(x.id) && (has(x.tags) || has(x.ownerID) || has(x.instanceMatchCriteria)))'
                 context:
                   description: |-
                     Context is a Reserved field in EC2 APIs
@@ -311,6 +318,11 @@ spec:
                   enum:
                     - RAID0
                   type: string
+                ipPrefixCount:
+                  description: IPPrefixCount sets the number of IPv4 prefixes to be automatically assigned to the network interface.
+                  format: int32
+                  minimum: 0
+                  type: integer
                 kubelet:
                   description: |-
                     Kubelet defines args to be used when configuring kubelet on provisioned nodes.
@@ -506,17 +518,12 @@ spec:
                   type: object
                 role:
                   description: |-
-                    Role is the AWS identity that nodes use. This field is immutable.
+                    Role is the AWS identity that nodes use.
                     This field is mutually exclusive from instanceProfile.
-                    Marking this field as immutable avoids concerns around terminating managed instance profiles from running instances.
-                    This field may be made mutable in the future, assuming the correct garbage collection and drift handling is implemented
-                    for the old instance profiles on an update.
                   type: string
                   x-kubernetes-validations:
                     - message: role cannot be empty
                       rule: self != ''
-                    - message: immutable field changed
-                      rule: self == oldSelf
                 securityGroupSelectorTerms:
                   description: SecurityGroupSelectorTerms is a list of security group selector terms. The terms are ORed.
                   items:
@@ -620,8 +627,6 @@ spec:
               x-kubernetes-validations:
                 - message: must specify exactly one of ['role', 'instanceProfile']
                   rule: (has(self.role) && !has(self.instanceProfile)) || (!has(self.role) && has(self.instanceProfile))
-                - message: changing from 'instanceProfile' to 'role' is not supported. You must delete and recreate this node class if you want to change this.
-                  rule: (has(oldSelf.role) && has(self.role)) || (has(oldSelf.instanceProfile) && has(self.instanceProfile))
                 - message: if set, amiFamily must be 'AL2' or 'Custom' when using an AL2 alias
                   rule: '!has(self.amiFamily) || (self.amiSelectorTerms.exists(x, has(x.alias) && x.alias.find(''^[^@]+'') == ''al2'') ? (self.amiFamily == ''Custom'' || self.amiFamily == ''AL2'') : true)'
                 - message: if set, amiFamily must be 'AL2023' or 'Custom' when using an AL2023 alias
@@ -632,6 +637,8 @@ spec:
                   rule: '!has(self.amiFamily) || (self.amiSelectorTerms.exists(x, has(x.alias) && x.alias.find(''^[^@]+'') == ''windows2019'') ? (self.amiFamily == ''Custom'' || self.amiFamily == ''Windows2019'') : true)'
                 - message: if set, amiFamily must be 'Windows2022' or 'Custom' when using a Windows2022 alias
                   rule: '!has(self.amiFamily) || (self.amiSelectorTerms.exists(x, has(x.alias) && x.alias.find(''^[^@]+'') == ''windows2022'') ? (self.amiFamily == ''Custom'' || self.amiFamily == ''Windows2022'') : true)'
+                - message: if set, amiFamily must be 'Windows2025' or 'Custom' when using a Windows2025 alias
+                  rule: '!has(self.amiFamily) || (self.amiSelectorTerms.exists(x, has(x.alias) && x.alias.find(''^[^@]+'') == ''windows2025'') ? (self.amiFamily == ''Custom'' || self.amiFamily == ''Windows2025'') : true)'
                 - message: must specify amiFamily if amiSelectorTerms does not contain an alias
                   rule: 'self.amiSelectorTerms.exists(x, has(x.alias)) ? true : has(self.amiFamily)'
             status:
@@ -720,6 +727,22 @@ spec:
                       ownerID:
                         description: The ID of the AWS account that owns the capacity reservation.
                         pattern: ^[0-9]{12}$
+                        type: string
+                      reservationType:
+                        default: default
+                        description: The type of capacity reservation.
+                        enum:
+                          - default
+                          - capacity-block
+                        type: string
+                      state:
+                        default: active
+                        description: |-
+                          The state of the capacity reservation. A capacity reservation is considered to be expiring if it is within the EC2
+                          reclaimation window. Only capacity-block reservations may be in this state.
+                        enum:
+                          - active
+                          - expiring
                         type: string
                     required:
                       - availabilityZone
