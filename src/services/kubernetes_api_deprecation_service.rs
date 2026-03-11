@@ -2,8 +2,7 @@ use crate::environment::models::types::VersionsNumber;
 use crate::io_models::QoveryIdentifierError;
 use crate::runtime::block_on;
 use crate::{
-    cmd::kubent::{Deprecation as CmdDeprecation, Kubent, KubentError},
-    cmd::pluto::{Pluto, PlutoError},
+    cmd::pluto::{Deprecation as CmdDeprecation, Pluto, PlutoError},
     io_models::QoveryIdentifier,
 };
 use kube::api::{ApiResource, DynamicObject};
@@ -18,10 +17,8 @@ use std::{
 
 #[derive(thiserror::Error, Clone, Debug, PartialEq)]
 pub enum KubernetesDeprecationServiceError {
-    #[error("Client (kubent) error: {client_error}")]
-    ClientError { client_error: KubentError },
     #[error("Client (pluto) error: {client_error}")]
-    PlutoClientError { client_error: PlutoError },
+    ClientError { client_error: PlutoError },
     #[error(
         "Error while trying to parse kubernetes API version, it seems to be an invalid version: `{invalid_version}`"
     )]
@@ -388,16 +385,12 @@ pub enum KubernetesApiDeprecationServiceGranuality<'a> {
 
 #[derive(Default)]
 pub struct KubernetesApiDeprecationService {
-    kubent_client: Kubent,
     pluto_client: Pluto,
 }
 
 impl KubernetesApiDeprecationService {
-    pub fn new(client: Kubent) -> Self {
-        Self {
-            kubent_client: client,
-            pluto_client: Pluto::default(),
-        }
+    pub fn new(client: Pluto) -> Self {
+        Self { pluto_client: client }
     }
 
     pub fn get_deprecated_kubernetes_apis(
@@ -407,29 +400,9 @@ impl KubernetesApiDeprecationService {
         envs: &[(&str, &str)],
         granularity: KubernetesApiDeprecationServiceGranuality,
     ) -> Result<Vec<Deprecation>, KubernetesDeprecationServiceError> {
-        self.kubent_client
-            .get_deprecations(kubeconfig, target_version.map(|v| v.to_string()), envs)
-            .map_err(|e| KubernetesDeprecationServiceError::ClientError { client_error: e })?
-            .into_iter()
-            .map(|d| match granularity {
-                KubernetesApiDeprecationServiceGranuality::Default => Deprecation::try_from(d),
-                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata { kube_client } => {
-                    Deprecation::try_from_with_qovery_metadata(kube_client, d)
-                }
-            })
-            .collect()
-    }
-
-    pub fn get_deprecated_kubernetes_apis_with_pluto(
-        &self,
-        kubeconfig: &Path,
-        target_version: Option<&VersionsNumber>,
-        envs: &[(&str, &str)],
-        granularity: KubernetesApiDeprecationServiceGranuality,
-    ) -> Result<Vec<Deprecation>, KubernetesDeprecationServiceError> {
         self.pluto_client
             .get_deprecations(kubeconfig, target_version.map(|v| v.to_string()), envs)
-            .map_err(|e| KubernetesDeprecationServiceError::PlutoClientError { client_error: e })?
+            .map_err(|e| KubernetesDeprecationServiceError::ClientError { client_error: e })?
             .into_iter()
             .map(|d| match granularity {
                 KubernetesApiDeprecationServiceGranuality::Default => Deprecation::try_from(d),
@@ -450,27 +423,7 @@ impl KubernetesApiDeprecationService {
         let deprecations = self
             .get_deprecated_kubernetes_apis(kubeconfig, target_kubernetes_version, envs, granularity)?
             .into_iter()
-            .filter(|deprecation| should_report_deprecation(deprecation, target_kubernetes_version, true))
-            .collect::<Vec<_>>();
-        if !deprecations.is_empty() {
-            return Err(KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound {
-                deprecations: Deprecations(deprecations),
-            });
-        }
-        Ok(())
-    }
-
-    pub fn is_cluster_fully_compatible_with_kubernetes_version_with_pluto(
-        &self,
-        kubeconfig: &Path,
-        target_kubernetes_version: Option<&VersionsNumber>,
-        envs: &[(&str, &str)],
-        granularity: KubernetesApiDeprecationServiceGranuality,
-    ) -> Result<(), KubernetesDeprecationServiceError> {
-        let deprecations = self
-            .get_deprecated_kubernetes_apis_with_pluto(kubeconfig, target_kubernetes_version, envs, granularity)?
-            .into_iter()
-            .filter(|deprecation| should_report_deprecation(deprecation, target_kubernetes_version, false))
+            .filter(|deprecation| should_report_deprecation(deprecation, target_kubernetes_version))
             .collect::<Vec<_>>();
         if !deprecations.is_empty() {
             return Err(KubernetesDeprecationServiceError::CallsToDeprecatedAPIsFound {
@@ -481,15 +434,11 @@ impl KubernetesApiDeprecationService {
     }
 }
 
-fn should_report_deprecation(
-    deprecation: &Deprecation,
-    target_kubernetes_version: Option<&VersionsNumber>,
-    report_when_since_is_missing: bool,
-) -> bool {
+fn should_report_deprecation(deprecation: &Deprecation, target_kubernetes_version: Option<&VersionsNumber>) -> bool {
     match target_kubernetes_version {
         Some(tv) => match deprecation.since {
             Some(ref version) => version <= tv,
-            None => report_when_since_is_missing,
+            None => false,
         },
         None => true,
     }
@@ -502,7 +451,7 @@ mod tests {
 
     use super::*;
     use crate::environment::models::types::VersionsNumberBuilder;
-    use crate::{cmd::kubent, services::kubernetes_api_deprecation_service::Deprecation as ServiceDeprecation};
+    use crate::{cmd::pluto, services::kubernetes_api_deprecation_service::Deprecation as ServiceDeprecation};
 
     #[test]
     fn test_get_deprecated_kubernetes_apis_with_deprecations() {
@@ -515,7 +464,7 @@ mod tests {
             std::fs::remove_dir_all(temp_dir.path()).expect("Failed to remove temp dir");
         });
 
-        let deprecations = vec![kubent::Deprecation {
+        let deprecations = vec![pluto::Deprecation {
             name: Some("name".to_string()),
             namespace: Some("namespace".to_string()),
             kind: Some("kind".to_string()),
@@ -524,10 +473,10 @@ mod tests {
             replace_with: Some("replace_with".to_string()),
             since: Some("1.28".to_string()),
         }];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.get_deprecated_kubernetes_apis(
@@ -559,10 +508,10 @@ mod tests {
         });
 
         let deprecations = vec![];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.get_deprecated_kubernetes_apis(
@@ -587,12 +536,12 @@ mod tests {
         // setup:
         let kubeconfig = PathBuf::from("/tmp/kubeconfig-this-one-doesnt-exist");
 
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Err(KubentError::InvalidKubeConfig {
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Err(PlutoError::InvalidKubeConfig {
             kubeconfig_path: kubeconfig.display().to_string(),
         }));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.get_deprecated_kubernetes_apis(
@@ -605,7 +554,7 @@ mod tests {
         // verify:
         assert_eq!(
             KubernetesDeprecationServiceError::ClientError {
-                client_error: KubentError::InvalidKubeConfig {
+                client_error: PlutoError::InvalidKubeConfig {
                     kubeconfig_path: kubeconfig.display().to_string(),
                 }
             },
@@ -627,7 +576,7 @@ mod tests {
         let invalid_api_version = ""; // TODO(benjaminch): find a better invalid version,
         // VersionsNumber parsing is a bit too permissive and clunky and needs to be improved /
         // swapped with an external lib.
-        let deprecations = vec![kubent::Deprecation {
+        let deprecations = vec![pluto::Deprecation {
             name: Some("name".to_string()),
             namespace: Some("namespace".to_string()),
             kind: Some("kind".to_string()),
@@ -636,10 +585,10 @@ mod tests {
             replace_with: Some("replace_with".to_string()),
             since: Some(invalid_api_version.to_string()),
         }];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.get_deprecated_kubernetes_apis(
@@ -670,10 +619,10 @@ mod tests {
         });
 
         let deprecations = vec![];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.is_cluster_fully_compatible_with_kubernetes_version(
@@ -698,7 +647,7 @@ mod tests {
             std::fs::remove_dir_all(temp_dir.path()).expect("Failed to remove temp dir");
         });
 
-        let deprecations = vec![kubent::Deprecation {
+        let deprecations = vec![pluto::Deprecation {
             name: Some("name".to_string()),
             namespace: Some("namespace".to_string()),
             kind: Some("kind".to_string()),
@@ -707,10 +656,10 @@ mod tests {
             replace_with: Some("replace_with".to_string()),
             since: Some("1.33".to_string()),
         }];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.is_cluster_fully_compatible_with_kubernetes_version(
@@ -735,7 +684,7 @@ mod tests {
             std::fs::remove_dir_all(temp_dir.path()).expect("Failed to remove temp dir");
         });
 
-        let deprecations = vec![kubent::Deprecation {
+        let deprecations = vec![pluto::Deprecation {
             name: Some("name".to_string()),
             namespace: Some("namespace".to_string()),
             kind: Some("kind".to_string()),
@@ -744,10 +693,10 @@ mod tests {
             replace_with: Some("replace_with".to_string()),
             since: Some("1.32".to_string()),
         }];
-        let mut kubent_cmd_mock = Kubent::faux();
-        faux::when!(kubent_cmd_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
+        let mut pluto_mock = Pluto::faux();
+        faux::when!(pluto_mock.get_deprecations(_, _, _)).then_return(Ok(deprecations.clone()));
 
-        let service = KubernetesApiDeprecationService::new(kubent_cmd_mock);
+        let service = KubernetesApiDeprecationService::new(pluto_mock);
 
         // execute:
         let result = service.is_cluster_fully_compatible_with_kubernetes_version(
@@ -772,7 +721,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_report_deprecation_with_missing_since_for_pluto_path() {
+    fn test_should_report_deprecation_with_missing_since() {
         let target_version = VersionsNumberBuilder::new().major(1).minor(31).build();
         let deprecation = ServiceDeprecation::new(
             Some("ingress".to_string()),
@@ -785,37 +734,20 @@ mod tests {
             None,
         );
 
-        assert!(!should_report_deprecation(&deprecation, Some(&target_version), false));
-    }
-
-    #[test]
-    fn test_should_report_deprecation_with_missing_since_for_kubent_path() {
-        let target_version = VersionsNumberBuilder::new().major(1).minor(31).build();
-        let deprecation = ServiceDeprecation::new(
-            Some("ingress".to_string()),
-            Some("default".to_string()),
-            Some("Ingress".to_string()),
-            Some("networking.k8s.io/v1beta1".to_string()),
-            None,
-            None,
-            None,
-            None,
-        );
-
-        assert!(should_report_deprecation(&deprecation, Some(&target_version), true));
+        assert!(!should_report_deprecation(&deprecation, Some(&target_version)));
     }
 
     #[test]
     fn test_deprecation_from_cmd_deprecation() {
         // setup:
         struct TestCase {
-            cmd_deprecation: kubent::Deprecation,
+            cmd_deprecation: pluto::Deprecation,
             expected: Result<Deprecation, KubernetesDeprecationServiceError>,
         }
 
         let test_cases = vec![
             TestCase {
-                cmd_deprecation: kubent::Deprecation {
+                cmd_deprecation: pluto::Deprecation {
                     name: Some("name".to_string()),
                     namespace: Some("namespace".to_string()),
                     kind: Some("kind".to_string()),
@@ -830,7 +762,7 @@ mod tests {
                 }),
             },
             TestCase {
-                cmd_deprecation: kubent::Deprecation {
+                cmd_deprecation: pluto::Deprecation {
                     name: Some("name".to_string()),
                     namespace: Some("namespace".to_string()),
                     kind: Some("kind".to_string()),
@@ -851,7 +783,7 @@ mod tests {
                 }),
             },
             TestCase {
-                cmd_deprecation: kubent::Deprecation {
+                cmd_deprecation: pluto::Deprecation {
                     name: None,
                     namespace: None,
                     kind: None,

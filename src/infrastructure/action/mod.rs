@@ -27,7 +27,6 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::{KubernetesUpgradeStatus, is_kubernetes_upgrade_required};
 use crate::logger::Logger;
-use crate::services::kubernetes_api_deprecation_rollout::is_pluto_enabled_for_cluster;
 use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use tera::Context as TeraContext;
 
@@ -80,37 +79,22 @@ pub trait InfrastructureAction: Send + Sync {
                     let kube_client = infra_ctx.mk_kube_client()?;
                     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Upgrade));
                     let cluster_id = infra_ctx.context().cluster_long_id();
-                    let use_pluto = is_pluto_enabled_for_cluster(cluster_id);
-                    let scanner_name = if use_pluto { "pluto" } else { "kubent" };
 
                     logger.info("Check if cluster has no calls to deprecated kubernetes API in next version");
                     info!(
-                        "Running deprecated API compatibility check with scanner `{}` for cluster `{}`",
-                        scanner_name, cluster_id
+                        "Running deprecated API compatibility check with scanner `pluto` for cluster `{}`",
+                        cluster_id
                     );
-                    let compatibility_check = if use_pluto {
-                        infra_ctx
-                            .kubernetes_api_deprecation_service()
-                            .is_cluster_fully_compatible_with_kubernetes_version_with_pluto(
-                                kubernetes.kubeconfig_local_file_path().as_path(),
-                                Some(&upgrade_status.requested_version),
-                                &cloud_provider.credentials_environment_variables(),
-                                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                    kube_client: kube_client.as_ref(),
-                                },
-                            )
-                    } else {
-                        infra_ctx
-                            .kubernetes_api_deprecation_service()
-                            .is_cluster_fully_compatible_with_kubernetes_version(
-                                kubernetes.kubeconfig_local_file_path().as_path(),
-                                Some(&upgrade_status.requested_version),
-                                &cloud_provider.credentials_environment_variables(),
-                                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                    kube_client: kube_client.as_ref(),
-                                },
-                            )
-                    };
+                    let compatibility_check = infra_ctx
+                        .kubernetes_api_deprecation_service()
+                        .is_cluster_fully_compatible_with_kubernetes_version(
+                            kubernetes.kubeconfig_local_file_path().as_path(),
+                            Some(&upgrade_status.requested_version),
+                            &cloud_provider.credentials_environment_variables(),
+                            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
+                                kube_client: kube_client.as_ref(),
+                            },
+                        );
 
                     match compatibility_check {
                         Ok(_) => logger.info("Cluster is compatible with the next version"),
@@ -133,8 +117,6 @@ pub trait InfrastructureAction: Send + Sync {
                     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
                     let kube_client = infra_ctx.mk_kube_client()?;
                     let cluster_id = infra_ctx.context().cluster_long_id();
-                    let use_pluto = is_pluto_enabled_for_cluster(cluster_id);
-                    let scanner_name = if use_pluto { "pluto" } else { "kubent" };
                     let target_kubernetes_version = match kubernetes.version().next_version() {
                         Some(v) => v.into(),
                         None => kubernetes.version().clone().into(),
@@ -143,32 +125,19 @@ pub trait InfrastructureAction: Send + Sync {
                         "Check if cluster has calls to deprecated kubernetes API for version `{target_kubernetes_version}`"
                     ));
                     info!(
-                        "Running deprecated API check with scanner `{}` for cluster `{}` and target version `{}`",
-                        scanner_name, cluster_id, target_kubernetes_version
+                        "Running deprecated API check with scanner `pluto` for cluster `{}` and target version `{}`",
+                        cluster_id, target_kubernetes_version
                     );
-                    let compatibility_check = if use_pluto {
-                        infra_ctx
-                            .kubernetes_api_deprecation_service()
-                            .is_cluster_fully_compatible_with_kubernetes_version_with_pluto(
-                                kubernetes.kubeconfig_local_file_path().as_path(),
-                                Some(&target_kubernetes_version),
-                                &cloud_provider.credentials_environment_variables(),
-                                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                    kube_client: kube_client.as_ref(),
-                                },
-                            )
-                    } else {
-                        infra_ctx
-                            .kubernetes_api_deprecation_service()
-                            .is_cluster_fully_compatible_with_kubernetes_version(
-                                kubernetes.kubeconfig_local_file_path().as_path(),
-                                Some(&target_kubernetes_version),
-                                &cloud_provider.credentials_environment_variables(),
-                                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                    kube_client: kube_client.as_ref(),
-                                },
-                            )
-                    };
+                    let compatibility_check = infra_ctx
+                        .kubernetes_api_deprecation_service()
+                        .is_cluster_fully_compatible_with_kubernetes_version(
+                            kubernetes.kubeconfig_local_file_path().as_path(),
+                            Some(&target_kubernetes_version),
+                            &cloud_provider.credentials_environment_variables(),
+                            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
+                                kube_client: kube_client.as_ref(),
+                            },
+                        );
 
                     match compatibility_check {
                         Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
