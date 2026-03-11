@@ -59,9 +59,9 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -110,9 +110,9 @@ fn create_resize_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -156,9 +156,9 @@ fn create_pause_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -205,9 +205,9 @@ fn create_upgrade_and_destroy_eks_cluster_with_env_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -254,9 +254,9 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -387,9 +387,9 @@ fn create_and_destroy_eks_cluster_with_env_and_gateway_api_in_eu_west_3() {
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 
@@ -438,9 +438,9 @@ fn create_and_destroy_eks_cluster_with_all_gateway_api_envoy_settings_in_eu_west
         "{}.{}",
         to_short_id(&cluster_id),
         secrets
-            .DEFAULT_TEST_DOMAIN
+            .AWS_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str()
     );
 

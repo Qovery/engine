@@ -510,9 +510,9 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
         let mut environment = helpers::environment::working_minimal_environment_with_router(
             &context,
             secrets
-                .DEFAULT_TEST_DOMAIN
+                .AZURE_DEFAULT_TEST_DOMAIN
                 .as_ref()
-                .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+                .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
 
@@ -619,9 +619,9 @@ fn azure_aks_deploy_container_with_router() {
 
         let suffix = QoveryIdentifier::new_random().short().to_string();
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .AZURE_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets")
+            .expect("AZURE_DEFAULT_TEST_DOMAIN is not set in secrets")
             .as_str();
 
         let annotations_group_id = Uuid::new_v4();

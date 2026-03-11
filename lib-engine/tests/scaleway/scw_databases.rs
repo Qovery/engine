@@ -124,9 +124,9 @@ fn deploy_an_environment_with_db_and_pause_it() {
             .SCALEWAY_TEST_CLUSTER_LONG_ID
             .expect("SCALEWAY_TEST_CLUSTER_LONG_ID");
         let default_test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets");
         let region = ScwZone::from_str(
             secrets
                 .SCALEWAY_TEST_CLUSTER_REGION
@@ -230,9 +230,9 @@ fn postgresql_deploy_a_working_development_environment_with_all_options() {
             metrics_registry.clone(),
         );
         let test_domain = secrets
-            .DEFAULT_TEST_DOMAIN
+            .SCALEWAY_DEFAULT_TEST_DOMAIN
             .as_ref()
-            .expect("DEFAULT_TEST_DOMAIN is not set in secrets");
+            .expect("SCALEWAY_DEFAULT_TEST_DOMAIN is not set in secrets");
 
         let environment = helpers::environment::environment_2_app_2_routers_1_psql(
             &context,
