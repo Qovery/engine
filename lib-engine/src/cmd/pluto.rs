@@ -1,10 +1,20 @@
 use crate::cmd::command::{CommandError as RawCommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::kubent::Deprecation;
 use crate::errors::CommandError;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
 use std::time::Duration;
+
+#[derive(Default, Debug, Clone, PartialEq)]
+pub struct Deprecation {
+    pub name: Option<String>,
+    pub namespace: Option<String>,
+    pub kind: Option<String>,
+    pub api_version: Option<String>,
+    pub rule_set: Option<String>,
+    pub replace_with: Option<String>,
+    pub since: Option<String>,
+}
 
 #[derive(thiserror::Error, Clone, Debug, PartialEq)]
 pub enum PlutoError {
@@ -100,17 +110,20 @@ fn is_expected_pluto_result_exit_status(error: &RawCommandError) -> bool {
     }
 }
 
+#[cfg_attr(test, faux::create)]
 pub struct Pluto {
     pluto_cmd: PlutoCmd,
 }
 
+#[cfg_attr(test, faux::methods)]
 impl Default for Pluto {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Pluto {
+#[cfg_attr(test, faux::methods)]
+impl<'m> Pluto {
     pub fn new() -> Self {
         Self {
             pluto_cmd: PlutoCmd::new(),
@@ -118,10 +131,10 @@ impl Pluto {
     }
 
     pub fn get_deprecations(
-        &self,
+        &'m self,
         kubeconfig: &Path,
         target_version: Option<String>,
-        envs: &[(&str, &str)],
+        envs: &'m [(&'m str, &'m str)],
     ) -> Result<Vec<Deprecation>, PlutoError> {
         if !kubeconfig.exists() {
             return Err(PlutoError::InvalidKubeConfig {

@@ -5368,9 +5368,6 @@ impl EngineError {
             KubernetesDeprecationServiceError::ClientError { .. } => {
                 message_safe.push_str("a client error was triggered")
             }
-            KubernetesDeprecationServiceError::PlutoClientError { .. } => {
-                message_safe.push_str("a client error was triggered")
-            }
             KubernetesDeprecationServiceError::ApiVersionNumberParsingError { invalid_version } => {
                 message_safe.push_str(
                     format!(
