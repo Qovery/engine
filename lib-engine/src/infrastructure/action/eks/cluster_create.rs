@@ -30,7 +30,9 @@ use crate::services::kube_client::SelectK8sResourceBy;
 use crate::utilities::envs_to_string;
 use retry::delay::Fixed;
 use retry::{Error, OperationResult};
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
+use url::Url;
 
 pub fn create_eks_cluster(
     kubernetes: &EKS,
@@ -166,6 +168,14 @@ pub fn create_eks_cluster(
         }
     }
 
+    precheck_custom_vpc_alb_subnet_tags(
+        kubernetes,
+        &aws_conn,
+        event_details.clone(),
+        &logger,
+        infra_ctx.context().is_first_cluster_deployment(),
+    )?;
+
     // Deploy Karpenter nodegroup and install Karpenter charts if migration is enabled
     logger.info("Checking if Karpenter nodegroup should be deployed...");
     if should_deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger) {
@@ -221,6 +231,213 @@ pub fn create_eks_cluster(
     helms_deployments.deploy_charts(infra_ctx, &logger)?;
 
     Ok(())
+}
+
+fn should_precheck_custom_vpc_alb_subnet_tags(network_managed_by_user: bool, alb_controller_enabled: bool) -> bool {
+    network_managed_by_user && alb_controller_enabled
+}
+
+fn precheck_custom_vpc_alb_subnet_tags(
+    kubernetes: &EKS,
+    aws_conn: &aws_types::SdkConfig,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+    requested_strict_mode: bool,
+) -> Result<(), Box<EngineError>> {
+    if !should_precheck_custom_vpc_alb_subnet_tags(
+        kubernetes.is_network_managed_by_user(),
+        kubernetes.advanced_settings().aws_eks_enable_alb_controller,
+    ) {
+        return Ok(());
+    }
+
+    let Some(user_network_config) = kubernetes.options.user_provided_network.as_ref() else {
+        return Ok(());
+    };
+
+    let public_subnet_ids = collect_unique_subnet_ids([
+        user_network_config.eks_subnets_zone_a_ids.as_slice(),
+        user_network_config.eks_subnets_zone_b_ids.as_slice(),
+        user_network_config.eks_subnets_zone_c_ids.as_slice(),
+    ]);
+    let private_subnet_ids = collect_unique_subnet_ids([
+        user_network_config.eks_private_subnets_zone_a_ids.as_slice(),
+        user_network_config.eks_private_subnets_zone_b_ids.as_slice(),
+        user_network_config.eks_private_subnets_zone_c_ids.as_slice(),
+    ]);
+    let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+
+    if all_subnet_ids.is_empty() {
+        return Ok(());
+    }
+
+    let subnet_tags_by_id = match block_on(aws_conn.describe_subnets_tags_by_ids(all_subnet_ids.clone())) {
+        Ok(tags) => tags,
+        Err(error) => {
+            if is_update_relaxed_mode(requested_strict_mode) {
+                logger.warn(format!(
+                    "Cannot validate custom VPC subnet tags required by AWS ALB controller during cluster update. Continuing because this is not a cluster creation. Error: {error}"
+                ));
+                return Ok(());
+            }
+
+            return Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+                event_details.clone(),
+                CommandError::new_from_safe_message(format!(
+                    "Cannot validate custom VPC subnet tags required by AWS ALB controller: {error}"
+                )),
+                Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html").ok(),
+            )));
+        }
+    };
+
+    let cluster_tag_key = format!("kubernetes.io/cluster/{}", kubernetes.cluster_name());
+    let validation_errors = validate_alb_controller_subnet_tags(
+        public_subnet_ids.as_slice(),
+        private_subnet_ids.as_slice(),
+        all_subnet_ids.as_slice(),
+        &subnet_tags_by_id,
+        cluster_tag_key.as_str(),
+    );
+
+    if validation_errors.is_empty() {
+        return Ok(());
+    }
+
+    if is_update_relaxed_mode(requested_strict_mode) {
+        // Transitional policy:
+        // for cluster updates, do not fail yet on subnet-tag non-compliance.
+        // We first warn and contact impacted customers before making this mandatory.
+        logger.warn(format!(
+            "ALB custom VPC subnet tags are non-compliant. Continuing because this is not a cluster creation. Please fix these tags (will become mandatory later): {}",
+            validation_errors.join(" ; ")
+        ));
+        return Ok(());
+    }
+
+    let remediation_message = format!(
+        "ALB controller requires subnet tags on custom VPC before Terraform during cluster creation. Fix the following and retry: {}",
+        validation_errors.join(" ; ")
+    );
+    Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+        event_details,
+        CommandError::new_from_safe_message(remediation_message),
+        Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html").ok(),
+    )))
+}
+
+fn is_update_relaxed_mode(requested_strict_mode: bool) -> bool {
+    !requested_strict_mode
+}
+
+fn collect_unique_subnet_ids<'a, I>(subnet_groups: I) -> Vec<String>
+where
+    I: IntoIterator<Item = &'a [String]>,
+{
+    let mut unique_subnet_ids = BTreeSet::new();
+    for subnet_group in subnet_groups {
+        for subnet_id in subnet_group {
+            unique_subnet_ids.insert(subnet_id.clone());
+        }
+    }
+
+    unique_subnet_ids.into_iter().collect()
+}
+
+fn validate_alb_controller_subnet_tags(
+    public_subnet_ids: &[String],
+    private_subnet_ids: &[String],
+    all_subnet_ids: &[String],
+    subnet_tags_by_id: &HashMap<String, HashMap<String, String>>,
+    cluster_tag_key: &str,
+) -> Vec<String> {
+    let mut validation_errors = BTreeSet::new();
+    let expected_cluster_tag_value = "shared";
+    let public_subnet_ids_set: BTreeSet<&str> = public_subnet_ids.iter().map(String::as_str).collect();
+    let private_subnet_ids_set: BTreeSet<&str> = private_subnet_ids.iter().map(String::as_str).collect();
+
+    // Validate public/internal role tags. If a subnet is present in both lists, accept either role tag.
+    for subnet_id in all_subnet_ids {
+        let Some(subnet_tags) = subnet_tags_by_id.get(subnet_id) else {
+            validation_errors.insert(format!("Subnet `{subnet_id}` was not returned by AWS DescribeSubnets API."));
+            continue;
+        };
+
+        let is_public = public_subnet_ids_set.contains(subnet_id.as_str());
+        let is_private = private_subnet_ids_set.contains(subnet_id.as_str());
+
+        match (is_public, is_private) {
+            (true, true) => validate_subnet_any_role_tag(subnet_id, subnet_tags, &mut validation_errors),
+            (true, false) => {
+                validate_subnet_tag(subnet_id, subnet_tags, "kubernetes.io/role/elb", "1", &mut validation_errors)
+            }
+            (false, true) => validate_subnet_tag(
+                subnet_id,
+                subnet_tags,
+                "kubernetes.io/role/internal-elb",
+                "1",
+                &mut validation_errors,
+            ),
+            (false, false) => {}
+        }
+    }
+
+    // Validate cluster tag once per subnet to avoid duplicated errors.
+    for subnet_id in all_subnet_ids {
+        let Some(subnet_tags) = subnet_tags_by_id.get(subnet_id) else {
+            continue;
+        };
+        validate_subnet_tag(
+            subnet_id,
+            subnet_tags,
+            cluster_tag_key,
+            expected_cluster_tag_value,
+            &mut validation_errors,
+        );
+    }
+
+    validation_errors.into_iter().collect()
+}
+
+fn validate_subnet_tag(
+    subnet_id: &str,
+    subnet_tags: &HashMap<String, String>,
+    tag_key: &str,
+    expected_tag_value: &str,
+    validation_errors: &mut BTreeSet<String>,
+) {
+    match subnet_tags.get(tag_key) {
+        None => {
+            validation_errors.insert(format!(
+                "Subnet `{subnet_id}` is missing tag `{tag_key}` with value `{expected_tag_value}`."
+            ));
+        }
+        Some(actual_value) if actual_value != expected_tag_value => {
+            validation_errors.insert(format!(
+                "Subnet `{subnet_id}` has tag `{tag_key}={actual_value}` but expected `{expected_tag_value}`."
+            ));
+        }
+        Some(_) => {}
+    }
+}
+
+fn validate_subnet_any_role_tag(
+    subnet_id: &str,
+    subnet_tags: &HashMap<String, String>,
+    validation_errors: &mut BTreeSet<String>,
+) {
+    let has_public_role_tag = subnet_tags
+        .get("kubernetes.io/role/elb")
+        .is_some_and(|value| value == "1");
+    let has_private_role_tag = subnet_tags
+        .get("kubernetes.io/role/internal-elb")
+        .is_some_and(|value| value == "1");
+
+    if !has_public_role_tag && !has_private_role_tag {
+        validation_errors.insert(format!(
+            "Subnet `{subnet_id}` is in both public/private lists and must have at least one role tag with value `1`: `kubernetes.io/role/elb` or `kubernetes.io/role/internal-elb`."
+        ));
+    }
 }
 
 fn is_nginx_migrated_to_alb(
@@ -356,4 +573,213 @@ fn restore_access_to_eks(
         .map(|eks_tf_output| update_cluster_outputs(kubernetes, &eks_tf_output));
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        collect_unique_subnet_ids, is_update_relaxed_mode, should_precheck_custom_vpc_alb_subnet_tags,
+        validate_alb_controller_subnet_tags,
+    };
+    use std::collections::HashMap;
+
+    #[test]
+    fn should_precheck_only_when_network_is_user_managed_and_alb_enabled() {
+        assert!(should_precheck_custom_vpc_alb_subnet_tags(true, true));
+        assert!(!should_precheck_custom_vpc_alb_subnet_tags(true, false));
+        assert!(!should_precheck_custom_vpc_alb_subnet_tags(false, true));
+        assert!(!should_precheck_custom_vpc_alb_subnet_tags(false, false));
+    }
+
+    #[test]
+    fn should_use_relaxed_mode_only_when_not_strict() {
+        assert!(is_update_relaxed_mode(false));
+        assert!(!is_update_relaxed_mode(true));
+    }
+
+    #[test]
+    fn collect_unique_subnet_ids_should_deduplicate_and_sort() {
+        let subnets = collect_unique_subnet_ids([
+            &["subnet-b".to_string(), "subnet-a".to_string()][..],
+            &["subnet-a".to_string()][..],
+        ]);
+        assert_eq!(subnets, vec!["subnet-a".to_string(), "subnet-b".to_string()]);
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_succeed_when_all_tags_are_correct() {
+        let public_subnet_ids = vec!["subnet-public-a".to_string()];
+        let private_subnet_ids = vec!["subnet-private-a".to_string()];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+
+        let mut subnet_tags_by_id: HashMap<String, HashMap<String, String>> = HashMap::new();
+        subnet_tags_by_id.insert(
+            "subnet-public-a".to_string(),
+            HashMap::from([
+                ("kubernetes.io/role/elb".to_string(), "1".to_string()),
+                (cluster_tag_key.to_string(), "shared".to_string()),
+            ]),
+        );
+        subnet_tags_by_id.insert(
+            "subnet-private-a".to_string(),
+            HashMap::from([
+                ("kubernetes.io/role/internal-elb".to_string(), "1".to_string()),
+                (cluster_tag_key.to_string(), "shared".to_string()),
+            ]),
+        );
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_fail_when_public_subnet_tag_is_missing() {
+        let public_subnet_ids = vec!["subnet-public-a".to_string()];
+        let private_subnet_ids = vec![];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::from([(
+            "subnet-public-a".to_string(),
+            HashMap::from([(cluster_tag_key.to_string(), "shared".to_string())]),
+        )]);
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("kubernetes.io/role/elb"));
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_fail_when_private_subnet_tag_value_is_invalid() {
+        let public_subnet_ids = vec![];
+        let private_subnet_ids = vec!["subnet-private-a".to_string()];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::from([(
+            "subnet-private-a".to_string(),
+            HashMap::from([
+                ("kubernetes.io/role/internal-elb".to_string(), "true".to_string()),
+                (cluster_tag_key.to_string(), "shared".to_string()),
+            ]),
+        )]);
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("kubernetes.io/role/internal-elb=true"));
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_fail_when_cluster_tag_value_is_invalid() {
+        let public_subnet_ids = vec!["subnet-public-a".to_string()];
+        let private_subnet_ids = vec![];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::from([(
+            "subnet-public-a".to_string(),
+            HashMap::from([
+                ("kubernetes.io/role/elb".to_string(), "1".to_string()),
+                (cluster_tag_key.to_string(), "owned".to_string()),
+            ]),
+        )]);
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("expected `shared`"));
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_fail_when_subnet_not_returned_by_aws() {
+        let public_subnet_ids = vec!["subnet-public-a".to_string()];
+        let private_subnet_ids = vec![];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::new();
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains("was not returned by AWS DescribeSubnets API"));
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_allow_overlap_when_one_role_tag_is_present() {
+        let public_subnet_ids = vec!["subnet-a".to_string()];
+        let private_subnet_ids = vec!["subnet-a".to_string()];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::from([(
+            "subnet-a".to_string(),
+            HashMap::from([
+                ("kubernetes.io/role/elb".to_string(), "1".to_string()),
+                (cluster_tag_key.to_string(), "shared".to_string()),
+            ]),
+        )]);
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn validate_alb_controller_subnet_tags_should_deduplicate_cluster_tag_errors_for_overlap() {
+        let public_subnet_ids = vec!["subnet-a".to_string()];
+        let private_subnet_ids = vec!["subnet-a".to_string()];
+        let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+        let cluster_tag_key = "kubernetes.io/cluster/qovery-abcd1234";
+        let subnet_tags_by_id = HashMap::from([(
+            "subnet-a".to_string(),
+            HashMap::from([("kubernetes.io/role/elb".to_string(), "1".to_string())]),
+        )]);
+
+        let errors = validate_alb_controller_subnet_tags(
+            public_subnet_ids.as_slice(),
+            private_subnet_ids.as_slice(),
+            all_subnet_ids.as_slice(),
+            &subnet_tags_by_id,
+            cluster_tag_key,
+        );
+
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].contains(cluster_tag_key));
+    }
 }
