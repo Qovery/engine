@@ -42,13 +42,15 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
         &cluster.advanced_settings().pleco_resources_ttl,
     );
 
-    // API server IP whitelist
+    // API server IP whitelist — always provide authorized_ip_ranges because we use
+    // azapi_update_resource to manage them (the azurerm provider cannot disable IP ranges once set).
+    // When unrestricted, we pass an empty list to explicitly clear the ranges.
     let public_access_cidrs =
         generate_public_access_cidrs(cluster.advanced_settings(), cluster.qovery_allowed_public_access_cidrs.as_ref());
-    let enable_api_server_ip_whitelist = is_api_access_restricted(&public_access_cidrs);
-    context.insert("enable_api_server_ip_whitelist", &enable_api_server_ip_whitelist);
-    if enable_api_server_ip_whitelist {
+    if is_api_access_restricted(&public_access_cidrs) {
         context.insert("authorized_ip_ranges", &public_access_cidrs);
+    } else {
+        context.insert("authorized_ip_ranges", &Vec::<String>::new());
     }
 
     // Kubernetes

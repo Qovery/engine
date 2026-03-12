@@ -214,7 +214,6 @@ variable "nat_gateway_sku_tier_name" {
   default     = "{{ azure_nat_gateway_sku_tier_name }}"
 }
 
-{% if enable_api_server_ip_whitelist %}
 variable "authorized_ip_ranges" {
   description = "List of authorized IP ranges for AKS API server access"
   type        = list(string)
@@ -224,5 +223,4 @@ variable "authorized_ip_ranges" {
     {%- endfor -%}
   ]
 }
-{% endif %}
 
