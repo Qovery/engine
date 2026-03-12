@@ -54,14 +54,31 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
 spec:
   parentRefs:
+    {%- if certificate_alternative_names|length > 0 %}
+    {%- for domain in certificate_alternative_names %}
+    - group: gateway.networking.k8s.io
+      kind: ListenerSet
+      name: {{ sanitized_name }}-listeners
+      namespace: {{ namespace_key }}
+      sectionName: {{ sanitized_name }}-{{ loop.index }}-https
+    {%- endfor %}
     - name: qovery-cluster-public-gateway
       namespace: qovery
       sectionName: https
     {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
-    # If NOT forcing SSL redirect, also accept HTTP traffic directly
     - name: qovery-cluster-public-gateway
       namespace: qovery
       sectionName: http
+    {%- endif %}
+    {%- else %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: https
+    {%- if not advanced_settings.network_gateway_api_force_ssl_redirect or advanced_settings.network_gateway_api_force_ssl_redirect == "false" %}
+    - name: qovery-cluster-public-gateway
+      namespace: qovery
+      sectionName: http
+    {%- endif %}
     {%- endif %}
   hostnames:
     {%- for host in grpc_hosts %}

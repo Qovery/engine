@@ -206,6 +206,14 @@ impl ToCommonHelmChart for CertManagerChart {
                 key: "config.enableGatewayAPI".to_string(),
                 value: true.to_string(),
             });
+            values.push(ChartSetValue {
+                key: "config.enableGatewayAPIListenerSet".to_string(),
+                value: true.to_string(),
+            });
+            values.push(ChartSetValue {
+                key: "config.featureGates.ListenerSets".to_string(),
+                value: true.to_string(),
+            });
         }
 
         Ok(CommonChart {
@@ -297,6 +305,7 @@ impl ToCommonHelmChart for CertManagerChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         })
     }
 }

@@ -538,7 +538,10 @@ mod tests {
             CommonChart {
                 // just fake to mimic common chart for test
                 chart_info: chart.chart_info,
-                ..Default::default()
+
+                vertical_pod_autoscaler: None,
+                chart_installation_checker: None,
+                pre_execute_action: None,
             },
             format!(
                 "/lib/{}/bootstrap/chart_values/{}-config.yaml",

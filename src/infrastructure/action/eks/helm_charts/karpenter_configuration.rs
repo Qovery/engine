@@ -543,6 +543,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             },
             chart_installation_checker: Some(Box::new(KarpenterChartChecker::new())),
             vertical_pod_autoscaler: None, // enabled in the chart configuration
+            pre_execute_action: None,
         })
     }
 }

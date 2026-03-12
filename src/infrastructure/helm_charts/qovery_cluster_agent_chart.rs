@@ -215,6 +215,7 @@ impl ToCommonHelmChart for QoveryClusterAgentChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         })
     }
 }

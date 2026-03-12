@@ -132,6 +132,7 @@ impl ToCommonHelmChart for QoveryShellAgentChart {
             },
             chart_installation_checker: Some(Box::new(QoveryShellAgentChartChecker::new())),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

@@ -380,7 +380,7 @@ variable "release_channel" {
 variable "gateway_api_channel" {
   type        = string
   description = "The gateway api channel of this cluster. Accepted values are `CHANNEL_STANDARD` and `CHANNEL_DISABLED`."
-  default     = null
+  default     = "CHANNEL_STANDARD"
 }
 
 variable "add_cluster_firewall_rules" {

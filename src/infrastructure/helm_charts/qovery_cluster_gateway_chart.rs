@@ -139,6 +139,7 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             },
             chart_installation_checker: Some(Box::new(QoveryClusterGatewayChartInstallationChecker::new())),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }
