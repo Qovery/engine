@@ -56,11 +56,11 @@ resource "azurerm_kubernetes_cluster" "primary" {
     dns_service_ip      = local.dns_service_ip
   }
 
-  {% if enable_api_server_ip_whitelist %}
-  api_server_access_profile {
-    authorized_ip_ranges = var.authorized_ip_ranges
+  # api_server_access_profile is managed via azapi_update_resource below because the azurerm
+  # provider cannot disable authorized_ip_ranges once set (https://github.com/hashicorp/terraform-provider-azurerm/issues/20085).
+  lifecycle {
+    ignore_changes = [api_server_access_profile]
   }
-  {% endif %}
 
   # TODO(benjaminch): Azure integration, to be variabilized
   maintenance_window {
@@ -138,6 +138,37 @@ resource "azurerm_role_assignment" "sp_contributor" { # for nginx ingress
   scope                = azurerm_resource_group.main.id
   principal_id         = azurerm_kubernetes_cluster.primary.identity.0.principal_id
   role_definition_name = "Contributor"
+}
+
+# Manage API server authorized IP ranges via azapi because the azurerm provider
+# cannot disable them once set (known provider bug).
+# See: https://github.com/hashicorp/terraform-provider-azurerm/issues/20085
+#
+# When IP ranges are specified, we include the NAT gateway public IPs so that
+# nodes (which egress through the NAT gateway) can reach the API server.
+locals {
+  nat_gateway_ips = [
+    {% for zone in azure_zones %}
+    "${azurerm_public_ip.nat_zone_{{ zone }}.ip_address}/32",
+    {% endfor %}
+  ]
+
+  effective_authorized_ip_ranges = length(var.authorized_ip_ranges) > 0 ? distinct(concat(var.authorized_ip_ranges, local.nat_gateway_ips)) : var.authorized_ip_ranges
+}
+
+resource "azapi_update_resource" "aks_api_server_access" {
+  type        = "Microsoft.ContainerService/managedClusters@2024-09-01"
+  resource_id = azurerm_kubernetes_cluster.primary.id
+
+  body = {
+    properties = {
+      apiServerAccessProfile = {
+        authorizedIPRanges = local.effective_authorized_ip_ranges
+      }
+    }
+  }
+
+  ignore_missing_property = true
 }
 
 resource "time_static" "on_cluster_create" {}

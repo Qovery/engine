@@ -42,14 +42,11 @@ pub fn generate_public_access_cidrs(
         qovery_allowed_public_access_cidrs,
     ) {
         (true, Some(qovery_allowed_public_access_cidrs)) if !qovery_allowed_public_access_cidrs.is_empty() => {
-            match &advanced_settings.k8s_api_allowed_public_access_cidrs {
-                Some(k8s_api_allowed_public_access_cidrs) => [
-                    qovery_allowed_public_access_cidrs.clone(),
-                    k8s_api_allowed_public_access_cidrs.clone(),
-                ]
-                .concat(),
-                None => qovery_allowed_public_access_cidrs.clone(),
+            let mut cidrs = qovery_allowed_public_access_cidrs.clone();
+            if let Some(extra) = &advanced_settings.k8s_api_allowed_public_access_cidrs {
+                cidrs.extend_from_slice(extra);
             }
+            cidrs
         }
         _ => vec![UNRESTRICTED_CIDR.to_string()],
     }
