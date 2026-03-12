@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use aws_sdk_ec2::operation::describe_subnets::{DescribeSubnetsError, DescribeSubnetsOutput};
 use aws_sdk_eks::error::SdkError;
 use aws_sdk_eks::operation::delete_nodegroup::{DeleteNodegroupError, DeleteNodegroupOutput};
 use aws_sdk_eks::operation::describe_nodegroup::{DescribeNodegroupError, DescribeNodegroupOutput};
@@ -7,6 +8,7 @@ use aws_sdk_eks::operation::list_nodegroups::{ListNodegroupsError, ListNodegroup
 use aws_sdk_iam::operation::create_service_linked_role::{CreateServiceLinkedRoleError, CreateServiceLinkedRoleOutput};
 use aws_sdk_iam::operation::get_role::{GetRoleError, GetRoleOutput};
 use aws_types::SdkConfig;
+use std::collections::HashMap;
 
 #[async_trait]
 pub trait QoveryAwsSdkConfigEks {
@@ -37,6 +39,16 @@ pub trait QoveryAwsSdkConfigEks {
         &self,
         name: &str,
     ) -> Result<CreateServiceLinkedRoleOutput, SdkError<CreateServiceLinkedRoleError>>;
+
+    async fn describe_subnets_by_ids(
+        &self,
+        subnet_ids: Vec<String>,
+    ) -> Result<DescribeSubnetsOutput, SdkError<DescribeSubnetsError>>;
+
+    async fn describe_subnets_tags_by_ids(
+        &self,
+        subnet_ids: Vec<String>,
+    ) -> Result<HashMap<String, HashMap<String, String>>, SdkError<DescribeSubnetsError>>;
 }
 
 #[async_trait]
@@ -117,5 +129,44 @@ impl QoveryAwsSdkConfigEks for SdkConfig {
             .aws_service_name(service_name)
             .send()
             .await
+    }
+
+    async fn describe_subnets_by_ids(
+        &self,
+        subnet_ids: Vec<String>,
+    ) -> Result<DescribeSubnetsOutput, SdkError<DescribeSubnetsError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        client.describe_subnets().set_subnet_ids(Some(subnet_ids)).send().await
+    }
+
+    async fn describe_subnets_tags_by_ids(
+        &self,
+        subnet_ids: Vec<String>,
+    ) -> Result<HashMap<String, HashMap<String, String>>, SdkError<DescribeSubnetsError>> {
+        if subnet_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        let subnets = self.describe_subnets_by_ids(subnet_ids).await?;
+        let mut subnets_tags_by_id: HashMap<String, HashMap<String, String>> = HashMap::new();
+
+        for subnet in subnets.subnets() {
+            let Some(subnet_id) = subnet.subnet_id() else {
+                continue;
+            };
+
+            let mut tags_by_key = HashMap::new();
+            for tag in subnet.tags() {
+                let Some(tag_key) = tag.key() else {
+                    continue;
+                };
+
+                tags_by_key.insert(tag_key.to_string(), tag.value().unwrap_or("").to_string());
+            }
+
+            subnets_tags_by_id.insert(subnet_id.to_string(), tags_by_key);
+        }
+
+        Ok(subnets_tags_by_id)
     }
 }
