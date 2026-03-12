@@ -208,7 +208,6 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
                 self.gateway_classes_to_be_installed.clone(),
             ))),
             vertical_pod_autoscaler: None,
-            pre_execute_action: None,
         })
     }
 }

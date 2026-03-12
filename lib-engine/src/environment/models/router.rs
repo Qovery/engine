@@ -9,7 +9,6 @@ use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType, default_tera_context};
-use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Protocol;
 use crate::io_models::context::Context;
@@ -332,7 +331,6 @@ impl<T: CloudProvider> Router<T> {
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
         context.insert("k8s_remove_nginx", &kubernetes.advanced_settings().k8s_remove_nginx);
-        context.insert("k8s_use_v1beta1_reference_grant", &matches!(kubernetes.kind(), Kind::Gke)); // referencegrant is not yet compatible on GKE, they are not running the latest Gateway-API version (>= 1.8.0)
 
         Ok(context)
     }

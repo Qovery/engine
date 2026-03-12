@@ -1,13 +1,12 @@
 {{- if .Values.webhook.networkPolicy.enabled }}
-
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: {{ template "webhook.fullname" . }}-allow-ingress
+  name: {{ template "webhook.fullname" . }}-allow-egress
   namespace: {{ include "cert-manager.namespace" . }}
 spec:
-  ingress:
-    {{- with .Values.webhook.networkPolicy.ingress }}
+  egress:
+    {{- with .Values.webhook.networkPolicy.egress }}
       {{- toYaml . | nindent 2 }}
     {{- end }}
   podSelector:
@@ -16,6 +15,5 @@ spec:
       app.kubernetes.io/instance: {{ .Release.Name }}
       app.kubernetes.io/component: "webhook"
   policyTypes:
-  - Ingress
-
+  - Egress
 {{- end }}

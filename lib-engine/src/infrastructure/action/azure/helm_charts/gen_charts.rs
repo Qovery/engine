@@ -199,14 +199,6 @@ pub(super) fn aks_helm_charts(
         &chart_config_prerequisites.dns_provider_config,
         vec![domain.to_string(), new_gateway_api_domain.to_string()],
         HelmChartNamespaces::Qovery,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_remove_nginx
-            .unwrap_or(false),
     )
     .to_common_helm_chart()?;
 

@@ -120,9 +120,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
             ],
             ..Default::default()
         },
-        chart_installation_checker: None,
-        vertical_pod_autoscaler: None,
-        pre_execute_action: None,
+        ..Default::default()
     };
 
     let cert_manager_config = CommonChart {
@@ -154,9 +152,7 @@ fn cert_manager_conf() -> (Helm, PathBuf, CommonChart, CommonChart) {
             ],
             ..Default::default()
         },
-        chart_installation_checker: None,
-        vertical_pod_autoscaler: None,
-        pre_execute_action: None,
+        ..Default::default()
     };
 
     (helm, kube_config, cert_manager, cert_manager_config)

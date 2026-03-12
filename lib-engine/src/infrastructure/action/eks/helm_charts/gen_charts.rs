@@ -454,14 +454,6 @@ pub(super) fn eks_helm_charts(
         &chart_config_prerequisites.dns_provider_config,
         vec![domain.to_string(), new_gateway_api_domain.to_string()],
         HelmChartNamespaces::CertManager,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_remove_nginx
-            .unwrap_or(false),
     )
     .to_common_helm_chart()?;
 
@@ -881,9 +873,7 @@ pub(super) fn eks_helm_charts(
             ],
             ..Default::default()
         },
-        vertical_pod_autoscaler: None,
-        chart_installation_checker: None,
-        pre_execute_action: None,
+        ..Default::default()
     };
 
     // chart deployment order matters!!!

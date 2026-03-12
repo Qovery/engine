@@ -432,7 +432,6 @@ pub struct ChartInfo {
     pub action: HelmAction,
     pub atomic: bool,
     pub force_upgrade: bool,
-    pub force_conflicts: bool,
     pub recreate_pods: bool,
     pub reinstall_chart_if_installed_version_is_below_than: Option<Version>,
     pub timeout_in_seconds: i64,
@@ -520,7 +519,6 @@ impl Default for ChartInfo {
             action: Deploy,
             atomic: true,
             force_upgrade: false,
-            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: default_helm_timeout().as_secs() as i64,
@@ -545,14 +543,6 @@ impl Default for ChartInfo {
 
 pub trait HelmChart: Send {
     fn clone_dyn(&self) -> Box<dyn HelmChart>;
-
-    fn get_chart_installation_checker(&self) -> Option<&dyn ChartInstallationChecker> {
-        None
-    }
-
-    fn get_pre_execute_action(&self) -> Option<&dyn ChartPreExecuteAction> {
-        None
-    }
 
     fn check_prerequisites(&self) -> Result<Option<ChartPayload>, HelmChartError> {
         let chart = self.get_chart_info();
@@ -701,13 +691,6 @@ pub trait HelmChart: Send {
                 // Verify that we don't need to upgrade the CRDS
                 update_crds_on_upgrade(kubernetes_config, chart_info.clone(), envs, &helm)?;
 
-                // Execute pre-execute action if defined
-                if let Some(action) = self.get_pre_execute_action()
-                    && let Err(e) = action.execute(kubernetes_config, envs.to_vec())
-                {
-                    warn!("Pre-execute action for chart {} failed (non-fatal): {:?}", &chart_info.name, e);
-                }
-
                 let attempts = if let Some(upgrade_retry) = &chart_info.upgrade_retry {
                     Fixed::from_millis(upgrade_retry.delay_in_milli_sec).take(upgrade_retry.nb_retry)
                 } else {
@@ -855,18 +838,6 @@ impl Clone for Box<dyn ChartInstallationChecker> {
     }
 }
 
-/// Trait for pre-execution actions that need to be executed before applying a chart.
-pub trait ChartPreExecuteAction: Send {
-    fn execute(&self, kubernetes_config: &Path, envs: Vec<(&str, &str)>) -> Result<(), CommandError>;
-    fn clone_dyn(&self) -> Box<dyn ChartPreExecuteAction>;
-}
-
-impl Clone for Box<dyn ChartPreExecuteAction> {
-    fn clone(&self) -> Self {
-        self.clone_dyn()
-    }
-}
-
 #[derive(Default, Clone)]
 pub struct CommonChartVpa {
     pub helm_path: HelmPath,
@@ -885,12 +856,11 @@ impl CommonChartVpa {
     }
 }
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct CommonChart {
     pub chart_info: ChartInfo,
     pub chart_installation_checker: Option<Box<dyn ChartInstallationChecker>>,
     pub vertical_pod_autoscaler: Option<CommonChartVpa>,
-    pub pre_execute_action: Option<Box<dyn ChartPreExecuteAction>>,
 }
 
 impl CommonChart {
@@ -903,7 +873,6 @@ impl CommonChart {
             chart_info,
             chart_installation_checker,
             vertical_pod_autoscaler,
-            pre_execute_action: None,
         }
     }
 
@@ -965,14 +934,6 @@ impl ChartPayload {
 impl HelmChart for CommonChart {
     fn clone_dyn(&self) -> Box<dyn HelmChart> {
         Box::new(self.clone())
-    }
-
-    fn get_chart_installation_checker(&self) -> Option<&dyn ChartInstallationChecker> {
-        self.chart_installation_checker.as_deref()
-    }
-
-    fn get_pre_execute_action(&self) -> Option<&dyn ChartPreExecuteAction> {
-        self.pre_execute_action.as_deref()
     }
 
     fn get_chart_info(&self) -> &ChartInfo {

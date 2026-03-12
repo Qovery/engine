@@ -602,101 +602,6 @@ where
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }
 
-/// kubectl_get_validating_admission_policy: gets a ValidatingAdmissionPolicy and its binding as YAML.
-///
-/// Returns a tuple of (policy_yaml, binding_yaml) if both exist, or None if either doesn't exist.
-///
-/// Arguments
-///
-/// * `kubernetes_config`: kubernetes config file path.
-/// * `policy_name`: name of the ValidatingAdmissionPolicy to get.
-/// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_get_validating_admission_policy<P>(
-    kubernetes_config: P,
-    policy_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<Option<(String, String)>, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // Get the policy
-    let policy_cmd_args = vec!["get", "validatingadmissionpolicy", policy_name, "-o", "yaml"];
-    let policy_yaml = match kubectl_exec_raw_output(policy_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-        Ok(yaml) => yaml,
-        Err(_) => return Ok(None), // Policy doesn't exist
-    };
-
-    // Get the binding
-    let binding_cmd_args = vec!["get", "validatingadmissionpolicybinding", policy_name, "-o", "yaml"];
-    let binding_yaml = match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs, false) {
-        Ok(yaml) => yaml,
-        Err(_) => return Ok(None), // Binding doesn't exist
-    };
-
-    Ok(Some((policy_yaml, binding_yaml)))
-}
-
-/// kubectl_apply_validating_admission_policy: applies a ValidatingAdmissionPolicy and its binding from YAML.
-///
-/// Arguments
-///
-/// * `kubernetes_config`: kubernetes config file path.
-/// * `policy_yaml`: YAML content of the ValidatingAdmissionPolicy.
-/// * `binding_yaml`: YAML content of the ValidatingAdmissionPolicyBinding.
-/// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_apply_validating_admission_policy<P>(
-    kubernetes_config: P,
-    policy_yaml: &str,
-    binding_yaml: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // Apply the policy
-    kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs.clone(), None, policy_yaml, true)?;
-
-    // Apply the binding
-    kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs, None, binding_yaml, true)
-}
-
-/// kubectl_delete_validating_admission_policy: deletes a ValidatingAdmissionPolicy and its binding.
-///
-/// This is useful when upgrading Gateway API CRDs, as the safe-upgrades policy
-/// prevents installing experimental CRDs on top of standard channel CRDs.
-///
-/// Arguments
-///
-/// * `kubernetes_config`: kubernetes config file path.
-/// * `policy_name`: name of the ValidatingAdmissionPolicy to delete.
-/// * `envs`: environment variables to be passed to kubectl.
-pub fn kubectl_delete_validating_admission_policy<P>(
-    kubernetes_config: P,
-    policy_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, CommandError>
-where
-    P: AsRef<Path>,
-{
-    // Delete the policy binding first (if it exists)
-    let binding_cmd_args = vec![
-        "delete",
-        "validatingadmissionpolicybinding",
-        policy_name,
-        "--ignore-not-found=true",
-    ];
-    let _ = kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs.clone(), false);
-
-    // Delete the policy itself
-    let policy_cmd_args = vec![
-        "delete",
-        "validatingadmissionpolicy",
-        policy_name,
-        "--ignore-not-found=true",
-    ];
-    kubectl_exec_raw_output(policy_cmd_args, kubernetes_config, envs, false)
-}
-
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
 ///
 /// Arguments
@@ -936,13 +841,11 @@ where
     kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
 }
 
-/// kubectl_apply_with_server_side_apply: apply a kubernetes manifest with server side apply.
 pub fn kubectl_apply_with_server_side_apply<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     args: Option<Vec<&str>>,
     template: &str,
-    force_conflicts: bool,
 ) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
@@ -953,10 +856,6 @@ where
         for arg in args {
             cmd_args.push(arg)
         }
-    }
-
-    if force_conflicts {
-        cmd_args.push("--force-conflicts");
     }
 
     cmd_args.push("--server-side");

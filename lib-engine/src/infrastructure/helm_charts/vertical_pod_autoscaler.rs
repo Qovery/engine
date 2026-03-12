@@ -234,7 +234,6 @@ impl ToCommonHelmChart for VpaChart {
                 )),
                 false => None,
             },
-            pre_execute_action: None,
         })
     }
 }

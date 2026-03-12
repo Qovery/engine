@@ -183,7 +183,6 @@ impl ToCommonHelmChart for EsoChart {
                 HelmAction::Destroy => None,
             },
             vertical_pod_autoscaler: None,
-            pre_execute_action: None,
         })
     }
 }

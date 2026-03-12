@@ -11,10 +11,6 @@ metadata:
   {{- end }}
 spec:
   gatewayClassName: qovery-public-gateway
-  # Allow ListenerSets from all namespaces to attach to this Gateway
-  allowedListeners:
-    namespaces:
-      from: All
   infrastructure:
     annotations:
     {{- range $key, $value := .Values.infrastructure.annotations }}

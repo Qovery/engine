@@ -1,0 +1,16 @@
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: qovery-cluster-allow-gateway-to-cert-manager-secrets
+  namespace: "{{ .Values.certManagerNamespace }}"
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      namespace: qovery
+  to:
+    - group: ""
+      kind: Secret
+      name: letsencrypt-acme-qovery-cert
+
