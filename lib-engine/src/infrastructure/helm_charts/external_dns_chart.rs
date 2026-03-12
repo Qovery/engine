@@ -382,6 +382,7 @@ impl ToCommonHelmChart for ExternalDNSChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         })
     }
 }
@@ -527,6 +528,7 @@ impl ToCommonHelmChart for ExternalDNSSecretChart {
             },
             chart_installation_checker: Some(Box::new(ExternalDNSSecretChartInstallationChecker::new())),
             vertical_pod_autoscaler: None, // Secrets don't need VPA
+            pre_execute_action: None,
         })
     }
 }

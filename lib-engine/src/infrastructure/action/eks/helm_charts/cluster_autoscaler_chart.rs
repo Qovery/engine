@@ -101,6 +101,7 @@ impl ToCommonHelmChart for ClusterAutoscalerChart {
             },
             chart_installation_checker: Some(Box::new(ClusterAutoscalerChartChecker::new())),
             vertical_pod_autoscaler: None, // enabled in the chart configuration
+            pre_execute_action: None,
         })
     }
 }

@@ -109,6 +109,7 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
             },
             chart_installation_checker: Some(Box::new(QoveryCertManagerWebhookChartChecker::new())),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

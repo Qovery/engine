@@ -4,3 +4,34 @@ crds:
     channel: experimental   # Available options: standard, experimental
   envoyGateway:
     enabled: false
+
+# Pre-install hook to remove Gateway API ValidatingAdmissionPolicy
+# This policy prevents installing experimental/custom CRDs over standard channel CRDs
+# Ref: https://gateway-api.sigs.k8s.io/concepts/versioning/
+preInstallHook:
+  enabled: true
+  image:
+    # Using alpine/k8s for universal compatibility across all cloud providers
+    # Works on GKE, EKS, AKS, and Scaleway
+    # Alternative: bitnami/kubectl:1.31 (if available in your registry)
+    repository: alpine/k8s
+    tag: "1.31.4"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+  # GKE Autopilot manages node selection and tolerations automatically
+  nodeSelector: {}
+  tolerations: []

@@ -81,6 +81,7 @@ impl ToCommonHelmChart for GrafanaChart {
             },
             chart_installation_checker: Some(Box::new(GrafanaChartChecker::new())),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         };
 
         if let Some(conf) = &self.grafana_datasources.cloudwatch_config {
