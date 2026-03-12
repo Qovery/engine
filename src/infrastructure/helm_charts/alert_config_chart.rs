@@ -119,7 +119,6 @@ impl ToCommonHelmChart for AlertConfigChart {
             },
             chart_installation_checker: None,
             vertical_pod_autoscaler: None,
-            pre_execute_action: None,
         })
     }
 }

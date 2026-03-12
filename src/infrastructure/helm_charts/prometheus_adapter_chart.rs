@@ -149,7 +149,6 @@ impl ToCommonHelmChart for PrometheusAdapterChart {
                 false => None,
             },
             chart_installation_checker: None,
-            pre_execute_action: None,
         })
     }
 }

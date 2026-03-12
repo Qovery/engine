@@ -152,7 +152,6 @@ impl ToCommonHelmChart for PromtailChart {
                 )),
                 false => None,
             },
-            pre_execute_action: None,
         })
     }
 }

@@ -56,7 +56,6 @@ impl ToCommonHelmChart for NvidiaGpuK8sDevicePluginChart {
             },
             chart_installation_checker: Some(Box::new(NvidiaGpuK8sDevicePluginChartChecker::new())),
             vertical_pod_autoscaler: None,
-            pre_execute_action: None,
         })
     }
 }

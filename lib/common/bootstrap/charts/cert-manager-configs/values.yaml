@@ -28,9 +28,3 @@ acme:
     emailReport: ""
     acmeUrl: ""
     skipTLSVerify: false
-
-# Gateway API deployment flag
-k8sDeployApiGateway: false
-
-# Nginx removal flag
-k8sRemoveNginx: false

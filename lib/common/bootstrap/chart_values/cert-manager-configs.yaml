@@ -6,9 +6,6 @@ externalDnsProvider: set-by-engine-code
 # you can use [*domain] or the ones you want
 managedDns: set-by-engine-code
 
-k8sDeployApiGateway: set-by-engine-code
-k8sRemoveNginx: set-by-engine-code
-
 acme:
   letsEncrypt:
     # Let's encrypt email address for notifications

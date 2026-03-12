@@ -1,10 +1,9 @@
 use kube::Client;
-use std::path::Path;
 
 use crate::helm::ChartSetValue;
 use crate::{
     errors::CommandError,
-    helm::{ChartInfo, ChartInstallationChecker, ChartPreExecuteAction, CommonChart},
+    helm::{ChartInfo, ChartInstallationChecker, CommonChart},
     infrastructure::helm_charts::{
         HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
     },
@@ -62,7 +61,7 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
                     value: self.include_envoy_proxy_crds.to_string(),
                 },
             ],
-            force_conflicts: true, // CRDs may already exist from previous installations, and we want to ensure they are updated if needed.
+
             requires_server_side_apply: true,
             ..Default::default()
         };
@@ -70,8 +69,7 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
         Ok(CommonChart {
             chart_info,
             chart_installation_checker: Some(Box::new(EnvoyGatewayCrdChartChecker::new())),
-            vertical_pod_autoscaler: None,
-            pre_execute_action: Some(Box::new(RemoveGatewayApiValidatingAdmissionPolicyAction)),
+            ..Default::default()
         })
     }
 }
@@ -98,26 +96,6 @@ impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
-        Box::new(self.clone())
-    }
-}
-
-/// Pre-execute action for removing the Gateway API ValidatingAdmissionPolicy.
-/// This policy blocks installing experimental CRDs on top of standard channel CRDs.
-/// Reference: https://gateway-api.sigs.k8s.io/concepts/versioning/
-#[derive(Clone)]
-pub struct RemoveGatewayApiValidatingAdmissionPolicyAction;
-
-impl ChartPreExecuteAction for RemoveGatewayApiValidatingAdmissionPolicyAction {
-    fn execute(&self, kubernetes_config: &Path, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
-        use crate::cmd::kubectl::kubectl_delete_validating_admission_policy;
-
-        kubectl_delete_validating_admission_policy(kubernetes_config, "safe-upgrades.gateway.networking.k8s.io", envs)?;
-
-        Ok(())
-    }
-
-    fn clone_dyn(&self) -> Box<dyn ChartPreExecuteAction> {
         Box::new(self.clone())
     }
 }

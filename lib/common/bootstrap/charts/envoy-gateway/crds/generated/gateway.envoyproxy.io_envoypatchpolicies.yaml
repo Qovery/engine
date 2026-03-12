@@ -19,11 +19,8 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.ancestors[0].conditions[?(@.type=="Accepted")].status
-      name: Accepted
-      type: string
-    - jsonPath: .status.ancestors[0].conditions[?(@.type=="Programmed")].status
-      name: Programmed
+    - jsonPath: .status.conditions[?(@.type=="Programmed")].reason
+      name: Status
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age

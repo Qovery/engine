@@ -66,9 +66,6 @@ spec:
       {{- with .Values.global.priorityClassName }}
       priorityClassName: {{ . | quote }}
       {{- end }}
-      {{- if (hasKey .Values.global "hostUsers") }}
-      hostUsers: {{ .Values.global.hostUsers }}
-      {{- end }}
       {{- with .Values.securityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
@@ -76,8 +73,8 @@ spec:
       {{- if or .Values.volumes .Values.config}}
       volumes:
         {{- if .Values.config }}
-        - name: config
-          configMap:
+        - name: config 
+          configMap: 
             name: {{ include "cert-manager.fullname" . }}
         {{- end }}
         {{ with .Values.volumes }}
@@ -86,7 +83,7 @@ spec:
       {{- end }}
       containers:
         - name: {{ .Chart.Name }}-controller
-          image: "{{ template "image" (tuple .Values.image .Values.imageRegistry .Values.imageNamespace (printf ":%s" .Chart.AppVersion)) }}"
+          image: "{{ template "image" (tuple .Values.image $.Chart.AppVersion) }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args:
           {{- /* The if statement below is equivalent to {{- if $value }} but will also return true for 0. */ -}}
@@ -114,7 +111,9 @@ spec:
           - --leader-election-retry-period={{ .retryPeriod }}
           {{- end }}
           {{- end }}
-          - --acme-http01-solver-image={{ template "image" (tuple .Values.acmesolver.image .Values.imageRegistry .Values.imageNamespace (printf ":%s" .Chart.AppVersion)) }}
+          {{- with .Values.acmesolver.image }}
+          - --acme-http01-solver-image={{- if .registry -}}{{ .registry }}/{{- end -}}{{ .repository }}{{- if (.digest) -}} @{{ .digest }}{{- else -}}:{{ default $.Chart.AppVersion .tag }} {{- end -}}
+          {{- end }}
           {{- with .Values.extraArgs }}
           {{- toYaml . | nindent 10 }}
           {{- end }}
@@ -161,7 +160,7 @@ spec:
           {{- if or .Values.config .Values.volumeMounts }}
           volumeMounts:
             {{- if .Values.config }}
-            - name: config
+            - name: config 
               mountPath: /var/cert-manager/config
             {{- end }}
             {{- with .Values.volumeMounts }}
@@ -210,12 +209,7 @@ spec:
             failureThreshold: {{ .failureThreshold }}
           {{- end }}
           {{- end }}
-      {{- if .Values.extraContainers }}
-        {{- toYaml .Values.extraContainers | nindent 8 }}
-      {{- end }}
-      {{- $nodeSelector := .Values.global.nodeSelector | default dict }}
-      {{- $nodeSelector = merge $nodeSelector (.Values.nodeSelector | default dict) }}
-      {{- with $nodeSelector }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- range $key, $value := . }}
         {{ $key }}: {{ $value | quote }}

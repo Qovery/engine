@@ -60,7 +60,6 @@ impl ToCommonHelmChart for MetalLbConfigChart {
             },
             vertical_pod_autoscaler: None,
             chart_installation_checker: None,
-            pre_execute_action: None,
         })
     }
 }

@@ -4,7 +4,3 @@ crds:
     channel: experimental
   envoyGateway:
     enabled: true
-
-# Enable pre-install hook to remove ValidatingAdmissionPolicy that blocks experimental CRD installation
-preInstallHook:
-  enabled: true
