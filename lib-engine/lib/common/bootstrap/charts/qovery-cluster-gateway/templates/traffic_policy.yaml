@@ -17,6 +17,8 @@ spec:
     xForwardedFor:
       numTrustedHops: {{ $numHops }}
   {{- end }}
+  headers:
+    enableEnvoyHeaders: true # add the "X-Envoy-" headers to requests and responses
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
