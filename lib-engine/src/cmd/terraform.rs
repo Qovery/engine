@@ -3,7 +3,7 @@ use dirs::home_dir;
 use retry::OperationResult;
 use retry::delay::Fixed;
 
-use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::cmd::terraform_validators::{TerraformValidationError, TerraformValidators};
 use crate::constants::TF_PLUGIN_CACHE_DIR;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -18,6 +18,21 @@ use std::{env, fs, thread, time};
 pub struct TerraformOutput {
     pub raw_error_output: Vec<String>,
     pub raw_std_output: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TerraformApplyOptions {
+    pub max_retries: usize,
+    pub command_timeout: Option<time::Duration>,
+}
+
+impl Default for TerraformApplyOptions {
+    fn default() -> Self {
+        Self {
+            max_retries: 1,
+            command_timeout: None,
+        }
+    }
 }
 
 impl TerraformOutput {
@@ -1181,10 +1196,19 @@ fn terraform_apply_internal(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_apply_internal_with_options(root_dir, envs, validators, TerraformApplyOptions::default())
+}
+
+fn terraform_apply_internal_with_options(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    options: TerraformApplyOptions,
+) -> Result<TerraformOutput, TerraformError> {
     let terraform_args = vec!["apply", "-lock=false", "-no-color", "-auto-approve", "tf_plan"];
-    let result = retry::retry(Fixed::from_millis(3000).take(1), || {
+    let result = retry::retry(Fixed::from_millis(3000).take(options.max_retries), || {
         // terraform apply
-        match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
+        match terraform_exec_with_timeout(root_dir, terraform_args.clone(), envs, validators, options.command_timeout) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
                 let _ = manage_common_issues(root_dir, "", &err, validators);
@@ -1478,8 +1502,21 @@ pub fn terraform_apply(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
-    // Terraform init, validate, plan and apply
-    terraform_run(TerraformAction::APPLY, root_dir, dry_run, envs, validators)
+    terraform_apply_with_options(root_dir, dry_run, envs, validators, TerraformApplyOptions::default())
+}
+
+pub fn terraform_apply_with_options(
+    root_dir: &str,
+    dry_run: bool,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+    options: TerraformApplyOptions,
+) -> Result<TerraformOutput, TerraformError> {
+    if dry_run {
+        return Ok(TerraformOutput::default());
+    }
+
+    terraform_apply_internal_with_options(root_dir, envs, validators, options)
 }
 
 pub fn terraform_plan(
@@ -1559,18 +1596,32 @@ fn terraform_exec_from_command(
     cmd: &mut impl ExecutableCommand,
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_exec_from_command_with_timeout(cmd, validators, None)
+}
+
+fn terraform_exec_from_command_with_timeout(
+    cmd: &mut impl ExecutableCommand,
+    validators: &TerraformValidators,
+    command_timeout: Option<time::Duration>,
+) -> Result<TerraformOutput, TerraformError> {
     let mut terraform_output = TerraformOutput::default();
 
-    let result = cmd.exec_with_output(
-        &mut |line| {
-            info!("{}", line);
-            terraform_output.raw_std_output.push(line);
-        },
-        &mut |line| {
-            error!("{}", line);
-            terraform_output.raw_error_output.push(line);
-        },
-    );
+    let mut stdout_sink = |line| {
+        info!("{}", line);
+        terraform_output.raw_std_output.push(line);
+    };
+    let mut stderr_sink = |line| {
+        error!("{}", line);
+        terraform_output.raw_error_output.push(line);
+    };
+
+    let result = match command_timeout {
+        Some(timeout) => {
+            let command_killer = CommandKiller::from_timeout(timeout);
+            cmd.exec_with_abort(&mut stdout_sink, &mut stderr_sink, &command_killer)
+        }
+        None => cmd.exec_with_output(&mut stdout_sink, &mut stderr_sink),
+    };
 
     validators.validate(&terraform_output).map_err(TerraformError::from)?;
 
@@ -1591,6 +1642,16 @@ fn terraform_exec(
     env: &[(&str, &str)],
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
+    terraform_exec_with_timeout(root_dir, args, env, validators, None)
+}
+
+fn terraform_exec_with_timeout(
+    root_dir: &str,
+    args: Vec<&str>,
+    env: &[(&str, &str)],
+    validators: &TerraformValidators,
+    command_timeout: Option<time::Duration>,
+) -> Result<TerraformOutput, TerraformError> {
     // override if environment variable is set
     let tf_plugin_cache_dir_value = match env::var_os(TF_PLUGIN_CACHE_DIR) {
         Some(val) => format!("{val:?}")
@@ -1608,7 +1669,10 @@ fn terraform_exec(
     let mut cmd = QoveryCommand::new("terraform", &args, &envs);
     cmd.set_current_dir(root_dir);
 
-    terraform_exec_from_command(&mut cmd, validators)
+    match command_timeout {
+        Some(timeout) => terraform_exec_from_command_with_timeout(&mut cmd, validators, Some(timeout)),
+        None => terraform_exec_from_command(&mut cmd, validators),
+    }
 }
 
 #[cfg(test)]

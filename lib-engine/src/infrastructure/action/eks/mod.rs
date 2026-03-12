@@ -30,6 +30,9 @@ use serde_derive::{Deserialize, Serialize};
 static AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::hours(1);
 // https://docs.aws.amazon.com/eks/latest/userguide/managed-node-update-behavior.html
 static AWS_EKS_MAX_NODE_DRAIN_TIMEOUT_DURATION: ChronoDuration = ChronoDuration::minutes(15);
+const ONE_HOUR_IN_SECONDS: u64 = 3_600;
+pub(crate) const AWS_EKS_TERRAFORM_APPLY_HARD_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(ONE_HOUR_IN_SECONDS);
 
 impl InfrastructureAction for EKS {
     fn bootstap_cluster(&self, infra_ctx: &InfrastructureContext) -> Result<(), Box<EngineError>> {

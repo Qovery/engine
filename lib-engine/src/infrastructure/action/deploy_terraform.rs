@@ -1,5 +1,5 @@
 use crate::cmd::terraform::{
-    terraform_apply, terraform_apply_with_specific_resources, terraform_destroy,
+    TerraformApplyOptions, terraform_apply_with_options, terraform_apply_with_specific_resources, terraform_destroy,
     terraform_destroy_with_specific_resources, terraform_init_validate, terraform_output, terraform_plan,
     terraform_remove_resource_from_tf_state, terraform_state_list,
 };
@@ -12,6 +12,7 @@ use crate::utilities::envs_to_slice;
 use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
+use std::time::Duration;
 use tera::Context as TeraContext;
 
 pub struct TerraformInfraResources {
@@ -72,6 +73,29 @@ impl TerraformInfraResources {
     }
 
     pub fn create<T: DeserializeOwned>(&self, logger: &impl InfraLogger) -> Result<T, Box<EngineError>> {
+        self.create_with_apply_options(logger, TerraformApplyOptions::default())
+    }
+
+    pub fn create_with_custom_tf_apply_options<T: DeserializeOwned>(
+        &self,
+        logger: &impl InfraLogger,
+        apply_max_retries: usize,
+        apply_timeout: Option<Duration>,
+    ) -> Result<T, Box<EngineError>> {
+        self.create_with_apply_options(
+            logger,
+            TerraformApplyOptions {
+                max_retries: apply_max_retries,
+                command_timeout: apply_timeout,
+            },
+        )
+    }
+
+    fn create_with_apply_options<T: DeserializeOwned>(
+        &self,
+        logger: &impl InfraLogger,
+        apply_options: TerraformApplyOptions,
+    ) -> Result<T, Box<EngineError>> {
         let envs = envs_to_slice(self.envs.as_slice());
         self.prepare_terraform_files()?;
         self.terraform_init(&envs)?;
@@ -87,11 +111,12 @@ impl TerraformInfraResources {
         // Apply will be skipped/do nothing if dry run is enabled
         // but to log a message, we do the if/else
         if !self.is_dry_run {
-            terraform_apply(
+            terraform_apply_with_options(
                 self.destination_folder.to_string_lossy().as_ref(),
                 self.is_dry_run,
                 &envs,
                 &TerraformValidators::Default,
+                apply_options,
             )
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))?;
         } else {

@@ -18,7 +18,9 @@ use crate::infrastructure::action::eks::nodegroup::{
 use crate::infrastructure::action::eks::sdk::QoveryAwsSdkConfigEks;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::action::eks::utils::{define_cluster_upgrade_timeout, get_rusoto_eks_client};
-use crate::infrastructure::action::eks::{AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AwsEksQoveryTerraformOutput};
+use crate::infrastructure::action::eks::{
+    AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_TERRAFORM_APPLY_HARD_TIMEOUT, AwsEksQoveryTerraformOutput,
+};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
@@ -113,13 +115,18 @@ pub fn create_eks_cluster(
             infra_ctx.context().is_dry_run_deploy(),
         );
 
+        let mut retry_warning_sent = false;
         let tf_apply_result = retry::retry(Fixed::from_millis(3000).take(1), || {
             let qovery_terraform_output: Result<AwsEksQoveryTerraformOutput, Box<EngineError>> =
-                tf_action.create(&logger);
+                tf_action.create_with_custom_tf_apply_options(&logger, 0, Some(AWS_EKS_TERRAFORM_APPLY_HARD_TIMEOUT));
 
             match qovery_terraform_output {
                 Ok(output) => OperationResult::Ok(output),
                 Err(e) => {
+                    if !retry_warning_sent {
+                        logger.warn("Terraform apply failed. Retrying once before failing infrastructure deployment.");
+                        retry_warning_sent = true;
+                    }
                     // on EKS, clean possible nodegroup deployment failures because of quota issues
                     // do not exit on this error to avoid masking the real Terraform issue
                     logger.info("Ensuring no failed nodegroups are present in the cluster, or delete them if at least one active nodegroup is present");
