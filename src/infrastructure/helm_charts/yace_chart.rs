@@ -204,6 +204,7 @@ impl ToCommonHelmChart for YaceChart {
             },
             chart_installation_checker: None,
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

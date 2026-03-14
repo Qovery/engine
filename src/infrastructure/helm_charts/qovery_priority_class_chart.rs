@@ -77,6 +77,7 @@ impl ToCommonHelmChart for QoveryPriorityClassChart {
                 self.priority_classes_to_be_installed.clone(),
             ))),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

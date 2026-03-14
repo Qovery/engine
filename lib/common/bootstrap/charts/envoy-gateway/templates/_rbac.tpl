@@ -115,6 +115,7 @@ apiGroups:
 - gateway.networking.k8s.io
 resources:
 - gateways
+- listenersets
 - grpcroutes
 - httproutes
 - referencegrants
@@ -133,6 +134,7 @@ apiGroups:
 - gateway.networking.k8s.io
 resources:
 - gateways/status
+- listenersets/status
 - grpcroutes/status
 - httproutes/status
 - tcproutes/status
@@ -141,6 +143,12 @@ resources:
 - backendtlspolicies/status
 verbs:
 - update
+{{- end }}
+
+{{- define "eg.rbac.namespaced.gateway.networking.experimental" -}}
+{{- end }}
+
+{{- define "eg.rbac.namespaced.gateway.networking.experimental.status" -}}
 {{- end }}
 
 {{/*

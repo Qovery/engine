@@ -146,6 +146,7 @@ impl ToCommonHelmChart for MetricsServerChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         };
 
         if self.allow_insecure_tls {

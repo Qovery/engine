@@ -97,6 +97,7 @@ fn q_ingress_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -118,6 +119,7 @@ fn q_ingress_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
 
     let resources = get_kube_resources(
@@ -145,6 +147,7 @@ fn q_container_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -166,6 +169,7 @@ fn q_container_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -199,6 +203,7 @@ fn q_application_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -220,6 +225,7 @@ fn q_application_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -252,6 +258,7 @@ fn q_container_psql_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -273,6 +280,7 @@ fn q_container_psql_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/services/{}", lib_dir(), chart_name).as_str(),
@@ -299,6 +307,7 @@ fn q_managed_psql_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -320,6 +329,7 @@ fn q_managed_psql_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -346,6 +356,7 @@ fn q_job_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -367,6 +378,7 @@ fn q_job_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -416,6 +428,7 @@ fn q_application_with_ndots_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -437,6 +450,7 @@ fn q_application_with_ndots_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -514,6 +528,7 @@ fn q_container_with_ndots_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -535,6 +550,7 @@ fn q_container_with_ndots_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -612,6 +628,7 @@ fn q_job_with_ndots_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -633,6 +650,7 @@ fn q_job_with_ndots_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),
@@ -725,6 +743,7 @@ fn q_container_with_none_ndots_test() {
             action: HelmAction::Deploy,
             atomic: false,
             force_upgrade: false,
+            force_conflicts: false,
             recreate_pods: false,
             reinstall_chart_if_installed_version_is_below_than: None,
             timeout_in_seconds: 0,
@@ -746,6 +765,7 @@ fn q_container_with_none_ndots_test() {
         },
         chart_installation_checker: None,
         vertical_pod_autoscaler: None,
+        pre_execute_action: None,
     };
     let resources = get_kube_resources(
         format!("{}/common/charts/{}", lib_dir(), chart_name).as_str(),

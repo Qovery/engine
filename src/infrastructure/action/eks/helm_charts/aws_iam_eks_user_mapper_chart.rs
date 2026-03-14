@@ -135,6 +135,7 @@ impl ToCommonHelmChart for AwsIamEksUserMapperChart {
             },
             chart_installation_checker: Some(Box::new(AwsIamEksUserMapperChecker::new())),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         };
 
         // Activating Group mapping option

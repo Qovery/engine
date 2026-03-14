@@ -390,6 +390,7 @@ impl ToCommonHelmChart for LokiChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         };
 
         // Add schema configuration object_store settings

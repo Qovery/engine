@@ -541,6 +541,7 @@ impl ToCommonHelmChart for KubePrometheusStackChart {
                 )),
                 false => None,
             },
+            pre_execute_action: None,
         };
 
         common_chart.chart_info.values.append(&mut object_storage_configs);
