@@ -100,6 +100,7 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
                 self.default_storage_class.clone(),
             ))),
             vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

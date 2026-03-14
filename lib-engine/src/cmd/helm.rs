@@ -1181,14 +1181,30 @@ impl Helm {
         let unlock_ret = self.unlock_release(chart, envs);
         info!("Helm lock status: {:?}", unlock_ret);
 
+        // Check if the release already exists to determine if this is an upgrade or install
+        let is_upgrade = self
+            .get_chart_version(&chart.name, Some(chart.get_namespace_string().as_str()), envs)
+            .ok()
+            .flatten()
+            .is_some();
+
         let timeout_string = format!("{}s", &chart.timeout_in_seconds);
 
-        let mut args_string: Vec<String> = vec![
-            "template".to_string(),
+        let mut args_string: Vec<String> = vec!["template".to_string()];
+
+        // Use --is-upgrade flag when:
+        // 1. A Helm release already exists, OR
+        // 2. Using server-side apply (resources might exist without Helm metadata)
+        // This allows helm template to skip validation for existing resources
+        if is_upgrade || chart.requires_server_side_apply {
+            args_string.push("--is-upgrade".to_string());
+        }
+
+        args_string.extend(vec![
             "--debug".to_string(),
             "--timeout".to_string(),
             timeout_string.as_str().to_string(),
-        ];
+        ]);
 
         // warn: don't add debug or json output won't work
         if chart.atomic {
@@ -1279,6 +1295,7 @@ impl Helm {
                     envs.to_vec(),
                     None,
                     &template_lines.join("\n"),
+                    chart.force_conflicts,
                 ) {
                     Ok(_) => Ok(()),
                     Err(err) => Err(HelmError::KubernetesApplyError(err)),

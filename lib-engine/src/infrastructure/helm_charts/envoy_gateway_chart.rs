@@ -147,7 +147,8 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
         Ok(CommonChart {
             chart_info,
             chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new())),
-            ..Default::default()
+            vertical_pod_autoscaler: None,
+            pre_execute_action: None,
         })
     }
 }

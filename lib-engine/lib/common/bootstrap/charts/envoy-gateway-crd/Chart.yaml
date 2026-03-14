@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: v1.6.1
+appVersion: v1.8.0-dev.0
 description: A Helm chart for Envoy Gateway CRDs
 home: https://gateway.envoyproxy.io/
 icon: https://raw.githubusercontent.com/envoyproxy/gateway/main/site/assets/icons/logo.svg
@@ -17,4 +17,4 @@ name: gateway-crds-helm
 sources:
 - https://github.com/envoyproxy/gateway
 type: application
-version: 1.6.1
+version: v1.8.0-dev.0

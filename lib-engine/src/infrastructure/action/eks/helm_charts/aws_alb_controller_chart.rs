@@ -148,6 +148,7 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                 )),
             },
             chart_installation_checker: None,
+            pre_execute_action: None,
         })
     }
 }

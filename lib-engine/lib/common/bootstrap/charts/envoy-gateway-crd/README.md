@@ -30,7 +30,7 @@ If you do, make sure that you don't install the CRDs again when installing the E
 Once Helm has been set up correctly, install the chart from dockerhub:
 
 ``` shell
-helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
+helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm --set 'crds.gatewayAPI.enabled=true' --set 'crds.envoyGateway.enabled=true' \
     --version v0.0.0-latest | kubectl apply --server-side -f -
 ```
 
@@ -53,4 +53,57 @@ helm template eg-crds oci://docker.io/envoyproxy/gateway-crds-helm \
 | crds.envoyGateway.enabled | bool | `false` |  |
 | crds.gatewayAPI.channel | string | `"experimental"` |  |
 | crds.gatewayAPI.enabled | bool | `false` |  |
+
+---
+
+## Qovery Patches
+
+⚠️ **IMPORTANT**: The following files have been **manually patched** by Qovery:
+
+- `templates/standard-gatewayapi-crds.yaml`
+- `templates/experimental-gatewayapi-crds.yaml`
+
+### Removed: ValidatingAdmissionPolicy
+
+The upstream Gateway API CRDs include a `ValidatingAdmissionPolicy` named `safe-upgrades.gateway.networking.k8s.io` that blocks installing experimental/RC CRDs on top of stable versions.
+
+**Problem on GKE Autopilot:**
+- GKE Autopilot pre-installs Gateway API v1.3.0 (stable channel)
+- We need experimental channel for `ListenerSets` support
+- The policy would block upgrades to v1.5.0-rc.1 experimental CRDs
+
+**Solution:**
+Both ValidatingAdmissionPolicy and its binding have been removed from the CRD templates.
+
+### Updating Gateway API CRDs
+
+When updating to new Gateway API versions from upstream:
+
+1. Download new CRDs from https://github.com/kubernetes-sigs/gateway-api/releases
+2. **Before committing**, remove these sections from both `standard` and `experimental` CRD files:
+   ```yaml
+   ---
+   # config/crd/.../gateway.networking.k8s.io_vap_safeupgrades.yaml
+   apiVersion: admissionregistration.k8s.io/v1
+   kind: ValidatingAdmissionPolicy
+   metadata:
+     name: "safe-upgrades.gateway.networking.k8s.io"
+   ...
+   ---
+   apiVersion: admissionregistration.k8s.io/v1
+   kind: ValidatingAdmissionPolicyBinding
+   metadata:
+     name: safe-upgrades.gateway.networking.k8s.io
+   ...
+   ```
+3. Replace with a comment block (see existing files for reference)
+
+### ValidatingAdmissionPolicy Deletion
+
+The Rust pre-execute action in `envoy_gateway_crd_chart.rs` automatically:
+- Deletes any existing `safe-upgrades.gateway.networking.k8s.io` ValidatingAdmissionPolicy before applying CRDs
+- Verifies the policy is fully deleted (retries up to 60 seconds)
+- Waits an additional 5 seconds for API server cache propagation
+
+This ensures experimental CRDs can be installed even if a previous installation included the policy.
 

@@ -4,6 +4,7 @@ use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomRe
 use kube::api::{DeleteParams, Patch, PatchParams, PropagationPolicy};
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
+use retry::{OperationResult, delay::Fixed};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_yaml::Deserializer;
@@ -11,6 +12,8 @@ use std::fmt::Debug;
 use std::fs::{File, read_dir, read_to_string};
 use std::io::Read;
 use std::path::Path;
+use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
@@ -602,6 +605,179 @@ where
     kubectl_exec_raw_output(cmd_args, kubernetes_config, envs, false)
 }
 
+/// kubectl_get_validating_admission_policy: gets a ValidatingAdmissionPolicy and its binding as YAML.
+///
+/// Returns a tuple of (policy_yaml, binding_yaml) if both exist, or None if either doesn't exist.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `policy_name`: name of the ValidatingAdmissionPolicy to get.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_get_validating_admission_policy<P>(
+    kubernetes_config: P,
+    policy_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<Option<(String, String)>, CommandError>
+where
+    P: AsRef<Path>,
+{
+    // Get the policy
+    let policy_cmd_args = vec!["get", "validatingadmissionpolicy", policy_name, "-o", "yaml"];
+    let policy_yaml = match kubectl_exec_raw_output(policy_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+        Ok(yaml) => yaml,
+        Err(_) => return Ok(None), // Policy doesn't exist
+    };
+
+    // Get the binding
+    let binding_cmd_args = vec!["get", "validatingadmissionpolicybinding", policy_name, "-o", "yaml"];
+    let binding_yaml = match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs, false) {
+        Ok(yaml) => yaml,
+        Err(_) => return Ok(None), // Binding doesn't exist
+    };
+
+    Ok(Some((policy_yaml, binding_yaml)))
+}
+
+/// kubectl_apply_validating_admission_policy: applies a ValidatingAdmissionPolicy and its binding from YAML.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `policy_yaml`: YAML content of the ValidatingAdmissionPolicy.
+/// * `binding_yaml`: YAML content of the ValidatingAdmissionPolicyBinding.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_apply_validating_admission_policy<P>(
+    kubernetes_config: P,
+    policy_yaml: &str,
+    binding_yaml: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    // Apply the policy
+    kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs.clone(), None, policy_yaml, true)?;
+
+    // Apply the binding
+    kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs, None, binding_yaml, true)
+}
+
+/// kubectl_delete_validating_admission_policy: deletes a ValidatingAdmissionPolicy and its binding.
+///
+/// This is useful when upgrading Gateway API CRDs, as the safe-upgrades policy
+/// prevents installing experimental CRDs on top of standard channel CRDs.
+///
+/// Arguments
+///
+/// * `kubernetes_config`: kubernetes config file path.
+/// * `policy_name`: name of the ValidatingAdmissionPolicy to delete.
+/// * `envs`: environment variables to be passed to kubectl.
+pub fn kubectl_delete_validating_admission_policy<P>(
+    kubernetes_config: P,
+    policy_name: &str,
+    envs: Vec<(&str, &str)>,
+) -> Result<String, CommandError>
+where
+    P: AsRef<Path>,
+{
+    info!("Deleting ValidatingAdmissionPolicy: {}", policy_name);
+
+    // Delete the policy binding first (if it exists)
+    let binding_cmd_args = vec![
+        "delete",
+        "validatingadmissionpolicybinding",
+        policy_name,
+        "--ignore-not-found=true",
+    ];
+    match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+        Ok(output) => info!("Deleted ValidatingAdmissionPolicyBinding {}: {}", policy_name, output),
+        Err(e) => warn!("Failed to delete ValidatingAdmissionPolicyBinding {}: {:?}", policy_name, e),
+    }
+
+    // Delete the policy itself
+    let policy_cmd_args = vec![
+        "delete",
+        "validatingadmissionpolicy",
+        policy_name,
+        "--ignore-not-found=true",
+    ];
+    let result = kubectl_exec_raw_output(policy_cmd_args, kubernetes_config.as_ref(), envs.clone(), false);
+    match &result {
+        Ok(output) => info!("Deleted ValidatingAdmissionPolicy {}: {}", policy_name, output),
+        Err(e) => warn!("Failed to delete ValidatingAdmissionPolicy {}: {:?}", policy_name, e),
+    }
+
+    // Verify the policy is fully deleted by retrying kubectl get
+    info!("Verifying ValidatingAdmissionPolicy {} is fully deleted", policy_name);
+    let verify_result = retry::retry(
+        Fixed::from(Duration::from_secs(3)).take(20), // Retry for up to 60 seconds (20 attempts * 3 seconds)
+        || {
+            let get_cmd_args = vec![
+                "get",
+                "validatingadmissionpolicy",
+                policy_name,
+                "--ignore-not-found=true",
+            ];
+            match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+                Ok(output) if output.trim().is_empty() => {
+                    // Policy is gone
+                    info!("ValidatingAdmissionPolicy {} no longer exists", policy_name);
+                    OperationResult::Ok(())
+                }
+                Ok(output) => {
+                    // Policy still exists
+                    warn!("ValidatingAdmissionPolicy {} still exists, retrying...", policy_name);
+                    OperationResult::Retry(format!(
+                        "ValidatingAdmissionPolicy {} still exists: {}",
+                        policy_name, output
+                    ))
+                }
+                Err(e) => {
+                    // kubectl get failed - this is likely good (policy is gone) but check the error
+                    let msg = e.message_safe();
+                    if msg.contains("not found") || msg.contains("NotFound") {
+                        info!("ValidatingAdmissionPolicy {} confirmed deleted (NotFound)", policy_name);
+                        OperationResult::Ok(())
+                    } else {
+                        warn!("Failed to verify ValidatingAdmissionPolicy {}, retrying: {:?}", policy_name, e);
+                        OperationResult::Retry(format!(
+                            "Failed to verify ValidatingAdmissionPolicy {}: {:?}",
+                            policy_name, e
+                        ))
+                    }
+                }
+            }
+        },
+    );
+
+    match verify_result {
+        Ok(_) => {
+            info!("Verified ValidatingAdmissionPolicy {} is fully deleted", policy_name);
+
+            // Add additional wait to ensure API server caches are fully cleared
+            // This prevents the policy from blocking CRD validation even after deletion
+            info!("Waiting additional 5 seconds for API server cache propagation...");
+            thread::sleep(Duration::from_secs(5));
+            info!("Proceeding with CRD installation");
+
+            result
+        }
+        Err(retry::Error { error, .. }) => {
+            // If verification timed out, the policy might still be blocking
+            // Return an error instead of proceeding
+            Err(CommandError::new(
+                format!(
+                    "Failed to verify ValidatingAdmissionPolicy {} deletion after 60 seconds",
+                    policy_name
+                ),
+                Some(error),
+                Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+            ))
+        }
+    }
+}
+
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
 ///
 /// Arguments
@@ -841,11 +1017,13 @@ where
     kubectl_exec_raw_output::<P>(cmd_args, kubernetes_config, envs, false)
 }
 
+/// kubectl_apply_with_server_side_apply: apply a kubernetes manifest with server side apply.
 pub fn kubectl_apply_with_server_side_apply<P>(
     kubernetes_config: P,
     envs: Vec<(&str, &str)>,
     args: Option<Vec<&str>>,
     template: &str,
+    force_conflicts: bool,
 ) -> Result<String, CommandError>
 where
     P: AsRef<Path>,
@@ -856,6 +1034,10 @@ where
         for arg in args {
             cmd_args.push(arg)
         }
+    }
+
+    if force_conflicts {
+        cmd_args.push("--force-conflicts");
     }
 
     cmd_args.push("--server-side");

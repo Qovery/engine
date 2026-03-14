@@ -99,6 +99,7 @@ impl ToCommonHelmChart for K8sEventLoggerChart {
                 false => None,
             },
             chart_installation_checker: None,
+            pre_execute_action: None,
         })
     }
 }
