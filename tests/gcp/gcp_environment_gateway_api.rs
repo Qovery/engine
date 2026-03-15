@@ -46,7 +46,7 @@ fn retry_list_gateway_api_resources(
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_cors_enabled_on_gcp_aks() {
+fn deploy_application_with_cors_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -219,7 +219,7 @@ fn deploy_application_with_cors_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_sticky_session_enabled_on_gcp_aks() {
+fn deploy_application_with_sticky_session_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -380,7 +380,7 @@ fn deploy_application_with_sticky_session_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_ip_whitelist_enabled_on_gcp_aks() {
+fn deploy_application_with_ip_whitelist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -546,7 +546,7 @@ fn deploy_application_with_ip_whitelist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_ip_denylist_enabled_on_gcp_aks() {
+fn deploy_application_with_ip_denylist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -715,7 +715,7 @@ fn deploy_application_with_ip_denylist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_both_whitelist_and_denylist_on_gcp_aks() {
+fn deploy_application_with_both_whitelist_and_denylist_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -904,7 +904,7 @@ fn deploy_application_with_both_whitelist_and_denylist_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_basic_auth_enabled_on_gcp_aks() {
+fn deploy_application_with_basic_auth_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -1051,7 +1051,7 @@ fn deploy_application_with_basic_auth_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_rate_limit_enabled_on_gcp_aks() {
+fn deploy_application_with_rate_limit_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -1277,7 +1277,7 @@ fn deploy_application_with_rate_limit_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_custom_headers_enabled_on_gcp_aks() {
+fn deploy_application_with_custom_headers_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -1501,7 +1501,7 @@ fn deploy_application_with_custom_headers_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_sticky_session_enabled_on_gcp_aks_grpc() {
+fn deploy_application_with_sticky_session_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -1664,7 +1664,7 @@ fn deploy_application_with_sticky_session_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
+fn deploy_application_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -1832,7 +1832,7 @@ fn deploy_application_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_ip_denylist_enabled_on_gcp_aks_grp() {
+fn deploy_application_with_ip_denylist_enabled_on_gcp_gke_grp() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -2002,7 +2002,7 @@ fn deploy_application_with_ip_denylist_enabled_on_gcp_aks_grp() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
+fn deploy_application_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -2192,7 +2192,7 @@ fn deploy_application_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_basic_auth_enabled_on_gcp_aks_grpc() {
+fn deploy_application_with_basic_auth_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -2341,7 +2341,7 @@ fn deploy_application_with_basic_auth_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_rate_limit_enabled_on_gcp_aks_grpc() {
+fn deploy_application_with_rate_limit_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -2524,7 +2524,7 @@ fn deploy_application_with_rate_limit_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_custom_headers_enabled_on_gcp_aks_grpc() {
+fn deploy_application_with_custom_headers_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -2751,7 +2751,7 @@ fn deploy_application_with_custom_headers_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_cors_enabled_on_gcp_aks() {
+fn deploy_container_with_cors_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -2954,7 +2954,7 @@ fn deploy_container_with_cors_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_sticky_session_enabled_on_gcp_aks() {
+fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3151,7 +3151,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_ip_whitelist_enabled_on_gcp_aks() {
+fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3353,7 +3353,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_ip_denylist_enabled_on_gcp_aks() {
+fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3554,7 +3554,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_both_whitelist_and_denylist_on_gcp_aks() {
+fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3773,7 +3773,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_basic_auth_enabled_on_gcp_aks() {
+fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3956,7 +3956,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_rate_limit_enabled_on_gcp_aks() {
+fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -4212,7 +4212,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_custom_headers_enabled_on_gcp_aks() {
+fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -4471,7 +4471,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_sticky_session_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -4670,7 +4670,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -4874,7 +4874,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_ip_denylist_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5077,7 +5077,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
+fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5298,7 +5298,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_basic_auth_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5483,7 +5483,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_rate_limit_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5741,7 +5741,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_custom_headers_enabled_on_gcp_aks_grpc() {
+fn deploy_container_with_custom_headers_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -6002,7 +6002,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_force_ssl_redirect_on_gcp_aks_http() {
+fn deploy_application_with_force_ssl_redirect_on_gcp_gke_http() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -6234,7 +6234,7 @@ fn deploy_application_with_force_ssl_redirect_on_gcp_aks_http() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_force_ssl_redirect_on_gcp_aks_http() {
+fn deploy_container_with_force_ssl_redirect_on_gcp_gke_http() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -6502,7 +6502,7 @@ fn deploy_container_with_force_ssl_redirect_on_gcp_aks_http() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_cors_enabled_on_gcp_aks() {
+fn deploy_helm_with_cors_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -6695,7 +6695,7 @@ fn deploy_helm_with_cors_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_sticky_session_enabled_on_gcp_aks() {
+fn deploy_helm_with_sticky_session_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -6882,7 +6882,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_ip_whitelist_enabled_on_gcp_aks() {
+fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -7065,7 +7065,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_ip_denylist_enabled_on_gcp_aks() {
+fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -7248,7 +7248,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_aks() {
+fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -7431,7 +7431,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_basic_auth_enabled_on_gcp_aks() {
+fn deploy_helm_with_basic_auth_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -7605,7 +7605,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_rate_limit_enabled_on_gcp_aks() {
+fn deploy_helm_with_rate_limit_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -7804,7 +7804,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_custom_headers_enabled_on_gcp_aks() {
+fn deploy_helm_with_custom_headers_enabled_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -8010,7 +8010,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_sticky_session_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_sticky_session_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -8199,7 +8199,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -8384,7 +8384,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_ip_denylist_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -8569,7 +8569,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
+fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -8754,7 +8754,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_basic_auth_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_basic_auth_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -8930,7 +8930,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_rate_limit_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_rate_limit_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -9131,7 +9131,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_custom_headers_enabled_on_gcp_aks_grpc() {
+fn deploy_helm_with_custom_headers_enabled_on_gcp_gke_grpc() {
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -9336,7 +9336,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_aks_grpc() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_custom_http_errors_on_gcp_aks() {
+fn deploy_application_with_custom_http_errors_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -9534,7 +9534,7 @@ fn deploy_application_with_custom_http_errors_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_custom_http_errors_on_gcp_aks() {
+fn deploy_container_with_custom_http_errors_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -9735,7 +9735,7 @@ fn deploy_container_with_custom_http_errors_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_custom_http_errors_on_gcp_aks() {
+fn deploy_helm_with_custom_http_errors_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -9951,7 +9951,7 @@ fn deploy_helm_with_custom_http_errors_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_application_with_circuit_breaker_on_gcp_aks() {
+fn deploy_application_with_circuit_breaker_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -10098,7 +10098,7 @@ fn deploy_application_with_circuit_breaker_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_container_with_circuit_breaker_on_gcp_aks() {
+fn deploy_container_with_circuit_breaker_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -10275,7 +10275,7 @@ fn deploy_container_with_circuit_breaker_on_gcp_aks() {
 #[cfg(feature = "test-gcp-minimal")]
 #[named]
 #[test]
-fn deploy_helm_with_circuit_breaker_on_gcp_aks() {
+fn deploy_helm_with_circuit_breaker_on_gcp_gke() {
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
