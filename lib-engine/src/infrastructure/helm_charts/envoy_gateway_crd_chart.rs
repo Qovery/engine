@@ -1,7 +1,10 @@
-use kube::Client;
+use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
+use kube::{Api, Client};
+use retry::{OperationResult, delay::Fixed};
 use std::path::Path;
 
 use crate::helm::ChartSetValue;
+use crate::runtime::block_on;
 use crate::{
     errors::CommandError,
     helm::{ChartInfo, ChartInstallationChecker, ChartPreExecuteAction, CommonChart},
@@ -92,9 +95,85 @@ impl Default for EnvoyGatewayCrdChartChecker {
 }
 
 impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
-    fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO(benjaminch): Implement actual verification logic for Envoy Gateway chart installation.
-        Ok(())
+    fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
+        let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+
+        let required_crds = [
+            "gatewayclasses.gateway.networking.k8s.io",
+            "gateways.gateway.networking.k8s.io",
+            "httproutes.gateway.networking.k8s.io",
+        ];
+
+        let envoy_crds = [
+            "envoyproxies.gateway.envoyproxy.io",
+            "backendtrafficpolicies.gateway.envoyproxy.io",
+            "securitypolicies.gateway.envoyproxy.io",
+        ];
+
+        let result = retry::retry(Fixed::from_millis(10_000).take(6), || {
+            for crd_name in &required_crds {
+                match block_on(crds.get(crd_name)) {
+                    Ok(crd) => {
+                        let is_established = crd
+                            .status
+                            .as_ref()
+                            .and_then(|s| s.conditions.as_ref())
+                            .map(|conditions| {
+                                conditions
+                                    .iter()
+                                    .any(|c| c.type_ == "Established" && c.status == "True")
+                            })
+                            .unwrap_or(false);
+
+                        if !is_established {
+                            return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                                "Gateway API CRD '{crd_name}' exists but is not yet established"
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                            "Gateway API CRD '{crd_name}' not found: {e}"
+                        )));
+                    }
+                }
+            }
+
+            for crd_name in &envoy_crds {
+                match block_on(crds.get(crd_name)) {
+                    Ok(crd) => {
+                        let is_established = crd
+                            .status
+                            .as_ref()
+                            .and_then(|s| s.conditions.as_ref())
+                            .map(|conditions| {
+                                conditions
+                                    .iter()
+                                    .any(|c| c.type_ == "Established" && c.status == "True")
+                            })
+                            .unwrap_or(false);
+
+                        if !is_established {
+                            return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                                "Envoy Gateway CRD '{crd_name}' exists but is not yet established"
+                            )));
+                        }
+                    }
+                    Err(e) => {
+                        return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                            "Envoy Gateway CRD '{crd_name}' not found: {e}"
+                        )));
+                    }
+                }
+            }
+
+            OperationResult::Ok(())
+        });
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.error),
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
@@ -102,9 +181,6 @@ impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
     }
 }
 
-/// Pre-execute action for removing the Gateway API ValidatingAdmissionPolicy.
-/// This policy blocks installing experimental CRDs on top of standard channel CRDs.
-/// Reference: https://gateway-api.sigs.k8s.io/concepts/versioning/
 #[derive(Clone)]
 pub struct RemoveGatewayApiValidatingAdmissionPolicyAction;
 

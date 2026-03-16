@@ -1,3 +1,4 @@
+use crate::cmd::kubectl::kubectl_check_gateway_api_crds_available;
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
@@ -329,10 +330,18 @@ impl<T: CloudProvider> Router<T> {
         };
         context.insert("spec_acme_server", lets_encrypt_url);
 
+        let gateway_api_crds_available = kubectl_check_gateway_api_crds_available(&target.kube.client());
+        let deploy_listenerset =
+            kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false) && gateway_api_crds_available;
+
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
         context.insert("k8s_remove_nginx", &kubernetes.advanced_settings().k8s_remove_nginx);
-        context.insert("k8s_use_v1beta1_reference_grant", &matches!(kubernetes.kind(), Kind::Gke)); // referencegrant is not yet compatible on GKE, they are not running the latest Gateway-API version (>= 1.8.0)
+        // ReferenceGrant v1 is not yet compatible on GKE, they are not running the latest Gateway-API version (>= 1.8.0)
+        context.insert("k8s_use_v1beta1_reference_grant", &matches!(kubernetes.kind(), Kind::Gke));
+        context.insert("k8s_gateway_api_crds_available", &gateway_api_crds_available);
+        // Runtime check for ListenerSet CRD availability - once rolled out to all clusters, this check can be simplified or removed
+        context.insert("k8s_deploy_listenerset", &deploy_listenerset);
 
         Ok(context)
     }
