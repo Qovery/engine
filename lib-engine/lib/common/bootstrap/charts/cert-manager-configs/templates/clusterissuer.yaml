@@ -14,10 +14,8 @@ spec:
       name: letsencrypt-acme-priv-key
 
     # https://cert-manager.io/docs/configuration/acme/
-    # Gateway API solver must come first for ListenerSet-created certificates
     solvers:
-      {{- if .Values.k8sDeployApiGateway }}
-      # Gateway API solver (for Envoy Gateway with ListenerSet)
+      {{- if or (eq .Values.k8sUseApiGateway true) (eq .Values.k8sDeployApiGateway true) }}
       - http01:
           gatewayHTTPRoute:
             parentRefs:
@@ -25,15 +23,13 @@ spec:
                 namespace: qovery
                 kind: Gateway
       {{- end }}
-      {{- if not .Values.k8sRemoveNginx }}
-      # Ingress solver (for Nginx Ingress)
+      {{- if and (ne .Values.k8sUseApiGateway true) (ne .Values.k8sRemoveNginx true) }}
       - http01:
           ingress:
             class: nginx-qovery
             ingressTemplate:
               metadata:
                 annotations:
-                  # Ensure ACME HTTP01 challenges are not blocked by user-defined IP whitelist/denylist
                   nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0, ::/0"
       {{- end }}
       - dns01:

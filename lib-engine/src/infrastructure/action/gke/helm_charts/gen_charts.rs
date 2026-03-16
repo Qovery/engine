@@ -216,6 +216,10 @@ pub(super) fn gke_helm_charts(
             .unwrap_or(false),
         chart_config_prerequisites
             .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
             .k8s_remove_nginx
             .unwrap_or(false),
     )
