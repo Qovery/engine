@@ -16,6 +16,8 @@ use std::thread;
 use std::time::Duration;
 use uuid::Uuid;
 
+use crate::runtime::block_on;
+
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::cmd::structs::{
     Configmap, KubernetesIngress, KubernetesIngressStatusLoadBalancerIngress, KubernetesJob, KubernetesKind,
@@ -24,7 +26,6 @@ use crate::cmd::structs::{
 };
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
-use crate::runtime::block_on;
 
 pub enum ScalingKind {
     Deployment,
@@ -663,16 +664,6 @@ where
     kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs, None, binding_yaml, true)
 }
 
-/// kubectl_delete_validating_admission_policy: deletes a ValidatingAdmissionPolicy and its binding.
-///
-/// This is useful when upgrading Gateway API CRDs, as the safe-upgrades policy
-/// prevents installing experimental CRDs on top of standard channel CRDs.
-///
-/// Arguments
-///
-/// * `kubernetes_config`: kubernetes config file path.
-/// * `policy_name`: name of the ValidatingAdmissionPolicy to delete.
-/// * `envs`: environment variables to be passed to kubectl.
 pub fn kubectl_delete_validating_admission_policy<P>(
     kubernetes_config: P,
     policy_name: &str,
@@ -683,7 +674,6 @@ where
 {
     info!("Deleting ValidatingAdmissionPolicy: {}", policy_name);
 
-    // Delete the policy binding first (if it exists)
     let binding_cmd_args = vec![
         "delete",
         "validatingadmissionpolicybinding",
@@ -695,7 +685,6 @@ where
         Err(e) => warn!("Failed to delete ValidatingAdmissionPolicyBinding {}: {:?}", policy_name, e),
     }
 
-    // Delete the policy itself
     let policy_cmd_args = vec![
         "delete",
         "validatingadmissionpolicy",
@@ -708,74 +697,99 @@ where
         Err(e) => warn!("Failed to delete ValidatingAdmissionPolicy {}: {:?}", policy_name, e),
     }
 
-    // Verify the policy is fully deleted by retrying kubectl get
     info!("Verifying ValidatingAdmissionPolicy {} is fully deleted", policy_name);
-    let verify_result = retry::retry(
-        Fixed::from(Duration::from_secs(3)).take(20), // Retry for up to 60 seconds (20 attempts * 3 seconds)
-        || {
-            let get_cmd_args = vec![
-                "get",
-                "validatingadmissionpolicy",
-                policy_name,
-                "--ignore-not-found=true",
-            ];
-            match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-                Ok(output) if output.trim().is_empty() => {
-                    // Policy is gone
-                    info!("ValidatingAdmissionPolicy {} no longer exists", policy_name);
+    let verify_result = retry::retry(Fixed::from(Duration::from_secs(3)).take(20), || {
+        let get_cmd_args = vec![
+            "get",
+            "validatingadmissionpolicy",
+            policy_name,
+            "--ignore-not-found=true",
+        ];
+        match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+            Ok(output) if output.trim().is_empty() => {
+                info!("ValidatingAdmissionPolicy {} no longer exists", policy_name);
+                OperationResult::Ok(())
+            }
+            Ok(output) => {
+                warn!("ValidatingAdmissionPolicy {} still exists, retrying...", policy_name);
+                OperationResult::Retry(format!("ValidatingAdmissionPolicy {} still exists: {}", policy_name, output))
+            }
+            Err(e) => {
+                let msg = e.message_safe();
+                if msg.contains("not found") || msg.contains("NotFound") {
+                    info!("ValidatingAdmissionPolicy {} confirmed deleted (NotFound)", policy_name);
                     OperationResult::Ok(())
-                }
-                Ok(output) => {
-                    // Policy still exists
-                    warn!("ValidatingAdmissionPolicy {} still exists, retrying...", policy_name);
+                } else {
+                    warn!("Failed to verify ValidatingAdmissionPolicy {}, retrying: {:?}", policy_name, e);
                     OperationResult::Retry(format!(
-                        "ValidatingAdmissionPolicy {} still exists: {}",
-                        policy_name, output
+                        "Failed to verify ValidatingAdmissionPolicy {}: {:?}",
+                        policy_name, e
                     ))
                 }
-                Err(e) => {
-                    // kubectl get failed - this is likely good (policy is gone) but check the error
-                    let msg = e.message_safe();
-                    if msg.contains("not found") || msg.contains("NotFound") {
-                        info!("ValidatingAdmissionPolicy {} confirmed deleted (NotFound)", policy_name);
-                        OperationResult::Ok(())
-                    } else {
-                        warn!("Failed to verify ValidatingAdmissionPolicy {}, retrying: {:?}", policy_name, e);
-                        OperationResult::Retry(format!(
-                            "Failed to verify ValidatingAdmissionPolicy {}: {:?}",
-                            policy_name, e
-                        ))
-                    }
-                }
             }
-        },
-    );
+        }
+    });
 
     match verify_result {
         Ok(_) => {
             info!("Verified ValidatingAdmissionPolicy {} is fully deleted", policy_name);
-
-            // Add additional wait to ensure API server caches are fully cleared
-            // This prevents the policy from blocking CRD validation even after deletion
             info!("Waiting additional 5 seconds for API server cache propagation...");
             thread::sleep(Duration::from_secs(5));
             info!("Proceeding with CRD installation");
-
             result
         }
-        Err(retry::Error { error, .. }) => {
-            // If verification timed out, the policy might still be blocking
-            // Return an error instead of proceeding
-            Err(CommandError::new(
-                format!(
-                    "Failed to verify ValidatingAdmissionPolicy {} deletion after 60 seconds",
-                    policy_name
-                ),
-                Some(error),
-                Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-            ))
+        Err(retry::Error { error, .. }) => Err(CommandError::new(
+            format!(
+                "Failed to verify ValidatingAdmissionPolicy {} deletion after 60 seconds",
+                policy_name
+            ),
+            Some(error),
+            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+        )),
+    }
+}
+
+pub fn kubectl_does_crd_exist(kube_client: &Client, crd_name: &str) -> bool {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+
+    match block_on(crds.get(crd_name)) {
+        Ok(crd) => crd
+            .status
+            .as_ref()
+            .and_then(|s| s.conditions.as_ref())
+            .map(|conditions| {
+                conditions
+                    .iter()
+                    .any(|c| c.type_ == "Established" && c.status == "True")
+            })
+            .unwrap_or(false),
+        Err(e) => {
+            debug!("CRD '{}' not found or not accessible: {}", crd_name, e);
+            false
         }
     }
+}
+
+pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
+    let required_crds = [
+        "listenersets.gateway.networking.k8s.io",
+        "referencegrants.gateway.networking.k8s.io",
+        "gateways.gateway.networking.k8s.io",
+        "httproutes.gateway.networking.k8s.io",
+    ];
+
+    for crd_name in &required_crds {
+        if !kubectl_does_crd_exist(kube_client, crd_name) {
+            info!(
+                "Gateway API CRD '{}' not found or not established - Gateway API features will be disabled",
+                crd_name
+            );
+            return false;
+        }
+    }
+
+    info!("All required Gateway API CRDs are available and established");
+    true
 }
 
 /// kubectl_get_crash_looping_pods: gets crash looping pods.

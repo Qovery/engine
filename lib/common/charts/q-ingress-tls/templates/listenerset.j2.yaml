@@ -1,4 +1,5 @@
 {%- if k8s_deploy_api_gateway == true %}
+{%- if k8s_deploy_listenerset == true %}
 {%- if certificate_alternative_names|length > 0 %}
 {%- for namespace_key, http_hosts in http_hosts_per_namespace %}
 {%- if http_hosts|length >= 1  %}
@@ -46,5 +47,6 @@ spec:
   {%- endfor %}
 {%- endif %}
 {%- endfor %}
+{%- endif %}
 {%- endif %}
 {%- endif %}
