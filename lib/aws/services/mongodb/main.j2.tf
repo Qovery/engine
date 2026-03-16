@@ -38,6 +38,10 @@ resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   preferred_maintenance_window = var.preferred_maintenance_window
 
   tags = local.mongodb_database_tags
+
+  lifecycle {
+    ignore_changes = [preferred_maintenance_window]
+  }
 }
 
 resource "aws_docdb_cluster" "documentdb_cluster" {

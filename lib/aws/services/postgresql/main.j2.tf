@@ -91,6 +91,7 @@ resource "aws_db_instance" "postgresql_instance" {
       final_snapshot_identifier,
 {%- endif %}
       parameter_group_name,
+      maintenance_window,
     ]
   }
   copy_tags_to_snapshot = true
