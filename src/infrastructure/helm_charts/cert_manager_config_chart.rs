@@ -18,6 +18,7 @@ pub struct CertManagerConfigsChart<'a> {
     managed_dns: Vec<String>,
     namespace: HelmChartNamespaces,
     k8s_deploy_api_gateway: bool,
+    k8s_use_api_gateway: bool,
     k8s_remove_nginx: bool,
 }
 
@@ -29,6 +30,7 @@ impl<'a> CertManagerConfigsChart<'a> {
         managed_dns_helm_format: Vec<String>,
         namespace: HelmChartNamespaces,
         k8s_deploy_api_gateway: bool,
+        k8s_use_api_gateway: bool,
         k8s_remove_nginx: bool,
     ) -> Self {
         CertManagerConfigsChart {
@@ -47,6 +49,7 @@ impl<'a> CertManagerConfigsChart<'a> {
             managed_dns: managed_dns_helm_format,
             namespace,
             k8s_deploy_api_gateway,
+            k8s_use_api_gateway,
             k8s_remove_nginx,
         }
     }
@@ -191,6 +194,10 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                 value: self.k8s_deploy_api_gateway.to_string(),
             },
             ChartSetValue {
+                key: "k8sUseApiGateway".to_string(),
+                value: self.k8s_use_api_gateway.to_string(),
+            },
+            ChartSetValue {
                 key: "k8sRemoveNginx".to_string(),
                 value: self.k8s_remove_nginx.to_string(),
             },
@@ -276,6 +283,7 @@ mod tests {
             HelmChartNamespaces::CertManager,
             false,
             false,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -312,6 +320,7 @@ mod tests {
             &dns_provider_config,
             vec!["whatever".to_string()],
             HelmChartNamespaces::CertManager,
+            false,
             false,
             false,
         );
@@ -354,6 +363,7 @@ mod tests {
             &dns_provider_config,
             vec!["whatever".to_string()],
             HelmChartNamespaces::CertManager,
+            false,
             false,
             false,
         );

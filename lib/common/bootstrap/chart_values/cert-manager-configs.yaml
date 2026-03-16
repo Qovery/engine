@@ -7,6 +7,7 @@ externalDnsProvider: set-by-engine-code
 managedDns: set-by-engine-code
 
 k8sDeployApiGateway: set-by-engine-code
+k8sUseApiGateway: set-by-engine-code
 k8sRemoveNginx: set-by-engine-code
 
 acme:
