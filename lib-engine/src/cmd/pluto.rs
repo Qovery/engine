@@ -60,10 +60,16 @@ impl PlutoCmd {
         let args_ref = args.iter().map(String::as_str).collect::<Vec<_>>();
         let mut envs_with_soft_memory_limit = envs.to_vec();
         if !envs.iter().any(|(k, _v)| k == &"GOMEMLIMIT") {
-            // Set a soft memory limit of 64MiB for pluto since it can eventually OOM.
+            // Set a soft memory limit of 256MiB for pluto since cluster-wide scans can
+            // otherwise OOM with lower values.
             // This is not a hard limit, it's just a hint to the Go runtime trying to keep
             // memory under the limit by triggering GC more often.
-            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "64MiB"));
+            envs_with_soft_memory_limit.push(("GOMEMLIMIT", "256MiB"));
+        }
+        if !envs.iter().any(|(k, _v)| k == &"GOGC") {
+            // Lower the GC target percentage so the Go runtime collects more aggressively
+            // when scanning large clusters.
+            envs_with_soft_memory_limit.push(("GOGC", "50"));
         }
 
         let mut cmd = QoveryCommand::new("pluto", args_ref.as_slice(), envs_with_soft_memory_limit.as_slice());
