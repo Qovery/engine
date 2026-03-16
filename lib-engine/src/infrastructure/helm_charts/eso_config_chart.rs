@@ -70,6 +70,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                             value: format!("store-aws-{}", access.id),
                         });
                         values.push(ChartSetValue {
+                            key: format!("authentications[{}].secretManagerAccessId", idx),
+                            value: access.id.clone(),
+                        });
+                        values.push(ChartSetValue {
                             key: format!("authentications[{}].region", idx),
                             value: region.clone(),
                         });
@@ -157,6 +161,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].name", idx),
                             value: format!("store-gcp-{}", access.id),
+                        });
+                        values.push(ChartSetValue {
+                            key: format!("authentications[{}].secretManagerAccessId", idx),
+                            value: access.id.clone(),
                         });
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].projectId", idx),
@@ -360,6 +368,11 @@ mod tests {
         assert!(
             values
                 .iter()
+                .any(|v| v.key == "authentications[0].secretManagerAccessId" && v.value == "test-iam")
+        );
+        assert!(
+            values
+                .iter()
                 .any(|v| v.key == "authentications[0].type" && v.value == "aws-iam")
         );
         assert!(
@@ -413,6 +426,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-test-static")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].secretManagerAccessId" && v.value == "test-static")
         );
         assert!(
             values
@@ -478,6 +496,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-test-auto")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].secretManagerAccessId" && v.value == "test-auto")
         );
         assert!(
             values
@@ -641,6 +664,11 @@ mod tests {
         assert!(
             values
                 .iter()
+                .any(|v| v.key == "authentications[0].secretManagerAccessId" && v.value == "gcp-workload")
+        );
+        assert!(
+            values
+                .iter()
                 .any(|v| v.key == "authentications[0].type" && v.value == "gcp-workload-identity")
         );
         assert!(
@@ -695,6 +723,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].name" && v.value == "store-gcp-gcp-static")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].secretManagerAccessId" && v.value == "gcp-static")
         );
         assert!(
             values
