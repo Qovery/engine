@@ -38,7 +38,7 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   # need to add this dirty trick while Hashicorp fix this issue
   # https://github.com/hashicorp/terraform-provider-aws/issues/15625
   lifecycle {
-    ignore_changes = [engine_version {%- if not skip_final_snapshot %}, final_snapshot_identifier{%- endif %}]
+    ignore_changes = [engine_version {%- if not skip_final_snapshot %}, final_snapshot_identifier{%- endif %}, maintenance_window]
   }
 
   engine = "redis"
@@ -118,6 +118,10 @@ resource "aws_elasticache_replication_group" "elasticache_cluster" {
 # Snapshot
   snapshot_name = var.snapshot_identifier
 {%- endif %}
+
+  lifecycle {
+    ignore_changes = [maintenance_window]
+  }
 }
 {%- endif %}
 

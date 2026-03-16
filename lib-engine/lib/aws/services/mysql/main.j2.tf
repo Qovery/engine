@@ -101,6 +101,7 @@ resource "aws_db_instance" "mysql_instance" {
   lifecycle {
     ignore_changes = [
       final_snapshot_identifier,
+      maintenance_window,
     ]
   }
   {%- endif %}
