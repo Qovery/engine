@@ -6,7 +6,7 @@ certManagerNamespace: "cert-manager"
 gateway:
   qoveryPublic:
     enable: true
-    enableProxyProtocol: false # Proxy protocol disabled - not working correctly with Envoy Gateway v1.6.1
+    enableProxyProtocol: true
     xForwardedFor:
       numberTrustedHops: null
     customHttpErrors:
