@@ -100,10 +100,23 @@ spec:
         {%- endif %}
       {%- endif %}
   {%- endif %}
-  {%- if advanced_settings.network_gateway_api_http_request_timeout_seconds %}
+  {%- set service_request_timeout = advanced_settings.network_gateway_api_http_request_timeout_seconds %}
+  {%- set service_idle_timeout = advanced_settings.network_gateway_api_http_connection_idle_timeout_seconds %}
+  {%- set cluster_request_timeout = cluster_envoy_gateway_api_http_request_timeout_seconds %}
+  {%- set cluster_idle_timeout = cluster_envoy_gateway_api_http_connection_idle_timeout_seconds %}
+  {%- if service_request_timeout or service_idle_timeout or cluster_request_timeout or cluster_idle_timeout %}
   timeout:
     http:
-      requestTimeout: {{ advanced_settings.network_gateway_api_http_request_timeout_seconds }}s
+      {%- if service_request_timeout %}
+      requestTimeout: {{ service_request_timeout }}s
+      {%- elif cluster_request_timeout %}
+      requestTimeout: {{ cluster_request_timeout }}s
+      {%- endif %}
+      {%- if service_idle_timeout %}
+      connectionIdleTimeout: {{ service_idle_timeout }}s
+      {%- elif cluster_idle_timeout %}
+      connectionIdleTimeout: {{ cluster_idle_timeout }}s
+      {%- endif %}
   {%- endif %}
   {%- if advanced_settings.network_gateway_api_tcp_keepalive_idle_time_seconds or advanced_settings.network_gateway_api_tcp_keepalive_interval_seconds %}
   tcpKeepalive:

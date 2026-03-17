@@ -438,6 +438,10 @@ pub struct ClusterAdvancedSettings {
     pub envoy_memory_request_in_mib: u32,
     #[serde(alias = "envoy.memory.limit_in_mib")]
     pub envoy_memory_limit_in_mib: u32,
+    #[serde(alias = "envoy.gateway_api.http_request_timeout_seconds")]
+    pub envoy_gateway_api_http_request_timeout_seconds: Option<u32>,
+    #[serde(alias = "envoy.gateway_api.http_connection_idle_timeout_seconds")]
+    pub envoy_gateway_api_http_connection_idle_timeout_seconds: Option<u32>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
     #[serde(alias = "envoy.access_log.format", alias = "envoy.log_format")]
@@ -541,6 +545,8 @@ impl Default for ClusterAdvancedSettings {
             envoy_vcpu_limit_in_milli_cpu: 1000,
             envoy_memory_request_in_mib: 256,
             envoy_memory_limit_in_mib: 1024,
+            envoy_gateway_api_http_request_timeout_seconds: None,
+            envoy_gateway_api_http_connection_idle_timeout_seconds: None,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
             envoy_access_log_format: None,
             envoy_custom_http_errors_default: None,
@@ -915,5 +921,25 @@ mod tests {
         let data = r#"{"aws.eks.ec2.ami": "AmazonLinux2023"}"#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
         assert_eq!(settings.aws_eks_ec2_ami, super::Ec2Ami::AmazonLinux2023);
+    }
+
+    #[test]
+    fn test_default_envoy_gateway_api_http_timeouts_are_none() {
+        let settings = ClusterAdvancedSettings::default();
+        assert_eq!(settings.envoy_gateway_api_http_request_timeout_seconds, None);
+        assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, None);
+    }
+
+    #[test]
+    fn test_envoy_gateway_api_http_timeouts_deserialization() {
+        let data = r#"
+        {
+            "envoy.gateway_api.http_request_timeout_seconds": 90,
+            "envoy.gateway_api.http_connection_idle_timeout_seconds": 120
+        }
+        "#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(settings.envoy_gateway_api_http_request_timeout_seconds, Some(90));
+        assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, Some(120));
     }
 }

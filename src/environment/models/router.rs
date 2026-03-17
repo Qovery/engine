@@ -334,6 +334,18 @@ impl<T: CloudProvider> Router<T> {
         let deploy_listenerset =
             kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false) && gateway_api_crds_available;
 
+        context.insert(
+            "cluster_envoy_gateway_api_http_request_timeout_seconds",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_http_request_timeout_seconds,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_http_connection_idle_timeout_seconds,
+        );
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
         context.insert("k8s_remove_nginx", &kubernetes.advanced_settings().k8s_remove_nginx);
