@@ -356,6 +356,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_gateway_api_tcp_keepalive_idle_time_seconds: None,
             network_gateway_api_tcp_keepalive_interval_seconds: None,
             network_gateway_api_http_request_timeout_seconds: None,
+            network_gateway_api_http_connection_idle_timeout_seconds: None,
             network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
             network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
             network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
@@ -524,6 +525,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             network_gateway_api_tcp_keepalive_idle_time_seconds: None,
             network_gateway_api_tcp_keepalive_interval_seconds: None,
             network_gateway_api_http_request_timeout_seconds: None,
+            network_gateway_api_http_connection_idle_timeout_seconds: None,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -857,6 +859,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         network_gateway_api_tcp_keepalive_idle_time_seconds: None,
         network_gateway_api_tcp_keepalive_interval_seconds: None,
         network_gateway_api_http_request_timeout_seconds: None,
+        network_gateway_api_http_connection_idle_timeout_seconds: None,
         network_ingress_cors_allow_origin: "my_network_ingress_cors_allow_origin".to_string(),
         network_ingress_cors_allow_methods: "my_network_ingress_cors_allow_methods".to_string(),
         network_ingress_cors_allow_headers: "my_network_ingress_cors_allow_headers".to_string(),
@@ -1117,6 +1120,7 @@ fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container
         network_gateway_api_tcp_keepalive_idle_time_seconds: None,
         network_gateway_api_tcp_keepalive_interval_seconds: None,
         network_gateway_api_http_request_timeout_seconds: None,
+        network_gateway_api_http_connection_idle_timeout_seconds: None,
     };
 
     Container::new(
