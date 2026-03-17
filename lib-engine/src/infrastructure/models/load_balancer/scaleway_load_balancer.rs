@@ -21,7 +21,7 @@ impl InteractWithLoadBalancer for ScalewayLoadBalancer {
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2".to_string(),
-                "false".to_string(),
+                "true".to_string(),
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-health-check-type".to_string(),
@@ -34,7 +34,7 @@ impl InteractWithLoadBalancer for ScalewayLoadBalancer {
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy".to_string(),
-                "false".to_string(),
+                "true".to_string(),
             ),
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-use-hostname".to_string(),
@@ -127,10 +127,10 @@ mod tests {
             Some(&"true".to_string())
         );
 
-        // Verify proxy protocol settings (disabled due to Envoy Gateway v1.6.1 compatibility issues)
+        // Verify proxy protocol settings (enabled for Envoy Gateway)
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2"),
-            Some(&"false".to_string())
+            Some(&"true".to_string())
         );
 
         // Verify health check configuration (TCP-based for Envoy Gateway compatibility)
@@ -144,7 +144,7 @@ mod tests {
         );
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy"),
-            Some(&"false".to_string())
+            Some(&"true".to_string())
         );
 
         // Verify timeout settings
