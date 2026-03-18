@@ -314,6 +314,18 @@ impl Docker {
         Ok(docker)
     }
 
+    /// Spawns a new Docker buildx builder on Kubernetes.
+    ///
+    /// Each architecture gets a buildx node whose name is:
+    ///   `{builder_prefix}{exec_id}-{arch}`  (truncated to 60 chars)
+    ///
+    /// Kubernetes then creates a pod named `{node_name}-{random_suffix}`.
+    /// For example, with `exec_id = "03d…ef-3999-0"` and `builder_prefix = "build-"`:
+    ///   node  = `build-03d49150-a2f5-4fb5-ba90-2c94e32dd9ef-3999-0-amd64`
+    ///   pod   = `build-03d49150-a2f5-4fb5-ba90-2c94e32dd9ef-3999-0-amd64-bbm9b5c`
+    ///
+    /// The deterministic node name (without the random suffix) can be used to
+    /// identify build pods in monitoring dashboards (e.g., Grafana).
     pub fn spawn_builder(
         &self,
         exec_id: &str,
@@ -443,6 +455,8 @@ impl Docker {
                         should_abort,
                     )?;
                 }
+
+                info!("Build pod name prefix: {builder_prefix}{exec_id}-<arch> (builder: {builder_name})");
 
                 Ok(build_handle)
             }
