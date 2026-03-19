@@ -1,6 +1,7 @@
 use crate::helm::{
-    ChartInfo, ChartSetValue, CommonChart, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass,
-    QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy, get_engine_helm_action_from_location,
+    ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode,
+    PriorityClass, QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, VpaContainerPolicy,
+    get_engine_helm_action_from_location,
 };
 use crate::infrastructure::action::eks::helm_charts::nvidia_gpu_k8s_device_plugin_chart::NvidiaGpuK8sDevicePluginChart;
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
@@ -903,8 +904,6 @@ pub(super) fn eks_helm_charts(
     if let Some(chart) = envoy_gateway_crd {
         level_0.push(Box::new(chart));
     }
-    // Add ESO CRDs
-    level_0.push(Box::new(eso_charts.eso_requirements_chart));
 
     let mut level_1: Vec<Box<dyn HelmChart>> = vec![];
     // Add Qovery gateway class
@@ -938,10 +937,9 @@ pub(super) fn eks_helm_charts(
         level_3.push(Box::new(aws_iam_eks_user_mapper));
     }
 
-    let mut level_4: Vec<Box<dyn HelmChart>> =
-        vec![Box::new(q_storage_class), Box::new(vpa), Box::new(eso_charts.eso_chart)];
+    let mut level_4: Vec<Box<dyn HelmChart>> = vec![Box::new(q_storage_class), Box::new(vpa)];
 
-    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager), Box::new(eso_charts.eso_config_chart)];
+    let mut level_5: Vec<Box<dyn HelmChart>> = vec![Box::new(cert_manager)];
 
     let mut level_6: Vec<Box<dyn HelmChart>> = vec![];
     // Add Qovery cluster gateway - must be deployed after cert-manager since it creates resources in cert-manager namespace
@@ -1048,6 +1046,21 @@ pub(super) fn eks_helm_charts(
     // keda
     level_0.push(Box::new(keda_charts.keda_crd_chart));
     level_4.push(Box::new(keda_charts.keda_chart));
+
+    // External Secrets Operator
+    // Needed to handle property uninstallation: config depends on crds
+    match eso_charts.helm_action {
+        HelmAction::Deploy => {
+            level_0.push(Box::new(eso_charts.eso_requirements_chart));
+            level_4.push(Box::new(eso_charts.eso_chart));
+            level_5.push(Box::new(eso_charts.eso_config_chart));
+        }
+        HelmAction::Destroy => {
+            level_0.push(Box::new(eso_charts.eso_config_chart));
+            level_4.push(Box::new(eso_charts.eso_chart));
+            level_5.push(Box::new(eso_charts.eso_requirements_chart));
+        }
+    }
 
     info!("charts configuration preparation finished");
     Ok(vec![
