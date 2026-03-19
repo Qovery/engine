@@ -30,6 +30,7 @@ use uuid::Uuid;
 
 const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
+const ENGINE_POST_RENDERER_BINARY: &str = "engine_post_renderer";
 
 pub enum Timeout<T> {
     Default,
@@ -936,6 +937,8 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
+        append_engine_post_renderer_args(&mut args_string, chart);
+
         for value in &chart.values {
             args_string.push("--set".to_string());
             args_string.push(format!("{}={}", value.key, value.value));
@@ -1053,6 +1056,8 @@ impl Helm {
         if chart.wait {
             args_string.push("--wait".to_string())
         }
+
+        append_engine_post_renderer_args(&mut args_string, chart);
 
         // overrides and files overrides
         for value in &chart.values {
@@ -1219,6 +1224,8 @@ impl Helm {
         if chart.wait {
             args_string.push("--wait".to_string())
         }
+
+        append_engine_post_renderer_args(&mut args_string, chart);
 
         // overrides and files overrides
         for value in &chart.values {
@@ -1858,6 +1865,33 @@ impl Helm {
             }
         }
     }
+}
+
+fn append_engine_post_renderer_args(args: &mut Vec<String>, chart: &ChartInfo) {
+    if !chart.enable_engine_post_renderer_labels {
+        return;
+    }
+
+    let current_exe = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            warn!("Cannot resolve engine executable path for helm post-renderer, skipping: {e}");
+            return;
+        }
+    };
+
+    let Some(current_exe_dir) = current_exe.parent() else {
+        warn!("Cannot resolve engine executable directory for helm post-renderer, skipping");
+        return;
+    };
+
+    let post_renderer_path = current_exe_dir
+        .join(format!("{ENGINE_POST_RENDERER_BINARY}{}", std::env::consts::EXE_SUFFIX))
+        .to_string_lossy()
+        .to_string();
+
+    args.push("--post-renderer".to_string());
+    args.push(post_renderer_path);
 }
 
 fn helm_exec_with_output<STDOUT, STDERR>(
