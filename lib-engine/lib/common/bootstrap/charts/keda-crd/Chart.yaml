@@ -3,4 +3,4 @@ name: keda-crd
 description: KEDA Custom Resource Definitions
 type: application
 version: 1.0.0
-appVersion: "2.16.1"
+appVersion: "2.19.0"
