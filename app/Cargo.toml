@@ -10,6 +10,10 @@ edition = "2024"
 name = "engine_grpc"
 path = "src/main_grpc.rs"
 
+[[bin]]
+name = "engine_post_renderer"
+path = "src/main_post_renderer.rs"
+
 [features]
 default = []
 
@@ -31,6 +35,7 @@ anyhow = "1.0.98"
 scopeguard = "1.2.0"
 reqwest = { version = "0.12.15", default-features = false, features = ["blocking", "json", "gzip", "zstd", "rustls-tls-native-roots-no-provider"] }
 serde = "1.0.219"
+serde_yaml = "0.9.34"
 clap = { version = "4.5.38", features = ["derive", "env"] }
 rustls = "0.23.27"
 

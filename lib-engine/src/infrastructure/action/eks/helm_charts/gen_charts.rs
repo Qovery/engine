@@ -896,7 +896,7 @@ pub(super) fn eks_helm_charts(
         Box::new(q_priority_class_chart),
     ];
     // Add prometheus CRDs early to avoid issues with other charts
-    if let Some(chart) = metrics_config.prometheus_operator_crds_chart {
+    if let Some(chart) = metrics_config.prometheus_operator_crds_chart.clone() {
         level_0.push(Box::new(chart));
     }
     // Add envoy gateway api CRDs

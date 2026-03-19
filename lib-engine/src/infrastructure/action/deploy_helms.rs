@@ -16,6 +16,17 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 use tera::Context as TeraContext;
+use uuid::Uuid;
+
+const ENGINE_POST_RENDERER_AUTHORIZED_ORGANIZATION_IDS: &[&str] = &[
+    "460616f0-94da-4d35-b631-6fa4ed08eb9a",
+    "3d542888-3d2c-474a-b1ad-712556db66da",
+    "141c07c8-0dd9-4623-983b-3fdd61867255",
+    "9e1ad0f5-8092-4232-9430-b55c48c87716",
+    "21bd04fb-7b93-45c5-9957-4325d833a05a",
+    "cf8e78e6-159b-45b6-bfb5-2430c9505080",
+];
+
 /// Strategy for calculating delays between retry attempts.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum DelayStrategy {
@@ -186,7 +197,15 @@ pub(super) trait HelmInfraResources {
         self.charts_context().prepare_helm_files_on_disk()?;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
         let ev_details = &self.charts_context().event_details;
-        let charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
+        let mut charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
+        if organization_is_authorized_for_engine_post_renderer(infra_ctx) {
+            let chart_count = enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy);
+            logger.info(format!(
+                "🏷️ Enabling engine post-renderer labels for all Helm charts (organization {}, {} charts)",
+                infra_ctx.context().organization_long_id(),
+                chart_count
+            ));
+        }
 
         logger.info("🛳️ Going to deploy Helm charts in this sequence:");
         charts_to_deploy.iter().enumerate().for_each(|(ix, charts_lvl)| {
@@ -272,6 +291,42 @@ pub(super) trait HelmInfraResources {
 
         Ok(())
     }
+}
+
+fn organization_is_authorized_for_engine_post_renderer(infra_ctx: &InfrastructureContext) -> bool {
+    organization_is_in_allowlist(
+        ENGINE_POST_RENDERER_AUTHORIZED_ORGANIZATION_IDS,
+        infra_ctx.context().organization_long_id().to_string().as_str(),
+    )
+}
+
+fn organization_is_in_allowlist(allowlist: &[&str], org_long_id: &str) -> bool {
+    if allowlist.is_empty() {
+        return false;
+    }
+
+    let Ok(org_long_uuid) = Uuid::parse_str(org_long_id) else {
+        return false;
+    };
+
+    allowlist
+        .iter()
+        .map(|id| id.trim())
+        .filter_map(|allowed_org| Uuid::parse_str(allowed_org).ok())
+        .any(|allowed_org| allowed_org == org_long_uuid)
+}
+
+fn enable_engine_post_renderer_for_all_charts(charts_to_deploy: &mut [Vec<Box<dyn HelmChart>>]) -> usize {
+    let mut chart_count = 0usize;
+
+    for charts_level in charts_to_deploy.iter_mut() {
+        for chart in charts_level.iter_mut() {
+            chart.get_chart_info_mut().enable_engine_post_renderer_labels = true;
+            chart_count += 1;
+        }
+    }
+
+    chart_count
 }
 
 fn charts_names_user_str(charts: &[Box<dyn HelmChart>]) -> String {
@@ -621,4 +676,33 @@ fn create_helm_diff_file(dir_path: &Path, chart_name: &str) -> anyhow::Result<Bu
         .open(filepath)?;
 
     Ok(BufWriter::new(file))
+}
+
+#[cfg(test)]
+mod test {
+    use super::organization_is_in_allowlist;
+
+    #[test]
+    fn organization_allowlist_should_match_long_id() {
+        assert!(organization_is_in_allowlist(
+            &[
+                "11111111-1111-1111-1111-111111111111",
+                "22222222-2222-2222-2222-222222222222",
+            ],
+            "22222222-2222-2222-2222-222222222222",
+        ));
+    }
+
+    #[test]
+    fn organization_allowlist_should_reject_short_id_like_values() {
+        assert!(!organization_is_in_allowlist(&["org-abc", "org-def"], "org-def"));
+    }
+
+    #[test]
+    fn organization_allowlist_should_reject_when_not_present() {
+        assert!(!organization_is_in_allowlist(
+            &["org-abc", "11111111-1111-1111-1111-111111111111"],
+            "22222222-2222-2222-2222-222222222222",
+        ));
+    }
 }

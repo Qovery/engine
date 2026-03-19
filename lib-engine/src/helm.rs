@@ -457,6 +457,10 @@ pub struct ChartInfo {
     /// Shared cache injected before parallel deployment to ensure `helm list` is called
     /// at most once per namespace across all chart threads in the same level.
     pub helm_list_cache: Option<HelmListCache>,
+    /// Enables the engine post-renderer for this chart.
+    /// When enabled, Helm commands add:
+    /// `--post-renderer <engine_post_renderer-binary>`
+    pub enable_engine_post_renderer_labels: bool,
 }
 
 impl ChartInfo {
@@ -539,6 +543,7 @@ impl Default for ChartInfo {
             upgrade_retry: None,
             requires_server_side_apply: false,
             helm_list_cache: None,
+            enable_engine_post_renderer_labels: false,
         }
     }
 }
