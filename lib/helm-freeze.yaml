@@ -70,7 +70,7 @@ charts:
       https://github.com/aws/eks-charts/tree/gh-pages
   - name: metrics-server
     repo_name: metrics-server
-    version: 3.12.1
+    version: 3.13.0
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: loki
     repo_name: grafana
