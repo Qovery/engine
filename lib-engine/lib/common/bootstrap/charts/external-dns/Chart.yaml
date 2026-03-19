@@ -1,13 +1,17 @@
 annotations:
   artifacthub.io/changes: |-
     - kind: added
-      description: "Add option to configure annotationFilter via dedicated chart value."
+      description: "Add option to set annotationPrefix (#5889) @lexfrei."
     - kind: changed
-      description: "Grant discovery.k8s.io/endpointslices permission only when using service source."
+      description: "Grant networking.k8s.io/ingresses and gateway.solo.io/gateways permissions when using gloo-proxy source."
     - kind: changed
-      description: "Update ExternalDNS OCI image version to v0.19.0."
+      description: "Update ExternalDNS OCI image version to v0.20.0."
+    - kind: fixed
+      description: "Fixed the missing schema for .provider.webhook."
+    - kind: fixed
+      description: "Fixed incorrect indentation of selector labels under spec.template.spec.topologySpreadConstraints when topologySpreadConstraints is set."
 apiVersion: v2
-appVersion: 0.19.0
+appVersion: 0.20.0
 description: ExternalDNS synchronizes exposed Kubernetes Services and Ingresses with
   DNS providers.
 home: https://github.com/kubernetes-sigs/external-dns/
@@ -28,4 +32,4 @@ name: external-dns
 sources:
 - https://github.com/kubernetes-sigs/external-dns/
 type: application
-version: 1.19.0
+version: 1.20.0

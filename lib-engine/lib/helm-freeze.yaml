@@ -11,7 +11,7 @@ charts:
     comment: https://artifacthub.io/packages/helm/cert-manager/cert-manager
   - name: external-dns
     repo_name: external-dns
-    version: 1.19.0
+    version: 1.20.0
     comment: https://github.com/kubernetes-sigs/external-dns/charts/external-dns
   - name: grafana
     version: 6.16.10
