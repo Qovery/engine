@@ -7,7 +7,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 use uuid::Uuid;
 
-const PROMTAIL_DOCKER_IMAGE: &str = "public.ecr.aws/r3m4q3r9/pub-mirror-promtail:3.5.1";
+const PROMTAIL_DOCKER_IMAGE: &str = "public.ecr.aws/r3m4q3r9/pub-mirror-promtail:3.6.7";
 
 struct PromtailContainer {
     name: String,
