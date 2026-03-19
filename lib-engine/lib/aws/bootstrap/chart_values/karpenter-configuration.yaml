@@ -23,7 +23,12 @@ tags:
   OrganizationLongId: set-by-engine-code
   Region: set-by-engine-code
 
-global_node_pools:
+global_node_pools: {}
+
+stableNodePool:
+  requirements: []
+
+defaultNodePool:
   requirements: []
 
 # GPUs

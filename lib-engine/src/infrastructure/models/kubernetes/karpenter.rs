@@ -117,6 +117,8 @@ impl fmt::Display for KarpenterRequirementOperator {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterStableNodePoolOverride {
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
@@ -125,7 +127,8 @@ pub struct KarpenterStableNodePoolOverride {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterGpuNodePoolOverride {
-    pub spot_enabled: bool,
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
     pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
     pub limits: Option<KarpenterNodePoolLimits>,
     pub requirements: Option<Vec<KarpenterNodePoolRequirement>>,
@@ -186,6 +189,8 @@ impl fmt::Display for KarpenterNodePoolDisruptionReason {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterDefaultNodePoolOverride {
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
     pub limits: Option<KarpenterNodePoolLimits>,
     #[serde(default)]
     pub consolidate_after_in_seconds: Option<u64>,
@@ -284,6 +289,7 @@ mod tests {
         assert_eq!(
             stable_node_pool_override,
             KarpenterStableNodePoolOverride {
+                spot_enabled: None,
                 budgets: vec![
                     KarpenterNodePoolDisruptionBudget {
                         nodes: "0".to_string(),
@@ -442,6 +448,7 @@ mod tests {
         assert_eq!(
             stable_node_pool_override,
             KarpenterStableNodePoolOverride {
+                spot_enabled: None,
                 budgets: vec![
                     // default budgets from deserialization
                     KarpenterNodePoolDisruptionBudget {
@@ -527,6 +534,7 @@ mod tests {
         assert_eq!(
             default_node_pool_override,
             KarpenterDefaultNodePoolOverride {
+                spot_enabled: None,
                 limits: Some(KarpenterNodePoolLimits {
                     max_cpu: KubernetesCpuResourceUnit::MilliCpu(6000),
                     max_memory: KubernetesMemoryResourceUnit::GibiByte(20),
@@ -600,6 +608,7 @@ mod tests {
         assert_eq!(
             default_node_pool_override,
             KarpenterDefaultNodePoolOverride {
+                spot_enabled: None,
                 limits: None,
                 consolidate_after_in_seconds: None,
             }

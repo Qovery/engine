@@ -6,7 +6,7 @@ spec:
   template:
     spec:
       requirements:
-        {{- range .Values.global_node_pools.requirements }}
+        {{- range .Values.defaultNodePool.requirements }}
         - key: "{{ .key }}"
           operator: "{{ .operator }}"
           values:

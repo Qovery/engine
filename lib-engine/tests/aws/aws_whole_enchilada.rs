@@ -305,6 +305,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             },
                         ],
                         stable_override: KarpenterStableNodePoolOverride {
+                            spot_enabled: None,
                             budgets: vec![KarpenterNodePoolDisruptionBudget {
                                 nodes: "0".to_string(),
                                 reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -318,7 +319,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             consolidate_after_in_seconds: None,
                         },
                         gpu_override: Some(KarpenterGpuNodePoolOverride {
-                            spot_enabled: true,
+                            spot_enabled: Some(true),
                             disk_size: DiskSize::Gib(100),
                             disk_iops: None,
                             disk_throughput: None,
@@ -352,6 +353,7 @@ fn create_upgrade_and_destroy_eks_cluster_gpu_with_env_in_eu_west_3() {
                             consolidate_after_in_seconds: None,
                         }),
                         default_override: Some(KarpenterDefaultNodePoolOverride {
+                            spot_enabled: None,
                             limits: Some(KarpenterNodePoolLimits {
                                 max_cpu: KubernetesCpuResourceUnit::MilliCpu(10_000),
                                 max_memory: KubernetesMemoryResourceUnit::GibiByte(20),

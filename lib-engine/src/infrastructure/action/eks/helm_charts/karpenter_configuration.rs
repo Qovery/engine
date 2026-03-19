@@ -12,7 +12,8 @@ use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami;
 use crate::infrastructure::models::kubernetes::KubernetesVersion;
 use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
 use crate::infrastructure::models::kubernetes::karpenter::{
-    KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
+    KarpenterNodePoolDisruptionBudget, KarpenterNodePoolLimits, KarpenterNodePoolRequirement,
+    KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
 };
 use itertools::Itertools;
 use kube::Client;
@@ -132,9 +133,9 @@ impl KarpenterConfigurationChart {
 
     fn enrich_karpenter_requirements(
         spot_enabled: bool,
-        node_pool_requirements: Vec<KarpenterNodePoolRequirement>,
+        node_pool_requirements: &[KarpenterNodePoolRequirement],
     ) -> Vec<KarpenterNodePoolRequirement> {
-        let mut requirements = node_pool_requirements;
+        let mut requirements = node_pool_requirements.to_vec();
         requirements.push(KarpenterNodePoolRequirement {
             key: KarpenterNodePoolRequirementKey::CapacityType,
             operator: Some(KarpenterRequirementOperator::In),
@@ -146,6 +147,77 @@ impl KarpenterConfigurationChart {
         });
 
         requirements
+    }
+
+    fn push_requirements_values(
+        values: &mut Vec<ChartSetValue>,
+        pool_prefix: &str,
+        requirements: &[KarpenterNodePoolRequirement],
+    ) {
+        requirements.iter().enumerate().for_each(|(index, requirement)| {
+            let prefix = format!("{pool_prefix}.requirements[{index}]");
+
+            let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
+                requirement.values.iter().map(|value| value.to_lowercase()).join(",")
+            } else {
+                requirement.values.join(",")
+            };
+
+            values.push(ChartSetValue {
+                key: format!("{prefix}.key"),
+                value: requirement.key.to_k8s_label(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.operator"),
+                value: requirement
+                    .operator
+                    .as_ref()
+                    .unwrap_or(&KarpenterRequirementOperator::In)
+                    .to_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.values"),
+                value: format!("{{{formated_values}}}"),
+            });
+        });
+    }
+
+    fn push_budgets_values(
+        values: &mut Vec<ChartSetValue>,
+        pool_prefix: &str,
+        budgets: &[KarpenterNodePoolDisruptionBudget],
+    ) {
+        budgets.iter().enumerate().for_each(|(index, it)| {
+            let prefix = format!("{pool_prefix}.consolidation.budgets[{index}]");
+
+            values.push(ChartSetValue {
+                key: format!("{prefix}.nodes"),
+                value: it.nodes.to_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.reasons"),
+                value: it.reasons.to_helm_format_string().to_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.duration"),
+                value: it.get_karpenter_budget_duration_as_string(),
+            });
+            values.push(ChartSetValue {
+                key: format!("{prefix}.schedule"),
+                value: it.schedule.to_string(),
+            });
+        });
+    }
+
+    fn push_limits_values(values: &mut Vec<ChartSetValue>, pool_prefix: &str, limits: &KarpenterNodePoolLimits) {
+        values.push(ChartSetValue {
+            key: format!("{pool_prefix}.limits.maxCpu"),
+            value: limits.max_cpu.to_string(),
+        });
+        values.push(ChartSetValue {
+            key: format!("{pool_prefix}.limits.maxMemory"),
+            value: limits.max_memory.to_string(),
+        });
     }
 }
 
@@ -295,75 +367,41 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             });
         }
 
-        let karpenter_node_pools_requirements = Self::enrich_karpenter_requirements(
-            self.karpenter_parameters.spot_enabled,
-            self.karpenter_parameters.qovery_node_pools.requirements.clone(),
+        // Resolve per-pool spot settings, falling back to the global spot_enabled
+        let default_spot = self
+            .karpenter_parameters
+            .qovery_node_pools
+            .default_override
+            .as_ref()
+            .and_then(|o| o.spot_enabled)
+            .unwrap_or(self.karpenter_parameters.spot_enabled);
+
+        let stable_spot = self
+            .karpenter_parameters
+            .qovery_node_pools
+            .stable_override
+            .spot_enabled
+            .unwrap_or(self.karpenter_parameters.spot_enabled);
+
+        // Default node pool requirements
+        let default_requirements = Self::enrich_karpenter_requirements(
+            default_spot,
+            &self.karpenter_parameters.qovery_node_pools.requirements,
         );
+        Self::push_requirements_values(&mut values, "defaultNodePool", &default_requirements);
 
-        karpenter_node_pools_requirements
-            .iter()
-            .enumerate()
-            .for_each(|(index, requirement)| {
-                let prefix = format!("global_node_pools.requirements[{index}]");
-
-                let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
-                    // The nodepool support only lowercase value for arch
-                    requirement.values.iter().map(|value| value.to_lowercase()).join(",")
-                } else {
-                    requirement.values.join(",")
-                };
-
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.key"),
-                    value: requirement.key.to_k8s_label(),
-                });
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.operator"),
-                    value: requirement
-                        .operator
-                        .as_ref()
-                        .unwrap_or(&KarpenterRequirementOperator::In)
-                        .to_string(),
-                });
-                values.push(ChartSetValue {
-                    key: format!("{prefix}.values"),
-                    value: format!("{{{formated_values}}}"),
-                });
-            });
+        // Stable node pool requirements
+        let stable_requirements =
+            Self::enrich_karpenter_requirements(stable_spot, &self.karpenter_parameters.qovery_node_pools.requirements);
+        Self::push_requirements_values(&mut values, "stableNodePool", &stable_requirements);
 
         // Stable node pool consolidation
-        let stable_pool_override = self.karpenter_parameters.qovery_node_pools.stable_override.clone();
-        stable_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
-            let prefix = format!("stableNodePool.consolidation.budgets[{index}]");
-
-            values.push(ChartSetValue {
-                key: format!("{prefix}.nodes"),
-                value: it.nodes.to_string(),
-            });
-            values.push(ChartSetValue {
-                key: format!("{prefix}.reasons"),
-                value: it.reasons.to_helm_format_string().to_string(),
-            });
-            values.push(ChartSetValue {
-                key: format!("{prefix}.duration"),
-                value: it.get_karpenter_budget_duration_as_string(),
-            });
-            values.push(ChartSetValue {
-                key: format!("{prefix}.schedule"),
-                value: it.schedule.to_string(),
-            });
-        });
+        let stable_pool_override = &self.karpenter_parameters.qovery_node_pools.stable_override;
+        Self::push_budgets_values(&mut values, "stableNodePool", &stable_pool_override.budgets);
 
         // Stable node pool limits
         if let Some(limits) = &stable_pool_override.limits {
-            values.push(ChartSetValue {
-                key: "stableNodePool.limits.maxCpu".to_string(),
-                value: limits.max_cpu.to_string(),
-            });
-            values.push(ChartSetValue {
-                key: "stableNodePool.limits.maxMemory".to_string(),
-                value: limits.max_memory.to_string(),
-            });
+            Self::push_limits_values(&mut values, "stableNodePool", limits);
         }
 
         // Stable node pool consolidateAfter
@@ -383,70 +421,21 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
                 });
 
                 // Requirements
+                let gpu_spot = gpu_pool_override
+                    .spot_enabled
+                    .unwrap_or(self.karpenter_parameters.spot_enabled);
                 let requirements = Self::enrich_karpenter_requirements(
-                    self.karpenter_parameters.spot_enabled,
-                    gpu_pool_override.requirements.as_ref().unwrap_or(&vec![]).clone(),
+                    gpu_spot,
+                    gpu_pool_override.requirements.as_deref().unwrap_or(&[]),
                 );
-                requirements.iter().enumerate().for_each(|(index, requirement)| {
-                    let prefix = format!("gpuNodePool.requirements[{index}]");
-
-                    let formated_values = if requirement.key == KarpenterNodePoolRequirementKey::Arch {
-                        // The nodepool support only lowercase value for arch
-                        requirement.values.iter().map(|value| value.to_lowercase()).join(",")
-                    } else {
-                        requirement.values.join(",")
-                    };
-
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.key"),
-                        value: requirement.key.to_k8s_label(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.operator"),
-                        value: requirement
-                            .operator
-                            .as_ref()
-                            .unwrap_or(&KarpenterRequirementOperator::In)
-                            .to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.values"),
-                        value: format!("{{{formated_values}}}"),
-                    });
-                });
+                Self::push_requirements_values(&mut values, "gpuNodePool", &requirements);
 
                 // Node pool consolidation
-                gpu_pool_override.budgets.iter().enumerate().for_each(|(index, it)| {
-                    let prefix = format!("gpuNodePool.consolidation.budgets[{index}]");
-
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.nodes"),
-                        value: it.nodes.to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.reasons"),
-                        value: it.reasons.to_helm_format_string().to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.duration"),
-                        value: it.get_karpenter_budget_duration_as_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: format!("{prefix}.schedule"),
-                        value: it.schedule.to_string(),
-                    });
-                });
+                Self::push_budgets_values(&mut values, "gpuNodePool", &gpu_pool_override.budgets);
 
                 // Node pool limits
                 if let Some(limits) = &gpu_pool_override.limits {
-                    values.push(ChartSetValue {
-                        key: "gpuNodePool.limits.maxCpu".to_string(),
-                        value: limits.max_cpu.to_string(),
-                    });
-                    values.push(ChartSetValue {
-                        key: "gpuNodePool.limits.maxMemory".to_string(),
-                        value: limits.max_memory.to_string(),
-                    });
+                    Self::push_limits_values(&mut values, "gpuNodePool", limits);
                 }
 
                 // Disk size
@@ -487,21 +476,14 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
         }
 
         // Default node pool limits
-        if let Some(Some(default_node_pool_limits)) = self
+        if let Some(limits) = self
             .karpenter_parameters
             .qovery_node_pools
             .default_override
-            .clone()
-            .map(|default_override| default_override.limits)
+            .as_ref()
+            .and_then(|o| o.limits.as_ref())
         {
-            values.push(ChartSetValue {
-                key: "defaultNodePool.limits.maxCpu".to_string(),
-                value: default_node_pool_limits.max_cpu.to_string(),
-            });
-            values.push(ChartSetValue {
-                key: "defaultNodePool.limits.maxMemory".to_string(),
-                value: default_node_pool_limits.max_memory.to_string(),
-            });
+            Self::push_limits_values(&mut values, "defaultNodePool", limits);
         }
 
         // Default node pool consolidateAfter
@@ -617,6 +599,7 @@ mod tests {
             KarpenterNodePool {
                 requirements: vec![],
                 stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
                     budgets: vec![],
                     limits: None,
                     consolidate_after_in_seconds: None,
@@ -656,6 +639,7 @@ mod tests {
             KarpenterNodePool {
                 requirements: vec![],
                 stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
                     budgets: vec![],
                     limits: None,
                     consolidate_after_in_seconds: None,
@@ -696,6 +680,7 @@ mod tests {
             KarpenterNodePool {
                 requirements: vec![],
                 stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
                     budgets: vec![],
                     limits: None,
                     consolidate_after_in_seconds: None,
@@ -747,6 +732,7 @@ mod tests {
                         },
                     ],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -777,6 +763,7 @@ mod tests {
                         },
                     ],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -812,6 +799,7 @@ mod tests {
                         },
                     ],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -850,6 +838,7 @@ mod tests {
                         },
                     ],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -860,6 +849,7 @@ mod tests {
                         consolidate_after_in_seconds: None,
                     },
                     default_override: Some(KarpenterDefaultNodePoolOverride {
+                        spot_enabled: None,
                         limits: Some(KarpenterNodePoolLimits {
                             max_cpu: KubernetesCpuResourceUnit::MilliCpu(30_000),
                             max_memory: KubernetesMemoryResourceUnit::GibiByte(40),
@@ -867,7 +857,7 @@ mod tests {
                         consolidate_after_in_seconds: None,
                     }),
                     gpu_override: Some(KarpenterGpuNodePoolOverride {
-                        spot_enabled: true,
+                        spot_enabled: Some(true),
                         budgets: vec![KarpenterNodePoolDisruptionBudget {
                             nodes: "0".to_string(),
                             reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
@@ -1216,6 +1206,7 @@ mod tests {
                 qovery_node_pools: KarpenterNodePool {
                     requirements: vec![],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![],
                         limits: None,
                         consolidate_after_in_seconds: None,
@@ -1306,6 +1297,7 @@ mod tests {
                 qovery_node_pools: KarpenterNodePool {
                     requirements: vec![],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![],
                         limits: None,
                         consolidate_after_in_seconds: None,
@@ -1397,6 +1389,7 @@ mod tests {
                 qovery_node_pools: KarpenterNodePool {
                     requirements: vec![],
                     stable_override: KarpenterStableNodePoolOverride {
+                        spot_enabled: None,
                         budgets: vec![],
                         limits: None,
                         consolidate_after_in_seconds: None,
