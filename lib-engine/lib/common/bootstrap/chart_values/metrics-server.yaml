@@ -1,3 +1,6 @@
+image:
+  tag: v0.8.1
+
 # create api service to be able to use hpa/vpa
 apiService:
   create: true
