@@ -68,11 +68,19 @@ imagePullSecrets: []
 networkPolicy:
   # -- Enable network policies
   enabled: false
-  # -- Flavor of the network policies (cilium)
+  # -- Flavor of the network policies (cilium, kubernetes)
   flavor: "cilium"
   # -- Allow use of extra egress rules for cilium network policies
   cilium:
     operator:
+      extraEgressRules: []
+  # -- Allow use of extra egress rules for kubernetes network policies
+  kubernetes:
+    operator:
+      extraEgressRules: []
+    metricsServer:
+      extraEgressRules: []
+    webhooks:
       extraEgressRules: []
 
 operator:
@@ -601,7 +609,6 @@ profiling:
     # -- Expose profiling on a specific port
     port: 8084
 
-
 ## Extra KEDA Operator and Metrics Adapter container arguments
 extraArgs:
   # -- Additional KEDA Operator container arguments
@@ -820,8 +827,8 @@ opentelemetry:
     # -- Uri of OpenTelemetry Collector to push telemetry to
     uri: ""
   operator:
-      # -- Enable pushing metrics to an OpenTelemetry Collector for operator
-      enabled: false
+    # -- Enable pushing metrics to an OpenTelemetry Collector for operator
+    enabled: false
 
 certificates:
   # -- Enables the self generation for KEDA TLS certificates inside KEDA operator
@@ -909,4 +916,3 @@ customManagedBy: ""
 # -- Enable service links in pods. Although enabled, mirroring k8s default, it is highly recommended to disable,
 # due to its legacy status [Legacy container links](https://docs.docker.com/engine/network/links/)
 enableServiceLinks: true
-

@@ -1,0 +1,79 @@
+{{- if and .Values.networkPolicy.enabled (eq .Values.networkPolicy.flavor "kubernetes") }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.operator.name }}-metrics-apiserver
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.operator.name }}-metrics-apiserver
+    app.kubernetes.io/name: {{ .Values.operator.name }}-metrics-apiserver
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.operator.name }}-metrics-apiserver
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from any pod in the cluster on the HTTPS metrics API port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.portHttpsTarget }}
+    {{- if .Values.prometheus.metricServer.enabled }}
+    # Allow ingress from any pod in the cluster on the prometheus metrics port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.prometheus.metricServer.port }}
+    {{- end }}
+    {{- if .Values.profiling.metricsServer.enabled }}
+    # Allow ingress from any pod in the cluster on the profiling port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.profiling.metricsServer.port }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow access to Kubernetes API server
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Allow egress to KEDA operator for gRPC metrics service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: {{ .Values.operator.name }}
+      ports:
+        - protocol: TCP
+          port: 9666
+    # Allow egress to any pod in the cluster for metric collection
+    - to:
+        - namespaceSelector: {}
+    {{- if .Values.networkPolicy.kubernetes.metricsServer.extraEgressRules }}
+    {{ toYaml .Values.networkPolicy.kubernetes.metricsServer.extraEgressRules | nindent 4 }}
+    {{- end }}
+{{- end }}

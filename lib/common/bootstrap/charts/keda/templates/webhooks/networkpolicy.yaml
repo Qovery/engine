@@ -1,0 +1,72 @@
+{{- if and .Values.webhooks.enabled .Values.networkPolicy.enabled (eq .Values.networkPolicy.flavor "kubernetes") }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.webhooks.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.webhooks.name }}
+    name: {{ .Values.webhooks.name }}
+    app.kubernetes.io/name: {{ .Values.webhooks.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.webhooks.name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from Kubernetes API server for admission webhooks
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.webhooks.port | default 9443 }}
+    {{- if .Values.prometheus.webhooks.enabled }}
+    # Allow ingress from any pod in the cluster on the prometheus metrics port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.prometheus.webhooks.port }}
+    {{- end }}
+    {{- if .Values.profiling.webhooks.enabled }}
+    # Allow ingress from any pod in the cluster on the profiling port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.profiling.webhooks.port }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow access to Kubernetes API server
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Allow egress to any pod in the cluster for validation
+    - to:
+        - namespaceSelector: {}
+    {{- if .Values.networkPolicy.kubernetes.webhooks.extraEgressRules }}
+    {{ toYaml .Values.networkPolicy.kubernetes.webhooks.extraEgressRules | nindent 4 }}
+    {{- end }}
+{{- end }}

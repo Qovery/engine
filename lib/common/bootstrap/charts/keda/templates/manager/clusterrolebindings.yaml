@@ -20,7 +20,7 @@ subjects:
   name: {{ (.Values.serviceAccount.operator).name | default .Values.serviceAccount.name }}
   namespace: {{ .Release.Namespace }}
 {{- else }}
-  {{- $namespaces := append (splitList "," .Values.watchNamespace) .Release.Namespace -}}
+  {{- $namespaces := uniq (append (splitList "," .Values.watchNamespace) .Release.Namespace) -}}
   {{- range $namespaces }}
 ---
 # Role binding for namespace '{{ . }}'

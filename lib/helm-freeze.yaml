@@ -144,7 +144,7 @@ charts:
     version: 1.9.0
   - name: keda
     repo_name: kedacore
-    version: v2.18.2
+    version: v2.19.0
   - name: nvidia-device-plugin
     dest: aws-bootstrap
     repo_name: nvidia

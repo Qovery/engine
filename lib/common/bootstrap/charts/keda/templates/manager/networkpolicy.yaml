@@ -1,0 +1,72 @@
+{{- if and .Values.networkPolicy.enabled (eq .Values.networkPolicy.flavor "kubernetes") }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Values.operator.name }}
+  namespace: {{ .Release.Namespace }}
+  {{- with .Values.additionalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  labels:
+    app: {{ .Values.operator.name }}
+    name: {{ .Values.operator.name }}
+    app.kubernetes.io/name: {{ .Values.operator.name }}
+    {{- include "keda.labels" . | indent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ .Values.operator.name }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from any pod in the cluster on the metrics service port (gRPC)
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 9666
+    {{- if .Values.prometheus.operator.enabled }}
+    # Allow ingress from any pod in the cluster on the prometheus metrics port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.prometheus.operator.port }}
+    {{- end }}
+    {{- if .Values.profiling.operator.enabled }}
+    # Allow ingress from any pod in the cluster on the profiling port
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.profiling.operator.port }}
+    {{- end }}
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow access to Kubernetes API server
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    # Allow egress to any pod in the cluster for scalers and custom resources
+    - to:
+        - namespaceSelector: {}
+    {{- if .Values.networkPolicy.kubernetes.operator.extraEgressRules }}
+    {{ toYaml .Values.networkPolicy.kubernetes.operator.extraEgressRules | nindent 4 }}
+    {{- end }}
+{{- end }}
