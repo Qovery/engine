@@ -21,11 +21,11 @@ spec:
       {{- if .Values.tests.image }}
       imagePullPolicy: {{ .Values.tests.image.pullPolicy }}
       {{- end }}
-      command: ['bash']
+      command: ['sh']
       args:
         - -c
         - |
-          #!/bin/bash
+          #!/bin/sh
 
           set -ex
           cat <<EOF | kubectl -n {{ .Release.Namespace }} apply -f -

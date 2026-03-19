@@ -4,6 +4,7 @@ apiVersion: {{ ternary "policy/v1" "policy/v1beta1" (semverCompare ">=1.21.0-0" 
 kind: PodDisruptionBudget
 metadata:
   name: "{{ template "vpa.fullname" . }}-recommender-pdb"
+  namespace: {{ .Release.Namespace }}
 spec:
   {{- toYaml .Values.recommender.podDisruptionBudget | nindent 2 }}
   selector:

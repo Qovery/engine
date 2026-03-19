@@ -127,7 +127,7 @@ charts:
   - name: vpa
     dest_folder_override: vertical-pod-autoscaler
     repo_name: fairwinds
-    version: 4.8.0
+    version: 4.10.2
   - name: k8s-event-logger
     repo_name: qovery-github
     chart_path: chart

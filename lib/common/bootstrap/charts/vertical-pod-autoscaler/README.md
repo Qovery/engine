@@ -128,6 +128,24 @@ recommender:
     storage: prometheus
 ```
 
+## Utilize In-Place Pod Vertical Scaling
+
+Since version 1.4, VPA supports Kubernetes' in-place pod vertical scaling feature. To use this feature, you will need to
+
+- have a Kubernetes cluster supporting this feature (feature flag `InPlacePodVerticalScaling` enabled)
+- enable the VPA feature flag for updater and admission controller:
+  ```
+  admissionController:
+    extraArgs:
+      "feature-gates": "InPlaceOrRecreate=true"
+  updater:
+    extraArgs:
+      "feature-gates": "InPlaceOrRecreate=true"
+  ```
+- configure the respective VPA resources with `spec.updatePolicy.updateMode: "InPlaceOrRecreate"`
+
+For more information, see [VPA docs](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/docs/features.md#in-place-updates-inplaceorrecreate) and [Kubernetes docs](https://kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/).
+
 ## Values
 
 | Key | Type | Default | Description |
@@ -138,12 +156,13 @@ recommender:
 | fullnameOverride | string | `""` | A template override for the fullname |
 | podLabels | object | `{}` | Labels to add to all pods |
 | rbac.create | bool | `true` | If true, then rbac resources (ClusterRoles and ClusterRoleBindings) will be created for the selected components. Temporary rbac resources will still be created, to ensure a functioning installation process |
-| rbac.extraRules | object | `{"vpaActor":[],"vpaCheckpointActor":[],"vpaEvictioner":[],"vpaMetricsReader":[],"vpaStatusActor":[],"vpaStatusReader":[],"vpaTargetReader":[]}` | Extra rbac rules for ClusterRoles |
+| rbac.extraRules | object | `{"vpaActor":[],"vpaCheckpointActor":[],"vpaEvictioner":[],"vpaMetricsReader":[],"vpaStatusActor":[],"vpaStatusReader":[],"vpaTargetReader":[],"vpaUpdaterInPlace":[]}` | Extra rbac rules for ClusterRoles |
 | rbac.extraRules.vpaActor | list | `[]` | Extra rbac rules for the vpa-actor ClusterRole |
 | rbac.extraRules.vpaStatusActor | list | `[]` | Extra rbac rules for the vpa-status-actor ClusterRole |
 | rbac.extraRules.vpaCheckpointActor | list | `[]` | Extra rbac rules for the vpa-checkpoint-actor ClusterRole |
 | rbac.extraRules.vpaEvictioner | list | `[]` | Extra rbac rules for the vpa-evictioner ClusterRole |
 | rbac.extraRules.vpaMetricsReader | list | `[]` | Extra rbac rules for the vpa-metrics-reader ClusterRole |
+| rbac.extraRules.vpaUpdaterInPlace | list | `[]` | Extra rbac rules for the vpa-updater-in-place ClusterRole |
 | rbac.extraRules.vpaTargetReader | list | `[]` | Extra rbac rules for the vpa-target-reader ClusterRole |
 | rbac.extraRules.vpaStatusReader | list | `[]` | Extra rbac rules for the vpa-status-reader ClusterRole |
 | serviceAccount.create | bool | `true` | Specifies whether a service account should be created for each component |
@@ -233,8 +252,8 @@ recommender:
 | admissionController.httpPort | int | `8000` | Port of the admission controller for the mutating webhooks |
 | admissionController.metricsPort | int | `8944` | Port of the admission controller where metrics can be received from |
 | tests.securityContext | object | `{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true,"runAsNonRoot":true,"runAsUser":10324}` | The security context for the containers run as helm hook tests |
-| tests.image.repository | string | `"bitnami/kubectl"` | An image used for testing containing bash, cat and kubectl |
-| tests.image.tag | string | `""` | An image tag for the tests image |
+| tests.image.repository | string | `"alpine/kubectl"` | An image used for testing containing sh, cat and kubectl |
+| tests.image.tag | string | `"1.35.2"` | An image tag for the tests image |
 | tests.image.pullPolicy | string | `"Always"` | The pull policy for the tests image. |
 | metrics-server | object | `{"enabled":false}` | configuration options for the [metrics server Helm chart](https://github.com/kubernetes-sigs/metrics-server/tree/master/charts/metrics-server). See the projects [README.md](https://github.com/kubernetes-sigs/metrics-server/tree/master/charts/metrics-server#configuration) for all available options |
 | metrics-server.enabled | bool | `false` | Whether or not the metrics server Helm chart should be installed |

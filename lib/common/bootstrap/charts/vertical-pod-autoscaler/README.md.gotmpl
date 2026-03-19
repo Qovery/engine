@@ -128,4 +128,22 @@ recommender:
     storage: prometheus
 ```
 
+## Utilize In-Place Pod Vertical Scaling
+
+Since version 1.4, VPA supports Kubernetes' in-place pod vertical scaling feature. To use this feature, you will need to
+
+- have a Kubernetes cluster supporting this feature (feature flag `InPlacePodVerticalScaling` enabled)
+- enable the VPA feature flag for updater and admission controller:
+  ```
+  admissionController:
+    extraArgs:
+      "feature-gates": "InPlaceOrRecreate=true"
+  updater:
+    extraArgs:
+      "feature-gates": "InPlaceOrRecreate=true"
+  ```
+- configure the respective VPA resources with `spec.updatePolicy.updateMode: "InPlaceOrRecreate"`
+
+For more information, see [VPA docs](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/docs/features.md#in-place-updates-inplaceorrecreate) and [Kubernetes docs](https://kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/).
+
 {{ template "chart.valuesSection" . }}

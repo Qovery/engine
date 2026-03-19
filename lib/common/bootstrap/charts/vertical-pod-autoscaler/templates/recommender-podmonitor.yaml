@@ -4,6 +4,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: PodMonitor
 metadata:
   name: {{ include "vpa.fullname" . }}-recommender
+  namespace: {{ .Release.Namespace }}
   {{- with .Values.recommender.podMonitor.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
