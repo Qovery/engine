@@ -40,6 +40,7 @@ use crate::infrastructure::action::eks::helm_charts::cluster_autoscaler_chart::C
 use crate::infrastructure::action::eks::helm_charts::gen_eso_charts::generate_eso_charts;
 use crate::infrastructure::action::eks::helm_charts::gen_karpenter_charts::generate_karpenter_charts;
 use crate::infrastructure::action::eks::helm_charts::gen_keda_charts::generate_keda_charts;
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -93,6 +94,17 @@ pub(super) fn eks_helm_charts(
         prometheus_namespace.clone(),
         get_chart_override_fn.clone(),
     )?;
+
+    let gateway_api_rollout_status = GatewayApiRolloutStatus::new(
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false),
+    );
 
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
@@ -441,10 +453,7 @@ pub(super) fn eks_helm_charts(
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
+        gateway_api_rollout_status,
     )
     .to_common_helm_chart()?;
 

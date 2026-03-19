@@ -15,7 +15,8 @@ spec:
 
     # https://cert-manager.io/docs/configuration/acme/
     solvers:
-      {{- if or (eq .Values.k8sUseApiGateway true) (eq .Values.k8sDeployApiGateway true) }}
+      # Activate gateway-api solver only if gateway-api is default
+      {{- if and (eq .Values.k8sUseApiGateway true) (eq .Values.k8sDeployApiGateway true) }}
       - http01:
           gatewayHTTPRoute:
             parentRefs:

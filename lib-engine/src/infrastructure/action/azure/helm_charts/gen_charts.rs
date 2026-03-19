@@ -7,6 +7,7 @@ use crate::helm::{
 };
 use crate::infrastructure::action::azure::helm_charts::AksChartsConfigPrerequisites;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
@@ -72,6 +73,17 @@ pub(super) fn aks_helm_charts(
         ),
     )
     .to_common_helm_chart()?;
+
+    let gateway_api_rollout_status = GatewayApiRolloutStatus::new(
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false),
+    );
 
     // Qovery priority class
     let q_priority_class_chart = QoveryPriorityClassChart::new(
@@ -185,10 +197,7 @@ pub(super) fn aks_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         HelmChartNamespaces::Qovery,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
+        gateway_api_rollout_status,
     )
     .to_common_helm_chart()?;
 

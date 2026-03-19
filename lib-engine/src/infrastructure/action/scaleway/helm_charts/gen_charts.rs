@@ -46,6 +46,7 @@ use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryCluste
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::io_models::QoveryIdentifier;
 // use crate::io_models::metrics::MetricsConfiguration;
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use std::collections::HashSet;
 use std::iter::FromIterator;
@@ -78,6 +79,17 @@ pub fn kapsule_helm_charts(
         prometheus_namespace,
         get_chart_override_fn.clone(),
     )?;
+
+    let gateway_api_rollout_status = GatewayApiRolloutStatus::new(
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false),
+    );
 
     let prometheus_operator_crds_chart = metrics_config
         .prometheus_operator_crds_chart
@@ -260,10 +272,7 @@ pub fn kapsule_helm_charts(
         true,
         HelmChartNamespaces::CertManager,
         HelmChartNamespaces::KubeSystem,
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
+        gateway_api_rollout_status,
     )
     .to_common_helm_chart()?;
 
