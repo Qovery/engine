@@ -25,7 +25,6 @@ pub mod k8s_event_logger;
 pub mod keda;
 pub mod keda_crd;
 pub mod kube_prometheus_stack_chart;
-pub mod kube_state_metrics;
 pub mod loki_chart;
 pub mod metrics_server_chart;
 pub mod nginx_ingress_chart;
