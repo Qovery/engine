@@ -7,6 +7,7 @@ metadata:
   {{- .Values.recommender.annotations | toYaml | nindent 4 }}
   {{- end }}
   name: {{ include "vpa.fullname" . }}-recommender
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/component: recommender
     {{- include "vpa.labels" . | nindent 4 }}

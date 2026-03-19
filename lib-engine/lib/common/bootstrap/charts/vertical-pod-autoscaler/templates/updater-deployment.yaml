@@ -7,6 +7,7 @@ metadata:
   {{- .Values.updater.annotations | toYaml | nindent 4 }}
   {{- end }}
   name: {{ include "vpa.fullname" . }}-updater
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/component: updater
     {{- include "vpa.labels" . | nindent 4 }}

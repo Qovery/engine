@@ -4,6 +4,7 @@ apiVersion: {{ ternary "policy/v1" "policy/v1beta1" (semverCompare ">=1.21.0-0" 
 kind: PodDisruptionBudget
 metadata:
   name: "{{ template "vpa.fullname" . }}-admission-controller-pdb"
+  namespace: {{ .Release.Namespace }}
 spec:
   {{- toYaml .Values.admissionController.podDisruptionBudget | nindent 2 }}
   selector:

@@ -1,6 +1,8 @@
 priorityClassName: system-cluster-critical
 
 recommender:
+  image:
+    tag: "1.6.0"
   extraArgs:
     pod-recommendation-min-cpu-millicores: 50
     pod-recommendation-min-memory-mb: 32
@@ -22,6 +24,8 @@ recommender:
     initialDelaySeconds: 45
 
 updater:
+  image:
+    tag: "1.6.0"
   extraArgs:
     min-replicas: 1
   resources:
@@ -34,6 +38,8 @@ updater:
 
 admissionController:
   enabled: true
+  image:
+    tag: "1.6.0"
   resources:
     limits:
       cpu: set-by-engine-code

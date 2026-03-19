@@ -14,8 +14,8 @@ Get kubectl image name
 */}}
 {{- define "vpa.test.image" -}}
 {{- if .Values.tests.image }}
-{{- printf "%s:%s" (default "bitnami/kubectl" .Values.tests.image.repository) (default (include "vpa.test.tag" . ) .Values.tests.image.tag) }}
+{{- printf "%s:%s" (default "alpine/kubectl" .Values.tests.image.repository) (default (include "vpa.test.tag" . ) .Values.tests.image.tag) }}
 {{- else }}
-{{- printf "bitnami/kubectl:%s" (include "vpa.test.tag" . ) }}
+{{- printf "alpine/kubectl:%s" (include "vpa.test.tag" . ) }}
 {{- end }}
 {{- end }}
