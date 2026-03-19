@@ -159,6 +159,7 @@ impl ObjectStorage for S3 {
                 bucket: bucket_name.to_string(),
                 expected_bucket_owner: None,
             }))
+            .map_err(|e| e.to_string())
         })
         .is_ok()
     }

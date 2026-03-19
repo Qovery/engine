@@ -223,7 +223,7 @@ where
         // pod is available: as of today, we consider the status can be set to Executing
         logger.switch_to_executing_step();
 
-        let _ = pod_tx.map(|tx| tx.send(pod));
+        let _ = pod_tx.map(|tx| tx.send(pod).map_err(|e| e.to_string()));
         let pod = block_on(super::deploy_job::job::await_job_pod_to_terminate(
             self.kube_name(),
             max_execution_duration,

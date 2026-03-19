@@ -377,7 +377,7 @@ pub fn main() -> io::Result<()> {
                                            logger: Box<dyn Logger>,
                                            metrics_registry: Box<dyn MetricsRegistry>,
                                            log_file_writer: LogFileWriter|
-              -> Result<Arc<dyn Task>, EngineEvent> {
+              -> Result<Arc<dyn Task>, Box<EngineEvent>> {
             // make sure to clean configuration directories so engine task can start fresh
             clean_configuration_directories();
 
@@ -429,7 +429,7 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
                         ),
                         Some(message),
                     );
-                    Err(err)
+                    Err(Box::new(err))
                 }
             }
         };

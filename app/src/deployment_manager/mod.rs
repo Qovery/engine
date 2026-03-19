@@ -95,7 +95,7 @@ type MkEngineTask = Box<
             Box<dyn Logger>,
             Box<dyn MetricsRegistry>,
             LogFileWriter,
-        ) -> Result<Arc<dyn Task>, EngineEvent>
+        ) -> Result<Arc<dyn Task>, Box<EngineEvent>>
         + Send,
 >;
 
@@ -277,7 +277,7 @@ impl DeploymentManager {
                                     (next_step, None)
                                 }
                                 Err(err) => {
-                                    deployment.hard_abort_deployment(err).await;
+                                    deployment.hard_abort_deployment(*err).await;
                                     upstream.await_termination().await;
                                     (DeploymentManagerState::SeekingNewDeployment {}, None)
                                 }
@@ -414,7 +414,7 @@ impl DeploymentManager {
                                         }
                                         Err(err) => {
                                             task.terminate_task().await;
-                                            deployment.hard_abort_deployment(err).await;
+                                            deployment.hard_abort_deployment(*err).await;
                                             upstream.await_termination().await;
 
                                             return (DeploymentManagerState::SeekingNewDeployment {}, None);
@@ -519,6 +519,7 @@ mod test {
             &self,
             _request: Request<DeploymentRequest>,
         ) -> Result<Response<DeploymentInfo>, Status> {
+            #[allow(clippy::result_large_err)]
             self.deployments
                 .lock()
                 .unwrap()
@@ -666,7 +667,7 @@ mod test {
         let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
         let mk_engine_task = |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
-            Ok::<_, EngineEvent>(task)
+            Ok::<_, Box<EngineEvent>>(task)
         };
 
         let mut deployment_mngr = DeploymentManager::new(
@@ -733,7 +734,7 @@ mod test {
 
         let mk_engine_task = move |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(task.clone());
-            Ok::<_, EngineEvent>(task)
+            Ok::<_, Box<EngineEvent>>(task)
         };
 
         let task = TaskSelector::Environment;
@@ -778,6 +779,7 @@ mod test {
             &self,
             _request: Request<DeploymentRequest>,
         ) -> Result<Response<DeploymentInfo>, Status> {
+            #[allow(clippy::result_large_err)]
             self.deployments
                 .lock()
                 .unwrap()
@@ -871,7 +873,7 @@ mod test {
 
         let mk_engine_task = move |_, _: &_, _: &_, _, _, _| {
             let task: Arc<dyn Task> = Arc::new(task.clone());
-            Ok::<_, EngineEvent>(task)
+            Ok::<_, Box<EngineEvent>>(task)
         };
 
         let task = TaskSelector::Environment;

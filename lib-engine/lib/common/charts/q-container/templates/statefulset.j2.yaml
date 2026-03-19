@@ -156,7 +156,11 @@ spec:
             {%- endif %}
             {%- if service.readiness_probe.type.exec %}
             exec:
-              command: {{ service.readiness_probe.type.exec.commands }}
+              command:
+              {%- for cmd in service.readiness_probe.type.exec.commands %}
+              - |-
+                {{ cmd }}
+              {%- endfor %}
             {%- endif %}
             {%- if service.readiness_probe.type.grpc %}
             grpc:
@@ -184,7 +188,11 @@ spec:
             {%- endif %}
             {%- if service.liveness_probe.type.exec %}
             exec:
-              command: {{ service.liveness_probe.type.exec.commands }}
+              command:
+              {%- for cmd in service.liveness_probe.type.exec.commands %}
+              - |-
+                {{ cmd }}
+              {%- endfor %}
             {%- endif %}
             {%- if service.liveness_probe.type.grpc %}
             grpc:
