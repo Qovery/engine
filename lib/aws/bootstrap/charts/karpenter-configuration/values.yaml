@@ -36,9 +36,9 @@ tags:
 
 # to configure all the node pools (later we can have a section by node pool)
 global_node_pools:
-  requirements: []
   terminationGracePeriod: 1h
 stableNodePool:
+  requirements: []
   consolidateAfter: 30s
   consolidation:
     budgets: []
@@ -46,6 +46,7 @@ stableNodePool:
     maxCpu: ""
     maxMemory: ""
 defaultNodePool:
+  requirements: []
   consolidateAfter: 1m
   limits:
     maxCpu: ""
