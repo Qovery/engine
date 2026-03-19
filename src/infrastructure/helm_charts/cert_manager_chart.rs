@@ -7,6 +7,7 @@ use crate::helm::{
     HelmChartNamespaces, UpdateStrategy, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
     VpaTargetRefKind,
 };
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
     HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
@@ -33,7 +34,7 @@ pub struct CertManagerChart {
     enable_vpa: bool,
     namespace: HelmChartNamespaces,
     leader_election_namespace: HelmChartNamespaces,
-    deploy_gateway_api: bool,
+    gateway_api_rollout_status: GatewayApiRolloutStatus,
 }
 
 impl CertManagerChart {
@@ -48,7 +49,7 @@ impl CertManagerChart {
         enable_vpa: bool,
         namespace: HelmChartNamespaces,
         leader_election_namespace: HelmChartNamespaces,
-        deploy_gateway_api: bool,
+        gateway_api_rollout_status: GatewayApiRolloutStatus,
     ) -> CertManagerChart {
         CertManagerChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
@@ -107,7 +108,7 @@ impl CertManagerChart {
             enable_vpa,
             namespace,
             leader_election_namespace,
-            deploy_gateway_api,
+            gateway_api_rollout_status,
         }
     }
 
@@ -193,7 +194,7 @@ impl ToCommonHelmChart for CertManagerChart {
             },
         ];
 
-        if self.deploy_gateway_api {
+        if self.gateway_api_rollout_status.is_deployed() {
             values.push(ChartSetValue {
                 key: "config.apiVersion".to_string(),
                 value: "controller.config.cert-manager.io/v1alpha1".to_string(),
@@ -206,6 +207,10 @@ impl ToCommonHelmChart for CertManagerChart {
                 key: "config.enableGatewayAPI".to_string(),
                 value: true.to_string(),
             });
+        }
+
+        // If use gateway-api as default, those options will deal with ListenerSets and certificates generation
+        if self.gateway_api_rollout_status.is_default() {
             values.push(ChartSetValue {
                 key: "config.enableGatewayAPIListenerSet".to_string(),
                 value: true.to_string(),
@@ -339,6 +344,7 @@ impl ChartInstallationChecker for CertManagerChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::helm::{HelmChartNamespaces, UpdateStrategy};
+    use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
     use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
     use crate::infrastructure::helm_charts::{
         HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
@@ -372,7 +378,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
-            false,
+            GatewayApiRolloutStatus::NotDeployed,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -407,7 +413,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
-            false,
+            GatewayApiRolloutStatus::NotDeployed,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -446,7 +452,7 @@ mod tests {
             false,
             HelmChartNamespaces::CertManager,
             HelmChartNamespaces::KubeSystem,
-            false,
+            GatewayApiRolloutStatus::NotDeployed,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

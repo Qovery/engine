@@ -8,6 +8,7 @@ use crate::helm::{
     QoveryPriorityClass, UpdateStrategy,
 };
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::action::gke::helm_charts::gen_eso_charts::generate_eso_charts;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
@@ -71,6 +72,17 @@ pub(super) fn gke_helm_charts(
         prometheus_namespace,
         get_chart_override_fn.clone(),
     )?;
+
+    let gateway_api_rollout_status = GatewayApiRolloutStatus::new(
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_deploy_api_gateway
+            .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_use_api_gateway
+            .unwrap_or(false),
+    );
 
     // Qovery storage class
     let q_storage_class_chart = QoveryStorageClassChart::new(
@@ -196,10 +208,7 @@ pub(super) fn gke_helm_charts(
         true,
         HelmChartNamespaces::Qovery,
         HelmChartNamespaces::Qovery, // Leader election defaults to kube-system which is not permitted on GKE autopilot
-        chart_config_prerequisites
-            .cluster_advanced_settings
-            .k8s_deploy_api_gateway
-            .unwrap_or(false),
+        gateway_api_rollout_status,
     )
     .to_common_helm_chart()?;
 
