@@ -21,6 +21,7 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::eksanywhere::helm_charts::EksAnywhereChartsConfigPrerequisites;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_chart::MetalLbChart;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_config_chart::MetalLbConfigChart;
+use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
 use crate::infrastructure::helm_charts::external_dns_chart::{
     ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
@@ -43,6 +44,8 @@ pub(super) fn eks_anywhere_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
+
+    let gateway_api_rollout_status = GatewayApiRolloutStatus::NotDeployed;
 
     // VPA
     let vpa = VpaChart::new(
@@ -286,6 +289,7 @@ pub(super) fn eks_anywhere_helm_charts(
                         .annotation_external_dns_kubernetes_target
                         .clone(),
                 ),
+                declare_service_hostname: !gateway_api_rollout_status.is_default(), // if envoy is default, we don't want nginx to declare hostname on its service
             },
         )
         .to_common_helm_chart()?,

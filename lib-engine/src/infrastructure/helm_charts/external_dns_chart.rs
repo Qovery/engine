@@ -99,7 +99,7 @@ impl ExternalDNSChart {
                     ExternalDNSSource::GatewayTcpRoute,
                     ExternalDNSSource::GatewayUdpRoute,
                     ExternalDNSSource::GatewayTlsRoute,
-                    // ExternalDNSSource::Service,
+                    ExternalDNSSource::Service,
                 ]
                 .into_iter()
                 .collect(),

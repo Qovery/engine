@@ -595,6 +595,7 @@ pub(super) fn eks_helm_charts(
                 replica_count: None,
                 metal_lb_load_balancer_ip: None,
                 external_dns_target: None,
+                declare_service_hostname: !gateway_api_rollout_status.is_default(), // if envoy is default, we don't want nginx to declare hostname on its service
             },
         )
         .to_common_helm_chart()?,
