@@ -479,6 +479,7 @@ pub fn kapsule_helm_charts(
                             .clone(),
                     },
                 },
+                false,
             )
             .to_common_helm_chart()?,
         );
