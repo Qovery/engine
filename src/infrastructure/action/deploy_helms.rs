@@ -637,6 +637,8 @@ fn deploy_charts_once(
                     succeeded.push(name);
                 }
                 Ok((chart, Err(e))) => {
+                    let name = chart.get_chart_info().name.clone();
+                    tracing::error!(chart = %name, error = %e, "Helm chart deployment failed");
                     failed.push((chart, e));
                 }
                 Err(panic_err) => {

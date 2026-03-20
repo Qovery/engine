@@ -412,6 +412,7 @@ pub(super) fn gke_helm_charts(
                             .clone(),
                     },
                 },
+                false,
             )
             .to_common_helm_chart()?,
         );

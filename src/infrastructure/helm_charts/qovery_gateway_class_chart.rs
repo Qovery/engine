@@ -18,6 +18,7 @@ use std::collections::HashSet;
 pub struct QoveryGatewayClassChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    additional_chart_path: Option<HelmChartValuesFilePath>,
     namespace: HelmChartNamespaces,
     gateway_classes_to_be_installed: HashSet<QoveryGatewayClass>,
     access_log_format: Option<String>,
@@ -31,6 +32,7 @@ impl QoveryGatewayClassChart {
         gateway_classes_to_be_checked_after_install: HashSet<QoveryGatewayClass>,
         access_log_format: Option<String>,
         hpa_mode: HpaMode,
+        karpenter_enabled: bool,
     ) -> Self {
         QoveryGatewayClassChart {
             chart_path: HelmChartPath::new(
@@ -43,6 +45,14 @@ impl QoveryGatewayClassChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 QoveryGatewayClassChart::chart_name(),
             ),
+            additional_chart_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    format!("{}-with-karpenter", QoveryGatewayClassChart::chart_name()),
+                )),
+                false => None,
+            },
             namespace,
             gateway_classes_to_be_installed: gateway_classes_to_be_checked_after_install,
             access_log_format,
@@ -151,6 +161,11 @@ impl QoveryGatewayClassChart {
 
 impl ToCommonHelmChart for QoveryGatewayClassChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_chart_path) = &self.additional_chart_path {
+            values_files.push(additional_chart_path.to_string());
+        }
+
         let mut values = vec![
             ChartSetValue {
                 key: "gatewayClass.qoveryPublic.enable".to_string(),
@@ -199,7 +214,7 @@ impl ToCommonHelmChart for QoveryGatewayClassChart {
                 name: QoveryGatewayClassChart::chart_name(),
                 namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values,
                 values_string,
                 ..Default::default()
@@ -299,6 +314,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -330,6 +346,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -365,6 +382,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -402,6 +420,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:
@@ -460,6 +479,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:
@@ -505,6 +525,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:
@@ -556,6 +577,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:
@@ -595,6 +617,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:
@@ -624,6 +647,7 @@ mod tests {
             HpaMode::Enabled {
                 config: Default::default(),
             },
+            true,
         );
 
         // execute:

@@ -642,6 +642,7 @@ pub(super) fn eks_helm_charts(
                             .clone(),
                     },
                 },
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         );

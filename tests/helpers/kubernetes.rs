@@ -61,6 +61,13 @@ pub enum ClusterTestType {
     WithNodesResize,
 }
 
+fn expect_ok<T, E: std::fmt::Debug>(test_name: &str, step: &str, result: Result<T, E>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(err) => panic!("Test `{test_name}` failed at step `{step}` with error: {err:?}"),
+    }
+}
+
 pub fn cluster_test(
     test_name: &str,
     provider_kind: Kind,
@@ -127,16 +134,22 @@ pub fn cluster_test(
     );
 
     // Bootstrap
-    let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-    assert!(deploy_tx.is_ok());
+    expect_ok(
+        test_name,
+        "bootstrap:create_cluster",
+        engine.kubernetes().as_infra_actions().create_cluster(&engine, false),
+    );
 
     // update
     engine.context_mut().update_is_first_cluster_deployment(false);
 
     // If no actionable features, then trigger a cluster update as usual
     if actionable_features.is_empty() {
-        let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-        assert!(deploy_tx.is_ok());
+        expect_ok(
+            test_name,
+            "update:create_cluster",
+            engine.kubernetes().as_infra_actions().create_cluster(&engine, false),
+        );
     } else {
         // 1. Enable actionable features
         let engine_with_features_enabled = create_infrastructure_context(
@@ -155,15 +168,21 @@ pub fn cluster_test(
             actionable_features,
         );
 
-        let deploy_tx = engine
-            .kubernetes()
-            .as_infra_actions()
-            .create_cluster(&engine_with_features_enabled, false);
-        assert!(deploy_tx.is_ok());
+        expect_ok(
+            test_name,
+            "features:enable:create_cluster",
+            engine
+                .kubernetes()
+                .as_infra_actions()
+                .create_cluster(&engine_with_features_enabled, false),
+        );
 
         // 2. Disable actionable features
-        let deploy_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-        assert!(deploy_tx.is_ok());
+        expect_ok(
+            test_name,
+            "features:disable:create_cluster",
+            engine.kubernetes().as_infra_actions().create_cluster(&engine, false),
+        );
     }
 
     // Deploy env if any
@@ -178,9 +197,11 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = qovery_engine::infrastructure::models::cloud_provider::service::Action::Create;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
-            panic!("{ret:?}")
-        }
+        expect_ok(
+            test_name,
+            "environment:create",
+            EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None),
+        );
     }
 
     match test_type {
@@ -188,12 +209,18 @@ pub fn cluster_test(
         ClusterTestType::Classic => {}
         ClusterTestType::WithPause => {
             // Pause
-            let pause_tx = engine.kubernetes().as_infra_actions().pause_cluster(&engine);
-            assert!(pause_tx.is_ok());
+            expect_ok(
+                test_name,
+                "pause:pause_cluster",
+                engine.kubernetes().as_infra_actions().pause_cluster(&engine),
+            );
 
             // Resume
-            let resume_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-            assert!(resume_tx.is_ok());
+            expect_ok(
+                test_name,
+                "pause:resume:create_cluster",
+                engine.kubernetes().as_infra_actions().create_cluster(&engine, false),
+            );
         }
         ClusterTestType::WithUpgrade => {
             let upgrade_to_version = kubernetes_boot_version.next_version().unwrap_or_else(|| {
@@ -216,12 +243,18 @@ pub fn cluster_test(
             );
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().run(&engine, Action::Create);
-            assert!(upgrade_tx.is_ok());
+            expect_ok(
+                test_name,
+                "upgrade:run:create",
+                engine.kubernetes().as_infra_actions().run(&engine, Action::Create),
+            );
 
             // Delete
-            let delete_tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);
-            assert!(delete_tx.is_ok());
+            expect_ok(
+                test_name,
+                "upgrade:delete_cluster",
+                engine.kubernetes().as_infra_actions().delete_cluster(&engine),
+            );
 
             return test_name.to_string();
         }
@@ -243,12 +276,18 @@ pub fn cluster_test(
             );
 
             // Upgrade
-            let upgrade_tx = engine.kubernetes().as_infra_actions().create_cluster(&engine, false);
-            assert!(upgrade_tx.is_ok());
+            expect_ok(
+                test_name,
+                "resize:create_cluster",
+                engine.kubernetes().as_infra_actions().create_cluster(&engine, false),
+            );
 
             // Delete
-            let delete_tx = engine.kubernetes().as_infra_actions().delete_cluster(&engine);
-            assert!(delete_tx.is_ok());
+            expect_ok(
+                test_name,
+                "resize:delete_cluster",
+                engine.kubernetes().as_infra_actions().delete_cluster(&engine),
+            );
 
             return test_name.to_string();
         }
@@ -266,15 +305,19 @@ pub fn cluster_test(
             .unwrap();
 
         env.action = Action::Delete;
-        if let Err(ret) = EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None) {
-            panic!("{ret:?}")
-        }
+        expect_ok(
+            test_name,
+            "environment:delete",
+            EnvironmentTask::deploy_environment(env, &engine, &|| AbortStatus::None),
+        );
     }
 
     // Delete
-    if let Err(err) = engine.kubernetes().as_infra_actions().delete_cluster(&engine) {
-        panic!("{err:?}")
-    }
+    expect_ok(
+        test_name,
+        "final:delete_cluster",
+        engine.kubernetes().as_infra_actions().delete_cluster(&engine),
+    );
 
     test_name.to_string()
 }

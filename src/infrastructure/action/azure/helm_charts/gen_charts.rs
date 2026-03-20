@@ -387,6 +387,7 @@ pub(super) fn aks_helm_charts(
                             .clone(),
                     },
                 },
+                false,
             )
             .to_common_helm_chart()?,
         );

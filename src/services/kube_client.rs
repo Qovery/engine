@@ -53,6 +53,31 @@ pub enum SelectK8sResourceBy {
 )]
 pub struct GatewayClassSpec {}
 
+// kube.rs extension to query Gateway and its status conditions.
+#[derive(CustomResource, Deserialize, Serialize, Clone, Debug, JsonSchema)]
+#[kube(
+    group = "gateway.networking.k8s.io",
+    version = "v1",
+    kind = "Gateway",
+    namespaced,
+    status = "GatewayStatus"
+)]
+pub struct GatewaySpec {}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct GatewayStatus {
+    pub conditions: Option<Vec<GatewayCondition>>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct GatewayCondition {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub status: String,
+    #[serde(rename = "observedGeneration")]
+    pub observed_generation: Option<i64>,
+}
+
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
@@ -798,8 +823,12 @@ async fn create_kube_client_in_cluster() -> Result<kube::Client, kube::Error> {
 #[cfg(test)]
 mod tests {
     use std::env;
+    use std::fs;
     use std::path::PathBuf;
 
+    use kube::CustomResourceExt;
+    use serde::Deserialize;
+    use serde_yaml::Value;
     use uuid::Uuid;
 
     use crate::runtime::block_on;
@@ -810,7 +839,66 @@ mod tests {
         io_models::QoveryIdentifier,
     };
 
-    use super::QubeClient;
+    use super::{Gateway, QubeClient};
+
+    fn find_workspace_root() -> PathBuf {
+        let mut current_directory = env::current_dir().expect("Impossible to get current directory");
+        loop {
+            if current_directory.join("Cargo.toml").exists() && current_directory.join("lib-engine").exists() {
+                return current_directory;
+            }
+
+            if !current_directory.pop() {
+                panic!("Cannot locate workspace root containing lib-engine");
+            }
+        }
+    }
+
+    fn load_gateway_crd_from_envoy_gateway_crd_templates() -> Value {
+        let workspace_root = find_workspace_root();
+        let template_files = [
+            workspace_root.join(
+                "lib-engine/lib/common/bootstrap/charts/envoy-gateway-crd/templates/standard-gatewayapi-crds.yaml",
+            ),
+            workspace_root.join(
+                "lib-engine/lib/common/bootstrap/charts/envoy-gateway-crd/templates/experimental-gatewayapi-crds.yaml",
+            ),
+        ];
+
+        for template_path in template_files {
+            let file_content = fs::read_to_string(&template_path)
+                .unwrap_or_else(|_| panic!("Failed to read CRD template file: {}", template_path.display()));
+
+            // Remove Helm template directives to keep the YAML parseable in unit tests.
+            let sanitized_content = file_content
+                .lines()
+                .filter(|line| !line.trim_start().starts_with("{{"))
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            for document in serde_yaml::Deserializer::from_str(&sanitized_content) {
+                let yaml_value = match Value::deserialize(document) {
+                    Ok(doc) => doc,
+                    Err(_) => continue,
+                };
+
+                if yaml_value.get("kind").and_then(Value::as_str) != Some("CustomResourceDefinition") {
+                    continue;
+                }
+
+                if yaml_value
+                    .get("metadata")
+                    .and_then(|metadata| metadata.get("name"))
+                    .and_then(Value::as_str)
+                    == Some("gateways.gateway.networking.k8s.io")
+                {
+                    return yaml_value;
+                }
+            }
+        }
+
+        panic!("Cannot find Gateway CRD definition in envoy-gateway-crd templates");
+    }
 
     pub fn get_qube_client() -> (QubeClient, EventDetails) {
         rustls::crypto::aws_lc_rs::default_provider()
@@ -836,7 +924,6 @@ mod tests {
     #[test]
     fn test_karpenter_crds_have_correct_metadata() {
         use super::{EC2NodeClass, NodeClaim, NodePool};
-        use kube::CustomResourceExt;
 
         let test_cases = vec![
             (NodePool::crd(), "karpenter.sh", "NodePool"),
@@ -852,6 +939,62 @@ mod tests {
                 "{expected_kind} CRD must have a v1 version"
             );
         }
+    }
+
+    #[test]
+    fn test_gateway_custom_resource_is_aligned_with_chart_crd() {
+        let gateway_crd_from_chart = load_gateway_crd_from_envoy_gateway_crd_templates();
+        let generated_gateway_crd = Gateway::crd();
+
+        assert_eq!(
+            generated_gateway_crd.spec.group,
+            gateway_crd_from_chart["spec"]["group"]
+                .as_str()
+                .expect("Chart CRD spec.group must be a string"),
+            "Gateway CRD group drift detected"
+        );
+        assert_eq!(
+            generated_gateway_crd.spec.names.kind,
+            gateway_crd_from_chart["spec"]["names"]["kind"]
+                .as_str()
+                .expect("Chart CRD spec.names.kind must be a string"),
+            "Gateway CRD kind drift detected"
+        );
+        assert_eq!(
+            generated_gateway_crd.spec.scope,
+            gateway_crd_from_chart["spec"]["scope"]
+                .as_str()
+                .expect("Chart CRD spec.scope must be a string"),
+            "Gateway CRD scope drift detected"
+        );
+        assert!(
+            generated_gateway_crd
+                .spec
+                .versions
+                .iter()
+                .any(|version| version.name == "v1"),
+            "Generated Gateway CRD must expose v1"
+        );
+
+        let chart_v1_version = gateway_crd_from_chart["spec"]["versions"]
+            .as_sequence()
+            .and_then(|versions| versions.iter().find(|version| version["name"].as_str() == Some("v1")))
+            .expect("Chart Gateway CRD must expose a v1 version");
+
+        let conditions_properties = &chart_v1_version["schema"]["openAPIV3Schema"]["properties"]["status"]["properties"]
+            ["conditions"]["items"]["properties"];
+        assert!(
+            conditions_properties.get("type").is_some(),
+            "Gateway CRD status.conditions[].type must exist in chart schema"
+        );
+        assert!(
+            conditions_properties.get("status").is_some(),
+            "Gateway CRD status.conditions[].status must exist in chart schema"
+        );
+        assert!(
+            conditions_properties.get("observedGeneration").is_some(),
+            "Gateway CRD status.conditions[].observedGeneration must exist in chart schema"
+        );
     }
 
     #[test]
