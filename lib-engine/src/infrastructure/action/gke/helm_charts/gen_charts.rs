@@ -4,7 +4,7 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
-    CommonChart, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass, QoveryGatewayClass,
+    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass, QoveryGatewayClass,
     QoveryPriorityClass, UpdateStrategy,
 };
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
@@ -603,7 +603,6 @@ pub(super) fn gke_helm_charts(
     let mut level_0: Vec<Option<Box<dyn HelmChart>>> = vec![
         prometheus_operator_crds_chart,
         Some(Box::new(keda_charts.keda_crd_chart)),
-        Some(Box::new(eso_charts.eso_requirements_chart)),
     ];
     // GKE has a predeployed gateway api crds, so we skip deploying them
     // Add envoy gateway api CRDs
@@ -611,12 +610,11 @@ pub(super) fn gke_helm_charts(
         level_0.push(Some(Box::new(chart)));
     }
 
-    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let mut level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
         promtail,
-        Some(Box::new(eso_charts.eso_chart)),
     ];
     // Add Qovery gateway class
     let mut level_2: Vec<Option<Box<dyn HelmChart>>> = vec![];
@@ -624,12 +622,7 @@ pub(super) fn gke_helm_charts(
         level_2.push(Some(Box::new(chart)));
     }
 
-    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![
-        loki,
-        thanos_chart,
-        alert_config,
-        Some(Box::new(eso_charts.eso_config_chart)),
-    ];
+    let mut level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
     let level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(cert_manager)), Some(Box::new(keda_charts.keda_chart))];
     let mut level_5: Vec<Option<Box<dyn HelmChart>>> =
@@ -655,6 +648,21 @@ pub(super) fn gke_helm_charts(
         Some(Box::new(qovery_shell_agent)),
         Some(Box::new(k8s_event_logger)),
     ];
+
+    // External Secrets Operator
+    // Needed to handle property uninstallation: config depends on crds
+    match eso_charts.helm_action {
+        HelmAction::Deploy => {
+            level_0.push(Some(Box::new(eso_charts.eso_requirements_chart)));
+            level_1.push(Some(Box::new(eso_charts.eso_chart)));
+            level_3.push(Some(Box::new(eso_charts.eso_config_chart)));
+        }
+        HelmAction::Destroy => {
+            level_0.push(Some(Box::new(eso_charts.eso_config_chart)));
+            level_1.push(Some(Box::new(eso_charts.eso_chart)));
+            level_3.push(Some(Box::new(eso_charts.eso_requirements_chart)));
+        }
+    }
 
     Ok(vec![
         level_0.into_iter().flatten().collect(),
