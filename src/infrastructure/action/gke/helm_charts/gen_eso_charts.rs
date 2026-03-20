@@ -10,6 +10,7 @@ pub struct EsoCharts {
     pub eso_requirements_chart: CommonChart,
     pub eso_chart: CommonChart,
     pub eso_config_chart: CommonChart,
+    pub helm_action: HelmAction,
 }
 
 pub fn generate_eso_charts(
@@ -49,7 +50,7 @@ pub fn generate_eso_charts(
     let eso_config = EsoConfigChart::new(
         chart_prefix_path,
         HelmChartNamespaces::Qovery,
-        helm_action,
+        helm_action.clone(),
         secrets_manager_accesses,
         eso_cluster_outputs,
     )
@@ -59,5 +60,6 @@ pub fn generate_eso_charts(
         eso_requirements_chart: eso_requirements,
         eso_chart: eso,
         eso_config_chart: eso_config,
+        helm_action,
     })
 }
