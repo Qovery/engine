@@ -7,6 +7,11 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::load_balancer::{InteractWithLoadBalancer, LoadBalancer};
+use crate::runtime::block_on;
+use crate::services::kube_client::Gateway;
+use kube::Api;
+use retry::OperationResult;
+use retry::delay::Fixed;
 
 #[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
@@ -137,7 +142,9 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 values: chart_set_values,
                 ..Default::default()
             },
-            chart_installation_checker: Some(Box::new(QoveryClusterGatewayChartInstallationChecker::new())),
+            chart_installation_checker: Some(Box::new(QoveryClusterGatewayChartInstallationChecker::new(
+                self.namespace.clone(),
+            ))),
             vertical_pod_autoscaler: None,
             pre_execute_action: None,
         })
@@ -145,22 +152,78 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
 }
 
 #[derive(Clone)]
-pub struct QoveryClusterGatewayChartInstallationChecker {}
+pub struct QoveryClusterGatewayChartInstallationChecker {
+    namespace: HelmChartNamespaces,
+}
 
 impl QoveryClusterGatewayChartInstallationChecker {
-    pub fn new() -> Self {
-        QoveryClusterGatewayChartInstallationChecker {}
+    pub fn new(namespace: HelmChartNamespaces) -> Self {
+        QoveryClusterGatewayChartInstallationChecker { namespace }
+    }
+
+    fn has_condition_true_for_generation(gateway: &Gateway, conditions_type: &str, expected_generation: i64) -> bool {
+        gateway
+            .status
+            .as_ref()
+            .and_then(|status| status.conditions.as_ref())
+            .and_then(|conditions| conditions.iter().find(|condition| condition.type_ == conditions_type))
+            .map(|condition| {
+                condition.status == "True" && condition.observed_generation.unwrap_or_default() >= expected_generation
+            })
+            .unwrap_or(false)
     }
 }
 impl Default for QoveryClusterGatewayChartInstallationChecker {
     fn default() -> Self {
-        Self::new()
+        Self::new(HelmChartNamespaces::Qovery)
     }
 }
 
 impl ChartInstallationChecker for QoveryClusterGatewayChartInstallationChecker {
-    fn verify_installation(&self, _kube_client: &kube::Client) -> Result<(), CommandError> {
-        Ok(())
+    fn verify_installation(&self, kube_client: &kube::Client) -> Result<(), CommandError> {
+        let gateway_name = "qovery-cluster-public-gateway";
+        let namespace = self.namespace.to_string();
+        let kube_client = kube_client.clone();
+
+        let result = retry::retry(Fixed::from_millis(5000).take(24), || {
+            // Retry every 5 seconds for up to 2 minutes (24 attempts * 5s = 120s)
+            let gateways: Api<Gateway> = Api::namespaced(kube_client.clone(), namespace.as_str());
+
+            let gateway = match block_on(gateways.get(gateway_name)) {
+                Ok(result) => result,
+                Err(e) => {
+                    let err = CommandError::new(
+                        format!("Error trying to get gateway (name={gateway_name}, namespace={namespace})"),
+                        Some(e.to_string()),
+                        None,
+                    );
+                    return OperationResult::Retry(err);
+                }
+            };
+
+            let expected_generation = gateway.metadata.generation.unwrap_or_default();
+            let is_accepted = Self::has_condition_true_for_generation(&gateway, "Accepted", expected_generation);
+            let is_programmed = Self::has_condition_true_for_generation(&gateway, "Programmed", expected_generation);
+
+            // Phase 1 check for "qovery-cluster-gateway": ensure the Gateway object exists.
+            // The retry loop here is only for transient read failures / resource-not-found while the
+            // Gateway object is being created. Once `get()` succeeds, this checker returns Ok(()) even if
+            // readiness conditions are not met yet.
+            // Phase 2 readiness (Accepted/Programmed) is enforced later in EnvoyGatewayChartChecker,
+            // after the Envoy controller is deployed in a subsequent Helm level.
+            if !is_accepted || !is_programmed {
+                tracing::info!(
+                    "Gateway exists but is not yet accepted/programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation})"
+                );
+            }
+
+            OperationResult::Ok(())
+        });
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(retry::Error { error, .. }) => Err(error),
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
