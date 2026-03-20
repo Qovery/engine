@@ -1,8 +1,13 @@
+use kube::Api;
 use kube::Client;
+use retry::OperationResult;
+use retry::delay::Fixed;
 
 use crate::helm::{HpaConfig, HpaMode};
 use crate::infrastructure::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::runtime::block_on;
+use crate::services::kube_client::Gateway;
 use crate::{
     errors::CommandError,
     helm::{ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartNamespaces, PriorityClass},
@@ -185,7 +190,7 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
 
         Ok(CommonChart {
             chart_info,
-            chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new())),
+            chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new(self.namespace.clone()))),
             vertical_pod_autoscaler: None,
             pre_execute_action: None,
         })
@@ -193,24 +198,74 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
 }
 
 #[derive(Clone)]
-pub struct EnvoyGatewayChartChecker {}
+pub struct EnvoyGatewayChartChecker {
+    namespace: HelmChartNamespaces,
+}
 
 impl EnvoyGatewayChartChecker {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(namespace: HelmChartNamespaces) -> Self {
+        Self { namespace }
+    }
+
+    fn has_condition_true_for_generation(gateway: &Gateway, conditions_type: &str, expected_generation: i64) -> bool {
+        gateway
+            .status
+            .as_ref()
+            .and_then(|status| status.conditions.as_ref())
+            .and_then(|conditions| conditions.iter().find(|condition| condition.type_ == conditions_type))
+            .map(|condition| {
+                condition.status == "True" && condition.observed_generation.unwrap_or_default() >= expected_generation
+            })
+            .unwrap_or(false)
     }
 }
 
 impl Default for EnvoyGatewayChartChecker {
     fn default() -> Self {
-        Self::new()
+        Self::new(HelmChartNamespaces::Qovery)
     }
 }
 
 impl ChartInstallationChecker for EnvoyGatewayChartChecker {
-    fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        // TODO(benjaminch): Implement actual verification logic for Envoy Gateway chart installation.
-        Ok(())
+    fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
+        let gateway_name = "qovery-cluster-public-gateway";
+        let namespace = self.namespace.to_string();
+        let kube_client = kube_client.clone();
+
+        let result = retry::retry(Fixed::from_millis(5000).take(36), || {
+            // Retry every 5 seconds for up to 3 minutes.
+            let gateways: Api<Gateway> = Api::namespaced(kube_client.clone(), namespace.as_str());
+
+            let gateway = match block_on(gateways.get(gateway_name)) {
+                Ok(result) => result,
+                Err(e) => {
+                    let err = CommandError::new(
+                        format!("Error trying to get gateway (name={gateway_name}, namespace={namespace})"),
+                        Some(e.to_string()),
+                        None,
+                    );
+                    return OperationResult::Retry(err);
+                }
+            };
+
+            let expected_generation = gateway.metadata.generation.unwrap_or_default();
+            let is_accepted = Self::has_condition_true_for_generation(&gateway, "Accepted", expected_generation);
+            let is_programmed = Self::has_condition_true_for_generation(&gateway, "Programmed", expected_generation);
+
+            if !is_accepted || !is_programmed {
+                let err = CommandError::new_from_safe_message(format!(
+                    "Waiting for gateway to be accepted and programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation})"
+                ));
+                return OperationResult::Retry(err);
+            }
+
+            OperationResult::Ok(())
+        });
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(retry::Error { error, .. }) => Err(error),
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
