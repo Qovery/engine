@@ -143,6 +143,7 @@ pub struct NginxIngressChart {
     replica_count: Option<u8>,
     metal_lb_load_balancer_ip: Option<String>,
     external_dns_target: Option<String>,
+    declare_service_hostname: bool,
 }
 
 pub struct NginxOptions {
@@ -169,6 +170,7 @@ pub struct NginxOptions {
     pub replica_count: Option<u8>,
     pub metal_lb_load_balancer_ip: Option<String>,
     pub external_dns_target: Option<String>,
+    pub declare_service_hostname: bool,
 }
 
 impl NginxIngressChart {
@@ -250,6 +252,7 @@ impl NginxIngressChart {
             replica_count: options.replica_count,
             metal_lb_load_balancer_ip: options.metal_lb_load_balancer_ip,
             external_dns_target: options.external_dns_target,
+            declare_service_hostname: options.declare_service_hostname,
         }
     }
 
@@ -597,10 +600,12 @@ defaultBackend:
             }
         }
         // external dns
-        chart_set_values.push(ChartSetValue {
-            key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
-            value: self.domain.wildcarded().to_string(),
-        });
+        if self.declare_service_hostname {
+            chart_set_values.push(ChartSetValue {
+                key: "controller.service.annotations.external-dns\\.alpha\\.kubernetes\\.io/hostname".to_string(),
+                value: self.domain.wildcarded().to_string(),
+            });
+        }
 
         Ok(CommonChart {
             chart_info: ChartInfo {
@@ -732,6 +737,7 @@ mod tests {
                 replica_count: None,
                 metal_lb_load_balancer_ip: None,
                 external_dns_target: None,
+                declare_service_hostname: false,
             },
         );
 
@@ -795,6 +801,7 @@ mod tests {
                 replica_count: None,
                 metal_lb_load_balancer_ip: None,
                 external_dns_target: None,
+                declare_service_hostname: false,
             },
         );
 
@@ -860,6 +867,7 @@ mod tests {
                     replica_count: None,
                     metal_lb_load_balancer_ip: None,
                     external_dns_target: None,
+                    declare_service_hostname: false,
                 },
             );
 
@@ -931,6 +939,7 @@ mod tests {
                 replica_count: None,
                 metal_lb_load_balancer_ip: None,
                 external_dns_target: None,
+                declare_service_hostname: false,
             },
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
