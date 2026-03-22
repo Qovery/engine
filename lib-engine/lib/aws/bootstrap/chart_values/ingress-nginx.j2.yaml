@@ -121,8 +121,8 @@ controller:
       # service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true",
       # service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300",
       # service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10",
-      # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
-      # external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+      # Qovery managed DNS requires *.$domain (something like: *.<cluster_id>.<given_dns_name>)
+      external-dns.alpha.kubernetes.io/hostname: null # set-by-engine-code
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0

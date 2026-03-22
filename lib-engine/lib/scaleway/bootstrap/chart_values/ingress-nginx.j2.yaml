@@ -142,7 +142,7 @@ controller:
       # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-S, LB-GP-M, LB-GP-L, LB-GP-XL)
       service.beta.kubernetes.io/scw-loadbalancer-type: "LB-S" # set-by-engine-code
       # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
-      # external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+      external-dns.alpha.kubernetes.io/hostname: null # set-by-engine-code
     externalTrafficPolicy: "Local"
 
   topologySpreadConstraints:
