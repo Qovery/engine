@@ -68,7 +68,7 @@ controller:
     annotations:
       metallb.universe.tf/loadBalancerIPs: "set-by-engine-code"
       external-dns.alpha.kubernetes.io/target: "set-by-engine-code"
-      external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+      external-dns.alpha.kubernetes.io/hostname: null # set-by-engine-code
     # POWENS: To be able to keep source IP of user, as we don't have proxy protocol
     externalTrafficPolicy: "Local"
     sessionAffinity: ""

@@ -107,8 +107,8 @@ controller:
   service:
     enabled: true
     annotations:
-      # Qovery managed DNS requieres *.$domain (something like: *.<cluster_id>.<given_dns_name>)
-      # external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+      # Qovery managed DNS requires *.$domain (something like: *.<cluster_id>.<given_dns_name>)
+      external-dns.alpha.kubernetes.io/hostname: null # set-by-engine-code
     externalTrafficPolicy: "Local"
     sessionAffinity: ""
     healthCheckNodePort: 0
