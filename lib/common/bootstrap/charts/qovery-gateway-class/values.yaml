@@ -1,6 +1,12 @@
 gatewayClass:
   qoveryPublic:
     enable: true
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 1
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
     accessLog:
       # format: Specify a custom JSON string to override the default format
       # Leave empty ("") to use the default format defined in the template
@@ -18,6 +24,12 @@ gatewayClass:
     tolerations: null
   qoveryPrivate:
     enable: true
+    hpa:
+      enabled: false
+      minReplicas: 1
+      maxReplicas: 1
+      targetCPUUtilizationPercentage: null
+      targetMemoryUtilizationPercentage: null
     accessLog:
       # format: Specify a custom JSON string to override the default format
       # Leave empty ("") to use the default format defined in the template

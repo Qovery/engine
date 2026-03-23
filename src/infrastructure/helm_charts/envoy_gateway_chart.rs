@@ -125,13 +125,52 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
                 key: "hpa.maxReplicas".to_string(),
                 value: config.max_replicas.to_string(),
             });
+
+            let mut hpa_metric_index = 0;
+            if let Some(cpu_target) = config.cpu_average_utilization_percentage.as_ref() {
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].type"),
+                    value: "Resource".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.name"),
+                    value: "cpu".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.type"),
+                    value: "Utilization".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.averageUtilization"),
+                    value: cpu_target.as_u8_percent().to_string(),
+                });
+                hpa_metric_index += 1;
+            }
+
+            if let Some(memory_target) = config.memory_average_utilization_percentage.as_ref() {
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].type"),
+                    value: "Resource".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.name"),
+                    value: "memory".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.type"),
+                    value: "Utilization".to_string(),
+                });
+                chart_info.values.push(ChartSetValue {
+                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.averageUtilization"),
+                    value: memory_target.as_u8_percent().to_string(),
+                });
+            }
+
             // Adjust PDB
             chart_info.values.push(ChartSetValue {
                 key: "podDisruptionBudget.maxUnavailable".to_string(),
                 value: "20%".to_string(),
             });
-
-            // TODO(benjaminch): Handle HPA CPU / Memory thresholds when needed.
         } else {
             chart_info.values.push(ChartSetValue {
                 key: "hpa.enabled".to_string(),

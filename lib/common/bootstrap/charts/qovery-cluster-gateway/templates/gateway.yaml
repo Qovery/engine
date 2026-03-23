@@ -4,10 +4,12 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: qovery-cluster-public-gateway
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  {{- if .Values.gateway.qoveryPublic.annotations }}
   annotations:
   {{- range $key, $value := .Values.gateway.qoveryPublic.annotations }}
     {{ $key }}: {{ tpl ($value | toString) $ | quote }}
+  {{- end }}
   {{- end }}
 spec:
   gatewayClassName: qovery-public-gateway
@@ -15,11 +17,13 @@ spec:
   allowedListeners:
     namespaces:
       from: All
+  {{- if .Values.infrastructure.annotations }}
   infrastructure:
     annotations:
     {{- range $key, $value := .Values.infrastructure.annotations }}
       {{ $key }}: {{ tpl ($value | toString) $ | quote }}
     {{- end }}
+  {{- end }}
   listeners:
   - name: http
     protocol: HTTP

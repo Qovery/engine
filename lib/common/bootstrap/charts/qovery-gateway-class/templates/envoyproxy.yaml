@@ -17,6 +17,32 @@ spec:
           {{- if .Values.gatewayClass.qoveryPublic.tolerations }}
           tolerations: {{- toYaml .Values.gatewayClass.qoveryPublic.tolerations | nindent 12 }}
           {{- end }}
+      {{- if and .Values.gatewayClass.qoveryPublic.hpa .Values.gatewayClass.qoveryPublic.hpa.enabled }}
+      envoyHpa:
+        minReplicas: {{ .Values.gatewayClass.qoveryPublic.hpa.minReplicas }}
+        maxReplicas: {{ .Values.gatewayClass.qoveryPublic.hpa.maxReplicas }}
+        {{- $cpuTarget := .Values.gatewayClass.qoveryPublic.hpa.targetCPUUtilizationPercentage }}
+        {{- $memoryTarget := .Values.gatewayClass.qoveryPublic.hpa.targetMemoryUtilizationPercentage }}
+        {{- if or $cpuTarget $memoryTarget }}
+        metrics:
+          {{- if $cpuTarget }}
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: {{ $cpuTarget }}
+          {{- end }}
+          {{- if $memoryTarget }}
+          - type: Resource
+            resource:
+              name: memory
+              target:
+                type: Utilization
+                averageUtilization: {{ $memoryTarget }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
   {{- if .Values.gatewayClass.qoveryPublic.accessLog }}
   telemetry:
     accessLog:
@@ -82,6 +108,32 @@ spec:
           {{- if .Values.gatewayClass.qoveryPrivate.tolerations }}
           tolerations: {{- toYaml .Values.gatewayClass.qoveryPrivate.tolerations | nindent 12 }}
           {{- end }}
+      {{- if and .Values.gatewayClass.qoveryPrivate.hpa .Values.gatewayClass.qoveryPrivate.hpa.enabled }}
+      envoyHpa:
+        minReplicas: {{ .Values.gatewayClass.qoveryPrivate.hpa.minReplicas }}
+        maxReplicas: {{ .Values.gatewayClass.qoveryPrivate.hpa.maxReplicas }}
+        {{- $cpuTarget := .Values.gatewayClass.qoveryPrivate.hpa.targetCPUUtilizationPercentage }}
+        {{- $memoryTarget := .Values.gatewayClass.qoveryPrivate.hpa.targetMemoryUtilizationPercentage }}
+        {{- if or $cpuTarget $memoryTarget }}
+        metrics:
+          {{- if $cpuTarget }}
+          - type: Resource
+            resource:
+              name: cpu
+              target:
+                type: Utilization
+                averageUtilization: {{ $cpuTarget }}
+          {{- end }}
+          {{- if $memoryTarget }}
+          - type: Resource
+            resource:
+              name: memory
+              target:
+                type: Utilization
+                averageUtilization: {{ $memoryTarget }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
   {{- if .Values.gatewayClass.qoveryPrivate.accessLog }}
   telemetry:
     accessLog:
@@ -89,7 +141,7 @@ spec:
         - format:
             type: "JSON"
             {{- $customFormat := .Values.gatewayClass.qoveryPrivate.accessLog.format | trim }}
-            {{- if ne $customFormat "" }}
+            {{- if and (ne $customFormat "") (ne $customFormat "set-by-engine") }}
             {{- $decodedFormat := $customFormat | b64dec }}
             json: {{ $decodedFormat | fromJson | toYaml | nindent 14 }}
             {{- else }}

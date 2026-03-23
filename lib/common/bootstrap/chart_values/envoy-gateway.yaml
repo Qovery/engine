@@ -20,17 +20,17 @@ deployment:
       requests:
         cpu: set-by-engine-code
         memory: set-by-engine-code
+  pod:
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: control-plane
+                  operator: In
+                  values:
+                    - envoy-gateway
+            topologyKey: kubernetes.io/hostname
 
 podDisruptionBudget:
   maxUnavailable: 1 # set-by-engine
-
-affinity:
-  podAntiAffinity:
-    requiredDuringSchedulingIgnoredDuringExecution:
-      - labelSelector:
-          matchExpressions:
-            - key: app.kubernetes.io/name
-              operator: In
-              values:
-                - envoy-gateway
-        topologyKey: kubernetes.io/hostname
