@@ -379,7 +379,10 @@ RUN packages_to_remove="" && \
   rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-sdk && \
   curl -sSL "https://github.com/eksctl-io/eksctl/releases/download/v${EKSCTL_VERSION}/eksctl_Linux_$(dpkg --print-architecture).tar.gz" | \
   tar -C /usr/local/bin/ --no-same-owner -xzv eksctl && \
+  tmp_dir="$(mktemp -d)" && \
   curl -sSL "https://github.com/aws/eks-anywhere/releases/download/v${EKS_ANYWHERE_VERSION}/eksctl-anywhere-v${EKS_ANYWHERE_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | \
-  tar -C /usr/local/bin/ --no-same-owner -xzv eksctl-anywhere
+  tar -C "$tmp_dir" --no-same-owner -xzv && \
+  install -o root -g root -m 0755 "$tmp_dir/eksctl-anywhere" /usr/local/bin/eksctl-anywhere && \
+  rm -rf "$tmp_dir"
 
 USER qovery
