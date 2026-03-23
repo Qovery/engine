@@ -42,7 +42,7 @@ use crate::io_models::{
 };
 use crate::utilities::to_short_id;
 
-use super::{PodAntiAffinity, UpdateStrategy};
+use super::{PodAntiAffinity, TopologySpreadZone, UpdateStrategy};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Protocol {
@@ -133,6 +133,8 @@ pub struct ApplicationAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.topology_spread.zone")]
+    pub deployment_topology_spread_zone: TopologySpreadZone,
     #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
     pub deployment_lifecycle_post_start_exec_command: Vec<String>,
     #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
@@ -289,6 +291,7 @@ impl Default for ApplicationAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_topology_spread_zone: TopologySpreadZone::Disabled,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_dns_ndots: None,
@@ -372,6 +375,7 @@ impl ApplicationAdvancedSettings {
                 .deployment_update_strategy_rolling_update_max_surge_percent,
             deployment_affinity_node_required: self.deployment_affinity_node_required.clone(),
             deployment_antiaffinity_pod: self.deployment_antiaffinity_pod.clone(),
+            deployment_topology_spread_zone: self.deployment_topology_spread_zone.clone(),
             deployment_lifecycle_post_start_exec_command: self.deployment_lifecycle_post_start_exec_command.clone(),
             deployment_lifecycle_pre_stop_exec_command: self.deployment_lifecycle_pre_stop_exec_command.clone(),
             network_dns_ndots: self.network_dns_ndots,
