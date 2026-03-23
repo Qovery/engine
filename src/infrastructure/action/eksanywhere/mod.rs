@@ -34,6 +34,20 @@ impl InfrastructureAction for EksAnywhere {
             logger.info(format!("Using eksctl: {}", eksctl_version.trim()));
         }
 
+        let mut eksctl_anywhere_version = String::new();
+        let mut cmd = QoveryCommand::new("eksctl", &["anywhere", "version"], &[]);
+        if cmd
+            .exec_with_output(&mut |line| eksctl_anywhere_version.push_str(&line), &mut |line| {
+                warn!("Error while getting `eksctl anywhere` version: {}", line)
+            })
+            .is_err()
+            || eksctl_anywhere_version.trim().is_empty()
+        {
+            logger.warn("Unable to get `eksctl anywhere` version using `eksctl anywhere version`.");
+        } else {
+            logger.info(format!("Using eksctl anywhere: {}", eksctl_anywhere_version.trim()));
+        }
+
         send_progress_on_long_task(self, Action::Create, || install_eks_anywhere_charts(self, infra_ctx, logger))
     }
 
