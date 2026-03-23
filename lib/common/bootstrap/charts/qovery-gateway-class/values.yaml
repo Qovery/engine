@@ -21,7 +21,24 @@ gatewayClass:
       #   }
       format: ""
     affinity: null
+    topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: kubernetes.io/hostname
+        maxSkew: 2
+        whenUnsatisfiable: ScheduleAnyway
     tolerations: null
+    pdb:
+      enabled: true
+      minAvailable: null
+      maxUnavailable: 20%
   qoveryPrivate:
     enable: true
     hpa:
@@ -44,4 +61,21 @@ gatewayClass:
       #   }
       format: ""
     affinity: null
+    topologySpreadConstraints:
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: topology.kubernetes.io/zone
+        maxSkew: 1
+        whenUnsatisfiable: ScheduleAnyway
+      - labelSelector:
+          matchLabels:
+            app.kubernetes.io/component: proxy
+        topologyKey: kubernetes.io/hostname
+        maxSkew: 2
+        whenUnsatisfiable: ScheduleAnyway
     tolerations: null
+    pdb:
+      enabled: true
+      minAvailable: null
+      maxUnavailable: 20%
