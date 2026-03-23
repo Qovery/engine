@@ -15,6 +15,7 @@ ARG CONTAINERD_VERSION="1.7.29-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG PLUTO_VERSION=5.22.8
 ARG EKSCTL_VERSION=0.220.0
+ARG EKS_ANYWHERE_VERSION=0.25.0
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.92.0-2026-01-05T18-08-48"
@@ -365,6 +366,7 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 FROM run AS run-eksanywhere
 
 ARG EKSCTL_VERSION
+ARG EKS_ANYWHERE_VERSION
 
 USER root
 RUN packages_to_remove="" && \
@@ -376,6 +378,8 @@ RUN packages_to_remove="" && \
   fi && \
   rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-sdk && \
   curl -sSL "https://github.com/eksctl-io/eksctl/releases/download/v${EKSCTL_VERSION}/eksctl_Linux_$(dpkg --print-architecture).tar.gz" | \
-  tar -C /usr/local/bin/ --no-same-owner -xzv eksctl
+  tar -C /usr/local/bin/ --no-same-owner -xzv eksctl && \
+  curl -sSL "https://github.com/aws/eks-anywhere/releases/download/v${EKS_ANYWHERE_VERSION}/eksctl-anywhere-v${EKS_ANYWHERE_VERSION}-linux-$(dpkg --print-architecture).tar.gz" | \
+  tar -C /usr/local/bin/ --no-same-owner -xzv eksctl-anywhere
 
 USER qovery
