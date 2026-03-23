@@ -107,6 +107,15 @@ spec:
                     values:
                     - "{{ service.long_id }}"
           {%- endif %}
+      {%- if service.advanced_settings.deployment_topology_spread_zone != "Disabled" %}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: {{ service.advanced_settings.deployment_topology_spread_zone }}
+          labelSelector:
+            matchLabels:
+              qovery.com/service-id: "{{ service.long_id }}"
+      {%- endif %}
       automountServiceAccountToken: {{ service.advanced_settings.security_automount_service_account_token }}
       {%- if service.advanced_settings.security_service_account_name != "" %}
       serviceAccountName: {{ service.advanced_settings.security_service_account_name }}

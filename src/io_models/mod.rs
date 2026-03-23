@@ -50,6 +50,14 @@ pub enum PodAntiAffinity {
     Required,
 }
 
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Debug, Default)]
+pub enum TopologySpreadZone {
+    #[default]
+    Disabled,
+    ScheduleAnyway,
+    DoNotSchedule,
+}
+
 #[derive(thiserror::Error, Clone, Debug, PartialEq)]
 pub enum QoveryIdentifierError {
     #[error("Error while parsing Qovery identifier: {raw_error_message}")]

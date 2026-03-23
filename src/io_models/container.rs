@@ -1,4 +1,4 @@
-use super::{PodAntiAffinity, UpdateStrategy};
+use super::{PodAntiAffinity, TopologySpreadZone, UpdateStrategy};
 use crate::environment::models;
 use crate::environment::models::aws::AwsAppExtraSettings;
 use crate::environment::models::azure::AzureAppExtraSettings;
@@ -272,6 +272,8 @@ pub struct ContainerAdvancedSettings {
     pub deployment_affinity_node_required: BTreeMap<String, String>,
     #[serde(alias = "deployment.antiaffinity.pod")]
     pub deployment_antiaffinity_pod: PodAntiAffinity,
+    #[serde(alias = "deployment.topology_spread.zone")]
+    pub deployment_topology_spread_zone: TopologySpreadZone,
     #[serde(alias = "deployment.lifecycle.post_start_exec_command")]
     pub deployment_lifecycle_post_start_exec_command: Vec<String>,
     #[serde(alias = "deployment.lifecycle.pre_stop_exec_command")]
@@ -414,6 +416,7 @@ impl Default for ContainerAdvancedSettings {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_topology_spread_zone: TopologySpreadZone::Disabled,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_dns_ndots: None,

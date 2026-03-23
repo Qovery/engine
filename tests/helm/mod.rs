@@ -41,7 +41,7 @@ use qovery_engine::io_models::models::{
     CpuArchitecture, CustomDomain, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
     MountedFile, Route, Storage, StorageClass,
 };
-use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, UpdateStrategy};
+use qovery_engine::io_models::{PodAntiAffinity, QoveryIdentifier, TopologySpreadZone, UpdateStrategy};
 use qovery_engine::utilities::to_short_id;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -387,6 +387,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             hpa_memory_average_utilization_percent: None,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_topology_spread_zone: TopologySpreadZone::Disabled,
         },
         AwsAppExtraSettings {},
         |transmitter| test_kube.context().get_event_details(transmitter),
@@ -465,6 +466,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             deployment_update_strategy_rolling_update_max_surge_percent: 25,
             deployment_affinity_node_required: BTreeMap::new(),
             deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+            deployment_topology_spread_zone: TopologySpreadZone::Disabled,
             deployment_lifecycle_post_start_exec_command: vec![],
             deployment_lifecycle_pre_stop_exec_command: vec![],
             network_dns_ndots: None,
@@ -890,6 +892,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         hpa_memory_average_utilization_percent: None,
         deployment_affinity_node_required: BTreeMap::new(),
         deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+        deployment_topology_spread_zone: TopologySpreadZone::Disabled,
     };
 
     Application::new(
@@ -1060,6 +1063,7 @@ fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container
         deployment_update_strategy_rolling_update_max_surge_percent: 25,
         deployment_affinity_node_required: BTreeMap::new(),
         deployment_antiaffinity_pod: PodAntiAffinity::Preferred,
+        deployment_topology_spread_zone: TopologySpreadZone::Disabled,
         deployment_lifecycle_post_start_exec_command: vec![],
         deployment_lifecycle_pre_stop_exec_command: vec![],
         network_dns_ndots: Some(ndots),
