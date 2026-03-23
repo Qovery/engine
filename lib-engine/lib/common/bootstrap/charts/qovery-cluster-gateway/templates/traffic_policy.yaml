@@ -2,13 +2,13 @@ apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: ClientTrafficPolicy
 metadata:
   name: qovery-cluster-public-gateway-client-traffic-policy
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
 spec:
   {{- $numHops := -1 }}
   {{- if .Values.gateway.qoveryPublic }}
-    {{- if .Values.gateway.qoveryPublic.xforwardedFor }}
-      {{- if hasKey .Values.gateway.qoveryPublic.xforwardedFor "numberTrustedHops" }}
-        {{- $numHops = .Values.gateway.qoveryPublic.xforwardedFor.numberTrustedHops }}
+    {{- if .Values.gateway.qoveryPublic.xForwardedFor }}
+      {{- if hasKey .Values.gateway.qoveryPublic.xForwardedFor "numberTrustedHops" }}
+        {{- $numHops = .Values.gateway.qoveryPublic.xForwardedFor.numberTrustedHops }}
       {{- end }}
     {{- end }}
   {{- end }}

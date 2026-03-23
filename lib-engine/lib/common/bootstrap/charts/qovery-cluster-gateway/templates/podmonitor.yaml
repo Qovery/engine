@@ -5,7 +5,9 @@ metadata:
   name: qovery-cluster-gateway-envoy
   namespace: {{ .Values.metrics.podMonitor.namespace | default .Release.Namespace }}
   labels:
+    {{- if not (and .Values.metrics.podMonitor.additionalLabels (hasKey .Values.metrics.podMonitor.additionalLabels "release")) }}
     release: kube-prometheus-stack
+    {{- end }}
     {{- if .Values.metrics.podMonitor.additionalLabels }}
     {{- toYaml .Values.metrics.podMonitor.additionalLabels | nindent 4 }}
     {{- end }}
