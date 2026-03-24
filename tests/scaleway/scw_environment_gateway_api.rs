@@ -6112,7 +6112,7 @@ fn deploy_application_with_force_ssl_redirect_on_scw_kapsule_http() {
                 .and_then(|labels| labels.get("qovery.com/service-id"))
                 .map(|id| *id == router_id.to_string())
                 .unwrap_or(false)
-                && !route.name_any().contains("-ssl-redirect")
+                && !route.name_any().contains("-ssl-redir")
         });
 
         assert!(router_route.is_some(), "HTTPRoute for router should exist");
@@ -6166,7 +6166,7 @@ fn deploy_application_with_force_ssl_redirect_on_scw_kapsule_http() {
                 .and_then(|labels| labels.get("qovery.com/service-id"))
                 .map(|id| *id == router_id.to_string())
                 .unwrap_or(false)
-                && route.name_any().contains("-ssl-redirect")
+                && route.name_any().contains("-ssl-redir")
         });
 
         assert!(
@@ -6189,10 +6189,35 @@ fn deploy_application_with_force_ssl_redirect_on_scw_kapsule_http() {
             }
 
             if let Some(rules) = spec.get("rules").and_then(|v| v.as_array()) {
-                assert!(!rules.is_empty(), "Redirect route should have rules");
+                assert_eq!(
+                    rules.len(),
+                    2,
+                    "Redirect route should have exactly 2 rules (ACME pass-through + redirect)"
+                );
 
-                let first_rule = &rules[0];
-                if let Some(filters) = first_rule.get("filters").and_then(|v| v.as_array()) {
+                // Rule 0: ACME HTTP-01 challenge pass-through — must NOT redirect, so that
+                // cert-manager's solver HTTPRoute can handle /.well-known/acme-challenge/
+                // requests without being 301-redirected to HTTPS first.
+                let acme_rule = &rules[0];
+                if let Some(matches) = acme_rule.get("matches").and_then(|v| v.as_array()) {
+                    let acme_match = matches.iter().find(|m| {
+                        m.get("path")
+                            .and_then(|p| p.get("value"))
+                            .and_then(|v| v.as_str())
+                            .map(|v| v.starts_with("/.well-known/acme-challenge/"))
+                            .unwrap_or(false)
+                    });
+                    assert!(
+                        acme_match.is_some(),
+                        "Rule 0 should match /.well-known/acme-challenge/ for ACME HTTP-01 pass-through"
+                    );
+                } else {
+                    panic!("ACME pass-through rule should have matches");
+                }
+
+                // Rule 1: Redirect all other HTTP traffic to HTTPS.
+                let redirect_rule = &rules[1];
+                if let Some(filters) = redirect_rule.get("filters").and_then(|v| v.as_array()) {
                     let redirect_filter = filters.iter().find(|f| {
                         f.get("type")
                             .and_then(|t| t.as_str())
@@ -6380,7 +6405,7 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
                 .and_then(|labels| labels.get("qovery.com/service-id"))
                 .map(|id| *id == router_id.to_string())
                 .unwrap_or(false)
-                && !route.name_any().contains("-ssl-redirect")
+                && !route.name_any().contains("-ssl-redir")
         });
 
         assert!(router_route.is_some(), "HTTPRoute for router should exist");
@@ -6434,7 +6459,7 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
                 .and_then(|labels| labels.get("qovery.com/service-id"))
                 .map(|id| *id == router_id.to_string())
                 .unwrap_or(false)
-                && route.name_any().contains("-ssl-redirect")
+                && route.name_any().contains("-ssl-redir")
         });
 
         assert!(
@@ -6457,10 +6482,35 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
             }
 
             if let Some(rules) = spec.get("rules").and_then(|v| v.as_array()) {
-                assert!(!rules.is_empty(), "Redirect route should have rules");
+                assert_eq!(
+                    rules.len(),
+                    2,
+                    "Redirect route should have exactly 2 rules (ACME pass-through + redirect)"
+                );
 
-                let first_rule = &rules[0];
-                if let Some(filters) = first_rule.get("filters").and_then(|v| v.as_array()) {
+                // Rule 0: ACME HTTP-01 challenge pass-through — must NOT redirect, so that
+                // cert-manager's solver HTTPRoute can handle /.well-known/acme-challenge/
+                // requests without being 301-redirected to HTTPS first.
+                let acme_rule = &rules[0];
+                if let Some(matches) = acme_rule.get("matches").and_then(|v| v.as_array()) {
+                    let acme_match = matches.iter().find(|m| {
+                        m.get("path")
+                            .and_then(|p| p.get("value"))
+                            .and_then(|v| v.as_str())
+                            .map(|v| v.starts_with("/.well-known/acme-challenge/"))
+                            .unwrap_or(false)
+                    });
+                    assert!(
+                        acme_match.is_some(),
+                        "Rule 0 should match /.well-known/acme-challenge/ for ACME HTTP-01 pass-through"
+                    );
+                } else {
+                    panic!("ACME pass-through rule should have matches");
+                }
+
+                // Rule 1: Redirect all other HTTP traffic to HTTPS.
+                let redirect_rule = &rules[1];
+                if let Some(filters) = redirect_rule.get("filters").and_then(|v| v.as_array()) {
                     let redirect_filter = filters.iter().find(|f| {
                         f.get("type")
                             .and_then(|t| t.as_str())
@@ -7943,7 +7993,7 @@ fn deploy_helm_with_custom_headers_enabled_on_scw_kapsule() {
                 .and_then(|labels| labels.get("qovery.com/service-id"))
                 .map(|id| *id == router_id.to_string())
                 .unwrap_or(false)
-                && !route.name_any().contains("-ssl-redirect")
+                && !route.name_any().contains("-ssl-redir")
         });
 
         assert!(router_route.is_some());
