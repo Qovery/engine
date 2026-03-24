@@ -136,12 +136,12 @@ charts:
     dest_folder_override: karpenter
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 1.9.0
+    version: 1.10.0
   - name: karpenter-crd
     dest_folder_override: karpenter-crd
     repo_name: oci://public.ecr.aws/karpenter
     dest: aws-bootstrap
-    version: 1.9.0
+    version: 1.10.0
   - name: keda
     repo_name: kedacore
     version: v2.19.0

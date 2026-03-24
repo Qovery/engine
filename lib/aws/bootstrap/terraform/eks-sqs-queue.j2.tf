@@ -33,6 +33,14 @@ locals {
         detail-type = ["EC2 Instance State-change Notification"]
       }
     }
+    capacity_reservation_interrupt = {
+      name        = "CapResInterrupt"
+      description = "Karpenter interrupt - EC2 capacity reservation instance interruption warning"
+      event_pattern = {
+        source      = ["aws.ec2"]
+        detail-type = ["EC2 Capacity Reservation Instance Interruption Warning"]
+      }
+    }
   }
 }
 
