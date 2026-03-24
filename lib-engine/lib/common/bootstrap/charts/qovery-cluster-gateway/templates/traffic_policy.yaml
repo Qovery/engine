@@ -8,7 +8,12 @@ spec:
   {{- if .Values.gateway.qoveryPublic }}
     {{- if .Values.gateway.qoveryPublic.xForwardedFor }}
       {{- if hasKey .Values.gateway.qoveryPublic.xForwardedFor "numberTrustedHops" }}
-        {{- $numHops = .Values.gateway.qoveryPublic.xForwardedFor.numberTrustedHops }}
+        {{- $rawNumHops := .Values.gateway.qoveryPublic.xForwardedFor.numberTrustedHops }}
+        {{- if and (kindIs "string" $rawNumHops) (regexMatch "^-?[0-9]+$" (trim $rawNumHops)) }}
+          {{- $numHops = int $rawNumHops }}
+        {{- else if or (kindIs "int" $rawNumHops) (kindIs "int64" $rawNumHops) (kindIs "float64" $rawNumHops) }}
+          {{- $numHops = int $rawNumHops }}
+        {{- end }}
       {{- end }}
     {{- end }}
   {{- end }}
