@@ -202,7 +202,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: {{ sanitized_name }}-ssl-redirect{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  name: {{ sanitized_name }}-ssl-redir{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   namespace: {{ namespace_key }}
   labels:
     qovery.com/service-id: {{ long_id }}
@@ -238,11 +238,22 @@ spec:
     {%- endif %}
     {%- endfor %}
   rules:
+  # Rule 1: Allow ACME HTTP-01 challenge requests to pass through without redirect.
+  # cert-manager dynamically creates its own HTTPRoute with a more-specific path
+  # (exact challenge token), which wins over this route by Gateway API precedence.
+  # This rule exists to ensure the catch-all redirect below does NOT intercept
+  # /.well-known/acme-challenge/ requests before cert-manager can handle them,
+  # which would otherwise cause an infinite renewal loop every ~60 days.
+  - matches:
+      - path:
+          type: PathPrefix
+          value: /.well-known/acme-challenge/
+  # Rule 2: Redirect all other HTTP traffic to HTTPS.
   - filters:
-    - type: RequestRedirect
-      requestRedirect:
-        scheme: https
-        statusCode: 301
+      - type: RequestRedirect
+        requestRedirect:
+          scheme: https
+          statusCode: 301
 {%- endfor %}
 {%- endif %}
 {%- endif %}
