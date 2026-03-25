@@ -233,10 +233,6 @@ pub fn create_eks_cluster(
     Ok(())
 }
 
-fn should_precheck_custom_vpc_alb_subnet_tags(network_managed_by_user: bool, alb_controller_enabled: bool) -> bool {
-    network_managed_by_user && alb_controller_enabled
-}
-
 fn precheck_custom_vpc_alb_subnet_tags(
     kubernetes: &EKS,
     aws_conn: &aws_types::SdkConfig,
@@ -244,10 +240,7 @@ fn precheck_custom_vpc_alb_subnet_tags(
     logger: &impl InfraLogger,
     requested_strict_mode: bool,
 ) -> Result<(), Box<EngineError>> {
-    if !should_precheck_custom_vpc_alb_subnet_tags(
-        kubernetes.is_network_managed_by_user(),
-        kubernetes.advanced_settings().aws_eks_enable_alb_controller,
-    ) {
+    if !kubernetes.is_network_managed_by_user() {
         return Ok(());
     }
 
@@ -577,19 +570,8 @@ fn restore_access_to_eks(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        collect_unique_subnet_ids, is_update_relaxed_mode, should_precheck_custom_vpc_alb_subnet_tags,
-        validate_alb_controller_subnet_tags,
-    };
+    use super::{collect_unique_subnet_ids, is_update_relaxed_mode, validate_alb_controller_subnet_tags};
     use std::collections::HashMap;
-
-    #[test]
-    fn should_precheck_only_when_network_is_user_managed_and_alb_enabled() {
-        assert!(should_precheck_custom_vpc_alb_subnet_tags(true, true));
-        assert!(!should_precheck_custom_vpc_alb_subnet_tags(true, false));
-        assert!(!should_precheck_custom_vpc_alb_subnet_tags(false, true));
-        assert!(!should_precheck_custom_vpc_alb_subnet_tags(false, false));
-    }
 
     #[test]
     fn should_use_relaxed_mode_only_when_not_strict() {
