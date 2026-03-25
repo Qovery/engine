@@ -22,8 +22,8 @@ use crate::infrastructure::action::eks::{
     AWS_EKS_DEFAULT_UPGRADE_TIMEOUT_DURATION, AWS_EKS_TERRAFORM_APPLY_HARD_TIMEOUT, AwsEksQoveryTerraformOutput,
 };
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
-use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
+use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, Kubernetes};
 use crate::io_models::models::KubernetesClusterAction;
 use crate::runtime::block_on;
 use crate::services::kube_client::SelectK8sResourceBy;
@@ -240,6 +240,11 @@ fn precheck_custom_vpc_alb_subnet_tags(
     logger: &impl InfraLogger,
     requested_strict_mode: bool,
 ) -> Result<(), Box<EngineError>> {
+    // Guardrail: this ALB subnet-tag check only applies to EKS clusters.
+    if kubernetes.kind() != KubernetesKind::Eks {
+        return Ok(());
+    }
+
     if !kubernetes.is_network_managed_by_user() {
         return Ok(());
     }
