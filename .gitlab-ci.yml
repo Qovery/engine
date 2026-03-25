@@ -32,6 +32,9 @@ default:
   before_script:
     - SOPS_AGE_KEY_FILE=$AGE_ENGINE_TEST_SECRET_KEY sops decrypt test_secrets.enc.env > test_secrets.env
     - ci_helper await_docker_socket
+    - cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
+    - mkdir -p target/debug/deps
+    - ln -sf ../engine_post_renderer target/debug/deps/engine_post_renderer
 
 # Reusable Cargo cache for Rust builds/tests
 .cargo-cache:
