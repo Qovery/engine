@@ -879,11 +879,15 @@ mod tests {
     use kube::CustomResourceExt;
     use serde::Deserialize;
     use serde_yaml::Value;
+    #[cfg(feature = "test-local-kube")]
     use uuid::Uuid;
 
+    #[cfg(feature = "test-local-kube")]
     use crate::runtime::block_on;
+    #[cfg(feature = "test-local-kube")]
     use crate::services::kube_client::SelectK8sResourceBy;
 
+    #[cfg(feature = "test-local-kube")]
     use crate::{
         events::{EventDetails, Stage},
         io_models::QoveryIdentifier,
@@ -950,6 +954,7 @@ mod tests {
         panic!("Cannot find Gateway CRD definition in envoy-gateway-crd templates");
     }
 
+    #[cfg(feature = "test-local-kube")]
     pub fn get_qube_client() -> (QubeClient, EventDetails) {
         rustls::crypto::aws_lc_rs::default_provider()
             .install_default()

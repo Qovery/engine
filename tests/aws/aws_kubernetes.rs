@@ -10,23 +10,26 @@ use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
+#[cfg(any(feature = "test-aws-infra-karpenter", feature = "test-aws-infra-upgrade"))]
 use qovery_engine::infrastructure::models::disk_size::DiskSize;
 use qovery_engine::infrastructure::models::kubernetes::Kind as KKind;
+#[cfg(any(feature = "test-aws-infra-karpenter", feature = "test-aws-infra-upgrade"))]
 use qovery_engine::infrastructure::models::kubernetes::karpenter::{
     KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
     KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
     KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters, KarpenterRequirementOperator,
     KarpenterStableNodePoolOverride,
 };
-use qovery_engine::io_models::models::VpcQoveryNetworkMode::{WithNatGateways, WithoutNatGateways};
-use qovery_engine::io_models::models::{
-    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, VpcQoveryNetworkMode,
-};
+#[cfg(any(feature = "test-aws-infra-nat-gateway", feature = "test-aws-infra-karpenter"))]
+use qovery_engine::io_models::models::VpcQoveryNetworkMode::WithNatGateways;
+use qovery_engine::io_models::models::VpcQoveryNetworkMode::WithoutNatGateways;
+use qovery_engine::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
+#[cfg(any(feature = "test-aws-infra-karpenter", feature = "test-aws-infra-upgrade"))]
+use qovery_engine::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use qovery_engine::utilities::to_short_id;
 
 #[cfg(any(
     feature = "test-aws-infra",
-    feature = "test-aws-infra-arm",
     feature = "test-aws-infra-nat-gateway",
     feature = "test-aws-infra-upgrade",
     feature = "test-aws-infra-karpenter",
