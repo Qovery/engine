@@ -52,6 +52,10 @@ metadata:
     external-dns.alpha.kubernetes.io/exclude: "true"
     {%- endif %}
     cert-manager.io/cluster-issuer: "letsencrypt-qovery"
+    {%- for key, value in annotations_group.gateway_api_routes %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
 spec:
   parentRefs:
     {%- if certificate_alternative_names|length > 0 %}

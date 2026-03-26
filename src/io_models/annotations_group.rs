@@ -23,6 +23,7 @@ pub enum AnnotationsGroupScope {
     StatefulSets,
     Services,
     Ingress,
+    GatewayApiRoutes,
     Hpa,
     Pods,
     Secrets,
