@@ -78,6 +78,56 @@ pub struct GatewayCondition {
     pub observed_generation: Option<i64>,
 }
 
+/// cert-manager Certificate CRD — used to list and patch ownerReferences during
+/// nginx ↔ Gateway API ownership migrations.
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[kube(
+    group = "cert-manager.io",
+    version = "v1",
+    kind = "Certificate",
+    root = "CertManagerCertificate",
+    namespaced,
+    status = "CertManagerCertificateStatus"
+)]
+pub struct CertManagerCertificateSpec {
+    #[serde(rename = "secretName")]
+    pub secret_name: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct CertManagerCertificateStatus {}
+
+/// Gateway API ListenerSet CRD — used to look up the correct owner when migrating
+/// certificate ownerReferences from Ingress to ListenerSet (and back).
+#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[kube(
+    group = "gateway.networking.k8s.io",
+    version = "v1",
+    kind = "ListenerSet",
+    root = "CertManagerListenerSet",
+    namespaced
+)]
+pub struct ListenerSetSpec {
+    pub listeners: Vec<ListenerSetListener>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct ListenerSetListener {
+    pub tls: Option<ListenerSetTls>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct ListenerSetTls {
+    #[serde(rename = "certificateRefs", default)]
+    pub certificate_refs: Vec<ListenerSetCertificateRef>,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, Default, JsonSchema)]
+pub struct ListenerSetCertificateRef {
+    pub name: String,
+    pub namespace: Option<String>,
+}
+
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(group = "karpenter.k8s.aws", version = "v1", kind = "EC2NodeClass")]
 pub struct Ec2nodeclassesSpec {}
