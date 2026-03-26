@@ -11,6 +11,7 @@ pub(crate) struct AnnotationsGroupTeraContext {
     pub(crate) secrets: BTreeMap<String, String>,
     pub(crate) hpa: BTreeMap<String, String>,
     pub(crate) ingress: BTreeMap<String, String>,
+    pub(crate) gateway_api_routes: BTreeMap<String, String>,
     pub(crate) job: BTreeMap<String, String>,
     pub(crate) cronjob: BTreeMap<String, String>,
 }
@@ -25,6 +26,7 @@ impl AnnotationsGroupTeraContext {
             secrets: get_annotations(&annotations_groups, AnnotationsGroupScope::Secrets),
             hpa: get_annotations(&annotations_groups, AnnotationsGroupScope::Hpa),
             ingress: get_annotations(&annotations_groups, AnnotationsGroupScope::Ingress),
+            gateway_api_routes: get_annotations(&annotations_groups, AnnotationsGroupScope::GatewayApiRoutes),
             job: get_annotations(&annotations_groups, AnnotationsGroupScope::Jobs),
             cronjob: get_annotations(&annotations_groups, AnnotationsGroupScope::CronJobs),
         }

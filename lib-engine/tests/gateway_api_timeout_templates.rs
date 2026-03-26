@@ -7,6 +7,10 @@ const HTTP_TEMPLATE: &str = include_str!(
 const GRPC_TEMPLATE: &str = include_str!(
     "../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route-envoy-backend-traffic-policy.j2.yaml"
 );
+const HTTP_ROUTE_TEMPLATE: &str =
+    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-http-route.j2.yaml");
+const GRPC_ROUTE_TEMPLATE: &str =
+    include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route.j2.yaml");
 
 fn base_advanced_settings(
     service_request_timeout: Option<u32>,
@@ -95,6 +99,105 @@ fn render_grpc_policy(
     tera.render("template", &context).expect("gRPC template should render")
 }
 
+fn render_http_route() -> String {
+    let mut tera = Tera::default();
+    tera.add_raw_template("template", HTTP_ROUTE_TEMPLATE)
+        .expect("HTTP route template should parse");
+
+    let mut context = Context::new();
+    context.insert("k8s_deploy_api_gateway", &true);
+    context.insert(
+        "http_hosts_per_namespace",
+        &json!({
+            "app-ns": [{
+                "domain_name": "example.com",
+                "service_name": "demo",
+                "service_port": 80,
+                "weight": 1,
+                "path_type": "PathPrefix",
+                "path": "/",
+                "path_rewrite": ""
+            }]
+        }),
+    );
+    context.insert("sanitized_name", &"router-name");
+    context.insert("long_id", &"service-id");
+    context.insert("associated_service_long_id", &"associated-service-id");
+    context.insert("associated_service_type", &"application");
+    context.insert("environment_long_id", &"environment-id");
+    context.insert("project_long_id", &"project-id");
+    context.insert("has_wildcard_domain", &false);
+    context.insert("certificate_alternative_names", &json!([]));
+    context.insert("k8s_deploy_listenerset", &false);
+    context.insert(
+        "labels_group",
+        &json!({ "common": { "labels-group-key": "labels-group-value" } }),
+    );
+    context.insert(
+        "annotations_group",
+        &json!({ "gateway_api_routes": { "annotations-group-key": "annotations-group-value" } }),
+    );
+    context.insert(
+        "advanced_settings",
+        &json!({
+            "network_gateway_api_force_ssl_redirect": false,
+            "network_gateway_api_add_headers": {},
+            "network_gateway_api_proxy_set_headers": {}
+        }),
+    );
+
+    tera.render("template", &context)
+        .expect("HTTP route template should render")
+}
+
+fn render_grpc_route() -> String {
+    let mut tera = Tera::default();
+    tera.add_raw_template("template", GRPC_ROUTE_TEMPLATE)
+        .expect("gRPC route template should parse");
+
+    let mut context = Context::new();
+    context.insert("k8s_deploy_api_gateway", &true);
+    context.insert(
+        "grpc_hosts_per_namespace",
+        &json!({
+            "app-ns": [{
+                "domain_name": "example.com",
+                "service_name": "demo",
+                "service_port": 50051,
+                "weight": 1
+            }]
+        }),
+    );
+    context.insert("sanitized_name", &"router-name");
+    context.insert("long_id", &"service-id");
+    context.insert("associated_service_long_id", &"associated-service-id");
+    context.insert("associated_service_type", &"application");
+    context.insert("environment_long_id", &"environment-id");
+    context.insert("project_long_id", &"project-id");
+    context.insert("has_wildcard_domain", &false);
+    context.insert("certificate_alternative_names", &json!([]));
+    context.insert("k8s_deploy_listenerset", &false);
+    context.insert(
+        "labels_group",
+        &json!({ "common": { "labels-group-key": "labels-group-value" } }),
+    );
+    context.insert(
+        "annotations_group",
+        &json!({ "gateway_api_routes": { "annotations-group-key": "annotations-group-value" } }),
+    );
+    context.insert(
+        "advanced_settings",
+        &json!({
+            "network_gateway_api_force_ssl_redirect": false,
+            "network_gateway_api_add_headers": {},
+            "network_gateway_api_proxy_set_headers": {}
+        }),
+    );
+
+    tera.render("template", &context)
+        .expect("gRPC route template should render")
+}
+
 #[test]
 fn http_policy_uses_cluster_defaults_when_service_timeout_is_missing() {
     let rendered = render_http_policy(None, None, Some(42), Some(120));
@@ -130,4 +233,22 @@ fn grpc_policy_uses_cluster_defaults_and_service_override() {
     let rendered = render_grpc_policy(Some(75), Some(121), Some(42), Some(120));
     assert!(rendered.contains("requestTimeout: 75s"));
     assert!(rendered.contains("connectionIdleTimeout: 121s"));
+}
+
+#[test]
+fn http_route_includes_group_annotations_and_labels() {
+    let rendered = render_http_route();
+    assert!(rendered.contains("annotations-group-key: |-"));
+    assert!(rendered.contains("annotations-group-value"));
+    assert!(rendered.contains("labels-group-key: |-"));
+    assert!(rendered.contains("labels-group-value"));
+}
+
+#[test]
+fn grpc_route_includes_group_annotations_and_labels() {
+    let rendered = render_grpc_route();
+    assert!(rendered.contains("annotations-group-key: |-"));
+    assert!(rendered.contains("annotations-group-value"));
+    assert!(rendered.contains("labels-group-key: |-"));
+    assert!(rendered.contains("labels-group-value"));
 }
