@@ -39,15 +39,14 @@ run = '''
 '''
 
 [tasks.lint]
-description = "Run cargo fmt and clippy"
+description = "Run fast lint (cargo fmt + workspace clippy)"
 run = '''
-  set -e
-  echo "=== CARGO FMT ==="
-  cargo fmt --all -- --check --color=always || { echo "Use cargo fmt to format your code"; exit 1; }
-
-  echo "=== CLIPPY ==="
-  cargo clippy --all --all-features --tests --locked -- -D warnings || { echo "Solve your clippy errors to succeed"; exit 1; }
+  ./helper.sh lint
 '''
+
+[tasks.lint-matrix]
+description = "Run full clippy test matrix (dynamic features)"
+run = "./helper.sh lint_matrix"
 
 [tasks.fmt]
 description = "Run cargo fmt to format code"

@@ -6,9 +6,15 @@ awk=awk
 sed=sed
 grep=grep
 if [ "$(uname)" == "Darwin" ] ; then
-  grep='ggrep'
-  awk='gawk'
-  sed='gsed'
+  if command -v ggrep >/dev/null 2>&1 ; then
+    grep='ggrep'
+  fi
+  if command -v gawk >/dev/null 2>&1 ; then
+    awk='gawk'
+  fi
+  if command -v gsed >/dev/null 2>&1 ; then
+    sed='gsed'
+  fi
 fi
 
 trap "exit 1" 10
@@ -38,7 +44,7 @@ export DEFAULT_ENGINE_IMAGE_NAME="qoveryrd/engine"
 
 function print_help() {
   echo "Usage: $0 <option>"
-  $grep '##' $0 | $grep 'function' | $grep -v grep | $sed -r "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
+  $grep '##' $0 | $grep 'function' | $grep -v grep | $sed -E "s/^function\s(\w+).+##\s*(.+)/\1| \2/g" | $awk 'BEGIN {FS = "|"}; {printf "\033[36m%-30s\033[0m %s\n", $1, $2}' | sort
   exit 1
 }
 
@@ -361,7 +367,43 @@ function lint() { ## Run rust linter
 
   export RUSTC_WRAPPER=""
   export RUSTC_WORKSPACE_WRAPPER="sccache"
+
+  print_title "CLIPPY (workspace/all-features/tests)"
   cargo clippy --all --all-features --tests --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
+}
+
+function lint_matrix() { ## Run clippy test matrix (dynamic features from helper.sh run_tests)
+  export RUST_LOG=info
+  use_sccache
+
+  set -e
+  export RUSTC_WRAPPER=""
+  export RUSTC_WORKSPACE_WRAPPER="sccache"
+
+  clippy_test_features=()
+  while IFS= read -r feature; do
+    if [ -n "$feature" ] ; then
+      clippy_test_features+=("$feature")
+    fi
+  done < <(
+    comm -12 \
+      <($grep -Eo 'run_tests test-[a-z0-9-]+' "$0" | $awk '{print $2}' | sort -u) \
+      <($awk '
+        /^\[features\]/ { in_features = 1; next }
+        /^\[/ { if (in_features) in_features = 0 }
+        in_features && $1 ~ /^test-[a-z0-9-]+$/ && $2 == "=" { print $1 }
+      ' lib-engine/Cargo.toml | sort -u)
+  )
+
+  if [ ${#clippy_test_features[@]} -eq 0 ]; then
+    echo "No test feature found from helper.sh run_tests entries"
+    exit 1
+  fi
+
+  for feature in "${clippy_test_features[@]}"; do
+    print_title "CLIPPY (qovery-engine/${feature})"
+    cargo clippy -p qovery-engine --tests --no-default-features --features "$feature" --locked -- -D warnings || (echo "Solve your clippy errors to succeed"; exit 1)
+  done
 }
 
 function unused_dependencies() { ## Check rust unused dependencies
@@ -576,6 +618,9 @@ cargo_version)
   ;;
 lint)
   lint
+  ;;
+lint_matrix)
+  lint_matrix
   ;;
 unused_dependencies)
   unused_dependencies

@@ -1618,6 +1618,7 @@ pub async fn kube_copy_secret_to_another_namespace(
 mod tests {
     use k8s_openapi::api::core::v1::{Service, ServiceSpec};
     use kube::core::{ListMeta, ObjectList, ObjectMeta};
+    #[cfg(feature = "test-local-kube")]
     use std::collections::BTreeMap;
 
     use crate::cmd::structs::{KubernetesList, KubernetesNode, KubernetesVersion};
@@ -1626,20 +1627,26 @@ mod tests {
     use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure::action::InfraLogger;
     use crate::infrastructure::models::kubernetes;
+    use crate::infrastructure::models::kubernetes::KubernetesVersion as K8sVersion;
     use crate::infrastructure::models::kubernetes::{
         KubernetesNodesType, check_kubernetes_upgrade_status, compare_kubernetes_cluster_versions_for_upgrade,
         convert_k8s_cpu_value_to_f32, filter_svc_loadbalancers, validate_k8s_required_cpu_and_burstable,
     };
+    #[cfg(feature = "test-local-kube")]
     use crate::infrastructure::models::kubernetes::{
-        KubernetesVersion as K8sVersion, kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists,
-        kube_does_secret_exists, kube_list_services,
+        kube_copy_secret_to_another_namespace, kube_create_namespace_if_not_exists, kube_does_secret_exists,
+        kube_list_services,
     };
     use crate::io_models::QoveryIdentifier;
     use crate::io_models::models::CpuLimits;
     use crate::logger::StdIoLogger;
+    #[cfg(feature = "test-local-kube")]
     use crate::runtime::block_on;
+    #[cfg(feature = "test-local-kube")]
     use crate::services::kube_client::QubeClient;
+    #[cfg(feature = "test-local-kube")]
     use std::env;
+    #[cfg(feature = "test-local-kube")]
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::Arc;
@@ -1656,6 +1663,7 @@ mod tests {
         fn diff(&self, _from: InfrastructureDiffType, _message: String) {}
     }
 
+    #[cfg(feature = "test-local-kube")]
     pub fn kubeconfig_path() -> String {
         env::var("HOME").unwrap() + "/.kube/config"
     }
@@ -1693,6 +1701,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "test-local-kube")]
     fn create_kube_client() -> QubeClient {
         rustls::crypto::aws_lc_rs::default_provider()
             .install_default()

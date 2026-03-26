@@ -7,7 +7,7 @@ extern crate tracing;
 extern crate core;
 extern crate trust_dns_resolver;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-local-kube"))]
 mod byok_chart_gen;
 pub mod cmd;
 pub mod constants;

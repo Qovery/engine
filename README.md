@@ -37,6 +37,13 @@ In order to get your next MR validated, linter, fmt etc...there is a pre commit 
 ./helper.sh install_hook
 ```
 
+The pre-commit hook runs `./helper.sh lint` (fast lint).  
+For the full integration-feature clippy matrix, run:
+
+```shell
+mise run lint-matrix
+```
+
 ### Run locally
 
 ```shell
