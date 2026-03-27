@@ -5,8 +5,10 @@ use kube::api::{DeleteParams, Patch, PatchParams, PropagationPolicy};
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
 use retry::{OperationResult, delay::Fixed};
+use semver::Version;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 use serde_yaml::Deserializer;
 use std::fmt::Debug;
 use std::fs::{File, read_dir, read_to_string};
@@ -770,15 +772,46 @@ pub fn kubectl_does_crd_exist(kube_client: &Client, crd_name: &str) -> bool {
     }
 }
 
+/// Returns the Gateway API bundle version read from the `gateway.networking.k8s.io/bundle-version`
+/// annotation on a core CRD (e.g. `gateways.gateway.networking.k8s.io`), or `None` if the CRD is
+/// absent or the annotation is missing / unparseable.
+pub fn kubectl_get_gateway_api_bundle_version(kube_client: &Client) -> Option<Version> {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("gateways.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch Gateway CRD to determine bundle version: {}", e);
+            return None;
+        }
+    };
+
+    let raw = crd
+        .metadata
+        .annotations
+        .as_ref()
+        .and_then(|a| a.get("gateway.networking.k8s.io/bundle-version"))
+        .map(|s| s.as_str())?;
+
+    // The annotation value may be prefixed with "v" (e.g. "v1.8.0").
+    let trimmed = raw.trim_start_matches('v');
+    match Version::parse(trimmed) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            debug!("Could not parse Gateway API bundle-version annotation '{}': {}", raw, e);
+            None
+        }
+    }
+}
+
 pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
-    let required_crds = [
-        "listenersets.gateway.networking.k8s.io",
+    // Core CRDs that must always be present.
+    let core_crds = [
         "referencegrants.gateway.networking.k8s.io",
         "gateways.gateway.networking.k8s.io",
         "httproutes.gateway.networking.k8s.io",
     ];
 
-    for crd_name in &required_crds {
+    for crd_name in &core_crds {
         if !kubectl_does_crd_exist(kube_client, crd_name) {
             info!(
                 "Gateway API CRD '{}' not found or not established - Gateway API features will be disabled",
@@ -788,8 +821,177 @@ pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
         }
     }
 
+    // ListenerSet was introduced as a standard resource in Gateway API >= 1.8.0.
+    // Only require it when the installed bundle version is >= 1.8.0; older installs
+    // (e.g. the version GKE ships) don't have it and should still be considered valid
+    // for core Gateway API usage. Also note that some Gateway implementations (e.g. GKE)
+    // don't support `allowedListeners.namespaces.from: All`, so ListenerSet attachments
+    // can be rejected even when the CRD exists.
+    let min_listenerset_version = Version::new(1, 8, 0);
+    match kubectl_get_gateway_api_bundle_version(kube_client) {
+        Some(v) if v >= min_listenerset_version => {
+            if !kubectl_does_crd_exist(kube_client, "listenersets.gateway.networking.k8s.io") {
+                info!(
+                    "Gateway API bundle version is {} (>= 1.8.0) but ListenerSet CRD is not established - Gateway API features will be disabled",
+                    v
+                );
+                return false;
+            }
+        }
+        Some(v) => {
+            info!("Gateway API bundle version is {} (< 1.8.0) - ListenerSet CRD not required", v);
+        }
+        None => {
+            info!("Could not determine Gateway API bundle version - skipping ListenerSet CRD check");
+        }
+    }
+
     info!("All required Gateway API CRDs are available and established");
     true
+}
+
+/// Returns true if ListenerSet resources should be deployed based on the installed Gateway API
+/// bundle version and CRD availability. For unknown bundle versions, only deploy when the CRD
+/// actually exists to avoid apply failures on older installs.
+pub fn kubectl_should_deploy_listenerset(kube_client: &Client) -> bool {
+    kubectl_does_crd_exist(kube_client, "listenersets.gateway.networking.k8s.io")
+}
+
+/// Returns true if the Gateway CRD schema exposes the `allowedListeners` field.
+pub fn kubectl_gateway_crd_supports_allowed_listeners(kube_client: &Client) -> bool {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("gateways.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch Gateway CRD to check allowedListeners support: {}", e);
+            return false;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize Gateway CRD to inspect schema");
+        return false;
+    };
+
+    let versions = crd_value
+        .get("spec")
+        .and_then(|v| v.get("versions"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    for version in versions {
+        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
+        if !served {
+            continue;
+        }
+        let allowed_listeners = version
+            .get("schema")
+            .and_then(|v| v.get("openAPIV3Schema"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("spec"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("listeners"))
+            .and_then(|v| v.get("items"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("allowedListeners"));
+
+        if allowed_listeners.is_some() {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Returns the preferred served Gateway API version for the Gateway CRD (e.g. "v1" or "v1beta1").
+/// Prefers v1 if served, otherwise falls back to v1beta1, or the first served version if any.
+pub fn kubectl_get_gateway_api_served_version(kube_client: &Client) -> Option<String> {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("gateways.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch Gateway CRD to determine served version: {}", e);
+            return None;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize Gateway CRD to inspect versions");
+        return None;
+    };
+
+    let versions = crd_value
+        .get("spec")
+        .and_then(|v| v.get("versions"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut served_versions: Vec<String> = Vec::new();
+    for version in versions {
+        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
+        if !served {
+            continue;
+        }
+        if let Some(name) = version.get("name").and_then(Value::as_str) {
+            served_versions.push(name.to_string());
+        }
+    }
+
+    if served_versions.iter().any(|v| v == "v1") {
+        return Some("v1".to_string());
+    }
+    if served_versions.iter().any(|v| v == "v1beta1") {
+        return Some("v1beta1".to_string());
+    }
+
+    served_versions.into_iter().next()
+}
+
+/// Returns the preferred served Gateway API version for the ReferenceGrant CRD (e.g. "v1" or "v1beta1").
+/// Prefers v1 if served, otherwise falls back to v1beta1, or the first served version if any.
+pub fn kubectl_get_reference_grant_served_version(kube_client: &Client) -> Option<String> {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("referencegrants.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch ReferenceGrant CRD to determine served version: {}", e);
+            return None;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize ReferenceGrant CRD to inspect versions");
+        return None;
+    };
+
+    let versions = crd_value
+        .get("spec")
+        .and_then(|v| v.get("versions"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut served_versions: Vec<String> = Vec::new();
+    for version in versions {
+        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
+        if !served {
+            continue;
+        }
+        if let Some(name) = version.get("name").and_then(Value::as_str) {
+            served_versions.push(name.to_string());
+        }
+    }
+
+    if served_versions.iter().any(|v| v == "v1") {
+        return Some("v1".to_string());
+    }
+    if served_versions.iter().any(|v| v == "v1beta1") {
+        return Some("v1beta1".to_string());
+    }
+
+    served_versions.into_iter().next()
 }
 
 /// kubectl_get_crash_looping_pods: gets crash looping pods.

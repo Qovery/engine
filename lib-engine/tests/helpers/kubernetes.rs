@@ -665,6 +665,7 @@ pub fn get_environment_test_kubernetes(
                             default_kubernetes_storage_class,
                         ),
                         k8s_deploy_api_gateway: Some(true),
+                        k8s_use_api_gateway: Some(true),
                         envoy_vcpu_request_in_milli_cpu,
                         ..Default::default()
                     },

@@ -1,4 +1,4 @@
-use crate::cmd::kubectl::kubectl_check_gateway_api_crds_available;
+use crate::cmd::kubectl::{kubectl_check_gateway_api_crds_available, kubectl_should_deploy_listenerset};
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
@@ -331,8 +331,13 @@ impl<T: CloudProvider> Router<T> {
         context.insert("spec_acme_server", lets_encrypt_url);
 
         let gateway_api_crds_available = kubectl_check_gateway_api_crds_available(&target.kube.client());
-        let deploy_listenerset =
-            kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false) && gateway_api_crds_available;
+        // NOTE: GKE (especially Autopilot) ships Gateway API bundles where ListenerSet attachments
+        // can be rejected due to missing `allowedListeners.namespaces.from: All` support in the Gateway.
+        // We still deploy ListenerSets for backward compatibility, but rely on Gateway certRef
+        // patching as a fallback on GKE for custom domain TLS.
+        let deploy_listenerset = kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false)
+            && gateway_api_crds_available
+            && kubectl_should_deploy_listenerset(&target.kube.client());
 
         context.insert(
             "cluster_envoy_gateway_api_http_request_timeout_seconds",
