@@ -67,7 +67,7 @@ impl ToCommonHelmChart for EsoConfigChart {
                         // Set common fields
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].name", idx),
-                            value: format!("store-aws-{}", access.id),
+                            value: format!("store-{}", access.id),
                         });
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].secretManagerAccessId", idx),
@@ -160,7 +160,7 @@ impl ToCommonHelmChart for EsoConfigChart {
                         // Set common fields
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].name", idx),
-                            value: format!("store-gcp-{}", access.id),
+                            value: format!("store-{}", access.id),
                         });
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].secretManagerAccessId", idx),
@@ -363,7 +363,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-test-iam")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-test-iam")
         );
         assert!(
             values
@@ -425,7 +425,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-test-static")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-test-static")
         );
         assert!(
             values
@@ -495,7 +495,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-test-auto")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-test-auto")
         );
         assert!(
             values
@@ -599,7 +599,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-first-iam")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-first-iam")
         );
         assert!(
             values
@@ -611,7 +611,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[1].name" && v.value == "store-aws-second-static")
+                .any(|v| v.key == "authentications[1].name" && v.value == "store-second-static")
         );
         assert!(
             values
@@ -659,7 +659,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-gcp-gcp-workload")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-gcp-workload")
         );
         assert!(
             values
@@ -722,7 +722,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-gcp-gcp-static")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-gcp-static")
         );
         assert!(
             values
@@ -802,7 +802,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-aws-access")
+                .any(|v| v.key == "authentications[0].name" && v.value == "store-aws-access")
         );
         assert!(
             values
@@ -814,7 +814,7 @@ mod tests {
         assert!(
             values
                 .iter()
-                .any(|v| v.key == "authentications[1].name" && v.value == "store-gcp-gcp-access")
+                .any(|v| v.key == "authentications[1].name" && v.value == "store-gcp-access")
         );
         assert!(
             values
