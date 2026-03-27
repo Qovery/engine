@@ -21,6 +21,7 @@ pub struct QoveryClusterGatewayChartOptions {
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
     pub default_backend_image: Option<String>, // default backend container image (e.g., "registry.k8s.io/ingress-nginx/custom-error-pages")
     pub default_backend_tag: Option<String>,   // default backend container image tag (e.g., "v1.1.1")
+    pub reconcile_gateway_cert_refs: bool,     // reconcile Gateway TLS certificateRefs post-install/upgrade
 }
 
 pub struct QoveryClusterGatewayChart {
@@ -144,6 +145,7 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             },
             chart_installation_checker: Some(Box::new(QoveryClusterGatewayChartInstallationChecker::new(
                 self.namespace.clone(),
+                self.chart_options.reconcile_gateway_cert_refs,
             ))),
             vertical_pod_autoscaler: None,
             pre_execute_action: None,
@@ -154,11 +156,15 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
 #[derive(Clone)]
 pub struct QoveryClusterGatewayChartInstallationChecker {
     namespace: HelmChartNamespaces,
+    reconcile_gateway_cert_refs: bool,
 }
 
 impl QoveryClusterGatewayChartInstallationChecker {
-    pub fn new(namespace: HelmChartNamespaces) -> Self {
-        QoveryClusterGatewayChartInstallationChecker { namespace }
+    pub fn new(namespace: HelmChartNamespaces, reconcile_gateway_cert_refs: bool) -> Self {
+        QoveryClusterGatewayChartInstallationChecker {
+            namespace,
+            reconcile_gateway_cert_refs,
+        }
     }
 
     fn has_condition_true_for_generation(gateway: &Gateway, conditions_type: &str, expected_generation: i64) -> bool {
@@ -175,7 +181,7 @@ impl QoveryClusterGatewayChartInstallationChecker {
 }
 impl Default for QoveryClusterGatewayChartInstallationChecker {
     fn default() -> Self {
-        Self::new(HelmChartNamespaces::Qovery)
+        Self::new(HelmChartNamespaces::Qovery, false)
     }
 }
 
@@ -223,7 +229,33 @@ impl ChartInstallationChecker for QoveryClusterGatewayChartInstallationChecker {
         match result {
             Ok(_) => Ok(()),
             Err(retry::Error { error, .. }) => Err(error),
+        }?;
+
+        if self.reconcile_gateway_cert_refs {
+            match crate::cmd::kubectl::kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
+                &kube_client,
+                namespace.as_str(),
+                gateway_name,
+                "https",
+            ) {
+                Ok(true) => {
+                    tracing::info!("Gateway certificateRefs reconciled for {}/{}", namespace, gateway_name);
+                }
+                Ok(false) => {
+                    tracing::info!("Gateway certificateRefs already up to date for {}/{}", namespace, gateway_name);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to reconcile Gateway certificateRefs for {}/{}: {}",
+                        namespace,
+                        gateway_name,
+                        e
+                    );
+                }
+            }
         }
+
+        Ok(())
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {

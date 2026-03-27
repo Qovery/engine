@@ -528,6 +528,7 @@ pub fn kapsule_helm_charts(
                         .cluster_advanced_settings
                         .envoy_default_backend_tag
                         .clone(),
+                    reconcile_gateway_cert_refs: false,
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),
             )

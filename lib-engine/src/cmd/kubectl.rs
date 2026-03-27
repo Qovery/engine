@@ -1,14 +1,16 @@
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::Secret;
+use k8s_openapi::api::networking::v1::Ingress;
 use k8s_openapi::apiextensions_apiserver::pkg::apis::apiextensions::v1::CustomResourceDefinition;
-use kube::api::{DeleteParams, Patch, PatchParams, PropagationPolicy};
+use kube::api::{ApiResource, DeleteParams, Patch, PatchParams, PropagationPolicy};
+use kube::core::GroupVersionKind;
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
 use retry::{OperationResult, delay::Fixed};
 use semver::Version;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde_json::Value;
+use serde_json::{Value, json};
 use serde_yaml::Deserializer;
 use std::fmt::Debug;
 use std::fs::{File, read_dir, read_to_string};
@@ -992,6 +994,257 @@ pub fn kubectl_get_reference_grant_served_version(kube_client: &Client) -> Optio
     }
 
     served_versions.into_iter().next()
+}
+
+/// Returns the preferred served Gateway API version for the ListenerSet CRD (e.g. "v1" or "v1beta1").
+/// Prefers v1 if served, otherwise falls back to v1beta1, or the first served version if any.
+pub fn kubectl_get_listenerset_served_version(kube_client: &Client) -> Option<String> {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("listenersets.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch ListenerSet CRD to determine served version: {}", e);
+            return None;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize ListenerSet CRD to inspect versions");
+        return None;
+    };
+
+    let versions = crd_value
+        .get("spec")
+        .and_then(|v| v.get("versions"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut served_versions: Vec<String> = Vec::new();
+    for version in versions {
+        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
+        if !served {
+            continue;
+        }
+        if let Some(name) = version.get("name").and_then(Value::as_str) {
+            served_versions.push(name.to_string());
+        }
+    }
+
+    if served_versions.iter().any(|v| v == "v1") {
+        return Some("v1".to_string());
+    }
+    if served_versions.iter().any(|v| v == "v1beta1") {
+        return Some("v1beta1".to_string());
+    }
+
+    served_versions.into_iter().next()
+}
+
+/// Reconciles Gateway TLS certificateRefs to include all router TLS Secrets (router-tls-*)
+/// found across namespaces. Returns true if the Gateway was patched.
+pub fn kubectl_reconcile_gateway_certrefs_for_router_tls_secrets(
+    kube_client: &Client,
+    gateway_namespace: &str,
+    gateway_name: &str,
+    listener_name: &str,
+) -> Result<bool, CommandError> {
+    let mut desired_refs: Vec<(String, String)> = Vec::new();
+
+    // Collect secrets referenced by Qovery-managed Ingress resources.
+    let ingress_api: Api<Ingress> = Api::all(kube_client.clone());
+    let ingress_list = block_on(ingress_api.list(&ListParams::default().labels("qovery.com/service-type=router")))
+        .map_err(|e| {
+            CommandError::new_from_safe_message(format!(
+                "Failed to list Ingress resources for Gateway reconciliation: {e}"
+            ))
+        })?;
+
+    for ingress in ingress_list.items {
+        let Some(namespace) = ingress.metadata.namespace.clone() else {
+            continue;
+        };
+        let Some(spec) = ingress.spec else { continue };
+        let Some(tls_entries) = spec.tls else { continue };
+        for tls in tls_entries {
+            let Some(secret_name) = tls.secret_name else { continue };
+            if !secret_name.starts_with("router-tls-") {
+                continue;
+            }
+            desired_refs.push((namespace.clone(), secret_name));
+        }
+    }
+
+    // Collect secrets referenced by Qovery-managed ListenerSet resources (when available).
+    if let Some(listenerset_version) = kubectl_get_listenerset_served_version(kube_client) {
+        let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &listenerset_version, "ListenerSet");
+        let api: Api<kube::core::DynamicObject> = Api::all_with(kube_client.clone(), &ApiResource::from_gvk(&gvk));
+        let listenersets = block_on(api.list(&ListParams::default().labels("qovery.com/service-type=router")))
+            .map_err(|e| {
+                CommandError::new_from_safe_message(format!(
+                    "Failed to list ListenerSet resources for Gateway reconciliation: {e}"
+                ))
+            })?;
+
+        for ls in listenersets.items {
+            let ls_namespace = match ls.metadata.namespace.clone() {
+                Some(ns) => ns,
+                None => continue,
+            };
+            let listeners = ls
+                .data
+                .get("spec")
+                .and_then(|spec| spec.get("listeners"))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+
+            for listener in listeners {
+                let cert_refs = listener
+                    .get("tls")
+                    .and_then(|tls| tls.get("certificateRefs"))
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                for r in cert_refs {
+                    let name = r.get("name").and_then(Value::as_str);
+                    if let Some(name) = name {
+                        if !name.starts_with("router-tls-") {
+                            continue;
+                        }
+                        let namespace = r
+                            .get("namespace")
+                            .and_then(Value::as_str)
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| ls_namespace.clone());
+                        desired_refs.push((namespace, name.to_string()));
+                    }
+                }
+            }
+        }
+    }
+
+    // Deduplicate desired refs.
+    desired_refs.sort();
+    desired_refs.dedup();
+
+    if desired_refs.is_empty() {
+        return Ok(false);
+    }
+
+    let api_version = kubectl_get_gateway_api_served_version(kube_client).unwrap_or_else(|| "v1".to_string());
+    let gvk = GroupVersionKind::gvk("gateway.networking.k8s.io", &api_version, "Gateway");
+    let api: Api<kube::core::DynamicObject> =
+        Api::namespaced_with(kube_client.clone(), gateway_namespace, &ApiResource::from_gvk(&gvk));
+
+    let mut gateway = block_on(api.get(gateway_name)).map_err(|e| {
+        CommandError::new_from_safe_message(format!("Failed to fetch Gateway {gateway_namespace}/{gateway_name}: {e}"))
+    })?;
+
+    let listeners = gateway
+        .data
+        .get_mut("spec")
+        .and_then(|spec| spec.get_mut("listeners"))
+        .and_then(|listeners| listeners.as_array_mut())
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Gateway {gateway_namespace}/{gateway_name} has no spec.listeners"
+            ))
+        })?;
+
+    let listener = listeners
+        .iter_mut()
+        .find(|l| l.get("name").and_then(|v| v.as_str()) == Some(listener_name))
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Gateway {gateway_namespace}/{gateway_name} has no '{listener_name}' listener"
+            ))
+        })?;
+
+    let mut mutated = false;
+
+    let tls = listener
+        .as_object_mut()
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' is not an object"
+            ))
+        })?
+        .entry("tls")
+        .or_insert_with(|| {
+            mutated = true;
+            json!({ "mode": "Terminate", "certificateRefs": [] })
+        });
+
+    let cert_refs = tls
+        .as_object_mut()
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' tls is not an object"
+            ))
+        })?
+        .entry("certificateRefs")
+        .or_insert_with(|| {
+            mutated = true;
+            json!([])
+        });
+
+    let cert_refs_array = cert_refs.as_array_mut().ok_or_else(|| {
+        CommandError::new_from_safe_message(format!(
+            "Gateway {gateway_namespace}/{gateway_name} listener '{listener_name}' tls.certificateRefs is not an array"
+        ))
+    })?;
+
+    let mut existing = std::collections::HashSet::new();
+    for r in cert_refs_array.iter() {
+        let name = r.get("name").and_then(|v| v.as_str());
+        if let Some(n) = name {
+            let ns = r.get("namespace").and_then(|v| v.as_str()).unwrap_or(gateway_namespace);
+            existing.insert(format!("{ns}/{n}"));
+        }
+    }
+
+    for (namespace, name) in desired_refs {
+        let key = format!("{namespace}/{name}");
+        if existing.contains(&key) {
+            continue;
+        }
+        cert_refs_array.push(json!({
+            "kind": "Secret",
+            "name": name,
+            "namespace": namespace,
+        }));
+        mutated = true;
+    }
+
+    if !mutated {
+        return Ok(false);
+    }
+
+    let listeners_patch = gateway
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("listeners"))
+        .cloned()
+        .ok_or_else(|| {
+            CommandError::new_from_safe_message(format!(
+                "Gateway {gateway_namespace}/{gateway_name} has no spec.listeners after mutation"
+            ))
+        })?;
+
+    let patch = json!({
+        "spec": {
+            "listeners": listeners_patch
+        }
+    });
+
+    block_on(api.patch(gateway_name, &PatchParams::default(), &Patch::Merge(&patch))).map_err(|e| {
+        CommandError::new_from_safe_message(format!(
+            "Failed to patch Gateway {gateway_namespace}/{gateway_name} certificateRefs: {e}"
+        ))
+    })?;
+
+    Ok(true)
 }
 
 /// kubectl_get_crash_looping_pods: gets crash looping pods.
