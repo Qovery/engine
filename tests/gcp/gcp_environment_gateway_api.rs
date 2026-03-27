@@ -19,6 +19,7 @@ use qovery_engine::io_models::router::{CustomDomain, Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::io_models::{Action, QoveryIdentifier};
 use qovery_engine::runtime::block_on;
+use qovery_engine::utilities::to_short_id;
 use retry::delay::Fibonacci;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -41,6 +42,56 @@ fn retry_list_gateway_api_resources(
         }
     })
     .map_err(|e| format!("Failed to list Gateway API resources after retries: {e:?}"))
+}
+
+fn retry_get_gateway_resource(
+    api: &Api<kube::core::DynamicObject>,
+    name: &str,
+) -> Result<kube::core::DynamicObject, String> {
+    retry::retry(Fibonacci::from_millis(3000).take(10), || {
+        match block_on(async { api.get(name).await }) {
+            Ok(resource) => retry::OperationResult::Ok(resource),
+            Err(e) => {
+                tracing::warn!("Failed to get Gateway API resource, retrying: {}", e);
+                retry::OperationResult::Retry("Failed to get Gateway API resource")
+            }
+        }
+    })
+    .map_err(|e| format!("Failed to get Gateway API resource after retries: {e:?}"))
+}
+
+fn gateway_has_tls_secret_ref(
+    gateway: &kube::core::DynamicObject,
+    listener_name: &str,
+    secret_namespace: &str,
+    secret_name: &str,
+) -> bool {
+    let listeners = gateway
+        .data
+        .get("spec")
+        .and_then(|spec| spec.get("listeners"))
+        .and_then(|listeners| listeners.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let Some(listener) = listeners
+        .iter()
+        .find(|l| l.get("name").and_then(|v| v.as_str()) == Some(listener_name))
+    else {
+        return false;
+    };
+
+    let cert_refs = listener
+        .get("tls")
+        .and_then(|tls| tls.get("certificateRefs"))
+        .and_then(|refs| refs.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    cert_refs.iter().any(|r| {
+        r.get("name").and_then(|v| v.as_str()) == Some(secret_name)
+            && r.get("namespace").and_then(|v| v.as_str()) == Some(secret_namespace)
+    })
 }
 
 #[cfg(feature = "test-gcp-minimal")]
@@ -207,6 +258,127 @@ fn deploy_application_with_cors_enabled_on_gcp_gke() {
         } else {
             panic!("SecurityPolicy should have spec");
         }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-gcp-minimal")]
+#[named]
+#[test]
+fn deploy_router_with_custom_domain_patches_gateway_certrefs_on_gcp_gke() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .GCP_TEST_ORGANIZATION_LONG_ID
+                .expect("GCP_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .GCP_TEST_CLUSTER_LONG_ID
+                .expect("GCP_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_gcp_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .GCP_TEST_KUBECONFIG_b64
+                .expect("GCP_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = gcp_infra_config(&target_cluster_gcp_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = gcp_infra_config(
+            &target_cluster_gcp_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .GCP_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("GCP_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        let router_name = format!("router-{suffix}");
+        let custom_domain = CustomDomain {
+            domain: format!("custom-{suffix}.{test_domain}"),
+            target_domain: format!("custom-{suffix}.{}.{}", context.cluster_short_id(), test_domain),
+            generate_certificate: true,
+            use_cdn: true, // speed-up DNS propagation for tests
+        };
+
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "gateway-certref-router".to_string(),
+            kube_name: router_name.clone(),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![custom_domain],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let gateway_api_resource = kube::api::ApiResource {
+            group: "gateway.networking.k8s.io".to_string(),
+            version: "v1".to_string(),
+            kind: "Gateway".to_string(),
+            api_version: "gateway.networking.k8s.io/v1".to_string(),
+            plural: "gateways".to_string(),
+        };
+
+        let gateway_api: Api<kube::core::DynamicObject> =
+            Api::namespaced_with(kube_client.clone(), "qovery", &gateway_api_resource);
+        let gateway = retry_get_gateway_resource(&gateway_api, "qovery-cluster-public-gateway")
+            .expect("Failed to get Gateway after retries");
+
+        let secret_namespace = environment.kube_name.as_str();
+        let secret_name = format!("router-tls-{}", to_short_id(&router_id));
+
+        assert!(
+            gateway_has_tls_secret_ref(&gateway, "https", secret_namespace, &secret_name),
+            "Gateway should reference router TLS secret {secret_namespace}/{secret_name}"
+        );
 
         // clean up:
         let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
