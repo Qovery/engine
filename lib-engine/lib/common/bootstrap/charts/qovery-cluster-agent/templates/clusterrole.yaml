@@ -48,6 +48,16 @@ rules:
       - get
       - list
   - apiGroups:
+      - gateway.networking.k8s.io
+    resources:
+      - httproutes
+      - gateways
+      - listenersets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
       - karpenter.sh
     resources:
       - nodepools
