@@ -678,15 +678,21 @@ where
 {
     info!("Deleting ValidatingAdmissionPolicy: {}", policy_name);
 
-    let binding_cmd_args = vec![
-        "delete",
-        "validatingadmissionpolicybinding",
-        policy_name,
-        "--ignore-not-found=true",
-    ];
-    match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-        Ok(output) => info!("Deleted ValidatingAdmissionPolicyBinding {}: {}", policy_name, output),
-        Err(e) => warn!("Failed to delete ValidatingAdmissionPolicyBinding {}: {:?}", policy_name, e),
+    // Try deleting binding with both naming conventions:
+    // - Same name as policy (upstream Gateway API convention, e.g. "safe-upgrades.gateway.networking.k8s.io")
+    // - Policy name with "-binding" suffix (GKE convention, e.g. "enforce-gateway-standard-channel-binding")
+    let binding_with_suffix = format!("{}-binding", policy_name);
+    for binding_name in [policy_name, binding_with_suffix.as_str()] {
+        let binding_cmd_args = vec![
+            "delete",
+            "validatingadmissionpolicybinding",
+            binding_name,
+            "--ignore-not-found=true",
+        ];
+        match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+            Ok(output) => info!("Deleted ValidatingAdmissionPolicyBinding {}: {}", binding_name, output),
+            Err(e) => warn!("Failed to delete ValidatingAdmissionPolicyBinding {}: {:?}", binding_name, e),
+        }
     }
 
     let policy_cmd_args = vec![
@@ -701,56 +707,58 @@ where
         Err(e) => warn!("Failed to delete ValidatingAdmissionPolicy {}: {:?}", policy_name, e),
     }
 
-    info!("Verifying ValidatingAdmissionPolicy {} is fully deleted", policy_name);
-    let verify_result = retry::retry(Fixed::from(Duration::from_secs(3)).take(20), || {
-        let get_cmd_args = vec![
-            "get",
-            "validatingadmissionpolicy",
-            policy_name,
-            "--ignore-not-found=true",
-        ];
-        match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-            Ok(output) if output.trim().is_empty() => {
-                info!("ValidatingAdmissionPolicy {} no longer exists", policy_name);
-                OperationResult::Ok(())
-            }
-            Ok(output) => {
-                warn!("ValidatingAdmissionPolicy {} still exists, retrying...", policy_name);
-                OperationResult::Retry(format!("ValidatingAdmissionPolicy {} still exists: {}", policy_name, output))
-            }
-            Err(e) => {
-                let msg = e.message_safe();
-                if msg.contains("not found") || msg.contains("NotFound") {
-                    info!("ValidatingAdmissionPolicy {} confirmed deleted (NotFound)", policy_name);
+    // Verify both the policy and binding are fully deleted
+    for (resource_kind, resource_name) in [
+        ("validatingadmissionpolicy", policy_name),
+        ("validatingadmissionpolicybinding", policy_name),
+        ("validatingadmissionpolicybinding", binding_with_suffix.as_str()),
+    ] {
+        info!("Verifying {} {} is fully deleted", resource_kind, resource_name);
+        let verify_result = retry::retry(Fixed::from(Duration::from_secs(3)).take(20), || {
+            let get_cmd_args = vec!["get", resource_kind, resource_name, "--ignore-not-found=true"];
+            match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
+                Ok(output) if output.trim().is_empty() => {
+                    info!("{} {} no longer exists", resource_kind, resource_name);
                     OperationResult::Ok(())
-                } else {
-                    warn!("Failed to verify ValidatingAdmissionPolicy {}, retrying: {:?}", policy_name, e);
-                    OperationResult::Retry(format!(
-                        "Failed to verify ValidatingAdmissionPolicy {}: {:?}",
-                        policy_name, e
-                    ))
+                }
+                Ok(output) => {
+                    // Resource still exists — attempt deletion again before retrying verification
+                    warn!("{} {} still exists, re-deleting and retrying...", resource_kind, resource_name);
+                    let del_args = vec!["delete", resource_kind, resource_name, "--ignore-not-found=true"];
+                    let _ = kubectl_exec_raw_output(del_args, kubernetes_config.as_ref(), envs.clone(), false);
+                    OperationResult::Retry(format!("{} {} still exists: {}", resource_kind, resource_name, output))
+                }
+                Err(e) => {
+                    let msg = e.message_safe();
+                    if msg.contains("not found") || msg.contains("NotFound") {
+                        info!("{} {} confirmed deleted (NotFound)", resource_kind, resource_name);
+                        OperationResult::Ok(())
+                    } else {
+                        warn!("Failed to verify {} {}, retrying: {:?}", resource_kind, resource_name, e);
+                        OperationResult::Retry(format!("Failed to verify {} {}: {:?}", resource_kind, resource_name, e))
+                    }
                 }
             }
-        }
-    });
+        });
 
-    match verify_result {
-        Ok(_) => {
-            info!("Verified ValidatingAdmissionPolicy {} is fully deleted", policy_name);
-            info!("Waiting additional 5 seconds for API server cache propagation...");
-            thread::sleep(Duration::from_secs(5));
-            info!("Proceeding with CRD installation");
-            result
+        match verify_result {
+            Ok(_) => {
+                info!("Verified {} {} is fully deleted", resource_kind, resource_name);
+            }
+            Err(retry::Error { error, .. }) => {
+                return Err(CommandError::new(
+                    format!("Failed to verify {} {} deletion after 60 seconds", resource_kind, resource_name),
+                    Some(error),
+                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
+                ));
+            }
         }
-        Err(retry::Error { error, .. }) => Err(CommandError::new(
-            format!(
-                "Failed to verify ValidatingAdmissionPolicy {} deletion after 60 seconds",
-                policy_name
-            ),
-            Some(error),
-            Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-        )),
     }
+
+    info!("Waiting additional 5 seconds for API server cache propagation...");
+    thread::sleep(Duration::from_secs(5));
+    info!("Proceeding with CRD installation");
+    result
 }
 
 pub fn kubectl_does_crd_exist(kube_client: &Client, crd_name: &str) -> bool {

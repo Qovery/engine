@@ -33,7 +33,7 @@ use qovery_engine::services::azure::container_registry_service::AzureContainerRe
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub const AZURE_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
+pub const AZURE_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_34 {
     prefix: None,
     patch: None,
     suffix: None,

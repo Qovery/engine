@@ -421,7 +421,7 @@ mod tests {
     use std::sync::Arc;
     use time::Time;
 
-    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_33 {
+    const KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_34 {
         prefix: None,
         patch: None,
         suffix: None,

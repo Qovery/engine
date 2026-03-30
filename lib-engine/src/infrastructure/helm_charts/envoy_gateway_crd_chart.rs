@@ -188,7 +188,14 @@ impl ChartPreExecuteAction for RemoveGatewayApiValidatingAdmissionPolicyAction {
     fn execute(&self, kubernetes_config: &Path, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
         use crate::cmd::kubectl::kubectl_delete_validating_admission_policy;
 
-        kubectl_delete_validating_admission_policy(kubernetes_config, "safe-upgrades.gateway.networking.k8s.io", envs)?;
+        // `kubectl_delete_validating_admission_policy` takes `envs` by value; clone the vector
+        // to reuse it for the second deletion call.
+        kubectl_delete_validating_admission_policy(
+            kubernetes_config,
+            "safe-upgrades.gateway.networking.k8s.io",
+            envs.clone(),
+        )?;
+        kubectl_delete_validating_admission_policy(kubernetes_config, "enforce-gateway-standard-channel", envs)?;
 
         Ok(())
     }

@@ -117,6 +117,8 @@ resource "aws_eks_node_group" "karpenter_controller" {
     max_unavailable_percentage = 50  # Allow 1 node to be unavailable during updates
   }
 
+  force_update_version = true
+
   timeouts {
     create = "10m"
     delete = "60m"
