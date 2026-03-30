@@ -14,7 +14,6 @@ metadata:
     qovery.com/deployment-id: {{ deployment_id }}
     app.kubernetes.io/name: {{ service.name }}
     app.kubernetes.io/instance: {{ service.long_id }}
-    app.kubernetes.io/version: {{ service.image_tag }}
     app.kubernetes.io/component: {{ service.type }}
     app.kubernetes.io/part-of: {{ namespace }}
     app.kubernetes.io/managed-by: qovery
@@ -56,7 +55,6 @@ spec:
         qovery.com/project-id: {{ project_long_id }}
         app.kubernetes.io/name: {{ service.name }}
         app.kubernetes.io/instance: {{ service.long_id }}
-        app.kubernetes.io/version: {{ service.image_tag }}
         app.kubernetes.io/component: {{ service.type }}
         app.kubernetes.io/part-of: {{ namespace }}
         app.kubernetes.io/managed-by: qovery
