@@ -17,6 +17,14 @@ use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::services::kube_client::QubeClient;
 use crate::utilities::envs_to_string;
+use k8s_openapi::api::core::v1::{Container, Pod, PodSpec, ResourceRequirements};
+use k8s_openapi::apimachinery::pkg::api::resource::Quantity;
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::ObjectMeta;
+use kube::Api;
+use kube::api::PostParams;
+use std::collections::BTreeMap;
+use std::thread;
+use std::time::Duration;
 
 const KARPENTER_NODEGROUP_TERRAFORM_RESOURCES: &[&str] = &[
     // Nodegroup resources
@@ -33,6 +41,12 @@ const KARPENTER_NODEGROUP_TERRAFORM_RESOURCES: &[&str] = &[
     "aws_cloudwatch_event_rule.qovery_cloudwatch_event_rule",
     "aws_cloudwatch_event_target.qovery_cloudwatch_event_target",
 ];
+
+const KARPENTER_TEST_POD_NAME: &str = "karpenter-migration-test";
+const KARPENTER_TEST_POD_NAMESPACE: &str = "qovery";
+const KARPENTER_TEST_POD_IMAGE: &str = "public.ecr.aws/eks-distro/kubernetes/pause:3.9";
+const KARPENTER_PROVISIONING_POLL_INTERVAL_SECS: u64 = 15;
+const KARPENTER_PROVISIONING_MAX_ATTEMPTS: u32 = 20; // 20 * 15s = 5 minutes
 
 /// Deploys Karpenter nodegroup infrastructure via Terraform and installs Karpenter helm charts.
 ///
@@ -87,6 +101,10 @@ pub fn deploy_karpenter_nodegroup(
     logger.info("📦 Installing Karpenter helm charts...");
     install_karpenter_charts(kubernetes, infra_ctx, &eks_tf_output, logger)?;
     logger.info("✅ Karpenter helm charts installed successfully");
+
+    // Safety check: verify Karpenter can provision nodes before proceeding
+    // If this fails, the migration is aborted and the old autoscaler is preserved
+    verify_karpenter_provisioning(kubernetes, infra_ctx, logger)?;
 
     Ok(eks_tf_output)
 }
@@ -202,6 +220,210 @@ fn install_karpenter_charts(
     logger.info("✅ Karpenter configuration installed");
 
     Ok(())
+}
+
+/// Verifies that Karpenter can provision nodes by performing a two-phase check:
+///
+/// Phase 1 (Health): Validates the Karpenter controller deployment is healthy and NodePools exist.
+/// Phase 2 (Provisioning): Creates a test Pod that forces Karpenter to provision a new node from
+/// the default NodePool, then waits for it to become Running.
+///
+/// On success, the test Pod is deleted but the provisioned node is left for real workloads.
+/// On failure, the test Pod is cleaned up and an error is returned to abort the migration.
+fn verify_karpenter_provisioning(
+    kubernetes: &EKS,
+    infra_ctx: &InfrastructureContext,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Create));
+    let kube_client = infra_ctx.mk_kube_client()?;
+
+    // Phase 1: Controller health check
+    logger.info("🔍 Verifying Karpenter controller health...");
+
+    let deployments = crate::runtime::block_on(kube_client.get_deployments(
+        event_details.clone(),
+        Some("kube-system"),
+        crate::services::kube_client::SelectK8sResourceBy::Name("karpenter".to_string()),
+    ))
+    .map_err(|e| {
+        Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(format!(
+                "Karpenter migration safety check failed: cannot query Karpenter deployment: {e}"
+            ))
+            .into(),
+        ))
+    })?;
+
+    if deployments.is_empty() {
+        return Err(Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(
+                "Karpenter migration safety check failed: Karpenter deployment not found in kube-system. \
+                 Aborting migration to preserve existing autoscaler."
+                    .to_string(),
+            )
+            .into(),
+        )));
+    }
+
+    let ready_replicas = deployments
+        .first()
+        .and_then(|d| d.status.as_ref())
+        .and_then(|s| s.ready_replicas)
+        .unwrap_or(0);
+
+    if ready_replicas == 0 {
+        return Err(Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(
+                "Karpenter migration safety check failed: Karpenter deployment has 0 ready replicas. \
+                 Aborting migration to preserve existing autoscaler."
+                    .to_string(),
+            )
+            .into(),
+        )));
+    }
+
+    let node_pools = crate::runtime::block_on(kube_client.get_node_pools(&event_details)).map_err(|e| {
+        Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(format!(
+                "Karpenter migration safety check failed: cannot query NodePools: {e}"
+            ))
+            .into(),
+        ))
+    })?;
+
+    if node_pools.is_empty() {
+        return Err(Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(
+                "Karpenter migration safety check failed: no NodePools found. \
+                 Aborting migration to preserve existing autoscaler."
+                    .to_string(),
+            )
+            .into(),
+        )));
+    }
+
+    logger.info(format!(
+        "✅ Karpenter controller healthy ({ready_replicas} ready replicas, {} NodePools)",
+        node_pools.len()
+    ));
+
+    // Phase 2: Provisioning test
+    logger.info("🧪 Creating test Pod to verify Karpenter can provision nodes...");
+
+    let pods_api: Api<Pod> = Api::namespaced(kube_client.client(), KARPENTER_TEST_POD_NAMESPACE);
+
+    // Clean up any leftover test pod from a previous failed run
+    let _ = crate::runtime::block_on(kube_client.delete_pod(
+        &event_details,
+        KARPENTER_TEST_POD_NAMESPACE,
+        KARPENTER_TEST_POD_NAME,
+    ));
+    thread::sleep(Duration::from_secs(5));
+
+    let test_pod = build_karpenter_test_pod();
+    crate::runtime::block_on(pods_api.create(&PostParams::default(), &test_pod)).map_err(|e| {
+        Box::new(EngineError::new_helm_chart_error(
+            event_details.clone(),
+            CommandError::new_from_safe_message(format!(
+                "Karpenter migration safety check failed: cannot create test Pod: {e}"
+            ))
+            .into(),
+        ))
+    })?;
+
+    let mut provisioned = false;
+    for attempt in 1..=KARPENTER_PROVISIONING_MAX_ATTEMPTS {
+        match crate::runtime::block_on(pods_api.get(KARPENTER_TEST_POD_NAME)) {
+            Ok(pod) => {
+                let phase = pod
+                    .status
+                    .as_ref()
+                    .and_then(|s| s.phase.as_deref())
+                    .unwrap_or("Unknown");
+
+                logger.info(format!(
+                    "⏳ Waiting for Karpenter to provision a node... (attempt {attempt}/{KARPENTER_PROVISIONING_MAX_ATTEMPTS}, pod phase: {phase})"
+                ));
+
+                match phase {
+                    "Running" => {
+                        provisioned = true;
+                        break;
+                    }
+                    // Pod terminated unexpectedly — no point waiting further
+                    "Failed" | "Succeeded" => break,
+                    _ => {}
+                }
+            }
+            Err(e) => {
+                logger.warn(format!(
+                    "⏳ Cannot get test Pod status (attempt {attempt}/{KARPENTER_PROVISIONING_MAX_ATTEMPTS}): {e}"
+                ));
+            }
+        }
+        thread::sleep(Duration::from_secs(KARPENTER_PROVISIONING_POLL_INTERVAL_SECS));
+    }
+
+    // Always clean up the test pod
+    let _ = crate::runtime::block_on(kube_client.delete_pod(
+        &event_details,
+        KARPENTER_TEST_POD_NAMESPACE,
+        KARPENTER_TEST_POD_NAME,
+    ));
+
+    if provisioned {
+        logger.info("✅ Test Pod is Running — Karpenter provisioning verified");
+        Ok(())
+    } else {
+        Err(Box::new(EngineError::new_k8s_node_not_ready(
+            event_details,
+            CommandError::new_from_safe_message(
+                "Karpenter migration safety check failed: Karpenter could not provision a node within 5 minutes. \
+                 Aborting migration to preserve existing autoscaler. \
+                 Check IAM roles, subnet configuration, and instance availability."
+                    .to_string(),
+            ),
+        )))
+    }
+}
+
+/// Builds the Kubernetes Pod spec for the Karpenter provisioning test.
+fn build_karpenter_test_pod() -> Pod {
+    Pod {
+        metadata: ObjectMeta {
+            name: Some(KARPENTER_TEST_POD_NAME.to_string()),
+            namespace: Some(KARPENTER_TEST_POD_NAMESPACE.to_string()),
+            labels: Some(BTreeMap::from([
+                ("app.kubernetes.io/name".to_string(), "karpenter-migration-test".to_string()),
+                ("app.kubernetes.io/managed-by".to_string(), "qovery-engine".to_string()),
+            ])),
+            ..Default::default()
+        },
+        spec: Some(PodSpec {
+            node_selector: Some(BTreeMap::from([("karpenter.sh/nodepool".to_string(), "default".to_string())])),
+            containers: vec![Container {
+                name: "pause".to_string(),
+                image: Some(KARPENTER_TEST_POD_IMAGE.to_string()),
+                resources: Some(ResourceRequirements {
+                    requests: Some(BTreeMap::from([
+                        ("cpu".to_string(), Quantity("100m".to_string())),
+                        ("memory".to_string(), Quantity("128Mi".to_string())),
+                    ])),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            }],
+            termination_grace_period_seconds: Some(0),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
 }
 
 /// Determines if Karpenter nodegroup deployment should be performed
