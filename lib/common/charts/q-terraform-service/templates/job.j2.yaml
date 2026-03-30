@@ -12,7 +12,6 @@ metadata:
     qovery.com/deployment-id: {{ deployment_id }}
     app.kubernetes.io/name: {{ service.name }}
     app.kubernetes.io/instance: {{ service.long_id }}
-    app.kubernetes.io/version: {{ service.image_tag }}
     app.kubernetes.io/component: terraform-service
     app.kubernetes.io/part-of: {{ namespace }}
     app.kubernetes.io/managed-by: qovery
@@ -41,7 +40,6 @@ spec:
         qovery.com/deployment-id: {{ deployment_id }}
         app.kubernetes.io/name: {{ service.name }}
         app.kubernetes.io/instance: {{ service.long_id }}
-        app.kubernetes.io/version: {{ service.image_tag }}
         app.kubernetes.io/component: terraform-service
         app.kubernetes.io/part-of: {{ namespace }}
         app.kubernetes.io/managed-by: qovery
