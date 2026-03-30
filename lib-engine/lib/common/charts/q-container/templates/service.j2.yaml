@@ -10,6 +10,12 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    app.kubernetes.io/name: {{ service.name }}
+    app.kubernetes.io/instance: {{ service.long_id }}
+    app.kubernetes.io/version: {{ service.image_tag }}
+    app.kubernetes.io/component: {{ service.type }}
+    app.kubernetes.io/part-of: {{ namespace }}
+    app.kubernetes.io/managed-by: qovery
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}
@@ -45,6 +51,12 @@ metadata:
     qovery.com/service-type: {{ service.type }}
     qovery.com/environment-id: {{ environment_long_id }}
     qovery.com/project-id: {{ project_long_id }}
+    app.kubernetes.io/name: {{ service.name }}
+    app.kubernetes.io/instance: {{ service.long_id }}
+    app.kubernetes.io/version: {{ service.image_tag }}
+    app.kubernetes.io/component: {{ service.type }}
+    app.kubernetes.io/part-of: {{ namespace }}
+    app.kubernetes.io/managed-by: qovery
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}
