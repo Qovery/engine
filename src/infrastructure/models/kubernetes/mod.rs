@@ -145,6 +145,11 @@ pub enum KubernetesVersion {
         patch: Option<u8>,
         suffix: Option<Arc<str>>,
     },
+    V1_34 {
+        prefix: Option<Arc<str>>,
+        patch: Option<u8>,
+        suffix: Option<Arc<str>>,
+    },
 }
 
 impl KubernetesVersion {
@@ -161,6 +166,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_31 { prefix, .. } => prefix,
             KubernetesVersion::V1_32 { prefix, .. } => prefix,
             KubernetesVersion::V1_33 { prefix, .. } => prefix,
+            KubernetesVersion::V1_34 { prefix, .. } => prefix,
         }
     }
 
@@ -177,6 +183,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_31 { .. } => 1,
             KubernetesVersion::V1_32 { .. } => 1,
             KubernetesVersion::V1_33 { .. } => 1,
+            KubernetesVersion::V1_34 { .. } => 1,
         }
     }
 
@@ -193,6 +200,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_31 { .. } => 31,
             KubernetesVersion::V1_32 { .. } => 32,
             KubernetesVersion::V1_33 { .. } => 33,
+            KubernetesVersion::V1_34 { .. } => 34,
         }
     }
 
@@ -209,6 +217,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_31 { patch, .. } => patch,
             KubernetesVersion::V1_32 { patch, .. } => patch,
             KubernetesVersion::V1_33 { patch, .. } => patch,
+            KubernetesVersion::V1_34 { patch, .. } => patch,
         }
     }
 
@@ -225,6 +234,7 @@ impl KubernetesVersion {
             KubernetesVersion::V1_31 { suffix, .. } => suffix,
             KubernetesVersion::V1_32 { suffix, .. } => suffix,
             KubernetesVersion::V1_33 { suffix, .. } => suffix,
+            KubernetesVersion::V1_34 { suffix, .. } => suffix,
         }
     }
 
@@ -277,6 +287,11 @@ impl KubernetesVersion {
                 suffix: None,
             }),
             KubernetesVersion::V1_33 { .. } => Some(KubernetesVersion::V1_32 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_34 { .. } => Some(KubernetesVersion::V1_33 {
                 prefix: None,
                 patch: None,
                 suffix: None,
@@ -336,7 +351,12 @@ impl KubernetesVersion {
                 patch: None,
                 suffix: None,
             }),
-            KubernetesVersion::V1_33 { .. } => None,
+            KubernetesVersion::V1_33 { .. } => Some(KubernetesVersion::V1_34 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            KubernetesVersion::V1_34 { .. } => None,
         }
     }
 
@@ -441,6 +461,11 @@ impl FromStr for KubernetesVersion {
                 suffix: None,
             }),
             "1.33" => Ok(KubernetesVersion::V1_33 {
+                prefix: None,
+                patch: None,
+                suffix: None,
+            }),
+            "1.34" => Ok(KubernetesVersion::V1_34 {
                 prefix: None,
                 patch: None,
                 suffix: None,
@@ -2285,6 +2310,11 @@ mod tests {
                         patch: None,
                         suffix: None,
                     }),
+                    "1.34" => Ok(kubernetes::KubernetesVersion::V1_34 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None,
+                    }),
                     _ => panic!("unsupported k8s version string"),
                 },
                 K8sVersion::from_str(&k8s_version_str)
@@ -2452,6 +2482,11 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
+                    K8sVersion::V1_34 { .. } => Some(K8sVersion::V1_33 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
                 },
                 k8s_version.previous_version(),
             );
@@ -2511,6 +2546,7 @@ mod tests {
                     K8sVersion::V1_31 { .. } => None,
                     K8sVersion::V1_32 { .. } => None,
                     K8sVersion::V1_33 { .. } => None,
+                    K8sVersion::V1_34 { .. } => None,
                 },
                 k3s_version.previous_version(),
             );
@@ -2573,7 +2609,12 @@ mod tests {
                         patch: None,
                         suffix: None
                     }),
-                    K8sVersion::V1_33 { .. } => None,
+                    K8sVersion::V1_33 { .. } => Some(K8sVersion::V1_34 {
+                        prefix: None,
+                        patch: None,
+                        suffix: None
+                    }),
+                    K8sVersion::V1_34 { .. } => None,
                 },
                 k8s_version.next_version(),
             );
@@ -2637,6 +2678,7 @@ mod tests {
                     K8sVersion::V1_31 { .. } => None,
                     K8sVersion::V1_32 { .. } => None,
                     K8sVersion::V1_33 { .. } => None,
+                    K8sVersion::V1_34 { .. } => None,
                 },
                 k3s_version.next_version(),
             );

@@ -34,6 +34,7 @@ impl AwsCoreDnsAddon {
                 KubernetesVersion::V1_31 { .. } => "v1.11.4-eksbuild.2",
                 KubernetesVersion::V1_32 { .. } => "v1.11.4-eksbuild.2",
                 KubernetesVersion::V1_33 { .. } => "v1.12.2-eksbuild.4",
+                KubernetesVersion::V1_34 { .. } => "v1.13.2-eksbuild.3",
             }
             .to_string(),
             resources: AwsCoreDnsAddon::compute_resources(&cluster_profile),
@@ -201,6 +202,15 @@ mod tests {
                 },
                 cluster_profile: ClusterProfile::Medium,
                 expected_addon_version: "v1.12.2-eksbuild.4".to_string(),
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_34 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                cluster_profile: ClusterProfile::Medium,
+                expected_addon_version: "v1.13.2-eksbuild.3".to_string(),
             },
         ];
 

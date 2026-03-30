@@ -118,7 +118,7 @@ impl KarpenterConfigurationChart {
                     | KubernetesVersion::V1_30 { .. }
                     | KubernetesVersion::V1_31 { .. }
                     | KubernetesVersion::V1_32 { .. } => Ec2Ami::AmazonLinux2,
-                    KubernetesVersion::V1_33 { .. } => Ec2Ami::AmazonLinux2023,
+                    KubernetesVersion::V1_33 { .. } | KubernetesVersion::V1_34 { .. } => Ec2Ami::AmazonLinux2023,
                 },
             },
             aws_storage_type,
@@ -226,7 +226,7 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
         // GPU nodes always use the standard AMI (not affected by custom AMI setting)
         let gpu_ec2_ami = if self.eks_ec2_ami.is_custom() {
             match self.kubernetes_version {
-                KubernetesVersion::V1_33 { .. } => Ec2Ami::AmazonLinux2023,
+                KubernetesVersion::V1_33 { .. } | KubernetesVersion::V1_34 { .. } => Ec2Ami::AmazonLinux2023,
                 _ => Ec2Ami::AmazonLinux2,
             }
         } else {
