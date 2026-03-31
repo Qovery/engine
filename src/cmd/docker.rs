@@ -33,6 +33,9 @@ pub enum DockerError {
 
     #[error("Docker command terminated due to timeout: {raw_error_message:?}")]
     Timeout { raw_error_message: String },
+
+    #[error("Buildkit builder pod was terminated unexpectedly: {raw_error_message:?}")]
+    BuilderPodTerminated { raw_error_message: String },
 }
 
 impl DockerError {
@@ -798,22 +801,25 @@ impl Docker {
         // Hack
         // Sometimes, the build can fail with a transient error, we need to retry, for stability ...
         // https://github.com/docker/buildx/issues/2668
-        // The root cause seems to be a race condition: Kubernetes marks the node “Ready” before its CSR is signed,
-        // so buildx’s connection attempt fails with a TLS error instead of retrying gracefully
+        // The root cause seems to be a race condition: Kubernetes marks the node "Ready" before its CSR is signed,
+        // so buildx's connection attempt fails with a TLS error instead of retrying gracefully
         let mut nb_retry = 3;
         let started_at = std::time::Instant::now();
 
         loop {
             let mut transient_error = false;
+            let mut oom_killed = false;
             let ret = {
                 let mut stderr_output = |line: String| {
+                    if line.contains("OOMKilled") {
+                        oom_killed = true;
+                    }
                     if line.contains("listing workers for Build")
                         || line.contains("use of closed network connection")
                         || line.contains("i/o timeout")
                     {
                         transient_error = true;
                     }
-
                     stderr_output(line);
                 };
                 docker_exec(
@@ -824,6 +830,13 @@ impl Docker {
                     should_abort,
                 )
             };
+
+            if ret.is_err() && oom_killed {
+                return Err(DockerError::BuilderPodTerminated {
+                    raw_error_message: "Builder pod was OOMKilled during the build. The pod exceeded its memory limit."
+                        .to_string(),
+                });
+            }
 
             if ret.is_err() && transient_error && should_abort.should_abort().is_none() {
                 if nb_retry == 0 && started_at.elapsed() > Duration::from_secs(60 * 3) {
