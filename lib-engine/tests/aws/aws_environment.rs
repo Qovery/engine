@@ -1194,6 +1194,7 @@ fn deploy_a_non_working_environment_with_no_failover_on_aws_eks() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "tests clusters are using Envoy / Gateway-API by default now"]
 fn aws_eks_deploy_a_working_environment_with_sticky_session() {
     use qovery_engine::environment::models::router::RouterAdvancedSettings;
 
@@ -1439,6 +1440,7 @@ fn aws_eks_deploy_a_working_environment_with_ip_whitelist_allowing_all() {
 #[cfg(feature = "test-aws-self-hosted")]
 #[named]
 #[test]
+#[ignore = "tests clusters are using Envoy / Gateway-API by default now"]
 fn aws_eks_deploy_a_working_environment_with_ip_whitelist_deny_all() {
     use qovery_engine::environment::models::router::RouterAdvancedSettings;
 

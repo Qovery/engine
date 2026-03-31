@@ -5,7 +5,7 @@
   Create one BackendTrafficPolicy per HTTPRoute part.
   See gateway-http-route.j2.yaml for details on why routes are split.
 #}
-{%- set max_hosts_per_route = 8 %}
+{%- set max_hosts_per_route = 1 %}
 {%- set total_hosts = http_hosts|length %}
 {%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
 {%- for route_index in range(end=num_routes) %}

@@ -6,16 +6,15 @@
   - Maximum 16 hostnames per HTTPRoute
   - Maximum 16 rules per HTTPRoute
 
-  Why 8 hosts per route?
-  - Each host generates 2 hostnames (original + new-gateway-api variant)
-  - Each host generates 2 rules (main path + service prefix path for backward compatibility)
-  - 8 hosts × 2 = 16 hostnames and 16 rules (at the Kubernetes limit)
+  Why 1 host per route?
+  - Ensures per-domain routing without header matching
+  - Avoids cross-domain attribution when multiple hostnames share a route
 
   When you have >8 hosts, multiple HTTPRoute resources are created:
   - router-name (for 1-8 hosts)
   - router-name-1, router-name-2, ... (for >8 hosts)
 #}
-{%- set max_hosts_per_route = 8 %}
+{%- set max_hosts_per_route = 1 %}
 {%- set total_hosts = http_hosts|length %}
 {%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
 {%- for route_index in range(end=num_routes) %}

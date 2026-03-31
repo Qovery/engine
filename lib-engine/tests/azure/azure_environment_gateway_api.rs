@@ -114,6 +114,7 @@ fn deploy_application_with_cors_enabled_on_azure_aks() {
         }];
 
         let router_id = Uuid::new_v4();
+
         environment.routers = vec![Router {
             long_id: router_id,
             name: "cors-test-router".to_string(),
@@ -10722,6 +10723,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_azure_aks(
             })
             .collect();
 
+        let expected_routes = (custom_domains.len() + 1) * 2;
+
         environment.routers = vec![Router {
             long_id: router_id,
             name: "multi-domain-router".to_string(),
@@ -10779,10 +10782,15 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_azure_aks(
             })
             .collect();
 
-        // With 10 custom domains, should create 3 route parts
-        // Each domain generates 2 http_hosts entries (port-prefixed + bare domain);
-        // default domain also generates 2 entries → total 22 entries; ceil(22/8) = 3 routes.
-        assert_eq!(router_routes.len(), 3, "Should have 3 HTTPRoute parts for 10 custom domains");
+        // With 10 custom domains:
+        // - Each domain generates 2 http_hosts entries (port-prefixed + bare domain)
+        // - Default domain also generates 2 entries
+        // - Total: (10 + 1) * 2 = 22 http_hosts entries; 1 host per route → 22 route parts
+        assert_eq!(
+            router_routes.len(),
+            expected_routes,
+            "Should have {expected_routes} HTTPRoute parts for 10 custom domains"
+        );
 
         // Verify route names
         let route_names: Vec<String> = router_routes.iter().map(|route| route.name_any()).collect();
@@ -10792,12 +10800,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_azure_aks(
             "Should have {router_name}-1 route"
         );
         assert!(
-            route_names.contains(&format!("{router_name}-2")),
-            "Should have {router_name}-2 route"
-        );
-        assert!(
-            route_names.contains(&format!("{router_name}-3")),
-            "Should have {router_name}-3 route"
+            route_names.contains(&format!("{router_name}-{expected_routes}")),
+            "Should have {router_name}-{expected_routes} route"
         );
 
         // Verify qovery.com/router-name label exists on all routes

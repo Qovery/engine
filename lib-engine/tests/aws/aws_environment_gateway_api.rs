@@ -114,6 +114,7 @@ fn deploy_application_with_cors_enabled_on_aws_eks() {
         }];
 
         let router_id = Uuid::new_v4();
+
         environment.routers = vec![Router {
             long_id: router_id,
             name: "cors-test-router".to_string(),
@@ -10726,6 +10727,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
             })
             .collect();
 
+        let expected_routes = (custom_domains.len() + 1) * 2;
+
         environment.routers = vec![Router {
             long_id: router_id,
             name: "multi-domain-router".to_string(),
@@ -10786,7 +10789,7 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
         // With 10 custom domains:
         // - Each domain generates 2 http_hosts entries (port-prefixed + bare domain)
         // - Default domain also generates 2 http_hosts entries
-        // - Total: 22 http_hosts entries; max 8 per route → ceil(22/8) = 3 route parts
+        // - Total: (10 + 1) * 2 = 22 http_hosts entries; 1 host per route → 22 route parts
 
         // Debug: print all route names found
         let route_names: Vec<String> = router_routes.iter().map(|route| route.name_any()).collect();
@@ -10810,8 +10813,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
 
         assert_eq!(
             main_routes.len(),
-            3,
-            "Should have 3 main HTTPRoute parts for 10 custom domains (found {} routes: {:?})",
+            expected_routes,
+            "Should have {expected_routes} main HTTPRoute parts for 10 custom domains (found {} routes: {:?})",
             main_routes.len(),
             main_route_names
         );
@@ -10823,13 +10826,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
             main_route_names
         );
         assert!(
-            main_route_names.contains(&format!("{router_name}-2")),
-            "Should have {router_name}-2 route, found: {:?}",
-            main_route_names
-        );
-        assert!(
-            main_route_names.contains(&format!("{router_name}-3")),
-            "Should have {router_name}-3 route, found: {:?}",
+            main_route_names.contains(&format!("{router_name}-{expected_routes}")),
+            "Should have {router_name}-{expected_routes} route, found: {:?}",
             main_route_names
         );
 
@@ -10861,10 +10859,10 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_aws_eks() 
             if let Some(spec) = route.data.get("spec")
                 && let Some(hostnames) = spec.get("hostnames").and_then(|h| h.as_array())
             {
-                // Each route part should have ≤16 hostnames
+                // Each route part should have exactly 2 hostnames (original + new-gateway-api)
                 assert!(
-                    hostnames.len() <= 16,
-                    "Route {} should have ≤16 hostnames, got {}",
+                    hostnames.len() == 2,
+                    "Route {} should have 2 hostnames, got {}",
                     route.name_any(),
                     hostnames.len()
                 );

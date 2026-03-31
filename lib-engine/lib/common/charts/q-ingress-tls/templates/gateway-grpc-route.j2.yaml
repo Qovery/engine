@@ -6,16 +6,15 @@
   - Maximum 16 hostnames per GRPCRoute
   - Maximum 16 rules per GRPCRoute
 
-  Why 8 hosts per route?
-  - Each host generates 2 hostnames (original + new-gateway-api variant)
-  - Each host generates 1 rule
-  - 8 hosts × 2 hostnames = 16 hostnames (at the Kubernetes limit)
+  Why 1 host per route?
+  - Ensures per-domain routing without header matching
+  - Avoids cross-domain attribution when multiple hostnames share a route
 
   When you have >8 hosts, multiple GRPCRoute resources are created:
   - router-name-grpc (for 1-8 hosts)
   - router-name-grpc-1, router-name-grpc-2, ... (for >8 hosts)
 #}
-{%- set max_hosts_per_route = 8 %}
+{%- set max_hosts_per_route = 1 %}
 {%- set total_hosts = grpc_hosts|length %}
 {%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
 {%- for route_index in range(end=num_routes) %}
@@ -103,7 +102,7 @@ spec:
           name: "{{ host.service_name }}"
           port: {{ host.service_port }}
           weight: {{ host.weight }}
-      {%- if host.grpc_service is defined and host.grpc_service | trim %}
+      {%- if host.grpc_service is defined and (host.grpc_service | trim) %}
       # GRPCRoute uses method matching (service/method) instead of path matching
       matches:
         - method:
