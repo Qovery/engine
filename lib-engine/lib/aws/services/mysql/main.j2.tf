@@ -102,13 +102,21 @@ resource "aws_db_instance" "mysql_instance" {
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = local.final_snapshot_name
+  {%- endif %}
   lifecycle {
     ignore_changes = [
+{%- if not skip_final_snapshot %}
       final_snapshot_identifier,
+{%- endif %}
       maintenance_window,
+      enabled_cloudwatch_logs_exports,
+      deletion_protection,
+      iam_database_authentication_enabled,
+      max_allocated_storage,
+      dedicated_log_volume,
+      option_group_name,
     ]
   }
-  {%- endif %}
   copy_tags_to_snapshot = true
   delete_automated_backups = var.delete_automated_backups
 

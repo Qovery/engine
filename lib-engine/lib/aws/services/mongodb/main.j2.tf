@@ -40,7 +40,13 @@ resource "aws_docdb_cluster_instance" "documentdb_cluster_instances" {
   tags = local.mongodb_database_tags
 
   lifecycle {
-    ignore_changes = [preferred_maintenance_window]
+    ignore_changes = [
+      preferred_maintenance_window,
+      enable_performance_insights,
+      promotion_tier,
+      copy_tags_to_snapshot,
+      ca_cert_identifier,
+    ]
   }
 }
 
@@ -87,10 +93,17 @@ resource "aws_docdb_cluster" "documentdb_cluster" {
   skip_final_snapshot = var.skip_final_snapshot
   {%- if not skip_final_snapshot %}
   final_snapshot_identifier = local.final_snapshot_name
+  {%- endif %}
   lifecycle {
     ignore_changes = [
+{%- if not skip_final_snapshot %}
       final_snapshot_identifier,
+{%- endif %}
+      enabled_cloudwatch_logs_exports,
+      deletion_protection,
+      db_cluster_parameter_group_name,
+      preferred_maintenance_window,
+      allow_major_version_upgrade,
     ]
   }
-  {%- endif %}
 }
