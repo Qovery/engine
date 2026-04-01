@@ -38,7 +38,16 @@ resource "aws_elasticache_cluster" "elasticache_cluster" {
   # need to add this dirty trick while Hashicorp fix this issue
   # https://github.com/hashicorp/terraform-provider-aws/issues/15625
   lifecycle {
-    ignore_changes = [engine_version {%- if not skip_final_snapshot %}, final_snapshot_identifier{%- endif %}, maintenance_window]
+    ignore_changes = [
+      engine_version,
+{%- if not skip_final_snapshot %}
+      final_snapshot_identifier,
+{%- endif %}
+      maintenance_window,
+      log_delivery_configuration,
+      notification_topic_arn,
+      auto_minor_version_upgrade,
+    ]
   }
 
   engine = "redis"
@@ -120,7 +129,15 @@ resource "aws_elasticache_replication_group" "elasticache_cluster" {
 {%- endif %}
 
   lifecycle {
-    ignore_changes = [maintenance_window]
+    ignore_changes = [
+      maintenance_window,
+      log_delivery_configuration,
+      notification_topic_arn,
+      auto_minor_version_upgrade,
+      user_group_ids,
+      automatic_failover_enabled,
+      transit_encryption_mode,
+    ]
   }
 }
 {%- endif %}

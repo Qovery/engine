@@ -92,6 +92,12 @@ resource "aws_db_instance" "postgresql_instance" {
 {%- endif %}
       parameter_group_name,
       maintenance_window,
+      enabled_cloudwatch_logs_exports,
+      deletion_protection,
+      iam_database_authentication_enabled,
+      max_allocated_storage,
+      dedicated_log_volume,
+      option_group_name,
     ]
   }
   copy_tags_to_snapshot = true
