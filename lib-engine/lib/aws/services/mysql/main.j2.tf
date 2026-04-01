@@ -30,7 +30,7 @@ locals {
 }
 
 resource "aws_db_parameter_group" "mysql_parameter_group" {
-  name   = "qovery-${var.mysql_identifier}"
+  name   = "qovery-${var.mysql_identifier}-${replace(var.parameter_group_family, ".", "-")}"
   family = var.parameter_group_family
 
   tags = local.mysql_database_tags
@@ -39,6 +39,10 @@ resource "aws_db_parameter_group" "mysql_parameter_group" {
   parameter {
     name  = "log_bin_trust_function_creators"
     value = "1"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 
