@@ -389,18 +389,9 @@ pub(super) fn eks_anywhere_helm_charts(
             &chart_config_prerequisites.dns_provider_config,
             vec![domain.to_string()],
             HelmChartNamespaces::Qovery,
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .k8s_deploy_api_gateway
-                .unwrap_or(false),
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .k8s_use_api_gateway
-                .unwrap_or(false),
-            chart_config_prerequisites
-                .cluster_advanced_settings
-                .k8s_remove_nginx
-                .unwrap_or(false),
+            gateway_api_rollout_status.is_deployed(),
+            gateway_api_rollout_status.is_default(),
+            false,
         )
         .to_common_helm_chart()?,
     ));
