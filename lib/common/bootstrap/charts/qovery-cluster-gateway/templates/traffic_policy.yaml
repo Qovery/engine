@@ -24,6 +24,7 @@ spec:
   {{- end }}
   headers:
     enableEnvoyHeaders: true # add the "X-Envoy-" headers to requests and responses
+    withUnderscoresAction: {{ .Values.gateway.qoveryPublic.withUnderscoresAction }} # avoid rejecting requests when intermediaries send underscored headers
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
