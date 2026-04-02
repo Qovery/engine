@@ -137,6 +137,8 @@ pub struct EksAnywhereGitRepository {
     #[serde(default)]
     pub provider: Option<String>,
     pub branch: String,
+    #[serde(default, alias = "commitId")]
+    pub commit_id: Option<String>,
     #[serde(alias = "rootPath")]
     pub root_path: String,
     #[serde(default, alias = "gitTokenId")]
@@ -283,6 +285,7 @@ mod tests {
                 "url": "https://bitbucket.com/workspace/cluster.git",
                 "provider": "BITBUCKET",
                 "branch": "main",
+                "commit_id": "0123456789abcdef0123456789abcdef01234567",
                 "root_path": "/",
                 "git_token_id": Uuid::new_v4().to_string(),
                 "git_credentials": {
@@ -299,14 +302,20 @@ mod tests {
             .infrastructure_charts_parameters
             .eks_anywhere_parameters
             .expect("eks_anywhere_parameters should be present");
+        let git_repository = eks_anywhere_parameters
+            .git_repository
+            .expect("git_repository should be present");
 
         assert_eq!(
-            eks_anywhere_parameters
-                .git_repository
-                .expect("git_repository should be present")
-                .url
-                .expect("url should be present"),
+            git_repository.url.as_deref().expect("url should be present"),
             "https://bitbucket.com/workspace/cluster.git"
+        );
+        assert_eq!(
+            git_repository
+                .commit_id
+                .as_deref()
+                .expect("commit_id should be present"),
+            "0123456789abcdef0123456789abcdef01234567"
         );
         assert_eq!(
             eks_anywhere_parameters
