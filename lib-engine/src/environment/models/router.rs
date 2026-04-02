@@ -290,7 +290,7 @@ impl<T: CloudProvider> Router<T> {
             .cloned()
             .collect();
         let cluster_domain = target.dns_provider.domain().to_string();
-        let http_hosts_per_namespace = to_host_data_template(
+        let http_hosts_per_namespace_nginx = to_host_data_template(
             service_name,
             &http_ports,
             &self.default_domain,
@@ -298,7 +298,23 @@ impl<T: CloudProvider> Router<T> {
             &cluster_domain,
             environment.namespace(),
         );
-        let grpc_hosts_per_namespace = to_host_data_template(
+        let grpc_hosts_per_namespace_nginx = to_host_data_template(
+            service_name,
+            &grpc_ports,
+            &self.default_domain,
+            &self.custom_domains,
+            &cluster_domain,
+            environment.namespace(),
+        );
+        let http_hosts_per_namespace_gateway = to_gateway_host_data_template(
+            service_name,
+            &http_ports,
+            &self.default_domain,
+            &self.custom_domains,
+            &cluster_domain,
+            environment.namespace(),
+        );
+        let grpc_hosts_per_namespace_gateway = to_gateway_host_data_template(
             service_name,
             &grpc_ports,
             &self.default_domain,
@@ -307,19 +323,23 @@ impl<T: CloudProvider> Router<T> {
             environment.namespace(),
         );
 
-        let http_hosts_has_regex_path = http_hosts_per_namespace
+        let http_hosts_has_regex_path = http_hosts_per_namespace_nginx
             .values()
             .flatten()
             .any(|host| host.path != Port::DEFAULT_PUBLIC_PATH);
-        let grpc_hosts_has_regex_path = grpc_hosts_per_namespace
+        let grpc_hosts_has_regex_path = grpc_hosts_per_namespace_nginx
             .values()
             .flatten()
             .any(|host| host.path != Port::DEFAULT_PUBLIC_PATH);
         context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
         context.insert("http_hosts_has_regex_path", &http_hosts_has_regex_path);
-        context.insert("http_hosts_per_namespace", &http_hosts_per_namespace);
+        context.insert("http_hosts_per_namespace", &http_hosts_per_namespace_nginx);
+        context.insert("http_hosts_per_namespace_nginx", &http_hosts_per_namespace_nginx);
+        context.insert("http_hosts_per_namespace_gateway", &http_hosts_per_namespace_gateway);
         context.insert("grpc_hosts_has_regex_path", &grpc_hosts_has_regex_path);
-        context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace);
+        context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace_nginx);
+        context.insert("grpc_hosts_per_namespace_nginx", &grpc_hosts_per_namespace_nginx);
+        context.insert("grpc_hosts_per_namespace_gateway", &grpc_hosts_per_namespace_gateway);
 
         context.insert("annotations_group", &self.annotations_group);
         context.insert("labels_group", &self.labels_group);
@@ -380,6 +400,45 @@ fn to_host_data_template(
     cluster_domain: &str,
     environment_namespace: &str,
 ) -> HashMap<String, Vec<HostDataTemplate>> {
+    to_host_data_template_with_rewrite_policy(
+        service_name,
+        ports,
+        default_domain,
+        custom_domains,
+        cluster_domain,
+        environment_namespace,
+        false,
+    )
+}
+
+fn to_gateway_host_data_template(
+    service_name: &str,
+    ports: &[&Port],
+    default_domain: &str,
+    custom_domains: &[CustomDomain],
+    cluster_domain: &str,
+    environment_namespace: &str,
+) -> HashMap<String, Vec<HostDataTemplate>> {
+    to_host_data_template_with_rewrite_policy(
+        service_name,
+        ports,
+        default_domain,
+        custom_domains,
+        cluster_domain,
+        environment_namespace,
+        true,
+    )
+}
+
+fn to_host_data_template_with_rewrite_policy(
+    service_name: &str,
+    ports: &[&Port],
+    default_domain: &str,
+    custom_domains: &[CustomDomain],
+    cluster_domain: &str,
+    environment_namespace: &str,
+    gateway_api_rewrite_restrictions: bool,
+) -> HashMap<String, Vec<HostDataTemplate>> {
     if ports.is_empty() {
         return HashMap::new();
     }
@@ -388,13 +447,11 @@ fn to_host_data_template(
         HostPathType::from_path(port.public_path().unwrap_or_default(), HostPathType::PathPrefix)
     };
     let to_path_rewrite = |port: &Port| -> Option<String> {
-        let path_type = to_path_type(port);
-        // Gateway API only allows ReplacePrefixMatch rewrites with PathPrefix matches.
-        if path_type == HostPathType::PathPrefix {
-            port.public_path_rewrite().map(|p| p.to_string())
-        } else {
-            None
+        if gateway_api_rewrite_restrictions && to_path_type(port) != HostPathType::PathPrefix {
+            // Gateway API only allows ReplacePrefixMatch rewrites with PathPrefix matches.
+            return None;
         }
+        port.public_path_rewrite().map(|p| p.to_string())
     };
     let to_path_weight = |_port: &Port| -> u32 { 1 };
     let ports_by_namespace = get_ports_by_namespace(ports);
@@ -665,7 +722,9 @@ where
 #[cfg(test)]
 mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
-    use crate::environment::models::router::{generate_certificate_alternative_names, to_host_data_template};
+    use crate::environment::models::router::{
+        generate_certificate_alternative_names, to_gateway_host_data_template, to_host_data_template,
+    };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
 
@@ -1121,7 +1180,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_router_host_template_drops_path_rewrite_for_regex_paths() {
+    pub fn test_router_host_template_keeps_path_rewrite_for_regex_paths() {
         let regex_port_with_path_rewrite = Port {
             long_id: Default::default(),
             name: "http-regex".to_string(),
@@ -1139,6 +1198,46 @@ mod tests {
 
         let namespace = "env_namespace";
         let ret = to_host_data_template(
+            "srv",
+            &[&regex_port_with_path_rewrite],
+            "cluster.com",
+            &[],
+            "cluster.com",
+            namespace,
+        );
+        assert_eq!(ret.len(), 1);
+        let host_data = ret.get(namespace).unwrap();
+        assert_eq!(host_data.len(), 1);
+        assert!(host_data.contains(&HostDataTemplate {
+            domain_name: "http-regex-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+            path: "/(.*)".to_string(),
+            path_rewrite: Some("/public/$1".to_string()),
+            path_type: HostPathType::RegularExpression,
+            weight: 1,
+        }));
+    }
+
+    #[test]
+    pub fn test_gateway_host_template_drops_path_rewrite_for_regex_paths() {
+        let regex_port_with_path_rewrite = Port {
+            long_id: Default::default(),
+            name: "http-regex".to_string(),
+            port: 8080,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/(.*)".to_string(),
+                    path_rewrite: Some("/public/$1".to_string()),
+                }),
+            },
+        };
+
+        let namespace = "env_namespace";
+        let ret = to_gateway_host_data_template(
             "srv",
             &[&regex_port_with_path_rewrite],
             "cluster.com",

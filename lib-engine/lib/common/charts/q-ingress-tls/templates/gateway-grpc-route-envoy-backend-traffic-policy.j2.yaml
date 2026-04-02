@@ -1,5 +1,5 @@
 {%- if k8s_deploy_api_gateway == true %}
-{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace %}
+{% for namespace_key, grpc_hosts in grpc_hosts_per_namespace_gateway %}
 {%- if grpc_hosts|length >= 1  %}
 {#
   Create one BackendTrafficPolicy per GRPCRoute part.

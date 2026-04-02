@@ -10,6 +10,7 @@ use base64::engine::general_purpose;
 use bstr::ByteSlice;
 use function_name::named;
 use k8s_openapi::api::batch::v1::CronJob;
+use k8s_openapi::api::networking::v1::Ingress;
 use kube::Api;
 use kube::api::ListParams;
 use qovery_engine::cmd::kubectl::kubectl_get_secret;
@@ -535,22 +536,18 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
         }
 
         for mut application in environment.applications.into_iter() {
-            application.ports.push(PortIo {
-                long_id: Uuid::new_v4(),
-                port: 5050,
-                is_default: false,
-                name: "grpc".to_string(),
-                publicly_accessible: true,
-                protocol: Protocol::GRPC,
-                service_name: None,
-                namespace: None,
-                path: None,
-                path_rewrite: None,
-            });
+            let default_http_port = application
+                .ports
+                .iter_mut()
+                .find(|port| port.is_default && port.protocol == Protocol::HTTP)
+                .expect("default HTTP port should exist");
+            default_http_port.path = Some("/(.*)".to_string());
+            default_http_port.path_rewrite = Some("/public/$1".to_string());
             modified_environment.applications.push(application);
         }
 
         environment = modified_environment;
+        let router_id = environment.routers[0].long_id;
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -560,6 +557,56 @@ fn azure_aks_deploy_a_working_environment_with_domain() {
 
         let ret = environment.deploy_environment(&ea, &infra_ctx);
         assert!(ret.is_ok());
+
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let ingress_api: Api<Ingress> = Api::namespaced(kube_client, environment.kube_name.as_str());
+        let ingresses = block_on(async {
+            ingress_api
+                .list(&ListParams::default().labels(&format!("qovery.com/service-id={router_id}")))
+                .await
+        })
+        .expect("Failed to list ingress resources");
+        assert!(!ingresses.items.is_empty(), "Router ingress should exist");
+
+        let ingress = ingresses
+            .items
+            .first()
+            .expect("Router ingress should be present for regex verification");
+        let annotations = ingress
+            .metadata
+            .annotations
+            .as_ref()
+            .expect("Ingress annotations should be present");
+        assert_eq!(
+            annotations
+                .get("nginx.ingress.kubernetes.io/use-regex")
+                .map(|value| value.as_str()),
+            Some("true"),
+            "Ingress should enable regex matching for regex path"
+        );
+        assert_eq!(
+            annotations
+                .get("nginx.ingress.kubernetes.io/rewrite-target")
+                .map(|value| value.as_str()),
+            Some("/public/$1"),
+            "Ingress should keep rewrite target for regex path on nginx"
+        );
+
+        let has_regex_path = ingress
+            .spec
+            .as_ref()
+            .and_then(|spec| spec.rules.as_ref())
+            .map(|rules| {
+                rules.iter().any(|rule| {
+                    rule.http.as_ref().is_some_and(|http| {
+                        http.paths.iter().any(|path| {
+                            path.path.as_deref() == Some("/(.*)") && path.path_type == "ImplementationSpecific"
+                        })
+                    })
+                })
+            })
+            .unwrap_or(false);
+        assert!(has_regex_path, "Ingress should contain regex path /(.*)");
 
         let ret = environment_delete.delete_environment(&ea_delete, &infra_ctx_for_delete);
         assert!(ret.is_ok());
