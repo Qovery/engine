@@ -1,5 +1,5 @@
 {%- if k8s_deploy_api_gateway == true %}
-{% for namespace_key, http_hosts in http_hosts_per_namespace %}
+{% for namespace_key, http_hosts in http_hosts_per_namespace_gateway %}
 {%- if http_hosts|length >= 1 %}
 {%- if advanced_settings.network_gateway_api_custom_http_errors is defined and advanced_settings.network_gateway_api_custom_http_errors %}
 ---
