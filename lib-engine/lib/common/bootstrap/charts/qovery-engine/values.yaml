@@ -78,10 +78,10 @@ securityContext:
 engineResources:
   requests:
     cpu: 200m
-    memory: 2Gi
+    memory: 3Gi
   limits:
     cpu: 1
-    memory: 2Gi
+    memory: 3Gi
 
 nodeSelector: {}
 

@@ -226,10 +226,10 @@ overprovisionning.resources.limits.cpu="4",\
 overprovisionning.resources.requests.memory="8Gi",\
 overprovisionning.resources.limits.memory="8Gi",\
 engineResources.limits.cpu="1",\
-engineResources.limits.memory="2Gi",\
+engineResources.limits.memory="3Gi",\
 engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
-engineResources.requests.memory="2Gi",\
+engineResources.requests.memory="3Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
 }
 
