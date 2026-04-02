@@ -384,9 +384,17 @@ fn to_host_data_template(
         return HashMap::new();
     }
     let to_port_path = |port: &Port| -> String { port.public_path().expect("port should be public here").to_string() };
-    let to_path_rewrite = |port: &Port| -> Option<String> { port.public_path_rewrite().map(|p| p.to_string()) };
     let to_path_type = |port: &Port| -> HostPathType {
         HostPathType::from_path(port.public_path().unwrap_or_default(), HostPathType::PathPrefix)
+    };
+    let to_path_rewrite = |port: &Port| -> Option<String> {
+        let path_type = to_path_type(port);
+        // Gateway API only allows ReplacePrefixMatch rewrites with PathPrefix matches.
+        if path_type == HostPathType::PathPrefix {
+            port.public_path_rewrite().map(|p| p.to_string())
+        } else {
+            None
+        }
     };
     let to_path_weight = |_port: &Port| -> u32 { 1 };
     let ports_by_namespace = get_ports_by_namespace(ports);
@@ -1108,6 +1116,46 @@ mod tests {
             path: "/toto".to_string(),
             path_rewrite: Some("/titi".to_string()),
             path_type: HostPathType::PathPrefix,
+            weight: 1,
+        }));
+    }
+
+    #[test]
+    pub fn test_router_host_template_drops_path_rewrite_for_regex_paths() {
+        let regex_port_with_path_rewrite = Port {
+            long_id: Default::default(),
+            name: "http-regex".to_string(),
+            port: 8080,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/(.*)".to_string(),
+                    path_rewrite: Some("/public/$1".to_string()),
+                }),
+            },
+        };
+
+        let namespace = "env_namespace";
+        let ret = to_host_data_template(
+            "srv",
+            &[&regex_port_with_path_rewrite],
+            "cluster.com",
+            &[],
+            "cluster.com",
+            namespace,
+        );
+        assert_eq!(ret.len(), 1);
+        let host_data = ret.get(namespace).unwrap();
+        assert_eq!(host_data.len(), 1);
+        assert!(host_data.contains(&HostDataTemplate {
+            domain_name: "http-regex-cluster.com".to_string(),
+            service_name: "srv".to_string(),
+            service_port: 8080,
+            path: "/(.*)".to_string(),
+            path_rewrite: None,
+            path_type: HostPathType::RegularExpression,
             weight: 1,
         }));
     }
