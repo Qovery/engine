@@ -89,6 +89,31 @@ where
     Ok(())
 }
 
+pub fn fetch_file_at_commit<P>(
+    repository_url: &Url,
+    commit_id: &str,
+    file_path: &Path,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<Vec<u8>, BuildError>
+where
+    P: AsRef<Path>,
+{
+    let repo = fetch(repository_url, into_dir, get_credentials, commit_id).map_err(|error| BuildError::GitError {
+        application: "".to_string(),
+        git_cmd: GitCmd::Fetch,
+        context: format!("url: {repository_url}/ commit id: {commit_id}"),
+        raw_error: error,
+    })?;
+
+    file_content_at_commit(&repo, commit_id, file_path).map_err(|error| BuildError::GitError {
+        application: "".to_string(),
+        git_cmd: GitCmd::Checkout,
+        context: format!("commit id: {commit_id}, file path: {}", file_path.display()),
+        raw_error: error,
+    })
+}
+
 // Credentials callback is called endlessly until the server return Auth Ok (or a definitive error)
 // If auth is denied, it up to us to return a new credential to try different auth method
 // or an error to specify that we have exhausted everything we are able to provide
@@ -144,6 +169,40 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
 
     repo.reset(&obj, Hard, Some(&mut checkout_opts))?;
     Ok(obj)
+}
+
+fn file_content_at_commit(repo: &Repository, commit_id: &str, file_path: &Path) -> Result<Vec<u8>, Error> {
+    let obj = repo.revparse_single(commit_id).map_err(|err| {
+        let repo_url = repo
+            .find_remote("origin")
+            .map(|remote| remote.url().unwrap_or_default().to_string())
+            .unwrap_or_default();
+        let msg = format!(
+            "Unable to use git object commit ID {} on repository {}: {}",
+            commit_id, repo_url, err
+        );
+        Error::from_str(&msg)
+    })?;
+    let commit = obj.peel_to_commit()?;
+    let tree = commit.tree()?;
+    let entry = tree.get_path(file_path).map_err(|err| {
+        Error::from_str(&format!(
+            "Unable to find file {} in commit {}: {}",
+            file_path.display(),
+            commit_id,
+            err
+        ))
+    })?;
+    let blob = repo.find_blob(entry.id()).map_err(|err| {
+        Error::from_str(&format!(
+            "Unable to read blob for file {} in commit {}: {}",
+            file_path.display(),
+            commit_id,
+            err
+        ))
+    })?;
+
+    Ok(blob.content().to_vec())
 }
 
 fn fetch<P>(
@@ -223,10 +282,11 @@ fn remote_fetch(
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::git::{checkout, clone_at_commit, fetch};
+    use crate::cmd::git::{checkout, clone_at_commit, fetch, file_content_at_commit};
     use base64::Engine;
     use base64::engine::general_purpose;
-    use git2::{Cred, CredentialType, Repository};
+    use git2::{Cred, CredentialType, Repository, Signature};
+    use std::fs;
     use std::path::{Path, PathBuf};
     use url::Url;
     use uuid::Uuid;
@@ -355,6 +415,40 @@ mod tests {
         let check = checkout(&repo, valid_commit);
         assert!(check.is_ok());
         assert_eq!(repo.head().unwrap().target().unwrap().to_string(), valid_commit);
+    }
+
+    #[test]
+    fn test_git_file_content_at_commit() {
+        let repo_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_git_file".to_string());
+        let repo = Repository::init(repo_dir.path()).expect("repository should initialize");
+        let workdir = repo.workdir().expect("workdir should exist").to_path_buf();
+
+        fs::create_dir_all(workdir.join("clusters")).expect("directory should be created");
+        fs::write(
+            workdir.join("clusters/cluster-a.yaml"),
+            "kind: Cluster\nmetadata:\n  name: test\n",
+        )
+        .expect("file should be written");
+
+        let mut index = repo.index().expect("index should open");
+        index
+            .add_path(Path::new("clusters/cluster-a.yaml"))
+            .expect("file should be staged");
+        index.write().expect("index should be written");
+        let tree_id = index.write_tree().expect("tree should be written");
+        let tree = repo.find_tree(tree_id).expect("tree should be found");
+        let signature = Signature::now("Qovery", "qovery@example.com").expect("signature should be created");
+        let commit_id = repo
+            .commit(Some("HEAD"), &signature, &signature, "initial commit", &tree, &[])
+            .expect("commit should be created");
+
+        let content = file_content_at_commit(&repo, &commit_id.to_string(), Path::new("clusters/cluster-a.yaml"))
+            .expect("file should be read from commit");
+
+        assert_eq!(
+            String::from_utf8(content).expect("content should be utf-8"),
+            "kind: Cluster\nmetadata:\n  name: test\n"
+        );
     }
 
     #[test]
