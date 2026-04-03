@@ -173,6 +173,7 @@ fn deploy_application_with_cors_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -341,6 +342,7 @@ fn deploy_router_with_custom_domain_patches_gateway_certrefs_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![custom_domain],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -458,6 +460,7 @@ fn deploy_application_with_sticky_session_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -619,6 +622,7 @@ fn deploy_application_with_ip_whitelist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -785,6 +789,7 @@ fn deploy_application_with_ip_denylist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -957,6 +962,7 @@ fn deploy_application_with_both_whitelist_and_denylist_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1144,6 +1150,7 @@ fn deploy_application_with_basic_auth_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1299,6 +1306,7 @@ fn deploy_application_with_rate_limit_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1530,6 +1538,7 @@ fn deploy_application_with_custom_headers_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1742,6 +1751,7 @@ fn deploy_application_with_sticky_session_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1905,6 +1915,7 @@ fn deploy_application_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2073,6 +2084,7 @@ fn deploy_application_with_ip_denylist_enabled_on_gcp_gke_grp() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2246,6 +2258,7 @@ fn deploy_application_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2434,6 +2447,7 @@ fn deploy_application_with_basic_auth_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2591,6 +2605,7 @@ fn deploy_application_with_rate_limit_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2779,6 +2794,7 @@ fn deploy_application_with_custom_headers_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3030,6 +3046,7 @@ fn deploy_container_with_cors_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3230,6 +3247,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3427,6 +3445,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3629,6 +3648,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3831,6 +3851,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4050,6 +4071,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4235,6 +4257,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4500,6 +4523,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4749,6 +4773,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4948,6 +4973,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5152,6 +5178,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5356,6 +5383,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5577,6 +5605,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5764,6 +5793,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6031,6 +6061,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6241,6 +6272,7 @@ fn deploy_application_with_force_ssl_redirect_on_gcp_gke_http() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6535,6 +6567,7 @@ fn deploy_container_with_force_ssl_redirect_on_gcp_gke_http() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6821,6 +6854,7 @@ fn deploy_helm_with_cors_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7011,6 +7045,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7198,6 +7233,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7381,6 +7417,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7565,6 +7602,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7758,6 +7796,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7922,6 +7961,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8124,6 +8164,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8328,6 +8369,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8517,6 +8559,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8702,6 +8745,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8888,6 +8932,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9083,6 +9128,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9249,6 +9295,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9453,6 +9500,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_gke_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9625,6 +9673,7 @@ fn deploy_application_with_custom_http_errors_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9860,6 +9909,7 @@ fn deploy_container_with_custom_http_errors_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10051,6 +10101,7 @@ fn deploy_helm_with_custom_http_errors_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10425,6 +10476,7 @@ fn deploy_container_with_circuit_breaker_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10593,6 +10645,7 @@ fn deploy_helm_with_circuit_breaker_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10738,6 +10791,7 @@ fn deploy_application_with_timeout_settings_on_gcp_gke() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
+            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10869,11 +10923,13 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
             .as_str();
 
         let app_id = environment.applications[0].long_id;
+        let port_name = format!("http-{suffix}");
+        let default_domain = format!("main.{}.{}", context.cluster_short_id(), test_domain);
         environment.applications[0].ports = vec![PortIo {
             long_id: Uuid::new_v4(),
             port: 80,
             is_default: true,
-            name: format!("http-{suffix}"),
+            name: port_name.clone(),
             publicly_accessible: true,
             protocol: HTTP,
             service_name: None,
@@ -10885,7 +10941,8 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
         let router_id = Uuid::new_v4();
         let router_name = format!("router-{suffix}");
 
-        // Create 10 custom domains to trigger route splitting
+        // Create 10 custom domains to trigger route splitting with the compacted route model.
+        // The renderer deduplicates hostnames and packs up to 16 hostnames per HTTPRoute.
         let custom_domains: Vec<CustomDomain> = (0..10)
             .map(|i| CustomDomain {
                 domain: format!("custom-{i}-{suffix}.{test_domain}"),
@@ -10895,16 +10952,17 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
             })
             .collect();
 
-        let expected_routes = (custom_domains.len() + 1) * 2;
+        let expected_min_routes = 2usize;
 
         environment.routers = vec![Router {
             long_id: router_id,
             name: "multi-domain-router".to_string(),
             kube_name: router_name.clone(),
             action: Action::Create,
-            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            default_domain: default_domain.clone(),
             public_port: 443,
-            custom_domains,
+            ff_enable_deduplication: Some(true),
+            custom_domains: custom_domains.clone(),
             routes: vec![Route {
                 path: "/".to_string(),
                 service_long_id: app_id,
@@ -10954,35 +11012,126 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_gcp_gke() 
             })
             .collect();
 
-        // With 10 custom domains:
-        // - Each domain generates 2 http_hosts entries (port-prefixed + bare domain)
-        // - Default domain also generates 2 entries
-        // - Total: (10 + 1) * 2 = 22 http_hosts entries; 1 host per route → 22 route parts
-        assert_eq!(
+        assert!(
+            expected_min_routes > 1,
+            "Test setup should force multiple compacted routes, got expected_min_routes={expected_min_routes}"
+        );
+
+        // Debug: print all route names found
+        let route_names: Vec<String> = router_routes.iter().map(|route| route.name_any()).collect();
+        println!(
+            "DEBUG: Found {} routes with router_name label: {:?}",
             router_routes.len(),
-            expected_routes,
-            "Should have {expected_routes} HTTPRoute parts for 10 custom domains"
+            route_names
+        );
+
+        // Filter out SSL redirect routes as they should be counted separately
+        let main_routes: Vec<_> = router_routes
+            .iter()
+            .filter(|route| !route.name_any().contains("-ssl-redir"))
+            .collect();
+        let main_route_names: Vec<String> = main_routes.iter().map(|route| route.name_any()).collect();
+        println!(
+            "DEBUG: Found {} main routes (excluding SSL redirect): {:?}",
+            main_routes.len(),
+            main_route_names
+        );
+
+        assert!(
+            main_routes.len() >= expected_min_routes,
+            "Should have at least {expected_min_routes} main compacted HTTPRoute parts (found {} routes: {:?})",
+            main_routes.len(),
+            main_route_names
         );
 
         // Verify route names
-        let route_names: Vec<String> = router_routes.iter().map(|route| route.name_any()).collect();
-
         assert!(
-            route_names.contains(&format!("{router_name}-1")),
-            "Should have {router_name}-1 route"
+            main_route_names.contains(&format!("{router_name}-1")),
+            "Should have {router_name}-1 route, found: {:?}",
+            main_route_names
         );
         assert!(
-            route_names.contains(&format!("{router_name}-{expected_routes}")),
-            "Should have {router_name}-{expected_routes} route"
+            main_route_names
+                .iter()
+                .any(|name| name.starts_with(&format!("{router_name}-"))),
+            "Should have compacted route parts named with the {router_name}-N pattern, found: {:?}",
+            main_route_names
         );
 
-        // Verify qovery.com/router-name label exists on all routes
+        // Verify each route has the correct labels
         for route in &router_routes {
             let labels = route.metadata.labels.as_ref().expect("Route should have labels");
+
+            assert_eq!(
+                labels.get("qovery.com/service-id").map(|s| s.as_str()),
+                Some(router_id.to_string().as_str()),
+                "Route should have correct service-id label"
+            );
+
+            assert_eq!(
+                labels.get("qovery.com/service-type").map(|s| s.as_str()),
+                Some("router"),
+                "Route should have service-type=router label"
+            );
+
             assert_eq!(
                 labels.get("qovery.com/router-name").map(|s| s.as_str()),
                 Some(router_name.as_str()),
                 "Route should have router-name label"
+            );
+        }
+
+        // Verify hostnames are distributed correctly and respect Gateway API limits.
+        let mut observed_main_hostnames = BTreeSet::new();
+        for route in &main_routes {
+            if let Some(spec) = route.data.get("spec")
+                && let Some(hostnames) = spec.get("hostnames").and_then(|h| h.as_array())
+            {
+                assert!(
+                    !hostnames.is_empty(),
+                    "Route {} should have at least one hostname",
+                    route.name_any(),
+                );
+                assert!(
+                    hostnames.len() <= 16,
+                    "Route {} should have at most 16 hostnames, got {}",
+                    route.name_any(),
+                    hostnames.len()
+                );
+                for hostname in hostnames {
+                    if let Some(hostname) = hostname.as_str() {
+                        observed_main_hostnames.insert(hostname.to_string());
+                    }
+                }
+            }
+        }
+        // Default domain + default prefixed hostname must always exist.
+        assert!(
+            observed_main_hostnames.contains(&default_domain),
+            "Main routes should expose default domain {default_domain}"
+        );
+        let prefixed_default_domain = format!("{port_name}-{default_domain}");
+        assert!(
+            observed_main_hostnames.contains(&prefixed_default_domain),
+            "Main routes should expose default prefixed domain {prefixed_default_domain}"
+        );
+
+        // For each custom domain, we expect:
+        // - the bare custom domain
+        // - one prefixed variant using either '.' or '-' separator depending on cluster domain policy.
+        for custom_domain in &custom_domains {
+            assert!(
+                observed_main_hostnames.contains(&custom_domain.domain),
+                "Main routes should expose custom domain {}",
+                custom_domain.domain
+            );
+            let dotted_prefixed = format!("{port_name}.{}", custom_domain.domain);
+            let hyphen_prefixed = format!("{port_name}-{}", custom_domain.domain);
+            assert!(
+                observed_main_hostnames.contains(&dotted_prefixed)
+                    || observed_main_hostnames.contains(&hyphen_prefixed),
+                "Main routes should expose a prefixed variant for custom domain {} (expected one of: {dotted_prefixed}, {hyphen_prefixed})",
+                custom_domain.domain
             );
         }
 

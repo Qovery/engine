@@ -1,14 +1,12 @@
 {%- if k8s_deploy_api_gateway == true %}
-{% for namespace_key, http_hosts in http_hosts_per_namespace_gateway %}
-{%- if http_hosts|length >= 1  %}
+{% for namespace_key, gateway_http_routes in gateway_http_routes_per_namespace %}
+{%- if gateway_http_routes|length >= 1 %}
 {#
   Create one SecurityPolicy per HTTPRoute part.
-  See gateway-http-route.j2.yaml for details on why routes are split.
 #}
-{%- set max_hosts_per_route = 1 %}
-{%- set total_hosts = http_hosts|length %}
-{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
-{%- for route_index in range(end=num_routes) %}
+{%- set num_routes = gateway_http_routes|length %}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy

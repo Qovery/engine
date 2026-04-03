@@ -102,7 +102,7 @@ pub struct KubeServicePort {
     pub protocol: String,
 }
 
-#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Clone, Debug, Eq, PartialEq, Hash, PartialOrd, Ord)]
 pub enum HostPathType {
     Exact,
     PathPrefix,
@@ -129,7 +129,7 @@ impl HostPathType {
     }
 }
 
-#[derive(Serialize, Eq, PartialEq)]
+#[derive(Serialize, Clone, Debug, Eq, PartialEq)]
 pub struct HostDataTemplate {
     pub domain_name: String,
     pub service_name: String,

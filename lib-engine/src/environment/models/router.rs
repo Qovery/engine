@@ -19,11 +19,11 @@ use crate::io_models::models::{
     CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
 };
 use crate::utilities::to_short_id;
-use std::collections::HashMap;
-use std::iter;
+use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
+use tracing::debug;
 use uuid::Uuid;
 
 #[derive(thiserror::Error, Debug)]
@@ -77,12 +77,47 @@ pub struct Router<T: CloudProvider> {
     pub(crate) default_domain: String,
     pub(crate) custom_domains: Vec<CustomDomain>,
     pub(crate) routes: Vec<Route>,
+    pub(crate) ff_enable_deduplication: bool,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct GatewayHttpRouteHeadersSignature {
+    response_headers: Vec<(String, String)>,
+    request_headers: Vec<(String, String)>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
+struct GatewayHttpRouteDataTemplate {
+    hostnames: Vec<String>,
+    rules: Vec<GatewayHttpRouteRuleDataTemplate>,
+}
+
+#[derive(serde::Serialize, Clone, Debug, Eq, PartialEq)]
+struct GatewayHttpRouteRuleDataTemplate {
+    service_name: String,
+    service_port: u16,
+    path: String,
+    path_rewrite: Option<String>,
+    path_type: HostPathType,
+    weight: u32,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct GatewayHttpRouteRuleSignature {
+    service_name: String,
+    service_port: u16,
+    path: String,
+    path_rewrite: Option<String>,
+    path_type: HostPathType,
+    response_headers: Vec<(String, String)>,
+    request_headers: Vec<(String, String)>,
+    weight: u32,
 }
 
 impl<T: CloudProvider> Router<T> {
@@ -95,6 +130,7 @@ impl<T: CloudProvider> Router<T> {
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
+        ff_enable_deduplication: bool,
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -121,6 +157,7 @@ impl<T: CloudProvider> Router<T> {
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
+            ff_enable_deduplication,
             _extra_settings: extra_settings,
             advanced_settings,
             workspace_directory,
@@ -156,7 +193,7 @@ impl<T: CloudProvider> Router<T> {
             .service_long_id;
 
         // Check if the service is an application
-        let (service_name, ports) =
+        let (service_name, ports, gateway_http_route_headers_signature) =
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
                 // advanced settings
                 context.insert("advanced_settings", &application.advanced_settings());
@@ -189,7 +226,14 @@ impl<T: CloudProvider> Router<T> {
                     );
                 }
 
-                (application.kube_name(), application.public_ports())
+                (
+                    application.kube_name(),
+                    application.public_ports(),
+                    to_gateway_http_route_headers_signature(
+                        &application.advanced_settings().network_gateway_api_add_headers,
+                        &application.advanced_settings().network_gateway_api_proxy_set_headers,
+                    ),
+                )
             } else if let Some(container) = &environment
                 .containers
                 .iter()
@@ -226,7 +270,14 @@ impl<T: CloudProvider> Router<T> {
                     );
                 }
 
-                (container.kube_name(), container.public_ports())
+                (
+                    container.kube_name(),
+                    container.public_ports(),
+                    to_gateway_http_route_headers_signature(
+                        &container.advanced_settings().network_gateway_api_add_headers,
+                        &container.advanced_settings().network_gateway_api_proxy_set_headers,
+                    ),
+                )
             } else {
                 let helm_chart = environment
                     .helm_charts
@@ -265,7 +316,14 @@ impl<T: CloudProvider> Router<T> {
                     );
                 }
 
-                (helm_chart.kube_name(), helm_chart.public_ports())
+                (
+                    helm_chart.kube_name(),
+                    helm_chart.public_ports(),
+                    to_gateway_http_route_headers_signature(
+                        &helm_chart.advanced_settings().network_gateway_api_add_headers,
+                        &helm_chart.advanced_settings().network_gateway_api_proxy_set_headers,
+                    ),
+                )
             };
 
         // inject basic auth data
@@ -274,9 +332,10 @@ impl<T: CloudProvider> Router<T> {
         // Get the alternative names we need to generate for the certificate
         // For custom domain, we need to generate a subdomain for each port. p80.mydomain.com, p443.mydomain.com
         let cluster_domain = target.dns_provider.domain().to_string();
+        let deduplicated_custom_domains = deduplicate_custom_domains(&self.custom_domains);
         context.insert(
             "certificate_alternative_names",
-            &generate_certificate_alternative_names(&self.custom_domains, &cluster_domain, &ports),
+            &generate_certificate_alternative_names(&deduplicated_custom_domains, &cluster_domain, &ports),
         );
 
         let http_ports: Vec<&Port> = ports
@@ -294,7 +353,7 @@ impl<T: CloudProvider> Router<T> {
             service_name,
             &http_ports,
             &self.default_domain,
-            &self.custom_domains,
+            &deduplicated_custom_domains,
             &cluster_domain,
             environment.namespace(),
         );
@@ -318,9 +377,21 @@ impl<T: CloudProvider> Router<T> {
             service_name,
             &grpc_ports,
             &self.default_domain,
-            &self.custom_domains,
+            &deduplicated_custom_domains,
             &cluster_domain,
             environment.namespace(),
+        );
+        let cluster_long_id = kubernetes.context().cluster_long_id();
+        let gateway_http_route_dedup_enabled = self.ff_enable_deduplication;
+        let gateway_http_routes_per_namespace = to_gateway_http_routes_data_template_with_feature_flag(
+            &http_hosts_per_namespace_gateway,
+            &service_id,
+            &gateway_http_route_headers_signature,
+            gateway_http_route_dedup_enabled,
+        );
+        debug!(
+            cluster_long_id = cluster_long_id.to_string(),
+            gateway_http_route_dedup_enabled, "Gateway API HTTPRoute generation mode selected"
         );
 
         let http_hosts_has_regex_path = http_hosts_per_namespace_nginx
@@ -331,11 +402,15 @@ impl<T: CloudProvider> Router<T> {
             .values()
             .flatten()
             .any(|host| host.path != Port::DEFAULT_PUBLIC_PATH);
-        context.insert("has_wildcard_domain", &self.custom_domains.iter().any(|d| d.is_wildcard()));
+        context.insert(
+            "has_wildcard_domain",
+            &deduplicated_custom_domains.iter().any(|d| d.is_wildcard()),
+        );
         context.insert("http_hosts_has_regex_path", &http_hosts_has_regex_path);
         context.insert("http_hosts_per_namespace", &http_hosts_per_namespace_nginx);
         context.insert("http_hosts_per_namespace_nginx", &http_hosts_per_namespace_nginx);
         context.insert("http_hosts_per_namespace_gateway", &http_hosts_per_namespace_gateway);
+        context.insert("gateway_http_routes_per_namespace", &gateway_http_routes_per_namespace);
         context.insert("grpc_hosts_has_regex_path", &grpc_hosts_has_regex_path);
         context.insert("grpc_hosts_per_namespace", &grpc_hosts_per_namespace_nginx);
         context.insert("grpc_hosts_per_namespace_nginx", &grpc_hosts_per_namespace_nginx);
@@ -392,6 +467,220 @@ impl<T: CloudProvider> Router<T> {
     }
 }
 
+const MAX_GATEWAY_HTTP_ROUTE_HOSTNAMES_PER_RESOURCE: usize = 16;
+
+fn to_gateway_http_route_headers_signature(
+    response_headers: &BTreeMap<String, String>,
+    request_headers: &BTreeMap<String, String>,
+) -> GatewayHttpRouteHeadersSignature {
+    GatewayHttpRouteHeadersSignature {
+        response_headers: response_headers
+            .iter()
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+        request_headers: request_headers
+            .iter()
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    }
+}
+
+fn deduplicate_custom_domains(custom_domains: &[CustomDomain]) -> Vec<CustomDomain> {
+    let mut deduplicated_by_domain: BTreeMap<String, CustomDomain> = BTreeMap::new();
+
+    for custom_domain in custom_domains {
+        deduplicated_by_domain
+            .entry(custom_domain.domain.clone())
+            .and_modify(|existing| {
+                existing.generate_certificate |= custom_domain.generate_certificate;
+                existing.use_cdn |= custom_domain.use_cdn;
+                if existing.target_domain.is_empty() && !custom_domain.target_domain.is_empty() {
+                    existing.target_domain = custom_domain.target_domain.clone();
+                }
+            })
+            .or_insert_with(|| custom_domain.clone());
+    }
+
+    deduplicated_by_domain.into_values().collect()
+}
+
+fn to_gateway_http_routes_data_template(
+    http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
+    associated_service_long_id: &Uuid,
+    headers_signature: &GatewayHttpRouteHeadersSignature,
+) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
+    let mut routes_per_namespace: BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> = BTreeMap::new();
+
+    for (namespace, hosts) in http_hosts_per_namespace {
+        let mut hostnames_by_rules: BTreeMap<Vec<GatewayHttpRouteRuleSignature>, BTreeSet<String>> = BTreeMap::new();
+
+        for host in hosts {
+            let rule_signatures =
+                to_gateway_http_route_rule_signatures(host, associated_service_long_id, headers_signature);
+            let hostnames_entry = hostnames_by_rules.entry(rule_signatures).or_default();
+            for hostname in to_gateway_http_route_hostnames(&host.domain_name) {
+                hostnames_entry.insert(hostname);
+            }
+        }
+
+        let mut routes: Vec<GatewayHttpRouteDataTemplate> = Vec::new();
+        for (rule_signatures, hostnames) in hostnames_by_rules {
+            let rules = rule_signatures
+                .iter()
+                .map(|signature| GatewayHttpRouteRuleDataTemplate {
+                    service_name: signature.service_name.clone(),
+                    service_port: signature.service_port,
+                    path: signature.path.clone(),
+                    path_rewrite: signature.path_rewrite.clone(),
+                    path_type: signature.path_type.clone(),
+                    weight: signature.weight,
+                })
+                .collect::<Vec<_>>();
+
+            let hostnames: Vec<String> = hostnames.into_iter().collect();
+            for hostname_chunk in hostnames.chunks(MAX_GATEWAY_HTTP_ROUTE_HOSTNAMES_PER_RESOURCE) {
+                routes.push(GatewayHttpRouteDataTemplate {
+                    hostnames: hostname_chunk.to_vec(),
+                    rules: rules.clone(),
+                });
+            }
+        }
+
+        let unique_hostnames = routes
+            .iter()
+            .flat_map(|route| route.hostnames.iter().cloned())
+            .collect::<BTreeSet<_>>()
+            .len();
+        let rules_out = routes.iter().map(|route| route.rules.len()).sum::<usize>();
+
+        debug!(
+            namespace = namespace.as_str(),
+            hosts_in = hosts.len(),
+            unique_hostnames,
+            rules_out,
+            route_parts = routes.len(),
+            "Compacted Gateway API HTTPRoute model"
+        );
+
+        if !routes.is_empty() {
+            routes_per_namespace.insert(namespace.clone(), routes);
+        }
+    }
+
+    routes_per_namespace
+}
+
+fn to_gateway_http_routes_data_template_legacy(
+    http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
+    associated_service_long_id: &Uuid,
+    headers_signature: &GatewayHttpRouteHeadersSignature,
+) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
+    let mut routes_per_namespace: BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> = BTreeMap::new();
+
+    for (namespace, hosts) in http_hosts_per_namespace {
+        let mut routes: Vec<GatewayHttpRouteDataTemplate> = Vec::with_capacity(hosts.len());
+
+        for host in hosts {
+            let rules = to_gateway_http_route_rule_signatures(host, associated_service_long_id, headers_signature)
+                .into_iter()
+                .map(|signature| GatewayHttpRouteRuleDataTemplate {
+                    service_name: signature.service_name,
+                    service_port: signature.service_port,
+                    path: signature.path,
+                    path_rewrite: signature.path_rewrite,
+                    path_type: signature.path_type,
+                    weight: signature.weight,
+                })
+                .collect();
+
+            // Keep legacy behavior: include both hostnames without deduplicating.
+            let hostnames = vec![
+                host.domain_name.clone(),
+                host.domain_name.replace("-gtw.", "-gtw.new-gateway-api."),
+            ];
+
+            routes.push(GatewayHttpRouteDataTemplate { hostnames, rules });
+        }
+
+        debug!(
+            namespace = namespace.as_str(),
+            hosts_in = hosts.len(),
+            route_parts = routes.len(),
+            "Legacy Gateway API HTTPRoute model"
+        );
+
+        if !routes.is_empty() {
+            routes_per_namespace.insert(namespace.clone(), routes);
+        }
+    }
+
+    routes_per_namespace
+}
+
+fn to_gateway_http_routes_data_template_with_feature_flag(
+    http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
+    associated_service_long_id: &Uuid,
+    headers_signature: &GatewayHttpRouteHeadersSignature,
+    dedup_enabled: bool,
+) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
+    if dedup_enabled {
+        to_gateway_http_routes_data_template(http_hosts_per_namespace, associated_service_long_id, headers_signature)
+    } else {
+        to_gateway_http_routes_data_template_legacy(
+            http_hosts_per_namespace,
+            associated_service_long_id,
+            headers_signature,
+        )
+    }
+}
+
+fn to_gateway_http_route_rule_signatures(
+    host: &HostDataTemplate,
+    associated_service_long_id: &Uuid,
+    headers_signature: &GatewayHttpRouteHeadersSignature,
+) -> Vec<GatewayHttpRouteRuleSignature> {
+    let mut signatures: BTreeSet<GatewayHttpRouteRuleSignature> = BTreeSet::new();
+    let normalized_path_rewrite = if host.path_type == HostPathType::PathPrefix {
+        host.path_rewrite
+            .as_deref()
+            .map(str::trim)
+            .filter(|path_rewrite| !path_rewrite.is_empty())
+            .map(str::to_string)
+    } else {
+        None
+    };
+
+    signatures.insert(GatewayHttpRouteRuleSignature {
+        service_name: host.service_name.clone(),
+        service_port: host.service_port,
+        path: host.path.clone(),
+        path_rewrite: normalized_path_rewrite,
+        path_type: host.path_type.clone(),
+        response_headers: headers_signature.response_headers.clone(),
+        request_headers: headers_signature.request_headers.clone(),
+        weight: host.weight,
+    });
+    signatures.insert(GatewayHttpRouteRuleSignature {
+        service_name: host.service_name.clone(),
+        service_port: host.service_port,
+        path: format!("/{associated_service_long_id}/"),
+        path_rewrite: Some("/".to_string()),
+        path_type: HostPathType::PathPrefix,
+        response_headers: headers_signature.response_headers.clone(),
+        request_headers: headers_signature.request_headers.clone(),
+        weight: host.weight,
+    });
+
+    signatures.into_iter().collect()
+}
+
+fn to_gateway_http_route_hostnames(domain_name: &str) -> Vec<String> {
+    let mut hostnames = BTreeSet::new();
+    hostnames.insert(domain_name.to_string());
+    hostnames.insert(domain_name.replace("-gtw.", "-gtw.new-gateway-api."));
+    hostnames.into_iter().collect()
+}
+
 fn to_host_data_template(
     service_name: &str,
     ports: &[&Port],
@@ -399,7 +688,7 @@ fn to_host_data_template(
     custom_domains: &[CustomDomain],
     cluster_domain: &str,
     environment_namespace: &str,
-) -> HashMap<String, Vec<HostDataTemplate>> {
+) -> BTreeMap<String, Vec<HostDataTemplate>> {
     to_host_data_template_with_rewrite_policy(
         service_name,
         ports,
@@ -418,7 +707,7 @@ fn to_gateway_host_data_template(
     custom_domains: &[CustomDomain],
     cluster_domain: &str,
     environment_namespace: &str,
-) -> HashMap<String, Vec<HostDataTemplate>> {
+) -> BTreeMap<String, Vec<HostDataTemplate>> {
     to_host_data_template_with_rewrite_policy(
         service_name,
         ports,
@@ -438,10 +727,11 @@ fn to_host_data_template_with_rewrite_policy(
     cluster_domain: &str,
     environment_namespace: &str,
     gateway_api_rewrite_restrictions: bool,
-) -> HashMap<String, Vec<HostDataTemplate>> {
+) -> BTreeMap<String, Vec<HostDataTemplate>> {
     if ports.is_empty() {
-        return HashMap::new();
+        return BTreeMap::new();
     }
+
     let to_port_path = |port: &Port| -> String { port.public_path().expect("port should be public here").to_string() };
     let to_path_type = |port: &Port| -> HostPathType {
         HostPathType::from_path(port.public_path().unwrap_or_default(), HostPathType::PathPrefix)
@@ -454,19 +744,22 @@ fn to_host_data_template_with_rewrite_policy(
         port.public_path_rewrite().map(|p| p.to_string())
     };
     let to_path_weight = |_port: &Port| -> u32 { 1 };
+    let deduplicated_custom_domains = deduplicate_custom_domains(custom_domains);
     let ports_by_namespace = get_ports_by_namespace(ports);
 
-    let mut hosts_per_namespace: HashMap<String, Vec<HostDataTemplate>> =
-        HashMap::with_capacity(ports_by_namespace.keys().len());
+    let mut hosts_per_namespace: BTreeMap<String, Vec<HostDataTemplate>> = BTreeMap::new();
     for (namespace, ports) in &ports_by_namespace {
-        let mut hosts: Vec<HostDataTemplate> = Vec::with_capacity((custom_domains.len() + 1) * (ports.len() + 1));
+        let mut hosts: Vec<HostDataTemplate> =
+            Vec::with_capacity((deduplicated_custom_domains.len() + 1) * (ports.len() + 1));
 
         // Special case for wildcard domains, where we want to create only 2 routes
         // 1 for the wildcard domain and 1 for the default domain (*.mydomain.com and mydomain.com)
         // It imposes that there is only 1 public port, as else we cant route to the correct service
-        let (wildcards_domains, custom_domains): (Vec<&CustomDomain>, Vec<&CustomDomain>) =
-            custom_domains.iter().partition(|cd| cd.is_wildcard());
-        for wildcard_domain in &wildcards_domains {
+        let (wildcards_domains, custom_domains): (Vec<&CustomDomain>, Vec<&CustomDomain>) = deduplicated_custom_domains
+            .iter()
+            .partition(|custom_domain| custom_domain.is_wildcard());
+
+        for wildcard_domain in wildcards_domains {
             for port in ports {
                 hosts.push(HostDataTemplate {
                     domain_name: format!("{}.{}", port.name, wildcard_domain.domain_without_wildcard()),
@@ -560,6 +853,9 @@ fn to_host_data_template_with_rewrite_policy(
             }
         }
 
+        hosts.sort_by(compare_host_data_template);
+        hosts.dedup();
+
         hosts_per_namespace.insert(
             namespace
                 .as_ref()
@@ -571,12 +867,37 @@ fn to_host_data_template_with_rewrite_policy(
     hosts_per_namespace
 }
 
-fn get_ports_by_namespace(ports: &[&Port]) -> HashMap<Option<String>, Vec<Port>> {
-    let mut ports_by_namespace: HashMap<Option<String>, Vec<Port>> = HashMap::new();
+fn compare_host_data_template(left: &HostDataTemplate, right: &HostDataTemplate) -> std::cmp::Ordering {
+    left.domain_name
+        .cmp(&right.domain_name)
+        .then(left.service_name.cmp(&right.service_name))
+        .then(left.service_port.cmp(&right.service_port))
+        .then(left.path.cmp(&right.path))
+        .then(left.path_rewrite.cmp(&right.path_rewrite))
+        .then(left.path_type.cmp(&right.path_type))
+        .then(left.weight.cmp(&right.weight))
+}
+
+fn get_ports_by_namespace(ports: &[&Port]) -> BTreeMap<Option<String>, Vec<Port>> {
+    let mut ports_by_namespace: BTreeMap<Option<String>, Vec<Port>> = BTreeMap::new();
     for &port in ports {
         let entry = ports_by_namespace.entry(port.namespace.clone()).or_default();
         entry.push(port.clone());
     }
+
+    for namespace_ports in ports_by_namespace.values_mut() {
+        namespace_ports.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then(left.port.cmp(&right.port))
+                .then(left.is_default.cmp(&right.is_default))
+                .then(left.service_name.cmp(&right.service_name))
+                .then(left.public_path().cmp(&right.public_path()))
+                .then(left.public_path_rewrite().cmp(&right.public_path_rewrite()))
+                .then(left.namespace.cmp(&right.namespace))
+        });
+    }
+
     ports_by_namespace
 }
 
@@ -602,37 +923,38 @@ fn generate_certificate_alternative_names(
         return vec![];
     }
 
-    custom_domains
+    let mut alternative_domains = BTreeSet::new();
+    for custom_domain in deduplicate_custom_domains(custom_domains)
         .iter()
         // we filter out domain that belongs to our cluster, we dont need to create certificate for them
         // we keep wildcard domains, as we will need to create certificate for them
         .filter(|domain| {
-            (domain.is_wildcard() || !domain.domain.ends_with(&cluster_domain)) && domain.generate_certificate
+            (domain.is_wildcard() || !domain.domain.ends_with(cluster_domain)) && domain.generate_certificate
         })
-        .flat_map(|cd| {
-            // We always want the root domain to be in the certificate (I.e: example.com, or if *.example.com -> example.com)
-            let default_domain = CustomDomainDataTemplate {
-                domain: cd.domain_without_wildcard().to_string(),
-            };
+    {
+        // We always want the root domain to be in the certificate (I.e: example.com, or if *.example.com -> example.com)
+        alternative_domains.insert(custom_domain.domain_without_wildcard().to_string());
 
-            // If it is a wildcard domain, we want to generate the wildcard certificate (*.example.com)
-            // if there is a single public port, we can use only the default domain and don't generate subdomains for each port. (to avoid migration for clients)
-            iter::once(default_domain).chain(if cd.is_wildcard() {
-                vec![CustomDomainDataTemplate {
-                    domain: cd.domain.to_string(),
-                }]
-            } else if ports.len() == 1 {
-                vec![]
-            } else {
-                ports
-                    .iter()
-                    .map(|port| CustomDomainDataTemplate {
-                        domain: format!("{}.{}", port.name, cd.domain),
-                    })
-                    .collect()
-            })
-        })
-        .collect::<Vec<_>>()
+        // If it is a wildcard domain, we want to generate the wildcard certificate (*.example.com)
+        // if there is a single public port, we can use only the default domain and don't generate subdomains for each port. (to avoid migration for clients)
+        if custom_domain.is_wildcard() {
+            alternative_domains.insert(custom_domain.domain.to_string());
+            continue;
+        }
+
+        if ports.len() == 1 {
+            continue;
+        }
+
+        for port in ports {
+            alternative_domains.insert(format!("{}.{}", port.name, custom_domain.domain));
+        }
+    }
+
+    alternative_domains
+        .into_iter()
+        .map(|domain| CustomDomainDataTemplate { domain })
+        .collect()
 }
 
 impl<T: CloudProvider> Service for Router<T> {
@@ -723,10 +1045,14 @@ where
 mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{
-        generate_certificate_alternative_names, to_gateway_host_data_template, to_host_data_template,
+        generate_certificate_alternative_names, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
+        to_gateway_http_routes_data_template, to_gateway_http_routes_data_template_with_feature_flag,
+        to_host_data_template,
     };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
+    use std::collections::{BTreeMap, BTreeSet};
+    use uuid::Uuid;
 
     #[test]
     pub fn test_certificate_alternative_names() {
@@ -836,6 +1162,242 @@ mod tests {
         assert!(certificate_names.contains(&CustomDomainDataTemplate {
             domain: "*.toto.cluster.com".to_string()
         }));
+    }
+
+    #[test]
+    pub fn test_certificate_alternative_names_are_deduplicated() {
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: true,
+            },
+            CustomDomain {
+                domain: "toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: true,
+            },
+        ];
+
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+        let port_grpc = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 8080,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let certificate_names =
+            generate_certificate_alternative_names(&custom_domains, "cluster.com", &[&port_http, &port_grpc]);
+        assert_eq!(certificate_names.len(), 3);
+        assert_eq!(
+            certificate_names
+                .iter()
+                .map(|certificate_name| certificate_name.domain.clone())
+                .collect::<BTreeSet<_>>()
+                .len(),
+            certificate_names.len()
+        );
+    }
+
+    #[test]
+    pub fn test_gateway_http_routes_do_not_emit_duplicate_hostnames_or_rules() {
+        let service_id = Uuid::new_v4();
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "app.example.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: true,
+            },
+            CustomDomain {
+                domain: "app.example.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: true,
+            },
+        ];
+
+        let hosts_per_namespace = to_host_data_template(
+            "demo",
+            &[&port_http],
+            "cluster.example.com",
+            &custom_domains,
+            "cluster.example.com",
+            "env-ns",
+        );
+        let routes_per_namespace = to_gateway_http_routes_data_template(
+            &hosts_per_namespace,
+            &service_id,
+            &to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new()),
+        );
+
+        let routes = routes_per_namespace
+            .get("env-ns")
+            .expect("namespace route list should be generated");
+        assert_eq!(routes.len(), 1, "standard router should compact to one HTTPRoute part");
+
+        let route = routes.first().expect("route should exist");
+        assert_eq!(
+            route.hostnames.len(),
+            route.hostnames.iter().cloned().collect::<BTreeSet<_>>().len(),
+            "hostnames should be deduplicated"
+        );
+
+        let unique_rules = route
+            .rules
+            .iter()
+            .map(|rule| {
+                (
+                    rule.service_name.clone(),
+                    rule.service_port,
+                    rule.path.clone(),
+                    rule.path_rewrite.clone(),
+                    rule.path_type.clone(),
+                    rule.weight,
+                )
+            })
+            .collect::<BTreeSet<_>>();
+        assert_eq!(route.rules.len(), unique_rules.len(), "rules should be deduplicated");
+        assert_eq!(route.rules.len(), 2, "standard router should emit at most 2 rules");
+        assert!(route.rules.iter().any(|rule| rule.path == "/"));
+        assert!(
+            route
+                .rules
+                .iter()
+                .any(|rule| rule.path == format!("/{service_id}/") && rule.path_rewrite.as_deref() == Some("/"))
+        );
+    }
+
+    #[test]
+    pub fn test_gateway_http_routes_feature_flag_switches_between_legacy_and_dedup_models() {
+        let service_id = Uuid::new_v4();
+        let host = HostDataTemplate {
+            domain_name: "app.example.com".to_string(),
+            service_name: "demo".to_string(),
+            service_port: 80,
+            path: "/".to_string(),
+            path_rewrite: None,
+            path_type: HostPathType::PathPrefix,
+            weight: 1,
+        };
+        let hosts_per_namespace = BTreeMap::from([("env-ns".to_string(), vec![host.clone(), host])]);
+        let headers = to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new());
+
+        let legacy_routes =
+            to_gateway_http_routes_data_template_with_feature_flag(&hosts_per_namespace, &service_id, &headers, false);
+        let dedup_routes =
+            to_gateway_http_routes_data_template_with_feature_flag(&hosts_per_namespace, &service_id, &headers, true);
+
+        let legacy = legacy_routes
+            .get("env-ns")
+            .expect("legacy namespace route list should be generated");
+        let dedup = dedup_routes
+            .get("env-ns")
+            .expect("dedup namespace route list should be generated");
+
+        // Legacy keeps one HTTPRoute part per host entry.
+        assert_eq!(legacy.len(), 2);
+        // Dedup compacts equivalent hosts/rules to a single route part.
+        assert_eq!(dedup.len(), 1);
+
+        // Legacy keeps duplicated hostnames in each route part.
+        assert_eq!(legacy[0].hostnames.len(), 2);
+        // Dedup removes duplicate hostnames.
+        assert_eq!(dedup[0].hostnames.len(), 1);
+    }
+
+    #[test]
+    pub fn test_gateway_http_route_rewrite_is_only_emitted_for_path_prefix() {
+        let service_id = Uuid::new_v4();
+        let port_http_with_regex_path = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/api/.*".to_string(),
+                    path_rewrite: Some("/rewritten".to_string()),
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+
+        let hosts_per_namespace = to_host_data_template(
+            "demo",
+            &[&port_http_with_regex_path],
+            "cluster.example.com",
+            &[],
+            "cluster.example.com",
+            "env-ns",
+        );
+        let routes_per_namespace = to_gateway_http_routes_data_template(
+            &hosts_per_namespace,
+            &service_id,
+            &to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new()),
+        );
+        let routes = routes_per_namespace
+            .get("env-ns")
+            .expect("namespace route list should be generated");
+        let route = routes.first().expect("route should exist");
+
+        let regex_rule = route
+            .rules
+            .iter()
+            .find(|rule| rule.path == "/api/.*")
+            .expect("regex rule should exist");
+        assert_eq!(regex_rule.path_type, HostPathType::RegularExpression);
+        assert!(
+            regex_rule.path_rewrite.is_none(),
+            "regex/exact path rules must not render ReplacePrefixMatch rewrites"
+        );
+
+        let compatibility_rule = route
+            .rules
+            .iter()
+            .find(|rule| rule.path == format!("/{service_id}/"))
+            .expect("compatibility rule should exist");
+        assert_eq!(compatibility_rule.path_type, HostPathType::PathPrefix);
+        assert_eq!(compatibility_rule.path_rewrite.as_deref(), Some("/"));
     }
 
     #[test]

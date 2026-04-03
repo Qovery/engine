@@ -27,3 +27,4 @@ firedbg/
 age_*.txt
 dist/
 .speckit/
+.claude/**
