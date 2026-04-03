@@ -1,30 +1,18 @@
 {%- if k8s_deploy_api_gateway == true %}
-{% for namespace_key, http_hosts in http_hosts_per_namespace_gateway %}
-{%- if http_hosts|length >= 1  %}
+{% for namespace_key, gateway_http_routes in gateway_http_routes_per_namespace %}
+{%- if gateway_http_routes|length >= 1 %}
 {#
   Split routes to comply with Kubernetes Gateway API limits:
   - Maximum 16 hostnames per HTTPRoute
   - Maximum 16 rules per HTTPRoute
 
-  Why 1 host per route?
-  - Ensures per-domain routing without header matching
-  - Avoids cross-domain attribution when multiple hostnames share a route
-
-  When you have >8 hosts, multiple HTTPRoute resources are created:
-  - router-name (for 1-8 hosts)
-  - router-name-1, router-name-2, ... (for >8 hosts)
+  Each compacted route part contains:
+  - A deduplicated hostname set
+  - A deduplicated rule set shared by those hostnames
 #}
-{%- set max_hosts_per_route = 1 %}
-{%- set total_hosts = http_hosts|length %}
-{%- set num_routes = (total_hosts / max_hosts_per_route)|round(method='ceil')|int %}
-{%- for route_index in range(end=num_routes) %}
-{%- set start_idx = route_index * max_hosts_per_route %}
-{%- set end_idx_calc = start_idx + max_hosts_per_route %}
-{%- if end_idx_calc > total_hosts %}
-{%- set end_idx = total_hosts %}
-{%- else %}
-{%- set end_idx = end_idx_calc %}
-{%- endif %}
+{%- set num_routes = gateway_http_routes|length %}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -86,34 +74,28 @@ spec:
     {%- endif %}
     {%- endif %}
   hostnames:
-    {%- for host in http_hosts %}
-    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
-    - "{{ host.domain_name }}"
-    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
-    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
-    {%- endif %}
+    {%- for hostname in route.hostnames %}
+    - "{{ hostname }}"
     {%- endfor %}
   rules:
-    {%- for host in http_hosts %}
-    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
-    # Rule 1: Main path with optional rewrite
+    {%- for rule in route.rules %}
     - backendRefs:
         - group: ""
           kind: Service
-          name: "{{ host.service_name }}"
-          port: {{ host.service_port }}
-          weight: {{ host.weight }}
+          name: "{{ rule.service_name }}"
+          port: {{ rule.service_port }}
+          weight: {{ rule.weight }}
       matches:
         - path:
-            type: {{ host.path_type }}
-            value: "{{ host.path }}"
+            type: {{ rule.path_type }}
+            value: "{{ rule.path }}"
       filters:
-       {%- if host.path_rewrite is defined and host.path_rewrite | trim %}
+       {%- if rule.path_type == "PathPrefix" and rule.path_rewrite is defined and rule.path_rewrite | trim %}
         - type: URLRewrite
           urlRewrite:
             path:
               type: ReplacePrefixMatch
-              replacePrefixMatch: "{{ host.path_rewrite | trim }}"
+              replacePrefixMatch: "{{ rule.path_rewrite | trim }}"
        {%- endif %}
        {%- if advanced_settings.network_gateway_api_add_headers %}
         # Add custom response headers
@@ -141,65 +123,14 @@ spec:
               value: "{{ environment_long_id }}"
             - name: "x-qovery-com-associated-service-id"
               value: "{{ associated_service_long_id }}"
-     # Rule 2: Service name prefix path (for pre-migration compatibility)
-    - backendRefs:
-        - group: ""
-          kind: Service
-          name: "{{ host.service_name }}"
-          port: {{ host.service_port }}
-          weight: {{ host.weight }}
-      matches:
-        - path:
-            type: PathPrefix
-            value: /{{ associated_service_long_id }}/
-      filters:
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: /
-       {%- if advanced_settings.network_gateway_api_add_headers %}
-        # Add custom response headers
-        - type: ResponseHeaderModifier
-          responseHeaderModifier:
-            add:
-              {%- for header_name, header_value in advanced_settings.network_gateway_api_add_headers %}
-              - name: "{{ header_name }}"
-                value: "{{ header_value }}"
-              {%- endfor %}
-        {%- endif %}
-        - type: RequestHeaderModifier
-          requestHeaderModifier:
-            {%- if advanced_settings.network_gateway_api_proxy_set_headers %}
-            # Add custom request headers (proxy_set_header equivalent)
-            add:
-            {%- for header_name, header_value in advanced_settings.network_gateway_api_proxy_set_headers %}
-            - name: "{{ header_name }}"
-              value: "{{ header_value }}"
-            {%- endfor %}
-            {%- endif %}
-            # Add Qovery specific headers for logging and tracing
-            set:
-            - name: "x-qovery-com-environment-id"
-              value: "{{ environment_long_id }}"
-            - name: "x-qovery-com-associated-service-id"
-              value: "{{ associated_service_long_id }}"
-    {%- endif %}
     {%- endfor %}
 {%- endfor %}
 {%- if advanced_settings.network_gateway_api_force_ssl_redirect and advanced_settings.network_gateway_api_force_ssl_redirect != "false" %}
 {#
-  SSL redirect routes are also split using the same logic.
-  Each SSL redirect route matches the corresponding HTTPS route part.
+  SSL redirect routes are split exactly like the HTTPS routes.
 #}
-{%- for route_index in range(end=num_routes) %}
-{%- set start_idx = route_index * max_hosts_per_route %}
-{%- set end_idx_calc = start_idx + max_hosts_per_route %}
-{%- if end_idx_calc > total_hosts %}
-{%- set end_idx = total_hosts %}
-{%- else %}
-{%- set end_idx = end_idx_calc %}
-{%- endif %}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
 ---
 # SSL redirect HTTPRoute (only when force_ssl_redirect is TRUE)
 apiVersion: gateway.networking.k8s.io/v1
@@ -237,12 +168,8 @@ spec:
       namespace: qovery
       sectionName: http
   hostnames:
-    {%- for host in http_hosts %}
-    {%- if loop.index0 >= start_idx and loop.index0 < end_idx %}
-    - "{{ host.domain_name }}"
-    # TODO(QOV-1400): remove this code used for Gateway API double stack migration
-    - "{{ host.domain_name | replace(from="-gtw.", to="-gtw.new-gateway-api.") }}"
-    {%- endif %}
+    {%- for hostname in route.hostnames %}
+    - "{{ hostname }}"
     {%- endfor %}
   rules:
   # Rule 1: Allow ACME HTTP-01 challenge requests to pass through without redirect.

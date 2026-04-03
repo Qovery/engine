@@ -45,10 +45,7 @@ fn render_http_policy(
 
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
-    context.insert(
-        "http_hosts_per_namespace_gateway",
-        &json!({"app-ns": [{"domain_name": "example.com"}]}),
-    );
+    context.insert("gateway_http_routes_per_namespace", &json!({"app-ns": [{}]}));
     context.insert("sanitized_name", &"router-name");
     context.insert("long_id", &"service-id");
     context.insert("associated_service_long_id", &"associated-service-id");
@@ -113,16 +110,18 @@ fn render_http_route() -> String {
     let mut context = Context::new();
     context.insert("k8s_deploy_api_gateway", &true);
     context.insert(
-        "http_hosts_per_namespace_gateway",
+        "gateway_http_routes_per_namespace",
         &json!({
             "app-ns": [{
-                "domain_name": "example.com",
-                "service_name": "demo",
-                "service_port": 80,
-                "weight": 1,
-                "path_type": "PathPrefix",
-                "path": "/",
-                "path_rewrite": ""
+                "hostnames": ["example.com"],
+                "rules": [{
+                    "service_name": "demo",
+                    "service_port": 80,
+                    "weight": 1,
+                    "path_type": "PathPrefix",
+                    "path": "/",
+                    "path_rewrite": null
+                }]
             }]
         }),
     );
