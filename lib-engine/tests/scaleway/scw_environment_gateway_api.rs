@@ -122,7 +122,6 @@ fn deploy_application_with_cors_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -287,7 +286,6 @@ fn deploy_application_with_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -449,7 +447,6 @@ fn deploy_application_with_ip_whitelist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -616,7 +613,6 @@ fn deploy_application_with_ip_denylist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -789,7 +785,6 @@ fn deploy_application_with_both_whitelist_and_denylist_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -977,7 +972,6 @@ fn deploy_application_with_basic_auth_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1133,7 +1127,6 @@ fn deploy_application_with_rate_limit_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1365,7 +1358,6 @@ fn deploy_application_with_custom_headers_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1578,7 +1570,6 @@ fn deploy_application_with_sticky_session_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1742,7 +1733,6 @@ fn deploy_application_with_ip_whitelist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -1911,7 +1901,6 @@ fn deploy_application_with_ip_denylist_enabled_on_scw_kapsule_grp() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2085,7 +2074,6 @@ fn deploy_application_with_both_whitelist_and_denylist_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2274,7 +2262,6 @@ fn deploy_application_with_basic_auth_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2432,7 +2419,6 @@ fn deploy_application_with_rate_limit_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2621,7 +2607,6 @@ fn deploy_application_with_custom_headers_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -2873,7 +2858,6 @@ fn deploy_container_with_cors_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3074,7 +3058,6 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3272,7 +3255,6 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3475,7 +3457,6 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3678,7 +3659,6 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -3898,7 +3878,6 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4084,7 +4063,6 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4350,7 +4328,6 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4600,7 +4577,6 @@ fn deploy_container_with_sticky_session_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -4800,7 +4776,6 @@ fn deploy_container_with_ip_whitelist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5005,7 +4980,6 @@ fn deploy_container_with_ip_denylist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5210,7 +5184,6 @@ fn deploy_container_with_both_whitelist_and_denylist_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5432,7 +5405,6 @@ fn deploy_container_with_basic_auth_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5620,7 +5592,6 @@ fn deploy_container_with_rate_limit_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -5888,7 +5859,6 @@ fn deploy_container_with_custom_headers_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6099,7 +6069,6 @@ fn deploy_application_with_force_ssl_redirect_on_scw_kapsule_http() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6394,7 +6363,6 @@ fn deploy_container_with_force_ssl_redirect_on_scw_kapsule_http() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6681,7 +6649,6 @@ fn deploy_helm_with_cors_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -6872,7 +6839,6 @@ fn deploy_helm_with_sticky_session_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7060,7 +7026,6 @@ fn deploy_helm_with_ip_whitelist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7244,7 +7209,6 @@ fn deploy_helm_with_ip_denylist_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7429,7 +7393,6 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7623,7 +7586,6 @@ fn deploy_helm_with_basic_auth_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7788,7 +7750,6 @@ fn deploy_helm_with_rate_limit_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -7991,7 +7952,6 @@ fn deploy_helm_with_custom_headers_enabled_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8196,7 +8156,6 @@ fn deploy_helm_with_sticky_session_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8386,7 +8345,6 @@ fn deploy_helm_with_ip_whitelist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8572,7 +8530,6 @@ fn deploy_helm_with_ip_denylist_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8759,7 +8716,6 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -8955,7 +8911,6 @@ fn deploy_helm_with_basic_auth_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9122,7 +9077,6 @@ fn deploy_helm_with_rate_limit_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9327,7 +9281,6 @@ fn deploy_helm_with_custom_headers_enabled_on_scw_kapsule_grpc() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9500,7 +9453,6 @@ fn deploy_application_with_custom_http_errors_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9736,7 +9688,6 @@ fn deploy_container_with_custom_http_errors_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -9928,7 +9879,6 @@ fn deploy_helm_with_custom_http_errors_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10303,7 +10253,6 @@ fn deploy_container_with_circuit_breaker_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10472,7 +10421,6 @@ fn deploy_helm_with_circuit_breaker_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10618,7 +10566,6 @@ fn deploy_application_with_timeout_settings_on_scw_kapsule() {
             action: Action::Create,
             default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: vec![],
             routes: vec![Route {
                 path: "/".to_string(),
@@ -10788,7 +10735,6 @@ fn deploy_router_with_multiple_domains_splits_into_multiple_routes_on_scw_kapsul
             action: Action::Create,
             default_domain: default_domain.clone(),
             public_port: 443,
-            ff_enable_deduplication: Some(true),
             custom_domains: custom_domains.clone(),
             routes: vec![Route {
                 path: "/".to_string(),

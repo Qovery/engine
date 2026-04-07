@@ -143,7 +143,6 @@ pub fn working_environment(
             default_domain: application_domain,
             public_port: 443,
             custom_domains: vec![],
-            ff_enable_deduplication: Some(true),
             routes: vec![Route {
                 path: "/".to_string(),
                 service_long_id: application_id.to_uuid(),
@@ -472,7 +471,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
-                ff_enable_deduplication: Some(true),
                 routes: vec![Route {
                     path: "/".to_string(),
                     service_long_id: application_id1.to_uuid(),
@@ -486,7 +484,6 @@ pub fn environment_2_app_2_routers_1_psql(
                 default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
                 public_port: 443,
                 custom_domains: vec![],
-                ff_enable_deduplication: Some(true),
                 routes: vec![Route {
                     path: "/coco".to_string(),
                     service_long_id: application_id2.to_uuid(),
@@ -615,7 +612,6 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             default_domain: format!("{}.{}.{}", generate_id(), context.cluster_short_id(), test_domain),
             public_port: 443,
             custom_domains: vec![],
-            ff_enable_deduplication: Some(true),
             routes: vec![Route {
                 path: "/".to_string(),
                 service_long_id: application_id,
@@ -746,7 +742,6 @@ pub fn environment_only_http_server(
             default_domain: application_domain,
             public_port: 443,
             custom_domains: vec![],
-            ff_enable_deduplication: Some(true),
             routes: vec![Route {
                 path: "/".to_string(),
                 service_long_id: application_id,
