@@ -40,6 +40,7 @@ pub struct QoveryStorageClassChart {
     namespace: HelmChartNamespaces,
     default_storage_class: Option<StorageClassModel>,
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
+    efs_file_system_id: Option<String>,
 }
 
 impl QoveryStorageClassChart {
@@ -49,6 +50,7 @@ impl QoveryStorageClassChart {
         storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
         namespace: HelmChartNamespaces,
         default_storage_class: Option<StorageClassModel>,
+        efs_file_system_id: Option<String>,
     ) -> Self {
         QoveryStorageClassChart {
             chart_path: HelmChartPath::new(
@@ -64,6 +66,7 @@ impl QoveryStorageClassChart {
             namespace,
             default_storage_class,
             storage_types_to_be_checked_after_install,
+            efs_file_system_id,
         }
     }
 
@@ -83,6 +86,12 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
             chart_set_values.push(ChartSetValue {
                 key: "defaultStorageClassName".to_string(),
                 value: default_storage_class.to_string(),
+            });
+        }
+        if let Some(efs_id) = &self.efs_file_system_id {
+            chart_set_values.push(ChartSetValue {
+                key: "efsFileSystemId".to_string(),
+                value: efs_id.clone(),
             });
         }
 
@@ -209,6 +218,7 @@ mod tests {
                 HashSet::new(),
                 HelmChartNamespaces::KubeSystem,
                 None,
+                None,
             );
 
             let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -247,6 +257,7 @@ mod tests {
                 cloud_provider_kind.clone(),
                 HashSet::new(),
                 HelmChartNamespaces::KubeSystem,
+                None,
                 None,
             );
 
@@ -287,6 +298,7 @@ mod tests {
                 cloud_provider_kind.clone(),
                 HashSet::new(),
                 HelmChartNamespaces::KubeSystem,
+                None,
                 None,
             );
             let common_chart = chart.to_common_helm_chart().unwrap();

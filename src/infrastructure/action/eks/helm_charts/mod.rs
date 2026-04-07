@@ -87,6 +87,7 @@ pub struct EksChartsConfigPrerequisites {
     pub aws_iam_cloudwatch_exporter_role_arn: Option<String>,
     pub kubernetes_storage_class_fast_ssd: StorageClass,
     pub aws_iam_external_secrets_operator_role_arn: Option<String>,
+    pub efs_file_system_id: Option<String>,
 }
 
 pub struct EksHelmsDeployment<'a> {
@@ -186,6 +187,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
                 .terraform_output
                 .aws_iam_external_secrets_operator_role_arn
                 .clone(),
+            efs_file_system_id: self.terraform_output.efs_file_system_id.clone(),
         }
     }
 

@@ -71,6 +71,7 @@ pub(super) fn aks_helm_charts(
                 .k8s_storage_class_fast_ssd
                 .to_model(),
         ),
+        None,
     )
     .to_common_helm_chart()?;
 

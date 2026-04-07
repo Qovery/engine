@@ -76,6 +76,8 @@ pub struct Options {
     #[serde(default)]
     pub aws_addon_pod_identity_version_override: Option<String>,
     #[serde(default)]
+    pub aws_addon_efs_csi_version_override: Option<String>,
+    #[serde(default)]
     pub ec2_exposed_port: Option<u16>,
     #[serde(default)]
     pub karpenter_parameters: Option<KarpenterParameters>,
@@ -255,6 +257,7 @@ mod tests {
             aws_addon_ebs_csi_version_override: None,
             aws_addon_coredns_version_override: None,
             aws_addon_pod_identity_version_override: None,
+            aws_addon_efs_csi_version_override: None,
             ec2_exposed_port: None,
             karpenter_parameters: None,
             keda_parameters: None,

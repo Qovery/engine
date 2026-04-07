@@ -147,4 +147,7 @@ pub struct AwsEksQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub aws_iam_external_secrets_operator_role_arn: Option<String>,
+    #[serde(deserialize_with = "from_terraform_value")]
+    #[serde(default)]
+    pub efs_file_system_id: Option<String>,
 }

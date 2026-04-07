@@ -98,3 +98,20 @@ parameters:
 volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 reclaimPolicy: Delete
+{{- if .Values.efsFileSystemId }}
+---
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: aws-efs
+  labels:
+    aws-type: "efs"
+    qovery-type: "shared"
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: {{ .Values.efsFileSystemId }}
+  directoryPerms: "700"
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+{{- end }}
