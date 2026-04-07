@@ -12,6 +12,7 @@ use k8s_openapi::api::networking::v1::Ingress;
 use kube::Api;
 use kube::api::ListParams;
 use qovery_engine::cmd::structs::KubernetesPodStatusPhase;
+use qovery_engine::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
@@ -598,6 +599,7 @@ fn gcp_gke_deploy_a_working_environment_with_domain() {
 #[test]
 fn gcp_gke_deploy_container_with_router() {
     let test_name = function_name!();
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -644,12 +646,8 @@ fn gcp_gke_deploy_container_with_router() {
             name: "👾👾👾 my little container 澳大利亚和智利提及年度采购计划 👾👾👾".to_string(),
             kube_name: format!("my-little-container-{suffix}"),
             action: Action::Create,
-            registry: Registry::DockerHub {
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-                long_id: Uuid::new_v4(),
-                credentials: None,
-            },
-            image: "r3m4q3r9/pub-mirror-httpd".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-httpd"),
             tag: "2.4.56-alpine3.17".to_string(),
             command_args: vec![],
             entrypoint: None,
@@ -775,6 +773,7 @@ fn gcp_gke_deploy_container_with_router() {
 #[named]
 #[test]
 fn gcp_gke_deploy_container_with_ndots() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     let test_name = function_name!();
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = test_name);
@@ -820,11 +819,8 @@ fn gcp_gke_deploy_container_with_ndots() {
             name: "container-with-ndots".to_string(),
             kube_name: "container-with-ndots".to_string(),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -915,6 +911,7 @@ fn gcp_gke_deploy_container_with_ndots() {
 #[named]
 #[test]
 fn gcp_gke_deploy_container_with_none_ndots() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     let test_name = function_name!();
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = test_name);
@@ -960,11 +957,8 @@ fn gcp_gke_deploy_container_with_none_ndots() {
             name: "container-without-ndots".to_string(),
             kube_name: "container-without-ndots".to_string(),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),

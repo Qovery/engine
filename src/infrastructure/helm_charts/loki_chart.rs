@@ -6,10 +6,12 @@ use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartError,
     HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
+use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
 };
+use crate::infrastructure::models::cloud_provider::Kind;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 use kube::Client;
@@ -70,6 +72,7 @@ pub struct LokiChart {
     chart_resources: HelmChartResources,
     additional_char_path: Option<HelmChartValuesFilePath>,
     chart_timeout: HelmChartTimeout,
+    cloud_provider_kind: Kind,
 }
 
 impl LokiChart {
@@ -85,6 +88,7 @@ impl LokiChart {
         chart_resources: HelmChartResourcesConstraintType,
         chart_timeout: HelmChartTimeout,
         karpenter_enabled: bool,
+        cloud_provider_kind: Kind,
     ) -> Self {
         let chart_values_path_directory = match loki_object_bucket_configuration {
             LokiObjectBucketConfiguration::S3(_)
@@ -130,6 +134,7 @@ impl LokiChart {
                 false => None,
             },
             chart_timeout,
+            cloud_provider_kind,
         }
     }
 
@@ -187,181 +192,184 @@ impl ToCommonHelmChart for LokiChart {
                 },
                 reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
                 values_files,
-                values: vec![
-                    ChartSetValue {
-                        key: "kubectlImage.registry".to_string(),
-                        value: "public.ecr.aws".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "kubectlImage.repository".to_string(),
-                        value: "r3m4q3r9/pub-mirror-kubectl".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.image.registry".to_string(),
-                        value: "public.ecr.aws".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.image.repository".to_string(),
-                        value: "r3m4q3r9/pub-mirror-loki".to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.compactor.retention_enabled".to_string(),
-                        value: "true".to_string(),
-                    },
-                    // Logs retention period, table manager will be removed in the future (only used for boltdb-shipper)
-                    ChartSetValue {
-                        key: "loki.limits_config.retention_period".to_string(),
-                        value: format!("{}w", self.loki_log_retention_in_weeks), // (default 12 week)
-                    },
-                    // resources limits
-                    ChartSetValue {
-                        key: "singleBinary.resources.limits.cpu".to_string(),
-                        value: self.chart_resources.limit_cpu.to_helm_chart_value(),
-                    },
-                    ChartSetValue {
-                        key: "singleBinary.resources.limits.memory".to_string(),
-                        value: self.chart_resources.limit_memory.to_helm_chart_value(),
-                    },
-                    ChartSetValue {
-                        key: "singleBinary.resources.requests.cpu".to_string(),
-                        value: self.chart_resources.request_cpu.to_helm_chart_value(),
-                    },
-                    ChartSetValue {
-                        key: "singleBinary.resources.requests.memory".to_string(),
-                        value: self.chart_resources.request_memory.to_helm_chart_value(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.type".to_string(),
-                        value: match &self.loki_object_bucket_configuration {
-                            LokiObjectBucketConfiguration::S3(_) => "s3",
-                            LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                            LokiObjectBucketConfiguration::Local => "filesystem",
-                        }
-                        .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage_config.boltdb_shipper.shared_store".to_string(),
-                        value: match &self.loki_object_bucket_configuration {
-                            LokiObjectBucketConfiguration::S3(_) => "s3",
-                            LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                            LokiObjectBucketConfiguration::Local => "filesystem",
-                        }
-                        .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage_config.tsdb_shipper.shared_store".to_string(),
-                        value: match &self.loki_object_bucket_configuration {
-                            LokiObjectBucketConfiguration::S3(_) => "s3",
-                            LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                            LokiObjectBucketConfiguration::Local => "filesystem",
-                        }
-                        .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.compactor.shared_store".to_string(),
-                        value: match &self.loki_object_bucket_configuration {
-                            LokiObjectBucketConfiguration::S3(_) => "s3",
-                            LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                            LokiObjectBucketConfiguration::Local => "filesystem",
-                        }
-                        .to_string(),
-                    },
-                    // Schema configuration object_store settings
-                    ChartSetValue {
-                        key: "loki.storage.bucketNames.chunks".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.bucketNames.ruler".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.bucketNames.admin".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    // S3 configuration
-                    ChartSetValue {
-                        key: "loki.storage.s3.s3ForcePathStyle".to_string(),
-                        value: s3_configuration.use_path_style.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.s3.s3".to_string(),
-                        value: s3_configuration
-                            .s3_config
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
+                values: {
+                    let source_registry = QoverySourceRegistry::from(&self.cloud_provider_kind);
+                    vec![
+                        ChartSetValue {
+                            key: "kubectlImage.registry".to_string(),
+                            value: source_registry.host(),
+                        },
+                        ChartSetValue {
+                            key: "kubectlImage.repository".to_string(),
+                            value: source_registry.image_path("pub-mirror-kubectl"),
+                        },
+                        ChartSetValue {
+                            key: "loki.image.registry".to_string(),
+                            value: source_registry.host(),
+                        },
+                        ChartSetValue {
+                            key: "loki.image.repository".to_string(),
+                            value: source_registry.image_path("pub-mirror-loki"),
+                        },
+                        ChartSetValue {
+                            key: "loki.compactor.retention_enabled".to_string(),
+                            value: "true".to_string(),
+                        },
+                        // Logs retention period, table manager will be removed in the future (only used for boltdb-shipper)
+                        ChartSetValue {
+                            key: "loki.limits_config.retention_period".to_string(),
+                            value: format!("{}w", self.loki_log_retention_in_weeks), // (default 12 week)
+                        },
+                        // resources limits
+                        ChartSetValue {
+                            key: "singleBinary.resources.limits.cpu".to_string(),
+                            value: self.chart_resources.limit_cpu.to_helm_chart_value(),
+                        },
+                        ChartSetValue {
+                            key: "singleBinary.resources.limits.memory".to_string(),
+                            value: self.chart_resources.limit_memory.to_helm_chart_value(),
+                        },
+                        ChartSetValue {
+                            key: "singleBinary.resources.requests.cpu".to_string(),
+                            value: self.chart_resources.request_cpu.to_helm_chart_value(),
+                        },
+                        ChartSetValue {
+                            key: "singleBinary.resources.requests.memory".to_string(),
+                            value: self.chart_resources.request_memory.to_helm_chart_value(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.type".to_string(),
+                            value: match &self.loki_object_bucket_configuration {
+                                LokiObjectBucketConfiguration::S3(_) => "s3",
+                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                                LokiObjectBucketConfiguration::Local => "filesystem",
+                            }
                             .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.s3.region".to_string(),
-                        value: s3_configuration.region.as_ref().unwrap_or(&"".to_string()).to_string(), // Qovery setting
-                    },
-                    // Can't be set ATM: https://github.com/grafana/loki/issues/9018
-                    // ChartSetValue {
-                    //     key: "loki.storage.s3.sse-encryption".to_string(),
-                    //     value: match self.encryption_type {
-                    //         LokiEncryptionType::None => "false",
-                    //         LokiEncryptionType::ServerSideEncryption => "true",
-                    //     }
-                    //     .to_string(),
-                    // },
-                    ChartSetValue {
-                        key: "loki.storage.s3.insecure".to_string(),
-                        value: s3_configuration.insecure.to_string(),
-                    },
-                    ChartSetValue {
-                        // we use string templating (r"...") to escape dot in annotation's key
-                        key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
-                        value: s3_configuration
-                            .aws_iam_loki_role_arn
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
+                        },
+                        ChartSetValue {
+                            key: "loki.storage_config.boltdb_shipper.shared_store".to_string(),
+                            value: match &self.loki_object_bucket_configuration {
+                                LokiObjectBucketConfiguration::S3(_) => "s3",
+                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                                LokiObjectBucketConfiguration::Local => "filesystem",
+                            }
                             .to_string(),
-                    },
-                    // GCS configuration
-                    ChartSetValue {
-                        key: "loki.storage_config.gcs.bucket_name".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    ChartSetValue {
-                        // we use string templating (r"...") to escape dot in annotation's key
-                        key: r"serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
-                        value: gcs_configuration
-                            .gcp_service_account
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
+                        },
+                        ChartSetValue {
+                            key: "loki.storage_config.tsdb_shipper.shared_store".to_string(),
+                            value: match &self.loki_object_bucket_configuration {
+                                LokiObjectBucketConfiguration::S3(_) => "s3",
+                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                                LokiObjectBucketConfiguration::Local => "filesystem",
+                            }
                             .to_string(),
-                    },
-                    // Azure blob storage configuration
-                    ChartSetValue {
-                        key: "loki.storage.azure.account_name".to_string(),
-                        value: blob_storage_configuration
-                            .azure_loki_storage_service_account
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
+                        },
+                        ChartSetValue {
+                            key: "loki.compactor.shared_store".to_string(),
+                            value: match &self.loki_object_bucket_configuration {
+                                LokiObjectBucketConfiguration::S3(_) => "s3",
+                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
+                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+                                LokiObjectBucketConfiguration::Local => "filesystem",
+                            }
                             .to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage.azure.container_name".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage_config.azure.container_name".to_string(),
-                        value: bucket_name.to_string(),
-                    },
-                    ChartSetValue {
-                        key: "loki.storage_config.azure.account_name".to_string(),
-                        value: blob_storage_configuration
-                            .azure_loki_storage_service_account
-                            .as_ref()
-                            .unwrap_or(&"".to_string())
-                            .to_string(),
-                    },
-                ],
+                        },
+                        // Schema configuration object_store settings
+                        ChartSetValue {
+                            key: "loki.storage.bucketNames.chunks".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.bucketNames.ruler".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.bucketNames.admin".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        // S3 configuration
+                        ChartSetValue {
+                            key: "loki.storage.s3.s3ForcePathStyle".to_string(),
+                            value: s3_configuration.use_path_style.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.s3.s3".to_string(),
+                            value: s3_configuration
+                                .s3_config
+                                .as_ref()
+                                .unwrap_or(&"".to_string())
+                                .to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.s3.region".to_string(),
+                            value: s3_configuration.region.as_ref().unwrap_or(&"".to_string()).to_string(), // Qovery setting
+                        },
+                        // Can't be set ATM: https://github.com/grafana/loki/issues/9018
+                        // ChartSetValue {
+                        //     key: "loki.storage.s3.sse-encryption".to_string(),
+                        //     value: match self.encryption_type {
+                        //         LokiEncryptionType::None => "false",
+                        //         LokiEncryptionType::ServerSideEncryption => "true",
+                        //     }
+                        //     .to_string(),
+                        // },
+                        ChartSetValue {
+                            key: "loki.storage.s3.insecure".to_string(),
+                            value: s3_configuration.insecure.to_string(),
+                        },
+                        ChartSetValue {
+                            // we use string templating (r"...") to escape dot in annotation's key
+                            key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
+                            value: s3_configuration
+                                .aws_iam_loki_role_arn
+                                .as_ref()
+                                .unwrap_or(&"".to_string())
+                                .to_string(),
+                        },
+                        // GCS configuration
+                        ChartSetValue {
+                            key: "loki.storage_config.gcs.bucket_name".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        ChartSetValue {
+                            // we use string templating (r"...") to escape dot in annotation's key
+                            key: r"serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
+                            value: gcs_configuration
+                                .gcp_service_account
+                                .as_ref()
+                                .unwrap_or(&"".to_string())
+                                .to_string(),
+                        },
+                        // Azure blob storage configuration
+                        ChartSetValue {
+                            key: "loki.storage.azure.account_name".to_string(),
+                            value: blob_storage_configuration
+                                .azure_loki_storage_service_account
+                                .as_ref()
+                                .unwrap_or(&"".to_string())
+                                .to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage.azure.container_name".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage_config.azure.container_name".to_string(),
+                            value: bucket_name.to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.storage_config.azure.account_name".to_string(),
+                            value: blob_storage_configuration
+                                .azure_loki_storage_service_account
+                                .as_ref()
+                                .unwrap_or(&"".to_string())
+                                .to_string(),
+                        },
+                    ]
+                },
                 yaml_files_content: match self.customer_helm_chart_override.clone() {
                     Some(x) => vec![x.to_chart_values_generated()],
                     None => vec![],
@@ -483,6 +491,7 @@ mod tests {
         HelmChartResourcesConstraintType, HelmChartTimeout, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
     use std::sync::Arc;
@@ -512,6 +521,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartTimeout::ChartDefault,
             false,
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -547,6 +557,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartTimeout::ChartDefault,
             true,
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -586,6 +597,7 @@ mod tests {
             HelmChartResourcesConstraintType::ChartDefault,
             HelmChartTimeout::ChartDefault,
             false,
+            Kind::Aws,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

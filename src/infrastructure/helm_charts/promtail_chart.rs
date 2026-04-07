@@ -7,9 +7,11 @@ use crate::helm::{
     HelmChartNamespaces, PriorityClass, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion,
     VpaTargetRefKind,
 };
+use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::Kind;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use kube::Client;
 use semver::Version;
@@ -25,6 +27,7 @@ pub struct PromtailChart {
     namespace: HelmChartNamespaces,
     priority_class: PriorityClass,
     additional_chart_values: Vec<HelmChartValuesFilePath>,
+    cloud_provider_kind: Kind,
 }
 
 impl PromtailChart {
@@ -37,6 +40,7 @@ impl PromtailChart {
         namespace: HelmChartNamespaces,
         priority_class: PriorityClass,
         karpenter_enabled: bool,
+        cloud_provider_kind: Kind,
     ) -> Self {
         let mut additional_chart_values = vec![];
         if karpenter_enabled {
@@ -62,6 +66,7 @@ impl PromtailChart {
             namespace,
             priority_class,
             additional_chart_values,
+            cloud_provider_kind,
         }
     }
 
@@ -91,20 +96,23 @@ impl ToCommonHelmChart for PromtailChart {
             path: self.chart_path.to_string(),
             namespace: self.namespace.clone(),
             values_files,
-            values: vec![
-                ChartSetValue {
-                    key: "image.registry".to_string(),
-                    value: "public.ecr.aws".to_string(),
-                },
-                ChartSetValue {
-                    key: "image.repository".to_string(),
-                    value: "r3m4q3r9/pub-mirror-promtail".to_string(),
-                },
-                ChartSetValue {
-                    key: "config.clients[0].url".to_string(),
-                    value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
-                },
-            ],
+            values: {
+                let source_registry = QoverySourceRegistry::from(&self.cloud_provider_kind);
+                vec![
+                    ChartSetValue {
+                        key: "image.registry".to_string(),
+                        value: source_registry.host(),
+                    },
+                    ChartSetValue {
+                        key: "image.repository".to_string(),
+                        value: source_registry.image_path("pub-mirror-promtail"),
+                    },
+                    ChartSetValue {
+                        key: "config.clients[0].url".to_string(),
+                        value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
+                    },
+                ]
+            },
             yaml_files_content: match self.customer_helm_chart_override.clone() {
                 Some(x) => vec![x.to_chart_values_generated()],
                 None => vec![],
@@ -191,6 +199,7 @@ mod tests {
         HelmChartDirectoryLocation, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::Kind;
     use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
@@ -218,6 +227,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
             false,
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -250,6 +260,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
             false,
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -287,6 +298,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             PriorityClass::Default,
             false,
+            Kind::Aws,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

@@ -23,6 +23,7 @@ use qovery_engine::infrastructure::models::dns_provider::DnsProvider;
 use qovery_engine::infrastructure::models::kubernetes::gcp::{GcpStorageType, Gke, GkeOptions, VpcMode};
 use qovery_engine::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
 use qovery_engine::io_models::QoveryIdentifier;
+use qovery_engine::io_models::container::Registry;
 use qovery_engine::io_models::context::Context;
 use qovery_engine::io_models::engine_location::EngineLocation;
 use qovery_engine::io_models::environment::EnvironmentRequest;
@@ -30,6 +31,8 @@ use qovery_engine::io_models::models::{CpuArchitecture, NodeGroups, StorageClass
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
 use qovery_engine::services::gcp::artifact_registry_service::ArtifactRegistryService;
+
+use url::Url;
 
 use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
@@ -40,7 +43,6 @@ pub const GCP_REGION: GcpRegion = GcpRegion::EuropeWest9;
 
 pub const GCP_SELF_HOSTED_DATABASE_DISK_TYPE: GcpStorageType = GcpStorageType::Balanced;
 pub const GCP_MANAGED_DATABASE_DISK_TYPE: &str = "";
-// TODO: once managed DB is implemented
 pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed DB is implemented
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours

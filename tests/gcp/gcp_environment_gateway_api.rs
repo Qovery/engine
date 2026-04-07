@@ -9,6 +9,9 @@ use qovery_engine::io_models::application::PortIo;
 
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, logger, metrics_registry};
+
+use qovery_engine::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
+use qovery_engine::infrastructure::models::cloud_provider::Kind;
 use qovery_engine::io_models::application::Protocol::HTTP;
 use qovery_engine::io_models::container::{Container, ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::context::CloneForTest;
@@ -2941,6 +2944,7 @@ fn deploy_application_with_custom_headers_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_cors_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -2987,11 +2991,8 @@ fn deploy_container_with_cors_enabled_on_gcp_gke() {
             name: "cors-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -3145,6 +3146,7 @@ fn deploy_container_with_cors_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3191,11 +3193,8 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
             name: "sticky-session-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -3343,6 +3342,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3389,11 +3389,8 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
             name: "ip-whitelist-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -3546,6 +3543,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3592,11 +3590,8 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
             name: "ip-denylist-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -3748,6 +3743,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -3794,11 +3790,8 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
             name: "whitelist-denylist-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -3968,6 +3961,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -4014,11 +4008,8 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
             name: "basic-auth-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -4152,6 +4143,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -4198,11 +4190,8 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
             name: "rate-limit-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -4409,6 +4398,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -4466,11 +4456,8 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
             name: "custom-headers-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -4669,6 +4656,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -4717,11 +4705,8 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
             name: "sticky-session-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -4869,6 +4854,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -4917,11 +4903,8 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             name: "ip-whitelist-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -5074,6 +5057,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5122,11 +5106,8 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
             name: "ip-denylist-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -5278,6 +5259,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5326,11 +5308,8 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             name: "whitelist-denylist-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -5500,6 +5479,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5548,11 +5528,8 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
             name: "basic-auth-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -5686,6 +5663,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -5734,11 +5712,8 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
             name: "rate-limit-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -5945,6 +5920,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
 #[named]
 #[test]
 fn deploy_container_with_custom_headers_enabled_on_gcp_gke_grpc() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     use qovery_engine::io_models::application::Protocol::GRPC;
 
     engine_run_test(|| {
@@ -6004,11 +5980,8 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke_grpc() {
             name: "custom-headers-test-container-grpc".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -6465,6 +6438,7 @@ fn deploy_application_with_force_ssl_redirect_on_gcp_gke_http() {
 #[named]
 #[test]
 fn deploy_container_with_force_ssl_redirect_on_gcp_gke_http() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -6511,11 +6485,8 @@ fn deploy_container_with_force_ssl_redirect_on_gcp_gke_http() {
             name: "ssl-redirect-test-container-http".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -9807,6 +9778,7 @@ fn deploy_application_with_custom_http_errors_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_custom_http_errors_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -9853,11 +9825,8 @@ fn deploy_container_with_custom_http_errors_on_gcp_gke() {
             name: "custom-errors-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),
@@ -10373,6 +10342,7 @@ fn deploy_application_with_circuit_breaker_on_gcp_gke() {
 #[named]
 #[test]
 fn deploy_container_with_circuit_breaker_on_gcp_gke() {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     engine_run_test(|| {
         let span = span!(Level::INFO, "test", name = function_name!());
         let _enter = span.enter();
@@ -10419,11 +10389,8 @@ fn deploy_container_with_circuit_breaker_on_gcp_gke() {
             name: "circuit-breaker-test-container".to_string(),
             kube_name: format!("container-{suffix}"),
             action: Action::Create,
-            registry: Registry::PublicEcr {
-                long_id: Uuid::new_v4(),
-                url: Url::parse("https://public.ecr.aws").unwrap(),
-            },
-            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            registry: source_registry.clone().into(),
+            image: source_registry.image_path("pub-mirror-debian"),
             tag: "11.6-ci".to_string(),
             command_args: vec![
                 "/bin/sh".to_string(),

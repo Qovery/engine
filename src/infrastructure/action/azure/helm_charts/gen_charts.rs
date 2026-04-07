@@ -516,8 +516,9 @@ pub(super) fn aks_helm_charts(
                 true,
                 Some(500),
                 HelmChartResourcesConstraintType::ChartDefault,
-                HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
+                HelmChartTimeout::Custom(Duration::seconds(1200)),
                 false,
+                Kind::Azure,
             )
             .to_common_helm_chart()?,
         )),
@@ -535,6 +536,7 @@ pub(super) fn aks_helm_charts(
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
                 false,
+                Kind::Azure,
             )
             .to_common_helm_chart()?,
         )),

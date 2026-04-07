@@ -5,7 +5,7 @@
 objstoreConfig: set-by-engine-code
 
 image:
-  registry: public.ecr.aws/r3m4q3r9
+  registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
   repository: pub-mirror-bitnami-thanos
 global:
   security:

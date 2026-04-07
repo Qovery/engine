@@ -16,7 +16,7 @@ defaultRules:
 
 kube-state-metrics:
   image:
-    registry: public.ecr.aws/r3m4q3r9
+    registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
     repository: pub-mirror-kube-state-metrics
   prometheus:
     monitor:
@@ -175,7 +175,7 @@ prometheus:
     enabled: true
   prometheusSpec:
     image:
-      registry: public.ecr.aws/r3m4q3r9
+      registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
       repository: pub-mirror-prometheus
     # Replica label to be used by thanos
     replicaExternalLabelName: "replica"
@@ -213,13 +213,13 @@ prometheusOperator:
   priorityClassName: qovery-high-priority
   prometheusConfigReloader:
     image:
-      registry: public.ecr.aws/r3m4q3r9
+      registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
       repository: pub-mirror-prometheus-config-reloader
   thanosImage:
-    registry: public.ecr.aws/r3m4q3r9
+    registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
     repository: pub-mirror-thanos
   image:
-    registry: public.ecr.aws/r3m4q3r9
+    registry: us-docker.pkg.dev/qovery/ecr-proxy/r3m4q3r9
     repository: pub-mirror-prometheus-operator
   kubeletService:
     namespace: qovery
