@@ -9,6 +9,7 @@ pub mod database;
 pub(crate) mod database_utils;
 pub mod domain;
 pub mod environment;
+pub mod external_secret;
 pub mod gcp;
 pub mod helm_chart;
 pub mod job;

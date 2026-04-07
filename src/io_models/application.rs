@@ -31,7 +31,7 @@ use crate::io_models::container::{AutoscalingConfig, ContainerAdvancedSettings, 
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    CpuArchitecture, EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
+    CpuArchitecture, EnvironmentVariable, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
     KubernetesMemoryResourceUnit, StorageClass,
 };
 use crate::io_models::probe::Probe;
@@ -496,6 +496,10 @@ pub struct Application {
     pub docker_target_build_stage: Option<String>,
     #[serde(default)]
     pub autoscaling: Option<AutoscalingConfig>,
+    /// External secrets to sync from a remote secret manager via ESO.
+    /// Key is the environment variable name / k8s Secret key.
+    #[serde(default)]
+    pub external_secrets: BTreeMap<String, ExternalSecret>,
 }
 
 fn default_root_path_value() -> String {
@@ -512,6 +516,7 @@ impl Application {
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
     ) -> Result<Box<dyn ApplicationService>, ApplicationError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let external_secrets = self.external_secrets;
         let annotations_groups = self
             .annotations_group_ids
             .iter()
@@ -548,6 +553,7 @@ impl Application {
                     self.entrypoint,
                     self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                     environment_variables,
+                    external_secrets,
                     self.mounted_files
                         .iter()
                         .map(|e| e.to_domain())
@@ -584,6 +590,7 @@ impl Application {
                 self.entrypoint,
                 self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -619,6 +626,7 @@ impl Application {
                 self.entrypoint,
                 self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -654,6 +662,7 @@ impl Application {
                 self.entrypoint,
                 self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -689,6 +698,7 @@ impl Application {
                 self.entrypoint,
                 self.storage.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())

@@ -1748,6 +1748,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
@@ -1982,6 +1983,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2131,6 +2133,7 @@ fn deploy_container_with_storages_on_aws_eks() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2278,6 +2281,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2438,6 +2442,7 @@ fn deploy_container_with_router_on_aws_eks() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2581,6 +2586,7 @@ fn a_working_job() -> Job {
         gpu_request: None,
         gpu_limit: None,
         environment_vars_with_infos: Default::default(),
+        external_secrets: BTreeMap::new(),
         mounted_files: vec![],
         advanced_settings: Default::default(),
         readiness_probe: Some(Probe {
@@ -2866,6 +2872,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2980,6 +2987,7 @@ fn deploy_cronjob_on_aws_eks() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -3112,6 +3120,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -3255,6 +3264,7 @@ fn build_and_deploy_job_on_aws_eks() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -3440,6 +3450,7 @@ fn test_restart_deployment() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3590,6 +3601,7 @@ fn test_restart_statefulset() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3695,6 +3707,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![mounted_file.clone()],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -4052,6 +4065,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -4207,6 +4221,7 @@ fn deploy_container_with_ndots_on_aws_eks() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -4346,6 +4361,7 @@ fn deploy_container_with_none_ndots_on_aws_eks() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();

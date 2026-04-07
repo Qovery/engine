@@ -161,6 +161,23 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ service.name }}
+          {%- if external_secrets|length > 0 %}
+          env:
+            {%- for external_secret in external_secrets %}
+              {%- for entry in external_secret.entries %}
+              {%- if not entry.mount_path %}
+            - name: {{ entry.env_var_key }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ external_secret.external_secret_kube_name }}
+                  key: {{ entry.env_var_key }}
+              {%- else %}
+            - name: {{ entry.env_var_key }}
+              value: "{{ entry.mount_path }}"
+              {%- endif %}
+              {%- endfor %}
+            {%- endfor %}
+          {%- endif %}
           ports:
             {%- for port in service.ports %}
             - containerPort: {{ port.port }}
@@ -264,10 +281,33 @@ spec:
               name: {{ mounted_file.kube_name }}
               readOnly: true
             {%- endfor %}
+            {%- for external_secret in external_secrets %}
+              {%- for entry in external_secret.entries %}
+              {%- if entry.mount_path %}
+            - mountPath: "{{ entry.mount_path }}"
+              subPath: "{{ entry.mount_path_relative }}"
+              name: {{ entry.volume_name }}
+              readOnly: true
+              {%- endif %}
+              {%- endfor %}
+            {%- endfor %}
       volumes:
         {%- for mounted_file in mounted_files %}
         - name: {{ mounted_file.kube_name }}
           secret:
             secretName: {{ mounted_file.kube_name }}
+        {%- endfor %}
+        {%- for external_secret in external_secrets %}
+          {%- for entry in external_secret.entries %}
+          {%- if entry.mount_path %}
+        - name: {{ entry.volume_name }}
+          secret:
+            secretName: {{ external_secret.external_secret_kube_name }}
+            defaultMode: 420
+            items:
+              - key: "{{ entry.env_var_key }}"
+                path: "{{ entry.mount_path_relative }}"
+          {%- endif %}
+          {%- endfor %}
         {%- endfor %}
 {%- endif %}

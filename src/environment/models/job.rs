@@ -1,6 +1,7 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::container::{ClusterTeraContext, RegistryTeraContext};
+use crate::environment::models::external_secret::{ExternalSecretGroup, build_external_secret_groups};
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::probe::Probe;
 use crate::environment::models::registry_image_source::RegistryImageSource;
@@ -17,8 +18,8 @@ use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
-    MountedFile,
+    EnvironmentVariable, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
+    KubernetesMemoryResourceUnit, MountedFile,
 };
 use crate::utilities::to_short_id;
 use serde::Serialize;
@@ -60,6 +61,7 @@ pub struct Job<T: CloudProvider> {
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
     pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: BTreeSet<MountedFile>,
     pub(crate) advanced_settings: JobAdvancedSettings,
     pub(crate) _extra_settings: T::AppExtraSettings,
@@ -96,6 +98,7 @@ impl<T: CloudProvider> Job<T> {
         gpu_request: Option<KubernetesGpuResourceUnit>,
         gpu_limit: Option<KubernetesGpuResourceUnit>,
         environment_variables: Vec<EnvironmentVariable>,
+        external_secrets: BTreeMap<String, ExternalSecret>,
         mounted_files: BTreeSet<MountedFile>,
         advanced_settings: JobAdvancedSettings,
         readiness_probe: Option<Probe>,
@@ -114,6 +117,7 @@ impl<T: CloudProvider> Job<T> {
         )
         .map_err(|err| JobError::InvalidConfig(format!("Can't create workspace directory: {err}")))?;
 
+        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
         let event_details = mk_event_details(Transmitter::Job(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
@@ -143,6 +147,7 @@ impl<T: CloudProvider> Job<T> {
             gpu_request,
             gpu_limit,
             environment_variables,
+            external_secrets,
             mounted_files,
             advanced_settings,
             _extra_settings: extra_settings,
@@ -292,6 +297,7 @@ impl<T: CloudProvider> Job<T> {
                 docker_json_config: Some(docker_json.to_string()),
             }),
             environment_variables: self.environment_variables.clone(),
+            external_secrets: self.external_secrets.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             annotations_group: self.annotations_group.clone(),
@@ -542,6 +548,7 @@ pub(crate) struct JobTeraContext {
     pub(crate) service: ServiceTeraContext,
     pub(crate) registry: Option<RegistryTeraContext>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: Vec<MountedFile>,
     pub(crate) resource_expiration_in_seconds: Option<i32>,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,

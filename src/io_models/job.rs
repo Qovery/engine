@@ -21,7 +21,7 @@ use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+    CpuArchitecture, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
@@ -208,6 +208,10 @@ pub struct Job {
     #[serde(default)] // Default is false
     pub shared_image_feature_enabled: bool,
     pub output_variable_validation_pattern: String,
+    /// External secrets to sync from a remote secret manager via ESO.
+    /// Key is the environment variable name / k8s Secret key.
+    #[serde(default)]
+    pub external_secrets: BTreeMap<String, ExternalSecret>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -414,6 +418,7 @@ impl Job {
         };
 
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let external_secrets = self.external_secrets;
         let annotations_groups = self
             .annotations_group_ids
             .iter()
@@ -449,6 +454,7 @@ impl Job {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -484,6 +490,7 @@ impl Job {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -519,6 +526,7 @@ impl Job {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -554,6 +562,7 @@ impl Job {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -589,6 +598,7 @@ impl Job {
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())

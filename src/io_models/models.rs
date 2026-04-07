@@ -18,6 +18,17 @@ pub struct EnvironmentVariable {
     pub is_secret: bool,
 }
 
+/// Raw deserialization struct for an external secret entry from the deployment JSON.
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+pub struct ExternalSecret {
+    /// Path/name of the secret in the remote secret manager (e.g. "/prod/db/credentials").
+    pub external_secret_name: String,
+    /// UUID of the ClusterSecretStore to target (`store-{UUID}`).
+    pub secret_manager_access_id: Uuid,
+    /// If set, the secret is mounted as a file at this path instead of being injected as an env var.
+    pub mount_path: Option<String>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct EnvironmentVariableDataTemplate {
     pub key: String,

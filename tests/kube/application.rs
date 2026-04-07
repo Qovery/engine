@@ -93,6 +93,7 @@ fn should_increase_app_storage_size() {
             resized_app.entrypoint.clone(),
             storages,
             envs,
+            BTreeMap::new(),
             BTreeSet::default(),
             resized_app.readiness_probe.clone().map(|p| p.to_domain()),
             resized_app.liveness_probe.clone().map(|p| p.to_domain()),

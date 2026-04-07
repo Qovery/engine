@@ -292,6 +292,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         None,
         vec![test_storage()],
         vec![test_env_var()],
+        btreemap![],
         btreeset![test_mounted_file()],
         Some(Probe {
             r#type: ProbeType::Http {
@@ -437,6 +438,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         vec![test_port()],
         vec![test_storage()],
         vec![test_env_var()],
+        BTreeMap::new(),
         btreeset![test_mounted_file()],
         Some(Probe {
             r#type: ProbeType::Http {
@@ -724,6 +726,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         None,
         None,
         vec![test_env_var()],
+        BTreeMap::new(),
         btreeset![test_mounted_file()],
         JobAdvancedSettings {
             job_delete_ttl_seconds_after_finished: Some(8),
@@ -950,6 +953,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         None,
         vec![test_storage()],
         vec![test_env_var()],
+        btreemap![],
         btreeset![test_mounted_file()],
         Some(Probe {
             r#type: ProbeType::Http {
@@ -1157,6 +1161,7 @@ fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container
         vec![test_port()],
         vec![test_storage()],
         vec![test_env_var()],
+        BTreeMap::new(),
         btreeset![test_mounted_file()],
         Some(Probe {
             r#type: ProbeType::Http {
@@ -1372,6 +1377,7 @@ fn test_job_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Job<AWSType> {
         None,
         None,
         vec![test_env_var()],
+        BTreeMap::new(),
         btreeset![test_mounted_file()],
         advanced_settings,
         Some(Probe {

@@ -100,6 +100,7 @@ fn should_increase_container_storage_size() {
             resized_container.ports.iter().map(PortIo::to_port_domain).collect(),
             storages,
             envs,
+            BTreeMap::new(),
             BTreeSet::default(),
             resized_container.readiness_probe.clone().map(|p| p.to_domain()),
             resized_container.liveness_probe.clone().map(|p| p.to_domain()),

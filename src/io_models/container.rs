@@ -20,7 +20,9 @@ use crate::io_models::application::{PortIo, Storage, to_environment_variable};
 use crate::io_models::container::keda_transform::{KEY, NAME, SECRET_TARGET_REF, strip_qovery_env_prefix};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
-use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit};
+use crate::io_models::models::{
+    ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+};
 use crate::io_models::probe::Probe;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
@@ -764,6 +766,10 @@ pub struct Container {
     pub labels_group_ids: BTreeSet<Uuid>,
     #[serde(default)]
     pub autoscaling: Option<AutoscalingConfig>,
+    /// External secrets to sync from a remote secret manager via ESO.
+    /// Key is the environment variable name / k8s Secret key.
+    #[serde(default)]
+    pub external_secrets: BTreeMap<String, ExternalSecret>,
 }
 
 impl Container {
@@ -777,6 +783,7 @@ impl Container {
         labels_group: &BTreeMap<Uuid, LabelsGroup>,
     ) -> Result<Box<dyn ContainerService>, ContainerError> {
         let environment_variables = to_environment_variable(self.environment_vars_with_infos);
+        let external_secrets = self.external_secrets;
 
         // Default registry is a bit special as the core does not know its url/credentials as it is retrieved
         // by us with some tags
@@ -829,6 +836,7 @@ impl Container {
                 self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -863,6 +871,7 @@ impl Container {
                 self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -897,6 +906,7 @@ impl Container {
                 self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -931,6 +941,7 @@ impl Container {
                 self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())
@@ -965,6 +976,7 @@ impl Container {
                 self.ports.iter().map(PortIo::to_port_domain).collect(),
                 self.storages.iter().map(|s| s.to_storage()).collect::<Vec<_>>(),
                 environment_variables,
+                external_secrets,
                 self.mounted_files
                     .iter()
                     .map(|e| e.to_domain())

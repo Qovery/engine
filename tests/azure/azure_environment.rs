@@ -752,6 +752,7 @@ fn azure_aks_deploy_container_with_router() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -948,6 +949,7 @@ fn azure_aks_deploy_container_with_storages() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1107,6 +1109,7 @@ fn azure_aks_deploy_container_with_mounted_files_as_volume() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1274,6 +1277,7 @@ fn azure_aks_deploy_container_without_router() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -1401,6 +1405,7 @@ fn azure_aks_deploy_job() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1538,6 +1543,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1664,6 +1670,7 @@ fn azure_aks_deploy_cronjob() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1808,6 +1815,7 @@ fn azure_aks_deploy_cronjob_force_trigger() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -1963,6 +1971,7 @@ fn azure_aks_build_and_deploy_job() {
             gpu_request: None,
             gpu_limit: None,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             mounted_files: vec![],
             advanced_settings: Default::default(),
             readiness_probe: Some(Probe {
@@ -2353,6 +2362,7 @@ fn azure_aks_deploy_container_with_ndots() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2506,6 +2516,7 @@ fn azure_aks_deploy_container_with_none_ndots() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();

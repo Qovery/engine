@@ -209,6 +209,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 annotations_group_ids: BTreeSet::new(),
                 labels_group_ids: btreeset! {},
                 autoscaling: None,
+                external_secrets: BTreeMap::new(),
             };
             environment.containers = vec![container];
         }
@@ -250,6 +251,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                     },
                 ],
                 environment_vars_with_infos: BTreeMap::default(),
+                external_secrets: BTreeMap::new(),
                 branch: "basic-app-deploy".to_string(),
                 public_domain: format!("{}.{}", application_id, infra_ctx.dns_provider().domain()),
                 ports: vec![PortIo {
@@ -342,6 +344,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,
                 environment_vars_with_infos: BTreeMap::default(),
+                external_secrets: BTreeMap::new(),
                 advanced_settings: Default::default(),
                 mounted_files: vec![],
                 default_port: None,
