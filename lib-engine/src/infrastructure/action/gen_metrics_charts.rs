@@ -661,6 +661,7 @@ mod tests {
                 aws_addon_ebs_csi_version_override: None,
                 aws_addon_coredns_version_override: None,
                 aws_addon_pod_identity_version_override: None,
+                aws_addon_efs_csi_version_override: None,
                 ec2_exposed_port: None,
                 karpenter_parameters: None,
                 keda_parameters: None,
@@ -692,6 +693,7 @@ mod tests {
             aws_iam_cloudwatch_exporter_role_arn: None,
             kubernetes_storage_class_fast_ssd: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
             aws_iam_external_secrets_operator_role_arn: None,
+            efs_file_system_id: None,
         }
     }
 }

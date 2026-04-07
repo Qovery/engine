@@ -1,3 +1,4 @@
+use crate::environment::models::domain::ToTerraformString;
 use crate::environment::models::types::Percentage;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     LogFormatEscaping as LogFormatEscapingModel, NginxConfigurationSnippet as NginxConfigurationSnippetModel,
@@ -74,6 +75,72 @@ impl From<KindModel> for Kind {
 pub enum AwsEc2MetadataImds {
     Required,
     Optional,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EfsThroughputMode {
+    #[serde(rename = "elastic")]
+    Elastic,
+    #[serde(rename = "bursting")]
+    Bursting,
+}
+
+impl ToTerraformString for EfsThroughputMode {
+    fn to_terraform_format_string(&self) -> String {
+        match self {
+            EfsThroughputMode::Elastic => "elastic".to_string(),
+            EfsThroughputMode::Bursting => "bursting".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EfsPerformanceMode {
+    #[serde(rename = "generalPurpose")]
+    GeneralPurpose,
+    #[serde(rename = "maxIO")]
+    MaxIO,
+}
+
+impl ToTerraformString for EfsPerformanceMode {
+    fn to_terraform_format_string(&self) -> String {
+        match self {
+            EfsPerformanceMode::GeneralPurpose => "generalPurpose".to_string(),
+            EfsPerformanceMode::MaxIO => "maxIO".to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum EfsTransitionToIa {
+    #[serde(rename = "")]
+    Disabled,
+    #[serde(rename = "AFTER_1_DAY")]
+    After1Day,
+    #[serde(rename = "AFTER_7_DAYS")]
+    After7Days,
+    #[serde(rename = "AFTER_14_DAYS")]
+    After14Days,
+    #[serde(rename = "AFTER_30_DAYS")]
+    After30Days,
+    #[serde(rename = "AFTER_60_DAYS")]
+    After60Days,
+    #[serde(rename = "AFTER_90_DAYS")]
+    After90Days,
+}
+
+impl ToTerraformString for EfsTransitionToIa {
+    fn to_terraform_format_string(&self) -> String {
+        match self {
+            EfsTransitionToIa::Disabled => "".to_string(),
+            EfsTransitionToIa::After1Day => "AFTER_1_DAY".to_string(),
+            EfsTransitionToIa::After7Days => "AFTER_7_DAYS".to_string(),
+            EfsTransitionToIa::After14Days => "AFTER_14_DAYS".to_string(),
+            EfsTransitionToIa::After30Days => "AFTER_30_DAYS".to_string(),
+            EfsTransitionToIa::After60Days => "AFTER_60_DAYS".to_string(),
+            EfsTransitionToIa::After90Days => "AFTER_90_DAYS".to_string(),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -319,6 +386,14 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_encrypt_secrets_kms_key_arn: String,
     #[serde(alias = "aws.eks.enable_pod_identity_addon")]
     pub aws_eks_enable_pod_identity_addon: bool,
+    #[serde(alias = "aws.eks.enable_efs_addon")]
+    pub aws_eks_enable_efs_addon: bool,
+    #[serde(alias = "aws.eks.efs.throughput_mode")]
+    pub aws_eks_efs_throughput_mode: EfsThroughputMode,
+    #[serde(alias = "aws.eks.efs.performance_mode")]
+    pub aws_eks_efs_performance_mode: EfsPerformanceMode,
+    #[serde(alias = "aws.eks.efs.transition_to_ia")]
+    pub aws_eks_efs_transition_to_ia: EfsTransitionToIa,
     #[serde(alias = "cloud_provider.container_registry.tags")]
     pub cloud_provider_container_registry_tags: HashMap<String, String>,
     #[serde(alias = "database.postgresql.deny_any_access")]
@@ -513,6 +588,10 @@ impl Default for ClusterAdvancedSettings {
             scaleway_enable_private_network_migration: false,
             aws_eks_encrypt_secrets_kms_key_arn: "".to_string(),
             aws_eks_enable_pod_identity_addon: false,
+            aws_eks_enable_efs_addon: false,
+            aws_eks_efs_throughput_mode: EfsThroughputMode::Elastic,
+            aws_eks_efs_performance_mode: EfsPerformanceMode::GeneralPurpose,
+            aws_eks_efs_transition_to_ia: EfsTransitionToIa::After30Days,
             gcp_vpc_enable_flow_logs: false,
             gcp_vpc_flow_logs_sampling: None,
             qovery_static_ip_mode: None,

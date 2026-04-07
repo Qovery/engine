@@ -24,6 +24,7 @@ use tera::Context as TeraContext;
 
 mod core_dns_addon;
 mod ebs_csi_addon;
+mod efs_csi_addon;
 mod kube_proxy_addon;
 mod pod_identity_addon;
 mod vpc_cni_addon;
@@ -531,6 +532,40 @@ pub fn eks_tera_context(
                 pod_identity_addon::AwsPodIdentityAddon::new_with_overridden_version(overridden_version)
             }
         }),
+    );
+
+    // EFS CSI
+    context.insert(
+        "eks_efs_addon_enabled",
+        &kubernetes.advanced_settings().aws_eks_enable_efs_addon,
+    );
+    context.insert(
+        "eks_addon_efs_csi",
+        &(match &options.aws_addon_efs_csi_version_override {
+            None => efs_csi_addon::AwsEfsCsiAddon::new_from_k8s_version(kubernetes.version()),
+            Some(overridden_version) => efs_csi_addon::AwsEfsCsiAddon::new_with_overridden_version(overridden_version),
+        }),
+    );
+    context.insert(
+        "eks_efs_throughput_mode",
+        &kubernetes
+            .advanced_settings()
+            .aws_eks_efs_throughput_mode
+            .to_terraform_format_string(),
+    );
+    context.insert(
+        "eks_efs_performance_mode",
+        &kubernetes
+            .advanced_settings()
+            .aws_eks_efs_performance_mode
+            .to_terraform_format_string(),
+    );
+    context.insert(
+        "eks_efs_transition_to_ia",
+        &kubernetes
+            .advanced_settings()
+            .aws_eks_efs_transition_to_ia
+            .to_terraform_format_string(),
     );
 
     // Observability

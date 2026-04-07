@@ -123,6 +123,7 @@ pub(super) fn eks_helm_charts(
                 .k8s_storage_class_fast_ssd
                 .to_model(),
         ),
+        chart_config_prerequisites.efs_file_system_id.clone(),
     )
     .to_common_helm_chart()?;
 
