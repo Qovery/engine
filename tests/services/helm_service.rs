@@ -360,7 +360,6 @@ fn run_router_test(cloud_provider: CloudProvider) {
         action: Action::Create,
         default_domain: "main".to_string(),
         public_port: 443,
-        ff_enable_deduplication: Some(true),
         custom_domains: vec![],
         routes: vec![Route {
             path: "/".to_string(),

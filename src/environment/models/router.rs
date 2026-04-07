@@ -77,7 +77,6 @@ pub struct Router<T: CloudProvider> {
     pub(crate) default_domain: String,
     pub(crate) custom_domains: Vec<CustomDomain>,
     pub(crate) routes: Vec<Route>,
-    pub(crate) ff_enable_deduplication: bool,
     pub(crate) _extra_settings: T::RouterExtraSettings,
     pub(crate) advanced_settings: RouterAdvancedSettings,
     pub(crate) workspace_directory: PathBuf,
@@ -130,7 +129,6 @@ impl<T: CloudProvider> Router<T> {
         default_domain: &str,
         custom_domains: Vec<CustomDomain>,
         routes: Vec<Route>,
-        ff_enable_deduplication: bool,
         extra_settings: T::RouterExtraSettings,
         advanced_settings: RouterAdvancedSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -157,7 +155,6 @@ impl<T: CloudProvider> Router<T> {
             default_domain: default_domain.to_string(),
             custom_domains,
             routes,
-            ff_enable_deduplication,
             _extra_settings: extra_settings,
             advanced_settings,
             workspace_directory,
@@ -382,16 +379,14 @@ impl<T: CloudProvider> Router<T> {
             environment.namespace(),
         );
         let cluster_long_id = kubernetes.context().cluster_long_id();
-        let gateway_http_route_dedup_enabled = self.ff_enable_deduplication;
-        let gateway_http_routes_per_namespace = to_gateway_http_routes_data_template_with_feature_flag(
+        let gateway_http_routes_per_namespace = to_gateway_http_routes_data_template(
             &http_hosts_per_namespace_gateway,
             &service_id,
             &gateway_http_route_headers_signature,
-            gateway_http_route_dedup_enabled,
         );
         debug!(
             cluster_long_id = cluster_long_id.to_string(),
-            gateway_http_route_dedup_enabled, "Gateway API HTTPRoute generation mode selected"
+            "Gateway API HTTPRoute generation mode selected"
         );
 
         let http_hosts_has_regex_path = http_hosts_per_namespace_nginx
@@ -568,70 +563,6 @@ fn to_gateway_http_routes_data_template(
     }
 
     routes_per_namespace
-}
-
-fn to_gateway_http_routes_data_template_legacy(
-    http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
-    associated_service_long_id: &Uuid,
-    headers_signature: &GatewayHttpRouteHeadersSignature,
-) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
-    let mut routes_per_namespace: BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> = BTreeMap::new();
-
-    for (namespace, hosts) in http_hosts_per_namespace {
-        let mut routes: Vec<GatewayHttpRouteDataTemplate> = Vec::with_capacity(hosts.len());
-
-        for host in hosts {
-            let rules = to_gateway_http_route_rule_signatures(host, associated_service_long_id, headers_signature)
-                .into_iter()
-                .map(|signature| GatewayHttpRouteRuleDataTemplate {
-                    service_name: signature.service_name,
-                    service_port: signature.service_port,
-                    path: signature.path,
-                    path_rewrite: signature.path_rewrite,
-                    path_type: signature.path_type,
-                    weight: signature.weight,
-                })
-                .collect();
-
-            // Keep legacy behavior: include both hostnames without deduplicating.
-            let hostnames = vec![
-                host.domain_name.clone(),
-                host.domain_name.replace("-gtw.", "-gtw.new-gateway-api."),
-            ];
-
-            routes.push(GatewayHttpRouteDataTemplate { hostnames, rules });
-        }
-
-        debug!(
-            namespace = namespace.as_str(),
-            hosts_in = hosts.len(),
-            route_parts = routes.len(),
-            "Legacy Gateway API HTTPRoute model"
-        );
-
-        if !routes.is_empty() {
-            routes_per_namespace.insert(namespace.clone(), routes);
-        }
-    }
-
-    routes_per_namespace
-}
-
-fn to_gateway_http_routes_data_template_with_feature_flag(
-    http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
-    associated_service_long_id: &Uuid,
-    headers_signature: &GatewayHttpRouteHeadersSignature,
-    dedup_enabled: bool,
-) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
-    if dedup_enabled {
-        to_gateway_http_routes_data_template(http_hosts_per_namespace, associated_service_long_id, headers_signature)
-    } else {
-        to_gateway_http_routes_data_template_legacy(
-            http_hosts_per_namespace,
-            associated_service_long_id,
-            headers_signature,
-        )
-    }
 }
 
 fn to_gateway_http_route_rule_signatures(
@@ -1046,8 +977,7 @@ mod tests {
     use crate::environment::models::port::{HttpPublicPortConfig, Port, PortProtocol};
     use crate::environment::models::router::{
         generate_certificate_alternative_names, to_gateway_host_data_template, to_gateway_http_route_headers_signature,
-        to_gateway_http_routes_data_template, to_gateway_http_routes_data_template_with_feature_flag,
-        to_host_data_template,
+        to_gateway_http_routes_data_template, to_host_data_template,
     };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
@@ -1307,7 +1237,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_gateway_http_routes_feature_flag_switches_between_legacy_and_dedup_models() {
+    pub fn test_gateway_http_routes_are_deduplicated_model() {
         let service_id = Uuid::new_v4();
         let host = HostDataTemplate {
             domain_name: "app.example.com".to_string(),
@@ -1321,25 +1251,13 @@ mod tests {
         let hosts_per_namespace = BTreeMap::from([("env-ns".to_string(), vec![host.clone(), host])]);
         let headers = to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new());
 
-        let legacy_routes =
-            to_gateway_http_routes_data_template_with_feature_flag(&hosts_per_namespace, &service_id, &headers, false);
-        let dedup_routes =
-            to_gateway_http_routes_data_template_with_feature_flag(&hosts_per_namespace, &service_id, &headers, true);
-
-        let legacy = legacy_routes
-            .get("env-ns")
-            .expect("legacy namespace route list should be generated");
-        let dedup = dedup_routes
+        let routes = to_gateway_http_routes_data_template(&hosts_per_namespace, &service_id, &headers);
+        let dedup = routes
             .get("env-ns")
             .expect("dedup namespace route list should be generated");
 
-        // Legacy keeps one HTTPRoute part per host entry.
-        assert_eq!(legacy.len(), 2);
         // Dedup compacts equivalent hosts/rules to a single route part.
         assert_eq!(dedup.len(), 1);
-
-        // Legacy keeps duplicated hostnames in each route part.
-        assert_eq!(legacy[0].hostnames.len(), 2);
         // Dedup removes duplicate hostnames.
         assert_eq!(dedup[0].hostnames.len(), 1);
     }

@@ -32,7 +32,6 @@ pub struct Router {
     pub public_port: u16,
     pub custom_domains: Vec<CustomDomain>,
     pub routes: Vec<Route>,
-    pub ff_enable_deduplication: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -90,7 +89,6 @@ impl Router {
                 self.default_domain.as_str(),
                 custom_domains,
                 routes,
-                self.ff_enable_deduplication.unwrap_or(false),
                 AwsRouterExtraSettings {},
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -107,7 +105,6 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
-                    self.ff_enable_deduplication.unwrap_or(false),
                     ScwRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),
@@ -125,7 +122,6 @@ impl Router {
                 self.default_domain.as_str(),
                 custom_domains,
                 routes,
-                self.ff_enable_deduplication.unwrap_or(false),
                 GcpRouterExtraSettings {},
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -141,7 +137,6 @@ impl Router {
                 self.default_domain.as_str(),
                 custom_domains,
                 routes,
-                self.ff_enable_deduplication.unwrap_or(false),
                 AzureRouterExtraSettings {},
                 advanced_settings,
                 |transmitter| context.get_event_details(transmitter),
@@ -158,7 +153,6 @@ impl Router {
                     self.default_domain.as_str(),
                     custom_domains,
                     routes,
-                    self.ff_enable_deduplication.unwrap_or(false),
                     OnPremiseRouterExtraSettings {},
                     advanced_settings,
                     |transmitter| context.get_event_details(transmitter),

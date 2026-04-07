@@ -675,7 +675,6 @@ pub fn test_router(test_kube: &dyn Kubernetes, app_id: Uuid) -> Router<AWSType> 
         "my_default_domain",
         vec![test_custom_domain()],
         vec![test_route(app_id)],
-        false,
         AwsRouterExtraSettings {},
         RouterAdvancedSettings {
             whitelist_source_range: None,
