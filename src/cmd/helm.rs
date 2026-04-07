@@ -111,8 +111,14 @@ impl HelmError {
             HelmError::Killed(_, _) => false,
             HelmError::UnsupportedPrometheusObjectBucketConfiguration => false,
 
-            // CmdError and KubernetesApplyError: check message for network patterns
-            HelmError::CmdError(_, _, _) | HelmError::KubernetesApplyError(_) => self.has_transient_error_pattern(),
+            // CmdError: check message for network patterns
+            HelmError::CmdError(_, _, _) => self.has_transient_error_pattern(),
+
+            // KubernetesApplyError: retryable for transient network errors or GKE ValidatingAdmissionPolicy
+            // race conditions (GKE recreates the policy after we delete it, retry re-runs pre-execute action)
+            HelmError::KubernetesApplyError(_) => {
+                self.has_transient_error_pattern() || self.has_admission_policy_denial()
+            }
         }
     }
 
@@ -121,6 +127,17 @@ impl HelmError {
     /// These patterns indicate temporary issues that may resolve on retry.
     pub fn has_transient_error_pattern(&self) -> bool {
         errors::has_transient_error_pattern(&self.to_string())
+    }
+
+    /// Checks if the error is caused by a ValidatingAdmissionPolicy denial.
+    ///
+    /// On GKE, the control plane manages ValidatingAdmissionPolicies that restrict Gateway API CRDs
+    /// to the 'standard' channel. These policies can be recreated by GKE's controller after deletion,
+    /// causing a race condition during CRD installation. Retrying allows the pre-execute action to
+    /// re-delete the policies before re-attempting the apply.
+    fn has_admission_policy_denial(&self) -> bool {
+        let msg = self.to_string();
+        msg.contains("ValidatingAdmissionPolicy") && msg.contains("denied request")
     }
 }
 
