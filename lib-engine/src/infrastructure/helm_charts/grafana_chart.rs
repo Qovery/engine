@@ -3,9 +3,11 @@ use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, ChartValuesGenerated, CommonChart, HelmChartError,
     HelmChartNamespaces,
 };
+use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::Kind;
 use kube::Client;
 
 /// Grafana helm chart
@@ -16,6 +18,7 @@ pub struct GrafanaChart {
     grafana_admin_user: GrafanaAdminUser,
     grafana_datasources: GrafanaDatasources,
     persistence_storage_class: String, // TODO(benjaminch): make it an enum
+    cloud_provider_kind: Kind,
 }
 
 impl GrafanaChart {
@@ -24,6 +27,7 @@ impl GrafanaChart {
         grafana_admin_user: GrafanaAdminUser,
         grafana_datasources: GrafanaDatasources,
         persistence_storage_class: String,
+        cloud_provider_kind: Kind,
     ) -> GrafanaChart {
         GrafanaChart {
             chart_path: HelmChartPath::new(
@@ -39,6 +43,7 @@ impl GrafanaChart {
             grafana_admin_user,
             grafana_datasources,
             persistence_storage_class,
+            cloud_provider_kind,
         }
     }
 
@@ -62,7 +67,8 @@ impl ToCommonHelmChart for GrafanaChart {
                 values: vec![
                     ChartSetValue {
                         key: "image.repository".to_string(),
-                        value: "public.ecr.aws/r3m4q3r9/pub-mirror-grafana".to_string(),
+                        value: QoverySourceRegistry::from(&self.cloud_provider_kind)
+                            .image_full_path("pub-mirror-grafana"),
                     },
                     ChartSetValue {
                         key: "persistence.storageClassName".to_string(),
@@ -213,10 +219,12 @@ impl ChartInstallationChecker for GrafanaChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::helm_charts::grafana_chart::{GrafanaAdminUser, GrafanaChart, GrafanaDatasources};
+
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::Kind;
     use std::env;
 
     /// Makes sure chart directory containing all YAML files exists.
@@ -233,6 +241,7 @@ mod tests {
                 cloudwatch_config: None,
             },
             "whatever".to_string(),
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -266,6 +275,7 @@ mod tests {
                 cloudwatch_config: None,
             },
             "whatever".to_string(),
+            Kind::Aws,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -303,6 +313,7 @@ mod tests {
                 cloudwatch_config: None,
             },
             "whatever".to_string(),
+            Kind::Aws,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

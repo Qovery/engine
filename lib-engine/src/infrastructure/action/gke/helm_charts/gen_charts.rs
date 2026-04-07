@@ -4,8 +4,8 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
-    CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass, QoveryGatewayClass,
-    QoveryPriorityClass, UpdateStrategy,
+    ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode, PriorityClass,
+    QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy,
 };
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
@@ -32,13 +32,13 @@ use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
 use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
+use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::Kind;
-use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
@@ -55,6 +55,7 @@ pub(super) fn gke_helm_charts(
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
+    let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
@@ -87,7 +88,7 @@ pub(super) fn gke_helm_charts(
     // Qovery storage class
     let q_storage_class_chart = QoveryStorageClassChart::new(
         chart_prefix_path,
-        CloudProviderKind::Gcp,
+        Kind::Gcp,
         HashSet::from_iter(vec![QoveryStorageType::Ssd, QoveryStorageType::Hdd]), // TODO(ENG-1800): Add Cold and Nvme
         HelmChartNamespaces::Qovery, // Cannot install anything inside kube-system namespace when it comes to GKE autopilot
         Some(
@@ -144,6 +145,16 @@ pub(super) fn gke_helm_charts(
     )
     .to_common_helm_chart()?;
 
+    // Override image registries for GCP: use GCP Artifact Registry instead of ECR Public
+    let external_dns_chart = {
+        let mut chart = external_dns_chart;
+        chart.chart_info.values.push(ChartSetValue {
+            key: "image.repository".to_string(),
+            value: source_registry.image_full_path("pub-mirror-external-dns"),
+        });
+        chart
+    };
+
     // Metrics server is built-in GCP cluster, no need to manage it
     // VPA is built-in GCP cluster, no need to manage it
     let loki: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
@@ -174,6 +185,7 @@ pub(super) fn gke_helm_charts(
                 }),
                 HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
                 false,
+                Kind::Gcp,
             )
             .to_common_helm_chart()?,
         )),
@@ -191,6 +203,7 @@ pub(super) fn gke_helm_charts(
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Qovery(QoveryPriorityClass::HighPriority),
                 false,
+                Kind::Gcp,
             )
             .to_common_helm_chart()?,
         )),
@@ -237,17 +250,20 @@ pub(super) fn gke_helm_charts(
     // Cert Manager Webhook
     let mut qovery_cert_manager_webhook: Option<Box<dyn HelmChart>> = None;
     if let DnsProviderConfiguration::QoveryDns(qovery_dns_config) = &chart_config_prerequisites.dns_provider_config {
-        qovery_cert_manager_webhook = Some(Box::new(
-            QoveryCertManagerWebhookChart::new(
-                chart_prefix_path,
-                qovery_dns_config.clone(),
-                HelmChartResourcesConstraintType::ChartDefault,
-                UpdateStrategy::RollingUpdate,
-                HelmChartNamespaces::Qovery,
-                HelmChartNamespaces::Qovery,
-            )
-            .to_common_helm_chart()?,
-        ));
+        let mut chart = QoveryCertManagerWebhookChart::new(
+            chart_prefix_path,
+            qovery_dns_config.clone(),
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
+            HelmChartNamespaces::Qovery,
+            HelmChartNamespaces::Qovery,
+        )
+        .to_common_helm_chart()?;
+        chart.chart_info.values.push(ChartSetValue {
+            key: "image.repository".to_string(),
+            value: source_registry.image_full_path("cert-manager-webhook-qovery"),
+        });
+        qovery_cert_manager_webhook = Some(Box::new(chart));
     }
 
     // Nginx ingress
@@ -518,7 +534,7 @@ pub(super) fn gke_helm_charts(
     }
 
     // K8s Event Logger
-    let k8s_event_logger = K8sEventLoggerChart::new(
+    let mut k8s_event_logger = K8sEventLoggerChart::new(
         chart_prefix_path,
         true,
         HelmChartNamespaces::Qovery,
@@ -526,6 +542,10 @@ pub(super) fn gke_helm_charts(
         get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
+    k8s_event_logger.chart_info.values.push(ChartSetValue {
+        key: "image.repository".to_string(),
+        value: source_registry.image_full_path("k8s-event-logger-rs"),
+    });
 
     // Qovery cluster agent
     let qovery_cluster_agent = QoveryClusterAgentChart::new(
@@ -560,6 +580,11 @@ pub(super) fn gke_helm_charts(
         get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
+    let mut qovery_cluster_agent = qovery_cluster_agent;
+    qovery_cluster_agent.chart_info.values.push(ChartSetValue {
+        key: "image.repository".to_string(),
+        value: source_registry.image_full_path("cluster-agent"),
+    });
 
     // Qovery shell agent
     let qovery_shell_agent = QoveryShellAgentChart::new(
@@ -576,6 +601,11 @@ pub(super) fn gke_helm_charts(
         UpdateStrategy::RollingUpdate,
     )
     .to_common_helm_chart()?;
+    let mut qovery_shell_agent = qovery_shell_agent;
+    qovery_shell_agent.chart_info.values.push(ChartSetValue {
+        key: "image.repository".to_string(),
+        value: source_registry.image_full_path("shell-agent"),
+    });
 
     let prometheus_operator_crds_chart = metrics_config
         .prometheus_operator_crds_chart

@@ -9,6 +9,7 @@ use crate::environment::models::types::{CloudProvider, ToTeraContext, VersionsNu
 use crate::environment::models::utils;
 use crate::errors::{CommandError, EngineError};
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
+use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::service::{
     Action, Service, ServiceType, ServiceVersionCheckResult, check_service_version, default_tera_context,
@@ -417,17 +418,21 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         let container_database_publicly_accessible = !cluster_denied_any_access && self.publicly_accessible;
 
         // repository and image location
-        let registry_name = "public.ecr.aws";
-        let repository_name = format!("r3m4q3r9/pub-mirror-{}", T::db_type().to_string().to_lowercase());
-        let repository_name_minideb = "r3m4q3r9/pub-mirror-minideb".to_string();
-        let repository_name_bitnami_shell = "r3m4q3r9/pub-mirror-bitnami-shell".to_string();
-        context.insert("registry_name", registry_name);
-        context.insert("repository_name", repository_name.as_str());
-        context.insert("repository_name_minideb", repository_name_minideb.as_str());
-        context.insert("repository_name_bitnami_shell", repository_name_bitnami_shell.as_str());
+        let source_registry = QoverySourceRegistry::from(&target.cloud_provider.kind());
+
+        let db_image_name = format!("pub-mirror-{}", T::db_type().to_string().to_lowercase());
+        let db_image_path = source_registry.image_path(&db_image_name);
+
+        let minideb_image_path = source_registry.image_path("pub-mirror-minideb");
+        let bitnami_image_path = source_registry.image_path("pub-mirror-bitnami-shell");
+
+        context.insert("registry_name", source_registry.host().as_str());
+        context.insert("repository_name", db_image_path.as_str());
+        context.insert("repository_name_minideb", minideb_image_path.as_str());
+        context.insert("repository_name_bitnami_shell", bitnami_image_path.as_str());
         context.insert(
             "repository_with_registry",
-            format!("{registry_name}/{repository_name}").as_str(),
+            source_registry.image_full_path(&db_image_path).as_str(),
         );
 
         context.insert("namespace", environment.namespace());

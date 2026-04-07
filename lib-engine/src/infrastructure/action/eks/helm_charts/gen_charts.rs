@@ -338,6 +338,7 @@ pub(super) fn eks_helm_charts(
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 chart_config_prerequisites.is_karpenter_enabled,
+                Kind::Aws,
             )
             .to_common_helm_chart()?,
         ),
@@ -368,6 +369,7 @@ pub(super) fn eks_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
                 chart_config_prerequisites.is_karpenter_enabled,
+                Kind::Aws,
             )
             .to_common_helm_chart()?,
         ),
@@ -436,6 +438,7 @@ pub(super) fn eks_helm_charts(
                     )),
                 },
                 AwsStorageType::GP2.to_k8s_storage_class(),
+                Kind::Aws,
             )
             .to_common_helm_chart()?,
         ),

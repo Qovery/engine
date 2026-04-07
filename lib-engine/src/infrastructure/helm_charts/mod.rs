@@ -37,6 +37,7 @@ pub mod qovery_cluster_gateway_chart;
 pub mod qovery_gateway_class_chart;
 pub mod qovery_priority_class_chart;
 pub mod qovery_shell_agent_chart;
+pub mod qovery_source_registry;
 pub mod qovery_storage_class_chart;
 pub mod thanos;
 pub mod vertical_pod_autoscaler;

@@ -100,6 +100,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 HelmChartNamespaces::Qovery,
                 PriorityClass::Default,
                 false,
+                Kind::OnPremise,
             )
             .to_common_helm_chart()?,
         ),
@@ -121,6 +122,7 @@ pub(super) fn eks_anywhere_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
                 false,
+                Kind::OnPremise,
             )
             .to_common_helm_chart()?,
         ),

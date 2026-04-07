@@ -200,6 +200,7 @@ pub fn kapsule_helm_charts(
                 HelmChartNamespaces::KubeSystem,
                 PriorityClass::Default,
                 false,
+                Kind::Scw,
             )
             .to_common_helm_chart()?,
         ),
@@ -230,6 +231,7 @@ pub fn kapsule_helm_charts(
                 HelmChartResourcesConstraintType::ChartDefault,
                 HelmChartTimeout::ChartDefault,
                 false,
+                Kind::Scw,
             )
             .to_common_helm_chart()?,
         ),
@@ -255,6 +257,7 @@ pub fn kapsule_helm_charts(
                     cloudwatch_config: None,
                 },
                 "scw-sbv-ssd-0".to_string(), // TODO(benjaminch): introduce proper type here
+                Kind::Scw,
             )
             .to_common_helm_chart()?,
         ),
