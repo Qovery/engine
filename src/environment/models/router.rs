@@ -790,7 +790,7 @@ fn to_host_data_template_with_rewrite_policy(
         hosts_per_namespace.insert(
             namespace
                 .as_ref()
-                .cloned()
+                .and_then(|ns| if ns.is_empty() { None } else { Some(ns.clone()) })
                 .unwrap_or_else(|| environment_namespace.to_string()),
             hosts,
         );
