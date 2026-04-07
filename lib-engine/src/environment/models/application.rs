@@ -12,6 +12,7 @@ use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::container::{
     ClusterTeraContext, ContainerTeraContext, RegistryTeraContext, ServiceTeraContext, to_public_l4_ports,
 };
+use crate::environment::models::external_secret::{ExternalSecretGroup, build_external_secret_groups};
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::probe::Probe;
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
@@ -30,7 +31,7 @@ use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
     KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::kubers_utils::kube_get_resources_by_selector;
@@ -67,6 +68,7 @@ pub struct Application<T: CloudProvider> {
     pub(crate) entrypoint: Option<String>,
     pub(crate) storages: Vec<Storage>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: BTreeSet<MountedFile>,
     pub(crate) readiness_probe: Option<Probe>,
     pub(crate) liveness_probe: Option<Probe>,
@@ -98,6 +100,7 @@ impl<T: CloudProvider> Application<T> {
         entrypoint: Option<String>,
         storages: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
+        external_secrets: BTreeMap<String, ExternalSecret>,
         mounted_files: BTreeSet<MountedFile>,
         readiness_probe: Option<Probe>,
         liveness_probe: Option<Probe>,
@@ -126,6 +129,8 @@ impl<T: CloudProvider> Application<T> {
 
         let event_details = mk_event_details(Transmitter::Application(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
+        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+
         Ok(Self {
             _marker: PhantomData,
             mk_event_details: Box::new(mk_event_details),
@@ -149,6 +154,7 @@ impl<T: CloudProvider> Application<T> {
             entrypoint,
             storages,
             environment_variables,
+            external_secrets,
             mounted_files,
             readiness_probe,
             liveness_probe,
@@ -297,6 +303,7 @@ impl<T: CloudProvider> Application<T> {
                     docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
+            external_secrets: self.external_secrets.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),

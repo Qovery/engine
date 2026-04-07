@@ -65,6 +65,7 @@ pub fn working_environment(
             git_credentials: None,
             storage: vec![],
             environment_vars_with_infos: BTreeMap::default(),
+            external_secrets: btreemap![],
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             ports: vec![PortIo {
@@ -334,6 +335,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
+                external_secrets: btreemap![],
                 mounted_files: vec![],
                 ports: vec![PortIo {
                     long_id: Default::default(),
@@ -407,6 +409,7 @@ pub fn environment_2_app_2_routers_1_psql(
                      "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
+                external_secrets: btreemap![],
                 mounted_files: vec![],
                 public_domain: format!("{application_id2}.{test_domain}"),
                 ports: vec![PortIo {
@@ -549,6 +552,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
             environment_vars_with_infos: btreemap! {
                 "ECHO_TEXT".to_string() => VariableInfo {value: general_purpose::STANDARD.encode("42"), is_secret: false},
             },
+            external_secrets: btreemap![],
             mounted_files: vec![],
             branch: "echo-app".to_string(),
             public_domain: format!("{application_id}.{test_domain}"),
@@ -670,6 +674,7 @@ pub fn environment_only_http_server(
             git_credentials: None,
             storage: vec![],
             environment_vars_with_infos: btreemap! {},
+            external_secrets: btreemap![],
             mounted_files: vec![],
             branch: "main".to_string(),
             public_domain: format!("{application_id}.{test_domain}"),

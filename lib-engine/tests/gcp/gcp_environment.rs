@@ -714,6 +714,7 @@ fn gcp_gke_deploy_container_with_router() {
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -879,6 +880,7 @@ fn gcp_gke_deploy_container_with_ndots() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -1017,6 +1019,7 @@ fn gcp_gke_deploy_container_with_none_ndots() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             autoscaling: None,
+            external_secrets: BTreeMap::new(),
         }];
 
         let mut environment_for_delete = environment.clone();

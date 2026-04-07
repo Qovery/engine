@@ -253,6 +253,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_USERNAME".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_username.clone()), is_secret: false},
                      "PG_PASSWORD".to_string() => VariableInfo{value: general_purpose::STANDARD.encode(database_password.clone()), is_secret: false},
                 },
+                external_secrets: btreemap![],
                 mounted_files: vec![],
                 public_domain: format!("{app_id}.example.com"),
                 ports: vec![PortIo {
@@ -326,6 +327,7 @@ pub fn environment_3_apps_3_databases(
                      "PG_USERNAME".to_string() =>VariableInfo {value: general_purpose::STANDARD.encode(database_username_2.clone()), is_secret: false },
                      "PG_PASSWORD".to_string() => VariableInfo {value:general_purpose::STANDARD.encode(database_password.clone()), is_secret: false },
                 },
+                external_secrets: btreemap![],
                 mounted_files: vec![],
                 ports: vec![PortIo {
                     long_id: Default::default(),
@@ -401,6 +403,7 @@ pub fn environment_3_apps_3_databases(
                     "QOVERY_DATABASE_TESTING_DATABASE_USERNAME".to_string() =>VariableInfo { value:  general_purpose::STANDARD.encode(&database_username_mongo), is_secret:false},
                     "QOVERY_DATABASE_TESTING_DATABASE_PASSWORD".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(&database_password_mongo), is_secret:false},
                 },
+                external_secrets: btreemap![],
                 mounted_files: vec![],
                 public_domain: format!("{app_id}.example.com"),
                 ports: vec![PortIo {
@@ -586,6 +589,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
             git_credentials: None,
             storage: vec![],
             environment_vars_with_infos: BTreeMap::default(),
+            external_secrets: btreemap![],
             mounted_files: vec![],
             ports: vec![],
             cpu_request_in_milli: 100,
@@ -648,6 +652,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
             git_credentials: None,
             storage: vec![],
             environment_vars_with_infos: BTreeMap::default(),
+            external_secrets: btreemap![],
             mounted_files: vec![],
             branch: "basic-app-deploy".to_string(),
             public_domain: format!("{}.example.com", Uuid::new_v4()),

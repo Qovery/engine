@@ -12,6 +12,7 @@ use uuid::Uuid;
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::autoscaling::AutoscalingConfig;
+use crate::environment::models::external_secret::{ExternalSecretGroup, build_external_secret_groups};
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::probe::Probe;
 use crate::environment::models::registry_image_source::RegistryImageSource;
@@ -34,7 +35,7 @@ use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
+    EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
     KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
 use crate::kubers_utils::kube_get_resources_by_selector;
@@ -71,6 +72,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) ports: Vec<Port>,
     pub(crate) storages: Vec<Storage>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: BTreeSet<MountedFile>,
     pub(crate) readiness_probe: Option<Probe>,
     pub(crate) liveness_probe: Option<Probe>,
@@ -138,6 +140,7 @@ impl<T: CloudProvider> Container<T> {
         ports: Vec<Port>,
         storages: Vec<Storage>,
         environment_variables: Vec<EnvironmentVariable>,
+        external_secrets: BTreeMap<String, ExternalSecret>,
         mounted_files: BTreeSet<MountedFile>,
         readiness_probe: Option<Probe>,
         liveness_probe: Option<Probe>,
@@ -148,6 +151,8 @@ impl<T: CloudProvider> Container<T> {
         labels_groups: Vec<LabelsGroup>,
         autoscaling: Option<AutoscalingConfig>,
     ) -> Result<Self, ContainerError> {
+        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
                 "min_instances must be less or equal to max_instances".to_string(),
@@ -192,6 +197,7 @@ impl<T: CloudProvider> Container<T> {
             ports,
             storages,
             environment_variables,
+            external_secrets,
             mounted_files,
             readiness_probe,
             liveness_probe,
@@ -367,6 +373,7 @@ impl<T: CloudProvider> Container<T> {
                     docker_json_config: Some(docker_json.to_string()),
                 }),
             environment_variables: self.environment_variables.clone(),
+            external_secrets: self.external_secrets.clone(),
             mounted_files: self.mounted_files.clone().into_iter().collect::<Vec<_>>(),
             resource_expiration_in_seconds: Some(kubernetes.advanced_settings().pleco_resources_ttl),
             loadbalancer_l4_annotations: kubernetes.loadbalancer_l4_annotations(Some(self.kube_name())),
@@ -618,6 +625,7 @@ pub(crate) struct ContainerTeraContext {
     pub(crate) service: ServiceTeraContext,
     pub(crate) registry: Option<RegistryTeraContext>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: Vec<MountedFile>,
     pub(crate) resource_expiration_in_seconds: Option<i32>,
     pub(crate) loadbalancer_l4_annotations: Vec<(String, String)>,
