@@ -196,6 +196,7 @@ impl<T: CloudProvider> Job<T> {
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();
+        let mut deployment_affinity_node_preferred = BTreeMap::<String, String>::new();
         let is_stateful_set = false;
         let is_gpu = (self.gpu_request.is_some_and(|v| v.to_gpu_count() > 0))
             || (self.gpu_limit.is_some_and(|v| v.to_gpu_count() > 0));
@@ -206,6 +207,23 @@ impl<T: CloudProvider> Job<T> {
                 &mut tolerations,
                 is_stateful_set,
             );
+        }
+
+        // Target cronjob nodepool for cron-scheduled jobs (soft affinity for safe fallback)
+        if !is_gpu
+            && matches!(self.schedule, JobSchedule::Cron { .. })
+            && kubernetes.is_karpenter_cronjob_nodepool_enabled()
+        {
+            // Add toleration (harmless if nodepool doesn't exist)
+            tolerations
+                .entry("nodepool/cronjob".to_string())
+                .or_insert_with(|| "NoSchedule".to_string());
+
+            // Use preferred (soft) affinity so pods fall back to default nodepool
+            // if cronjob nodepool is removed without redeploying
+            deployment_affinity_node_preferred
+                .entry("karpenter.sh/nodepool".to_string())
+                .or_insert_with(|| "cronjob".to_string());
         }
 
         let mut advanced_settings = self.advanced_settings.clone();
@@ -278,6 +296,7 @@ impl<T: CloudProvider> Job<T> {
                 liveness_probe: self.liveness_probe.clone(),
                 advanced_settings,
                 tolerations,
+                deployment_affinity_node_preferred,
             },
             registry: match &self.image_source {
                 ImageSource::Registry { source } => registry_info.get_registry_docker_json_config(DockerRegistryInfo {
@@ -534,6 +553,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) liveness_probe: Option<Probe>,
     pub(crate) advanced_settings: JobAdvancedSettings,
     pub(crate) tolerations: BTreeMap<String, String>,
+    pub(crate) deployment_affinity_node_preferred: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -553,4 +573,114 @@ pub(crate) struct JobTeraContext {
     pub(crate) resource_expiration_in_seconds: Option<i32>,
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{JobTeraContext, ServiceTeraContext};
+    use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
+    use crate::environment::models::container::ClusterTeraContext;
+    use crate::environment::models::labels_group::LabelsGroupTeraContext;
+    use crate::io_models::job::JobAdvancedSettings;
+    use std::collections::BTreeMap;
+    use tera::{Context, Tera};
+    use uuid::Uuid;
+
+    #[test]
+    fn renders_cronjob_template_with_preferred_cronjob_nodepool_affinity() {
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"),
+            build_job_tera_context(true),
+        );
+
+        assert!(rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
+        assert!(rendered.contains("karpenter.sh/nodepool"));
+        assert!(rendered.contains("- cronjob"));
+        assert!(rendered.contains("key: \"nodepool/cronjob\""));
+        assert!(!rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+    }
+
+    #[test]
+    fn renders_job_template_with_preferred_cronjob_nodepool_affinity() {
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"),
+            build_job_tera_context(false),
+        );
+
+        assert!(rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
+        assert!(rendered.contains("karpenter.sh/nodepool"));
+        assert!(rendered.contains("- cronjob"));
+        assert!(rendered.contains("key: \"nodepool/cronjob\""));
+        assert!(!rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+    }
+
+    fn render_template(template: &str, context: JobTeraContext) -> String {
+        let tera_context = Context::from_serialize(context).expect("job tera context should serialize");
+        Tera::one_off(template, &tera_context, false).expect("template should render")
+    }
+
+    fn build_job_tera_context(is_cron_template: bool) -> JobTeraContext {
+        let mut tolerations = BTreeMap::new();
+        tolerations.insert("nodepool/cronjob".to_string(), "NoSchedule".to_string());
+
+        let mut deployment_affinity_node_preferred = BTreeMap::new();
+        deployment_affinity_node_preferred.insert("karpenter.sh/nodepool".to_string(), "cronjob".to_string());
+
+        JobTeraContext {
+            organization_long_id: Uuid::new_v4(),
+            project_long_id: Uuid::new_v4(),
+            environment_short_id: "env123456".to_string(),
+            environment_long_id: Uuid::new_v4(),
+            deployment_id: "deploy123456".to_string(),
+            cluster: ClusterTeraContext {
+                long_id: Uuid::new_v4(),
+                name: "test-cluster".to_string(),
+                region: "eu-west-3".to_string(),
+                zone: "eu-west-3a".to_string(),
+            },
+            namespace: "test-namespace".to_string(),
+            service: ServiceTeraContext {
+                short_id: "job123456".to_string(),
+                long_id: Uuid::new_v4(),
+                name: "test-job".to_string(),
+                version: "test-image:latest".to_string(),
+                user_unsafe_name: "test job".to_string(),
+                image_full: "registry.example.com/test-image:latest".to_string(),
+                image_tag: "latest".to_string(),
+                command_args: vec!["/bin/sh".to_string(), "-c".to_string(), "echo test".to_string()],
+                entrypoint: None,
+                cpu_request_in_milli: "250m".to_string(),
+                cpu_limit_in_milli: "250m".to_string(),
+                ram_request_in_mib: "256Mi".to_string(),
+                ram_limit_in_mib: "256Mi".to_string(),
+                gpu_request: None,
+                gpu_limit: None,
+                default_port: None,
+                max_nb_restart: 1,
+                max_duration_in_sec: 120,
+                with_rbac: false,
+                cronjob_schedule: if is_cron_template {
+                    Some("*/30 * * * *".to_string())
+                } else {
+                    None
+                },
+                cronjob_timezone: if is_cron_template {
+                    Some("Etc/UTC".to_string())
+                } else {
+                    None
+                },
+                readiness_probe: None,
+                liveness_probe: None,
+                advanced_settings: JobAdvancedSettings::default(),
+                tolerations,
+                deployment_affinity_node_preferred,
+            },
+            registry: None,
+            environment_variables: vec![],
+            mounted_files: vec![],
+            resource_expiration_in_seconds: None,
+            annotations_group: AnnotationsGroupTeraContext::new(vec![]),
+            labels_group: LabelsGroupTeraContext::new(vec![]),
+        }
+    }
 }

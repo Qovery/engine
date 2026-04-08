@@ -63,3 +63,12 @@ gpuNodePool:
   diskSize: 100Gi
   diskIops: null
   diskThroughput: null
+cronjobNodePool:
+  enable: false
+  consolidateAfter: 30s
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""

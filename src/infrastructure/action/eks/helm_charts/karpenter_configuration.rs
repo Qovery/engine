@@ -475,6 +475,48 @@ impl ToCommonHelmChart for KarpenterConfigurationChart {
             }
         }
 
+        // Cronjob node pool
+        match &self.karpenter_parameters.qovery_node_pools.cronjob_override {
+            Some(cronjob_pool_override) => {
+                values.push(ChartSetValue {
+                    key: "cronjobNodePool.enable".to_string(),
+                    value: true.to_string(),
+                });
+
+                // Requirements (reuse the global requirements with spot settings)
+                let cronjob_spot = cronjob_pool_override
+                    .spot_enabled
+                    .unwrap_or(self.karpenter_parameters.spot_enabled);
+                let cronjob_requirements = Self::enrich_karpenter_requirements(
+                    cronjob_spot,
+                    &self.karpenter_parameters.qovery_node_pools.requirements,
+                );
+                Self::push_requirements_values(&mut values, "cronjobNodePool", &cronjob_requirements);
+
+                // Node pool consolidation
+                Self::push_budgets_values(&mut values, "cronjobNodePool", &cronjob_pool_override.budgets);
+
+                // Node pool limits
+                if let Some(limits) = &cronjob_pool_override.limits {
+                    Self::push_limits_values(&mut values, "cronjobNodePool", limits);
+                }
+
+                // Cronjob node pool consolidateAfter
+                if let Some(consolidate_after_in_seconds) = cronjob_pool_override.consolidate_after_in_seconds {
+                    values.push(ChartSetValue {
+                        key: "cronjobNodePool.consolidateAfter".to_string(),
+                        value: format!("{}s", consolidate_after_in_seconds),
+                    });
+                }
+            }
+            None => {
+                values.push(ChartSetValue {
+                    key: "cronjobNodePool.enable".to_string(),
+                    value: "false".to_string(),
+                });
+            }
+        }
+
         // Default node pool limits
         if let Some(limits) = self
             .karpenter_parameters
@@ -574,9 +616,9 @@ mod tests {
     use crate::infrastructure::models::disk_size::DiskSize;
     use crate::infrastructure::models::kubernetes::aws::{AwsStorageType, UserNetworkConfig};
     use crate::infrastructure::models::kubernetes::karpenter::{
-        KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride, KarpenterNodePool,
-        KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits,
-        KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
+        KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride, KarpenterGpuNodePoolOverride,
+        KarpenterNodePool, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
+        KarpenterNodePoolLimits, KarpenterNodePoolRequirement, KarpenterNodePoolRequirementKey, KarpenterParameters,
         KarpenterRequirementOperator, KarpenterStableNodePoolOverride,
     };
     use crate::infrastructure::models::kubernetes::{Kind as KubernetesKind, KubernetesVersion};
@@ -606,6 +648,7 @@ mod tests {
                 },
                 default_override: None,
                 gpu_override: None,
+                cronjob_override: None,
             },
         );
 
@@ -646,6 +689,7 @@ mod tests {
                 },
                 default_override: None,
                 gpu_override: None,
+                cronjob_override: None,
             },
         );
 
@@ -687,6 +731,7 @@ mod tests {
                 },
                 default_override: None,
                 gpu_override: None,
+                cronjob_override: None,
             },
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -744,6 +789,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -775,6 +821,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -814,6 +861,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -887,6 +935,7 @@ mod tests {
                         ]),
                         consolidate_after_in_seconds: None,
                     }),
+                    cronjob_override: None,
                 },
                 verify_fn: verify_custom_node_pools,
             },
@@ -909,6 +958,90 @@ mod tests {
                 has_gpu_node_pool,
             );
         }
+    }
+
+    #[test]
+    fn test_karpenter_configuration_with_cronjob_node_pool() {
+        let yaml = generate_chart_yaml(
+            KUBERNETES_VERSION,
+            false,
+            KarpenterNodePool {
+                requirements: vec![
+                    KarpenterNodePoolRequirement {
+                        key: KarpenterNodePoolRequirementKey::InstanceCategory,
+                        operator: Some(KarpenterRequirementOperator::In),
+                        values: vec!["c".to_string()],
+                    },
+                    KarpenterNodePoolRequirement {
+                        key: KarpenterNodePoolRequirementKey::Arch,
+                        operator: Some(KarpenterRequirementOperator::In),
+                        values: vec!["AMD64".to_string()],
+                    },
+                ],
+                stable_override: KarpenterStableNodePoolOverride {
+                    spot_enabled: None,
+                    budgets: vec![],
+                    limits: None,
+                    consolidate_after_in_seconds: None,
+                },
+                default_override: None,
+                gpu_override: None,
+                cronjob_override: Some(KarpenterCronjobNodePoolOverride {
+                    spot_enabled: None,
+                    budgets: vec![KarpenterNodePoolDisruptionBudget {
+                        nodes: "0".to_string(),
+                        reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                        duration: duration_str::parse("12h").unwrap(),
+                        schedule: "0 6 * * *".to_string(),
+                    }],
+                    limits: Some(KarpenterNodePoolLimits {
+                        max_cpu: KubernetesCpuResourceUnit::MilliCpu(4_000),
+                        max_memory: KubernetesMemoryResourceUnit::GibiByte(16),
+                    }),
+                    consolidate_after_in_seconds: Some(60),
+                }),
+            },
+        );
+
+        let deserializer = serde_yaml::Deserializer::from_str(&yaml);
+        let node_pools: Vec<_> = deserializer
+            .map(|document| {
+                let value: Value = Value::deserialize(document).expect("Failed to deserialize YAML document");
+                serde_yaml::from_value::<NodePool>(value)
+            })
+            .filter_map(Result::ok)
+            .collect();
+
+        assert_eq!(node_pools.len(), 3, "Expected default, stable and cronjob node pools");
+
+        let cronjob_node_pool = node_pools
+            .iter()
+            .find(|node_pool| node_pool.metadata.name == "cronjob")
+            .expect("Expected cronjob node pool to be rendered");
+
+        assert_eq!(cronjob_node_pool.kind, "NodePool");
+
+        let reqs = &cronjob_node_pool.spec.template.spec.requirements;
+        assert_requirement_exists(reqs, "karpenter.k8s.aws/instance-category", "In", vec!["c".to_string()]);
+        assert_requirement_exists(reqs, "kubernetes.io/arch", "In", vec!["amd64".to_string()]);
+        assert_requirement_exists(reqs, "karpenter.sh/capacity-type", "In", vec!["on-demand".to_string()]);
+
+        assert_stable_node_pool_exists(&cronjob_node_pool.spec.disruption.budgets, "10%", None, None, None);
+        assert_stable_node_pool_exists(
+            &cronjob_node_pool.spec.disruption.budgets,
+            "0",
+            Some(vec!["Underutilized".to_string()]),
+            Some("12h".to_string()),
+            Some("0 6 * * *".to_string()),
+        );
+
+        let limits = cronjob_node_pool
+            .spec
+            .limits
+            .as_ref()
+            .expect("Expected cronjob node pool limits to be rendered");
+        assert_eq!(limits.cpu, "4000m");
+        assert_eq!(limits.memory, "16Gi");
     }
 
     #[derive(Debug)]
@@ -1213,6 +1346,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
             },
             Some(&user_network_config),
@@ -1304,6 +1438,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
             },
             Some(&user_network_config),
@@ -1396,6 +1531,7 @@ mod tests {
                     },
                     default_override: None,
                     gpu_override: None,
+                    cronjob_override: None,
                 },
             },
             None,

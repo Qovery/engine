@@ -287,6 +287,7 @@ fn create_and_destroy_eks_cluster_karpenter_without_nat_gw_in_eu_west_3() {
                 consolidate_after_in_seconds: None,
             }),
             gpu_override: None,
+            cronjob_override: None,
         },
     };
     create_and_destroy_eks_cluster(
@@ -387,6 +388,7 @@ fn create_and_destroy_eks_cluster_karpenter_with_gpu_node_pool_in_eu_west_3() {
                 }),
                 consolidate_after_in_seconds: None,
             }),
+            cronjob_override: None,
         },
     };
     create_and_destroy_eks_cluster(
@@ -449,6 +451,7 @@ fn create_pause_and_destroy_eks_cluster_arm_karpenter_with_nat_gw_in_eu_west_3()
                 consolidate_after_in_seconds: None,
             }),
             gpu_override: None,
+            cronjob_override: None,
         },
     };
     create_and_destroy_eks_cluster(
@@ -507,6 +510,7 @@ fn create_upgrade_and_destroy_eks_cluster_karpenter_with_nat_gw_in_eu_west_3() {
             },
             default_override: None,
             gpu_override: None,
+            cronjob_override: None,
         },
     };
     create_and_destroy_eks_cluster(

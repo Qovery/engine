@@ -44,3 +44,12 @@ gpuNodePool:
     maxCpu: ""
     maxMemory: ""
   diskSize: set-by-engine-code
+
+cronjobNodePool:
+  enable: set-by-engine-code
+  requirements: []
+  consolidation:
+    budgets: []
+  limits:
+    maxCpu: ""
+    maxMemory: ""

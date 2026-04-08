@@ -14,6 +14,7 @@ pub enum KarpenterNodePoolType {
     Stable,
     Default,
     Gpu,
+    Cronjob,
 }
 
 impl Display for KarpenterNodePoolType {
@@ -22,6 +23,7 @@ impl Display for KarpenterNodePoolType {
             KarpenterNodePoolType::Stable => "stable",
             KarpenterNodePoolType::Default => "default",
             KarpenterNodePoolType::Gpu => "gpu",
+            KarpenterNodePoolType::Cronjob => "cronjob",
         };
         write!(f, "{output}")
     }
@@ -46,6 +48,7 @@ pub struct KarpenterNodePool {
     pub stable_override: KarpenterStableNodePoolOverride,
     pub default_override: Option<KarpenterDefaultNodePoolOverride>,
     pub gpu_override: Option<KarpenterGpuNodePoolOverride>,
+    pub cronjob_override: Option<KarpenterCronjobNodePoolOverride>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -188,6 +191,16 @@ impl fmt::Display for KarpenterNodePoolDisruptionReason {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+pub struct KarpenterCronjobNodePoolOverride {
+    #[serde(default)]
+    pub spot_enabled: Option<bool>,
+    pub budgets: Vec<KarpenterNodePoolDisruptionBudget>,
+    pub limits: Option<KarpenterNodePoolLimits>,
+    #[serde(default)]
+    pub consolidate_after_in_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KarpenterDefaultNodePoolOverride {
     #[serde(default)]
     pub spot_enabled: Option<bool>,
@@ -208,8 +221,9 @@ pub struct KarpenterNodePoolLimits {
 #[cfg(test)]
 mod tests {
     use crate::infrastructure::models::kubernetes::karpenter::{
-        KarpenterDefaultNodePoolOverride, KarpenterNodePoolDisruptionBudget, KarpenterNodePoolDisruptionReason,
-        KarpenterNodePoolLimits, KarpenterParameters, KarpenterStableNodePoolOverride,
+        KarpenterCronjobNodePoolOverride, KarpenterDefaultNodePoolOverride, KarpenterNodePoolDisruptionBudget,
+        KarpenterNodePoolDisruptionReason, KarpenterNodePoolLimits, KarpenterParameters,
+        KarpenterStableNodePoolOverride,
     };
     use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
@@ -222,6 +236,7 @@ mod tests {
         assert_eq!(KarpenterNodePoolType::Default.to_string(), "default");
         assert_eq!(KarpenterNodePoolType::Stable.to_string(), "stable");
         assert_eq!(KarpenterNodePoolType::Gpu.to_string(), "gpu");
+        assert_eq!(KarpenterNodePoolType::Cronjob.to_string(), "cronjob");
     }
 
     #[test]
@@ -611,6 +626,90 @@ mod tests {
                 spot_enabled: None,
                 limits: None,
                 consolidate_after_in_seconds: None,
+            }
+        )
+    }
+
+    #[test]
+    fn should_deserialize_correctly_when_cronjob_override_is_present_with_consolidation_and_limits() {
+        // given
+        let karpenter_parameters_json = r#"
+        {
+          "spot_enabled": true,
+          "disk_size_in_gib": 20,
+          "default_service_architecture": "AMD64",
+          "qovery_node_pools": {
+            "requirements": [
+              {
+                "key": "InstanceFamily",
+                "operator": "In",
+                "values": ["z1d"]
+              },
+              {
+                "key": "InstanceSize",
+                "operator": "In",
+                "values": ["10xlarge", "xlarge"]
+              },
+              {
+                "key": "Arch",
+                "operator": "In",
+                "values": ["AMD64", "ARM64"]
+              }
+            ],
+            "stable_override": {
+              "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "24h",
+                  "schedule": "0 0 * * *"
+                }
+              ]
+            },
+            "cronjob_override": {
+              "budgets": [
+                {
+                  "nodes": "0",
+                  "reasons": ["Underutilized"],
+                  "duration": "12h",
+                  "schedule": "0 6 * * *"
+                }
+              ],
+              "limits": {
+                "max_cpu": "4000m",
+                "max_memory": "16Gi"
+              },
+              "consolidate_after_in_seconds": 60
+            }
+          }
+        }
+        "#;
+
+        // when
+        let result = serde_json::from_str::<KarpenterParameters>(karpenter_parameters_json);
+
+        // then
+        assert!(result.is_ok());
+        let karpenter_parameters = result.expect("should be Ok");
+        let cronjob_override = karpenter_parameters
+            .qovery_node_pools
+            .cronjob_override
+            .expect("cronjob_override should be present");
+        assert_eq!(
+            cronjob_override,
+            KarpenterCronjobNodePoolOverride {
+                spot_enabled: None,
+                budgets: vec![KarpenterNodePoolDisruptionBudget {
+                    nodes: "0".to_string(),
+                    reasons: vec![KarpenterNodePoolDisruptionReason::Underutilized],
+                    duration: duration_str::parse("12h").expect("12h should be a valid Duration"),
+                    schedule: "0 6 * * *".to_string(),
+                }],
+                limits: Some(KarpenterNodePoolLimits {
+                    max_cpu: KubernetesCpuResourceUnit::MilliCpu(4000),
+                    max_memory: KubernetesMemoryResourceUnit::GibiByte(16),
+                }),
+                consolidate_after_in_seconds: Some(60),
             }
         )
     }

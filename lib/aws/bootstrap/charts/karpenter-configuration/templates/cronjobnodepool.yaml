@@ -1,0 +1,54 @@
+{{- if .Values.cronjobNodePool.enable }}
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: cronjob
+spec:
+  template:
+    spec:
+      requirements:
+        {{- range .Values.cronjobNodePool.requirements }}
+        - key: "{{ .key }}"
+          operator: "{{ .operator }}"
+          values:
+            {{- range .values }}
+            - "{{ . }}"
+            {{- end }}
+          {{- if .minValues }}
+          minValues: {{ .minValues }}
+          {{- end }}
+        {{- end }}
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+      taints:
+        - key: nodepool/cronjob
+          effect: NoSchedule
+      expireAfter: 720h # 30 * 24h = 720h
+      terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
+  disruption:
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: {{ .Values.cronjobNodePool.consolidateAfter }}
+    budgets:
+      # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)
+      - nodes: 10%
+      # The consolidation budgets injected below contain:
+      # - either a forbidden rule for Underutilized when the user hasn't configured any disruption period
+      # - or some custom forbidden rules which are the complementary of what they configured on core side
+      {{- range .Values.cronjobNodePool.consolidation.budgets }}
+      - nodes: {{ .nodes | quote }}
+        reasons:
+          {{- range .reasons }}
+          - "{{ . }}"
+          {{- end }}
+        duration: {{ .duration }}
+        schedule: {{ .schedule | quote }}
+      {{- end }}
+  {{- if not (and (empty .Values.cronjobNodePool.limits.maxCpu) (empty .Values.cronjobNodePool.limits.maxMemory)) }}
+  limits:
+    cpu: {{ .Values.cronjobNodePool.limits.maxCpu }}
+    memory: {{ .Values.cronjobNodePool.limits.maxMemory }}
+  {{- end }}
+  weight: 10
+{{- end }}
