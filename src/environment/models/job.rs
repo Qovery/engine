@@ -677,6 +677,7 @@ mod tests {
             },
             registry: None,
             environment_variables: vec![],
+            external_secrets: vec![],
             mounted_files: vec![],
             resource_expiration_in_seconds: None,
             annotations_group: AnnotationsGroupTeraContext::new(vec![]),
