@@ -185,6 +185,14 @@ impl Kubernetes for EKS {
         self.options.karpenter_parameters.is_some()
     }
 
+    fn is_karpenter_cronjob_nodepool_enabled(&self) -> bool {
+        self.options
+            .karpenter_parameters
+            .as_ref()
+            .and_then(|p| p.qovery_node_pools.cronjob_override.as_ref())
+            .is_some()
+    }
+
     fn is_keda_enabled(&self) -> bool {
         self.options
             .keda_parameters

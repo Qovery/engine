@@ -566,6 +566,9 @@ pub trait Kubernetes: Send + Sync {
     fn is_karpenter_enabled(&self) -> bool {
         false
     }
+    fn is_karpenter_cronjob_nodepool_enabled(&self) -> bool {
+        false
+    }
     fn is_keda_enabled(&self) -> bool {
         false
     }

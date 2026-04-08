@@ -57,8 +57,9 @@ spec:
         {%- endfor %}
       {%- endif %}
       affinity:
-        {%- if service.advanced_settings.deployment_affinity_node_required %}
+        {%- if service.advanced_settings.deployment_affinity_node_required or service.deployment_affinity_node_preferred %}
         nodeAffinity:
+          {%- if service.advanced_settings.deployment_affinity_node_required %}
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
             - matchExpressions:
@@ -67,7 +68,20 @@ spec:
                   operator: In
                   values:
                   - {{ value }}
-        {%- endfor %}
+          {%- endfor %}
+          {%- endif %}
+          {%- if service.deployment_affinity_node_preferred %}
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  {%- for key, value in service.deployment_affinity_node_preferred %}
+                  - key: "{{ key }}"
+                    operator: In
+                    values:
+                    - {{ value }}
+                  {%- endfor %}
+          {%- endif %}
         {%- endif %}
       restartPolicy: OnFailure
       #shareProcessNamespace: true
