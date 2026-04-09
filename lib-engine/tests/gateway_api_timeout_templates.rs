@@ -15,6 +15,7 @@ const GRPC_ROUTE_TEMPLATE: &str =
 fn base_advanced_settings(
     service_request_timeout: Option<u32>,
     service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
 ) -> serde_json::Value {
     json!({
         "network_gateway_api_sticky_session_enable": false,
@@ -28,6 +29,7 @@ fn base_advanced_settings(
         "network_gateway_api_circuit_breaker_max_parallel_requests": null,
         "network_gateway_api_http_request_timeout_seconds": service_request_timeout,
         "network_gateway_api_http_connection_idle_timeout_seconds": service_idle_timeout,
+        "network_gateway_api_http_max_stream_duration_seconds": service_max_stream_duration,
         "network_gateway_api_tcp_keepalive_idle_time_seconds": null,
         "network_gateway_api_tcp_keepalive_interval_seconds": null
     })
@@ -36,8 +38,10 @@ fn base_advanced_settings(
 fn render_http_policy(
     service_request_timeout: Option<u32>,
     service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
     cluster_send_timeout: Option<u32>,
     cluster_read_timeout: Option<u32>,
+    cluster_max_stream_duration: Option<u32>,
 ) -> String {
     let mut tera = Tera::default();
     tera.add_raw_template("template", HTTP_TEMPLATE)
@@ -55,12 +59,16 @@ fn render_http_policy(
     context.insert("labels_group", &json!({ "common": {} }));
     context.insert(
         "advanced_settings",
-        &base_advanced_settings(service_request_timeout, service_idle_timeout),
+        &base_advanced_settings(service_request_timeout, service_idle_timeout, service_max_stream_duration),
     );
     context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
     context.insert(
         "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds",
         &cluster_read_timeout,
+    );
+    context.insert(
+        "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
+        &cluster_max_stream_duration,
     );
 
     tera.render("template", &context).expect("HTTP template should render")
@@ -69,8 +77,10 @@ fn render_http_policy(
 fn render_grpc_policy(
     service_request_timeout: Option<u32>,
     service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
     cluster_send_timeout: Option<u32>,
     cluster_read_timeout: Option<u32>,
+    cluster_max_stream_duration: Option<u32>,
 ) -> String {
     let mut tera = Tera::default();
     tera.add_raw_template("template", GRPC_TEMPLATE)
@@ -91,12 +101,16 @@ fn render_grpc_policy(
     context.insert("labels_group", &json!({ "common": {} }));
     context.insert(
         "advanced_settings",
-        &base_advanced_settings(service_request_timeout, service_idle_timeout),
+        &base_advanced_settings(service_request_timeout, service_idle_timeout, service_max_stream_duration),
     );
     context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
     context.insert(
         "cluster_envoy_gateway_api_http_connection_idle_timeout_seconds",
         &cluster_read_timeout,
+    );
+    context.insert(
+        "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
+        &cluster_max_stream_duration,
     );
 
     tera.render("template", &context).expect("gRPC template should render")
@@ -205,39 +219,51 @@ fn render_grpc_route() -> String {
 
 #[test]
 fn http_policy_uses_cluster_defaults_when_service_timeout_is_missing() {
-    let rendered = render_http_policy(None, None, Some(42), Some(120));
+    let rendered = render_http_policy(None, None, None, Some(42), Some(120), Some(600));
     assert!(rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 120s"));
+    assert!(rendered.contains("maxStreamDuration: 600s"));
 }
 
 #[test]
 fn http_policy_prioritizes_service_timeout_over_cluster_default() {
-    let rendered = render_http_policy(Some(90), None, Some(42), Some(120));
+    let rendered = render_http_policy(Some(90), None, None, Some(42), Some(120), Some(600));
     assert!(rendered.contains("requestTimeout: 90s"));
     assert!(!rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 120s"));
+    assert!(rendered.contains("maxStreamDuration: 600s"));
 }
 
 #[test]
 fn http_policy_prioritizes_service_idle_timeout_over_cluster_default() {
-    let rendered = render_http_policy(None, Some(121), Some(42), Some(120));
+    let rendered = render_http_policy(None, Some(121), None, Some(42), Some(120), Some(600));
     assert!(rendered.contains("requestTimeout: 42s"));
     assert!(rendered.contains("connectionIdleTimeout: 121s"));
     assert!(!rendered.contains("connectionIdleTimeout: 120s"));
+    assert!(rendered.contains("maxStreamDuration: 600s"));
 }
 
 #[test]
 fn http_policy_omits_timeout_when_no_value_is_provided() {
-    let rendered = render_http_policy(None, None, None, None);
+    let rendered = render_http_policy(None, None, None, None, None, None);
     assert!(!rendered.contains("requestTimeout:"));
     assert!(!rendered.contains("connectionIdleTimeout:"));
+    assert!(!rendered.contains("maxStreamDuration:"));
 }
 
 #[test]
 fn grpc_policy_uses_cluster_defaults_and_service_override() {
-    let rendered = render_grpc_policy(Some(75), Some(121), Some(42), Some(120));
+    let rendered = render_grpc_policy(Some(75), Some(121), Some(300), Some(42), Some(120), Some(600));
     assert!(rendered.contains("requestTimeout: 75s"));
     assert!(rendered.contains("connectionIdleTimeout: 121s"));
+    assert!(rendered.contains("maxStreamDuration: 300s"));
+}
+
+#[test]
+fn http_policy_prioritizes_service_max_stream_duration_over_cluster_default() {
+    let rendered = render_http_policy(None, None, Some(300), Some(42), Some(120), Some(600));
+    assert!(rendered.contains("maxStreamDuration: 300s"));
+    assert!(!rendered.contains("maxStreamDuration: 600s"));
 }
 
 #[test]

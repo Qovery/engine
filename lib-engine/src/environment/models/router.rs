@@ -441,6 +441,12 @@ impl<T: CloudProvider> Router<T> {
                 .advanced_settings()
                 .envoy_gateway_api_http_connection_idle_timeout_seconds,
         );
+        context.insert(
+            "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_http_max_stream_duration_seconds,
+        );
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
         context.insert("k8s_remove_nginx", &kubernetes.advanced_settings().k8s_remove_nginx);
