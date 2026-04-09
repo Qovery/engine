@@ -1,6 +1,6 @@
 use crate::helpers;
 use crate::helpers::aws::{AWS_KUBERNETES_VERSION, AWS_RESOURCE_TTL_IN_SECONDS, container_registry_ecr};
-use crate::helpers::common::{Cluster, ClusterDomain, NodeManager};
+use crate::helpers::common::{ActionableFeature, Cluster, ClusterDomain, NodeManager};
 use crate::helpers::dns::dns_provider_qoverydns;
 use crate::helpers::kubernetes::{ClusterTestType, cluster_test};
 use crate::helpers::utilities::{
@@ -84,7 +84,7 @@ fn create_and_destroy_eks_cluster_with_env_in_eu_west_3() {
             CpuArchitecture::AMD64,
             Some(&env_action),
             NodeManager::Default,
-            vec![],
+            vec![ActionableFeature::EfsAddon],
         )
     })
 }
