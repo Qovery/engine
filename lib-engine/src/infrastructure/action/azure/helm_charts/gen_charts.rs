@@ -411,6 +411,9 @@ pub(super) fn aks_helm_charts(
                     x_forwarded_for_number_truster_hops: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    http_stream_idle_timeout_seconds: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_gateway_api_http_stream_idle_timeout_seconds,
                     custom_http_errors_default: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_custom_http_errors_default

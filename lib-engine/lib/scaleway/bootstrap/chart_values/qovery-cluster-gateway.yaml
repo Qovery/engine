@@ -10,6 +10,9 @@ gateway:
     withUnderscoresAction: "DropHeader"
     xForwardedFor:
       numberTrustedHops: null
+    timeout:
+      http:
+        streamIdleTimeoutSeconds: null
     customHttpErrors:
       default: null
     compression:
