@@ -22,6 +22,26 @@ spec:
     xForwardedFor:
       numTrustedHops: {{ $numHops }}
   {{- end }}
+  {{- $streamIdleTimeoutSeconds := -1 }}
+  {{- if .Values.gateway.qoveryPublic }}
+    {{- if .Values.gateway.qoveryPublic.timeout }}
+      {{- if .Values.gateway.qoveryPublic.timeout.http }}
+        {{- if hasKey .Values.gateway.qoveryPublic.timeout.http "streamIdleTimeoutSeconds" }}
+          {{- $rawStreamIdleTimeoutSeconds := .Values.gateway.qoveryPublic.timeout.http.streamIdleTimeoutSeconds }}
+          {{- if and (kindIs "string" $rawStreamIdleTimeoutSeconds) (regexMatch "^[0-9]+$" (trim $rawStreamIdleTimeoutSeconds)) }}
+            {{- $streamIdleTimeoutSeconds = int $rawStreamIdleTimeoutSeconds }}
+          {{- else if or (kindIs "int" $rawStreamIdleTimeoutSeconds) (kindIs "int64" $rawStreamIdleTimeoutSeconds) (kindIs "float64" $rawStreamIdleTimeoutSeconds) }}
+            {{- $streamIdleTimeoutSeconds = int $rawStreamIdleTimeoutSeconds }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  {{- if ge $streamIdleTimeoutSeconds 0 }}
+  timeout:
+    http:
+      streamIdleTimeout: "{{ $streamIdleTimeoutSeconds }}s"
+  {{- end }}
   headers:
     enableEnvoyHeaders: true # add the "X-Envoy-" headers to requests and responses
     withUnderscoresAction: {{ .Values.gateway.qoveryPublic.withUnderscoresAction }} # avoid rejecting requests when intermediaries send underscored headers
