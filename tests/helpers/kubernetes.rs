@@ -476,6 +476,7 @@ pub fn get_environment_test_kubernetes(
                 NodeManager::AutoPilot => {}
             }
 
+            let mut enable_efs_addon = false;
             actionable_features.iter().for_each(|feature| {
                 match feature {
                     ActionableFeature::Metrics => {
@@ -489,6 +490,9 @@ pub fn get_environment_test_kubernetes(
                                 cloudwatch_exporter_config: Default::default(),
                             },
                         })
+                    }
+                    ActionableFeature::EfsAddon => {
+                        enable_efs_addon = true;
                     }
                 }
             });
@@ -512,6 +516,7 @@ pub fn get_environment_test_kubernetes(
                         aws_eks_ec2_metadata_imds:
                             qovery_engine::infrastructure::models::cloud_provider::io::AwsEc2MetadataImds::Required,
                         aws_eks_enable_alb_controller: true,
+                        aws_eks_enable_efs_addon: enable_efs_addon,
                         k8s_storage_class_fast_ssd: cloud_provider::io::StorageClass::from(
                             default_kubernetes_storage_class,
                         ),
@@ -572,19 +577,17 @@ pub fn get_environment_test_kubernetes(
                 None,
             );
             actionable_features.iter().for_each(|feature| {
-                match feature {
-                    ActionableFeature::Metrics => {
-                        options.metrics_parameters = Some(MetricsParameters {
-                            config: MetricsInstalledByQovery {
-                                install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
-                                enable_redundancy: None,
-                                beyla_config: None,
-                                alert_config: None,
-                                resource_profile: ResourceProfile::default(),
-                                cloudwatch_exporter_config: Default::default(),
-                            },
-                        })
-                    }
+                if let ActionableFeature::Metrics = feature {
+                    options.metrics_parameters = Some(MetricsParameters {
+                        config: MetricsInstalledByQovery {
+                            install_prometheus_adapter: false,
+                            enable_redundancy: None,
+                            beyla_config: None,
+                            alert_config: None,
+                            resource_profile: ResourceProfile::default(),
+                            cloudwatch_exporter_config: Default::default(),
+                        },
+                    })
                 }
             });
             options.nat_gateway_parameters = nat_gateway_parameters;
@@ -626,19 +629,17 @@ pub fn get_environment_test_kubernetes(
             );
 
             actionable_features.iter().for_each(|feature| {
-                match feature {
-                    ActionableFeature::Metrics => {
-                        options.metrics_parameters = Some(MetricsParameters {
-                            config: MetricsInstalledByQovery {
-                                install_prometheus_adapter: false, // The prometheus adapter is only enabled for our prod clusters, it's not configurable for clients
-                                enable_redundancy: None,
-                                beyla_config: None,
-                                alert_config: None,
-                                resource_profile: ResourceProfile::default(),
-                                cloudwatch_exporter_config: Default::default(),
-                            },
-                        })
-                    }
+                if let ActionableFeature::Metrics = feature {
+                    options.metrics_parameters = Some(MetricsParameters {
+                        config: MetricsInstalledByQovery {
+                            install_prometheus_adapter: false,
+                            enable_redundancy: None,
+                            beyla_config: None,
+                            alert_config: None,
+                            resource_profile: ResourceProfile::default(),
+                            cloudwatch_exporter_config: Default::default(),
+                        },
+                    })
                 }
             });
 

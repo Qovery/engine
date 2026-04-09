@@ -45,6 +45,7 @@ pub enum NodeManager {
 /// - disabled after cluster update (before cluster deletion)
 pub enum ActionableFeature {
     Metrics,
+    EfsAddon,
 }
 
 pub trait Cluster<T, U> {
