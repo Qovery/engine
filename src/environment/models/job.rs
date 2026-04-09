@@ -21,7 +21,7 @@ use crate::io_models::models::{
     EnvironmentVariable, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
     KubernetesMemoryResourceUnit, MountedFile,
 };
-use crate::utilities::to_short_id;
+use crate::utilities::{sanitize_k8s_label_value, to_short_id};
 use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
@@ -271,6 +271,7 @@ impl<T: CloudProvider> Job<T> {
                 version: self.service_version(),
                 user_unsafe_name: self.name.clone(),
                 image_full,
+                image_tag_label: sanitize_k8s_label_value(&image_tag),
                 image_tag,
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
@@ -535,6 +536,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) user_unsafe_name: String,
     pub(crate) image_full: String,
     pub(crate) image_tag: String,
+    pub(crate) image_tag_label: String,
     pub(crate) command_args: Vec<String>,
     pub(crate) entrypoint: Option<String>,
     pub(crate) cpu_request_in_milli: String,
@@ -647,6 +649,7 @@ mod tests {
                 user_unsafe_name: "test job".to_string(),
                 image_full: "registry.example.com/test-image:latest".to_string(),
                 image_tag: "latest".to_string(),
+                image_tag_label: "latest".to_string(),
                 command_args: vec!["/bin/sh".to_string(), "-c".to_string(), "echo test".to_string()],
                 entrypoint: None,
                 cpu_request_in_milli: "250m".to_string(),

@@ -75,6 +75,39 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     tag
 }
 
+/// Sanitize a string to be a valid Kubernetes label value.
+/// Rules: max 63 chars, only [a-zA-Z0-9._-], must start and end with alphanumeric.
+/// Keeps the last 63 characters (most discriminating part for mirrored image tags).
+pub fn sanitize_k8s_label_value(value: &str) -> String {
+    // Keep last 63 chars (the trailing UUID is the most discriminating part)
+    let truncated = if value.len() > 63 {
+        &value[value.len() - 63..]
+    } else {
+        value
+    };
+
+    // Replace invalid characters with '-'
+    let sanitized: String = truncated
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    // Trim leading/trailing non-alphanumeric characters
+    let trimmed = sanitized.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
 pub fn to_short_id(id: &Uuid) -> String {
     format!("z{}", id.to_string().split_at(8).0)
 }
@@ -104,7 +137,7 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests_utilities {
     use crate::infrastructure::models::build_platform::{DockerfileFragment, GitRepositoryExtraFile};
-    use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag};
+    use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag, sanitize_k8s_label_value};
     use base64::Engine;
     use base64::engine::general_purpose;
     use std::collections::BTreeMap;
@@ -331,5 +364,36 @@ mod tests_utilities {
         let decoded_res = general_purpose::STANDARD.decode(basic_auth_replacement).unwrap();
         let decoded_res_string = decoded_res.iter().map(|c| *c as char).collect::<String>();
         assert_eq!(decoded_res_string, "dennis:ritchie\nlinus:torvalds".to_string());
+    }
+
+    #[test]
+    fn test_sanitize_k8s_label_value_short_tag() {
+        assert_eq!(sanitize_k8s_label_value("v1.2.3"), "v1.2.3");
+        assert_eq!(sanitize_k8s_label_value("latest"), "latest");
+    }
+
+    #[test]
+    fn test_sanitize_k8s_label_value_long_mirrored_tag() {
+        let tag = "r3m4q3r9.pub-mirror-debian.11.6-ci.b691ecdf-2c9c-465d-9eaf-24a54ae92d1b";
+        let result = sanitize_k8s_label_value(tag);
+        assert!(result.len() <= 63);
+        assert!(result.ends_with("24a54ae92d1b"));
+    }
+
+    #[test]
+    fn test_sanitize_k8s_label_value_invalid_chars() {
+        assert_eq!(sanitize_k8s_label_value("my+tag:v1"), "my-tag-v1");
+    }
+
+    #[test]
+    fn test_sanitize_k8s_label_value_trim_edges() {
+        assert_eq!(sanitize_k8s_label_value("..abc.."), "abc");
+        assert_eq!(sanitize_k8s_label_value("-tag-"), "tag");
+    }
+
+    #[test]
+    fn test_sanitize_k8s_label_value_empty() {
+        assert_eq!(sanitize_k8s_label_value(""), "unknown");
+        assert_eq!(sanitize_k8s_label_value("..."), "unknown");
     }
 }

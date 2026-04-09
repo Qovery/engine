@@ -6,11 +6,11 @@ metadata:
   name: {{ mounted_file.kube_name }}
   namespace: {{ namespace }}
   labels:
-    envId: {{ environment_short_id }}
-    qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: job
-    qovery.com/environment-id: {{ environment_long_id }}
-    qovery.com/project-id: {{ project_long_id }}
+    envId: "{{ environment_short_id }}"
+    qovery.com/service-id: "{{ service.long_id }}"
+    qovery.com/service-type: "job"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}

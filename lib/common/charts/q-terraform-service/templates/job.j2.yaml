@@ -4,12 +4,18 @@ kind: Job
 metadata:
   name: {{ service.name }}
   labels:
-    envId: {{ environment_short_id }}
-    qovery.com/service-id: {{ service.long_id }}
-    qovery.com/service-type: terraform-service
-    qovery.com/environment-id: {{ environment_long_id }}
-    qovery.com/project-id: {{ project_long_id }}
-    qovery.com/deployment-id: {{ deployment_id }}
+    envId: "{{ environment_short_id }}"
+    qovery.com/service-id: "{{ service.long_id }}"
+    qovery.com/service-type: "terraform-service"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+    qovery.com/deployment-id: "{{ deployment_id }}"
+    app.kubernetes.io/name: "{{ service.name }}"
+    app.kubernetes.io/instance: "{{ service.long_id }}"
+    app.kubernetes.io/component: "terraform-service"
+    app.kubernetes.io/part-of: "{{ namespace }}"
+    app.kubernetes.io/managed-by: "qovery"
+    app.kubernetes.io/version: "{{ service.image_tag_label }}"
     {%- for key, value in labels_group.common %}
     {{ key }}: |-
        {{ value }}
@@ -27,12 +33,18 @@ spec:
   template:
     metadata:
       labels:
-        envId: {{ environment_short_id }}
-        qovery.com/service-id: {{ service.long_id }}
-        qovery.com/service-type: terraform-service
-        qovery.com/environment-id: {{ environment_long_id }}
-        qovery.com/project-id: {{ project_long_id }}
-        qovery.com/deployment-id: {{ deployment_id }}
+        envId: "{{ environment_short_id }}"
+        qovery.com/service-id: "{{ service.long_id }}"
+        qovery.com/service-type: "terraform-service"
+        qovery.com/environment-id: "{{ environment_long_id }}"
+        qovery.com/project-id: "{{ project_long_id }}"
+        qovery.com/deployment-id: "{{ deployment_id }}"
+        app.kubernetes.io/name: "{{ service.name }}"
+        app.kubernetes.io/instance: "{{ service.long_id }}"
+        app.kubernetes.io/component: "terraform-service"
+        app.kubernetes.io/part-of: "{{ namespace }}"
+        app.kubernetes.io/managed-by: "qovery"
+        app.kubernetes.io/version: "{{ service.image_tag_label }}"
         {%- for key, value in labels_group.common %}
         {{ key }}: |-
            {{ value }}

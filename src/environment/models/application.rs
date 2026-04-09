@@ -37,7 +37,7 @@ use crate::io_models::models::{
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;
-use crate::utilities::to_short_id;
+use crate::utilities::{sanitize_k8s_label_value, to_short_id};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ApplicationError {
@@ -244,6 +244,7 @@ impl<T: CloudProvider> Application<T> {
                 name: self.kube_name().to_string(),
                 user_unsafe_name: self.name.clone(),
                 image_full: self.build.image.full_image_name_with_tag(),
+                image_tag_label: sanitize_k8s_label_value(&self.build.image.tag),
                 image_tag: self.build.image.tag.clone(),
                 version: self.version(),
                 command_args: self.command_args.clone(),
