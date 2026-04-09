@@ -17,7 +17,7 @@ use crate::io_models::models::{
 };
 use crate::io_models::terraform::TerraformServiceAdvancedSettings;
 use crate::io_models::variable_utils::VariableInfo;
-use crate::utilities::to_short_id;
+use crate::utilities::{sanitize_k8s_label_value, to_short_id};
 use base64::Engine;
 use base64::engine::general_purpose;
 use itertools::Itertools;
@@ -240,6 +240,7 @@ impl<T: CloudProvider> TerraformService<T> {
                 long_id: self.long_id,
                 name: self.kube_name.clone(),
                 image_full,
+                image_tag_label: sanitize_k8s_label_value(&image_tag),
                 image_tag,
                 version: self.service_version(),
                 job_max_duration_in_sec: self.timeout.as_secs(),
@@ -518,6 +519,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) name: String,
     pub(crate) image_full: String,
     pub(crate) image_tag: String,
+    pub(crate) image_tag_label: String,
     pub(crate) version: String,
     pub(crate) job_max_duration_in_sec: u64,
     pub(crate) cpu_request_in_milli: String,
