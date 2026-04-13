@@ -407,11 +407,17 @@ impl<T: CloudProvider> Service for TerraformService<T> {
     }
 
     fn build(&self) -> Option<&Build> {
-        Some(&self.build)
+        match is_terraform_noop(&self.terraform_action) {
+            true => None,
+            false => Some(&self.build),
+        }
     }
 
     fn build_mut(&mut self) -> Option<&mut Build> {
-        Some(&mut self.build)
+        match is_terraform_noop(&self.terraform_action) {
+            true => None,
+            false => Some(&mut self.build),
+        }
     }
 
     fn get_environment_variables(&self) -> Vec<EnvironmentVariable> {
@@ -557,6 +563,10 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) backend_config: BackendConfigTeraContext,
 }
 
+pub(crate) fn is_terraform_noop(action: &TerraformAction) -> bool {
+    matches!(action, TerraformAction::TerraformNoop)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -688,5 +698,20 @@ mod tests {
                 "root_module_path '{input}' should produce base_path '{expected}'"
             );
         }
+    }
+
+    #[test]
+    fn test_noop_terraform_action_does_not_require_build() {
+        assert!(is_terraform_noop(&TerraformAction::TerraformNoop));
+    }
+
+    #[test]
+    fn test_non_noop_terraform_actions_require_build() {
+        assert!(!is_terraform_noop(&TerraformAction::TerraformPlanAndApply));
+        assert!(!is_terraform_noop(&TerraformAction::TerraformDestroy));
+        assert!(!is_terraform_noop(&TerraformAction::TerraformPlanOnly {
+            execution_id: "exec-1".to_string()
+        }));
+        assert!(!is_terraform_noop(&TerraformAction::TerraformInit));
     }
 }
