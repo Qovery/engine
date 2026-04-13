@@ -189,6 +189,8 @@ impl Cluster<AWS, Options> for AWS {
             credentials,
             aws_region.to_cloud_provider_format(),
             aws_region.get_zones_to_string(),
+            None,
+            None,
             kubernetes_kind,
             TerraformStateCredentials {
                 access_key_id: secrets

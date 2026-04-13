@@ -17,7 +17,7 @@ pub(super) fn install_eks_anywhere_charts(
 ) -> Result<(), Box<EngineError>> {
     let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::Create));
 
-    logger.info("Deploying charts for Eks Anywhere cluster.");
+    logger.info("🚀 Deploying EKS Anywhere charts.");
 
     write_kubeconfig_on_disk(
         &cluster.kubeconfig_local_file_path(),

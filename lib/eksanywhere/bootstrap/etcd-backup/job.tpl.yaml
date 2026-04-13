@@ -1,0 +1,98 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ job_name }}
+  namespace: {{ namespace }}
+  labels:
+    app.kubernetes.io/name: qovery-etcd-backup
+    qovery.com/component: etcd-backup
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: {{ ttl_seconds_after_finished }}
+  activeDeadlineSeconds: {{ timeout_seconds }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qovery-etcd-backup
+        job-name: {{ job_name }}
+    spec:
+      restartPolicy: Never
+      hostNetwork: true
+      volumes:
+        - name: work
+          emptyDir: {}
+        - name: client-certs
+          secret:
+            secretName: {{ client_certs_secret_name }}
+        - name: ca-certs
+          secret:
+            secretName: {{ ca_certs_secret_name }}
+      initContainers:
+        - name: snapshot-create
+          image: "{{ etcdctl_image }}"
+          env:
+            - name: ETCDCTL_API
+              value: "3"
+          command:
+            - etcdctl
+          args:
+            - --endpoints
+            - "{{ etcd_endpoint }}"
+            - --cacert
+            - /ca-certs/{{ ca_cert_key }}
+            - --cert
+            - /client-certs/{{ client_cert_key }}
+            - --key
+            - /client-certs/{{ client_private_key_key }}
+            - snapshot
+            - save
+            - /work/etcd-backup.db
+          volumeMounts:
+            - name: work
+              mountPath: /work
+            - name: client-certs
+              mountPath: /client-certs
+              readOnly: true
+            - name: ca-certs
+              mountPath: /ca-certs
+              readOnly: true
+        - name: snapshot-status
+          image: "{{ etcdctl_image }}"
+          command:
+            - etcdutl
+          args:
+            - --write-out=table
+            - snapshot
+            - status
+            - /work/etcd-backup.db
+          volumeMounts:
+            - name: work
+              mountPath: /work
+      containers:
+        - name: snapshot-upload
+          image: "{{ upload_image }}"
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -euo pipefail
+
+              ls -l /work || true
+              ls -l /work/etcd-backup.db || true
+              stat /work/etcd-backup.db || true
+
+              HTTP_CODE="$(curl --silent --show-error --output /tmp/upload-response.txt --write-out '%{http_code}' --request PUT --upload-file /work/etcd-backup.db "${PRESIGNED_PUT_URL}")"
+              if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
+                echo "Upload failed with HTTP status ${HTTP_CODE}."
+                cat /tmp/upload-response.txt || true
+                exit 1
+              fi
+          env:
+            - name: PRESIGNED_PUT_URL
+              value: "{{ presigned_put_url }}"
+          volumeMounts:
+            - name: work
+              mountPath: /work

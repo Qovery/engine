@@ -292,6 +292,7 @@ impl Display for Stage {
 pub enum InfrastructureDiffType {
     Terraform,
     Helm,
+    EksAnywhere,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -384,6 +385,7 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::InfrastructureDiff(name) => match name {
                     InfrastructureDiffType::Terraform => "infra-diff-terraform",
                     InfrastructureDiffType::Helm => "infra-diff-helm",
+                    InfrastructureDiffType::EksAnywhere => "infra-diff-eks-anywhere",
                 },
             },
         )

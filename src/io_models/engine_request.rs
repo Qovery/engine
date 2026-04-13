@@ -249,7 +249,7 @@ pub struct BuildPlatform {
     pub id: String,
     pub long_id: Uuid,
     pub name: String,
-    pub options: CloudProviderOptions,
+    pub options: Value,
 }
 
 impl BuildPlatform {
@@ -267,7 +267,7 @@ impl BuildPlatform {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct CloudProvider {
     pub kind: cloud_provider::Kind,
     pub id: String,
@@ -276,6 +276,124 @@ pub struct CloudProvider {
     pub zones: Vec<String>,
     pub options: CloudProviderOptions,
     pub terraform_state_credentials: TerraformStateCredentials,
+}
+
+#[derive(Deserialize)]
+struct CloudProviderWire {
+    kind: cloud_provider::Kind,
+    id: String,
+    long_id: Uuid,
+    name: String,
+    zones: Vec<String>,
+    options: Value,
+    terraform_state_credentials: TerraformStateCredentials,
+}
+
+impl<'de> Deserialize<'de> for CloudProvider {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = CloudProviderWire::deserialize(deserializer)?;
+        let options =
+            deserialize_cloud_provider_options_by_kind(wire.kind.clone(), wire.options).map_err(de::Error::custom)?;
+
+        Ok(Self {
+            kind: wire.kind,
+            id: wire.id,
+            long_id: wire.long_id,
+            name: wire.name,
+            zones: wire.zones,
+            options,
+            terraform_state_credentials: wire.terraform_state_credentials,
+        })
+    }
+}
+
+fn deserialize_cloud_provider_options_by_kind(
+    kind: cloud_provider::Kind,
+    options: Value,
+) -> Result<CloudProviderOptions, String> {
+    match kind {
+        cloud_provider::Kind::OnPremise => deserialize_onprem_options(options),
+        cloud_provider::Kind::Aws => {
+            let parsed = serde_json::from_value::<CloudProviderOptions>(options)
+                .map_err(|e| format!("Cannot deserialize AWS cloud provider options: {e}"))?;
+            match parsed {
+                CloudProviderOptions::Aws { .. } | CloudProviderOptions::AwsVsphere { .. } => Ok(parsed),
+                _ => Err("Invalid AWS cloud provider options payload".to_string()),
+            }
+        }
+        cloud_provider::Kind::Azure => {
+            let parsed = serde_json::from_value::<CloudProviderOptions>(options)
+                .map_err(|e| format!("Cannot deserialize Azure cloud provider options: {e}"))?;
+            match parsed {
+                CloudProviderOptions::Azure { .. } => Ok(parsed),
+                _ => Err("Invalid Azure cloud provider options payload".to_string()),
+            }
+        }
+        cloud_provider::Kind::Scw => {
+            let parsed = serde_json::from_value::<CloudProviderOptions>(options)
+                .map_err(|e| format!("Cannot deserialize Scaleway cloud provider options: {e}"))?;
+            match parsed {
+                CloudProviderOptions::Scaleway { .. } => Ok(parsed),
+                _ => Err("Invalid Scaleway cloud provider options payload".to_string()),
+            }
+        }
+        cloud_provider::Kind::Gcp => {
+            let parsed = serde_json::from_value::<CloudProviderOptions>(options)
+                .map_err(|e| format!("Cannot deserialize GCP cloud provider options: {e}"))?;
+            match parsed {
+                CloudProviderOptions::Gcp { .. } => Ok(parsed),
+                _ => Err("Invalid GCP cloud provider options payload".to_string()),
+            }
+        }
+    }
+}
+
+fn deserialize_onprem_options(options: Value) -> Result<CloudProviderOptions, String> {
+    let Some(options_object) = options.as_object() else {
+        return Err("Invalid OnPremise cloud provider options payload: expected an object".to_string());
+    };
+
+    let vsphere_user = option_string_alias(options_object, &["vsphere_user", "vsphere_username"]);
+    let vsphere_password = option_string_alias(options_object, &["vsphere_password"]);
+    let access_key_id = option_string_alias(options_object, &["access_key_id", "aws_access_key_id"]);
+    let secret_access_key = option_string_alias(options_object, &["secret_access_key", "aws_secret_access_key"]);
+    let session_token = option_string_alias(options_object, &["session_token", "aws_session_token"]);
+
+    if let (Some(vsphere_user), Some(vsphere_password)) = (vsphere_user.clone(), vsphere_password.clone()) {
+        return Ok(CloudProviderOptions::AwsVsphere {
+            access_key_id,
+            secret_access_key,
+            session_token,
+            vsphere_user,
+            vsphere_password,
+        });
+    }
+
+    if let (Some(access_key_id), Some(secret_access_key)) = (access_key_id, secret_access_key) {
+        return Ok(CloudProviderOptions::Aws {
+            access_key_id,
+            secret_access_key,
+            session_token,
+            vsphere_user,
+            vsphere_password,
+        });
+    }
+
+    Ok(CloudProviderOptions::OnPremise(OnPremiseOptions {}))
+}
+
+fn option_string_alias(options: &serde_json::Map<String, Value>, aliases: &[&str]) -> Option<String> {
+    aliases.iter().find_map(|alias| {
+        options
+            .get(*alias)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+    })
 }
 
 impl CloudProvider {
@@ -292,23 +410,54 @@ impl CloudProvider {
             dynamodb_table: self.terraform_state_credentials.dynamodb_table.clone(),
         };
 
+        // TODO remove
+        warn!("PGG Cloud provider: {:?}", self.kind);
         match self.kind {
             cloud_provider::Kind::Aws => {
-                let CloudProviderOptions::Aws {
-                    access_key_id,
-                    secret_access_key,
-                    session_token,
-                } = &self.options
-                else {
-                    return None;
-                };
-                let credentials =
-                    AwsCredentials::new(access_key_id.clone(), secret_access_key.clone(), session_token.clone());
+                let (access_key_id, secret_access_key, session_token, vsphere_user, vsphere_password) =
+                    match &self.options {
+                        CloudProviderOptions::Aws {
+                            access_key_id,
+                            secret_access_key,
+                            session_token,
+                            vsphere_user,
+                            vsphere_password,
+                        } => (
+                            access_key_id.clone(),
+                            secret_access_key.clone(),
+                            session_token.clone(),
+                            vsphere_user.clone(),
+                            vsphere_password.clone(),
+                        ),
+                        CloudProviderOptions::AwsVsphere {
+                            access_key_id,
+                            secret_access_key,
+                            session_token,
+                            vsphere_user,
+                            vsphere_password,
+                        } => (
+                            access_key_id
+                                .clone()
+                                .filter(|value| !value.trim().is_empty())
+                                .unwrap_or_else(|| self.terraform_state_credentials.access_key_id.clone()),
+                            secret_access_key
+                                .clone()
+                                .filter(|value| !value.trim().is_empty())
+                                .unwrap_or_else(|| self.terraform_state_credentials.secret_access_key.clone()),
+                            session_token.clone(),
+                            Some(vsphere_user.clone()),
+                            Some(vsphere_password.clone()),
+                        ),
+                        _ => return None,
+                    };
+                let credentials = AwsCredentials::new(access_key_id, secret_access_key, session_token);
                 Some(Box::new(AWS::new(
                     self.long_id,
                     credentials,
                     region,
                     self.zones.clone(),
+                    vsphere_user,
+                    vsphere_password,
                     cluster_kind,
                     terraform_state_credentials,
                 )))
@@ -375,7 +524,24 @@ impl CloudProvider {
                     terraform_state_credentials,
                 )))
             }
-            cloud_provider::Kind::OnPremise => Some(Box::new(SelfManaged::new(self.long_id))),
+            cloud_provider::Kind::OnPremise => {
+                let (vsphere_user, vsphere_password) = match &self.options {
+                    CloudProviderOptions::Aws {
+                        vsphere_user,
+                        vsphere_password,
+                        ..
+                    } => (vsphere_user.clone(), vsphere_password.clone()),
+                    CloudProviderOptions::AwsVsphere {
+                        vsphere_user,
+                        vsphere_password,
+                        ..
+                    } => (Some(vsphere_user.clone()), Some(vsphere_password.clone())),
+                    CloudProviderOptions::OnPremise(_) => (None, None),
+                    _ => return None,
+                };
+
+                Some(Box::new(SelfManaged::new(self.long_id, vsphere_user, vsphere_password)))
+            }
         }
     }
 }
@@ -930,11 +1096,34 @@ impl DnsProvider {
 #[serde(untagged)]
 pub enum CloudProviderOptions {
     Aws {
+        #[serde(alias = "aws_access_key_id")]
         access_key_id: String,
+        #[serde(alias = "aws_secret_access_key")]
         #[derivative(Debug = "ignore")]
         secret_access_key: String,
-        #[serde(default)]
+        #[serde(default, alias = "aws_session_token")]
         session_token: Option<String>,
+        #[serde(default, alias = "vsphere_user", alias = "vsphere_username")]
+        #[derivative(Debug = "ignore")]
+        vsphere_user: Option<String>,
+        #[serde(default, alias = "vsphere_password")]
+        #[derivative(Debug = "ignore")]
+        vsphere_password: Option<String>,
+    },
+    AwsVsphere {
+        #[serde(default, alias = "aws_access_key_id")]
+        access_key_id: Option<String>,
+        #[serde(default, alias = "aws_secret_access_key")]
+        #[derivative(Debug = "ignore")]
+        secret_access_key: Option<String>,
+        #[serde(default, alias = "aws_session_token")]
+        session_token: Option<String>,
+        #[serde(alias = "vsphere_user", alias = "vsphere_username")]
+        #[derivative(Debug = "ignore")]
+        vsphere_user: String,
+        #[serde(alias = "vsphere_password")]
+        #[derivative(Debug = "ignore")]
+        vsphere_password: String,
     },
     Azure {
         client_id: String,
@@ -956,7 +1145,257 @@ pub enum CloudProviderOptions {
         // Allow to deserialize string field to its struct counterpart
         gcp_credentials: JsonCredentialsIo,
     },
-    OnPremise {},
+    OnPremise(OnPremiseOptions),
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+#[derivative(Debug)]
+#[serde(deny_unknown_fields)]
+pub struct OnPremiseOptions {}
+
+#[cfg(test)]
+mod tests {
+    use super::{CloudProvider, CloudProviderOptions, TerraformStateCredentials};
+    use crate::infrastructure::models::{cloud_provider, kubernetes};
+    use serde_json::json;
+    use uuid::Uuid;
+
+    #[test]
+    fn should_build_onprem_provider_from_mixed_options_with_vsphere_credentials() {
+        let options = serde_json::from_value::<CloudProviderOptions>(json!({
+            "access_key_id": "AKIAxxxxxxxxxxxx",
+            "secret_access_key": "xxxxxxxxxxxxxxxxxxxxxxxx",
+            "vsphere_user": "svc_vsphere",
+            "vsphere_password": "super-secret"
+        }))
+        .expect("cloud provider options should parse");
+
+        let cloud_provider = CloudProvider {
+            kind: cloud_provider::Kind::OnPremise,
+            id: "onprem-id".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "onprem".to_string(),
+            zones: vec![],
+            options,
+            terraform_state_credentials: TerraformStateCredentials {
+                access_key_id: "AKIAxxxxxxxxxxxx".to_string(),
+                secret_access_key: "xxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+                region: "eu-west-3".to_string(),
+                s3_bucket: "terraform-state".to_string(),
+                dynamodb_table: "terraform-locks".to_string(),
+            },
+        };
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::OnPremiseSelfManaged)
+            .expect("onprem cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("GOVC_USERNAME", "svc_vsphere")));
+        assert!(envs.contains(&("GOVC_PASSWORD", "super-secret")));
+    }
+
+    #[test]
+    fn should_parse_empty_onprem_options_payload() {
+        let options =
+            serde_json::from_value::<CloudProviderOptions>(json!({})).expect("cloud provider options should parse");
+
+        match options {
+            CloudProviderOptions::OnPremise(_) => {}
+            _ => panic!("expected OnPremise variant"),
+        }
+    }
+
+    #[test]
+    fn should_build_onprem_provider_from_empty_options() {
+        let options =
+            serde_json::from_value::<CloudProviderOptions>(json!({})).expect("cloud provider options should parse");
+
+        let cloud_provider = CloudProvider {
+            kind: cloud_provider::Kind::OnPremise,
+            id: "onprem-id".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "onprem".to_string(),
+            zones: vec![],
+            options,
+            terraform_state_credentials: TerraformStateCredentials {
+                access_key_id: "AKIAxxxxxxxxxxxx".to_string(),
+                secret_access_key: "xxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+                region: "eu-west-3".to_string(),
+                s3_bucket: "terraform-state".to_string(),
+                dynamodb_table: "terraform-locks".to_string(),
+            },
+        };
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::OnPremiseSelfManaged)
+            .expect("onprem cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(!envs.iter().any(|(k, _)| *k == "GOVC_USERNAME"));
+        assert!(!envs.iter().any(|(k, _)| *k == "GOVC_PASSWORD"));
+    }
+
+    #[test]
+    fn should_deserialize_onprem_cloud_provider_with_legacy_extra_options_and_vsphere_credentials() {
+        let long_id = Uuid::new_v4();
+        let cloud_provider = serde_json::from_value::<CloudProvider>(json!({
+            "kind": "ON_PREMISE",
+            "id": "onprem-id",
+            "long_id": long_id,
+            "name": "onprem",
+            "zones": [],
+            "options": {
+                "legacy_field": "legacy-value",
+                "vsphere_username": "svc_vsphere",
+                "vsphere_password": "super-secret"
+            },
+            "terraform_state_credentials": {
+                "access_key_id": "AKIAxxxxxxxxxxxx",
+                "secret_access_key": "xxxxxxxxxxxxxxxxxxxxxxxx",
+                "region": "eu-west-3",
+                "s3_bucket": "terraform-state",
+                "dynamodb_table": "terraform-locks"
+            }
+        }))
+        .expect("cloud provider should parse");
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::OnPremiseSelfManaged)
+            .expect("onprem cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("GOVC_USERNAME", "svc_vsphere")));
+        assert!(envs.contains(&("GOVC_PASSWORD", "super-secret")));
+    }
+
+    #[test]
+    fn should_deserialize_onprem_cloud_provider_with_unrelated_legacy_options() {
+        let long_id = Uuid::new_v4();
+        let cloud_provider = serde_json::from_value::<CloudProvider>(json!({
+            "kind": "ON_PREMISE",
+            "id": "onprem-id",
+            "long_id": long_id,
+            "name": "onprem",
+            "zones": [],
+            "options": {
+                "legacy_field": "legacy-value",
+                "another_legacy_field": "another-value"
+            },
+            "terraform_state_credentials": {
+                "access_key_id": "AKIAxxxxxxxxxxxx",
+                "secret_access_key": "xxxxxxxxxxxxxxxxxxxxxxxx",
+                "region": "eu-west-3",
+                "s3_bucket": "terraform-state",
+                "dynamodb_table": "terraform-locks"
+            }
+        }))
+        .expect("cloud provider should parse");
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::OnPremiseSelfManaged)
+            .expect("onprem cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(!envs.iter().any(|(k, _)| *k == "GOVC_USERNAME"));
+        assert!(!envs.iter().any(|(k, _)| *k == "GOVC_PASSWORD"));
+    }
+
+    #[test]
+    fn should_build_eks_anywhere_aws_provider_with_vsphere_credentials() {
+        let options = serde_json::from_value::<CloudProviderOptions>(json!({
+            "access_key_id": "AKIAxxxxxxxxxxxx",
+            "secret_access_key": "xxxxxxxxxxxxxxxxxxxxxxxx",
+            "vsphere_user": "svc_vsphere",
+            "vsphere_password": "super-secret"
+        }))
+        .expect("cloud provider options should parse");
+
+        let cloud_provider = CloudProvider {
+            kind: cloud_provider::Kind::Aws,
+            id: "aws-id".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "aws".to_string(),
+            zones: vec!["eu-west-3a".to_string()],
+            options,
+            terraform_state_credentials: TerraformStateCredentials {
+                access_key_id: "AKIAxxxxxxxxxxxx".to_string(),
+                secret_access_key: "xxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+                region: "eu-west-3".to_string(),
+                s3_bucket: "terraform-state".to_string(),
+                dynamodb_table: "terraform-locks".to_string(),
+            },
+        };
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::EksAnywhere)
+            .expect("eks anywhere cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("AWS_ACCESS_KEY_ID", "AKIAxxxxxxxxxxxx")));
+        assert!(envs.contains(&("AWS_SECRET_ACCESS_KEY", "xxxxxxxxxxxxxxxxxxxxxxxx")));
+        assert!(envs.contains(&("GOVC_USERNAME", "svc_vsphere")));
+        assert!(envs.contains(&("GOVC_PASSWORD", "super-secret")));
+    }
+
+    #[test]
+    fn should_build_eks_anywhere_aws_provider_from_vsphere_only_options() {
+        let options = serde_json::from_value::<CloudProviderOptions>(json!({
+            "vsphere_user": "svc_vsphere",
+            "vsphere_password": "super-secret"
+        }))
+        .expect("cloud provider options should parse");
+
+        let cloud_provider = CloudProvider {
+            kind: cloud_provider::Kind::Aws,
+            id: "aws-id".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "aws".to_string(),
+            zones: vec!["eu-west-3a".to_string()],
+            options,
+            terraform_state_credentials: TerraformStateCredentials {
+                access_key_id: "AKIA_TFSTATE_FALLBACK".to_string(),
+                secret_access_key: "TFSTATE_SECRET_FALLBACK".to_string(),
+                region: "eu-west-3".to_string(),
+                s3_bucket: "terraform-state".to_string(),
+                dynamodb_table: "terraform-locks".to_string(),
+            },
+        };
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("eu-west-3", kubernetes::Kind::EksAnywhere)
+            .expect("eks anywhere cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("AWS_ACCESS_KEY_ID", "AKIA_TFSTATE_FALLBACK")));
+        assert!(envs.contains(&("AWS_SECRET_ACCESS_KEY", "TFSTATE_SECRET_FALLBACK")));
+        assert!(envs.contains(&("GOVC_USERNAME", "svc_vsphere")));
+        assert!(envs.contains(&("GOVC_PASSWORD", "super-secret")));
+    }
+
+    #[test]
+    fn should_parse_aws_options_with_prefixed_aliases() {
+        let options = serde_json::from_value::<CloudProviderOptions>(json!({
+            "aws_access_key_id": "AKIA_ALIAS",
+            "aws_secret_access_key": "ALIAS_SECRET",
+            "aws_session_token": "ALIAS_TOKEN"
+        }))
+        .expect("cloud provider options should parse");
+
+        match options {
+            CloudProviderOptions::Aws {
+                access_key_id,
+                secret_access_key,
+                session_token,
+                ..
+            } => {
+                assert_eq!(access_key_id, "AKIA_ALIAS");
+                assert_eq!(secret_access_key, "ALIAS_SECRET");
+                assert_eq!(session_token.as_deref(), Some("ALIAS_TOKEN"));
+            }
+            _ => panic!("expected Aws variant"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]

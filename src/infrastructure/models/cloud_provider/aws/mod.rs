@@ -72,6 +72,8 @@ pub struct AWS {
     credentials: AwsCredentials,
     pub region: String,
     pub zones: Vec<String>,
+    vsphere_user: Option<String>,
+    vsphere_password: Option<String>,
     kubernetes_kind: KubernetesKind,
     terraform_state_credentials: TerraformStateCredentials,
 }
@@ -82,6 +84,8 @@ impl AWS {
         credentials: AwsCredentials,
         region: &str,
         zones: Vec<String>,
+        vsphere_user: Option<String>,
+        vsphere_password: Option<String>,
         kubernetes_kind: KubernetesKind,
         terraform_state_credentials: TerraformStateCredentials,
     ) -> Self {
@@ -90,6 +94,8 @@ impl AWS {
             credentials,
             region: region.to_string(),
             zones,
+            vsphere_user,
+            vsphere_password,
             kubernetes_kind,
             terraform_state_credentials,
         }
@@ -141,30 +147,41 @@ impl CloudProvider for AWS {
     }
 
     fn credentials_environment_variables(&self) -> Vec<(&str, &str)> {
-        match &self.credentials {
+        let mut envs = match &self.credentials {
             AwsCredentials::Static {
                 access_key_id,
                 secret_access_key,
-            } => {
-                vec![
-                    (AWS_DEFAULT_REGION, self.region.as_str()),
-                    (AWS_ACCESS_KEY_ID, access_key_id),
-                    (AWS_SECRET_ACCESS_KEY, secret_access_key),
-                ]
-            }
+            } => vec![
+                (AWS_DEFAULT_REGION, self.region.as_str()),
+                (AWS_ACCESS_KEY_ID, access_key_id),
+                (AWS_SECRET_ACCESS_KEY, secret_access_key),
+            ],
             AwsCredentials::STS {
                 access_key_id,
                 secret_access_key,
                 session_token,
-            } => {
-                vec![
-                    (AWS_DEFAULT_REGION, self.region.as_str()),
-                    (AWS_ACCESS_KEY_ID, access_key_id),
-                    (AWS_SECRET_ACCESS_KEY, secret_access_key),
-                    (AWS_SESSION_TOKEN, session_token),
-                ]
-            }
+            } => vec![
+                (AWS_DEFAULT_REGION, self.region.as_str()),
+                (AWS_ACCESS_KEY_ID, access_key_id),
+                (AWS_SECRET_ACCESS_KEY, secret_access_key),
+                (AWS_SESSION_TOKEN, session_token),
+            ],
+        };
+
+        if let Some(vsphere_user) = &self.vsphere_user {
+            envs.push(("GOVC_USERNAME", vsphere_user.as_str()));
+            envs.push(("VSPHERE_USER", vsphere_user.as_str()));
+            envs.push(("VSPHERE_USERNAME", vsphere_user.as_str()));
+            envs.push(("EKSA_VSPHERE_USERNAME", vsphere_user.as_str()));
         }
+
+        if let Some(vsphere_password) = &self.vsphere_password {
+            envs.push(("GOVC_PASSWORD", vsphere_password.as_str()));
+            envs.push(("VSPHERE_PASSWORD", vsphere_password.as_str()));
+            envs.push(("EKSA_VSPHERE_PASSWORD", vsphere_password.as_str()));
+        }
+
+        envs
     }
 
     fn tera_context_environment_variables(&self) -> Vec<(&str, &str)> {
