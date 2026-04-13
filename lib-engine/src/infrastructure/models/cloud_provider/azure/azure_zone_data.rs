@@ -17,6 +17,7 @@ impl AzureLocation {
             "centralindia" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
             "centralus" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
             "chilecentral" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
+            "denmarkeast" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
             "eastasia" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
             "eastus" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],
             "eastus2" => &[AzureZone::One, AzureZone::Two, AzureZone::Three],

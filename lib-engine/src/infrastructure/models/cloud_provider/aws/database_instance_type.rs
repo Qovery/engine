@@ -9,12 +9,76 @@ use strum_macros::EnumIter;
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter)]
 #[allow(non_camel_case_types)]
 pub enum AwsDatabaseInstanceType {
+    CACHE_C7GN_12XLARGE,
+    CACHE_C7GN_16XLARGE,
+    CACHE_C7GN_2XLARGE,
+    CACHE_C7GN_4XLARGE,
+    CACHE_C7GN_8XLARGE,
+    CACHE_C7GN_LARGE,
+    CACHE_C7GN_XLARGE,
+    CACHE_M4_10XLARGE,
+    CACHE_M4_2XLARGE,
+    CACHE_M4_4XLARGE,
+    CACHE_M4_LARGE,
+    CACHE_M4_XLARGE,
+    CACHE_M5_12XLARGE,
+    CACHE_M5_24XLARGE,
+    CACHE_M5_2XLARGE,
+    CACHE_M5_4XLARGE,
+    CACHE_M5_LARGE,
+    CACHE_M5_XLARGE,
+    CACHE_M6G_12XLARGE,
+    CACHE_M6G_16XLARGE,
+    CACHE_M6G_2XLARGE,
+    CACHE_M6G_4XLARGE,
+    CACHE_M6G_8XLARGE,
+    CACHE_M6G_LARGE,
+    CACHE_M6G_XLARGE,
+    CACHE_M7G_12XLARGE,
+    CACHE_M7G_16XLARGE,
+    CACHE_M7G_2XLARGE,
+    CACHE_M7G_4XLARGE,
+    CACHE_M7G_8XLARGE,
+    CACHE_M7G_LARGE,
+    CACHE_M7G_XLARGE,
+    CACHE_R4_16XLARGE,
+    CACHE_R4_2XLARGE,
+    CACHE_R4_4XLARGE,
+    CACHE_R4_8XLARGE,
+    CACHE_R4_LARGE,
+    CACHE_R4_XLARGE,
+    CACHE_R5_12XLARGE,
+    CACHE_R5_24XLARGE,
+    CACHE_R5_2XLARGE,
+    CACHE_R5_4XLARGE,
+    CACHE_R5_LARGE,
+    CACHE_R5_XLARGE,
+    CACHE_R6G_12XLARGE,
+    CACHE_R6G_16XLARGE,
+    CACHE_R6G_2XLARGE,
+    CACHE_R6G_4XLARGE,
+    CACHE_R6G_8XLARGE,
     CACHE_R6G_LARGE,
     CACHE_R6G_XLARGE,
+    CACHE_R6GD_12XLARGE,
+    CACHE_R6GD_16XLARGE,
+    CACHE_R6GD_2XLARGE,
+    CACHE_R6GD_4XLARGE,
+    CACHE_R6GD_8XLARGE,
+    CACHE_R6GD_XLARGE,
+    CACHE_R7G_12XLARGE,
+    CACHE_R7G_16XLARGE,
+    CACHE_R7G_2XLARGE,
+    CACHE_R7G_4XLARGE,
+    CACHE_R7G_8XLARGE,
+    CACHE_R7G_LARGE,
+    CACHE_R7G_XLARGE,
     CACHE_T3_MEDIUM,
     CACHE_T3_MICRO,
     CACHE_T3_SMALL,
+    CACHE_T4G_MEDIUM,
     CACHE_T4G_MICRO,
+    CACHE_T4G_SMALL,
     DB_C6GD_12XLARGE,
     DB_C6GD_16XLARGE,
     DB_C6GD_2XLARGE,
@@ -268,12 +332,76 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
     }
     fn to_cloud_provider_format(&self) -> String {
         match self {
+            AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE => "cache.c7gn.12xlarge",
+            AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE => "cache.c7gn.16xlarge",
+            AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE => "cache.c7gn.2xlarge",
+            AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE => "cache.c7gn.4xlarge",
+            AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE => "cache.c7gn.8xlarge",
+            AwsDatabaseInstanceType::CACHE_C7GN_LARGE => "cache.c7gn.large",
+            AwsDatabaseInstanceType::CACHE_C7GN_XLARGE => "cache.c7gn.xlarge",
+            AwsDatabaseInstanceType::CACHE_M4_10XLARGE => "cache.m4.10xlarge",
+            AwsDatabaseInstanceType::CACHE_M4_2XLARGE => "cache.m4.2xlarge",
+            AwsDatabaseInstanceType::CACHE_M4_4XLARGE => "cache.m4.4xlarge",
+            AwsDatabaseInstanceType::CACHE_M4_LARGE => "cache.m4.large",
+            AwsDatabaseInstanceType::CACHE_M4_XLARGE => "cache.m4.xlarge",
+            AwsDatabaseInstanceType::CACHE_M5_12XLARGE => "cache.m5.12xlarge",
+            AwsDatabaseInstanceType::CACHE_M5_24XLARGE => "cache.m5.24xlarge",
+            AwsDatabaseInstanceType::CACHE_M5_2XLARGE => "cache.m5.2xlarge",
+            AwsDatabaseInstanceType::CACHE_M5_4XLARGE => "cache.m5.4xlarge",
+            AwsDatabaseInstanceType::CACHE_M5_LARGE => "cache.m5.large",
+            AwsDatabaseInstanceType::CACHE_M5_XLARGE => "cache.m5.xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_12XLARGE => "cache.m6g.12xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_16XLARGE => "cache.m6g.16xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_2XLARGE => "cache.m6g.2xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_4XLARGE => "cache.m6g.4xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_8XLARGE => "cache.m6g.8xlarge",
+            AwsDatabaseInstanceType::CACHE_M6G_LARGE => "cache.m6g.large",
+            AwsDatabaseInstanceType::CACHE_M6G_XLARGE => "cache.m6g.xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_12XLARGE => "cache.m7g.12xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_16XLARGE => "cache.m7g.16xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_2XLARGE => "cache.m7g.2xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_4XLARGE => "cache.m7g.4xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_8XLARGE => "cache.m7g.8xlarge",
+            AwsDatabaseInstanceType::CACHE_M7G_LARGE => "cache.m7g.large",
+            AwsDatabaseInstanceType::CACHE_M7G_XLARGE => "cache.m7g.xlarge",
+            AwsDatabaseInstanceType::CACHE_R4_16XLARGE => "cache.r4.16xlarge",
+            AwsDatabaseInstanceType::CACHE_R4_2XLARGE => "cache.r4.2xlarge",
+            AwsDatabaseInstanceType::CACHE_R4_4XLARGE => "cache.r4.4xlarge",
+            AwsDatabaseInstanceType::CACHE_R4_8XLARGE => "cache.r4.8xlarge",
+            AwsDatabaseInstanceType::CACHE_R4_LARGE => "cache.r4.large",
+            AwsDatabaseInstanceType::CACHE_R4_XLARGE => "cache.r4.xlarge",
+            AwsDatabaseInstanceType::CACHE_R5_12XLARGE => "cache.r5.12xlarge",
+            AwsDatabaseInstanceType::CACHE_R5_24XLARGE => "cache.r5.24xlarge",
+            AwsDatabaseInstanceType::CACHE_R5_2XLARGE => "cache.r5.2xlarge",
+            AwsDatabaseInstanceType::CACHE_R5_4XLARGE => "cache.r5.4xlarge",
+            AwsDatabaseInstanceType::CACHE_R5_LARGE => "cache.r5.large",
+            AwsDatabaseInstanceType::CACHE_R5_XLARGE => "cache.r5.xlarge",
+            AwsDatabaseInstanceType::CACHE_R6G_12XLARGE => "cache.r6g.12xlarge",
+            AwsDatabaseInstanceType::CACHE_R6G_16XLARGE => "cache.r6g.16xlarge",
+            AwsDatabaseInstanceType::CACHE_R6G_2XLARGE => "cache.r6g.2xlarge",
+            AwsDatabaseInstanceType::CACHE_R6G_4XLARGE => "cache.r6g.4xlarge",
+            AwsDatabaseInstanceType::CACHE_R6G_8XLARGE => "cache.r6g.8xlarge",
             AwsDatabaseInstanceType::CACHE_R6G_LARGE => "cache.r6g.large",
             AwsDatabaseInstanceType::CACHE_R6G_XLARGE => "cache.r6g.xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE => "cache.r6gd.12xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE => "cache.r6gd.16xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE => "cache.r6gd.2xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE => "cache.r6gd.4xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE => "cache.r6gd.8xlarge",
+            AwsDatabaseInstanceType::CACHE_R6GD_XLARGE => "cache.r6gd.xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_12XLARGE => "cache.r7g.12xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_16XLARGE => "cache.r7g.16xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_2XLARGE => "cache.r7g.2xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_4XLARGE => "cache.r7g.4xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_8XLARGE => "cache.r7g.8xlarge",
+            AwsDatabaseInstanceType::CACHE_R7G_LARGE => "cache.r7g.large",
+            AwsDatabaseInstanceType::CACHE_R7G_XLARGE => "cache.r7g.xlarge",
             AwsDatabaseInstanceType::CACHE_T3_MEDIUM => "cache.t3.medium",
             AwsDatabaseInstanceType::CACHE_T3_MICRO => "cache.t3.micro",
             AwsDatabaseInstanceType::CACHE_T3_SMALL => "cache.t3.small",
+            AwsDatabaseInstanceType::CACHE_T4G_MEDIUM => "cache.t4g.medium",
             AwsDatabaseInstanceType::CACHE_T4G_MICRO => "cache.t4g.micro",
+            AwsDatabaseInstanceType::CACHE_T4G_SMALL => "cache.t4g.small",
             AwsDatabaseInstanceType::DB_C6GD_12XLARGE => "db.c6gd.12xlarge",
             AwsDatabaseInstanceType::DB_C6GD_16XLARGE => "db.c6gd.16xlarge",
             AwsDatabaseInstanceType::DB_C6GD_2XLARGE => "db.c6gd.2xlarge",
@@ -525,12 +653,76 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
     }
     fn is_instance_allowed(&self) -> bool {
         match self {
+            AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_C7GN_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M4_10XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M4_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M4_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M4_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_M4_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_24XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_M5_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_M6G_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_M7G_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_R4_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_24XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_R5_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6G_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6G_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6G_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6G_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6G_8XLARGE => true,
             AwsDatabaseInstanceType::CACHE_R6G_LARGE => true,
             AwsDatabaseInstanceType::CACHE_R6G_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R6GD_XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_12XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_16XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_2XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_4XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_8XLARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_LARGE => true,
+            AwsDatabaseInstanceType::CACHE_R7G_XLARGE => true,
             AwsDatabaseInstanceType::CACHE_T3_MEDIUM => true,
             AwsDatabaseInstanceType::CACHE_T3_MICRO => true,
             AwsDatabaseInstanceType::CACHE_T3_SMALL => true,
+            AwsDatabaseInstanceType::CACHE_T4G_MEDIUM => true,
             AwsDatabaseInstanceType::CACHE_T4G_MICRO => true,
+            AwsDatabaseInstanceType::CACHE_T4G_SMALL => true,
             AwsDatabaseInstanceType::DB_C6GD_12XLARGE => true,
             AwsDatabaseInstanceType::DB_C6GD_16XLARGE => true,
             AwsDatabaseInstanceType::DB_C6GD_2XLARGE => true,
@@ -781,10 +973,196 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
     }
     fn is_instance_compatible_with(&self, database_type: DatabaseType) -> bool {
         matches!((self, database_type), |(
-            AwsDatabaseInstanceType::CACHE_R6G_LARGE,
+            AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE,
             DatabaseType::Redis,
         )| (
+            AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_C7GN_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_C7GN_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M4_10XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M4_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M4_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M4_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M4_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_24XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M5_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M6G_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_M7G_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R4_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_24XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R5_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6G_LARGE,
+            DatabaseType::Redis
+        ) | (
             AwsDatabaseInstanceType::CACHE_R6G_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R6GD_XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_12XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_16XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_2XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_4XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_8XLARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_LARGE,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_R7G_XLARGE,
             DatabaseType::Redis
         ) | (
             AwsDatabaseInstanceType::CACHE_T3_MEDIUM,
@@ -796,7 +1174,13 @@ impl DatabaseInstanceType for AwsDatabaseInstanceType {
             AwsDatabaseInstanceType::CACHE_T3_SMALL,
             DatabaseType::Redis
         ) | (
+            AwsDatabaseInstanceType::CACHE_T4G_MEDIUM,
+            DatabaseType::Redis
+        ) | (
             AwsDatabaseInstanceType::CACHE_T4G_MICRO,
+            DatabaseType::Redis
+        ) | (
+            AwsDatabaseInstanceType::CACHE_T4G_SMALL,
             DatabaseType::Redis
         ) | (
             AwsDatabaseInstanceType::DB_C6GD_12XLARGE,
@@ -2373,12 +2757,76 @@ impl FromStr for AwsDatabaseInstanceType {
     type Err = DatabaseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_lowercase().as_str() {
+            "cache.c7gn.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE),
+            "cache.c7gn.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE),
+            "cache.c7gn.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE),
+            "cache.c7gn.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE),
+            "cache.c7gn.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE),
+            "cache.c7gn.large" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_LARGE),
+            "cache.c7gn.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_C7GN_XLARGE),
+            "cache.m4.10xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M4_10XLARGE),
+            "cache.m4.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M4_2XLARGE),
+            "cache.m4.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M4_4XLARGE),
+            "cache.m4.large" => Ok(AwsDatabaseInstanceType::CACHE_M4_LARGE),
+            "cache.m4.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M4_XLARGE),
+            "cache.m5.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M5_12XLARGE),
+            "cache.m5.24xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M5_24XLARGE),
+            "cache.m5.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M5_2XLARGE),
+            "cache.m5.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M5_4XLARGE),
+            "cache.m5.large" => Ok(AwsDatabaseInstanceType::CACHE_M5_LARGE),
+            "cache.m5.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M5_XLARGE),
+            "cache.m6g.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_12XLARGE),
+            "cache.m6g.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_16XLARGE),
+            "cache.m6g.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_2XLARGE),
+            "cache.m6g.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_4XLARGE),
+            "cache.m6g.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_8XLARGE),
+            "cache.m6g.large" => Ok(AwsDatabaseInstanceType::CACHE_M6G_LARGE),
+            "cache.m6g.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M6G_XLARGE),
+            "cache.m7g.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_12XLARGE),
+            "cache.m7g.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_16XLARGE),
+            "cache.m7g.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_2XLARGE),
+            "cache.m7g.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_4XLARGE),
+            "cache.m7g.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_8XLARGE),
+            "cache.m7g.large" => Ok(AwsDatabaseInstanceType::CACHE_M7G_LARGE),
+            "cache.m7g.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_M7G_XLARGE),
+            "cache.r4.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R4_16XLARGE),
+            "cache.r4.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R4_2XLARGE),
+            "cache.r4.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R4_4XLARGE),
+            "cache.r4.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R4_8XLARGE),
+            "cache.r4.large" => Ok(AwsDatabaseInstanceType::CACHE_R4_LARGE),
+            "cache.r4.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R4_XLARGE),
+            "cache.r5.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R5_12XLARGE),
+            "cache.r5.24xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R5_24XLARGE),
+            "cache.r5.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R5_2XLARGE),
+            "cache.r5.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R5_4XLARGE),
+            "cache.r5.large" => Ok(AwsDatabaseInstanceType::CACHE_R5_LARGE),
+            "cache.r5.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R5_XLARGE),
+            "cache.r6g.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_12XLARGE),
+            "cache.r6g.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_16XLARGE),
+            "cache.r6g.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_2XLARGE),
+            "cache.r6g.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_4XLARGE),
+            "cache.r6g.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_8XLARGE),
             "cache.r6g.large" => Ok(AwsDatabaseInstanceType::CACHE_R6G_LARGE),
             "cache.r6g.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6G_XLARGE),
+            "cache.r6gd.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE),
+            "cache.r6gd.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE),
+            "cache.r6gd.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE),
+            "cache.r6gd.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE),
+            "cache.r6gd.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE),
+            "cache.r6gd.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R6GD_XLARGE),
+            "cache.r7g.12xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_12XLARGE),
+            "cache.r7g.16xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_16XLARGE),
+            "cache.r7g.2xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_2XLARGE),
+            "cache.r7g.4xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_4XLARGE),
+            "cache.r7g.8xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_8XLARGE),
+            "cache.r7g.large" => Ok(AwsDatabaseInstanceType::CACHE_R7G_LARGE),
+            "cache.r7g.xlarge" => Ok(AwsDatabaseInstanceType::CACHE_R7G_XLARGE),
             "cache.t3.medium" => Ok(AwsDatabaseInstanceType::CACHE_T3_MEDIUM),
             "cache.t3.micro" => Ok(AwsDatabaseInstanceType::CACHE_T3_MICRO),
             "cache.t3.small" => Ok(AwsDatabaseInstanceType::CACHE_T3_SMALL),
+            "cache.t4g.medium" => Ok(AwsDatabaseInstanceType::CACHE_T4G_MEDIUM),
             "cache.t4g.micro" => Ok(AwsDatabaseInstanceType::CACHE_T4G_MICRO),
+            "cache.t4g.small" => Ok(AwsDatabaseInstanceType::CACHE_T4G_SMALL),
             "db.c6gd.12xlarge" => Ok(AwsDatabaseInstanceType::DB_C6GD_12XLARGE),
             "db.c6gd.16xlarge" => Ok(AwsDatabaseInstanceType::DB_C6GD_16XLARGE),
             "db.c6gd.2xlarge" => Ok(AwsDatabaseInstanceType::DB_C6GD_2XLARGE),
@@ -2651,13 +3099,77 @@ mod tests {
     fn test_aws_database_instance_type_to_cloud_provider_format() {
         for instance_type in AwsDatabaseInstanceType::iter() {
             assert_eq!(
-                match instance_type { AwsDatabaseInstanceType::CACHE_R6G_LARGE =>
+                match instance_type { AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE =>
+                "cache.c7gn.12xlarge", AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE =>
+                "cache.c7gn.16xlarge", AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE =>
+                "cache.c7gn.2xlarge", AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE =>
+                "cache.c7gn.4xlarge", AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE =>
+                "cache.c7gn.8xlarge", AwsDatabaseInstanceType::CACHE_C7GN_LARGE =>
+                "cache.c7gn.large", AwsDatabaseInstanceType::CACHE_C7GN_XLARGE =>
+                "cache.c7gn.xlarge", AwsDatabaseInstanceType::CACHE_M4_10XLARGE =>
+                "cache.m4.10xlarge", AwsDatabaseInstanceType::CACHE_M4_2XLARGE =>
+                "cache.m4.2xlarge", AwsDatabaseInstanceType::CACHE_M4_4XLARGE =>
+                "cache.m4.4xlarge", AwsDatabaseInstanceType::CACHE_M4_LARGE =>
+                "cache.m4.large", AwsDatabaseInstanceType::CACHE_M4_XLARGE =>
+                "cache.m4.xlarge", AwsDatabaseInstanceType::CACHE_M5_12XLARGE =>
+                "cache.m5.12xlarge", AwsDatabaseInstanceType::CACHE_M5_24XLARGE =>
+                "cache.m5.24xlarge", AwsDatabaseInstanceType::CACHE_M5_2XLARGE =>
+                "cache.m5.2xlarge", AwsDatabaseInstanceType::CACHE_M5_4XLARGE =>
+                "cache.m5.4xlarge", AwsDatabaseInstanceType::CACHE_M5_LARGE =>
+                "cache.m5.large", AwsDatabaseInstanceType::CACHE_M5_XLARGE =>
+                "cache.m5.xlarge", AwsDatabaseInstanceType::CACHE_M6G_12XLARGE =>
+                "cache.m6g.12xlarge", AwsDatabaseInstanceType::CACHE_M6G_16XLARGE =>
+                "cache.m6g.16xlarge", AwsDatabaseInstanceType::CACHE_M6G_2XLARGE =>
+                "cache.m6g.2xlarge", AwsDatabaseInstanceType::CACHE_M6G_4XLARGE =>
+                "cache.m6g.4xlarge", AwsDatabaseInstanceType::CACHE_M6G_8XLARGE =>
+                "cache.m6g.8xlarge", AwsDatabaseInstanceType::CACHE_M6G_LARGE =>
+                "cache.m6g.large", AwsDatabaseInstanceType::CACHE_M6G_XLARGE =>
+                "cache.m6g.xlarge", AwsDatabaseInstanceType::CACHE_M7G_12XLARGE =>
+                "cache.m7g.12xlarge", AwsDatabaseInstanceType::CACHE_M7G_16XLARGE =>
+                "cache.m7g.16xlarge", AwsDatabaseInstanceType::CACHE_M7G_2XLARGE =>
+                "cache.m7g.2xlarge", AwsDatabaseInstanceType::CACHE_M7G_4XLARGE =>
+                "cache.m7g.4xlarge", AwsDatabaseInstanceType::CACHE_M7G_8XLARGE =>
+                "cache.m7g.8xlarge", AwsDatabaseInstanceType::CACHE_M7G_LARGE =>
+                "cache.m7g.large", AwsDatabaseInstanceType::CACHE_M7G_XLARGE =>
+                "cache.m7g.xlarge", AwsDatabaseInstanceType::CACHE_R4_16XLARGE =>
+                "cache.r4.16xlarge", AwsDatabaseInstanceType::CACHE_R4_2XLARGE =>
+                "cache.r4.2xlarge", AwsDatabaseInstanceType::CACHE_R4_4XLARGE =>
+                "cache.r4.4xlarge", AwsDatabaseInstanceType::CACHE_R4_8XLARGE =>
+                "cache.r4.8xlarge", AwsDatabaseInstanceType::CACHE_R4_LARGE =>
+                "cache.r4.large", AwsDatabaseInstanceType::CACHE_R4_XLARGE =>
+                "cache.r4.xlarge", AwsDatabaseInstanceType::CACHE_R5_12XLARGE =>
+                "cache.r5.12xlarge", AwsDatabaseInstanceType::CACHE_R5_24XLARGE =>
+                "cache.r5.24xlarge", AwsDatabaseInstanceType::CACHE_R5_2XLARGE =>
+                "cache.r5.2xlarge", AwsDatabaseInstanceType::CACHE_R5_4XLARGE =>
+                "cache.r5.4xlarge", AwsDatabaseInstanceType::CACHE_R5_LARGE =>
+                "cache.r5.large", AwsDatabaseInstanceType::CACHE_R5_XLARGE =>
+                "cache.r5.xlarge", AwsDatabaseInstanceType::CACHE_R6G_12XLARGE =>
+                "cache.r6g.12xlarge", AwsDatabaseInstanceType::CACHE_R6G_16XLARGE =>
+                "cache.r6g.16xlarge", AwsDatabaseInstanceType::CACHE_R6G_2XLARGE =>
+                "cache.r6g.2xlarge", AwsDatabaseInstanceType::CACHE_R6G_4XLARGE =>
+                "cache.r6g.4xlarge", AwsDatabaseInstanceType::CACHE_R6G_8XLARGE =>
+                "cache.r6g.8xlarge", AwsDatabaseInstanceType::CACHE_R6G_LARGE =>
                 "cache.r6g.large", AwsDatabaseInstanceType::CACHE_R6G_XLARGE =>
-                "cache.r6g.xlarge", AwsDatabaseInstanceType::CACHE_T3_MEDIUM =>
+                "cache.r6g.xlarge", AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE =>
+                "cache.r6gd.12xlarge", AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE =>
+                "cache.r6gd.16xlarge", AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE =>
+                "cache.r6gd.2xlarge", AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE =>
+                "cache.r6gd.4xlarge", AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE =>
+                "cache.r6gd.8xlarge", AwsDatabaseInstanceType::CACHE_R6GD_XLARGE =>
+                "cache.r6gd.xlarge", AwsDatabaseInstanceType::CACHE_R7G_12XLARGE =>
+                "cache.r7g.12xlarge", AwsDatabaseInstanceType::CACHE_R7G_16XLARGE =>
+                "cache.r7g.16xlarge", AwsDatabaseInstanceType::CACHE_R7G_2XLARGE =>
+                "cache.r7g.2xlarge", AwsDatabaseInstanceType::CACHE_R7G_4XLARGE =>
+                "cache.r7g.4xlarge", AwsDatabaseInstanceType::CACHE_R7G_8XLARGE =>
+                "cache.r7g.8xlarge", AwsDatabaseInstanceType::CACHE_R7G_LARGE =>
+                "cache.r7g.large", AwsDatabaseInstanceType::CACHE_R7G_XLARGE =>
+                "cache.r7g.xlarge", AwsDatabaseInstanceType::CACHE_T3_MEDIUM =>
                 "cache.t3.medium", AwsDatabaseInstanceType::CACHE_T3_MICRO =>
                 "cache.t3.micro", AwsDatabaseInstanceType::CACHE_T3_SMALL =>
-                "cache.t3.small", AwsDatabaseInstanceType::CACHE_T4G_MICRO =>
-                "cache.t4g.micro", AwsDatabaseInstanceType::DB_C6GD_12XLARGE =>
+                "cache.t3.small", AwsDatabaseInstanceType::CACHE_T4G_MEDIUM =>
+                "cache.t4g.medium", AwsDatabaseInstanceType::CACHE_T4G_MICRO =>
+                "cache.t4g.micro", AwsDatabaseInstanceType::CACHE_T4G_SMALL =>
+                "cache.t4g.small", AwsDatabaseInstanceType::DB_C6GD_12XLARGE =>
                 "db.c6gd.12xlarge", AwsDatabaseInstanceType::DB_C6GD_16XLARGE =>
                 "db.c6gd.16xlarge", AwsDatabaseInstanceType::DB_C6GD_2XLARGE =>
                 "db.c6gd.2xlarge", AwsDatabaseInstanceType::DB_C6GD_4XLARGE =>
@@ -2911,13 +3423,77 @@ mod tests {
     fn test_aws_database_instance_type_to_string() {
         for instance_type in AwsDatabaseInstanceType::iter() {
             assert_eq!(
-                match instance_type { AwsDatabaseInstanceType::CACHE_R6G_LARGE =>
+                match instance_type { AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE =>
+                "cache.c7gn.12xlarge", AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE =>
+                "cache.c7gn.16xlarge", AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE =>
+                "cache.c7gn.2xlarge", AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE =>
+                "cache.c7gn.4xlarge", AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE =>
+                "cache.c7gn.8xlarge", AwsDatabaseInstanceType::CACHE_C7GN_LARGE =>
+                "cache.c7gn.large", AwsDatabaseInstanceType::CACHE_C7GN_XLARGE =>
+                "cache.c7gn.xlarge", AwsDatabaseInstanceType::CACHE_M4_10XLARGE =>
+                "cache.m4.10xlarge", AwsDatabaseInstanceType::CACHE_M4_2XLARGE =>
+                "cache.m4.2xlarge", AwsDatabaseInstanceType::CACHE_M4_4XLARGE =>
+                "cache.m4.4xlarge", AwsDatabaseInstanceType::CACHE_M4_LARGE =>
+                "cache.m4.large", AwsDatabaseInstanceType::CACHE_M4_XLARGE =>
+                "cache.m4.xlarge", AwsDatabaseInstanceType::CACHE_M5_12XLARGE =>
+                "cache.m5.12xlarge", AwsDatabaseInstanceType::CACHE_M5_24XLARGE =>
+                "cache.m5.24xlarge", AwsDatabaseInstanceType::CACHE_M5_2XLARGE =>
+                "cache.m5.2xlarge", AwsDatabaseInstanceType::CACHE_M5_4XLARGE =>
+                "cache.m5.4xlarge", AwsDatabaseInstanceType::CACHE_M5_LARGE =>
+                "cache.m5.large", AwsDatabaseInstanceType::CACHE_M5_XLARGE =>
+                "cache.m5.xlarge", AwsDatabaseInstanceType::CACHE_M6G_12XLARGE =>
+                "cache.m6g.12xlarge", AwsDatabaseInstanceType::CACHE_M6G_16XLARGE =>
+                "cache.m6g.16xlarge", AwsDatabaseInstanceType::CACHE_M6G_2XLARGE =>
+                "cache.m6g.2xlarge", AwsDatabaseInstanceType::CACHE_M6G_4XLARGE =>
+                "cache.m6g.4xlarge", AwsDatabaseInstanceType::CACHE_M6G_8XLARGE =>
+                "cache.m6g.8xlarge", AwsDatabaseInstanceType::CACHE_M6G_LARGE =>
+                "cache.m6g.large", AwsDatabaseInstanceType::CACHE_M6G_XLARGE =>
+                "cache.m6g.xlarge", AwsDatabaseInstanceType::CACHE_M7G_12XLARGE =>
+                "cache.m7g.12xlarge", AwsDatabaseInstanceType::CACHE_M7G_16XLARGE =>
+                "cache.m7g.16xlarge", AwsDatabaseInstanceType::CACHE_M7G_2XLARGE =>
+                "cache.m7g.2xlarge", AwsDatabaseInstanceType::CACHE_M7G_4XLARGE =>
+                "cache.m7g.4xlarge", AwsDatabaseInstanceType::CACHE_M7G_8XLARGE =>
+                "cache.m7g.8xlarge", AwsDatabaseInstanceType::CACHE_M7G_LARGE =>
+                "cache.m7g.large", AwsDatabaseInstanceType::CACHE_M7G_XLARGE =>
+                "cache.m7g.xlarge", AwsDatabaseInstanceType::CACHE_R4_16XLARGE =>
+                "cache.r4.16xlarge", AwsDatabaseInstanceType::CACHE_R4_2XLARGE =>
+                "cache.r4.2xlarge", AwsDatabaseInstanceType::CACHE_R4_4XLARGE =>
+                "cache.r4.4xlarge", AwsDatabaseInstanceType::CACHE_R4_8XLARGE =>
+                "cache.r4.8xlarge", AwsDatabaseInstanceType::CACHE_R4_LARGE =>
+                "cache.r4.large", AwsDatabaseInstanceType::CACHE_R4_XLARGE =>
+                "cache.r4.xlarge", AwsDatabaseInstanceType::CACHE_R5_12XLARGE =>
+                "cache.r5.12xlarge", AwsDatabaseInstanceType::CACHE_R5_24XLARGE =>
+                "cache.r5.24xlarge", AwsDatabaseInstanceType::CACHE_R5_2XLARGE =>
+                "cache.r5.2xlarge", AwsDatabaseInstanceType::CACHE_R5_4XLARGE =>
+                "cache.r5.4xlarge", AwsDatabaseInstanceType::CACHE_R5_LARGE =>
+                "cache.r5.large", AwsDatabaseInstanceType::CACHE_R5_XLARGE =>
+                "cache.r5.xlarge", AwsDatabaseInstanceType::CACHE_R6G_12XLARGE =>
+                "cache.r6g.12xlarge", AwsDatabaseInstanceType::CACHE_R6G_16XLARGE =>
+                "cache.r6g.16xlarge", AwsDatabaseInstanceType::CACHE_R6G_2XLARGE =>
+                "cache.r6g.2xlarge", AwsDatabaseInstanceType::CACHE_R6G_4XLARGE =>
+                "cache.r6g.4xlarge", AwsDatabaseInstanceType::CACHE_R6G_8XLARGE =>
+                "cache.r6g.8xlarge", AwsDatabaseInstanceType::CACHE_R6G_LARGE =>
                 "cache.r6g.large", AwsDatabaseInstanceType::CACHE_R6G_XLARGE =>
-                "cache.r6g.xlarge", AwsDatabaseInstanceType::CACHE_T3_MEDIUM =>
+                "cache.r6g.xlarge", AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE =>
+                "cache.r6gd.12xlarge", AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE =>
+                "cache.r6gd.16xlarge", AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE =>
+                "cache.r6gd.2xlarge", AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE =>
+                "cache.r6gd.4xlarge", AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE =>
+                "cache.r6gd.8xlarge", AwsDatabaseInstanceType::CACHE_R6GD_XLARGE =>
+                "cache.r6gd.xlarge", AwsDatabaseInstanceType::CACHE_R7G_12XLARGE =>
+                "cache.r7g.12xlarge", AwsDatabaseInstanceType::CACHE_R7G_16XLARGE =>
+                "cache.r7g.16xlarge", AwsDatabaseInstanceType::CACHE_R7G_2XLARGE =>
+                "cache.r7g.2xlarge", AwsDatabaseInstanceType::CACHE_R7G_4XLARGE =>
+                "cache.r7g.4xlarge", AwsDatabaseInstanceType::CACHE_R7G_8XLARGE =>
+                "cache.r7g.8xlarge", AwsDatabaseInstanceType::CACHE_R7G_LARGE =>
+                "cache.r7g.large", AwsDatabaseInstanceType::CACHE_R7G_XLARGE =>
+                "cache.r7g.xlarge", AwsDatabaseInstanceType::CACHE_T3_MEDIUM =>
                 "cache.t3.medium", AwsDatabaseInstanceType::CACHE_T3_MICRO =>
                 "cache.t3.micro", AwsDatabaseInstanceType::CACHE_T3_SMALL =>
-                "cache.t3.small", AwsDatabaseInstanceType::CACHE_T4G_MICRO =>
-                "cache.t4g.micro", AwsDatabaseInstanceType::DB_C6GD_12XLARGE =>
+                "cache.t3.small", AwsDatabaseInstanceType::CACHE_T4G_MEDIUM =>
+                "cache.t4g.medium", AwsDatabaseInstanceType::CACHE_T4G_MICRO =>
+                "cache.t4g.micro", AwsDatabaseInstanceType::CACHE_T4G_SMALL =>
+                "cache.t4g.small", AwsDatabaseInstanceType::DB_C6GD_12XLARGE =>
                 "db.c6gd.12xlarge", AwsDatabaseInstanceType::DB_C6GD_16XLARGE =>
                 "db.c6gd.16xlarge", AwsDatabaseInstanceType::DB_C6GD_2XLARGE =>
                 "db.c6gd.2xlarge", AwsDatabaseInstanceType::DB_C6GD_4XLARGE =>
@@ -3190,12 +3766,76 @@ mod tests {
     fn test_aws_database_instance_type_is_instance_allowed() {
         for instance_type in AwsDatabaseInstanceType::iter() {
             assert_eq!(
-                match instance_type { AwsDatabaseInstanceType::CACHE_R6G_LARGE => true,
+                match instance_type { AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE =>
+                true, AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_C7GN_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_C7GN_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M4_10XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M4_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M4_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M4_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_M4_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_24XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_M5_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_M6G_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_M7G_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_R4_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_24XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_R5_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6G_LARGE => true,
                 AwsDatabaseInstanceType::CACHE_R6G_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R6GD_XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_12XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_16XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_2XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_4XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_8XLARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_LARGE => true,
+                AwsDatabaseInstanceType::CACHE_R7G_XLARGE => true,
                 AwsDatabaseInstanceType::CACHE_T3_MEDIUM => true,
                 AwsDatabaseInstanceType::CACHE_T3_MICRO => true,
                 AwsDatabaseInstanceType::CACHE_T3_SMALL => true,
+                AwsDatabaseInstanceType::CACHE_T4G_MEDIUM => true,
                 AwsDatabaseInstanceType::CACHE_T4G_MICRO => true,
+                AwsDatabaseInstanceType::CACHE_T4G_SMALL => true,
                 AwsDatabaseInstanceType::DB_C6GD_12XLARGE => true,
                 AwsDatabaseInstanceType::DB_C6GD_16XLARGE => true,
                 AwsDatabaseInstanceType::DB_C6GD_2XLARGE => true,
@@ -3452,12 +4092,76 @@ mod tests {
             for instance_type in AwsDatabaseInstanceType::iter() {
                 assert_eq!(
                     matches!((instance_type.clone(), db_type), |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_C7GN_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M4_10XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M4_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M4_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M4_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M4_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_24XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M5_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M6G_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_M7G_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R4_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_24XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R5_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6G_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6G_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6G_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6G_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6G_8XLARGE, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_R6G_LARGE, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_R6G_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R6GD_XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_12XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_16XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_2XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_4XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_8XLARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_LARGE, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_R7G_XLARGE, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_T3_MEDIUM, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_T3_MICRO, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_T3_SMALL, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_T4G_MEDIUM, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::CACHE_T4G_MICRO, DatabaseType::Redis) |
+                    (AwsDatabaseInstanceType::CACHE_T4G_SMALL, DatabaseType::Redis) |
                     (AwsDatabaseInstanceType::DB_C6GD_12XLARGE, DatabaseType::MySQL) |
                     (AwsDatabaseInstanceType::DB_C6GD_12XLARGE, DatabaseType::PostgreSQL)
                     | (AwsDatabaseInstanceType::DB_C6GD_16XLARGE, DatabaseType::MySQL) |

@@ -17,6 +17,22 @@ pub enum ScwInstancesType {
     BASIC2_A4C_8G,
     BASIC2_A8C_16G,
     BASIC2_A8C_32G,
+    BASIC3_X16C_32G,
+    BASIC3_X16C_64G,
+    BASIC3_X2C_4G,
+    BASIC3_X2C_8G,
+    BASIC3_X4C_16G,
+    BASIC3_X4C_8G,
+    BASIC3_X8C_16G,
+    BASIC3_X8C_32G,
+    COMPUTE3_X16C_32G,
+    COMPUTE3_X2C_4G,
+    COMPUTE3_X32C_64G,
+    COMPUTE3_X48C_96G,
+    COMPUTE3_X4C_8G,
+    COMPUTE3_X64C_128G,
+    COMPUTE3_X8C_16G,
+    COMPUTE3_X96C_192G,
     COPARM1_16C_64G,
     COPARM1_2C_8G,
     COPARM1_32C_128G,
@@ -39,6 +55,11 @@ pub enum ScwInstancesType {
     L4_4_24G,
     L40S_1_48G,
     L40S_2_48G,
+    MEMORY3_X16C_128G,
+    MEMORY3_X2C_16G,
+    MEMORY3_X32C_256G,
+    MEMORY3_X4C_32G,
+    MEMORY3_X8C_64G,
     PLAY2_MICRO,
     PLAY2_NANO,
     PLAY2_PICO,
@@ -75,6 +96,20 @@ pub enum ScwInstancesType {
     PRO2_XS,
     PRO2_XXS,
     RENDER_S,
+    STANDARD2_A16C_64G,
+    STANDARD2_A2C_8G,
+    STANDARD2_A32C_128G,
+    STANDARD2_A48C_192G,
+    STANDARD2_A4C_16G,
+    STANDARD2_A64C_256G,
+    STANDARD2_A8C_32G,
+    STANDARD3_X16C_64G,
+    STANDARD3_X2C_8G,
+    STANDARD3_X32C_128G,
+    STANDARD3_X48C_192G,
+    STANDARD3_X4C_16G,
+    STANDARD3_X64C_256G,
+    STANDARD3_X8C_32G,
     START1_L,
     START1_M,
     START1_S,
@@ -97,6 +132,22 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::BASIC2_A4C_8G => "basic2-a4c-8g",
             ScwInstancesType::BASIC2_A8C_16G => "basic2-a8c-16g",
             ScwInstancesType::BASIC2_A8C_32G => "basic2-a8c-32g",
+            ScwInstancesType::BASIC3_X16C_32G => "basic3-x16c-32g",
+            ScwInstancesType::BASIC3_X16C_64G => "basic3-x16c-64g",
+            ScwInstancesType::BASIC3_X2C_4G => "basic3-x2c-4g",
+            ScwInstancesType::BASIC3_X2C_8G => "basic3-x2c-8g",
+            ScwInstancesType::BASIC3_X4C_16G => "basic3-x4c-16g",
+            ScwInstancesType::BASIC3_X4C_8G => "basic3-x4c-8g",
+            ScwInstancesType::BASIC3_X8C_16G => "basic3-x8c-16g",
+            ScwInstancesType::BASIC3_X8C_32G => "basic3-x8c-32g",
+            ScwInstancesType::COMPUTE3_X16C_32G => "compute3-x16c-32g",
+            ScwInstancesType::COMPUTE3_X2C_4G => "compute3-x2c-4g",
+            ScwInstancesType::COMPUTE3_X32C_64G => "compute3-x32c-64g",
+            ScwInstancesType::COMPUTE3_X48C_96G => "compute3-x48c-96g",
+            ScwInstancesType::COMPUTE3_X4C_8G => "compute3-x4c-8g",
+            ScwInstancesType::COMPUTE3_X64C_128G => "compute3-x64c-128g",
+            ScwInstancesType::COMPUTE3_X8C_16G => "compute3-x8c-16g",
+            ScwInstancesType::COMPUTE3_X96C_192G => "compute3-x96c-192g",
             ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
             ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
             ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -119,6 +170,11 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::L4_4_24G => "l4-4-24g",
             ScwInstancesType::L40S_1_48G => "l40s-1-48g",
             ScwInstancesType::L40S_2_48G => "l40s-2-48g",
+            ScwInstancesType::MEMORY3_X16C_128G => "memory3-x16c-128g",
+            ScwInstancesType::MEMORY3_X2C_16G => "memory3-x2c-16g",
+            ScwInstancesType::MEMORY3_X32C_256G => "memory3-x32c-256g",
+            ScwInstancesType::MEMORY3_X4C_32G => "memory3-x4c-32g",
+            ScwInstancesType::MEMORY3_X8C_64G => "memory3-x8c-64g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -155,6 +211,20 @@ impl InstanceType for ScwInstancesType {
             ScwInstancesType::PRO2_XS => "pro2-xs",
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
+            ScwInstancesType::STANDARD2_A16C_64G => "standard2-a16c-64g",
+            ScwInstancesType::STANDARD2_A2C_8G => "standard2-a2c-8g",
+            ScwInstancesType::STANDARD2_A32C_128G => "standard2-a32c-128g",
+            ScwInstancesType::STANDARD2_A48C_192G => "standard2-a48c-192g",
+            ScwInstancesType::STANDARD2_A4C_16G => "standard2-a4c-16g",
+            ScwInstancesType::STANDARD2_A64C_256G => "standard2-a64c-256g",
+            ScwInstancesType::STANDARD2_A8C_32G => "standard2-a8c-32g",
+            ScwInstancesType::STANDARD3_X16C_64G => "standard3-x16c-64g",
+            ScwInstancesType::STANDARD3_X2C_8G => "standard3-x2c-8g",
+            ScwInstancesType::STANDARD3_X32C_128G => "standard3-x32c-128g",
+            ScwInstancesType::STANDARD3_X48C_192G => "standard3-x48c-192g",
+            ScwInstancesType::STANDARD3_X4C_16G => "standard3-x4c-16g",
+            ScwInstancesType::STANDARD3_X64C_256G => "standard3-x64c-256g",
+            ScwInstancesType::STANDARD3_X8C_32G => "standard3-x8c-32g",
             ScwInstancesType::START1_L => "start1-l",
             ScwInstancesType::START1_M => "start1-m",
             ScwInstancesType::START1_S => "start1-s",
@@ -179,6 +249,22 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::BASIC2_A4C_8G
                 | ScwInstancesType::BASIC2_A8C_16G
                 | ScwInstancesType::BASIC2_A8C_32G
+                | ScwInstancesType::BASIC3_X16C_32G
+                | ScwInstancesType::BASIC3_X16C_64G
+                | ScwInstancesType::BASIC3_X2C_4G
+                | ScwInstancesType::BASIC3_X2C_8G
+                | ScwInstancesType::BASIC3_X4C_16G
+                | ScwInstancesType::BASIC3_X4C_8G
+                | ScwInstancesType::BASIC3_X8C_16G
+                | ScwInstancesType::BASIC3_X8C_32G
+                | ScwInstancesType::COMPUTE3_X16C_32G
+                | ScwInstancesType::COMPUTE3_X2C_4G
+                | ScwInstancesType::COMPUTE3_X32C_64G
+                | ScwInstancesType::COMPUTE3_X48C_96G
+                | ScwInstancesType::COMPUTE3_X4C_8G
+                | ScwInstancesType::COMPUTE3_X64C_128G
+                | ScwInstancesType::COMPUTE3_X8C_16G
+                | ScwInstancesType::COMPUTE3_X96C_192G
                 | ScwInstancesType::COPARM1_16C_64G
                 | ScwInstancesType::COPARM1_2C_8G
                 | ScwInstancesType::COPARM1_32C_128G
@@ -201,6 +287,11 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::L4_1_24G
                 | ScwInstancesType::L4_2_24G
                 | ScwInstancesType::L4_4_24G
+                | ScwInstancesType::MEMORY3_X16C_128G
+                | ScwInstancesType::MEMORY3_X2C_16G
+                | ScwInstancesType::MEMORY3_X32C_256G
+                | ScwInstancesType::MEMORY3_X4C_32G
+                | ScwInstancesType::MEMORY3_X8C_64G
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::PLAY2_PICO
@@ -237,6 +328,20 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XS
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
+                | ScwInstancesType::STANDARD2_A16C_64G
+                | ScwInstancesType::STANDARD2_A2C_8G
+                | ScwInstancesType::STANDARD2_A32C_128G
+                | ScwInstancesType::STANDARD2_A48C_192G
+                | ScwInstancesType::STANDARD2_A4C_16G
+                | ScwInstancesType::STANDARD2_A64C_256G
+                | ScwInstancesType::STANDARD2_A8C_32G
+                | ScwInstancesType::STANDARD3_X16C_64G
+                | ScwInstancesType::STANDARD3_X2C_8G
+                | ScwInstancesType::STANDARD3_X32C_128G
+                | ScwInstancesType::STANDARD3_X48C_192G
+                | ScwInstancesType::STANDARD3_X4C_16G
+                | ScwInstancesType::STANDARD3_X64C_256G
+                | ScwInstancesType::STANDARD3_X8C_32G
                 | ScwInstancesType::START1_L
                 | ScwInstancesType::START1_M
                 | ScwInstancesType::START1_S
@@ -263,6 +368,22 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::BASIC2_A4C_8G
                 | ScwInstancesType::BASIC2_A8C_16G
                 | ScwInstancesType::BASIC2_A8C_32G
+                | ScwInstancesType::BASIC3_X16C_32G
+                | ScwInstancesType::BASIC3_X16C_64G
+                | ScwInstancesType::BASIC3_X2C_4G
+                | ScwInstancesType::BASIC3_X2C_8G
+                | ScwInstancesType::BASIC3_X4C_16G
+                | ScwInstancesType::BASIC3_X4C_8G
+                | ScwInstancesType::BASIC3_X8C_16G
+                | ScwInstancesType::BASIC3_X8C_32G
+                | ScwInstancesType::COMPUTE3_X16C_32G
+                | ScwInstancesType::COMPUTE3_X2C_4G
+                | ScwInstancesType::COMPUTE3_X32C_64G
+                | ScwInstancesType::COMPUTE3_X48C_96G
+                | ScwInstancesType::COMPUTE3_X4C_8G
+                | ScwInstancesType::COMPUTE3_X64C_128G
+                | ScwInstancesType::COMPUTE3_X8C_16G
+                | ScwInstancesType::COMPUTE3_X96C_192G
                 | ScwInstancesType::COPARM1_16C_64G
                 | ScwInstancesType::COPARM1_2C_8G
                 | ScwInstancesType::COPARM1_32C_128G
@@ -284,6 +405,11 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::L4_1_24G
                 | ScwInstancesType::L4_2_24G
                 | ScwInstancesType::L4_4_24G
+                | ScwInstancesType::MEMORY3_X16C_128G
+                | ScwInstancesType::MEMORY3_X2C_16G
+                | ScwInstancesType::MEMORY3_X32C_256G
+                | ScwInstancesType::MEMORY3_X4C_32G
+                | ScwInstancesType::MEMORY3_X8C_64G
                 | ScwInstancesType::PLAY2_MICRO
                 | ScwInstancesType::PLAY2_NANO
                 | ScwInstancesType::POP2_16C_64G
@@ -319,6 +445,20 @@ impl InstanceType for ScwInstancesType {
                 | ScwInstancesType::PRO2_XS
                 | ScwInstancesType::PRO2_XXS
                 | ScwInstancesType::RENDER_S
+                | ScwInstancesType::STANDARD2_A16C_64G
+                | ScwInstancesType::STANDARD2_A2C_8G
+                | ScwInstancesType::STANDARD2_A32C_128G
+                | ScwInstancesType::STANDARD2_A48C_192G
+                | ScwInstancesType::STANDARD2_A4C_16G
+                | ScwInstancesType::STANDARD2_A64C_256G
+                | ScwInstancesType::STANDARD2_A8C_32G
+                | ScwInstancesType::STANDARD3_X16C_64G
+                | ScwInstancesType::STANDARD3_X2C_8G
+                | ScwInstancesType::STANDARD3_X32C_128G
+                | ScwInstancesType::STANDARD3_X48C_192G
+                | ScwInstancesType::STANDARD3_X4C_16G
+                | ScwInstancesType::STANDARD3_X64C_256G
+                | ScwInstancesType::STANDARD3_X8C_32G
                 | ScwInstancesType::START1_L
                 | ScwInstancesType::START1_M
                 | ScwInstancesType::VC1L
@@ -341,6 +481,22 @@ impl ScwInstancesType {
             ScwInstancesType::BASIC2_A4C_8G => "basic2-a4c-8g",
             ScwInstancesType::BASIC2_A8C_16G => "basic2-a8c-16g",
             ScwInstancesType::BASIC2_A8C_32G => "basic2-a8c-32g",
+            ScwInstancesType::BASIC3_X16C_32G => "basic3-x16c-32g",
+            ScwInstancesType::BASIC3_X16C_64G => "basic3-x16c-64g",
+            ScwInstancesType::BASIC3_X2C_4G => "basic3-x2c-4g",
+            ScwInstancesType::BASIC3_X2C_8G => "basic3-x2c-8g",
+            ScwInstancesType::BASIC3_X4C_16G => "basic3-x4c-16g",
+            ScwInstancesType::BASIC3_X4C_8G => "basic3-x4c-8g",
+            ScwInstancesType::BASIC3_X8C_16G => "basic3-x8c-16g",
+            ScwInstancesType::BASIC3_X8C_32G => "basic3-x8c-32g",
+            ScwInstancesType::COMPUTE3_X16C_32G => "compute3-x16c-32g",
+            ScwInstancesType::COMPUTE3_X2C_4G => "compute3-x2c-4g",
+            ScwInstancesType::COMPUTE3_X32C_64G => "compute3-x32c-64g",
+            ScwInstancesType::COMPUTE3_X48C_96G => "compute3-x48c-96g",
+            ScwInstancesType::COMPUTE3_X4C_8G => "compute3-x4c-8g",
+            ScwInstancesType::COMPUTE3_X64C_128G => "compute3-x64c-128g",
+            ScwInstancesType::COMPUTE3_X8C_16G => "compute3-x8c-16g",
+            ScwInstancesType::COMPUTE3_X96C_192G => "compute3-x96c-192g",
             ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
             ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
             ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -363,6 +519,11 @@ impl ScwInstancesType {
             ScwInstancesType::L4_4_24G => "l4-4-24g",
             ScwInstancesType::L40S_1_48G => "l40s-1-48g",
             ScwInstancesType::L40S_2_48G => "l40s-2-48g",
+            ScwInstancesType::MEMORY3_X16C_128G => "memory3-x16c-128g",
+            ScwInstancesType::MEMORY3_X2C_16G => "memory3-x2c-16g",
+            ScwInstancesType::MEMORY3_X32C_256G => "memory3-x32c-256g",
+            ScwInstancesType::MEMORY3_X4C_32G => "memory3-x4c-32g",
+            ScwInstancesType::MEMORY3_X8C_64G => "memory3-x8c-64g",
             ScwInstancesType::PLAY2_MICRO => "play2-micro",
             ScwInstancesType::PLAY2_NANO => "play2-nano",
             ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -399,6 +560,20 @@ impl ScwInstancesType {
             ScwInstancesType::PRO2_XS => "pro2-xs",
             ScwInstancesType::PRO2_XXS => "pro2-xxs",
             ScwInstancesType::RENDER_S => "render-s",
+            ScwInstancesType::STANDARD2_A16C_64G => "standard2-a16c-64g",
+            ScwInstancesType::STANDARD2_A2C_8G => "standard2-a2c-8g",
+            ScwInstancesType::STANDARD2_A32C_128G => "standard2-a32c-128g",
+            ScwInstancesType::STANDARD2_A48C_192G => "standard2-a48c-192g",
+            ScwInstancesType::STANDARD2_A4C_16G => "standard2-a4c-16g",
+            ScwInstancesType::STANDARD2_A64C_256G => "standard2-a64c-256g",
+            ScwInstancesType::STANDARD2_A8C_32G => "standard2-a8c-32g",
+            ScwInstancesType::STANDARD3_X16C_64G => "standard3-x16c-64g",
+            ScwInstancesType::STANDARD3_X2C_8G => "standard3-x2c-8g",
+            ScwInstancesType::STANDARD3_X32C_128G => "standard3-x32c-128g",
+            ScwInstancesType::STANDARD3_X48C_192G => "standard3-x48c-192g",
+            ScwInstancesType::STANDARD3_X4C_16G => "standard3-x4c-16g",
+            ScwInstancesType::STANDARD3_X64C_256G => "standard3-x64c-256g",
+            ScwInstancesType::STANDARD3_X8C_32G => "standard3-x8c-32g",
             ScwInstancesType::START1_L => "start1-l",
             ScwInstancesType::START1_M => "start1-m",
             ScwInstancesType::START1_S => "start1-s",
@@ -423,6 +598,22 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::BASIC2_A4C_8G => write!(f, "basic2-a4c-8g"),
             ScwInstancesType::BASIC2_A8C_16G => write!(f, "basic2-a8c-16g"),
             ScwInstancesType::BASIC2_A8C_32G => write!(f, "basic2-a8c-32g"),
+            ScwInstancesType::BASIC3_X16C_32G => write!(f, "basic3-x16c-32g"),
+            ScwInstancesType::BASIC3_X16C_64G => write!(f, "basic3-x16c-64g"),
+            ScwInstancesType::BASIC3_X2C_4G => write!(f, "basic3-x2c-4g"),
+            ScwInstancesType::BASIC3_X2C_8G => write!(f, "basic3-x2c-8g"),
+            ScwInstancesType::BASIC3_X4C_16G => write!(f, "basic3-x4c-16g"),
+            ScwInstancesType::BASIC3_X4C_8G => write!(f, "basic3-x4c-8g"),
+            ScwInstancesType::BASIC3_X8C_16G => write!(f, "basic3-x8c-16g"),
+            ScwInstancesType::BASIC3_X8C_32G => write!(f, "basic3-x8c-32g"),
+            ScwInstancesType::COMPUTE3_X16C_32G => write!(f, "compute3-x16c-32g"),
+            ScwInstancesType::COMPUTE3_X2C_4G => write!(f, "compute3-x2c-4g"),
+            ScwInstancesType::COMPUTE3_X32C_64G => write!(f, "compute3-x32c-64g"),
+            ScwInstancesType::COMPUTE3_X48C_96G => write!(f, "compute3-x48c-96g"),
+            ScwInstancesType::COMPUTE3_X4C_8G => write!(f, "compute3-x4c-8g"),
+            ScwInstancesType::COMPUTE3_X64C_128G => write!(f, "compute3-x64c-128g"),
+            ScwInstancesType::COMPUTE3_X8C_16G => write!(f, "compute3-x8c-16g"),
+            ScwInstancesType::COMPUTE3_X96C_192G => write!(f, "compute3-x96c-192g"),
             ScwInstancesType::COPARM1_16C_64G => write!(f, "coparm1-16c-64g"),
             ScwInstancesType::COPARM1_2C_8G => write!(f, "coparm1-2c-8g"),
             ScwInstancesType::COPARM1_32C_128G => write!(f, "coparm1-32c-128g"),
@@ -445,6 +636,11 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::L4_4_24G => write!(f, "l4-4-24g"),
             ScwInstancesType::L40S_1_48G => write!(f, "l40s-1-48g"),
             ScwInstancesType::L40S_2_48G => write!(f, "l40s-2-48g"),
+            ScwInstancesType::MEMORY3_X16C_128G => write!(f, "memory3-x16c-128g"),
+            ScwInstancesType::MEMORY3_X2C_16G => write!(f, "memory3-x2c-16g"),
+            ScwInstancesType::MEMORY3_X32C_256G => write!(f, "memory3-x32c-256g"),
+            ScwInstancesType::MEMORY3_X4C_32G => write!(f, "memory3-x4c-32g"),
+            ScwInstancesType::MEMORY3_X8C_64G => write!(f, "memory3-x8c-64g"),
             ScwInstancesType::PLAY2_MICRO => write!(f, "play2-micro"),
             ScwInstancesType::PLAY2_NANO => write!(f, "play2-nano"),
             ScwInstancesType::PLAY2_PICO => write!(f, "play2-pico"),
@@ -481,6 +677,20 @@ impl fmt::Display for ScwInstancesType {
             ScwInstancesType::PRO2_XS => write!(f, "pro2-xs"),
             ScwInstancesType::PRO2_XXS => write!(f, "pro2-xxs"),
             ScwInstancesType::RENDER_S => write!(f, "render-s"),
+            ScwInstancesType::STANDARD2_A16C_64G => write!(f, "standard2-a16c-64g"),
+            ScwInstancesType::STANDARD2_A2C_8G => write!(f, "standard2-a2c-8g"),
+            ScwInstancesType::STANDARD2_A32C_128G => write!(f, "standard2-a32c-128g"),
+            ScwInstancesType::STANDARD2_A48C_192G => write!(f, "standard2-a48c-192g"),
+            ScwInstancesType::STANDARD2_A4C_16G => write!(f, "standard2-a4c-16g"),
+            ScwInstancesType::STANDARD2_A64C_256G => write!(f, "standard2-a64c-256g"),
+            ScwInstancesType::STANDARD2_A8C_32G => write!(f, "standard2-a8c-32g"),
+            ScwInstancesType::STANDARD3_X16C_64G => write!(f, "standard3-x16c-64g"),
+            ScwInstancesType::STANDARD3_X2C_8G => write!(f, "standard3-x2c-8g"),
+            ScwInstancesType::STANDARD3_X32C_128G => write!(f, "standard3-x32c-128g"),
+            ScwInstancesType::STANDARD3_X48C_192G => write!(f, "standard3-x48c-192g"),
+            ScwInstancesType::STANDARD3_X4C_16G => write!(f, "standard3-x4c-16g"),
+            ScwInstancesType::STANDARD3_X64C_256G => write!(f, "standard3-x64c-256g"),
+            ScwInstancesType::STANDARD3_X8C_32G => write!(f, "standard3-x8c-32g"),
             ScwInstancesType::START1_L => write!(f, "start1-l"),
             ScwInstancesType::START1_M => write!(f, "start1-m"),
             ScwInstancesType::START1_S => write!(f, "start1-s"),
@@ -506,6 +716,22 @@ impl FromStr for ScwInstancesType {
             "basic2-a4c-8g" => Ok(ScwInstancesType::BASIC2_A4C_8G),
             "basic2-a8c-16g" => Ok(ScwInstancesType::BASIC2_A8C_16G),
             "basic2-a8c-32g" => Ok(ScwInstancesType::BASIC2_A8C_32G),
+            "basic3-x16c-32g" => Ok(ScwInstancesType::BASIC3_X16C_32G),
+            "basic3-x16c-64g" => Ok(ScwInstancesType::BASIC3_X16C_64G),
+            "basic3-x2c-4g" => Ok(ScwInstancesType::BASIC3_X2C_4G),
+            "basic3-x2c-8g" => Ok(ScwInstancesType::BASIC3_X2C_8G),
+            "basic3-x4c-16g" => Ok(ScwInstancesType::BASIC3_X4C_16G),
+            "basic3-x4c-8g" => Ok(ScwInstancesType::BASIC3_X4C_8G),
+            "basic3-x8c-16g" => Ok(ScwInstancesType::BASIC3_X8C_16G),
+            "basic3-x8c-32g" => Ok(ScwInstancesType::BASIC3_X8C_32G),
+            "compute3-x16c-32g" => Ok(ScwInstancesType::COMPUTE3_X16C_32G),
+            "compute3-x2c-4g" => Ok(ScwInstancesType::COMPUTE3_X2C_4G),
+            "compute3-x32c-64g" => Ok(ScwInstancesType::COMPUTE3_X32C_64G),
+            "compute3-x48c-96g" => Ok(ScwInstancesType::COMPUTE3_X48C_96G),
+            "compute3-x4c-8g" => Ok(ScwInstancesType::COMPUTE3_X4C_8G),
+            "compute3-x64c-128g" => Ok(ScwInstancesType::COMPUTE3_X64C_128G),
+            "compute3-x8c-16g" => Ok(ScwInstancesType::COMPUTE3_X8C_16G),
+            "compute3-x96c-192g" => Ok(ScwInstancesType::COMPUTE3_X96C_192G),
             "coparm1-16c-64g" => Ok(ScwInstancesType::COPARM1_16C_64G),
             "coparm1-2c-8g" => Ok(ScwInstancesType::COPARM1_2C_8G),
             "coparm1-32c-128g" => Ok(ScwInstancesType::COPARM1_32C_128G),
@@ -528,6 +754,11 @@ impl FromStr for ScwInstancesType {
             "l4-4-24g" => Ok(ScwInstancesType::L4_4_24G),
             "l40s-1-48g" => Ok(ScwInstancesType::L40S_1_48G),
             "l40s-2-48g" => Ok(ScwInstancesType::L40S_2_48G),
+            "memory3-x16c-128g" => Ok(ScwInstancesType::MEMORY3_X16C_128G),
+            "memory3-x2c-16g" => Ok(ScwInstancesType::MEMORY3_X2C_16G),
+            "memory3-x32c-256g" => Ok(ScwInstancesType::MEMORY3_X32C_256G),
+            "memory3-x4c-32g" => Ok(ScwInstancesType::MEMORY3_X4C_32G),
+            "memory3-x8c-64g" => Ok(ScwInstancesType::MEMORY3_X8C_64G),
             "play2-micro" => Ok(ScwInstancesType::PLAY2_MICRO),
             "play2-nano" => Ok(ScwInstancesType::PLAY2_NANO),
             "play2-pico" => Ok(ScwInstancesType::PLAY2_PICO),
@@ -564,6 +795,20 @@ impl FromStr for ScwInstancesType {
             "pro2-xs" => Ok(ScwInstancesType::PRO2_XS),
             "pro2-xxs" => Ok(ScwInstancesType::PRO2_XXS),
             "render-s" => Ok(ScwInstancesType::RENDER_S),
+            "standard2-a16c-64g" => Ok(ScwInstancesType::STANDARD2_A16C_64G),
+            "standard2-a2c-8g" => Ok(ScwInstancesType::STANDARD2_A2C_8G),
+            "standard2-a32c-128g" => Ok(ScwInstancesType::STANDARD2_A32C_128G),
+            "standard2-a48c-192g" => Ok(ScwInstancesType::STANDARD2_A48C_192G),
+            "standard2-a4c-16g" => Ok(ScwInstancesType::STANDARD2_A4C_16G),
+            "standard2-a64c-256g" => Ok(ScwInstancesType::STANDARD2_A64C_256G),
+            "standard2-a8c-32g" => Ok(ScwInstancesType::STANDARD2_A8C_32G),
+            "standard3-x16c-64g" => Ok(ScwInstancesType::STANDARD3_X16C_64G),
+            "standard3-x2c-8g" => Ok(ScwInstancesType::STANDARD3_X2C_8G),
+            "standard3-x32c-128g" => Ok(ScwInstancesType::STANDARD3_X32C_128G),
+            "standard3-x48c-192g" => Ok(ScwInstancesType::STANDARD3_X48C_192G),
+            "standard3-x4c-16g" => Ok(ScwInstancesType::STANDARD3_X4C_16G),
+            "standard3-x64c-256g" => Ok(ScwInstancesType::STANDARD3_X64C_256G),
+            "standard3-x8c-32g" => Ok(ScwInstancesType::STANDARD3_X8C_32G),
             "start1-l" => Ok(ScwInstancesType::START1_L),
             "start1-m" => Ok(ScwInstancesType::START1_M),
             "start1-s" => Ok(ScwInstancesType::START1_S),
@@ -639,6 +884,22 @@ mod tests {
                 ScwInstancesType::BASIC2_A4C_8G => "basic2-a4c-8g",
                 ScwInstancesType::BASIC2_A8C_16G => "basic2-a8c-16g",
                 ScwInstancesType::BASIC2_A8C_32G => "basic2-a8c-32g",
+                ScwInstancesType::BASIC3_X16C_32G => "basic3-x16c-32g",
+                ScwInstancesType::BASIC3_X16C_64G => "basic3-x16c-64g",
+                ScwInstancesType::BASIC3_X2C_4G => "basic3-x2c-4g",
+                ScwInstancesType::BASIC3_X2C_8G => "basic3-x2c-8g",
+                ScwInstancesType::BASIC3_X4C_16G => "basic3-x4c-16g",
+                ScwInstancesType::BASIC3_X4C_8G => "basic3-x4c-8g",
+                ScwInstancesType::BASIC3_X8C_16G => "basic3-x8c-16g",
+                ScwInstancesType::BASIC3_X8C_32G => "basic3-x8c-32g",
+                ScwInstancesType::COMPUTE3_X16C_32G => "compute3-x16c-32g",
+                ScwInstancesType::COMPUTE3_X2C_4G => "compute3-x2c-4g",
+                ScwInstancesType::COMPUTE3_X32C_64G => "compute3-x32c-64g",
+                ScwInstancesType::COMPUTE3_X48C_96G => "compute3-x48c-96g",
+                ScwInstancesType::COMPUTE3_X4C_8G => "compute3-x4c-8g",
+                ScwInstancesType::COMPUTE3_X64C_128G => "compute3-x64c-128g",
+                ScwInstancesType::COMPUTE3_X8C_16G => "compute3-x8c-16g",
+                ScwInstancesType::COMPUTE3_X96C_192G => "compute3-x96c-192g",
                 ScwInstancesType::COPARM1_16C_64G => "coparm1-16c-64g",
                 ScwInstancesType::COPARM1_2C_8G => "coparm1-2c-8g",
                 ScwInstancesType::COPARM1_32C_128G => "coparm1-32c-128g",
@@ -655,6 +916,11 @@ mod tests {
                 "l4-2-24g", ScwInstancesType::L4_4_24G => "l4-4-24g",
                 ScwInstancesType::L40S_1_48G => "l40s-1-48g",
                 ScwInstancesType::L40S_2_48G => "l40s-2-48g",
+                ScwInstancesType::MEMORY3_X16C_128G => "memory3-x16c-128g",
+                ScwInstancesType::MEMORY3_X2C_16G => "memory3-x2c-16g",
+                ScwInstancesType::MEMORY3_X32C_256G => "memory3-x32c-256g",
+                ScwInstancesType::MEMORY3_X4C_32G => "memory3-x4c-32g",
+                ScwInstancesType::MEMORY3_X8C_64G => "memory3-x8c-64g",
                 ScwInstancesType::PLAY2_MICRO => "play2-micro",
                 ScwInstancesType::PLAY2_NANO => "play2-nano",
                 ScwInstancesType::PLAY2_PICO => "play2-pico",
@@ -687,14 +953,28 @@ mod tests {
                 ScwInstancesType::PRO2_L => "pro2-l", ScwInstancesType::PRO2_M =>
                 "pro2-m", ScwInstancesType::PRO2_S => "pro2-s", ScwInstancesType::PRO2_XS
                 => "pro2-xs", ScwInstancesType::PRO2_XXS => "pro2-xxs",
-                ScwInstancesType::RENDER_S => "render-s", ScwInstancesType::START1_L =>
-                "start1-l", ScwInstancesType::START1_M => "start1-m",
-                ScwInstancesType::START1_S => "start1-s", ScwInstancesType::VC1L =>
-                "vc1l", ScwInstancesType::VC1M => "vc1m", ScwInstancesType::VC1S =>
-                "vc1s", ScwInstancesType::X64_120GB => "x64-120gb",
-                ScwInstancesType::X64_15GB => "x64-15gb", ScwInstancesType::X64_30GB =>
-                "x64-30gb", ScwInstancesType::X64_60GB => "x64-60gb", } .to_string(),
-                result_to_string
+                ScwInstancesType::RENDER_S => "render-s",
+                ScwInstancesType::STANDARD2_A16C_64G => "standard2-a16c-64g",
+                ScwInstancesType::STANDARD2_A2C_8G => "standard2-a2c-8g",
+                ScwInstancesType::STANDARD2_A32C_128G => "standard2-a32c-128g",
+                ScwInstancesType::STANDARD2_A48C_192G => "standard2-a48c-192g",
+                ScwInstancesType::STANDARD2_A4C_16G => "standard2-a4c-16g",
+                ScwInstancesType::STANDARD2_A64C_256G => "standard2-a64c-256g",
+                ScwInstancesType::STANDARD2_A8C_32G => "standard2-a8c-32g",
+                ScwInstancesType::STANDARD3_X16C_64G => "standard3-x16c-64g",
+                ScwInstancesType::STANDARD3_X2C_8G => "standard3-x2c-8g",
+                ScwInstancesType::STANDARD3_X32C_128G => "standard3-x32c-128g",
+                ScwInstancesType::STANDARD3_X48C_192G => "standard3-x48c-192g",
+                ScwInstancesType::STANDARD3_X4C_16G => "standard3-x4c-16g",
+                ScwInstancesType::STANDARD3_X64C_256G => "standard3-x64c-256g",
+                ScwInstancesType::STANDARD3_X8C_32G => "standard3-x8c-32g",
+                ScwInstancesType::START1_L => "start1-l", ScwInstancesType::START1_M =>
+                "start1-m", ScwInstancesType::START1_S => "start1-s",
+                ScwInstancesType::VC1L => "vc1l", ScwInstancesType::VC1M => "vc1m",
+                ScwInstancesType::VC1S => "vc1s", ScwInstancesType::X64_120GB =>
+                "x64-120gb", ScwInstancesType::X64_15GB => "x64-15gb",
+                ScwInstancesType::X64_30GB => "x64-30gb", ScwInstancesType::X64_60GB =>
+                "x64-60gb", } .to_string(), result_to_string
             );
             match ScwInstancesType::from_str(&result_to_string) {
                 Ok(result_instance_type) => {
