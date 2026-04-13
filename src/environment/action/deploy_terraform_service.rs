@@ -1,7 +1,9 @@
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job::JobRunError;
 use crate::environment::action::{DeploymentAction, log_job_output_error};
-use crate::environment::models::terraform_service::{TerraformAction, TerraformService, TerraformServiceTrait};
+use crate::environment::models::terraform_service::{
+    TerraformAction, TerraformService, TerraformServiceTrait, is_terraform_noop,
+};
 use crate::environment::models::types::{CloudProvider, ToTeraContext};
 use crate::environment::report::logger::{EnvProgressLogger, EnvSuccessLogger};
 use crate::environment::report::terraform_service::reporter::TerraformServiceDeploymentReporter;
@@ -78,7 +80,7 @@ where
 
     fn on_delete(&self, target: &DeploymentTarget) -> Result<(), Box<EngineError>> {
         // If the TerraformAction is Noop, we should delete terraform service related resources (job, helm, etc) without triggering terraform destroy
-        let skip_terraform_destroy = matches!(self.terraform_action, TerraformAction::TerraformNoop);
+        let skip_terraform_destroy = is_terraform_noop(&self.terraform_action);
 
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Delete));
 
