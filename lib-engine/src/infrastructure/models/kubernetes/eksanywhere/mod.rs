@@ -128,6 +128,51 @@ pub struct EksAnywhereParameters {
     pub git_repository: Option<EksAnywhereGitRepository>,
     #[serde(default)]
     pub yaml_file_path: Option<String>,
+    #[serde(default, alias = "clusterBackup")]
+    pub cluster_backup: Option<EksAnywhereClusterBackupParameters>,
+}
+
+fn default_eks_anywhere_cluster_backup_enabled() -> bool {
+    true
+}
+
+fn default_eks_anywhere_cluster_backup_timeout_seconds() -> u64 {
+    300
+}
+
+fn default_eks_anywhere_cluster_backup_keep_failed_job_on_failure() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct EksAnywhereClusterBackupParameters {
+    #[serde(default = "default_eks_anywhere_cluster_backup_enabled")]
+    pub enabled: bool,
+    #[serde(
+        default = "default_eks_anywhere_cluster_backup_timeout_seconds",
+        alias = "timeoutSeconds"
+    )]
+    pub timeout_seconds: u64,
+    #[serde(
+        default = "default_eks_anywhere_cluster_backup_keep_failed_job_on_failure",
+        alias = "keepFailedJobOnFailure"
+    )]
+    pub keep_failed_job_on_failure: bool,
+    pub s3: EksAnywhereClusterBackupS3Parameters,
+    #[serde(default, alias = "certsSecretName")]
+    pub certs_secret_name: Option<String>,
+    #[serde(default, alias = "etcdctlImage")]
+    pub etcdctl_image: Option<String>,
+    #[serde(default, alias = "uploadImage")]
+    pub upload_image: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct EksAnywhereClusterBackupS3Parameters {
+    #[serde(alias = "etcdPresignedPutUrl")]
+    pub etcd_presigned_put_url: String,
+    #[serde(alias = "capiPresignedPutUrl")]
+    pub capi_presigned_put_url: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -335,6 +380,82 @@ mod tests {
                 .infrastructure_charts_parameters
                 .eks_anywhere_parameters
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn should_parse_cluster_backup_parameters_with_default_timeout_and_enabled() {
+        let mut payload = base_eks_anywhere_options();
+        payload["infrastructure_charts_parameters"]["eks_anywhere_parameters"] = json!({
+            "cluster_backup": {
+                "s3": {
+                    "etcd_presigned_put_url": "https://example.s3.eu-west-3.amazonaws.com/path/etcd.db?X-Amz-Signature=abc",
+                    "capi_presigned_put_url": "https://example.s3.eu-west-3.amazonaws.com/path/capi.tgz?X-Amz-Signature=xyz"
+                }
+            }
+        });
+
+        let options: EksAnywhereOptions = serde_json::from_value(payload).expect("options should deserialize");
+        let cluster_backup = options
+            .infrastructure_charts_parameters
+            .eks_anywhere_parameters
+            .expect("eks_anywhere_parameters should be present")
+            .cluster_backup
+            .expect("cluster_backup should be present");
+
+        assert!(cluster_backup.enabled);
+        assert_eq!(cluster_backup.timeout_seconds, 300);
+        assert!(cluster_backup.keep_failed_job_on_failure);
+        assert_eq!(
+            cluster_backup.s3.etcd_presigned_put_url,
+            "https://example.s3.eu-west-3.amazonaws.com/path/etcd.db?X-Amz-Signature=abc"
+        );
+        assert_eq!(
+            cluster_backup.s3.capi_presigned_put_url,
+            "https://example.s3.eu-west-3.amazonaws.com/path/capi.tgz?X-Amz-Signature=xyz"
+        );
+        assert_eq!(cluster_backup.certs_secret_name, None);
+    }
+
+    #[test]
+    fn should_parse_cluster_backup_parameters_with_custom_values() {
+        let mut payload = base_eks_anywhere_options();
+        payload["infrastructure_charts_parameters"]["eks_anywhere_parameters"] = json!({
+            "cluster_backup": {
+                "enabled": false,
+                "timeout_seconds": 120,
+                "keep_failed_job_on_failure": true,
+                "certs_secret_name": "custom-etcd-certs",
+                "etcdctl_image": "quay.io/coreos/etcd:v3.5.20",
+                "upload_image": "curlimages/curl:8.8.0",
+                "s3": {
+                    "etcd_presigned_put_url": "https://example.s3.eu-west-1.amazonaws.com/prefix/path/etcd.db?X-Amz-Signature=def",
+                    "capi_presigned_put_url": "https://example.s3.eu-west-1.amazonaws.com/prefix/path/capi.tgz?X-Amz-Signature=ghi"
+                }
+            }
+        });
+
+        let options: EksAnywhereOptions = serde_json::from_value(payload).expect("options should deserialize");
+        let cluster_backup = options
+            .infrastructure_charts_parameters
+            .eks_anywhere_parameters
+            .expect("eks_anywhere_parameters should be present")
+            .cluster_backup
+            .expect("cluster_backup should be present");
+
+        assert!(!cluster_backup.enabled);
+        assert_eq!(cluster_backup.timeout_seconds, 120);
+        assert!(cluster_backup.keep_failed_job_on_failure);
+        assert_eq!(cluster_backup.certs_secret_name.as_deref(), Some("custom-etcd-certs"));
+        assert_eq!(cluster_backup.etcdctl_image.as_deref(), Some("quay.io/coreos/etcd:v3.5.20"));
+        assert_eq!(cluster_backup.upload_image.as_deref(), Some("curlimages/curl:8.8.0"));
+        assert_eq!(
+            cluster_backup.s3.etcd_presigned_put_url,
+            "https://example.s3.eu-west-1.amazonaws.com/prefix/path/etcd.db?X-Amz-Signature=def"
+        );
+        assert_eq!(
+            cluster_backup.s3.capi_presigned_put_url,
+            "https://example.s3.eu-west-1.amazonaws.com/prefix/path/capi.tgz?X-Amz-Signature=ghi"
         );
     }
 }

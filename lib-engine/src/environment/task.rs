@@ -445,8 +445,27 @@ impl EnvironmentTask {
         secrets.extend(service_secrets);
 
         match &request.cloud_provider.options {
-            CloudProviderOptions::Aws { secret_access_key, .. } => {
+            CloudProviderOptions::Aws {
+                secret_access_key,
+                vsphere_password,
+                ..
+            } => {
                 secrets.push(secret_access_key.to_string());
+                if let Some(vsphere_password) = vsphere_password.as_ref().filter(|x| !x.trim().is_empty()) {
+                    secrets.push(vsphere_password.to_string());
+                }
+            }
+            CloudProviderOptions::AwsVsphere {
+                secret_access_key,
+                vsphere_password,
+                ..
+            } => {
+                if let Some(secret_access_key) = secret_access_key.as_ref().filter(|x| !x.trim().is_empty()) {
+                    secrets.push(secret_access_key.to_string());
+                }
+                if !vsphere_password.trim().is_empty() {
+                    secrets.push(vsphere_password.to_string());
+                }
             }
             CloudProviderOptions::Scaleway {
                 scaleway_secret_key, ..
@@ -461,7 +480,7 @@ impl EnvironmentTask {
                 }
             }
             CloudProviderOptions::Azure { .. } => {}
-            CloudProviderOptions::OnPremise { .. } => {}
+            CloudProviderOptions::OnPremise(_) => {}
         };
 
         secrets

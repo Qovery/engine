@@ -16,6 +16,7 @@ ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG PLUTO_VERSION=5.22.8
 ARG EKSCTL_VERSION=0.220.0
 ARG EKS_ANYWHERE_VERSION=0.25.0
+ARG GOVC_VERSION=0.52.0
 
 ARG BIN_DEST_FOLDER="/binaries"
 ARG RUST_IMAGE="public.ecr.aws/r3m4q3r9/qovery-ci:rust-1.92.0-2026-01-05T18-08-48"
@@ -367,16 +368,20 @@ FROM run AS run-eksanywhere
 
 ARG EKSCTL_VERSION
 ARG EKS_ANYWHERE_VERSION
+ARG GOVC_VERSION
 
 USER root
 RUN packages_to_remove="" && \
   for pkg in azure-cli google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin; do \
     if dpkg -s "$pkg" >/dev/null 2>&1; then packages_to_remove="$packages_to_remove $pkg"; fi; \
   done && \
+  govc_arch="$(dpkg --print-architecture | sed -e 's/amd64/x86_64/' -e 's/arm64/arm64/')" && \
   if [ -n "$packages_to_remove" ]; then \
     apt-get update && apt-get purge -y $packages_to_remove; \
   fi && \
   rm -rf /var/lib/apt/lists/* /opt/az /usr/lib/google-cloud-sdk && \
+  curl -sSL "https://github.com/vmware/govmomi/releases/download/v${GOVC_VERSION}/govc_Linux_${govc_arch}.tar.gz" | \
+  tar -C /usr/local/bin/ --no-same-owner -xzv govc && \
   curl -sSL "https://github.com/eksctl-io/eksctl/releases/download/v${EKSCTL_VERSION}/eksctl_Linux_$(dpkg --print-architecture).tar.gz" | \
   tar -C /usr/local/bin/ --no-same-owner -xzv eksctl && \
   tmp_dir="$(mktemp -d)" && \
