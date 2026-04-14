@@ -97,20 +97,34 @@ config:
           stages:
             - decolorize: {}
             - regex:
-                expression: '^\s*(?:\d{9,}\s+)?\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?(?:\s+\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?)?\s+(?P<level>TRACE|DEBUG|INFO|WARN(?:ING)?|ERROR|CRIT(?:ICAL)?|FATAL|PANIC)\b'
+                expression: '^\s*(?:\d{9,}\s+)?\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?(?:\s+\d{4}-\d{2}-\d{2}T[\d:.\-]+(?:Z|[+-]\d{2}:\d{2})?)?\s+(?P<level>TRACE|VERBOSE|DEBUG|LOG|INFO|NOTICE|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL|PANIC)\b'
             - labels: { level: null }
 
-      # STAGE 3: Extract from key=value or key:value patterns
+      # STAGE 3: Extract from generic structured text format
+      # ONLY if level is still empty
+      # Pattern examples:
+      # [INFO] Started
+      # 04/10/2026, 3:56:47 PM VERBOSE [AuthGuard] ...
+      # [Nest[] 1 - 04/10/2026, 3:56:47 PM VERBOSE [AuthGuard] ...
+      - match:
+          selector: '{level=""}'
+          stages:
+            - decolorize: {}
+            - regex:
+                expression: '^\s*(?:\[[^\]]+\]\s+\d+\s+-\s+)?(?:\d{1,4}[/-]\d{1,2}[/-]\d{1,4}(?:,\s+|\s+)\d{1,2}:\d{2}:\d{2}(?:[.,]\d+)?(?:\s+(?:AM|PM))?\s+)?\[?(?P<level>TRACE|VERBOSE|DEBUG|LOG|INFO|NOTICE|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL|PANIC)\]?\b'
+            - labels: { level: null }
+
+      # STAGE 4: Extract from key=value or key:value patterns
       # ONLY if level is still empty
       # Matches: level=INFO, level:WARN, severity=error, etc.
       - match:
           selector: '{level=""}'
           stages:
             - regex:
-                expression: '(?i)\b(?:level|severity)[:=]\s*"?(?P<level>trace|debug|info|warn(?:ing)?|error|crit(?:ical)?|fatal|panic)"?'
+                expression: '(?i)\b(?:level|severity)[:=]\s*"?(?P<level>trace|verbose|debug|log|info|notice|warn(?:ing)?|error|err|crit(?:ical)?|fatal|panic)"?'
             - labels: { level: null }
 
-      # STAGE 4: Normalize all captured levels to lowercase
+      # STAGE 5: Normalize all captured levels to lowercase
       {% raw %}
       - template:
           source: level
@@ -127,11 +141,11 @@ config:
           expression: '^(err)$'
           replace: 'error'
 
-      # STAGE 5: Publish level label
+      # STAGE 6: Publish level label
       - labels:
           level: null
 
-      # STAGE 6: Last resort - detect error keywords in log text
+      # STAGE 7: Last resort - detect error keywords in log text
       # ONLY if level is STILL empty
       - match:
           selector: '{level=""} |~ "(?i)\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\b"'
