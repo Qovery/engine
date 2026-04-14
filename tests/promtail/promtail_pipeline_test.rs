@@ -629,21 +629,21 @@ mod tests {
     }
 
     #[test]
-    fn test_java_iso_and_non_iso() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_java_iso_and_non_iso_are_detected() -> Result<(), Box<dyn std::error::Error>> {
         ensure_docker_image()?;
         let fixture = PromtailTestFixture::new()?;
 
-        // Java ISO 8601 timestamp → detected
+        // Java ISO 8601 timestamp -> detected
         assert_level_for(
             &fixture,
             r#"2025-10-14T05:38:11.544Z INFO  [main] c.example.App - Started"#,
             Some("info"),
         )?;
-        // Java non-ISO (yyyy-MM-dd HH:mm:ss,SSS) → not matched by current regex (expected None)
+        // Java non-ISO (yyyy-MM-dd HH:mm:ss,SSS) -> also detected by generic structured regex
         assert_level_for(
             &fixture,
             r#"2025-10-14 05:38:11,544 INFO  [main] c.example.App - Started"#,
-            None,
+            Some("info"),
         )?;
         Ok(())
     }
@@ -664,6 +664,32 @@ mod tests {
             &fixture,
             r#"2025-10-14T05:38:11.544Z [DefaultDispatcher-worker-1] severity=error msg="boom""#,
             Some("error"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_nestjs_verbose_format_is_extracted() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        assert_level_for(
+            &fixture,
+            r#"[Nest[] 1  - 04/10/2026, 3:56:47 PM VERBOSE [AuthGuard] No authorization header"#,
+            Some("verbose"),
+        )?;
+        Ok(())
+    }
+
+    #[test]
+    fn test_nestjs_verbose_not_overridden_by_error_keyword() -> Result<(), Box<dyn std::error::Error>> {
+        ensure_docker_image()?;
+        let fixture = PromtailTestFixture::new()?;
+
+        assert_level_for(
+            &fixture,
+            r#"[Nest[] 1  - 04/10/2026, 3:56:47 PM VERBOSE [ResourceGuard] policy_error=false request allowed"#,
+            Some("verbose"),
         )?;
         Ok(())
     }
