@@ -676,7 +676,7 @@ mod tests {
         assert_level_for(
             &fixture,
             r#"[Nest[] 1  - 04/10/2026, 3:56:47 PM VERBOSE [AuthGuard] No authorization header"#,
-            Some("verbose"),
+            Some("debug"),
         )?;
         Ok(())
     }
@@ -689,7 +689,7 @@ mod tests {
         assert_level_for(
             &fixture,
             r#"[Nest[] 1  - 04/10/2026, 3:56:47 PM VERBOSE [ResourceGuard] policy_error=false request allowed"#,
-            Some("verbose"),
+            Some("debug"),
         )?;
         Ok(())
     }
