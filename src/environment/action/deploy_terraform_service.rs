@@ -1,3 +1,4 @@
+use crate::environment::action::deploy_external_secrets::rollback_external_secrets_if_needed;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::job::JobRunError;
 use crate::environment::action::{DeploymentAction, log_job_output_error};
@@ -206,7 +207,10 @@ where
         let helm = self.helm_deployment(target, event_details)?;
 
         // create job
-        helm.on_create(target)?;
+        if let Err(e) = helm.on_create(target) {
+            rollback_external_secrets_if_needed(self.kube_name(), &self.external_secrets, target, logger);
+            return Err(e);
+        }
 
         let _backend_config_secret_cleanup = scopeguard::guard(&self.backend.kube_secret_name, |secret_name| {
             info!("Removing secret: {:?}", secret_name);

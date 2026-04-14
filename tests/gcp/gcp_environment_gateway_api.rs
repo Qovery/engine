@@ -6779,6 +6779,7 @@ fn deploy_helm_with_cors_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_enable_cors: true,
                 network_gateway_api_cors_allow_origin: "https://example.com,https://test.com".to_string(),
@@ -6972,6 +6973,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_sticky_session_enable: true,
                 ..Default::default()
@@ -7159,6 +7161,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_whitelist_source_range: "10.0.0.0/16,192.168.1.0/24".to_string(),
                 ..Default::default()
@@ -7342,6 +7345,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_denylist_source_range: "192.0.2.0/24,198.51.100.0/24".to_string(),
                 ..Default::default()
@@ -7525,6 +7529,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_whitelist_source_range: "10.0.0.0/16".to_string(),
                 network_gateway_api_denylist_source_range: "10.0.1.0/24".to_string(),
@@ -7719,6 +7724,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: env_vars,
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_basic_auth_env_var: "BASIC_AUTH".to_string(),
                 ..Default::default()
@@ -7882,6 +7888,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_route_limit_rps: Some(10),
                 network_gateway_api_route_limit_rpm: Some(600),
@@ -8085,6 +8092,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_add_headers: custom_headers,
                 ..Default::default()
@@ -8289,6 +8297,7 @@ fn deploy_helm_with_sticky_session_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_sticky_session_enable: true,
                 ..Default::default()
@@ -8478,6 +8487,7 @@ fn deploy_helm_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_whitelist_source_range: "10.0.0.0/16,192.168.1.0/24".to_string(),
                 ..Default::default()
@@ -8663,6 +8673,7 @@ fn deploy_helm_with_ip_denylist_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_denylist_source_range: "192.0.2.0/24,198.51.100.0/24".to_string(),
                 ..Default::default()
@@ -8848,6 +8859,7 @@ fn deploy_helm_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_whitelist_source_range: "10.0.0.0/16".to_string(),
                 network_gateway_api_denylist_source_range: "10.0.1.0/24".to_string(),
@@ -9044,6 +9056,7 @@ fn deploy_helm_with_basic_auth_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: env_vars,
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_basic_auth_env_var: "BASIC_AUTH".to_string(),
                 ..Default::default()
@@ -9209,6 +9222,7 @@ fn deploy_helm_with_rate_limit_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_route_limit_rps: Some(10),
                 network_gateway_api_route_limit_rpm: Some(600),
@@ -9414,6 +9428,7 @@ fn deploy_helm_with_custom_headers_enabled_on_gcp_gke_grpc() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_add_headers: custom_headers,
                 ..Default::default()
@@ -10011,6 +10026,7 @@ fn deploy_helm_with_custom_http_errors_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_custom_http_errors: Some(vec![401, 403, 404]),
                 ..Default::default()
@@ -10550,6 +10566,7 @@ fn deploy_helm_with_circuit_breaker_on_gcp_gke() {
             timeout_sec: 60,
             allow_cluster_wide_resources: false,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: HelmChartAdvancedSettings {
                 network_gateway_api_circuit_breaker_max_connections: Some(250),
                 network_gateway_api_circuit_breaker_max_pending_requests: Some(125),

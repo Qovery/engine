@@ -1,4 +1,5 @@
 use crate::environment::action::DeploymentAction;
+use crate::environment::models::external_secret::{ExternalSecretGroup, build_external_secret_groups};
 use crate::environment::models::port::Port;
 use crate::environment::models::types::CloudProvider;
 use crate::events::{EventDetails, Stage, Transmitter};
@@ -7,12 +8,12 @@ use crate::infrastructure::models::cloud_provider::service::{Action, Service, Se
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::helm_chart::{HelmChartAdvancedSettings, HelmRawValues};
-use crate::io_models::models::EnvironmentVariable;
+use crate::io_models::models::{EnvironmentVariable, ExternalSecret};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,6 +33,7 @@ pub struct HelmChart<T: CloudProvider> {
     pub(crate) long_id: Uuid,
     pub(crate) name: String,
     pub(crate) kube_name: String,
+    pub(crate) lib_root_directory: String,
     pub(crate) action: Action,
     pub(crate) chart_source: HelmChartSource,
     pub(crate) chart_values: HelmValueSource,
@@ -42,6 +44,8 @@ pub struct HelmChart<T: CloudProvider> {
     pub(crate) timeout: Duration,
     pub(crate) allow_cluster_wide_resources: bool,
     pub(crate) environment_variables: HashMap<String, VariableInfo>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
+    pub(crate) resolved_eso_values: HashMap<String, VariableInfo>,
     pub(crate) advanced_settings: HelmChartAdvancedSettings,
     pub(crate) _extra_settings: T::AppExtraSettings,
     pub(crate) workspace_directory: PathBuf,
@@ -66,6 +70,7 @@ impl<T: CloudProvider> HelmChart<T> {
         timeout: Duration,
         allow_cluster_wide_resources: bool,
         environment_variables: HashMap<String, VariableInfo>,
+        external_secrets: BTreeMap<String, ExternalSecret>,
         advanced_settings: HelmChartAdvancedSettings,
         extra_settings: T::AppExtraSettings,
         mk_event_details: impl Fn(Transmitter) -> EventDetails,
@@ -97,6 +102,7 @@ impl<T: CloudProvider> HelmChart<T> {
             }
         }
 
+        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
         let event_details = mk_event_details(Transmitter::Helm(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
@@ -107,6 +113,7 @@ impl<T: CloudProvider> HelmChart<T> {
             action,
             name,
             kube_name,
+            lib_root_directory: context.lib_root_dir().to_string(),
             chart_source,
             chart_values,
             set_values,
@@ -116,6 +123,8 @@ impl<T: CloudProvider> HelmChart<T> {
             timeout,
             allow_cluster_wide_resources,
             environment_variables,
+            external_secrets,
+            resolved_eso_values: HashMap::new(),
             advanced_settings,
             _extra_settings: extra_settings,
             chart_workspace_directory: workspace_directory.join("chart"),
@@ -173,6 +182,10 @@ impl<T: CloudProvider> HelmChart<T> {
 
     pub fn environment_variables(&self) -> &HashMap<String, VariableInfo> {
         &self.environment_variables
+    }
+
+    pub fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        &self.external_secrets
     }
 
     pub fn kube_label_selector(&self) -> String {
@@ -317,6 +330,10 @@ pub trait HelmChartService: Service + DeploymentAction + Send {
     fn public_ports(&self) -> Vec<&Port>;
     fn advanced_settings(&self) -> &HelmChartAdvancedSettings;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+    fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn lib_root_directory(&self) -> &str;
+    fn workspace_directory_path(&self) -> &Path;
+    fn set_resolved_eso_values(&mut self, values: HashMap<String, VariableInfo>);
 }
 
 impl<T: CloudProvider> HelmChartService for HelmChart<T>
@@ -331,6 +348,18 @@ where
     }
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+    fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        HelmChart::external_secrets(self)
+    }
+    fn lib_root_directory(&self) -> &str {
+        &self.lib_root_directory
+    }
+    fn workspace_directory_path(&self) -> &Path {
+        HelmChart::workspace_directory(self)
+    }
+    fn set_resolved_eso_values(&mut self, values: HashMap<String, VariableInfo>) {
+        self.resolved_eso_values = values;
     }
 }
 

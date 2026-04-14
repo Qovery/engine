@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use itertools::Itertools;
@@ -378,6 +378,10 @@ impl<T: CloudProvider> Application<T> {
         self.workspace_directory.to_str().unwrap_or("")
     }
 
+    pub fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        &self.external_secrets
+    }
+
     pub fn should_delete_shared_registry(&self) -> bool {
         self.should_delete_shared_registry
     }
@@ -460,6 +464,9 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn advanced_settings(&self) -> &ApplicationAdvancedSettings;
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+    fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn lib_root_directory(&self) -> &str;
+    fn workspace_directory_path(&self) -> &Path;
 }
 
 use crate::environment::models::autoscaling::AutoscalingConfig;
@@ -515,6 +522,18 @@ where
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+
+    fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        Application::external_secrets(self)
+    }
+
+    fn lib_root_directory(&self) -> &str {
+        &self.lib_root_directory
+    }
+
+    fn workspace_directory_path(&self) -> &Path {
+        Path::new(Application::workspace_directory(self))
     }
 }
 

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: q-external-secret
+description: A Qovery Helm chart to manage ExternalSecret objects
+type: application
+version: 0.1.0

@@ -15,6 +15,7 @@ use crate::infrastructure::models::kubernetes;
 use crate::io_models::application::{GitCredentials, PortIo};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
+use crate::io_models::models::ExternalSecret;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
 use base64::Engine;
@@ -270,6 +271,10 @@ pub struct HelmChart {
     pub environment_vars_with_infos: BTreeMap<String, VariableInfo>,
     pub advanced_settings: HelmChartAdvancedSettings,
     pub ports: Vec<PortIo>,
+    /// External secrets to sync from a remote secret manager via ESO.
+    /// Key is the environment variable name / k8s Secret key.
+    #[serde(default)]
+    pub external_secrets: BTreeMap<String, ExternalSecret>,
 }
 
 impl HelmChart {
@@ -358,6 +363,7 @@ impl HelmChart {
                 (k, v)
             })
             .collect();
+        let external_secrets = self.external_secrets;
         let service: Box<dyn HelmChartService> = match cloud_provider.kubernetes_kind() {
             kubernetes::Kind::Eks | kubernetes::Kind::EksSelfManaged | kubernetes::Kind::EksAnywhere => {
                 Box::new(models::helm_chart::HelmChart::<AWS>::new(
@@ -380,6 +386,7 @@ impl HelmChart {
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
                     environment_variables_with_info,
+                    external_secrets,
                     self.advanced_settings,
                     AwsAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -407,6 +414,7 @@ impl HelmChart {
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
                     environment_variables_with_info,
+                    external_secrets,
                     self.advanced_settings,
                     ScwAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -434,6 +442,7 @@ impl HelmChart {
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
                     environment_variables_with_info,
+                    external_secrets,
                     self.advanced_settings,
                     GcpAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -461,6 +470,7 @@ impl HelmChart {
                     std::time::Duration::from_secs(self.timeout_sec),
                     self.allow_cluster_wide_resources,
                     environment_variables_with_info,
+                    external_secrets,
                     self.advanced_settings,
                     AzureAppExtraSettings {},
                     |transmitter| context.get_event_details(transmitter),
@@ -487,6 +497,7 @@ impl HelmChart {
                 std::time::Duration::from_secs(self.timeout_sec),
                 self.allow_cluster_wide_resources,
                 environment_variables_with_info,
+                external_secrets,
                 self.advanced_settings,
                 OnPremiseAppExtraSettings {},
                 |transmitter| context.get_event_details(transmitter),

@@ -2,6 +2,7 @@ use crate::infrastructure::models::build_platform::{Credentials, SshKey};
 
 use crate::cmd::command::CommandKiller;
 use crate::cmd::git;
+use crate::environment::action::deploy_external_secrets::rollback_external_secrets_if_needed;
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::{DeploymentAction, K8sResourceType};
@@ -41,7 +42,15 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Deploy));
 
         let pre_run = |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
-            prepare_helm_chart_directory(self, target, event_details.clone(), logger)?;
+            // External secrets are deployed centrally in deploy_environment() before the build step.
+            // The resolved values are stored in self.resolved_eso_values.
+            prepare_helm_chart_directory(
+                self,
+                target,
+                event_details.clone(),
+                logger,
+                self.resolved_eso_values.clone(),
+            )?;
             // Now the chart is ready at self.chart_workspace_directory()
 
             // Check users does not bypass restrictions (i.e: install cluster wide resources, or not in the correct namespace)
@@ -76,19 +85,22 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
             .unpause_if_needed(target);
 
             let args = self.helm_upgrade_arguments().collect::<Vec<_>>();
-            target
-                .helm
-                .upgrade_raw(
-                    self.helm_release_name(),
-                    self.chart_workspace_directory(),
-                    target.environment.namespace(),
-                    &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
-                    &[],
-                    &CommandKiller::from(self.helm_timeout(), target.abort),
-                    &mut |line| logger.info(line),
-                    &mut |line| logger.warning(line),
-                )
-                .map_err(|err| (event_details.clone(), HelmChartError::HelmError(err)))?;
+            let upgrade_result = target.helm.upgrade_raw(
+                self.helm_release_name(),
+                self.chart_workspace_directory(),
+                target.environment.namespace(),
+                &args.iter().map(|x| x.as_ref()).collect::<Vec<_>>(),
+                &[],
+                &CommandKiller::from(self.helm_timeout(), target.abort),
+                &mut |line| logger.info(line),
+                &mut |line| logger.warning(line),
+            );
+
+            if upgrade_result.is_err() {
+                rollback_external_secrets_if_needed(self.kube_name(), self.external_secrets(), target, logger);
+            }
+
+            upgrade_result.map_err(|err| (event_details.clone(), HelmChartError::HelmError(err)))?;
 
             Ok(())
         };
@@ -172,10 +184,10 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
 
             let namespace_from_args = extract_namespace_from_helm_args(self.helm_upgrade_arguments());
 
-            // uninstall chart
+            // uninstall main chart first
             let mut chart_info = ChartInfo::new_from_release_name(
                 self.helm_release_name(),
-                &namespace_from_args.unwrap_or_else(|| Cow::Borrowed(target.environment.namespace())), // take the namespace from the list of arguments if it exists
+                &namespace_from_args.unwrap_or_else(|| Cow::Borrowed(target.environment.namespace())),
             );
             chart_info.timeout_in_seconds = self.helm_timeout().as_secs() as i64;
 
@@ -193,7 +205,9 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                         event_details.clone(),
                         HelmChartError::HelmError(err),
                     ))
-                })
+                })?;
+
+            Ok(())
         };
 
         execute_long_deployment(HelmChartDeploymentReporter::new(self, target, Action::Delete), task)
@@ -241,12 +255,12 @@ fn write_helm_value_with_replacement<'a>(
     service_version: &str,
     environment_id: Uuid,
     project_id: Uuid,
-    env_vars: &HashMap<String, VariableInfo>,
+    env_vars_and_external_secrets: &HashMap<String, VariableInfo>,
     loadbalancer_l4_annotations: Vec<(String, String)>,
 ) -> Result<(), anyhow::Error> {
     let mut output_writer = BufWriter::new(output_writer);
     let mut lines = lines.try_fold(Vec::with_capacity(512), |mut acc, l| {
-        replace_qovery_env_variable(l, env_vars).map(|ret| {
+        replace_qovery_env_variable(l, env_vars_and_external_secrets).map(|ret| {
             acc.push(ret);
             acc
         })
@@ -412,6 +426,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
     target: &DeploymentTarget,
     event_details: EventDetails,
     logger: &EnvProgressLogger,
+    external_secret_values: HashMap<String, VariableInfo>,
 ) -> Result<(), Box<EngineError>> {
     // Error Mapper.
     // There are a lot of small io error possible. We only want to return a meaningful error msg to user
@@ -508,9 +523,15 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
         )
         .map_err(|e| to_error(format!("Cannot fetch chart dependencies: {e:?}")))?;
 
+    // Merge environment variables and external secrets to replace references in values files
+    let mut env_vars_and_external_secrets = this.environment_variables.clone();
+    env_vars_and_external_secrets.extend(external_secret_values);
+
     // Now we retrieve and prepare the chart values
     match this.chart_values() {
         HelmValueSource::Raw { values } => {
+            // Merge environment variables and external secrets to replace references in values files
+
             for value in values {
                 logger.info(format!("Preparing Helm values file {}", &value.name));
 
@@ -527,7 +548,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     &this.service_version(),
                     target.environment.long_id,
                     target.environment.project_long_id,
-                    this.environment_variables(),
+                    &env_vars_and_external_secrets,
                     target.kubernetes.loadbalancer_l4_annotations(Some(this.name())),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {} due to {}", value.name, e)))?;
@@ -577,7 +598,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
                     &this.service_version(),
                     target.environment.long_id,
                     target.environment.project_long_id,
-                    this.environment_variables(),
+                    &env_vars_and_external_secrets,
                     target.kubernetes.loadbalancer_l4_annotations(Some(this.name())),
                 )
                 .map_err(|e| to_error(format!("Cannot prepare helm value file {filename:?} due to {e}")))?;

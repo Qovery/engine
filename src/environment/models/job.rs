@@ -26,7 +26,7 @@ use serde::Serialize;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -362,6 +362,10 @@ impl<T: CloudProvider> Job<T> {
         self.workspace_directory.to_str().unwrap_or("")
     }
 
+    pub fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        &self.external_secrets
+    }
+
     pub fn should_delete_shared_registry(&self) -> bool {
         self.should_delete_shared_registry
     }
@@ -459,6 +463,9 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
     fn max_duration(&self) -> &Duration;
     fn max_restarts(&self) -> u32;
     fn is_force_trigger(&self) -> bool;
+    fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn lib_root_directory(&self) -> &str;
+    fn workspace_directory_path(&self) -> &Path;
 }
 
 impl<T: CloudProvider> JobService for Job<T>
@@ -519,6 +526,18 @@ where
 
     fn is_force_trigger(&self) -> bool {
         self.force_trigger
+    }
+
+    fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        Job::external_secrets(self)
+    }
+
+    fn lib_root_directory(&self) -> &str {
+        &self.lib_root_directory
+    }
+
+    fn workspace_directory_path(&self) -> &Path {
+        Path::new(Job::workspace_directory(self))
     }
 }
 
