@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 pub struct EnvironmentDeployment<'a> {
     pub deployed_services: Arc<Mutex<HashSet<Uuid>>>,
-    deployment_target: DeploymentTarget<'a>,
+    pub deployment_target: DeploymentTarget<'a>,
     logger: Arc<Box<dyn Logger>>,
 }
 

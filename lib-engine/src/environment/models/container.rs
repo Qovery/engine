@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use itertools::Itertools;
@@ -420,6 +420,10 @@ impl<T: CloudProvider> Container<T> {
         self.workspace_directory.to_str().unwrap_or("")
     }
 
+    pub fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        &self.external_secrets
+    }
+
     fn service_version(&self) -> String {
         format!("{}:{}", self.source.image, self.source.tag)
     }
@@ -489,6 +493,9 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn image_full(&self) -> String;
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
+    fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn lib_root_directory(&self) -> &str;
+    fn workspace_directory_path(&self) -> &Path;
 }
 
 use crate::environment::models::port::Port;
@@ -545,6 +552,18 @@ where
 
     fn as_deployment_action(&self) -> &dyn DeploymentAction {
         self
+    }
+
+    fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        Container::external_secrets(self)
+    }
+
+    fn lib_root_directory(&self) -> &str {
+        &self.lib_root_directory
+    }
+
+    fn workspace_directory_path(&self) -> &Path {
+        Path::new(Container::workspace_directory(self))
     }
 }
 

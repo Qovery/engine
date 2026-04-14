@@ -1,4 +1,5 @@
 use crate::environment::action::DeploymentAction;
+use crate::environment::action::deploy_external_secrets::rollback_external_secrets_if_needed;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::models::container::{Container, ContainerService, get_container_with_invalid_storage_size};
@@ -120,7 +121,10 @@ where
                 )?;
             }
 
-            helm.on_create(target)?;
+            if let Err(e) = helm.on_create(target) {
+                rollback_external_secrets_if_needed(self.kube_name(), self.external_secrets(), target, logger);
+                return Err(e);
+            }
 
             Ok(state)
         };

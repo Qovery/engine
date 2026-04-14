@@ -1,3 +1,4 @@
+use crate::environment::action::deploy_external_secrets::rollback_external_secrets_if_needed;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::action::{JobRun, TaskContext};
 use crate::environment::action::deploy_job::job_output::{
@@ -79,7 +80,10 @@ where
     helm.on_delete(target)?;
 
     // create job
-    helm.on_create(target)?;
+    if let Err(e) = helm.on_create(target) {
+        rollback_external_secrets_if_needed(job.kube_name(), job.external_secrets(), target, logger);
+        return Err(e);
+    }
 
     let job_name = job.kube_name();
     let max_execution_duration = Duration::from_secs(60) + job.max_duration * (job.max_nb_restart + 1);

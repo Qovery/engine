@@ -312,7 +312,7 @@ impl Helm {
         }
     }
 
-    fn rollback(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
+    pub fn rollback(&self, chart: &ChartInfo, envs: &[(&str, &str)]) -> Result<(), HelmError> {
         if self.check_release_exist(chart, envs)?.version <= 1 {
             return Err(CannotRollback(chart.name.clone()));
         }

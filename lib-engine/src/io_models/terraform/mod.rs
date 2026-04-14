@@ -16,7 +16,7 @@ use crate::io_models::application::GitCredentials;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    CpuArchitecture, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+    CpuArchitecture, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
@@ -204,6 +204,10 @@ pub struct TerraformService {
     pub extra_action_arguments: BTreeMap<String, Vec<String>>,
     #[serde(default)]
     pub dockerfile_fragment: Option<DockerfileFragment>,
+    /// External secrets to sync from a remote secret manager via ESO.
+    /// Key is the environment variable name / k8s Secret key.
+    #[serde(default)]
+    pub external_secrets: BTreeMap<String, ExternalSecret>,
 }
 
 impl TerraformService {
@@ -262,6 +266,8 @@ impl TerraformService {
 
         let terraform_credentials_domain = self.get_terraform_credentials_domain()?;
 
+        let external_secrets = self.external_secrets;
+
         let service: Box<dyn TerraformServiceTrait> = match cloud_provider.kubernetes_kind() {
             Kind::Eks | Kind::EksSelfManaged | Kind::EksAnywhere => {
                 Box::new(models::terraform_service::TerraformService::<AWS>::new(
@@ -291,6 +297,7 @@ impl TerraformService {
                     annotations_groups,
                     labels_groups,
                     terraform_credentials_domain,
+                    external_secrets.clone(),
                 )?)
             }
             Kind::ScwKapsule | Kind::ScwSelfManaged => {
@@ -321,6 +328,7 @@ impl TerraformService {
                     annotations_groups,
                     labels_groups,
                     terraform_credentials_domain,
+                    external_secrets.clone(),
                 )?)
             }
             Kind::Gke | Kind::GkeSelfManaged => Box::new(models::terraform_service::TerraformService::<GCP>::new(
@@ -350,6 +358,7 @@ impl TerraformService {
                 annotations_groups,
                 labels_groups,
                 terraform_credentials_domain,
+                external_secrets.clone(),
             )?),
             Kind::Aks | Kind::AksSelfManaged => Box::new(models::terraform_service::TerraformService::<Azure>::new(
                 context,
@@ -378,6 +387,7 @@ impl TerraformService {
                 annotations_groups,
                 labels_groups,
                 terraform_credentials_domain,
+                external_secrets.clone(),
             )?),
             Kind::OnPremiseSelfManaged => Box::new(models::terraform_service::TerraformService::<OnPremise>::new(
                 context,
@@ -406,6 +416,7 @@ impl TerraformService {
                 annotations_groups,
                 labels_groups,
                 terraform_credentials_domain,
+                external_secrets.clone(),
             )?),
         };
 
@@ -738,6 +749,7 @@ mod tests {
             },
             timeout_sec: 600,
             environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: TerraformServiceAdvancedSettings::default(),
             annotations_group_ids: BTreeSet::new(),
             labels_group_ids: BTreeSet::new(),

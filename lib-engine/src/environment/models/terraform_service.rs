@@ -1,6 +1,7 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::container::RegistryTeraContext;
+use crate::environment::models::external_secret::{ExternalSecretGroup, build_external_secret_groups};
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::types::CloudProvider;
 use crate::environment::models::utils;
@@ -12,6 +13,7 @@ use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
+use crate::io_models::models::ExternalSecret;
 use crate::io_models::models::{
     EnvironmentVariable, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
@@ -24,7 +26,7 @@ use itertools::Itertools;
 use serde_derive::Serialize;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 use url::Url;
@@ -67,6 +69,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) workspace_directory: PathBuf,
     pub(crate) lib_root_directory: String,
     pub(crate) terraform_credentials: TerraformCredentials,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
 }
 
 impl<T: CloudProvider> TerraformService<T> {
@@ -97,9 +100,11 @@ impl<T: CloudProvider> TerraformService<T> {
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
         terraform_credentials: TerraformCredentials,
+        external_secrets: BTreeMap<String, ExternalSecret>,
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
+        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -143,6 +148,7 @@ impl<T: CloudProvider> TerraformService<T> {
             workspace_directory,
             lib_root_directory: context.lib_root_dir().to_string(),
             terraform_credentials,
+            external_secrets,
         })
     }
 
@@ -448,6 +454,9 @@ pub trait TerraformServiceTrait: Service + DeploymentAction + Send {
     fn advanced_settings(&self) -> &TerraformServiceAdvancedSettings;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_max_duration(&self) -> &Duration;
+    fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn lib_root_directory(&self) -> &str;
+    fn workspace_directory_path(&self) -> &Path;
 }
 
 impl<T: CloudProvider> TerraformServiceTrait for TerraformService<T>
@@ -464,6 +473,18 @@ where
 
     fn job_max_duration(&self) -> &Duration {
         &self.timeout
+    }
+
+    fn external_secrets(&self) -> &[ExternalSecretGroup] {
+        &self.external_secrets
+    }
+
+    fn lib_root_directory(&self) -> &str {
+        &self.lib_root_directory
+    }
+
+    fn workspace_directory_path(&self) -> &Path {
+        Path::new(TerraformService::workspace_directory(self))
     }
 }
 

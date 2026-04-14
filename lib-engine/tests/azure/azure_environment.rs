@@ -2081,6 +2081,7 @@ fn azure_aks_deploy_terraform_service() {
             },
             timeout_sec: 300,
             environment_vars_with_infos: Default::default(),
+            external_secrets: BTreeMap::new(),
             advanced_settings: Default::default(),
             annotations_group_ids: btreeset! { annotations_group_id },
             labels_group_ids: btreeset! { labels_group_id },

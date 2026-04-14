@@ -12,6 +12,7 @@ use qovery_engine::io_models::router::{Route, Router};
 use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::runtime::block_on;
 use qovery_engine::utilities::to_short_id;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tracing::{Level, span};
 use url::Url;
@@ -127,6 +128,7 @@ impl HelmChartBuilder {
                     is_secret: false
                 }
             },
+            external_secrets: BTreeMap::new(),
             advanced_settings: Default::default(),
             ports: self.ports.clone(),
         }
