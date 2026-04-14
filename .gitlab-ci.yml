@@ -949,12 +949,12 @@ gitlab-release:
 
   script: |-
     ./helper.sh update_engine_version
-    unset GITHUB_TOKEN
-    goreleaser release --skip=validate
+    #unset GITHUB_TOKEN
+    #goreleaser release --skip=validate
   
 
     # Prepare public branch of engine
-    mv dist/CHANGELOG.md /tmp/
+    #mv dist/CHANGELOG.md /tmp/
     git filter-repo --subdirectory-filter lib-engine --force --partial
     curl -s https://raw.githubusercontent.com/Qovery/engine/refs/heads/engine-public/CHANGELOG.md > /tmp/CHANGELOG.md.old
     cat <(cat /tmp/CHANGELOG.md) /tmp/CHANGELOG.md.old | tee CHANGELOG.md
