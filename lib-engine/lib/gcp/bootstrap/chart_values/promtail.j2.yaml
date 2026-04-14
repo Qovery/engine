@@ -138,6 +138,11 @@ config:
 
       - replace:
           source: level
+          expression: '^(verbose)$'
+          replace: 'debug'
+
+      - replace:
+          source: level
           expression: '^(err)$'
           replace: 'error'
 
