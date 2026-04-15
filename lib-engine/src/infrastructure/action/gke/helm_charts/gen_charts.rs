@@ -268,8 +268,8 @@ pub(super) fn gke_helm_charts(
     }
 
     // Nginx ingress
-    let nginx_ingress = Some(
-        NginxIngressChart::new(
+    let nginx_ingress = {
+        let mut chart = NginxIngressChart::new(
             chart_prefix_path,
             HelmChartResourcesConstraintType::Constrained(HelmChartResources {
                 request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(
@@ -384,8 +384,21 @@ pub(super) fn gke_helm_charts(
                 declare_service_hostname: !gateway_api_rollout_status.is_default(), // if envoy is default, we don't want nginx to declare hostname on its service
             },
         )
-        .to_common_helm_chart()?,
-    );
+        .to_common_helm_chart()?;
+
+        // If Gateway API is deployed and used as default and nginx flagged for removal, then we
+        // uninstall nginx
+        if chart_config_prerequisites
+            .cluster_advanced_settings
+            .k8s_remove_nginx
+            .unwrap_or(false)
+            && gateway_api_rollout_status.is_default()
+        {
+            chart.chart_info.action = HelmAction::Destroy;
+        }
+
+        Some(chart)
+    };
 
     // API Gateway / Envoy stack
     let mut envoy_gateway_crd: Option<CommonChart> = None;
