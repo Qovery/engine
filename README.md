@@ -103,7 +103,9 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 
 #### Dry-run deployment
 
-- Execute the following command: `qovery admin cluster deploy  --parallel-run 50 --filters IsProduction=true --execution-mode on-the-fly`
+- Go to engine pipelines <https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1>, filter by tag and select the version to deploy
+- Trigger the job: `3-dry-run-deploy-prod-clusters`
+- The AI check job `4-ai-check-prod-clusters` runs automatically — review its findings before proceeding
 - Analyse terraform & helm diff for unexpected change: <https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29>.
 - If everything is fine, proceed to the next step
 
@@ -116,8 +118,9 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 
 #### Dry-run deployment
 
-- Pick the latest pipeline <https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1>
+- Go to engine pipelines <https://gitlab.com/qovery/backend/engine/-/pipelines?scope=tags&page=1>, filter by tag and select the version to deploy
 - Trigger the job: `2-dry-run-deploy-dev-clusters`
+- The AI check job `3-ai-check-dev-clusters` runs automatically — review its findings before proceeding
 - Analyse terraform & helm diff for unexpected change: <https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff?orgId=1&from=now-3h&to=now&var-cluster=&var-tffilter=%28-%20%7C~%20%29>.
 - If everything is fine, proceed to the next step
 
@@ -160,6 +163,12 @@ git push origin HEAD:hot-fix-staging
 - ...
 
 1. Trigger the necessary jobs to deploy either the staging or the production infra engines
+
+## AI Check
+
+After each dry-run, Claude automatically reviews the Terraform and Helm plan diffs across all clusters and flags anything worth attention before the actual deploy. It is not meant to replace human review but to assist it and reduce the risk of missing something.
+
+Under the hood, `scripts/ci_release_ai_check.py` fetches the diff logs from Loki for each cluster, normalizes sensitive data (UUIDs, ARNs, IPs, account IDs), and sends the Terraform/Helm diffs to Claude for analysis. Findings are returned as structured JSON and categorized by severity (`critical`, `review`, `info`). The job is non-blocking (`allow_failure: true`) — always review its output before proceeding to the actual deploy.
 
 ## Supported connectors
 

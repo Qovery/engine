@@ -28,3 +28,4 @@ age_*.txt
 dist/
 .speckit/
 .claude/**
+__pycache__/
