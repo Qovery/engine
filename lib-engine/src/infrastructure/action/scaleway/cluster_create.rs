@@ -158,8 +158,8 @@ fn sanitize_node_groups(
     logger.info("Ensuring all groups nodes are in ready state from the Scaleway API");
     for ng in current_nodegroups {
         let res = retry::retry(
-            // retry 10 min max per nodegroup until they are ready
-            Fixed::from_millis(15000).take(80),
+            // retry 45 min max per nodegroup until they are ready (e.g. after a k8s version upgrade)
+            Fixed::from_millis(15000).take(180),
             || {
                 logger.info(format!(
                     "checking node group {}/{:?}, current status: {:?}",
