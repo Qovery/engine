@@ -1,4 +1,5 @@
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::{CommandError, EngineError};
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -21,6 +22,12 @@ pub(super) struct EksAnywhereUpgradePlanSummary {
 }
 
 impl EksAnywhereUpgradePlanSummary {
+    pub fn has_kubernetes_version_change(&self) -> bool {
+        self.kubernetes_version_transition
+            .as_ref()
+            .is_some_and(|(current, next)| !current.eq_ignore_ascii_case(next))
+    }
+
     pub fn has_kubernetes_major_or_minor_change(&self) -> bool {
         self.kubernetes_version_transition
             .as_ref()
@@ -33,6 +40,22 @@ impl EksAnywhereUpgradePlanSummary {
                     _ => !current.eq_ignore_ascii_case(next),
                 }
             })
+    }
+
+    pub fn kubernetes_major_upgrade_jump(&self) -> Option<u64> {
+        let (current, next) = self.kubernetes_version_transition.as_ref()?;
+        let (current_major, _) = extract_kubernetes_major_minor(current.as_str())?;
+        let (next_major, _) = extract_kubernetes_major_minor(next.as_str())?;
+        Some(next_major.saturating_sub(current_major))
+    }
+
+    pub fn has_kubernetes_major_upgrade_jump_over_one(&self) -> bool {
+        self.kubernetes_major_upgrade_jump().is_some_and(|jump| jump > 1)
+    }
+
+    pub fn target_kubernetes_version(&self) -> Option<VersionsNumber> {
+        let (_, next) = self.kubernetes_version_transition.as_ref()?;
+        normalize_kubernetes_target_version_for_pluto(next)
     }
 }
 
@@ -130,6 +153,7 @@ pub(super) fn run_eks_anywhere_upgrade_plan(
         logger,
     )?;
 
+    let no_upgrade_detected = upgrade_plan_reports_no_changes(&stdout);
     let expected_eksd_release_tag = expected_eksd_release_tag_from_upgrade_plan(&stdout);
     let kubernetes_version_transition = kubernetes_version_transition_from_upgrade_plan(&stdout);
     let summary = EksAnywhereUpgradePlanSummary {
@@ -139,12 +163,20 @@ pub(super) fn run_eks_anywhere_upgrade_plan(
 
     if let Some(expected_tag) = summary.expected_eksd_release_tag.as_deref() {
         logger.info(format!("🎯 Expected vSphere `eksdRelease` tag for upgrade: `{expected_tag}`."));
+    } else if no_upgrade_detected {
+        logger.info("🎯 No vSphere `eksdRelease` target from plan (cluster already up to date).");
     } else {
         logger.warn("Unable to infer expected vSphere `eksdRelease` tag from upgrade plan output.");
     }
+
     if let Some((current, next)) = summary.kubernetes_version_transition.as_ref() {
         logger.info(format!("🎯 Kubernetes version transition from plan: `{current}` -> `{next}`."));
+    } else if no_upgrade_detected {
+        logger.info("🎯 No Kubernetes version transition in plan (cluster already up to date).");
+    } else {
+        logger.warn("Unable to infer Kubernetes version transition from upgrade plan output.");
     }
+
     if summary.has_kubernetes_major_or_minor_change() {
         logger.warn("🎯 Kubernetes major/minor upgrade detected in plan.");
     } else {
@@ -316,36 +348,38 @@ fn build_eks_anywhere_command_envs(kubeconfig_path: &str, cloud_provider: &dyn C
 
     // Ensure eksctl always receives the vSphere variables it expects.
     // The target is listed first in sources so it is kept as-is if already set.
-    alias_env_if_missing(
-        &mut envs,
-        "VSPHERE_USERNAME",
-        &[
+    let alias_rules: [(&str, &[&str]); 4] = [
+        (
             "VSPHERE_USERNAME",
-            "VSPHERE_USER",
+            &[
+                "VSPHERE_USERNAME",
+                "VSPHERE_USER",
+                "EKSA_VSPHERE_USERNAME",
+                "GOVC_USERNAME",
+            ],
+        ),
+        (
+            "VSPHERE_PASSWORD",
+            &["VSPHERE_PASSWORD", "EKSA_VSPHERE_PASSWORD", "GOVC_PASSWORD"],
+        ),
+        (
             "EKSA_VSPHERE_USERNAME",
-            "GOVC_USERNAME",
-        ],
-    );
-    alias_env_if_missing(
-        &mut envs,
-        "VSPHERE_PASSWORD",
-        &["VSPHERE_PASSWORD", "EKSA_VSPHERE_PASSWORD", "GOVC_PASSWORD"],
-    );
-    alias_env_if_missing(
-        &mut envs,
-        "EKSA_VSPHERE_USERNAME",
-        &[
-            "EKSA_VSPHERE_USERNAME",
-            "VSPHERE_USERNAME",
-            "VSPHERE_USER",
-            "GOVC_USERNAME",
-        ],
-    );
-    alias_env_if_missing(
-        &mut envs,
-        "EKSA_VSPHERE_PASSWORD",
-        &["EKSA_VSPHERE_PASSWORD", "VSPHERE_PASSWORD", "GOVC_PASSWORD"],
-    );
+            &[
+                "EKSA_VSPHERE_USERNAME",
+                "VSPHERE_USERNAME",
+                "VSPHERE_USER",
+                "GOVC_USERNAME",
+            ],
+        ),
+        (
+            "EKSA_VSPHERE_PASSWORD",
+            &["EKSA_VSPHERE_PASSWORD", "VSPHERE_PASSWORD", "GOVC_PASSWORD"],
+        ),
+    ];
+
+    for (target, sources) in alias_rules {
+        alias_env_if_missing(&mut envs, target, sources);
+    }
 
     envs
 }
@@ -415,6 +449,14 @@ fn kubernetes_version_transition_from_upgrade_plan(lines: &[String]) -> Option<(
     })
 }
 
+fn upgrade_plan_reports_no_changes(lines: &[String]) -> bool {
+    lines.iter().any(|line| {
+        let normalized = line.trim().to_ascii_lowercase();
+        normalized.contains("nothing to upgrade")
+            || normalized.contains("all the components are up to date with the latest versions")
+    })
+}
+
 fn extract_kubernetes_major_minor(version: &str) -> Option<(u64, u64)> {
     let normalized = version.trim().trim_start_matches('v');
     let k8s_version = normalized.split("-eks-").next().unwrap_or(normalized);
@@ -428,6 +470,40 @@ fn extract_kubernetes_major_minor(version: &str) -> Option<(u64, u64)> {
         .parse::<u64>()
         .ok()?;
     Some((major, minor))
+}
+
+fn normalize_kubernetes_target_version_for_pluto(version: &str) -> Option<VersionsNumber> {
+    let normalized = version.trim().trim_start_matches('v');
+    let k8s_version = normalized.split("-eks-").next().unwrap_or(normalized);
+    let mut parts = k8s_version.split('.');
+
+    let major = parts
+        .next()?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse::<u64>()
+        .ok()?;
+    let minor = parts
+        .next()?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse::<u64>()
+        .ok()?;
+    let patch = parts
+        .next()
+        .map(|raw_patch| raw_patch.chars().take_while(|c| c.is_ascii_digit()).collect::<String>())
+        .filter(|digits| !digits.is_empty())
+        .and_then(|digits| digits.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    Some(VersionsNumber::new(
+        major.to_string(),
+        Some(minor.to_string()),
+        Some(patch.to_string()),
+        None,
+    ))
 }
 
 fn eksd_release_tag_from_kubernetes_next_version(next_version: &str) -> Option<String> {

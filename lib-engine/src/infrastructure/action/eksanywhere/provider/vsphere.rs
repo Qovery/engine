@@ -1,9 +1,12 @@
+use super::ParsedEksAnywhereClusterConfig;
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+#[cfg(test)]
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
+#[cfg(test)]
 use serde_yaml::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
@@ -46,22 +49,15 @@ struct VSphereTemplateInstallConfig {
 type TemplateIndexEntry = (BTreeSet<String>, BTreeSet<String>, Vec<VSphereTemplateRef>);
 
 pub(super) fn run_vsphere_preflight(
+    parsed_cluster_config: &ParsedEksAnywhereClusterConfig,
     cluster_config_path: &Path,
     cloud_provider: &dyn CloudProvider,
     install_missing: bool,
     expected_eksd_release_tag: Option<&str>,
     logger: &impl InfraLogger,
 ) -> Result<(), CommandError> {
-    let content = fs::read_to_string(cluster_config_path).map_err(|e| {
-        CommandError::new(
-            format!("Cannot read cluster config file {}", cluster_config_path.display()),
-            Some(e.to_string()),
-            None,
-        )
-    })?;
-
-    let templates = extract_vsphere_templates_from_yaml(&content)?;
-    let metadata = extract_vsphere_cluster_metadata_from_yaml(&content)?;
+    let templates = extract_vsphere_templates_from_parsed_config(parsed_cluster_config);
+    let metadata = extract_vsphere_cluster_metadata_from_parsed_config(parsed_cluster_config);
 
     log_vsphere_section_title(logger, "🖥️", "vSphere preflight");
 
@@ -1788,6 +1784,42 @@ fn summarize_vsphere_templates_for_user(templates: &[VSphereTemplateRef], cluste
     lines
 }
 
+fn extract_vsphere_cluster_metadata_from_parsed_config(
+    parsed_cluster_config: &ParsedEksAnywhereClusterConfig,
+) -> VSphereClusterMetadata {
+    let mut metadata = VSphereClusterMetadata {
+        kubernetes_version: parsed_cluster_config
+            .cluster_spec()
+            .and_then(|cluster| cluster.kubernetes_version.clone()),
+        ..VSphereClusterMetadata::default()
+    };
+
+    if let Some(vsphere_datacenter) = parsed_cluster_config.vsphere_datacenter_config() {
+        metadata.vcenter_server = vsphere_datacenter.server.clone();
+        metadata.insecure = vsphere_datacenter.insecure;
+        metadata.network = vsphere_datacenter.network.clone();
+    }
+
+    metadata
+}
+
+fn extract_vsphere_templates_from_parsed_config(
+    parsed_cluster_config: &ParsedEksAnywhereClusterConfig,
+) -> Vec<VSphereTemplateRef> {
+    parsed_cluster_config
+        .vsphere_machine_configs()
+        .map(|machine_config| VSphereTemplateRef {
+            machine_config_name: machine_config.name.clone(),
+            template: machine_config.template.clone(),
+            os_family: machine_config.os_family.clone(),
+            datastore: machine_config.datastore.clone(),
+            resource_pool: machine_config.resource_pool.clone(),
+            folder: machine_config.folder.clone(),
+        })
+        .collect()
+}
+
+#[cfg(test)]
 fn extract_vsphere_cluster_metadata_from_yaml(content: &str) -> Result<VSphereClusterMetadata, CommandError> {
     let mut metadata = VSphereClusterMetadata::default();
 
@@ -1831,6 +1863,7 @@ fn extract_vsphere_cluster_metadata_from_yaml(content: &str) -> Result<VSphereCl
     Ok(metadata)
 }
 
+#[cfg(test)]
 fn extract_vsphere_templates_from_yaml(content: &str) -> Result<Vec<VSphereTemplateRef>, CommandError> {
     let mut templates = Vec::new();
 
