@@ -6,6 +6,7 @@ mod etcd_backup;
 mod helm_charts;
 mod provider;
 
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -55,6 +56,12 @@ impl InfrastructureAction for EksAnywhere {
         // The generic Kubernetes version drift check would otherwise turn a create into an
         // unsupported cluster restart/upgrade path for this provider.
         None
+    }
+
+    fn post_create_deprecated_api_target_version(&self, _infra_ctx: &InfrastructureContext) -> Option<VersionsNumber> {
+        // For EKS Anywhere, keep the generic post-create Pluto check but target the
+        // cluster requested version directly (not requested+1) to avoid over-shooting.
+        Some(self.version().into())
     }
 }
 

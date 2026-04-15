@@ -4,9 +4,11 @@ use super::cluster_install::install_eks_anywhere_charts;
 use super::eksctl::{run_eks_anywhere_upgrade_cluster, run_eks_anywhere_upgrade_plan};
 use super::etcd_backup::{run_eks_anywhere_cluster_backup, upload_eks_anywhere_capi_backup};
 use super::provider::{
-    EksAnywhereProviderMode, detect_provider_mode_from_cluster_config, run_provider_preflight_for_mode,
+    EksAnywhereProviderMode, ParsedEksAnywhereClusterConfig, parse_eks_anywhere_cluster_config,
+    run_provider_preflight_for_mode,
 };
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::{CommandError, EngineError};
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -14,6 +16,7 @@ use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::EksAnywhere;
+use crate::services::kubernetes_api_deprecation_service::KubernetesApiDeprecationServiceGranuality;
 use std::path::Path;
 
 pub(super) fn create_eks_anywhere_cluster(
@@ -21,11 +24,6 @@ pub(super) fn create_eks_anywhere_cluster(
     infra_ctx: &InfrastructureContext,
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
-    if let Err(error) = validate_supported_cluster_deployment_mode(cluster, infra_ctx) {
-        logger.error((*error).clone(), None::<&str>);
-        return Err(error);
-    }
-
     let run_mode = EksAnywhereRunMode::from_context(infra_ctx);
 
     if let Some(cluster_config_path) = prepare_eks_anywhere_cluster_config(cluster, &logger)?.as_ref() {
@@ -46,30 +44,20 @@ fn run_cluster_config_workflow(
     run_mode: EksAnywhereRunMode,
     logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
-    let provider_mode = detect_provider_mode(cluster_config_path, logger);
+    let parsed_cluster_config = parse_cluster_config(cluster_config_path, logger);
+    let provider_mode = parsed_cluster_config.provider_mode();
+    log_provider_mode(logger, provider_mode);
     // Always run the upgrade plan (dry-run): its output is required to extract
     // the expected eksdRelease tag passed to the vSphere preflight.
     let upgrade_plan_summary =
         run_eks_anywhere_upgrade_plan(cluster, cluster_config_path, infra_ctx.cloud_provider(), logger)?;
-
-    // TODO(eks-anywhere): temporary guard requested for validation.
-    // Remove this early-exit once kube version-change workflow is finalized.
-    if upgrade_plan_summary.has_kubernetes_major_or_minor_change() {
-        if let Some((current, next)) = upgrade_plan_summary.kubernetes_version_transition.as_ref() {
-            logger.warn(format!(
-                "Temporary behavior: kubernetes major/minor change detected in upgrade plan (`{current}` -> `{next}`). Stopping workflow early."
-            ));
-        } else {
-            logger.warn(
-                "Temporary behavior: kubernetes major/minor change detected in upgrade plan. Stopping workflow early.",
-            );
-        }
-        return Ok(());
-    }
+    enforce_supported_kubernetes_version_jump(cluster, &upgrade_plan_summary)?;
+    run_pluto_check_before_upgrade_if_needed(cluster, infra_ctx, &upgrade_plan_summary, logger)?;
     run_provider_preflight_stage(
         cluster,
         infra_ctx,
         provider_mode,
+        &parsed_cluster_config,
         cluster_config_path,
         run_mode,
         upgrade_plan_summary.expected_eksd_release_tag.as_deref(),
@@ -103,25 +91,123 @@ fn run_cluster_config_workflow(
     Ok(())
 }
 
-fn detect_provider_mode(cluster_config_path: &Path, logger: &impl InfraLogger) -> EksAnywhereProviderMode {
-    let provider_mode = match detect_provider_mode_from_cluster_config(cluster_config_path) {
-        Ok(provider_mode) => provider_mode,
+fn enforce_supported_kubernetes_version_jump(
+    cluster: &EksAnywhere,
+    upgrade_plan_summary: &super::eksctl::EksAnywhereUpgradePlanSummary,
+) -> Result<(), Box<EngineError>> {
+    if !upgrade_plan_summary.has_kubernetes_major_upgrade_jump_over_one() {
+        return Ok(());
+    }
+
+    let details = cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError));
+    let message = match upgrade_plan_summary.kubernetes_version_transition.as_ref() {
+        Some((current, next)) => format!(
+            "Unsupported Kubernetes upgrade path detected in upgrade plan: `{current}` -> `{next}`. \
+Only upgrades with a maximum +1 major version jump are allowed."
+        ),
+        None => "Unsupported Kubernetes upgrade path detected in upgrade plan: major version jump is greater than one."
+            .to_string(),
+    };
+
+    Err(Box::new(EngineError::new_unknown(
+        details,
+        "Unsupported Kubernetes major upgrade jump".to_string(),
+        Some(CommandError::new_from_safe_message(message)),
+        None,
+        None,
+    )))
+}
+
+fn run_pluto_check_before_upgrade_if_needed(
+    cluster: &EksAnywhere,
+    infra_ctx: &InfrastructureContext,
+    upgrade_plan_summary: &super::eksctl::EksAnywhereUpgradePlanSummary,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    if !upgrade_plan_summary.has_kubernetes_version_change() {
+        logger.info(
+            "No Kubernetes upgrade detected in plan; generic deprecated API compatibility check will run after create.",
+        );
+        return Ok(());
+    }
+
+    let Some(target_kubernetes_version) = upgrade_plan_summary.target_kubernetes_version() else {
+        let details = cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError));
+        return Err(Box::new(EngineError::new_unknown(
+            details,
+            "Cannot parse planned Kubernetes target version from upgrade plan".to_string(),
+            Some(CommandError::new_from_safe_message(
+                "Kubernetes upgrade detected in upgrade plan, but target version parsing failed. Cannot run deprecated API compatibility check."
+                    .to_string(),
+            )),
+            None,
+            None,
+        )));
+    };
+    logger.info(format!(
+        "Kubernetes upgrade detected in plan; running blocking deprecated API compatibility check before upgrade (target `{target_kubernetes_version}`)."
+    ));
+
+    run_pluto_compatibility_check(cluster, infra_ctx, &target_kubernetes_version, logger)?;
+
+    Ok(())
+}
+
+fn run_pluto_compatibility_check(
+    cluster: &EksAnywhere,
+    infra_ctx: &InfrastructureContext,
+    target_kubernetes_version: &VersionsNumber,
+    logger: &impl InfraLogger,
+) -> Result<(), Box<EngineError>> {
+    logger.info(format!(
+        "Check if cluster has no calls to deprecated kubernetes API for target version `{target_kubernetes_version}`"
+    ));
+
+    let kube_client = infra_ctx.mk_kube_client()?;
+    let compatibility_check = infra_ctx
+        .kubernetes_api_deprecation_service()
+        .is_cluster_fully_compatible_with_kubernetes_version(
+            cluster.kubeconfig_local_file_path().as_path(),
+            Some(target_kubernetes_version),
+            &infra_ctx.cloud_provider().credentials_environment_variables(),
+            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
+                kube_client: kube_client.as_ref(),
+            },
+        );
+
+    match compatibility_check {
+        Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
+        Err(e) => {
+            let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found_error(
+                cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
+                target_kubernetes_version,
+                e,
+            );
+            return Err(Box::new(deprecation_error));
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_cluster_config(cluster_config_path: &Path, logger: &impl InfraLogger) -> ParsedEksAnywhereClusterConfig {
+    match parse_eks_anywhere_cluster_config(cluster_config_path) {
+        Ok(parsed_cluster_config) => parsed_cluster_config,
         Err(err) => {
             logger.warn(format!(
-                "Unable to detect EKS Anywhere provider mode from cluster config, defaulting to generic mode: {}",
+                "Unable to parse EKS Anywhere cluster config for provider detection/preflight, defaulting to generic mode: {}",
                 err
             ));
-            EksAnywhereProviderMode::Unknown
+            ParsedEksAnywhereClusterConfig::default()
         }
-    };
-    log_provider_mode(logger, provider_mode);
-    provider_mode
+    }
 }
 
 fn run_provider_preflight_stage(
     cluster: &EksAnywhere,
     infra_ctx: &InfrastructureContext,
     provider_mode: EksAnywhereProviderMode,
+    parsed_cluster_config: &ParsedEksAnywhereClusterConfig,
     cluster_config_path: &Path,
     run_mode: EksAnywhereRunMode,
     expected_eksd_release_tag: Option<&str>,
@@ -129,6 +215,7 @@ fn run_provider_preflight_stage(
 ) -> Result<(), Box<EngineError>> {
     run_provider_preflight_for_mode(
         provider_mode,
+        parsed_cluster_config,
         cluster_config_path,
         infra_ctx.cloud_provider(),
         run_mode.install_missing_templates(),
@@ -182,25 +269,6 @@ fn map_capi_backup_upload_error(cluster: &EksAnywhere, error: CommandError) -> B
         None,
         None,
     ))
-}
-
-fn validate_supported_cluster_deployment_mode(
-    cluster: &EksAnywhere,
-    infra_ctx: &InfrastructureContext,
-) -> Result<(), Box<EngineError>> {
-    if !infra_ctx.context().is_first_cluster_deployment() {
-        return Ok(());
-    }
-
-    Err(Box::new(EngineError::new_unknown(
-        cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
-        "Cluster creation is not supported on first install for EKS Anywhere".to_string(),
-        Some(CommandError::new_from_safe_message(
-            "first cluster deployment is not supported for EKS Anywhere".to_string(),
-        )),
-        None,
-        None,
-    )))
 }
 
 fn log_command_version(logger: &impl InfraLogger, binary_display_name: &str, args: &[&str]) {

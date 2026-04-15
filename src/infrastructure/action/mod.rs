@@ -20,6 +20,7 @@ pub use deploy_helms::{
     ChartFailure, DelayStrategy, ParallelDeploymentResult, ParallelDeploymentRetryConfig, RetryAttempt,
 };
 
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::{EngineError, ErrorMessageVerbosity, Tag};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
@@ -118,39 +119,41 @@ pub trait InfrastructureAction: Send + Sync {
                     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
                     let kube_client = infra_ctx.mk_kube_client()?;
                     let cluster_id = infra_ctx.context().cluster_long_id();
-                    let target_kubernetes_version = match kubernetes.version().next_version() {
-                        Some(v) => v.into(),
-                        None => kubernetes.version().clone().into(),
-                    };
-                    logger.info(format!(
-                        "Check if cluster has calls to deprecated kubernetes API for version `{target_kubernetes_version}`"
-                    ));
-                    info!(
-                        "Running deprecated API check with scanner `pluto` for cluster `{}` and target version `{}`",
-                        cluster_id, target_kubernetes_version
-                    );
-                    let compatibility_check = infra_ctx
-                        .kubernetes_api_deprecation_service()
-                        .is_cluster_fully_compatible_with_kubernetes_version(
-                            kubernetes.kubeconfig_local_file_path().as_path(),
-                            Some(&target_kubernetes_version),
-                            &cloud_provider.credentials_environment_variables(),
-                            KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
-                                kube_client: kube_client.as_ref(),
-                            },
+                    if let Some(target_kubernetes_version) = self.post_create_deprecated_api_target_version(infra_ctx) {
+                        logger.info(format!(
+                            "Check if cluster has calls to deprecated kubernetes API for version `{target_kubernetes_version}`"
+                        ));
+                        info!(
+                            "Running deprecated API check with scanner `pluto` for cluster `{}` and target version `{}`",
+                            cluster_id, target_kubernetes_version
                         );
-
-                    match compatibility_check {
-                        Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
-                        Err(e) => {
-                            // Non blocking error, just more FYI for user, to act on it if needed before upgrading
-                            let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found_error(
-                                event_details.clone(),
-                                &target_kubernetes_version,
-                                e,
+                        let compatibility_check = infra_ctx
+                            .kubernetes_api_deprecation_service()
+                            .is_cluster_fully_compatible_with_kubernetes_version(
+                                kubernetes.kubeconfig_local_file_path().as_path(),
+                                Some(&target_kubernetes_version),
+                                &cloud_provider.credentials_environment_variables(),
+                                KubernetesApiDeprecationServiceGranuality::WithQoveryMetadata {
+                                    kube_client: kube_client.as_ref(),
+                                },
                             );
-                            logger.warn(EventMessage::from(deprecation_error));
+
+                        match compatibility_check {
+                            Ok(_) => logger.info("Cluster has no calls to deprecated kubernetes API calls"),
+                            Err(e) => {
+                                // Non blocking error, just more FYI for user, to act on it if needed before upgrading
+                                let deprecation_error = EngineError::new_k8s_deprecated_api_calls_found_error(
+                                    event_details.clone(),
+                                    &target_kubernetes_version,
+                                    e,
+                                );
+                                logger.warn(EventMessage::from(deprecation_error));
+                            }
                         }
+                    } else {
+                        logger.warn(
+                            "Skipping deprecated API check after create: no target Kubernetes version available.",
+                        );
                     }
                 }
 
@@ -170,6 +173,13 @@ pub trait InfrastructureAction: Send + Sync {
     // I.e: fargate nodes are managed by karpenter, so we don't want to upgrade them
     fn upgrade_node_selector(&self) -> Option<&str> {
         None
+    }
+
+    fn post_create_deprecated_api_target_version(&self, infra_ctx: &InfrastructureContext) -> Option<VersionsNumber> {
+        match infra_ctx.kubernetes().version().next_version() {
+            Some(v) => Some(v.into()),
+            None => Some(infra_ctx.kubernetes().version().clone().into()),
+        }
     }
 
     fn is_upgrade_required(&self, infra_ctx: &InfrastructureContext) -> Option<KubernetesUpgradeStatus> {
