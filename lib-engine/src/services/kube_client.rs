@@ -1061,12 +1061,10 @@ mod tests {
         ];
 
         for (response_code, check_code, expected, description) in test_cases {
-            let error = kube::Error::Api(kube::error::ErrorResponse {
+            let error = kube::Error::Api(Box::new(kube::error::ErrorResponse {
                 code: response_code,
-                message: "".to_string(),
-                reason: "".to_string(),
-                status: "".to_string(),
-            });
+                ..Default::default()
+            }));
             assert_eq!(
                 QubeClient::is_error_code(&error, check_code),
                 expected,
@@ -1169,23 +1167,19 @@ mod tests {
     #[cfg(feature = "test-local-kube")]
     pub fn k8s_error_management_code() {
         let code_ok = QubeClient::is_error_code(
-            &kube::Error::Api(kube::error::ErrorResponse {
+            &kube::Error::Api(Box::new(kube::error::ErrorResponse {
                 code: 404,
-                message: "".to_string(),
-                reason: "".to_string(),
-                status: "".to_string(),
-            }),
+                ..Default::default()
+            })),
             404,
         );
         assert!(code_ok);
 
         let code_error = QubeClient::is_error_code(
-            &kube::Error::Api(kube::error::ErrorResponse {
+            &kube::Error::Api(Box::new(kube::error::ErrorResponse {
                 code: 200,
-                message: "".to_string(),
-                reason: "".to_string(),
-                status: "".to_string(),
-            }),
+                ..Default::default()
+            })),
             404,
         );
         assert!(!code_error);

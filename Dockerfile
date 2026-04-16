@@ -1,7 +1,7 @@
 # To find the version do an `apt list -a xxxx` helm inside the CI image
 
 # Upgrading kubectl/helm requires to update kubeconfig to not use anymore client.authentication.k8s.io/v1beta1
-ARG KUBECTL_VERSION="1.32.7"
+ARG KUBECTL_VERSION="1.34.7"
 ARG HELM_VERSION="3.17.4-1"
 ARG TERRAFORM_VERSION="1.9.7"
 ARG VAULT_VERSION="1.13.0-1"

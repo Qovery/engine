@@ -21,7 +21,6 @@ use dotenv::dotenv;
 use futures_util::future::select;
 use futures_util::pin_mut;
 use k8s_openapi::api::apps::v1::Deployment;
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
 use kube::Api;
 use kube::api::{DeleteParams, ListParams};
 use qovery_engine::cmd::docker;
@@ -467,10 +466,16 @@ async fn dead_builder_reaper(builder_namespace: String, builder_prefix: String) 
             .filter_map(|deployment| {
                 let deployment_name = deployment.metadata.name.unwrap_or_default();
 
-                if deployment_name.starts_with(builder_name)
-                    && Utc::now() - deployment.metadata.creation_timestamp.unwrap_or(Time(Utc::now())).0
-                        >= max_allowed_lifetime
-                {
+                if deployment_name.starts_with(builder_name) && {
+                    let ts = deployment
+                        .metadata
+                        .creation_timestamp
+                        .map(|t| t.0)
+                        .unwrap_or_else(k8s_openapi::jiff::Timestamp::now);
+                    let created_at =
+                        chrono::DateTime::<Utc>::from_timestamp(ts.as_second(), 0).unwrap_or_else(Utc::now);
+                    Utc::now() - created_at >= max_allowed_lifetime
+                } {
                     Some(deployment_name)
                 } else {
                     None
