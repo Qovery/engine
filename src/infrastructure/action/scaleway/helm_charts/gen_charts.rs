@@ -8,7 +8,7 @@ use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
+    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
 };
 use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
@@ -523,9 +523,14 @@ pub fn kapsule_helm_charts(
                     ),
                 }),
                 QoveryClusterGatewayChartOptions {
-                    x_forwarded_for_number_truster_hops: chart_config_prerequisites
-                        .cluster_advanced_settings
-                        .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(
+                        &chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_client_ip_detection_x_forwarded_for_trusted_cidrs,
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    ),
                     http_stream_idle_timeout_seconds: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_gateway_api_http_stream_idle_timeout_seconds,

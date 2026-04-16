@@ -26,7 +26,7 @@ use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
+    QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
 };
 use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewayClassChart;
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
@@ -421,9 +421,14 @@ pub(super) fn aks_helm_charts(
                 },
                 LoadBalancer::Azure(AzureLoadBalancer {}),
                 QoveryClusterGatewayChartOptions {
-                    x_forwarded_for_number_truster_hops: chart_config_prerequisites
-                        .cluster_advanced_settings
-                        .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(
+                        &chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_client_ip_detection_x_forwarded_for_trusted_cidrs,
+                        chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
+                    ),
                     http_stream_idle_timeout_seconds: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_gateway_api_http_stream_idle_timeout_seconds,

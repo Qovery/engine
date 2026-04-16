@@ -9,14 +9,43 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::load_balancer::{InteractWithLoadBalancer, LoadBalancer};
 use crate::runtime::block_on;
 use crate::services::kube_client::Gateway;
+use ipnet::IpNet;
 use kube::Api;
 use retry::OperationResult;
 use retry::delay::Fixed;
 
 #[derive(Default)]
+pub enum XForwardedForClientIpDetection {
+    #[default]
+    None,
+    TrustedHops(u8),          // fixed number of trusted proxy hops in XFF
+    TrustedCIDRs(Vec<IpNet>), // trusted CIDR ranges for XFF client IP detection
+}
+
+impl XForwardedForClientIpDetection {
+    /// Build an XFF client IP detection strategy from cluster advanced settings.
+    ///
+    /// Envoy Gateway ClientTrafficPolicy enforces a one-of constraint:
+    /// only one of `numTrustedHops` or `trustedCIDRs` can be configured.
+    /// If both settings are provided by input, we intentionally prioritize
+    /// `trustedCIDRs` to keep rendered policy valid and deterministic.
+    pub fn from_trusted_cidrs_and_hops(trusted_cidrs: &[IpNet], trusted_hops: Option<u8>) -> Self {
+        if !trusted_cidrs.is_empty() {
+            return XForwardedForClientIpDetection::TrustedCIDRs(trusted_cidrs.to_vec());
+        }
+
+        if let Some(num_hops) = trusted_hops {
+            return XForwardedForClientIpDetection::TrustedHops(num_hops);
+        }
+
+        XForwardedForClientIpDetection::None
+    }
+}
+
+#[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
-    pub x_forwarded_for_number_truster_hops: Option<u8>, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
-    pub http_stream_idle_timeout_seconds: Option<u32>,   // stream idle timeout for downstream HTTP streams
+    pub x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
+    pub http_stream_idle_timeout_seconds: Option<u32>, // stream idle timeout for downstream HTTP streams
     pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
     pub compression_enable: bool, // enable response compression (brotli quality=6 and gzip level=6, matching nginx defaults)
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
@@ -75,11 +104,22 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             value: self.domain.wildcarded().to_string(),
         }];
 
-        if let Some(num_hops) = self.chart_options.x_forwarded_for_number_truster_hops {
-            chart_set_values.push(ChartSetValue {
-                key: "gateway.qoveryPublic.xForwardedFor.numberTrustedHops".to_string(),
-                value: num_hops.to_string(),
-            });
+        match &self.chart_options.x_forwarded_for_client_ip_detection {
+            XForwardedForClientIpDetection::TrustedHops(num_hops) => {
+                chart_set_values.push(ChartSetValue {
+                    key: "gateway.qoveryPublic.xForwardedFor.numberTrustedHops".to_string(),
+                    value: num_hops.to_string(),
+                });
+            }
+            XForwardedForClientIpDetection::TrustedCIDRs(trusted_cidrs) => {
+                for (index, trusted_cidr) in trusted_cidrs.iter().enumerate() {
+                    chart_set_values.push(ChartSetValue {
+                        key: format!("gateway.qoveryPublic.xForwardedFor.trustedCIDRs[{index}]"),
+                        value: trusted_cidr.to_string(),
+                    });
+                }
+            }
+            XForwardedForClientIpDetection::None => {}
         }
 
         if let Some(stream_idle_timeout_seconds) = self.chart_options.http_stream_idle_timeout_seconds {
@@ -273,10 +313,12 @@ impl ChartInstallationChecker for QoveryClusterGatewayChartInstallationChecker {
 
 #[cfg(test)]
 mod tests {
+    use ipnet::IpNet;
+
     use crate::environment::models::domain::Domain;
     use crate::helm::HelmChartNamespaces;
     use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
+        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -405,5 +447,42 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    #[test]
+    fn x_forwarded_for_client_ip_detection_none_when_not_configured() {
+        let detection = XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(&[], None);
+        assert!(matches!(detection, XForwardedForClientIpDetection::None));
+    }
+
+    #[test]
+    fn x_forwarded_for_client_ip_detection_uses_trusted_hops_when_only_hops_is_set() {
+        let detection = XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(&[], Some(2));
+        assert!(matches!(detection, XForwardedForClientIpDetection::TrustedHops(2)));
+    }
+
+    #[test]
+    fn x_forwarded_for_client_ip_detection_uses_trusted_cidrs_when_only_cidrs_is_set() {
+        let cidrs = vec![
+            IpNet::V4("10.0.0.0/8".parse().unwrap_or_default()),
+            IpNet::V4("192.168.0.0/16".parse().unwrap_or_default()),
+        ];
+        let detection = XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(&cidrs, None);
+        assert!(matches!(
+            detection,
+            XForwardedForClientIpDetection::TrustedCIDRs(returned) if returned == cidrs
+        ));
+    }
+
+    #[test]
+    fn x_forwarded_for_client_ip_detection_prefers_trusted_cidrs_when_both_are_set() {
+        // Envoy Gateway enforces one-of semantics between trustedCIDRs and numTrustedHops.
+        // We prioritize CIDRs because they are more explicit and resilient to hop-count drift.
+        let cidrs = vec![IpNet::V4("10.0.0.0/8".parse().unwrap_or_default())];
+        let detection = XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(&cidrs, Some(3));
+        assert!(matches!(
+            detection,
+            XForwardedForClientIpDetection::TrustedCIDRs(returned) if returned == cidrs
+        ));
     }
 }
