@@ -128,7 +128,7 @@ mod test {
                                     exit_code_msg: exit_code_to_msg(137),
                                     reason:  Some("OOMKilled".to_string()),
                                     message: Some("using too much memory".to_string()),
-                                    finished_at: Some(v1::Time(chrono::DateTime::default())),
+                                    finished_at: Some(v1::Time(k8s_openapi::jiff::Timestamp::UNIX_EPOCH)),
                             }
                         },
                     },

@@ -3,7 +3,6 @@ use crate::errors::{CommandError, EngineError};
 use crate::events::EventDetails;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::runtime::block_on;
-use chrono::Utc;
 use k8s_openapi::api::apps::v1::{DaemonSet, Deployment, StatefulSet};
 use k8s_openapi::api::core::v1::Pod;
 use k8s_openapi::apimachinery::pkg::apis::meta::v1::Time;
@@ -179,8 +178,8 @@ async fn get_most_recent_pod_start_time(
         .filter_map(|pod| pod.status.and_then(|it| it.start_time))
         .reduce(|acc, current| if acc.gt(&current) { acc } else { current })
         // If no pod exists, returns current date
-        .or_else(|| Some(Time(Utc::now())))
-        .expect("Should retrieve either most recent pod.status.time.date_time or use DateTime<Utc> now");
+        .or_else(|| Some(Time(k8s_openapi::jiff::Timestamp::now())))
+        .expect("Should retrieve either most recent pod.status.time or use Timestamp::now");
     Ok((pods_api, pods_list_params, most_recent_pod_start_time_before_restart))
 }
 

@@ -11,7 +11,6 @@ use base64::engine::general_purpose;
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use itertools::Itertools;
-use serde::__private::from_utf8_lossy;
 use std::ffi::OsStr;
 use walkdir::WalkDir;
 
@@ -322,7 +321,7 @@ where
     };
 
     let content = match general_purpose::STANDARD.decode(secret_content) {
-        Ok(bytes) => from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
+        Ok(bytes) => String::from_utf8_lossy(&bytes[1..bytes.len() - 1]).to_string(),
         Err(e) => return Err(CommandError::new(message, Some(e.to_string()), None)),
     };
     match create_yaml_backup_file(working_root_dir.as_ref(), secret.metadata.name.clone(), None, content) {
