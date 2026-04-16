@@ -547,6 +547,8 @@ pub struct ClusterAdvancedSettings {
     pub envoy_gateway_api_http_max_stream_duration_seconds: Option<u32>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
+    #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs", default)]
+    pub envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: Vec<IpNet>,
     #[serde(alias = "envoy.access_log.format", alias = "envoy.log_format")]
     pub envoy_access_log_format: Option<String>,
     #[serde(
@@ -659,6 +661,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_gateway_api_http_stream_idle_timeout_seconds: None,
             envoy_gateway_api_http_max_stream_duration_seconds: None,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
+            envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: vec![],
             envoy_access_log_format: None,
             envoy_custom_http_errors_default: None,
             envoy_enable_compression: true,
@@ -717,6 +720,7 @@ impl CustomerHelmChartsOverrideEncoded {
 
 #[cfg(test)]
 mod tests {
+    use ipnet::IpNet;
     use uuid::Uuid;
 
     use crate::infrastructure::models::cloud_provider::io::{
@@ -1058,5 +1062,37 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, Some(120));
         assert_eq!(settings.envoy_gateway_api_http_stream_idle_timeout_seconds, Some(300));
         assert_eq!(settings.envoy_gateway_api_http_max_stream_duration_seconds, Some(600));
+    }
+
+    #[test]
+    fn test_default_envoy_client_ip_detection_xff_trusted_cidrs_is_empty() {
+        let settings = ClusterAdvancedSettings::default();
+        assert!(
+            settings
+                .envoy_client_ip_detection_x_forwarded_for_trusted_cidrs
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_ip_detection_xff_trusted_cidrs_deserialization() {
+        let data = r#"
+        {
+            "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs": [
+                "10.0.0.0/8",
+                "192.168.0.0/16",
+                "::/0"
+            ]
+        }
+        "#;
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(
+            settings.envoy_client_ip_detection_x_forwarded_for_trusted_cidrs,
+            vec![
+                IpNet::V4("10.0.0.0/8".parse().unwrap_or_default()),
+                IpNet::V4("192.168.0.0/16".parse().unwrap_or_default()),
+                IpNet::V6("::/0".parse().unwrap_or_default())
+            ]
+        );
     }
 }

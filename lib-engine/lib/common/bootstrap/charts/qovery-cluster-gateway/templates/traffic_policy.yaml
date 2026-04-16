@@ -5,6 +5,7 @@ metadata:
   namespace: {{ .Values.namespace | default .Release.Namespace }}
 spec:
   {{- $numHops := -1 }}
+  {{- $trustedCIDRs := list }}
   {{- if .Values.gateway.qoveryPublic }}
     {{- if .Values.gateway.qoveryPublic.xForwardedFor }}
       {{- if hasKey .Values.gateway.qoveryPublic.xForwardedFor "numberTrustedHops" }}
@@ -15,12 +16,29 @@ spec:
           {{- $numHops = int $rawNumHops }}
         {{- end }}
       {{- end }}
+      {{- if hasKey .Values.gateway.qoveryPublic.xForwardedFor "trustedCIDRs" }}
+        {{- $rawTrustedCIDRs := .Values.gateway.qoveryPublic.xForwardedFor.trustedCIDRs }}
+        {{- if kindIs "slice" $rawTrustedCIDRs }}
+          {{- $trustedCIDRs = $rawTrustedCIDRs }}
+        {{- end }}
+      {{- end }}
     {{- end }}
   {{- end }}
-  {{- if ge $numHops 0 }}
+  {{- $useTrustedCIDRs := gt (len $trustedCIDRs) 0 }}
+  {{- if or $useTrustedCIDRs (ge $numHops 0) }}
+  # Envoy Gateway validates xForwardedFor as one-of:
+  # use either trustedCIDRs or numTrustedHops, never both.
+  # If both are provided by settings, trustedCIDRs takes precedence.
   clientIPDetection:
     xForwardedFor:
+      {{- if $useTrustedCIDRs }}
+      trustedCIDRs:
+      {{- range $trustedCIDRs }}
+        - {{ . | quote }}
+      {{- end }}
+      {{- else }}
       numTrustedHops: {{ $numHops }}
+      {{- end }}
   {{- end }}
   {{- $streamIdleTimeoutSeconds := -1 }}
   {{- if .Values.gateway.qoveryPublic }}

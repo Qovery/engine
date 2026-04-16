@@ -11,6 +11,7 @@ gateway:
     withUnderscoresAction: "DropHeader"
     xForwardedFor:
       numberTrustedHops: null
+      trustedCIDRs: []
     timeout:
       http:
         streamIdleTimeoutSeconds: null
