@@ -12,6 +12,7 @@ use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
 use base64::engine::general_purpose;
+use ipnet::IpNet;
 use reqwest::StatusCode;
 use serde::Deserialize as SerdeDeserialize;
 use serde_derive::{Deserialize, Serialize};
@@ -380,6 +381,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_alb_controller_vpa_min_memory_in_mib: u32,
     #[serde(alias = "aws.eks.alb_controller.vpa.memory.max_in_mib")]
     pub aws_eks_alb_controller_vpa_max_memory_in_mib: u32,
+    #[serde(alias = "aws.eks.alb_controller.load_balancer_source_ranges", default)]
+    pub aws_eks_alb_controller_load_balancer_source_ranges: Vec<IpNet>,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -605,6 +608,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
+            aws_eks_alb_controller_load_balancer_source_ranges: vec![],
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
             nginx_controller_custom_http_errors: None,
             nginx_controller_enable_compression: true,

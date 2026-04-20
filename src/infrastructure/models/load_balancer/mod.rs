@@ -43,6 +43,7 @@ mod tests {
         let aws_lb = aws_alb_load_balancer::AwsAlbLoadBalancer {
             cluster_id,
             organization_id,
+            load_balancer_source_ranges: vec![],
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
 
@@ -96,6 +97,7 @@ mod tests {
         let aws_lb = aws_alb_load_balancer::AwsAlbLoadBalancer {
             cluster_id,
             organization_id,
+            load_balancer_source_ranges: vec![],
         };
 
         let trait_obj: &dyn InteractWithLoadBalancer = &aws_lb;
@@ -111,6 +113,7 @@ mod tests {
         let _aws = LoadBalancer::AwsAlb(aws_alb_load_balancer::AwsAlbLoadBalancer {
             cluster_id,
             organization_id,
+            load_balancer_source_ranges: vec![],
         });
         let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {});
         let _azure = LoadBalancer::Azure(azure_load_balancer::AzureLoadBalancer {});

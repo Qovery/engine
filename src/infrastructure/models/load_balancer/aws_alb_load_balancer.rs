@@ -1,15 +1,18 @@
 use crate::{infrastructure::models::load_balancer::InteractWithLoadBalancer, io_models::QoveryIdentifier};
+use ipnet::IpNet;
+use itertools::Itertools;
 use std::collections::HashMap;
 
 /// AWS Application Load Balancer (ALB) configuration.
 pub struct AwsAlbLoadBalancer {
     pub cluster_id: QoveryIdentifier,
     pub organization_id: QoveryIdentifier,
+    pub load_balancer_source_ranges: Vec<IpNet>,
 }
 
 impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
     fn annotations(&self) -> Option<HashMap<String, String>> {
-        Some(HashMap::from([
+        let mut annotations = HashMap::from([
             (
                 "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
                 "external".to_string(),
@@ -51,7 +54,20 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
             // Validation rule, must have max 8 annotations
             // spec.infrastructure.annotations: Too many: 10: must have at most 8 items
             // ("service.beta.kubernetes.io/aws-load-balancer-target-group-attributes".to_string(), "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300".to_string()), // Can use AWS defaults or set via AWS Load Balancer Controller configuration
-        ]))
+        ]);
+
+        if !self.load_balancer_source_ranges.is_empty() {
+            annotations.insert(
+                "service.beta.kubernetes.io/load-balancer-source-ranges".to_string(),
+                self.load_balancer_source_ranges
+                    .iter()
+                    .map(|ip| ip.to_string())
+                    .collect_vec()
+                    .join(", "),
+            );
+        }
+
+        Some(annotations)
     }
 }
 
@@ -68,6 +84,7 @@ mod tests {
         let lb = AwsAlbLoadBalancer {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
+            load_balancer_source_ranges: vec![],
         };
 
         let annotations = lb.annotations();
@@ -82,6 +99,7 @@ mod tests {
         let lb = AwsAlbLoadBalancer {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
+            load_balancer_source_ranges: vec![],
         };
 
         let annotations = lb.annotations().unwrap();
@@ -142,6 +160,7 @@ mod tests {
         let lb = AwsAlbLoadBalancer {
             cluster_id,
             organization_id,
+            load_balancer_source_ranges: vec![],
         };
 
         let annotations = lb.annotations().unwrap();
@@ -150,5 +169,42 @@ mod tests {
             "AWS ALB load balancer must have at most 8 annotations, got {}",
             annotations.len()
         );
+    }
+
+    #[test]
+    fn test_aws_alb_load_balancer_load_balancer_source_ranges_annotation() {
+        let cluster_id = QoveryIdentifier::new_random();
+        let organization_id = QoveryIdentifier::new_random();
+
+        let lb = AwsAlbLoadBalancer {
+            cluster_id,
+            organization_id,
+            load_balancer_source_ranges: vec![
+                "10.0.0.0/8".parse().unwrap(),
+                "192.168.1.0/24".parse().unwrap(),
+                "fd01::/64".parse().unwrap(),
+            ],
+        };
+
+        let annotations = lb.annotations().unwrap();
+        assert_eq!(
+            annotations.get("service.beta.kubernetes.io/load-balancer-source-ranges"),
+            Some(&"10.0.0.0/8, 192.168.1.0/24, fd01::/64".to_string())
+        );
+    }
+
+    #[test]
+    fn test_aws_alb_load_balancer_no_source_ranges_annotation_when_empty() {
+        let cluster_id = QoveryIdentifier::new_random();
+        let organization_id = QoveryIdentifier::new_random();
+
+        let lb = AwsAlbLoadBalancer {
+            cluster_id,
+            organization_id,
+            load_balancer_source_ranges: vec![],
+        };
+
+        let annotations = lb.annotations().unwrap();
+        assert!(!annotations.contains_key("service.beta.kubernetes.io/load-balancer-source-ranges"));
     }
 }
