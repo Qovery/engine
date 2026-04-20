@@ -34,10 +34,6 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
                 "true".to_string(),
             ),
             (
-                "service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval".to_string(),
-                "10".to_string(),
-            ),
-            (
                 "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
                 format!(
                     "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
@@ -105,7 +101,7 @@ mod tests {
         let annotations = lb.annotations().unwrap();
 
         // Verify count
-        assert_eq!(annotations.len(), 8);
+        assert_eq!(annotations.len(), 7);
 
         // Verify static annotation values
         assert_eq!(
@@ -123,10 +119,6 @@ mod tests {
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled"),
             Some(&"true".to_string())
-        );
-        assert_eq!(
-            annotations.get("service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval"),
-            Some(&"10".to_string())
         );
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/aws-load-balancer-proxy-protocol"),
