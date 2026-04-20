@@ -303,6 +303,7 @@ mod tests {
             LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -336,6 +337,7 @@ mod tests {
             LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -373,6 +375,7 @@ mod tests {
             LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,

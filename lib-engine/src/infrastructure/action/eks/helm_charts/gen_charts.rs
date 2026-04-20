@@ -680,6 +680,10 @@ pub(super) fn eks_helm_charts(
                 LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
                     cluster_id: QoveryIdentifier::new(chart_config_prerequisites.cluster_long_id),
                     organization_id: QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
+                    load_balancer_source_ranges: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .aws_eks_alb_controller_load_balancer_source_ranges
+                        .clone(),
                 }),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_number_truster_hops: chart_config_prerequisites
