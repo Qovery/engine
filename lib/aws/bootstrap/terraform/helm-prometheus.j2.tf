@@ -104,7 +104,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "prometheus_bucket
   bucket = aws_s3_bucket.prometheus_bucket.id
 
   rule {
-    blocked_encryption_types = ["NONE"]
+    blocked_encryption_types = ["SSE-C"]
     apply_server_side_encryption_by_default {
       kms_master_key_id = aws_kms_key.s3_metrics_kms_encryption.arn
       sse_algorithm = "aws:kms"
