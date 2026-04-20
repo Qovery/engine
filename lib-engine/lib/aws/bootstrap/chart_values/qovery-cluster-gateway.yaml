@@ -29,7 +29,6 @@ infrastructure:
     service.beta.kubernetes.io/aws-load-balancer-name: "set-by-engine-code"
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
     service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
-    service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "10"
     service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "set-by-engine-code"
     service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
     # Validation rule, must have max 8 annotations
