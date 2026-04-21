@@ -3,8 +3,10 @@ use aws_sdk_ec2::operation::describe_subnets::{DescribeSubnetsError, DescribeSub
 use aws_sdk_eks::error::SdkError;
 use aws_sdk_eks::operation::delete_nodegroup::{DeleteNodegroupError, DeleteNodegroupOutput};
 use aws_sdk_eks::operation::describe_nodegroup::{DescribeNodegroupError, DescribeNodegroupOutput};
+use aws_sdk_eks::operation::describe_update::{DescribeUpdateError, DescribeUpdateOutput};
 use aws_sdk_eks::operation::list_clusters::{ListClustersError, ListClustersOutput};
 use aws_sdk_eks::operation::list_nodegroups::{ListNodegroupsError, ListNodegroupsOutput};
+use aws_sdk_eks::operation::update_nodegroup_version::{UpdateNodegroupVersionError, UpdateNodegroupVersionOutput};
 use aws_sdk_iam::operation::create_service_linked_role::{CreateServiceLinkedRoleError, CreateServiceLinkedRoleOutput};
 use aws_sdk_iam::operation::get_role::{GetRoleError, GetRoleOutput};
 use aws_types::SdkConfig;
@@ -49,6 +51,19 @@ pub trait QoveryAwsSdkConfigEks {
         &self,
         subnet_ids: Vec<String>,
     ) -> Result<HashMap<String, HashMap<String, String>>, SdkError<DescribeSubnetsError>>;
+
+    async fn update_nodegroup_version(
+        &self,
+        cluster_id: String,
+        nodegroup_id: String,
+    ) -> Result<UpdateNodegroupVersionOutput, SdkError<UpdateNodegroupVersionError>>;
+
+    async fn describe_update(
+        &self,
+        cluster_id: String,
+        nodegroup_id: String,
+        update_id: String,
+    ) -> Result<DescribeUpdateOutput, SdkError<DescribeUpdateError>>;
 }
 
 #[async_trait]
@@ -168,5 +183,35 @@ impl QoveryAwsSdkConfigEks for SdkConfig {
         }
 
         Ok(subnets_tags_by_id)
+    }
+
+    async fn update_nodegroup_version(
+        &self,
+        cluster_id: String,
+        nodegroup_id: String,
+    ) -> Result<UpdateNodegroupVersionOutput, SdkError<UpdateNodegroupVersionError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client
+            .update_nodegroup_version()
+            .cluster_name(cluster_id)
+            .nodegroup_name(nodegroup_id)
+            .send()
+            .await
+    }
+
+    async fn describe_update(
+        &self,
+        cluster_id: String,
+        nodegroup_id: String,
+        update_id: String,
+    ) -> Result<DescribeUpdateOutput, SdkError<DescribeUpdateError>> {
+        let client = aws_sdk_eks::Client::new(self);
+        client
+            .describe_update()
+            .name(cluster_id)
+            .nodegroup_name(nodegroup_id)
+            .update_id(update_id)
+            .send()
+            .await
     }
 }

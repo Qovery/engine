@@ -49,11 +49,45 @@ const KARPENTER_PAUSE_TIMEOUT: Duration = Duration::from_secs(600);
 /// Timeout for the karpenter-configuration chart uninstall during delete.
 const KARPENTER_CHART_UNINSTALL_TIMEOUT: ChronoDuration = ChronoDuration::seconds(300);
 
+/// Prefix for the Karpenter controller managed nodegroup name. Must stay in sync
+/// with the `node_group_name` defined in the Karpenter nodegroup Terraform module.
+pub(crate) const KARPENTER_CONTROLLER_NODEGROUP_PREFIX: &str = "karpenter-controller-";
+
+/// Polling interval for DescribeUpdate during Karpenter controller AMI refresh.
+const KARPENTER_AMI_REFRESH_POLL_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Maximum total time we wait for the AMI refresh update to reach a terminal state.
+const KARPENTER_AMI_REFRESH_TIMEOUT: Duration = Duration::from_secs(40 * 60);
+
 // Terraform resources for karpenter nodegroup (used for pause/resume)
 const KARPENTER_NODEGROUP_TERRAFORM_RESOURCES: &[&str] = &[
     "aws_launch_template.karpenter_nodegroup",
     "aws_eks_node_group.karpenter_controller",
 ];
+
+/// Decision returned by `next_poll_action` after inspecting an AWS EKS `UpdateStatus`.
+#[derive(Debug, PartialEq, Eq)]
+enum PollAction {
+    /// The update finished successfully.
+    Done,
+    /// Continue polling.
+    Continue,
+    /// The update failed or was cancelled. String is a human-readable reason.
+    Failed(String),
+}
+
+/// Pure helper that maps an optional `UpdateStatus` to a polling decision.
+/// `None` and any future SDK variant are treated as `Continue` — the outer timeout
+/// still bounds the wait, and this avoids spurious failures when AWS adds new states.
+fn next_poll_action(status: Option<&aws_sdk_eks::types::UpdateStatus>) -> PollAction {
+    use aws_sdk_eks::types::UpdateStatus;
+    match status {
+        Some(UpdateStatus::Successful) => PollAction::Done,
+        Some(UpdateStatus::Failed) => PollAction::Failed("update failed".to_string()),
+        Some(UpdateStatus::Cancelled) => PollAction::Failed("update cancelled".to_string()),
+        None | Some(UpdateStatus::InProgress) | Some(_) => PollAction::Continue,
+    }
+}
 
 pub struct Karpenter {}
 
@@ -124,6 +158,10 @@ impl Karpenter {
         Ok(())
     }
 
+    fn controller_nodegroup_name(short_id: &str) -> String {
+        format!("{KARPENTER_CONTROLLER_NODEGROUP_PREFIX}{short_id}")
+    }
+
     pub async fn restart(
         kubernetes: &EKS,
         cloud_provider: &dyn CloudProvider,
@@ -154,6 +192,127 @@ impl Karpenter {
             kubernetes_long_id,
             options,
         )
+    }
+
+    /// Triggers a Karpenter controller managed nodegroup AMI refresh by calling AWS
+    /// `UpdateNodegroupVersion` with no version arguments. AWS resolves the latest
+    /// Bottlerocket AMI for the current K8s version and performs a rolling replacement
+    /// only if the current AMI is behind latest. Safe to call unconditionally: AWS
+    /// returns a short-lived `Successful` update when the nodegroup is already at latest.
+    pub async fn refresh_controller_ami(
+        kubernetes: &EKS,
+        aws_conn: &SdkConfig,
+        logger: &impl InfraLogger,
+    ) -> Result<(), Box<EngineError>> {
+        let event_details = kubernetes.get_event_details(Stage::Infrastructure(InfrastructureStep::Upgrade));
+
+        if !kubernetes.is_karpenter_enabled() {
+            logger.info("Karpenter not enabled; skipping controller nodegroup AMI refresh.");
+            return Ok(());
+        }
+
+        if kubernetes.context.is_dry_run_deploy() {
+            logger.warn("Dry run mode enabled. Skipping Karpenter controller nodegroup AMI refresh.");
+            return Ok(());
+        }
+
+        let cluster_name = kubernetes.cluster_name();
+        let nodegroup_name = Self::controller_nodegroup_name(kubernetes.short_id());
+        let mk_err = |reason: String| -> Box<EngineError> {
+            Box::new(EngineError::new_karpenter_controller_ami_refresh_error(
+                event_details.clone(),
+                nodegroup_name.clone(),
+                reason,
+            ))
+        };
+
+        logger.info(format!(
+            "Refreshing Karpenter controller nodegroup AMI for '{nodegroup_name}'..."
+        ));
+
+        let pre_upgrade_version = aws_conn
+            .describe_nodegroup(cluster_name.clone(), nodegroup_name.clone())
+            .await
+            .map_err(|e| mk_err(format!("DescribeNodegroup failed: {e}")))?
+            .nodegroup
+            .and_then(|n| n.release_version)
+            .unwrap_or_else(|| "unknown".to_string());
+
+        let update = aws_conn
+            .update_nodegroup_version(cluster_name.clone(), nodegroup_name.clone())
+            .await
+            .map_err(|e| mk_err(e.to_string()))?
+            .update
+            .ok_or_else(|| mk_err("UpdateNodegroupVersion returned no update object".to_string()))?;
+
+        let update_id = update
+            .id
+            .clone()
+            .ok_or_else(|| mk_err("Update object has no id".to_string()))?;
+
+        let started = std::time::Instant::now();
+        loop {
+            let describe_output = aws_conn
+                .describe_update(cluster_name.clone(), nodegroup_name.clone(), update_id.clone())
+                .await
+                .map_err(|e| mk_err(format!("DescribeUpdate failed: {e}")))?;
+
+            let current_status = describe_output.update.as_ref().and_then(|u| u.status.as_ref());
+
+            match next_poll_action(current_status) {
+                PollAction::Done => {
+                    let post_upgrade_version = aws_conn
+                        .describe_nodegroup(cluster_name.clone(), nodegroup_name.clone())
+                        .await
+                        .map_err(|e| mk_err(format!("DescribeNodegroup (post-upgrade) failed: {e}")))?
+                        .nodegroup
+                        .and_then(|n| n.release_version)
+                        .unwrap_or_else(|| "unknown".to_string());
+
+                    if pre_upgrade_version == post_upgrade_version {
+                        logger.info(format!(
+                            "Karpenter controller nodegroup AMI refresh completed: no upgrade needed, nodegroup remained at {post_upgrade_version} (update_id={update_id})."
+                        ));
+                    } else {
+                        logger.info(format!(
+                            "Karpenter controller nodegroup AMI refresh completed: rotated from {pre_upgrade_version} to {post_upgrade_version} (update_id={update_id})."
+                        ));
+                    }
+                    return Ok(());
+                }
+                PollAction::Continue => {
+                    logger.info(format!(
+                        "Update {update_id} still in progress, waiting {}s before next poll...",
+                        KARPENTER_AMI_REFRESH_POLL_INTERVAL.as_secs()
+                    ));
+                }
+                PollAction::Failed(reason) => {
+                    let aws_errors = describe_output
+                        .update
+                        .as_ref()
+                        .and_then(|u| u.errors.as_deref())
+                        .map(|errs| {
+                            errs.iter()
+                                .map(|e| {
+                                    format!("code={:?} message={:?}", e.error_code.as_ref(), e.error_message.as_ref())
+                                })
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        })
+                        .unwrap_or_else(|| "no error details".to_string());
+
+                    return Err(mk_err(format!("{reason}: {aws_errors}")));
+                }
+            }
+
+            if started.elapsed() >= KARPENTER_AMI_REFRESH_TIMEOUT {
+                return Err(mk_err(format!(
+                    "timed out after {}s waiting for update {update_id} to reach a terminal state",
+                    KARPENTER_AMI_REFRESH_TIMEOUT.as_secs()
+                )));
+            }
+            tokio::time::sleep(KARPENTER_AMI_REFRESH_POLL_INTERVAL).await;
+        }
     }
 
     pub async fn delete(
@@ -812,5 +971,42 @@ mod tests {
     #[test]
     fn standalone_pod_is_evictable() {
         assert!(is_evictable_pod(&pod_without_owner()));
+    }
+
+    #[test]
+    fn poll_action_none_is_continue() {
+        assert_eq!(next_poll_action(None), PollAction::Continue);
+    }
+
+    #[test]
+    fn poll_action_in_progress_is_continue() {
+        assert_eq!(
+            next_poll_action(Some(&aws_sdk_eks::types::UpdateStatus::InProgress)),
+            PollAction::Continue
+        );
+    }
+
+    #[test]
+    fn poll_action_successful_is_done() {
+        assert_eq!(
+            next_poll_action(Some(&aws_sdk_eks::types::UpdateStatus::Successful)),
+            PollAction::Done
+        );
+    }
+
+    #[test]
+    fn poll_action_failed_is_failed() {
+        match next_poll_action(Some(&aws_sdk_eks::types::UpdateStatus::Failed)) {
+            PollAction::Failed(msg) => assert!(msg.contains("failed")),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn poll_action_cancelled_is_failed() {
+        match next_poll_action(Some(&aws_sdk_eks::types::UpdateStatus::Cancelled)) {
+            PollAction::Failed(msg) => assert!(msg.contains("cancelled")),
+            other => panic!("expected Failed, got {other:?}"),
+        }
     }
 }

@@ -9,6 +9,7 @@ use crate::infrastructure::action::eks::AwsEksQoveryTerraformOutput;
 use crate::infrastructure::action::eks::helm_charts::karpenter::KarpenterChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use crate::infrastructure::action::eks::helm_charts::karpenter_crd::KarpenterCrdChart;
+use crate::infrastructure::action::eks::karpenter::KARPENTER_CONTROLLER_NODEGROUP_PREFIX;
 use crate::infrastructure::action::eks::tera_context::eks_tera_context;
 use crate::infrastructure::helm_charts::ToCommonHelmChart;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -487,7 +488,6 @@ pub fn should_deploy_karpenter_nodegroup(
         }
     };
 
-    // Filter nodes by nodegroup name pattern (eks.amazonaws.com/nodegroup contains "karpenter-controller")
     let karpenter_nodes: Vec<_> = nodes_with_infra_label
         .iter()
         .filter(|node| {
@@ -495,7 +495,7 @@ pub fn should_deploy_karpenter_nodegroup(
                 .labels
                 .as_ref()
                 .and_then(|labels| labels.get("eks.amazonaws.com/nodegroup"))
-                .map(|ng| ng.contains("karpenter-controller"))
+                .map(|ng| ng.starts_with(KARPENTER_CONTROLLER_NODEGROUP_PREFIX))
                 .unwrap_or(false)
         })
         .collect();

@@ -189,6 +189,8 @@ pub fn create_eks_cluster(
     let (eks_tf_output, tera_context) = terraform_apply()?;
     update_cluster_outputs(kubernetes, &eks_tf_output)?;
 
+    block_on(Karpenter::refresh_controller_ami(kubernetes, &aws_conn, &logger))?;
+
     let kube_client = infra_ctx.mk_kube_client()?;
 
     let credentials_env_vars = envs_to_string(cloud_provider.credentials_environment_variables());
