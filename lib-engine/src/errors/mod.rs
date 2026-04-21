@@ -826,6 +826,8 @@ pub enum Tag {
     CannotGetNodeGroupList,
     /// CannotDeleteNodeGroup: represents an error while trying to delete or checking if delete is possible of a node group
     CannotDeleteNodeGroup,
+    /// CannotRefreshKarpenterControllerAmi: represents an error when refreshing the Karpenter controller nodegroup AMI via UpdateNodegroupVersion fails
+    CannotRefreshKarpenterControllerAmi,
     /// CannotGetNodeGroupInfo: represent and error caused by the cloud provider because no Nodegroup information has been returned
     CannotGetNodeGroupInfo,
     /// NumberOfMaxNodesIsBelowThanCurrentUsage: represents an error explaining to the user the requested maximum of nodes is below the current usage
@@ -4090,6 +4092,31 @@ impl EngineError {
         };
 
         EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)
+    }
+
+    /// Error when refreshing the Karpenter controller nodegroup AMI via UpdateNodegroupVersion fails.
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `nodegroup_name`: The Karpenter controller nodegroup name.
+    /// * `safe_error`: Raw error message.
+    pub fn new_karpenter_controller_ami_refresh_error(
+        event_details: EventDetails,
+        nodegroup_name: String,
+        safe_error: String,
+    ) -> EngineError {
+        let message =
+            format!("Error refreshing Karpenter controller nodegroup AMI for '{nodegroup_name}': {safe_error}");
+
+        EngineError::new(
+            event_details,
+            Tag::CannotRefreshKarpenterControllerAmi,
+            message,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Can't delete any present node group
