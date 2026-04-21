@@ -59,7 +59,7 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
                     .iter()
                     .map(|ip| ip.to_string())
                     .collect_vec()
-                    .join(", "),
+                    .join("\\,"),
             );
         }
 
@@ -181,7 +181,7 @@ mod tests {
         let annotations = lb.annotations().unwrap();
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/load-balancer-source-ranges"),
-            Some(&"10.0.0.0/8, 192.168.1.0/24, fd01::/64".to_string())
+            Some(&"10.0.0.0/8\\,192.168.1.0/24\\,fd01::/64".to_string())
         );
     }
 
