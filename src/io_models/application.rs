@@ -161,6 +161,8 @@ pub struct ApplicationAdvancedSettings {
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
+    #[serde(default, alias = "network.gateway_api.sticky_session_header")]
+    pub network_gateway_api_sticky_session_header: Option<String>,
     #[serde(alias = "network.gateway_api.force_ssl_redirect")]
     pub network_gateway_api_force_ssl_redirect: bool,
     #[serde(alias = "network.gateway_api.enable_cors")]
@@ -334,6 +336,7 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_custom_http_errors: None,
             network_gateway_api_sticky_session_enable: false,
+            network_gateway_api_sticky_session_header: None,
             network_gateway_api_force_ssl_redirect: false,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),
@@ -417,6 +420,7 @@ impl ApplicationAdvancedSettings {
                 .clone(),
             network_ingress_nginx_custom_http_errors: self.network_ingress_nginx_custom_http_errors.clone(),
             network_gateway_api_sticky_session_enable: self.network_gateway_api_sticky_session_enable,
+            network_gateway_api_sticky_session_header: self.network_gateway_api_sticky_session_header.clone(),
             network_gateway_api_force_ssl_redirect: self.network_gateway_api_force_ssl_redirect,
             network_gateway_api_enable_cors: self.network_gateway_api_enable_cors,
             network_gateway_api_cors_allow_origin: self.network_gateway_api_cors_allow_origin.clone(),
