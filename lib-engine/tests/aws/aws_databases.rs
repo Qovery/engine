@@ -666,6 +666,7 @@ fn public_postgresql_v17_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Postgres RDS version is in extended support and cost extra money"]
 fn private_postgresql_v11_deploy_a_working_prod_environment() {
     test_postgresql_configuration("11", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -681,6 +682,7 @@ fn public_postgresql_v11_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Postgres RDS version is in extended support and cost extra money"]
 fn private_postgresql_v12_deploy_a_working_prod_environment() {
     test_postgresql_configuration("12", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -696,6 +698,7 @@ fn public_postgresql_v12_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Postgres RDS version is in extended support and cost extra money"]
 fn private_postgresql_v13_deploy_a_working_prod_environment() {
     test_postgresql_configuration("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -711,6 +714,7 @@ fn public_postgresql_v13_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "Postgres RDS version is in extended support and cost extra money"]
 fn private_postgresql_v13_deploy_and_pause() {
     test_postgresql_pause("13", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -1060,6 +1064,7 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "MySQL RDS version is in extended support and cost extra money"]
 fn private_mysql_v5_7_deploy_a_working_prod_environment() {
     test_mysql_configuration("5.7", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
@@ -1075,6 +1080,7 @@ fn public_mysql_v5_7_deploy_a_working_prod_environment() {
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
 #[test]
+#[ignore = "MySQL RDS version is in extended support and cost extra money"]
 fn private_mysql_v8_0_deploy_a_working_prod_environment() {
     test_mysql_configuration("8.0", function_name!(), MANAGED, KubernetesKind::Eks, false);
 }
