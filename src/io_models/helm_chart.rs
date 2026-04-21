@@ -38,6 +38,8 @@ pub struct HelmChartAdvancedSettings {
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
+    #[serde(default, alias = "network.gateway_api.sticky_session_header")]
+    pub network_gateway_api_sticky_session_header: Option<String>,
     #[serde(alias = "network.gateway_api.force_ssl_redirect")]
     pub network_gateway_api_force_ssl_redirect: bool,
     #[serde(alias = "network.gateway_api.enable_cors")]
@@ -186,6 +188,7 @@ impl Default for HelmChartAdvancedSettings {
             network_ingress_grpc_send_timeout_seconds: 60,
             network_ingress_grpc_read_timeout_seconds: 60,
             network_gateway_api_sticky_session_enable: false,
+            network_gateway_api_sticky_session_header: None,
             network_gateway_api_force_ssl_redirect: false,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),

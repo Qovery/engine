@@ -34,6 +34,13 @@ spec:
   loadBalancer:
     type: ConsistentHash
     consistentHash:
+      {%- if advanced_settings.network_gateway_api_sticky_session_header %}
+      # Header-based affinity — use this when clients cannot persist cookies
+      # across requests (e.g. MCP SDK clients keying off Mcp-Session-Id).
+      type: Header
+      header:
+        name: {{ advanced_settings.network_gateway_api_sticky_session_header }}
+      {%- else %}
       type: Cookie
       cookie:
         name: INGRESSCOOKIE_QOVERY
@@ -41,6 +48,7 @@ spec:
         attributes:
           secure: "true"
           samesite: Lax
+      {%- endif %}
   {%- endif %}
   {%- if advanced_settings.network_gateway_api_route_limit_rpm or advanced_settings.network_gateway_api_route_limit_rps %}
   rateLimit:
