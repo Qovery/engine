@@ -32,6 +32,7 @@ pub enum LoadBalancer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::infrastructure::models::cloud_provider::io::AwsAlbLoadBalancerScheme;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
 
@@ -44,6 +45,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
 
@@ -98,6 +100,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let trait_obj: &dyn InteractWithLoadBalancer = &aws_lb;
@@ -114,6 +117,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         });
         let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {});
         let _azure = LoadBalancer::Azure(azure_load_balancer::AzureLoadBalancer {});

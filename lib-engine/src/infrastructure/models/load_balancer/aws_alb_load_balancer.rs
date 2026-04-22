@@ -1,4 +1,7 @@
-use crate::{infrastructure::models::load_balancer::InteractWithLoadBalancer, io_models::QoveryIdentifier};
+use crate::{
+    infrastructure::models::{cloud_provider::io::AwsAlbLoadBalancerScheme, load_balancer::InteractWithLoadBalancer},
+    io_models::QoveryIdentifier,
+};
 use ipnet::IpNet;
 use itertools::Itertools;
 use std::collections::HashMap;
@@ -8,6 +11,7 @@ pub struct AwsAlbLoadBalancer {
     pub cluster_id: QoveryIdentifier,
     pub organization_id: QoveryIdentifier,
     pub load_balancer_source_ranges: Vec<IpNet>,
+    pub load_balancer_scheme: AwsAlbLoadBalancerScheme,
 }
 
 impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
@@ -19,7 +23,7 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
             ),
             (
                 "service.beta.kubernetes.io/aws-load-balancer-scheme".to_string(),
-                "internet-facing".to_string(),
+                self.load_balancer_scheme.to_string(),
             ),
             (
                 "service.beta.kubernetes.io/aws-load-balancer-name".to_string(),
@@ -81,6 +85,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations();
@@ -96,6 +101,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations().unwrap();
@@ -142,6 +148,19 @@ mod tests {
         assert!(tags.contains(&format!("ClusterLongId={}", cluster_id)));
         assert!(tags.contains(&format!("ClusterId={}", cluster_id.short())));
         assert!(tags.contains("\\,"));
+
+        let lb = AwsAlbLoadBalancer {
+            cluster_id: cluster_id.clone(),
+            organization_id: organization_id.clone(),
+            load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::Internal,
+        };
+
+        let annotations = lb.annotations().unwrap();
+        assert_eq!(
+            annotations.get("service.beta.kubernetes.io/aws-load-balancer-scheme"),
+            Some(&"internal".to_string())
+        );
     }
 
     #[test]
@@ -153,6 +172,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations().unwrap();
@@ -176,6 +196,7 @@ mod tests {
                 "192.168.1.0/24".parse().unwrap(),
                 "fd01::/64".parse().unwrap(),
             ],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations().unwrap();
@@ -194,6 +215,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations().unwrap();
