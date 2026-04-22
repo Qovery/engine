@@ -282,6 +282,7 @@ mod tests {
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
         get_helm_values_set_in_code_but_absent_in_values_file,
     };
+    use crate::infrastructure::models::cloud_provider::io::AwsAlbLoadBalancerScheme;
     use crate::infrastructure::models::kubernetes::Kind;
     use crate::infrastructure::models::load_balancer::LoadBalancer;
     use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::AwsAlbLoadBalancer;
@@ -304,6 +305,7 @@ mod tests {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
                 load_balancer_source_ranges: vec![],
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -338,6 +340,7 @@ mod tests {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
                 load_balancer_source_ranges: vec![],
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -376,6 +379,7 @@ mod tests {
                 cluster_id: QoveryIdentifier::new_random(),
                 organization_id: QoveryIdentifier::new_random(),
                 load_balancer_source_ranges: vec![],
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,

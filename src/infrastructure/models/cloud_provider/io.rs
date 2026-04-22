@@ -78,6 +78,25 @@ pub enum AwsEc2MetadataImds {
     Optional,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy, Default)]
+pub enum AwsAlbLoadBalancerScheme {
+    #[default]
+    #[serde(rename = "internet-facing")]
+    InternetFacing,
+    #[serde(rename = "internal")]
+    Internal,
+}
+
+impl Display for AwsAlbLoadBalancerScheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            AwsAlbLoadBalancerScheme::InternetFacing => "internet-facing",
+            AwsAlbLoadBalancerScheme::Internal => "internal",
+        };
+        write!(f, "{}", str)
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum EfsThroughputMode {
     #[serde(rename = "elastic")]
@@ -383,6 +402,8 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_alb_controller_vpa_max_memory_in_mib: u32,
     #[serde(alias = "aws.eks.alb_controller.load_balancer_source_ranges", default)]
     pub aws_eks_alb_controller_load_balancer_source_ranges: Vec<IpNet>,
+    #[serde(alias = "aws.eks.alb_controller.load_balancer_scheme", default)]
+    pub aws_eks_alb_controller_load_balancer_scheme: AwsAlbLoadBalancerScheme,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
     pub aws_cloudwatch_eks_logs_retention_days: u32,
     #[serde(alias = "aws.eks.encrypt_secrets_kms_key_arn", default)]
@@ -609,6 +630,7 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
             aws_eks_alb_controller_load_balancer_source_ranges: vec![],
+            aws_eks_alb_controller_load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
             nginx_controller_custom_http_errors: None,
             nginx_controller_enable_compression: true,

@@ -684,6 +684,9 @@ pub(super) fn eks_helm_charts(
                         .cluster_advanced_settings
                         .aws_eks_alb_controller_load_balancer_source_ranges
                         .clone(),
+                    load_balancer_scheme: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .aws_eks_alb_controller_load_balancer_scheme,
                 }),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_number_truster_hops: chart_config_prerequisites
