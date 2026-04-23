@@ -511,16 +511,16 @@ pub(super) fn aks_helm_charts(
     }
 
     let loki_namespace = HelmChartNamespaces::Qovery;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let loki_kube_dns_name = chart_config_prerequisites
+        .loki_parameters
+        .deployment_mode
+        .kube_dns_name(&loki_namespace);
     let loki: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(Box::new(
             LokiChart::new(
                 chart_prefix_path,
                 loki_namespace,
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::BlobStorage(BlobStorageLokiChartConfiguration {
                     azure_loki_storage_service_account: Some(
                         chart_config_prerequisites
@@ -537,7 +537,7 @@ pub(super) fn aks_helm_charts(
                 get_chart_override_fn.clone(),
                 true,
                 Some(500),
-                HelmChartResourcesConstraintType::ChartDefault,
+                chart_config_prerequisites.loki_parameters.clone(),
                 HelmChartTimeout::Custom(Duration::seconds(1200)),
                 false,
                 Kind::Azure,

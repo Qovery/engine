@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "ga-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
 {{ include "ga-operator.labels" . | indent 4 }}
   {{- with .Values.annotations }}
@@ -58,6 +59,10 @@ spec:
         {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.hostAliases }}
+      hostAliases:
       {{- toYaml . | nindent 8 }}
       {{- end }}
       {{- with .Values.nodeSelector }}

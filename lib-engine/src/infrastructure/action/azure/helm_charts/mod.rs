@@ -16,6 +16,7 @@ use crate::infrastructure::models::kubernetes::azure::AksOptions;
 use crate::infrastructure::models::kubernetes::azure::aks::AKS;
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::loki::LokiParameters;
 use crate::io_models::metrics::MetricsParameters;
 use crate::string::terraform_list_format;
 use chrono::{DateTime, Utc};
@@ -40,6 +41,7 @@ pub struct AksChartsConfigPrerequisites {
     pub storage_logging_service_msi_client_id: String,
     pub logs_bucket_name: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub loki_parameters: LokiParameters,
     pub _prometheus_config: Option<PrometheusConfiguration>,
     // qovery options form json input
     pub infra_options: AksOptions,
@@ -71,6 +73,7 @@ impl AksChartsConfigPrerequisites {
         storage_logging_service_msi_client_id: String,
         logs_bucket_name: String,
         metrics_parameters: Option<MetricsParameters>,
+        loki_parameters: LokiParameters,
         prometheus_config: Option<PrometheusConfiguration>,
         infra_options: AksOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
@@ -98,6 +101,7 @@ impl AksChartsConfigPrerequisites {
             storage_logging_service_msi_client_id,
             logs_bucket_name,
             metrics_parameters,
+            loki_parameters,
             _prometheus_config: prometheus_config,
             infra_options,
             cluster_advanced_settings,
@@ -162,6 +166,7 @@ impl HelmInfraResources for AksHelmsDeployment<'_> {
             self.terraform_output.loki_logging_service_msi_client_id.clone(),
             self.cluster.logs_bucket_name(),
             self.cluster.options.metrics_parameters.clone(),
+            LokiParameters::from_advanced_settings(self.cluster.advanced_settings()),
             None,
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),

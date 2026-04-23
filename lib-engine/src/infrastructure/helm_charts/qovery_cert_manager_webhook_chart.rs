@@ -1,7 +1,10 @@
+use std::path::Path;
+
+use crate::cmd::kubectl::{PodCondition, kubectl_exec_wait_for_pods_condition};
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
-    UpdateStrategy,
+    ChartInfo, ChartInstallationChecker, ChartPreExecuteAction, ChartSetValue, CommonChart, HelmChartError,
+    HelmChartNamespaces, UpdateStrategy,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -109,8 +112,31 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
             },
             chart_installation_checker: Some(Box::new(QoveryCertManagerWebhookChartChecker::new())),
             vertical_pod_autoscaler: None,
-            pre_execute_action: None,
+            pre_execute_action: Some(Box::new(WaitForCertManagerWebhookAction {
+                cert_manager_namespace: self.cert_manager_namespace.clone(),
+            })),
         })
+    }
+}
+
+#[derive(Clone)]
+struct WaitForCertManagerWebhookAction {
+    cert_manager_namespace: HelmChartNamespaces,
+}
+
+impl ChartPreExecuteAction for WaitForCertManagerWebhookAction {
+    fn execute(&self, kubernetes_config: &Path, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
+        kubectl_exec_wait_for_pods_condition(
+            kubernetes_config,
+            envs,
+            &self.cert_manager_namespace.to_string(),
+            "app.kubernetes.io/component=webhook,app.kubernetes.io/instance=cert-manager",
+            PodCondition::Ready,
+        )
+    }
+
+    fn clone_dyn(&self) -> Box<dyn ChartPreExecuteAction> {
+        Box::new(self.clone())
     }
 }
 

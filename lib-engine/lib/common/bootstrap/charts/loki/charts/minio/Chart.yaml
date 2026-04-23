@@ -1,6 +1,6 @@
 apiVersion: v1
-appVersion: RELEASE.2022-09-17T00-09-45Z
-description: Multi-Cloud Object Storage
+appVersion: RELEASE.2024-12-18T13-15-44Z
+description: High Performance Object Storage
 home: https://min.io
 icon: https://min.io/resources/img/logo/MINIO_wordmark.png
 keywords:
@@ -15,4 +15,4 @@ maintainers:
 name: minio
 sources:
 - https://github.com/minio/minio
-version: 4.0.15
+version: 5.4.0

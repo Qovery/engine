@@ -8,6 +8,7 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2AmiModel;
 use crate::infrastructure::models::cluster_profile::ClusterProfile as ClusterProfileModel;
+use crate::io_models::loki::LokiDeploymentMode;
 use crate::io_models::models::StorageClass as StorageClassModel;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
@@ -367,6 +368,40 @@ pub struct ClusterAdvancedSettings {
     pub pleco_resources_ttl: i32,
     #[serde(alias = "loki.log_retention_in_week")]
     pub loki_log_retention_in_week: u32,
+    #[serde(alias = "loki.deployment_mode", default)]
+    pub loki_deployment_mode: LokiDeploymentMode,
+    #[serde(alias = "loki.single_binary.cpu_request_m")]
+    pub loki_single_binary_cpu_request_m: Option<u32>,
+    #[serde(alias = "loki.single_binary.cpu_limit_m")]
+    pub loki_single_binary_cpu_limit_m: Option<u32>,
+    #[serde(alias = "loki.single_binary.memory_request_mib")]
+    pub loki_single_binary_memory_request_mib: Option<u32>,
+    #[serde(alias = "loki.single_binary.memory_limit_mib")]
+    pub loki_single_binary_memory_limit_mib: Option<u32>,
+    #[serde(alias = "loki.write.cpu_request_m")]
+    pub loki_write_cpu_request_m: Option<u32>,
+    #[serde(alias = "loki.write.cpu_limit_m")]
+    pub loki_write_cpu_limit_m: Option<u32>,
+    #[serde(alias = "loki.write.memory_request_mib")]
+    pub loki_write_memory_request_mib: Option<u32>,
+    #[serde(alias = "loki.write.memory_limit_mib")]
+    pub loki_write_memory_limit_mib: Option<u32>,
+    #[serde(alias = "loki.read.cpu_request_m")]
+    pub loki_read_cpu_request_m: Option<u32>,
+    #[serde(alias = "loki.read.cpu_limit_m")]
+    pub loki_read_cpu_limit_m: Option<u32>,
+    #[serde(alias = "loki.read.memory_request_mib")]
+    pub loki_read_memory_request_mib: Option<u32>,
+    #[serde(alias = "loki.read.memory_limit_mib")]
+    pub loki_read_memory_limit_mib: Option<u32>,
+    #[serde(alias = "loki.backend.cpu_request_m")]
+    pub loki_backend_cpu_request_m: Option<u32>,
+    #[serde(alias = "loki.backend.cpu_limit_m")]
+    pub loki_backend_cpu_limit_m: Option<u32>,
+    #[serde(alias = "loki.backend.memory_request_mib")]
+    pub loki_backend_memory_request_mib: Option<u32>,
+    #[serde(alias = "loki.backend.memory_limit_mib")]
+    pub loki_backend_memory_limit_mib: Option<u32>,
     #[serde(alias = "aws.iam.enable_admin_group_sync")]
     pub aws_iam_user_mapper_group_enabled: bool,
     #[serde(alias = "aws.iam.admin_group")]
@@ -577,6 +612,23 @@ impl Default for ClusterAdvancedSettings {
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,
+            loki_deployment_mode: LokiDeploymentMode::default(),
+            loki_single_binary_cpu_request_m: None,
+            loki_single_binary_cpu_limit_m: None,
+            loki_single_binary_memory_request_mib: None,
+            loki_single_binary_memory_limit_mib: None,
+            loki_write_cpu_request_m: None,
+            loki_write_cpu_limit_m: None,
+            loki_write_memory_request_mib: None,
+            loki_write_memory_limit_mib: None,
+            loki_read_cpu_request_m: None,
+            loki_read_cpu_limit_m: None,
+            loki_read_memory_request_mib: None,
+            loki_read_memory_limit_mib: None,
+            loki_backend_cpu_request_m: None,
+            loki_backend_cpu_limit_m: None,
+            loki_backend_memory_request_mib: None,
+            loki_backend_memory_limit_mib: None,
             aws_iam_user_mapper_group_enabled: true,
             aws_iam_user_mapper_group_name: Some("Admins".to_string()),
             aws_iam_user_mapper_sso_enabled: false,

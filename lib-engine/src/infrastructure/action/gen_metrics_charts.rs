@@ -564,6 +564,7 @@ mod tests {
             loki_logging_service_account_email: String::new(),
             logs_bucket_name: String::new(),
             metrics_parameters: None,
+            loki_parameters: Default::default(),
             infra_options: GkeOptions {
                 qovery_api_url: String::new(),
                 qovery_grpc_url: String::new(),
@@ -684,6 +685,7 @@ mod tests {
             aws_s3_loki_bucket_name: String::new(),
             loki_storage_config_aws_s3: String::new(),
             metrics_parameters: None,
+            loki_parameters: Default::default(),
             aws_iam_eks_prometheus_role_arn: String::new(),
             aws_s3_prometheus_bucket_name: String::new(),
             karpenter_controller_aws_role_arn: String::new(),

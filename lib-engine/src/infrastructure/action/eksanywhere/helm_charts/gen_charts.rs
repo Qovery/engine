@@ -86,7 +86,10 @@ pub(super) fn eks_anywhere_helm_charts(
 
     // Promtail & Loki
     let loki_namespace = HelmChartNamespaces::Qovery;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let loki_kube_dns_name = chart_config_prerequisites
+        .loki_parameters
+        .deployment_mode
+        .kube_dns_name(&loki_namespace);
 
     let promtail = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
@@ -112,14 +115,11 @@ pub(super) fn eks_anywhere_helm_charts(
             LokiChart::new(
                 chart_prefix_path,
                 loki_namespace,
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::Local,
                 get_chart_override_fn.clone(),
                 true,
                 None,
-                HelmChartResourcesConstraintType::ChartDefault,
+                chart_config_prerequisites.loki_parameters.clone(),
                 HelmChartTimeout::ChartDefault,
                 false,
                 Kind::OnPremise,

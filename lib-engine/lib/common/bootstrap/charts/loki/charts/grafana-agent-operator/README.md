@@ -1,6 +1,10 @@
+# ⚠️ Deprecation Notice
+
+**This chart is deprecated and will no longer receive updates or support.**
+
 # grafana-agent-operator
 
-![Version: 0.2.16](https://img.shields.io/badge/Version-0.2.16-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.34.1](https://img.shields.io/badge/AppVersion-0.34.1-informational?style=flat-square)
+![Version: 0.5.2](https://img.shields.io/badge/Version-0.5.2-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.44.2](https://img.shields.io/badge/AppVersion-0.44.2-informational?style=flat-square)
 
 A Helm chart for Grafana Agent Operator
 
@@ -8,7 +12,7 @@ A Helm chart for Grafana Agent Operator
 
 ## Source Code
 
-* <https://github.com/grafana/agent/tree/v0.34.1/pkg/operator>
+* <https://github.com/grafana/agent/tree/v0.44.2/static/operator>
 
 Note that this chart does not provision custom resources like `GrafanaAgent` and `MetricsInstance` (formerly `PrometheusInstance`) or any `*Monitor` resources.
 
@@ -16,7 +20,7 @@ To learn how to deploy these resources, please see Grafana's [Agent Operator get
 
 ## CRDs
 
-The CRDs are synced into this chart manually (for now) from the Grafana Agent [GitHub repo](https://github.com/grafana/agent/tree/main/production/operator/crds). To learn more about how Helm manages CRDs, please see [Custom Resource Definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) from the Helm docs.
+The CRDs are synced into this chart manually (for now) from the Grafana Agent [GitHub repo](https://github.com/grafana/agent/tree/main/operations/agent-static-operator/crds). To learn more about how Helm manages CRDs, please see [Custom Resource Definitions](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) from the Helm docs.
 
 ## Get Repo Info
 
@@ -58,11 +62,13 @@ A major chart version change (like v1.2.3 -> v2.0.0) indicates that there is an 
 | containerSecurityContext | object | `{}` | Container security context (allowPrivilegeEscalation, etc.) |
 | extraArgs | list | `[]` | List of additional cli arguments to configure agent-operator (example: `--log.level`) |
 | fullnameOverride | string | `""` | Overrides the chart's computed fullname |
+| global.commonLabels | object | `{}` | Common labels for all object directly managed by this chart. |
+| hostAliases | list | `[]` | hostAliases to add |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
 | image.pullSecrets | list | `[]` | Image pull secrets |
 | image.registry | string | `"docker.io"` | Image registry |
 | image.repository | string | `"grafana/agent-operator"` | Image repo |
-| image.tag | string | `"v0.34.1"` | Image tag |
+| image.tag | string | `"v0.44.2"` | Image tag |
 | kubeletService | object | `{"namespace":"default","serviceName":"kubelet"}` | If both are set, Agent Operator will create and maintain a service for scraping kubelets https://grafana.com/docs/agent/latest/operator/getting-started/#monitor-kubelets |
 | nameOverride | string | `""` | Overrides the chart's name |
 | nodeSelector | object | `{}` | nodeSelector configuration |
@@ -74,4 +80,7 @@ A major chart version change (like v1.2.3 -> v2.0.0) indicates that there is an 
 | resources | object | `{}` | Resource limits and requests config |
 | serviceAccount.create | bool | `true` | Toggle to create ServiceAccount |
 | serviceAccount.name | string | `nil` | Service account name |
+| test.image.registry | string | `"docker.io"` | Test image registry |
+| test.image.repository | string | `"library/busybox"` | Test image repo |
+| test.image.tag | string | `"latest"` | Test image tag |
 | tolerations | list | `[]` | Tolerations applied to Pods |

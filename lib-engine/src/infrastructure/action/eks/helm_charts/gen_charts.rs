@@ -83,7 +83,10 @@ pub(super) fn eks_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let loki_kube_dns_name = chart_config_prerequisites
+        .loki_parameters
+        .deployment_mode
+        .kube_dns_name(&loki_namespace);
 
     let new_gateway_api_domain = domain.with_sub_domain("new-gateway-api".to_string());
 
@@ -351,11 +354,7 @@ pub(super) fn eks_helm_charts(
         true => Some(
             LokiChart::new(
                 chart_prefix_path,
-                // LokiEncryptionType::ServerSideEncryption,
                 loki_namespace.clone(),
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
                     region: Some(chart_config_prerequisites.region.to_cloud_provider_format().to_string()), // TODO(benjaminch): region to be struct instead of String
                     bucketname: Some(chart_config_prerequisites.aws_s3_loki_bucket_name.clone()),
@@ -367,7 +366,7 @@ pub(super) fn eks_helm_charts(
                 get_chart_override_fn.clone(),
                 true,
                 None,
-                HelmChartResourcesConstraintType::ChartDefault,
+                chart_config_prerequisites.loki_parameters.clone(),
                 HelmChartTimeout::ChartDefault,
                 chart_config_prerequisites.is_karpenter_enabled,
                 Kind::Aws,

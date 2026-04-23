@@ -1,0 +1,29 @@
+{{- if or (eq .Values.serviceMonitor.enabled true) (eq .Values.webhooks.enabled true) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rollout-operator.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "rollout-operator.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  {{- if eq .Values.webhooks.enabled false }}
+  clusterIP: None
+  {{- end }}
+  ports:
+    {{- if .Values.serviceMonitor.enabled }}
+    - port: 8001
+      targetPort: http-metrics
+      protocol: TCP
+      name: http-metrics
+    {{- end }}
+    {{- if .Values.webhooks.enabled }}
+    - port: 443
+      protocol: TCP
+      targetPort: 8443
+      name: https
+    {{- end }}
+  selector:
+    {{- include "rollout-operator.selectorLabels" . | nindent 4 }}
+{{- end -}}

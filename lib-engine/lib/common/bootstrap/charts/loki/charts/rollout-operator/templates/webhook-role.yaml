@@ -1,0 +1,23 @@
+{{- if .Values.webhooks.enabled -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "rollout-operator.fullname" . }}-webhook-role
+  namespace: {{ .Release.Namespace | quote }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - update
+      - get
+    resourceNames:
+      - {{ .Values.webhooks.selfSignedCertSecretName }}
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+{{- end -}}

@@ -8,10 +8,11 @@ use crate::helm::{
 };
 use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
 use crate::infrastructure::helm_charts::{
-    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
-    HelmChartValuesFilePath, ToCommonHelmChart, ToHelmChartValue,
+    HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartTimeout, HelmChartValuesFilePath,
+    ToCommonHelmChart, ToHelmChartValue,
 };
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::io_models::loki::{LokiDeploymentMode, LokiParameters};
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 use kube::Client;
@@ -57,6 +58,17 @@ pub enum LokiObjectBucketConfiguration {
     Local,
 }
 
+impl LokiObjectBucketConfiguration {
+    fn storage_type_id(&self) -> &'static str {
+        match self {
+            LokiObjectBucketConfiguration::S3(_) => "s3",
+            LokiObjectBucketConfiguration::GCS(_) => "gcs",
+            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
+            LokiObjectBucketConfiguration::Local => "filesystem",
+        }
+    }
+}
+
 pub struct LokiChart {
     chart_prefix_path: Option<String>,
     chart_path: HelmChartPath,
@@ -69,8 +81,12 @@ pub struct LokiChart {
     customer_helm_chart_vpa_override: Option<CustomerHelmChartsOverride>,
     enable_vpa: bool,
     vpa_min_mcpu: Option<u32>,
-    chart_resources: HelmChartResources,
-    additional_char_path: Option<HelmChartValuesFilePath>,
+    loki_deployment_mode: LokiDeploymentMode,
+    write_resources: HelmChartResources,
+    read_resources: HelmChartResources,
+    backend_resources: HelmChartResources,
+    single_binary_resources: HelmChartResources,
+    additional_chart_paths: Vec<HelmChartValuesFilePath>,
     chart_timeout: HelmChartTimeout,
     cloud_provider_kind: Kind,
 }
@@ -80,22 +96,53 @@ impl LokiChart {
         chart_prefix_path: Option<&str>,
         // encryption_type: LokiEncryptionType,
         chart_namespace: HelmChartNamespaces,
-        loki_log_retention_in_weeks: u32,
         loki_object_bucket_configuration: LokiObjectBucketConfiguration,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         enable_vpa: bool,
         vpa_min_mcpu: Option<u32>,
-        chart_resources: HelmChartResourcesConstraintType,
+        loki_parameters: LokiParameters,
         chart_timeout: HelmChartTimeout,
         karpenter_enabled: bool,
         cloud_provider_kind: Kind,
     ) -> Self {
+        let LokiParameters {
+            deployment_mode: loki_deployment_mode,
+            log_retention_in_week: loki_log_retention_in_weeks,
+            write_resources,
+            read_resources,
+            backend_resources,
+            single_binary_resources,
+        } = loki_parameters;
+
         let chart_values_path_directory = match loki_object_bucket_configuration {
             LokiObjectBucketConfiguration::S3(_)
             | LokiObjectBucketConfiguration::GCS(_)
             | LokiObjectBucketConfiguration::BlobStorage(_) => HelmChartDirectoryLocation::CommonFolder,
             LokiObjectBucketConfiguration::Local => HelmChartDirectoryLocation::CloudProviderFolder,
         };
+
+        let mut additional_chart_paths = vec![];
+
+        // Local storage already ships single-binary via its provider base values;
+        // only object-storage clusters need the SingleBinary overlay to flip the default.
+        if matches!(loki_deployment_mode, LokiDeploymentMode::SingleBinary)
+            && !matches!(loki_object_bucket_configuration, LokiObjectBucketConfiguration::Local)
+        {
+            additional_chart_paths.push(HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                "loki_single_binary".to_string(),
+            ));
+        }
+
+        if karpenter_enabled {
+            additional_chart_paths.push(HelmChartValuesFilePath::new(
+                chart_prefix_path,
+                HelmChartDirectoryLocation::CommonFolder,
+                "loki_with_karpenter".to_string(),
+            ));
+        }
+
         LokiChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -116,23 +163,12 @@ impl LokiChart {
             customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             enable_vpa,
             vpa_min_mcpu,
-            chart_resources: match chart_resources {
-                HelmChartResourcesConstraintType::ChartDefault => HelmChartResources {
-                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(300)),
-                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
-                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(8000)),
-                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(2)),
-                },
-                HelmChartResourcesConstraintType::Constrained(r) => r,
-            },
-            additional_char_path: match karpenter_enabled {
-                true => Some(HelmChartValuesFilePath::new(
-                    chart_prefix_path,
-                    HelmChartDirectoryLocation::CommonFolder,
-                    "loki_with_karpenter".to_string(),
-                )),
-                false => None,
-            },
+            loki_deployment_mode,
+            write_resources,
+            read_resources,
+            backend_resources,
+            single_binary_resources,
+            additional_chart_paths,
             chart_timeout,
             cloud_provider_kind,
         }
@@ -140,6 +176,12 @@ impl LokiChart {
 
     pub fn chart_name() -> String {
         "loki".to_string()
+    }
+
+    /// Local storage forces single-binary regardless of the requested deployment mode.
+    fn is_single_binary_effective(&self) -> bool {
+        matches!(self.loki_object_bucket_configuration, LokiObjectBucketConfiguration::Local)
+            || matches!(self.loki_deployment_mode, LokiDeploymentMode::SingleBinary)
     }
 }
 
@@ -168,17 +210,16 @@ impl ToCommonHelmChart for LokiChart {
             };
 
         let bucket_name = match &self.loki_object_bucket_configuration {
-            LokiObjectBucketConfiguration::S3(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
-            LokiObjectBucketConfiguration::GCS(c) => c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string(),
-            LokiObjectBucketConfiguration::BlobStorage(c) => {
-                c.bucketname.as_ref().unwrap_or(&"".to_string()).to_string()
-            }
+            LokiObjectBucketConfiguration::S3(c) => c.bucketname.as_deref().unwrap_or("").to_string(),
+            LokiObjectBucketConfiguration::GCS(c) => c.bucketname.as_deref().unwrap_or("").to_string(),
+            LokiObjectBucketConfiguration::BlobStorage(c) => c.bucketname.as_deref().unwrap_or("").to_string(),
             LokiObjectBucketConfiguration::Local => "".to_string(),
         };
+        let object_store_value = self.loki_object_bucket_configuration.storage_type_id();
 
         let mut values_files = vec![self.chart_values_path.to_string()];
-        if let Some(additional_char_path) = &self.additional_char_path {
-            values_files.push(additional_char_path.to_string());
+        for path in &self.additional_chart_paths {
+            values_files.push(path.to_string());
         }
 
         let mut common_chart = CommonChart {
@@ -190,19 +231,11 @@ impl ToCommonHelmChart for LokiChart {
                     HelmChartTimeout::ChartDefault => 900,
                     HelmChartTimeout::Custom(t) => t.whole_seconds(),
                 },
-                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(5, 0, 0)),
+                reinstall_chart_if_installed_version_is_below_than: Some(Version::new(6, 0, 0)),
                 values_files,
                 values: {
                     let source_registry = QoverySourceRegistry::from(&self.cloud_provider_kind);
                     vec![
-                        ChartSetValue {
-                            key: "kubectlImage.registry".to_string(),
-                            value: source_registry.host(),
-                        },
-                        ChartSetValue {
-                            key: "kubectlImage.repository".to_string(),
-                            value: source_registry.image_path("pub-mirror-kubectl"),
-                        },
                         ChartSetValue {
                             key: "loki.image.registry".to_string(),
                             value: source_registry.host(),
@@ -211,71 +244,27 @@ impl ToCommonHelmChart for LokiChart {
                             key: "loki.image.repository".to_string(),
                             value: source_registry.image_path("pub-mirror-loki"),
                         },
+                        // Disable sidecar for rules - not used by Qovery
+                        ChartSetValue {
+                            key: "sidecar.rules.enabled".to_string(),
+                            value: "false".to_string(),
+                        },
                         ChartSetValue {
                             key: "loki.compactor.retention_enabled".to_string(),
                             value: "true".to_string(),
+                        },
+                        ChartSetValue {
+                            key: "loki.compactor.delete_request_store".to_string(),
+                            value: object_store_value.to_string(),
                         },
                         // Logs retention period, table manager will be removed in the future (only used for boltdb-shipper)
                         ChartSetValue {
                             key: "loki.limits_config.retention_period".to_string(),
                             value: format!("{}w", self.loki_log_retention_in_weeks), // (default 12 week)
                         },
-                        // resources limits
-                        ChartSetValue {
-                            key: "singleBinary.resources.limits.cpu".to_string(),
-                            value: self.chart_resources.limit_cpu.to_helm_chart_value(),
-                        },
-                        ChartSetValue {
-                            key: "singleBinary.resources.limits.memory".to_string(),
-                            value: self.chart_resources.limit_memory.to_helm_chart_value(),
-                        },
-                        ChartSetValue {
-                            key: "singleBinary.resources.requests.cpu".to_string(),
-                            value: self.chart_resources.request_cpu.to_helm_chart_value(),
-                        },
-                        ChartSetValue {
-                            key: "singleBinary.resources.requests.memory".to_string(),
-                            value: self.chart_resources.request_memory.to_helm_chart_value(),
-                        },
                         ChartSetValue {
                             key: "loki.storage.type".to_string(),
-                            value: match &self.loki_object_bucket_configuration {
-                                LokiObjectBucketConfiguration::S3(_) => "s3",
-                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                                LokiObjectBucketConfiguration::Local => "filesystem",
-                            }
-                            .to_string(),
-                        },
-                        ChartSetValue {
-                            key: "loki.storage_config.boltdb_shipper.shared_store".to_string(),
-                            value: match &self.loki_object_bucket_configuration {
-                                LokiObjectBucketConfiguration::S3(_) => "s3",
-                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                                LokiObjectBucketConfiguration::Local => "filesystem",
-                            }
-                            .to_string(),
-                        },
-                        ChartSetValue {
-                            key: "loki.storage_config.tsdb_shipper.shared_store".to_string(),
-                            value: match &self.loki_object_bucket_configuration {
-                                LokiObjectBucketConfiguration::S3(_) => "s3",
-                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                                LokiObjectBucketConfiguration::Local => "filesystem",
-                            }
-                            .to_string(),
-                        },
-                        ChartSetValue {
-                            key: "loki.compactor.shared_store".to_string(),
-                            value: match &self.loki_object_bucket_configuration {
-                                LokiObjectBucketConfiguration::S3(_) => "s3",
-                                LokiObjectBucketConfiguration::GCS(_) => "gcs",
-                                LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-                                LokiObjectBucketConfiguration::Local => "filesystem",
-                            }
-                            .to_string(),
+                            value: object_store_value.to_string(),
                         },
                         // Schema configuration object_store settings
                         ChartSetValue {
@@ -297,15 +286,11 @@ impl ToCommonHelmChart for LokiChart {
                         },
                         ChartSetValue {
                             key: "loki.storage.s3.s3".to_string(),
-                            value: s3_configuration
-                                .s3_config
-                                .as_ref()
-                                .unwrap_or(&"".to_string())
-                                .to_string(),
+                            value: s3_configuration.s3_config.as_deref().unwrap_or("").to_string(),
                         },
                         ChartSetValue {
                             key: "loki.storage.s3.region".to_string(),
-                            value: s3_configuration.region.as_ref().unwrap_or(&"".to_string()).to_string(), // Qovery setting
+                            value: s3_configuration.region.as_deref().unwrap_or("").to_string(), // Qovery setting
                         },
                         // Can't be set ATM: https://github.com/grafana/loki/issues/9018
                         // ChartSetValue {
@@ -325,8 +310,8 @@ impl ToCommonHelmChart for LokiChart {
                             key: r"serviceAccount.annotations.eks\.amazonaws\.com/role-arn".to_string(),
                             value: s3_configuration
                                 .aws_iam_loki_role_arn
-                                .as_ref()
-                                .unwrap_or(&"".to_string())
+                                .as_deref()
+                                .unwrap_or("")
                                 .to_string(),
                         },
                         // GCS configuration
@@ -339,8 +324,8 @@ impl ToCommonHelmChart for LokiChart {
                             key: r"serviceAccount.annotations.iam\.gke\.io/gcp-service-account".to_string(),
                             value: gcs_configuration
                                 .gcp_service_account
-                                .as_ref()
-                                .unwrap_or(&"".to_string())
+                                .as_deref()
+                                .unwrap_or("")
                                 .to_string(),
                         },
                         // Azure blob storage configuration
@@ -348,8 +333,8 @@ impl ToCommonHelmChart for LokiChart {
                             key: "loki.storage.azure.account_name".to_string(),
                             value: blob_storage_configuration
                                 .azure_loki_storage_service_account
-                                .as_ref()
-                                .unwrap_or(&"".to_string())
+                                .as_deref()
+                                .unwrap_or("")
                                 .to_string(),
                         },
                         ChartSetValue {
@@ -364,8 +349,8 @@ impl ToCommonHelmChart for LokiChart {
                             key: "loki.storage_config.azure.account_name".to_string(),
                             value: blob_storage_configuration
                                 .azure_loki_storage_service_account
-                                .as_ref()
-                                .unwrap_or(&"".to_string())
+                                .as_deref()
+                                .unwrap_or("")
                                 .to_string(),
                         },
                     ]
@@ -384,7 +369,11 @@ impl ToCommonHelmChart for LokiChart {
                         target_ref: VpaTargetRef::new(
                             VpaTargetRefApiVersion::AppsV1,
                             VpaTargetRefKind::StatefulSet,
-                            "loki".to_string(),
+                            if self.is_single_binary_effective() {
+                                "loki".to_string()
+                            } else {
+                                "loki-write".to_string()
+                            },
                         ),
                         container_policy: VpaContainerPolicy::new(
                             "*".to_string(),
@@ -402,13 +391,6 @@ impl ToCommonHelmChart for LokiChart {
         };
 
         // Add schema configuration object_store settings
-        let object_store_value = match &self.loki_object_bucket_configuration {
-            LokiObjectBucketConfiguration::S3(_) => "s3",
-            LokiObjectBucketConfiguration::GCS(_) => "gcs",
-            LokiObjectBucketConfiguration::BlobStorage(_) => "azure",
-            LokiObjectBucketConfiguration::Local => "filesystem",
-        };
-
         common_chart.chart_info.values.extend([
             ChartSetValue {
                 key: "loki.schemaConfig.configs[0].object_store".to_string(),
@@ -445,10 +427,51 @@ impl ToCommonHelmChart for LokiChart {
                 key: r"serviceAccount.annotations.azure\.workload\.identity/client-id".to_string(),
                 value: blob_storage_configuration
                     .azure_loki_msi_client_id
-                    .as_ref()
-                    .unwrap_or(&"".to_string())
+                    .as_deref()
+                    .unwrap_or("")
                     .to_string(),
             });
+        }
+
+        let inject_resources = |component: &str, r: &HelmChartResources| -> [ChartSetValue; 4] {
+            [
+                ChartSetValue {
+                    key: format!("{component}.resources.requests.cpu"),
+                    value: r.request_cpu.to_helm_chart_value(),
+                },
+                ChartSetValue {
+                    key: format!("{component}.resources.limits.cpu"),
+                    value: r.limit_cpu.to_helm_chart_value(),
+                },
+                ChartSetValue {
+                    key: format!("{component}.resources.requests.memory"),
+                    value: r.request_memory.to_helm_chart_value(),
+                },
+                ChartSetValue {
+                    key: format!("{component}.resources.limits.memory"),
+                    value: r.limit_memory.to_helm_chart_value(),
+                },
+            ]
+        };
+
+        if self.is_single_binary_effective() {
+            common_chart
+                .chart_info
+                .values
+                .extend(inject_resources("singleBinary", &self.single_binary_resources));
+        } else {
+            common_chart
+                .chart_info
+                .values
+                .extend(inject_resources("write", &self.write_resources));
+            common_chart
+                .chart_info
+                .values
+                .extend(inject_resources("read", &self.read_resources));
+            common_chart
+                .chart_info
+                .values
+                .extend(inject_resources("backend", &self.backend_resources));
         }
 
         Ok(common_chart)
@@ -488,10 +511,11 @@ mod tests {
         LokiChart, LokiObjectBucketConfiguration, S3LokiChartConfiguration,
     };
     use crate::infrastructure::helm_charts::{
-        HelmChartResourcesConstraintType, HelmChartTimeout, HelmChartType, ToCommonHelmChart,
-        get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
+        HelmChartTimeout, HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
+        get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use crate::infrastructure::models::cloud_provider::Kind;
+    use crate::io_models::loki::{LokiDeploymentMode, LokiParameters};
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
     use std::sync::Arc;
@@ -511,14 +535,16 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
-            12,
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
             None,
-            HelmChartResourcesConstraintType::ChartDefault,
+            LokiParameters {
+                deployment_mode: LokiDeploymentMode::SimpleScalable,
+                log_retention_in_week: 12,
+                ..Default::default()
+            },
             HelmChartTimeout::ChartDefault,
             false,
             Kind::Aws,
@@ -547,14 +573,16 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
-            12,
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
             None,
-            HelmChartResourcesConstraintType::ChartDefault,
+            LokiParameters {
+                deployment_mode: LokiDeploymentMode::SimpleScalable,
+                log_retention_in_week: 12,
+                ..Default::default()
+            },
             HelmChartTimeout::ChartDefault,
             true,
             Kind::Aws,
@@ -587,14 +615,16 @@ mod tests {
         // setup:
         let chart = LokiChart::new(
             None,
-            // LokiEncryptionType::None,
             HelmChartNamespaces::Logging,
-            12,
             LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration::default()),
             get_loki_chart_override(),
             false,
             None,
-            HelmChartResourcesConstraintType::ChartDefault,
+            LokiParameters {
+                deployment_mode: LokiDeploymentMode::SimpleScalable,
+                log_retention_in_week: 12,
+                ..Default::default()
+            },
             HelmChartTimeout::ChartDefault,
             false,
             Kind::Aws,

@@ -80,7 +80,7 @@ impl<T: ToString> ToHelmChartValue for Option<T> {
 //   requests:
 //     cpu: [request_cpu_m]
 //     memory: [request_memory_mi]
-#[derive(Serialize, Debug, PartialEq)]
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct HelmChartResources {
     #[serde(serialize_with = "serialize_cpu_resource")]
     pub limit_cpu: Option<KubernetesCpuResourceUnit>,

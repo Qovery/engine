@@ -68,7 +68,10 @@ pub fn kapsule_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let loki_kube_dns_name = chart_config_prerequisites
+        .loki_parameters
+        .deployment_mode
+        .kube_dns_name(&loki_namespace);
 
     let new_gateway_api_domain = domain.with_sub_domain("new-gateway-api".to_string());
 
@@ -213,23 +216,19 @@ pub fn kapsule_helm_charts(
         true => Some(
             LokiChart::new(
                 chart_prefix_path,
-                // LokiEncryptionType::None, // Scaleway does not support encryption yet.
                 loki_namespace.clone(),
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::S3(S3LokiChartConfiguration {
                     s3_config: Some(chart_config_prerequisites.loki_storage_config_scaleway_s3.clone()),
                     region: Some(chart_config_prerequisites.zone.region().to_string()),
                     aws_iam_loki_role_arn: None,
-                    bucketname: None,
+                    bucketname: Some(chart_config_prerequisites.loki_bucket_name.clone()),
                     insecure: false,
                     use_path_style: true,
                 }),
                 get_chart_override_fn.clone(),
                 true,
                 None,
-                HelmChartResourcesConstraintType::ChartDefault,
+                chart_config_prerequisites.loki_parameters.clone(),
                 HelmChartTimeout::ChartDefault,
                 false,
                 Kind::Scw,

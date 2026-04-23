@@ -1,0 +1,32 @@
+# Overlay: enables SingleBinary mode for object-storage-backed clusters.
+# Loaded in addition to loki.yaml when deployment_mode = SingleBinary and storage != Local.
+deploymentMode: SingleBinary
+
+singleBinary:
+  replicas: 1
+  # Logs stream to object storage; /var/loki only holds ephemeral index/cache/compactor state.
+  # readOnlyRootFilesystem blocks in-container mkdir, so mount an emptyDir explicitly.
+  persistence:
+    enabled: false
+  extraVolumes:
+    - name: storage
+      emptyDir: {}
+  extraVolumeMounts:
+    - name: storage
+      mountPath: /var/loki
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+write:
+  replicas: 0
+
+read:
+  replicas: 0
+
+backend:
+  replicas: 0

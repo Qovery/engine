@@ -52,6 +52,9 @@ test:
   enabled: false
 gateway:
   enabled: false
+
+deploymentMode: SingleBinary
+
 singleBinary:
   replicas: 1
   persistence:
