@@ -240,6 +240,20 @@ impl Docker {
             common_envs: vec![("DOCKER_BUILDKIT".to_string(), "1".to_string())],
         };
 
+        // Symlink local docker builx plugins so it is found by docker from our temp dir config
+        // (Docker looks for CLI plugins relative to that config directory)
+        // This is to run the engine locally without issue
+        if let Some(home) = dirs::home_dir() {
+            let src = home.join(".docker/cli-plugins");
+            let dst = docker.config_path.path().join("cli-plugins");
+            if src.exists()
+                && !dst.exists()
+                && let Err(e) = std::os::unix::fs::symlink(&src, &dst)
+            {
+                warn!("Could not symlink ~/.docker/cli-plugins to custom Docker config dir: {e}");
+            }
+        }
+
         // Override DOCKER_HOST if we use a TCP socket
         if let Some(socket_location) = &docker.socket_location {
             docker

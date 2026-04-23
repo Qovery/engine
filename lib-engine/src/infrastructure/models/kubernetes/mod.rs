@@ -1019,7 +1019,7 @@ where
             Ok(nodes) => {
                 let mut conditions: Vec<KubernetesNodeCondition> = Vec::new();
                 for node in nodes.items.into_iter() {
-                    conditions.extend(node.status.conditions.into_iter());
+                    conditions.extend(node.status.conditions);
                 }
 
                 for condition in conditions.iter() {
