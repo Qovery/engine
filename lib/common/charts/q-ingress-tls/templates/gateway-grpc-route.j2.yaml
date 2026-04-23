@@ -59,13 +59,10 @@ spec:
   parentRefs:
     {%- if certificate_alternative_names|length > 0 %}
     {%- if k8s_deploy_listenerset == true %}
-    {%- for domain in certificate_alternative_names %}
     - group: gateway.networking.k8s.io
       kind: ListenerSet
       name: {{ sanitized_name }}-listeners
       namespace: {{ namespace_key }}
-      sectionName: {{ sanitized_name }}-{{ loop.index }}-https
-    {%- endfor %}
     {%- endif %}
     - name: qovery-cluster-public-gateway
       namespace: qovery
