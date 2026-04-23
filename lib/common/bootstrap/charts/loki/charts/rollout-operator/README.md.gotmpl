@@ -1,0 +1,46 @@
+# Grafana rollout-operator Helm Chart
+
+Helm chart for deploying [Grafana rollout-operator]({{ template "chart.homepage" . }}) to Kubernetes.
+
+{{ template "chart.header" . }}
+
+{{ template "chart.versionBadge" . }}{{ template "chart.typeBadge" . }}{{ template "chart.appVersionBadge" . }}
+
+{{ template "chart.description" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "chart.requirementsSection" . }}
+
+## Installation
+
+This section describes various use cases for installation, upgrade and migration from different systems and versions.
+
+### Preparation
+
+These are the common tasks to perform before any of the use cases.
+
+```bash
+# Add the repository
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+```
+
+### Installation of Grafana Rollout Operator
+
+```bash
+helm install  -n <namespace> <release> grafana/rollout-operator
+```
+
+The Grafana rollout-operator should be installed in the same namespace as the statefulsets it is operating upon.
+It is not a highly available application and runs as a single pod.
+
+### Upgrade of Grafana Rollout Operator
+
+Starting with v0.33.0 of the rollout-operator chart, the rollout-operator webhooks are enabled. See https://github.com/grafana/rollout-operator/#webhooks.
+
+Before upgrading to this version, make sure that the CustomResourceDefinitions (CRDs) in the `crds` directory are applied to your cluster.
+
+Manually applying these CRDs is only required if upgrading from a chart <= v0.32.0.
+
+{{ template "chart.valuesSection" . }}

@@ -44,6 +44,9 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- if .Values.customLabels }}
 {{ toYaml .Values.customLabels }}
 {{- end }}
+{{- with .Values.global.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end }}
 
 {{/*

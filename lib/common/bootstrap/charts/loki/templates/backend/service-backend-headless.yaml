@@ -5,7 +5,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "loki.backendFullname" . }}-headless
-  namespace: {{ $.Release.Namespace }}
+  namespace: {{ include "loki.namespace" . }}
   labels:
     {{- include "loki.backendSelectorLabels" . | nindent 4 }}
     {{- with .Values.loki.serviceLabels }}
@@ -28,13 +28,14 @@ spec:
   clusterIP: None
   ports:
     - name: http-metrics
-      port: 3100
+      port: {{ .Values.loki.server.http_listen_port }}
       targetPort: http-metrics
       protocol: TCP
     - name: grpc
-      port: 9095
+      port: {{ .Values.loki.server.grpc_listen_port }}
       targetPort: grpc
       protocol: TCP
+      appProtocol: tcp
   selector:
     {{- include "loki.backendSelectorLabels" . | nindent 4 }}
 {{- end }}

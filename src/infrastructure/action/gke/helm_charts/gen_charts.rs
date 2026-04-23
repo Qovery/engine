@@ -62,7 +62,10 @@ pub(super) fn gke_helm_charts(
     let prometheus_namespace = HelmChartNamespaces::Qovery;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Qovery;
-    let loki_kube_dns_name = format!("loki.{loki_namespace}.svc:3100");
+    let loki_kube_dns_name = chart_config_prerequisites
+        .loki_parameters
+        .deployment_mode
+        .kube_dns_name(&loki_namespace);
 
     let new_gateway_api_domain = domain.with_sub_domain("new-gateway-api".to_string());
 
@@ -164,9 +167,6 @@ pub(super) fn gke_helm_charts(
             LokiChart::new(
                 chart_prefix_path,
                 loki_namespace,
-                chart_config_prerequisites
-                    .cluster_advanced_settings
-                    .loki_log_retention_in_week,
                 LokiObjectBucketConfiguration::GCS(GCSLokiChartConfiguration {
                     gcp_service_account: Some(
                         chart_config_prerequisites
@@ -178,12 +178,10 @@ pub(super) fn gke_helm_charts(
                 get_chart_override_fn.clone(),
                 true,
                 Some(500), // GCP need at least 500m for pod with antiAffinity
-                HelmChartResourcesConstraintType::Constrained(HelmChartResources {
-                    request_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(500)), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
-                    request_memory: Some(KubernetesMemoryResourceUnit::GibiByte(1)),
-                    limit_cpu: Some(KubernetesCpuResourceUnit::MilliCpu(1000)), // {"[denied by autogke-pod-limit-constraints]":["workload 'loki-0' cpu requests '250m' is lower than the Autopilot minimum required of '500m' for using pod anti affinity."]}
-                    limit_memory: Some(KubernetesMemoryResourceUnit::GibiByte(2)),
-                }),
+                chart_config_prerequisites
+                    .loki_parameters
+                    .clone()
+                    .with_cpu_floors_m(500, 1000),
                 HelmChartTimeout::Custom(Duration::seconds(1200)), // GCP might have a lag in role / authorizations to be working in case you just assigned them, so just allow Loki to wait a bit before failing
                 false,
                 Kind::Gcp,

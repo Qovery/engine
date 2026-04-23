@@ -1,17 +1,23 @@
 apiVersion: v2
-appVersion: 2.9.3
+appVersion: 3.6.7
 dependencies:
 - alias: minio
   condition: minio.enabled
   name: minio
   repository: https://charts.min.io/
-  version: 4.0.15
+  version: 5.4.0
 - alias: grafana-agent-operator
   condition: monitoring.selfMonitoring.grafanaAgent.installOperator
   name: grafana-agent-operator
   repository: https://grafana.github.io/helm-charts
-  version: 0.2.16
-description: Helm chart for Grafana Loki in simple, scalable mode
+  version: 0.5.2
+- alias: rollout_operator
+  condition: rollout_operator.enabled
+  name: rollout-operator
+  repository: https://grafana.github.io/helm-charts
+  version: 0.43.0
+description: Helm chart for Grafana Loki and Grafana Enterprise Logs supporting monolithic,
+  simple scalable, and microservices modes.
 home: https://grafana.github.io/helm-charts
 icon: https://grafana.com/docs/loki/latest/logo_and_name.png
 maintainers:
@@ -23,4 +29,4 @@ sources:
 - https://grafana.com/oss/loki/
 - https://grafana.com/docs/loki/latest/
 type: application
-version: 5.41.4
+version: 6.55.0

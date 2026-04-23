@@ -68,7 +68,7 @@ charts:
     comment: https://github.com/kubernetes-sigs/metrics-server/blob/master/charts/metrics-server/Chart.yaml#L5
   - name: loki
     repo_name: grafana
-    version: 5.41.4
+    version: 6.55.0
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
   - name: promtail
     repo_name: grafana

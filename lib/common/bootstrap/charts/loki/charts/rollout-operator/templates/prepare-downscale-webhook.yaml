@@ -1,0 +1,46 @@
+{{- if .Values.webhooks.enabled -}}
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: prepare-downscale-{{ .Release.Namespace }}
+  labels:
+    grafana.com/inject-rollout-operator-ca: "true"
+    grafana.com/namespace: {{ .Release.Namespace | quote }}
+    {{- include "rollout-operator.labels" . | nindent 4 }}
+webhooks:
+  - name: prepare-downscale-{{ .Release.Namespace }}.grafana.com
+    clientConfig:
+      service:
+        namespace: {{ .Release.Namespace | quote }}
+        name: {{ include "rollout-operator.fullname" . }}
+        path: /admission/prepare-downscale
+        port: 443
+    rules:
+      - operations:
+          - UPDATE
+        apiGroups:
+          - apps
+        apiVersions:
+          - v1
+        resources:
+          - statefulsets
+          - statefulsets/scale
+        scope: Namespaced
+    admissionReviewVersions:
+      - v1
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Release.Namespace | quote }}
+      {{- with .Values.namespaceSelector.matchExpressions }}
+      matchExpressions:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    {{- with .Values.webhooks.objectSelector }}
+    objectSelector:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    sideEffects: NoneOnDryRun
+    matchPolicy: Equivalent
+    timeoutSeconds: 10
+    failurePolicy: {{.Values.webhooks.failurePolicy}}
+{{- end -}}

@@ -1,0 +1,8 @@
+apiVersion: v2
+appVersion: v0.35.0
+description: Grafana rollout-operator
+home: https://github.com/grafana/rollout-operator
+kubeVersion: ^1.10.0-0
+name: rollout-operator
+type: application
+version: 0.43.0

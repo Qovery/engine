@@ -15,6 +15,7 @@ use crate::infrastructure::models::kubernetes::gcp::{Gke, GkeOptions};
 use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::loki::LokiParameters;
 use crate::io_models::metrics::MetricsParameters;
 use std::collections::HashMap;
 
@@ -36,6 +37,7 @@ pub struct GkeChartsConfigPrerequisites {
     pub loki_logging_service_account_email: String,
     pub logs_bucket_name: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub loki_parameters: LokiParameters,
     // qovery options form json input
     pub infra_options: GkeOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -66,6 +68,7 @@ impl GkeChartsConfigPrerequisites {
         loki_logging_service_account_email: String,
         logs_bucket_name: String,
         metrics_parameters: Option<MetricsParameters>,
+        loki_parameters: LokiParameters,
         infra_options: GkeOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
@@ -92,6 +95,7 @@ impl GkeChartsConfigPrerequisites {
             loki_logging_service_account_email,
             logs_bucket_name,
             metrics_parameters,
+            loki_parameters,
             infra_options,
             cluster_advanced_settings,
             customer_helm_charts_override,
@@ -150,6 +154,7 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             self.terraform_output.loki_logging_service_account_email.clone(),
             self.cluster.logs_bucket_name(),
             self.cluster.options.metrics_parameters.clone(),
+            LokiParameters::from_advanced_settings(self.cluster.advanced_settings()),
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.cluster.customer_helm_charts_override.clone(),

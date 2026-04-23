@@ -120,7 +120,6 @@ fn test_kubernetes() -> Box<dyn Kubernetes> {
                 load_balancer_size: "my_load_balancer_size".to_string(),
                 registry_image_retention_time_sec: 1,
                 pleco_resources_ttl: 2,
-                loki_log_retention_in_week: 3,
                 aws_iam_user_mapper_group_enabled: true,
                 aws_iam_user_mapper_group_name: Some("my_aws_iam_user_mapper_group_name".to_string()),
                 aws_vpc_enable_flow_logs: true,

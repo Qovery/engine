@@ -15,6 +15,7 @@ use crate::infrastructure::models::kubernetes::scaleway::kapsule::{Kapsule, Kaps
 use crate::io_models::context::Features;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::loki::LokiParameters;
 use crate::io_models::metrics::MetricsParameters;
 use crate::string::terraform_list_format;
 use chrono::{DateTime, Utc};
@@ -41,7 +42,9 @@ pub struct KapsuleChartsConfigPrerequisites {
     pub infra_options: KapsuleOptions,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub loki_storage_config_scaleway_s3: String,
+    pub loki_bucket_name: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub loki_parameters: LokiParameters,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 
     pub prometheus_storage_config_scaleway_s3: String,
@@ -70,7 +73,9 @@ impl KapsuleChartsConfigPrerequisites {
         infra_options: KapsuleOptions,
         cluster_advanced_settings: ClusterAdvancedSettings,
         loki_storage_config_scaleway_s3: String,
+        loki_bucket_name: String,
         metrics_parameters: Option<MetricsParameters>,
+        loki_parameters: LokiParameters,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         prometheus_storage_config_scaleway_s3: String,
         endpoint: String,
@@ -96,7 +101,9 @@ impl KapsuleChartsConfigPrerequisites {
             infra_options,
             cluster_advanced_settings,
             loki_storage_config_scaleway_s3,
+            loki_bucket_name,
             metrics_parameters,
+            loki_parameters,
             customer_helm_charts_override,
             prometheus_storage_config_scaleway_s3,
             endpoint,
@@ -163,7 +170,9 @@ impl HelmInfraResources for KapsuleHelmsDeployment<'_> {
             self.cluster.options.clone(),
             self.cluster.advanced_settings().clone(),
             self.terraform_output.loki_storage_config_scaleway_s3.clone(),
+            self.cluster.logs_bucket_name(),
             self.cluster.options.metrics_parameters.clone(),
+            LokiParameters::from_advanced_settings(self.cluster.advanced_settings()),
             self.cluster.customer_helm_charts_override.clone(),
             self.cluster.prometheus_bucket_name(),
             self.cluster.object_storage.get_endpoint_url_for_region(),

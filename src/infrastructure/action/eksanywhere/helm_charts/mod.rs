@@ -11,6 +11,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::{EksAnywhere, EksAnywhereOptions};
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::loki::LokiParameters;
 use crate::io_models::metrics::MetricsParameters;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -32,6 +33,7 @@ pub struct EksAnywhereChartsConfigPrerequisites {
     pub lets_encrypt_config: LetsEncryptConfig,
     pub infra_options: EksAnywhereOptions,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub loki_parameters: LokiParameters,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
 }
@@ -49,6 +51,7 @@ impl EksAnywhereChartsConfigPrerequisites {
         lets_encrypt_config: LetsEncryptConfig,
         infra_options: EksAnywhereOptions,
         metrics_parameters: Option<MetricsParameters>,
+        loki_parameters: LokiParameters,
         cluster_advanced_settings: ClusterAdvancedSettings,
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     ) -> Self {
@@ -64,6 +67,7 @@ impl EksAnywhereChartsConfigPrerequisites {
             lets_encrypt_config,
             infra_options,
             metrics_parameters,
+            loki_parameters,
             cluster_advanced_settings,
             customer_helm_charts_override,
         }
@@ -104,6 +108,7 @@ impl HelmInfraResources for EksAnywhereHelmsDeployment<'_> {
             ),
             self.cluster.options.clone(),
             self.cluster.options.metrics_parameters.clone(),
+            LokiParameters::from_advanced_settings(self.cluster.advanced_settings()),
             self.cluster.advanced_settings().clone(),
             self.cluster.customer_helm_charts_override.clone(),
         )

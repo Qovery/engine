@@ -22,6 +22,7 @@ use crate::infrastructure::models::cloud_provider::aws::regions::AwsRegion;
 use crate::infrastructure::models::kubernetes::aws::eks::EKS;
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
+use crate::io_models::loki::LokiParameters;
 use crate::io_models::metrics::MetricsParameters;
 use crate::string::terraform_list_format;
 use std::collections::HashMap;
@@ -78,6 +79,7 @@ pub struct EksChartsConfigPrerequisites {
     pub aws_s3_loki_bucket_name: String,
     pub loki_storage_config_aws_s3: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub loki_parameters: LokiParameters,
     pub aws_iam_eks_prometheus_role_arn: String,
     pub aws_s3_prometheus_bucket_name: String,
     pub karpenter_controller_aws_role_arn: String,
@@ -179,6 +181,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             aws_iam_alb_controller_arn: self.terraform_output.aws_iam_alb_controller_arn.clone(),
             customer_helm_charts_override: cluster.customer_helm_charts_override.clone(),
             metrics_parameters: cluster.options.metrics_parameters.clone(),
+            loki_parameters: LokiParameters::from_advanced_settings(&cluster.advanced_settings),
             aws_iam_eks_prometheus_role_arn: self.terraform_output.aws_iam_eks_prometheus_role_arn.clone(),
             aws_s3_prometheus_bucket_name: self.terraform_output.aws_s3_prometheus_bucket_name.clone(),
             cluster_creation_date: cluster.created_at,

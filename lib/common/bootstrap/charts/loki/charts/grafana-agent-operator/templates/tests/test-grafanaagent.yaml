@@ -107,12 +107,12 @@ metadata:
 spec:
   containers:
   - name: busybox
-    image: busybox
+    image: "{{ .Values.test.image.registry }}/{{ .Values.test.image.repository }}:{{ .Values.test.image.tag }}"
     command: ['wget']
     args:  ['grafana-agent-test-operated:8080/-/healthy']
   # Wait for GrafanaAgent CR
   initContainers:
   - name: sleep
-    image: busybox
+    image: "{{ .Values.test.image.registry }}/{{ .Values.test.image.repository }}:{{ .Values.test.image.tag }}"
     command: ['sleep', '60']
   restartPolicy: Never

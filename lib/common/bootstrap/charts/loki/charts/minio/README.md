@@ -1,10 +1,12 @@
-# MinIO Helm Chart
+# MinIO Community Helm Chart
 
 [![Slack](https://slack.min.io/slack?type=svg)](https://slack.min.io) [![license](https://img.shields.io/badge/license-AGPL%20V3-blue)](https://github.com/minio/minio/blob/master/LICENSE)
 
 MinIO is a High Performance Object Storage released under GNU Affero General Public License v3.0. It is API compatible with Amazon S3 cloud storage service. Use MinIO to build high performance infrastructure for machine learning, analytics and application data workloads.
 
-For more detailed documentation please visit [here](https://docs.minio.io/)
+| IMPORTANT |
+| -------------------------- |
+| This Helm chart is community built, maintained, and supported. MinIO does not guarantee support for any given bug, feature request, or update referencing this chart. <br/><br/> MinIO publishes a separate [MinIO Kubernetes Operator and Tenant Helm Chart](https://github.com/minio/operator/tree/master/helm) that is officially maintained and supported. MinIO strongly recommends using the MinIO Kubernetes Operator for production deployments. See [Deploy Operator With Helm](https://min.io/docs/minio/kubernetes/upstream/operations/install-deploy-manage/deploy-operator-helm.html?ref=github) for additional documentation. |
 
 ## Introduction
 
@@ -31,6 +33,14 @@ helm install --namespace minio --set rootUser=rootuser,rootPassword=rootpass123 
 ```
 
 The command deploys MinIO on the Kubernetes cluster in the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
+
+### Installing the Chart (toy-setup)
+
+Minimal toy setup for testing purposes can be deployed using:
+
+```bash
+helm install --set resources.requests.memory=512Mi --set replicas=1 --set persistence.enabled=false --set mode=standalone --set rootUser=rootuser,rootPassword=rootpass123 --generate-name minio/minio
+```
 
 ### Upgrading the Chart
 
@@ -101,6 +111,8 @@ the DefaultDeny namespace annotation. Note: this will enforce policy for *all* p
 ```
 kubectl annotate namespace default "net.beta.kubernetes.io/network-policy={\"ingress\":{\"isolation\":\"DefaultDeny\"}}"
 ```
+
+When using `Cilium` as a CNI in your cluster, please edit the `flavor` field to `cilium`.
 
 With NetworkPolicy enabled, traffic will be limited to just port 9000.
 
@@ -218,6 +230,22 @@ Description of the configuration parameters used above -
 - `users[].existingSecret` - secret name that contains the secretKey of user
 - `users[].existingSecretKey` - data key in existingSecret secret containing the secretKey
 - `users[].policy` - name of the policy to assign to user
+
+### Create service account after install
+
+Install the chart, specifying the service accounts you want to create after install:
+
+```bash
+helm install --set svcaccts[0].accessKey=accessKey,svcaccts[0].secretKey=secretKey,svcaccts[0].user=parentUser,svcaccts[1].accessKey=accessKey2,svcaccts[1].secretRef=existingSecret,svcaccts[1].secretKey=password,svcaccts[1].user=parentUser2 minio/minio
+```
+
+Description of the configuration parameters used above -
+
+- `svcaccts[].accessKey` - accessKey of service account
+- `svcaccts[].secretKey` - secretKey of svcacctsecretRef
+- `svcaccts[].existingSecret` - secret name that contains the secretKey of service account
+- `svcaccts[].existingSecretKey` - data key in existingSecret secret containing the secretKey
+- `svcaccts[].user` - name of the parent user to assign to service account
 
 ## Uninstalling the Chart
 

@@ -1,13 +1,11 @@
 # remove if you don't want to use a custom image
-kubectlImage:
-  registry: set-by-engine-code
-  repository: set-by-engine-code
 loki:
   podLabels: {}
   # remove if you don't want to use a custom image
   image:
     registry: set-by-engine-code
     repository: set-by-engine-code
+    tag: "3.7.1"
   # set if you want to use authentication
   auth_enabled: false
   commonConfig:
@@ -18,25 +16,9 @@ loki:
     chunk_idle_period: 3m
     chunk_block_size: 262144
     chunk_retain_period: 1m
-    max_transfer_retries: 0
-    lifecycler:
-      ring:
-        kvstore:
-          store: memberlist
-        replication_factor: 1
-  memberlistConfig:
-    abort_if_cluster_join_fails: false
-    bind_port: 7946
-    join_members:
-      # set loki headless service
-      - loki-headless.logging.svc:7946
-    max_join_backoff: 1m
-    max_join_retries: 10
-    min_join_backoff: 1s
   limits_config:
     ingestion_rate_mb: 20
     ingestion_burst_size_mb: 30
-    enforce_metric_name: false
     reject_old_samples: true
     reject_old_samples_max_age: 168h
     max_concurrent_tail_requests: 100
@@ -44,13 +26,13 @@ loki:
     max_query_lookback: 12w
     retention_period: set-by-engine-code
   compactor:
-    working_directory: /data/retention
-    # configure storage provider for the compactor
-    shared_store: set-by-engine-code
+    working_directory: /var/loki/retention
     compaction_interval: 10m
     retention_enabled: set-by-engine-code
     retention_delete_delay: 2h
     retention_delete_worker_count: 150
+    # required in Loki 3.x when retention_enabled is true
+    delete_request_store: set-by-engine-code
   query_scheduler:
     # the TSDB index dispatches many more, but each individually smaller, requests.
     # We increase the pending request queue sizes to compensate.
@@ -109,18 +91,28 @@ loki:
     gcs:
       bucket_name: set-by-engine-code
     boltdb_shipper:
-      active_index_directory: /data/loki/index
-      shared_store: set-by-engine-code
+      # shared_store removed in Loki 3.x
+      active_index_directory: /var/loki/index
       resync_interval: 5s
-      cache_location: /data/loki/boltdb-cache
+      cache_location: /var/loki/boltdb-cache
     tsdb_shipper:
-      active_index_directory: /data/loki/tsdb-index
-      shared_store: set-by-engine-code
-      cache_location: /data/loki/tsdb-cache
+      # shared_store removed in Loki 3.x
+      active_index_directory: /var/loki/tsdb-index
+      cache_location: /var/loki/tsdb-cache
     azure:
       account_name: set-by-engine-code
       container_name: set-by-engine-code
       use_federated_token: true # Use federated token for authentication
+
+lokiCanary:
+  enabled: false
+
+chunksCache:
+  enabled: false
+
+resultsCache:
+  enabled: false
+
 monitoring:
   dashboards:
     enabled: false
@@ -143,10 +135,26 @@ test:
 gateway:
   enabled: false
 
-# set the single binary version for basic usage
+sidecar:
+  rules:
+    enabled: set-by-engine-code
+
+# singleBinary is disabled here (replicas: 0) for object-storage clusters;
+# the loki_single_binary overlay flips it back on when deployment_mode = SingleBinary.
+deploymentMode: SimpleScalable
+
 singleBinary:
+  replicas: 0
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+write:
   replicas: 1
-  # set resources
   resources:
     limits:
       cpu: set-by-engine-code
@@ -155,20 +163,30 @@ singleBinary:
       cpu: set-by-engine-code
       memory: set-by-engine-code
   persistence:
-    enabled: false
-  extraVolumes:
-    - name: data
-      emptyDir: {}
-    - name: storage
-      emptyDir: {}
-  extraVolumeMounts:
-    - name: data
-      mountPath: /data
-    - name: storage
-      mountPath: /var/loki
-  # set disk persistence to reduce data loss in case of pod crash
-  # persistence:
-  #   storageClass: set-by-engine-code
+    # emptyDir avoids requiring a PVC provisioner (no durability needed here).
+    volumeClaimsEnabled: false
+
+read:
+  replicas: 1
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+
+backend:
+  replicas: 1
+  resources:
+    limits:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+    requests:
+      cpu: set-by-engine-code
+      memory: set-by-engine-code
+  persistence:
+    volumeClaimsEnabled: false
 
 serviceAccount:
   name: null

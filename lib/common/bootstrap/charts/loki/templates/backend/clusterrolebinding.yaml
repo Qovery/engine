@@ -1,4 +1,5 @@
-{{- if and (not .Values.rbac.namespaced) }}
+{{- $isSimpleScalable := eq (include "loki.deployment.isScalable" .) "true" -}}
+{{- if (not .Values.rbac.namespaced) }}
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -12,7 +13,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ template "loki.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ include "loki.namespace" . }}
 roleRef:
   kind: ClusterRole
 {{- if (not .Values.rbac.useExistingRole) }}
