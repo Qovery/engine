@@ -699,13 +699,13 @@ fn find_latest_capi_backup_directory(root_directory: &Path, cluster_name: &str) 
         .filter(|(_, name, _)| name.starts_with(preferred_prefix.as_str()))
         .cloned()
         .collect::<Vec<_>>();
-    preferred.sort_by(|a, b| b.2.cmp(&a.2));
+    preferred.sort_by_key(|b| std::cmp::Reverse(b.2));
 
     if let Some((path, _, _)) = preferred.first() {
         return Ok(path.clone());
     }
 
-    candidates.sort_by(|a, b| b.2.cmp(&a.2));
+    candidates.sort_by_key(|b| std::cmp::Reverse(b.2));
     Ok(candidates[0].0.clone())
 }
 
