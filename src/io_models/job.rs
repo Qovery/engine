@@ -16,7 +16,7 @@ use crate::infrastructure::models::container_registry::{
 };
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{GitCredentials, to_environment_variable};
+use crate::io_models::application::to_environment_variable;
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -24,6 +24,7 @@ use crate::io_models::models::{
     CpuArchitecture, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::io_models::probe::Probe;
+use crate::io_models::services_common::GitCredentials;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{
     Action, MountedFile, QoveryIdentifier, fetch_git_token, normalize_root_and_dockerfile_path, sanitized_git_url,

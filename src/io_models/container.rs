@@ -16,9 +16,7 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, azure_container_registry};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{
-    GatewayApiStickySessionType, PortIo, Storage, deserialize_gateway_api_sticky_session_type, to_environment_variable,
-};
+use crate::io_models::application::{Storage, to_environment_variable};
 use crate::io_models::container::keda_transform::{KEY, NAME, SECRET_TARGET_REF, strip_qovery_env_prefix};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -26,6 +24,9 @@ use crate::io_models::models::{
     ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::io_models::probe::Probe;
+use crate::io_models::services_common::{
+    GatewayApiStickySessionType, PortIo, deserialize_gateway_api_sticky_session_type,
+};
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
 use itertools::Itertools;

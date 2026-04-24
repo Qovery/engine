@@ -12,12 +12,12 @@ use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType, default_tera_context};
 use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::Protocol;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
     CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
 };
+use crate::io_models::services_common::Protocol;
 use crate::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;

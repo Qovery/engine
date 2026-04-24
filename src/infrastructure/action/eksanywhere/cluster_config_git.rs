@@ -5,7 +5,7 @@ use crate::events::{EventDetails, InfrastructureStep};
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::{EksAnywhere, EksAnywhereGitRepository};
-use crate::io_models::application::GitCredentials;
+use crate::io_models::services_common::GitCredentials;
 use git2::{Cred, CredentialType};
 use std::fs;
 use std::path::{Component, Path, PathBuf};

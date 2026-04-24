@@ -29,8 +29,6 @@ use crate::infrastructure::models::cloud_provider::service::{
 use crate::infrastructure::models::container_registry::DockerRegistryInfo;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::Protocol;
-use crate::io_models::application::Protocol::{TCP, UDP};
 use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -38,6 +36,8 @@ use crate::io_models::models::{
     EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
     KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
 };
+use crate::io_models::services_common::Protocol;
+use crate::io_models::services_common::Protocol::{TCP, UDP};
 use crate::kubers_utils::kube_get_resources_by_selector;
 use crate::runtime::block_on;
 use crate::unit_conversion::extract_volume_size;

@@ -12,12 +12,12 @@ use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::{NginxConfigurationSnippet, NginxServerSnippet};
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::infrastructure::models::kubernetes;
-use crate::io_models::application::{
-    GatewayApiStickySessionType, GitCredentials, PortIo, deserialize_gateway_api_sticky_session_type,
-};
 use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::models::ExternalSecret;
+use crate::io_models::services_common::{
+    GatewayApiStickySessionType, GitCredentials, PortIo, deserialize_gateway_api_sticky_session_type,
+};
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
 use base64::Engine;
