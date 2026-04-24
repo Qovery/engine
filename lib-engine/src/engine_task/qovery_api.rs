@@ -1,7 +1,7 @@
 use crate::environment::resource_extraction::parser::TerraformResource;
 use crate::infrastructure::action::cluster_outputs_helper::ClusterOutputsRequest;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
-use crate::io_models::application::GitCredentials;
+use crate::io_models::services_common::GitCredentials;
 use anyhow::anyhow;
 use std::collections::HashMap;
 use uuid::Uuid;

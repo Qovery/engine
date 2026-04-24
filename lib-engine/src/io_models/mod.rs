@@ -33,6 +33,7 @@ pub mod metrics;
 pub mod models;
 pub mod probe;
 pub mod router;
+pub mod services_common;
 pub mod terraform;
 pub mod types;
 pub mod variable_utils;

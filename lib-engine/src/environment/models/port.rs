@@ -1,4 +1,4 @@
-use crate::io_models::application::{PortIo, Protocol};
+use crate::io_models::services_common::{PortIo, Protocol};
 use serde_derive::Serialize;
 use uuid::Uuid;
 
