@@ -355,6 +355,12 @@ fn default_cluster_profile() -> ClusterProfile {
     ClusterProfile::Medium
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Certificate {
+    pub tls_crt: String,
+    pub tls_key: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -600,6 +606,8 @@ pub struct ClusterAdvancedSettings {
     pub envoy_default_backend_image: Option<String>,
     #[serde(alias = "envoy.default_backend.tag")]
     pub envoy_default_backend_tag: Option<String>,
+    #[serde(alias = "envoy.custom_certificate")]
+    pub envoy_custom_certificate: Option<Certificate>,
 }
 
 impl Default for ClusterAdvancedSettings {
@@ -720,6 +728,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_default_backend_enable: false,
             envoy_default_backend_image: None,
             envoy_default_backend_tag: None,
+            envoy_custom_certificate: None,
         }
     }
 }

@@ -32,7 +32,7 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
-use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
+use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::external_dns_chart::{
     ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
@@ -298,6 +298,11 @@ pub fn kapsule_helm_charts(
             .cluster_advanced_settings
             .k8s_remove_nginx
             .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .envoy_custom_certificate
+            .clone()
+            .map(UserProvidedCertificate::from),
     )
     .to_common_helm_chart()?;
 

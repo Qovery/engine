@@ -9,6 +9,7 @@ use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
+use crate::infrastructure::models::cloud_provider::io;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::runtime::block_on;
 use crate::services::kube_client::{CertManagerCertificate, CertManagerListenerSet};
@@ -33,6 +34,21 @@ pub struct CertManagerConfigsChart<'a> {
     k8s_deploy_api_gateway: bool,
     k8s_use_api_gateway: bool,
     k8s_remove_nginx: bool,
+    user_provided_certificate: Option<UserProvidedCertificate>,
+}
+
+pub struct UserProvidedCertificate {
+    pub cert: String,
+    pub key: String,
+}
+
+impl From<io::Certificate> for UserProvidedCertificate {
+    fn from(value: io::Certificate) -> Self {
+        Self {
+            cert: value.tls_crt,
+            key: value.tls_key,
+        }
+    }
 }
 
 impl<'a> CertManagerConfigsChart<'a> {
@@ -45,6 +61,7 @@ impl<'a> CertManagerConfigsChart<'a> {
         k8s_deploy_api_gateway: bool,
         k8s_use_api_gateway: bool,
         k8s_remove_nginx: bool,
+        user_provided_certificate: Option<UserProvidedCertificate>,
     ) -> Self {
         CertManagerConfigsChart {
             chart_path: HelmChartPath::new(
@@ -64,6 +81,7 @@ impl<'a> CertManagerConfigsChart<'a> {
             k8s_deploy_api_gateway,
             k8s_use_api_gateway,
             k8s_remove_nginx,
+            user_provided_certificate,
         }
     }
 
@@ -216,6 +234,21 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
             },
         ];
 
+        let values_string = if let Some(UserProvidedCertificate { cert, key }) = &self.user_provided_certificate {
+            vec![
+                ChartSetValue {
+                    key: "userProvidedCertificate.crt".to_string(),
+                    value: cert.clone(),
+                },
+                ChartSetValue {
+                    key: "userProvidedCertificate.key".to_string(),
+                    value: key.clone(),
+                },
+            ]
+        } else {
+            vec![]
+        };
+
         Ok(CommonChart {
             chart_info: ChartInfo {
                 name: CertManagerConfigsChart::chart_name(),
@@ -225,6 +258,7 @@ impl ToCommonHelmChart for CertManagerConfigsChart<'_> {
                 // backup_resources: Some(vec!["cert".to_string(), "issuer".to_string(), "clusterissuer".to_string()]),
                 values_files: vec![self.chart_values_path.to_string()],
                 values,
+                values_string,
                 upgrade_retry: Some(ChartInfoUpgradeRetry {
                     nb_retry: 10,
                     delay_in_milli_sec: 30_000,
@@ -638,6 +672,7 @@ mod tests {
             false,
             false,
             false,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -677,6 +712,7 @@ mod tests {
             false,
             false,
             false,
+            None,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -720,6 +756,7 @@ mod tests {
             false,
             false,
             false,
+            None,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

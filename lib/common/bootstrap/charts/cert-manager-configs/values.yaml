@@ -34,3 +34,7 @@ k8sDeployApiGateway: false
 
 # Nginx removal flag
 k8sRemoveNginx: false
+
+userProvidedCertificate:
+  crt: ""
+  key: ""

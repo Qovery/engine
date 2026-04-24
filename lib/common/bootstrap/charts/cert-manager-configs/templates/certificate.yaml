@@ -1,3 +1,12 @@
+{{- $isUserCertificate := not (empty .Values.userProvidedCertificate.crt) -}}
+
+{{/* 
+   By default, we let cert-manager manage the certificate
+   unless a user decide to provide (and rotate) the certificate themselves
+   Used by customers that do not want to expose their DNS publicly. For now only captivateIq
+*/}}
+
+{{ if not $isUserCertificate }}
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -5,10 +14,26 @@ metadata:
   namespace: {{ .Values.namespace }}
 spec:
   secretName: letsencrypt-acme-qovery-cert
+  secretTemplate:
+    annotations:
+      qovery.com/is-managed-by-user: "false"
   privateKey:
-    rotationPolicy: Never
+    rotationPolicy: Always # recommended by cert-manager
   issuerRef:
     name: letsencrypt-qovery
     kind: ClusterIssuer
   dnsNames:
   - '*.{{- join "'\n  - '*." .Values.managedDns }}'
+{{ else }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: letsencrypt-acme-qovery-cert
+  namespace: {{ .Values.namespace }}
+  annotations:
+    qovery.com/is-managed-by-user: "true"
+type: kubernetes.io/tls
+data:
+  tls.crt: {{ .Values.userProvidedCertificate.crt | b64enc }}
+  tls.key: {{ .Values.userProvidedCertificate.key | b64enc }}
+{{ end }}
