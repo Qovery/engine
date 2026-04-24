@@ -36,12 +36,14 @@ spec:
   loadBalancer:
     type: ConsistentHash
     consistentHash:
-      {%- if advanced_settings.network_gateway_api_sticky_session_header %}
+      {%- if advanced_settings.network_gateway_api_sticky_session_type.Header is defined %}
       # Header-based affinity — use this when clients cannot persist cookies
       # across requests (e.g. MCP SDK clients keying off Mcp-Session-Id).
       type: Header
       header:
-        name: {{ advanced_settings.network_gateway_api_sticky_session_header }}
+        name: {{ advanced_settings.network_gateway_api_sticky_session_type.Header.name }}
+      {%- elif advanced_settings.network_gateway_api_sticky_session_type == "SourceIP" %}
+      type: SourceIP
       {%- else %}
       type: Cookie
       cookie:
