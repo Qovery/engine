@@ -5,7 +5,7 @@ use ::function_name::named;
 use k8s_openapi::api::core::v1::ConfigMap;
 use kube::api::ListParams;
 use kube::{Api, ResourceExt};
-use qovery_engine::io_models::application::PortIo;
+use qovery_engine::io_models::application::{GatewayApiStickySessionType, PortIo};
 
 use crate::helpers::kubernetes::TargetCluster;
 use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, logger, metrics_registry};
@@ -360,6 +360,320 @@ fn deploy_application_with_sticky_session_enabled_on_aws_eks() {
                     } else {
                         panic!("ConsistentHash should have cookie configuration");
                     }
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_application_with_source_ip_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_sticky_session_enable = true;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_sticky_session_type = GatewayApiStickySessionType::SourceIp;
+
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "source-ip-sticky-session-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "SourceIP", "ConsistentHash type should be SourceIP");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for SourceIP"
+                    );
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_application_with_header_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let app_id = environment.applications[0].long_id;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_sticky_session_enable = true;
+        environment.applications[0]
+            .advanced_settings
+            .network_gateway_api_sticky_session_type = GatewayApiStickySessionType::Header {
+            name: "Mcp-Session-Id".to_string(),
+        };
+
+        environment.applications[0].ports = vec![PortIo {
+            long_id: Uuid::new_v4(),
+            port: 80,
+            is_default: true,
+            name: format!("http-{suffix}"),
+            publicly_accessible: true,
+            protocol: HTTP,
+            service_name: None,
+            namespace: None,
+            path: Some("/".to_string()),
+            path_rewrite: None,
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "header-sticky-session-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: app_id,
+            }],
+        }];
+
+        environment.containers = vec![];
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "Header", "ConsistentHash type should be Header");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for Header"
+                    );
+                    let header_name = consistent_hash
+                        .get("header")
+                        .and_then(|header| header.get("name"))
+                        .and_then(|name| name.as_str())
+                        .unwrap_or("");
+                    assert_eq!(header_name, "Mcp-Session-Id", "Header name should be Mcp-Session-Id");
                 } else {
                     panic!("LoadBalancer should have consistentHash configuration");
                 }
@@ -3133,6 +3447,390 @@ fn deploy_container_with_sticky_session_enabled_on_aws_eks() {
                     } else {
                         panic!("ConsistentHash should have cookie configuration");
                     }
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_container_with_header_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let container_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: container_id,
+            name: "sticky-session-test-container".to_string(),
+            kube_name: format!("container-{suffix}"),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                    .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            gpu_request: None,
+            gpu_limit: None,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", container_id, infra_ctx.dns_provider().domain()),
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+            storages: vec![],
+            environment_vars_with_infos: BTreeMap::new(),
+            mounted_files: vec![],
+            readiness_probe: None,
+            liveness_probe: None,
+            advanced_settings: ContainerAdvancedSettings {
+                network_gateway_api_sticky_session_enable: true,
+                network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Header {
+                    name: "Mcp-Session-Id".to_string(),
+                },
+                ..Default::default()
+            },
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
+            autoscaling: None,
+            external_secrets: BTreeMap::new(),
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "header-sticky-session-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: container_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "Header", "ConsistentHash type should be Header");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for Header"
+                    );
+                    let header_name = consistent_hash
+                        .get("header")
+                        .and_then(|header| header.get("name"))
+                        .and_then(|name| name.as_str())
+                        .unwrap_or("");
+                    assert_eq!(header_name, "Mcp-Session-Id", "Header name should be Mcp-Session-Id");
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_container_with_source_ip_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let container_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![Container {
+            long_id: container_id,
+            name: "sticky-session-test-container".to_string(),
+            kube_name: format!("container-{suffix}"),
+            action: Action::Create,
+            registry: Registry::PublicEcr {
+                long_id: Uuid::new_v4(),
+                url: Url::parse("https://public.ecr.aws").unwrap(),
+            },
+            image: "r3m4q3r9/pub-mirror-debian".to_string(),
+            tag: "11.6-ci".to_string(),
+            command_args: vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "apt-get update; apt-get install -y socat; socat TCP-LISTEN:80,bind=0.0.0.0,reuseaddr,fork STDOUT"
+                    .to_string(),
+            ],
+            entrypoint: None,
+            cpu_request_in_milli: 250,
+            cpu_limit_in_milli: 250,
+            ram_request_in_mib: 250,
+            ram_limit_in_mib: 250,
+            gpu_request: None,
+            gpu_limit: None,
+            min_instances: 1,
+            max_instances: 1,
+            public_domain: format!("{}.{}", container_id, infra_ctx.dns_provider().domain()),
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+            storages: vec![],
+            environment_vars_with_infos: BTreeMap::new(),
+            mounted_files: vec![],
+            readiness_probe: None,
+            liveness_probe: None,
+            advanced_settings: ContainerAdvancedSettings {
+                network_gateway_api_sticky_session_enable: true,
+                network_gateway_api_sticky_session_type: GatewayApiStickySessionType::SourceIp,
+                ..Default::default()
+            },
+            annotations_group_ids: BTreeSet::new(),
+            labels_group_ids: BTreeSet::new(),
+            autoscaling: None,
+            external_secrets: BTreeMap::new(),
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "source-ip-sticky-session-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: container_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "SourceIP", "ConsistentHash type should be SourceIP");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for SourceIP"
+                    );
                 } else {
                     panic!("LoadBalancer should have consistentHash configuration");
                 }
@@ -6930,6 +7628,370 @@ fn deploy_helm_with_sticky_session_enabled_on_aws_eks() {
                     } else {
                         panic!("ConsistentHash should have cookie configuration");
                     }
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_helm_with_header_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let helm_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![];
+        environment.helms = vec![HelmChart {
+            long_id: helm_id,
+            name: "sticky-session-test-helm".to_string(),
+            kube_name: format!("helm-{suffix}"),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "values.yaml".to_string(),
+                    content: "nameOverride: sticky-test".to_string(),
+                }],
+            },
+            set_values: vec![],
+            set_string_values: vec![("serviceId".to_string(), helm_id.to_string())],
+            set_json_values: vec![],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
+            advanced_settings: HelmChartAdvancedSettings {
+                network_gateway_api_sticky_session_enable: true,
+                network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Header {
+                    name: "Mcp-Session-Id".to_string(),
+                },
+                ..Default::default()
+            },
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "sticky-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: helm_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "Header", "ConsistentHash type should be Header");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for Header"
+                    );
+                    let header_name = consistent_hash
+                        .get("header")
+                        .and_then(|header| header.get("name"))
+                        .and_then(|name| name.as_str())
+                        .unwrap_or("");
+                    assert_eq!(header_name, "Mcp-Session-Id", "Header name should be Mcp-Session-Id");
+                } else {
+                    panic!("LoadBalancer should have consistentHash configuration");
+                }
+            } else {
+                panic!("BackendTrafficPolicy should have loadBalancer configuration");
+            }
+        } else {
+            panic!("BackendTrafficPolicy should have spec");
+        }
+
+        // clean up:
+        let ret = environment_for_delete.delete_environment(&environment_for_delete, &infra_ctx_for_delete);
+        assert!(ret.is_ok());
+
+        "".to_string()
+    })
+}
+
+#[cfg(feature = "test-aws-minimal")]
+#[named]
+#[test]
+fn deploy_helm_with_source_ip_sticky_session_enabled_on_aws_eks() {
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = function_name!());
+        let _enter = span.enter();
+
+        let logger = logger();
+        let secrets = FuncTestsSecrets::new();
+        let context = context_for_resource(
+            secrets
+                .AWS_TEST_ORGANIZATION_LONG_ID
+                .expect("AWS_TEST_ORGANIZATION_LONG_ID is not set"),
+            secrets
+                .AWS_TEST_CLUSTER_LONG_ID
+                .expect("AWS_TEST_CLUSTER_LONG_ID is not set"),
+        );
+        let target_cluster_aws_test = TargetCluster::MutualizedTestCluster {
+            kubeconfig: secrets
+                .AWS_TEST_KUBECONFIG_b64
+                .expect("AWS_TEST_KUBECONFIG_b64 is not set")
+                .to_string(),
+        };
+        let infra_ctx = aws_infra_config(&target_cluster_aws_test, &context, logger.clone(), metrics_registry());
+        let context_for_delete = context.clone_not_same_execution_id();
+        let infra_ctx_for_delete = aws_infra_config(
+            &target_cluster_aws_test,
+            &context_for_delete,
+            logger.clone(),
+            metrics_registry(),
+        );
+
+        // setup:
+        let mut environment = helpers::environment::working_minimal_environment(&context);
+
+        let suffix = QoveryIdentifier::new_random().short().to_string();
+        let test_domain = secrets
+            .AWS_DEFAULT_TEST_DOMAIN
+            .as_ref()
+            .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
+            .as_str();
+
+        let helm_id = Uuid::new_v4();
+        environment.applications = vec![];
+        environment.containers = vec![];
+        environment.helms = vec![HelmChart {
+            long_id: helm_id,
+            name: "sticky-session-test-helm".to_string(),
+            kube_name: format!("helm-{suffix}"),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://github.com/Qovery/helm_chart_engine_testing.git").unwrap(),
+                git_credentials: None,
+                commit_id: "18679eb4acf787470d4e3bdd4aa369c7dcea90a0".to_string(),
+                root_path: PathBuf::from("/simple_app"),
+            },
+            chart_values: HelmValueSource::Raw {
+                values: vec![HelmRawValues {
+                    name: "values.yaml".to_string(),
+                    content: "nameOverride: sticky-test".to_string(),
+                }],
+            },
+            set_values: vec![],
+            set_string_values: vec![("serviceId".to_string(), helm_id.to_string())],
+            set_json_values: vec![],
+            command_args: vec!["--install".to_string()],
+            timeout_sec: 60,
+            allow_cluster_wide_resources: false,
+            environment_vars_with_infos: BTreeMap::new(),
+            external_secrets: BTreeMap::new(),
+            advanced_settings: HelmChartAdvancedSettings {
+                network_gateway_api_sticky_session_enable: true,
+                network_gateway_api_sticky_session_type: GatewayApiStickySessionType::SourceIp,
+                ..Default::default()
+            },
+            ports: vec![PortIo {
+                long_id: Uuid::new_v4(),
+                port: 80,
+                is_default: true,
+                name: format!("http-{suffix}"),
+                publicly_accessible: true,
+                protocol: HTTP,
+                service_name: None,
+                namespace: None,
+                path: Some("/".to_string()),
+                path_rewrite: None,
+            }],
+        }];
+
+        let router_id = Uuid::new_v4();
+        environment.routers = vec![Router {
+            long_id: router_id,
+            name: "sticky-test-router".to_string(),
+            kube_name: format!("router-{suffix}"),
+            action: Action::Create,
+            default_domain: format!("main.{}.{}", context.cluster_short_id(), test_domain),
+            public_port: 443,
+            custom_domains: vec![],
+            routes: vec![Route {
+                path: "/".to_string(),
+                service_long_id: helm_id,
+            }],
+        }];
+
+        environment.jobs = vec![];
+
+        let mut environment_for_delete = environment.clone();
+        environment_for_delete.action = Action::Delete;
+
+        // execute:
+        let ret = environment.deploy_environment(&environment, &infra_ctx);
+        assert!(ret.is_ok(), "Deployment should succeed");
+
+        // verify:
+        let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
+        let namespace = environment.kube_name.as_str();
+        let api_resource = kube::api::ApiResource {
+            group: "gateway.envoyproxy.io".to_string(),
+            version: "v1alpha1".to_string(),
+            kind: "BackendTrafficPolicy".to_string(),
+            api_version: "gateway.envoyproxy.io/v1alpha1".to_string(),
+            plural: "backendtrafficpolicies".to_string(),
+        };
+
+        let api: Api<kube::core::DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &api_resource);
+
+        let traffic_policies =
+            retry_list_gateway_api_resources(&api).expect("Failed to list Gateway API resources after retries");
+
+        assert!(!traffic_policies.items.is_empty());
+
+        let router_policy = traffic_policies.items.iter().find(|policy| {
+            policy
+                .metadata
+                .labels
+                .as_ref()
+                .and_then(|labels| labels.get("qovery.com/service-id"))
+                .map(|id| *id == router_id.to_string())
+                .unwrap_or(false)
+        });
+
+        assert!(router_policy.is_some(), "BackendTrafficPolicy for router should exist");
+
+        let policy = router_policy.unwrap();
+
+        if let Some(spec) = policy.data.get("spec") {
+            if let Some(load_balancer) = spec.get("loadBalancer") {
+                let lb_type = load_balancer.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                assert_eq!(lb_type, "ConsistentHash", "Load balancer type should be ConsistentHash");
+
+                if let Some(consistent_hash) = load_balancer.get("consistentHash") {
+                    let hash_type = consistent_hash.get("type").and_then(|v| v.as_str()).unwrap_or("");
+
+                    assert_eq!(hash_type, "SourceIP", "ConsistentHash type should be SourceIP");
+                    assert!(
+                        consistent_hash.get("cookie").is_none(),
+                        "ConsistentHash should not have cookie configuration for SourceIP"
+                    );
                 } else {
                     panic!("LoadBalancer should have consistentHash configuration");
                 }
