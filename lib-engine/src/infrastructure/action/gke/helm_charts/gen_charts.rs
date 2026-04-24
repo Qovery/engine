@@ -12,7 +12,7 @@ use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::action::gke::helm_charts::gen_eso_charts::generate_eso_charts;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
-use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
+use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
 use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::EnvoyGatewayCrdChart;
 use crate::infrastructure::helm_charts::external_dns_chart::{
@@ -243,6 +243,11 @@ pub(super) fn gke_helm_charts(
             .cluster_advanced_settings
             .k8s_remove_nginx
             .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .envoy_custom_certificate
+            .clone()
+            .map(UserProvidedCertificate::from),
     )
     .to_common_helm_chart()?;
 

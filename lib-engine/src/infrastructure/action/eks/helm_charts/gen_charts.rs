@@ -43,7 +43,7 @@ use crate::infrastructure::action::eks::helm_charts::gen_keda_charts::generate_k
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
-use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
+use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::external_dns_chart::{
     ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
 };
@@ -479,6 +479,11 @@ pub(super) fn eks_helm_charts(
             .cluster_advanced_settings
             .k8s_remove_nginx
             .unwrap_or(false),
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .envoy_custom_certificate
+            .clone()
+            .map(UserProvidedCertificate::from),
     )
     .to_common_helm_chart()?;
 

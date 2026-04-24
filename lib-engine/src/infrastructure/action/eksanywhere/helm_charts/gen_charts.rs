@@ -22,7 +22,7 @@ use crate::infrastructure::action::eksanywhere::helm_charts::EksAnywhereChartsCo
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_chart::MetalLbChart;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_config_chart::MetalLbConfigChart;
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
-use crate::infrastructure::helm_charts::cert_manager_config_chart::CertManagerConfigsChart;
+use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::external_dns_chart::{
     ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
 };
@@ -394,6 +394,11 @@ pub(super) fn eks_anywhere_helm_charts(
             gateway_api_rollout_status.is_deployed(),
             gateway_api_rollout_status.is_default(),
             false,
+            chart_config_prerequisites
+                .cluster_advanced_settings
+                .envoy_custom_certificate
+                .clone()
+                .map(UserProvidedCertificate::from),
         )
         .to_common_helm_chart()?,
     ));
