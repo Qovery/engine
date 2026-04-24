@@ -856,7 +856,13 @@ fn generate_certificate_alternative_names(
     cluster_domain: &str,
     ports: &[&Port],
 ) -> Vec<CustomDomainDataTemplate> {
-    if ports.is_empty() || custom_domains.is_empty() {
+    let ports_eligible_to_certificate_requests: Vec<&Port> = ports
+        .iter()
+        .copied()
+        .filter(|port| port.protocol.protocol().is_http_layer())
+        .collect();
+
+    if ports_eligible_to_certificate_requests.is_empty() || custom_domains.is_empty() {
         return vec![];
     }
 
@@ -879,11 +885,11 @@ fn generate_certificate_alternative_names(
             continue;
         }
 
-        if ports.len() == 1 {
+        if ports_eligible_to_certificate_requests.len() == 1 {
             continue;
         }
 
-        for port in ports {
+        for port in &ports_eligible_to_certificate_requests {
             alternative_domains.insert(format!("{}.{}", port.name, custom_domain.domain));
         }
     }
@@ -987,7 +993,8 @@ mod tests {
     };
 
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
-    use std::collections::{BTreeMap, BTreeSet};
+    use maplit::hashset;
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
     use uuid::Uuid;
 
     #[test]
@@ -1098,6 +1105,78 @@ mod tests {
         assert!(certificate_names.contains(&CustomDomainDataTemplate {
             domain: "*.toto.cluster.com".to_string()
         }));
+    }
+
+    #[test]
+    pub fn layer_4_ports_should_not_be_eligible_to_certificate_requests() {
+        // given
+        let custom_domains = vec![CustomDomain {
+            domain: "custom-domain.com".to_string(),
+            target_domain: "".to_string(),
+            generate_certificate: true,
+            use_cdn: false,
+        }];
+
+        let http_port = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let grpc_port = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            protocol: PortProtocol::GRPC {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 81,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let tcp_port = Port {
+            long_id: Default::default(),
+            name: "tcp".to_string(),
+            protocol: PortProtocol::TCP { public: true },
+            port: 3000,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let udp_port = Port {
+            long_id: Default::default(),
+            name: "udp".to_string(),
+            protocol: PortProtocol::UDP { public: true },
+            port: 3001,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let ports = vec![&http_port, &grpc_port, &tcp_port, &udp_port];
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &ports);
+        assert_eq!(certificate_names.len(), 3);
+        assert_eq!(
+            certificate_names
+                .iter()
+                .map(|it| it.domain.as_str())
+                .collect::<HashSet<&str>>(),
+            hashset!["custom-domain.com", "http.custom-domain.com", "grpc.custom-domain.com"]
+        );
     }
 
     #[test]
