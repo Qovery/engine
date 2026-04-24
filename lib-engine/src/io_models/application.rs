@@ -109,6 +109,105 @@ pub struct GitCredentials {
     pub expired_at: DateTime<Utc>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash, Default)]
+pub enum GatewayApiStickySessionType {
+    #[default]
+    Cookie,
+    Header {
+        name: String,
+    },
+    #[serde(rename = "SourceIP")]
+    SourceIp,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum GatewayApiStickySessionTypeInput {
+    Explicit(GatewayApiStickySessionType),
+    LegacyHeaderName(String),
+}
+
+pub fn deserialize_gateway_api_sticky_session_type<'de, D>(
+    deserializer: D,
+) -> Result<GatewayApiStickySessionType, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let input = Option::<GatewayApiStickySessionTypeInput>::deserialize(deserializer)?;
+
+    Ok(match input {
+        None => GatewayApiStickySessionType::Cookie,
+        Some(GatewayApiStickySessionTypeInput::Explicit(value)) => value,
+        Some(GatewayApiStickySessionTypeInput::LegacyHeaderName(value)) => match value.as_str() {
+            "Cookie" | "cookie" => GatewayApiStickySessionType::Cookie,
+            "SourceIP" => GatewayApiStickySessionType::SourceIp,
+            name => GatewayApiStickySessionType::Header { name: name.to_string() },
+        },
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{GatewayApiStickySessionType, deserialize_gateway_api_sticky_session_type};
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct TestSettings {
+        #[serde(
+            default,
+            alias = "network.gateway_api.sticky_session_type",
+            alias = "network.gateway_api.sticky_session_header",
+            deserialize_with = "deserialize_gateway_api_sticky_session_type"
+        )]
+        network_gateway_api_sticky_session_type: GatewayApiStickySessionType,
+    }
+
+    #[test]
+    fn sticky_session_type_defaults_to_cookie() {
+        let parsed: TestSettings = serde_json::from_str("{}").expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::Cookie
+        );
+    }
+
+    #[test]
+    fn sticky_session_type_supports_legacy_header_name() {
+        let parsed: TestSettings =
+            serde_json::from_str(r#"{"network.gateway_api.sticky_session_header":"Mcp-Session-Id"}"#)
+                .expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::Header {
+                name: "Mcp-Session-Id".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn sticky_session_type_supports_source_ip() {
+        let parsed: TestSettings = serde_json::from_str(r#"{"network.gateway_api.sticky_session_type":"SourceIP"}"#)
+            .expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::SourceIp
+        );
+    }
+
+    #[test]
+    fn sticky_session_type_supports_header_object() {
+        let parsed: TestSettings =
+            serde_json::from_str(r#"{"network.gateway_api.sticky_session_type":{"Header":{"name":"Mcp-Session-Id"}}}"#)
+                .expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::Header {
+                name: "Mcp-Session-Id".to_string(),
+            }
+        );
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 #[serde(default)]
 pub struct ApplicationAdvancedSettings {
@@ -161,8 +260,13 @@ pub struct ApplicationAdvancedSettings {
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
-    #[serde(default, alias = "network.gateway_api.sticky_session_header")]
-    pub network_gateway_api_sticky_session_header: Option<String>,
+    #[serde(
+        default,
+        alias = "network.gateway_api.sticky_session_type",
+        alias = "network.gateway_api.sticky_session_header",
+        deserialize_with = "deserialize_gateway_api_sticky_session_type"
+    )]
+    pub network_gateway_api_sticky_session_type: GatewayApiStickySessionType,
     #[serde(alias = "network.gateway_api.force_ssl_redirect")]
     pub network_gateway_api_force_ssl_redirect: bool,
     #[serde(alias = "network.gateway_api.enable_cors")]
@@ -336,7 +440,7 @@ impl Default for ApplicationAdvancedSettings {
             network_ingress_nginx_limit_connections: None,
             network_ingress_nginx_custom_http_errors: None,
             network_gateway_api_sticky_session_enable: false,
-            network_gateway_api_sticky_session_header: None,
+            network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
             network_gateway_api_force_ssl_redirect: false,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),
@@ -420,7 +524,7 @@ impl ApplicationAdvancedSettings {
                 .clone(),
             network_ingress_nginx_custom_http_errors: self.network_ingress_nginx_custom_http_errors.clone(),
             network_gateway_api_sticky_session_enable: self.network_gateway_api_sticky_session_enable,
-            network_gateway_api_sticky_session_header: self.network_gateway_api_sticky_session_header.clone(),
+            network_gateway_api_sticky_session_type: self.network_gateway_api_sticky_session_type.clone(),
             network_gateway_api_force_ssl_redirect: self.network_gateway_api_force_ssl_redirect,
             network_gateway_api_enable_cors: self.network_gateway_api_enable_cors,
             network_gateway_api_cors_allow_origin: self.network_gateway_api_cors_allow_origin.clone(),

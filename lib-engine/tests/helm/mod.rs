@@ -31,7 +31,7 @@ use qovery_engine::infrastructure::models::kubernetes::aws::AwsStorageType;
 use qovery_engine::infrastructure::models::kubernetes::aws::eks::EKS;
 use qovery_engine::infrastructure::models::kubernetes::{Kind::Eks, Kubernetes, KubernetesVersion};
 use qovery_engine::io_models::annotations_group::{Annotation, AnnotationsGroup, AnnotationsGroupScope};
-use qovery_engine::io_models::application::ApplicationAdvancedSettings;
+use qovery_engine::io_models::application::{ApplicationAdvancedSettings, GatewayApiStickySessionType};
 use qovery_engine::io_models::container::{ContainerAdvancedSettings, Registry};
 use qovery_engine::io_models::database::{DatabaseMode, DatabaseOptions, DiskIOPS};
 use qovery_engine::io_models::engine_location::EngineLocation;
@@ -336,7 +336,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
             network_ingress_cors_enable: true,
             network_ingress_sticky_session_enable: false,
             network_gateway_api_sticky_session_enable: false,
-            network_gateway_api_sticky_session_header: None,
+            network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),
             network_gateway_api_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
@@ -509,7 +509,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
             network_gateway_api_sticky_session_enable: false,
-            network_gateway_api_sticky_session_header: None,
+            network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
             network_gateway_api_force_ssl_redirect: false,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),
@@ -847,7 +847,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         network_ingress_cors_enable: true,
         network_ingress_sticky_session_enable: false,
         network_gateway_api_sticky_session_enable: false,
-        network_gateway_api_sticky_session_header: None,
+        network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
         network_gateway_api_enable_cors: false,
         network_gateway_api_cors_allow_origin: "*".to_string(),
         network_gateway_api_cors_allow_methods: "GET, PUT, POST, DELETE, PATCH, OPTIONS".to_string(),
@@ -1112,7 +1112,7 @@ fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container
         security_read_only_root_filesystem: false,
         security_automount_service_account_token: false,
         network_gateway_api_sticky_session_enable: false,
-        network_gateway_api_sticky_session_header: None,
+        network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
         network_gateway_api_force_ssl_redirect: false,
         network_gateway_api_enable_cors: false,
         network_gateway_api_cors_allow_origin: "*".to_string(),

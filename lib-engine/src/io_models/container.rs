@@ -16,7 +16,9 @@ use crate::infrastructure::models::container_registry::errors::ContainerRegistry
 use crate::infrastructure::models::container_registry::{InteractWithRegistry, azure_container_registry};
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::io_models::annotations_group::AnnotationsGroup;
-use crate::io_models::application::{PortIo, Storage, to_environment_variable};
+use crate::io_models::application::{
+    GatewayApiStickySessionType, PortIo, Storage, deserialize_gateway_api_sticky_session_type, to_environment_variable,
+};
 use crate::io_models::container::keda_transform::{KEY, NAME, SECRET_TARGET_REF, strip_qovery_env_prefix};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
@@ -288,8 +290,13 @@ pub struct ContainerAdvancedSettings {
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
-    #[serde(default, alias = "network.gateway_api.sticky_session_header")]
-    pub network_gateway_api_sticky_session_header: Option<String>,
+    #[serde(
+        default,
+        alias = "network.gateway_api.sticky_session_type",
+        alias = "network.gateway_api.sticky_session_header",
+        deserialize_with = "deserialize_gateway_api_sticky_session_type"
+    )]
+    pub network_gateway_api_sticky_session_type: GatewayApiStickySessionType,
     #[serde(alias = "network.gateway_api.force_ssl_redirect")]
     pub network_gateway_api_force_ssl_redirect: bool,
     #[serde(alias = "network.gateway_api.enable_cors")]
@@ -457,7 +464,7 @@ impl Default for ContainerAdvancedSettings {
             network_ingress_nginx_controller_configuration_snippet: None,
             network_ingress_nginx_custom_http_errors: None,
             network_gateway_api_sticky_session_enable: false,
-            network_gateway_api_sticky_session_header: None,
+            network_gateway_api_sticky_session_type: GatewayApiStickySessionType::Cookie,
             network_gateway_api_force_ssl_redirect: false,
             network_gateway_api_enable_cors: false,
             network_gateway_api_cors_allow_origin: "*".to_string(),
