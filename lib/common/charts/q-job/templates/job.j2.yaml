@@ -130,7 +130,7 @@ spec:
           {%- if entry.mount_path %}
         - name: {{ entry.volume_name }}
           secret:
-            secretName: {{ external_secret.external_secret_kube_name }}
+            secretName: {{ external_secret.secret_name }}
             defaultMode: 420
             items:
               - key: "{{ entry.env_var_key }}"
@@ -191,23 +191,14 @@ spec:
           envFrom:
             - secretRef:
                 name: {{ service.name }}
-          {%- if external_secrets|length > 0 %}
-          env:
-            {%- for external_secret in external_secrets %}
-              {%- for entry in external_secret.entries %}
-              {%- if not entry.mount_path %}
-            - name: {{ entry.env_var_key }}
-              valueFrom:
-                secretKeyRef:
-                  name: {{ external_secret.external_secret_kube_name }}
-                  key: {{ entry.env_var_key }}
-              {%- else %}
-            - name: {{ entry.env_var_key }}
-              value: "{{ entry.mount_path }}"
-              {%- endif %}
+            {%- if external_secrets|length > 0 %}
+              {%- for external_secret in external_secrets %}
+                {%- if not entry.mount_path %}
+            - secretRef:
+                name: {{ external_secret.secret_name }}
+                {%- endif %}
               {%- endfor %}
-            {%- endfor %}
-          {%- endif %}
+            {%- endif %}
           {%- if service.default_port %}
           ports:
             - containerPort: {{ service.default_port }}

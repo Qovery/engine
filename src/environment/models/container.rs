@@ -151,7 +151,7 @@ impl<T: CloudProvider> Container<T> {
         labels_groups: Vec<LabelsGroup>,
         autoscaling: Option<AutoscalingConfig>,
     ) -> Result<Self, ContainerError> {
-        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+        let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
 
         if min_instances > max_instances {
             return Err(ContainerError::InvalidConfig(
@@ -424,6 +424,10 @@ impl<T: CloudProvider> Container<T> {
         &self.external_secrets
     }
 
+    pub fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        &mut self.external_secrets
+    }
+
     fn service_version(&self) -> String {
         format!("{}:{}", self.source.image, self.source.tag)
     }
@@ -494,6 +498,7 @@ pub trait ContainerService: Service + DeploymentAction + ToTeraContext + Send {
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup];
     fn lib_root_directory(&self) -> &str;
     fn workspace_directory_path(&self) -> &Path;
 }
@@ -556,6 +561,10 @@ where
 
     fn external_secrets(&self) -> &[ExternalSecretGroup] {
         Container::external_secrets(self)
+    }
+
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        Container::external_secrets_mut(self)
     }
 
     fn lib_root_directory(&self) -> &str {

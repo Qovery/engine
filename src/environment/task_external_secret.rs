@@ -1,6 +1,6 @@
 use crate::cmd::command::CommandKiller;
 use crate::environment::action::deploy_external_secrets::{
-    deploy_helm_external_secrets, eso_companion_release_name, external_secrets_exist_for_service,
+    DeployExternalSecretsResult, deploy_helm_external_secrets, eso_companion_release_name,
 };
 use crate::environment::models::abort::Abort;
 use crate::environment::models::environment::Environment;
@@ -10,56 +10,52 @@ use crate::events::{EnvironmentStep, Stage};
 use crate::helm::ChartInfo;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
-use crate::io_models::variable_utils::VariableInfo;
+use crate::infrastructure::models::cloud_provider::service::Action;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Resolved values collected when deploying services external secrets.
 pub struct EsoExternalSecretsPreBuild {
-    pub app_external_secrets_values: Vec<HashMap<String, VariableInfo>>,
-    pub job_external_secrets_values: Vec<HashMap<String, VariableInfo>>,
-    pub helm_external_secrets_values: Vec<HashMap<String, VariableInfo>>,
-    pub terraform_external_secrets_values: Vec<HashMap<String, VariableInfo>>,
-    // For this vec:
-    // * if new external secrets are empty => contains the existing external secrets' kube names to clean
-    //   at the end of deployment. The purpose is to not uninstall them immediately in case of service rollback
-    // * otherwise => it is empty (no clean to do)
-    pub external_secrets_to_clean_after_environment_deployment: Vec<String>,
+    pub app_external_secrets_values: Vec<DeployExternalSecretsResult>,
+    pub container_external_secrets_values: Vec<DeployExternalSecretsResult>,
+    pub job_external_secrets_values: Vec<DeployExternalSecretsResult>,
+    pub helm_external_secrets_values: Vec<DeployExternalSecretsResult>,
+    pub terraform_external_secrets_values: Vec<DeployExternalSecretsResult>,
 }
 
 /// Deploy all Services ExternalSecrets defined in separate helm release
 /// (we need to deploy them separately to compute the image tag needed for buildable services)
 /// Returns the kube names of services that need to be cleaned up if any
-pub fn deploy_services_external_secrets(
+pub fn handle_service_external_secrets(
     environment: &mut Environment,
     infra_ctx: &InfrastructureContext,
     abort: &dyn Abort,
-) -> Result<Vec<String>, Box<EngineError>> {
+) -> Result<(), Box<EngineError>> {
     let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
 
     let EsoExternalSecretsPreBuild {
-        app_external_secrets_values: app_resolved,
-        job_external_secrets_values: job_resolved,
-        helm_external_secrets_values: helm_resolved,
-        terraform_external_secrets_values: terraform_resolved,
-        external_secrets_to_clean_after_environment_deployment: orphaned_kube_names,
+        app_external_secrets_values,
+        container_external_secrets_values,
+        job_external_secrets_values,
+        helm_external_secrets_values,
+        terraform_external_secrets_values,
     } = {
         let target = DeploymentTarget::new(infra_ctx, environment, abort)?;
-        let kube_client = target.kube.client();
         let namespace = target.environment.namespace();
-        let mut external_secrets_to_delete_post_deployment: Vec<String> = Vec::new();
 
-        let app_r = environment
+        let app_external_secrets_values = environment
             .applications
             .iter()
             .map(|app| {
-                if app.external_secrets().is_empty() {
-                    // Compute external secrets to delete after service deployment
-                    if external_secrets_exist_for_service(&kube_client, namespace, *app.long_id()) {
-                        external_secrets_to_delete_post_deployment.push(app.kube_name().to_string());
-                    }
-                    return Ok(HashMap::new());
+                // Apply external secrets only:
+                // * to applications to be deployed
+                // * if external secrets non empty
+                if app.action() != &Action::Create || app.external_secrets().is_empty() {
+                    return Ok(DeployExternalSecretsResult {
+                        external_secrets_groups_with_values: vec![],
+                    });
                 }
+
                 let env_logger = EnvLogger::new(app.as_service(), EnvironmentStep::Deploy, logger.clone());
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
@@ -80,44 +76,53 @@ pub fn deploy_services_external_secrets(
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        for container in environment.containers.iter() {
-            if container.external_secrets().is_empty() {
-                // Compute external secrets to delete after service deployment
-                if external_secrets_exist_for_service(&kube_client, namespace, *container.long_id()) {
-                    external_secrets_to_delete_post_deployment.push(container.kube_name().to_string());
+        let container_external_secrets_values = environment
+            .containers
+            .iter()
+            .map(|container| {
+                // Apply external secrets only:
+                // * to applications to be deployed
+                // * if external secrets non empty
+                if container.action() != &Action::Create || container.external_secrets().is_empty() {
+                    return Ok(DeployExternalSecretsResult {
+                        external_secrets_groups_with_values: vec![],
+                    });
                 }
-                continue;
-            }
-            let env_logger = EnvLogger::new(container.as_service(), EnvironmentStep::Deploy, logger.clone());
-            let progress_logger = EnvProgressLogger::new(&env_logger);
-            deploy_helm_external_secrets(
-                container.kube_name(),
-                container.name(),
-                *container.long_id(),
-                "container",
-                namespace,
-                container.external_secrets(),
-                target.environment.long_id,
-                target.environment.project_long_id,
-                container.workspace_directory_path(),
-                container.lib_root_directory(),
-                &target,
-                container.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
-                &progress_logger,
-            )?;
-        }
 
-        let job_r = environment
+                let env_logger = EnvLogger::new(container.as_service(), EnvironmentStep::Deploy, logger.clone());
+                let progress_logger = EnvProgressLogger::new(&env_logger);
+                deploy_helm_external_secrets(
+                    container.kube_name(),
+                    container.name(),
+                    *container.long_id(),
+                    "container",
+                    namespace,
+                    container.external_secrets(),
+                    target.environment.long_id,
+                    target.environment.project_long_id,
+                    container.workspace_directory_path(),
+                    container.lib_root_directory(),
+                    &target,
+                    container.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
+                    &progress_logger,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let job_external_secrets_values = environment
             .jobs
             .iter()
+            // INFO (qov-1569) We need to deploy external secrets regardless of the job action
             .map(|job| {
+                // Apply external secrets only:
+                // * to applications to be deployed
+                // * if external secrets non empty
                 if job.external_secrets().is_empty() {
-                    // Compute external secrets to delete after service deployment
-                    if external_secrets_exist_for_service(&kube_client, namespace, *job.long_id()) {
-                        external_secrets_to_delete_post_deployment.push(job.kube_name().to_string());
-                    }
-                    return Ok(HashMap::new());
+                    return Ok(DeployExternalSecretsResult {
+                        external_secrets_groups_with_values: vec![],
+                    });
                 }
+
                 let service_type = if job.job_schedule().is_cronjob() {
                     "cronjob"
                 } else {
@@ -143,110 +148,177 @@ pub fn deploy_services_external_secrets(
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let helm_r = environment
+        let helm_external_secrets_values = environment
             .helm_charts
             .iter()
-            .map(|chart| {
-                if chart.external_secrets().is_empty() {
-                    // Compute external secrets to delete after service deployment
-                    if external_secrets_exist_for_service(&kube_client, namespace, *chart.long_id()) {
-                        external_secrets_to_delete_post_deployment.push(chart.kube_name().to_string());
-                    }
-                    return Ok(HashMap::new());
+            // Apply external secrets only to applications to be deployed
+            .filter(|helm_chart| helm_chart.action() == &Action::Create)
+            // Apply external secrets only if non empty
+            .filter(|app| !app.external_secrets().is_empty())
+            .map(|helm_chart| {
+                // Apply external secrets only:
+                // * to applications to be deployed
+                // * if external secrets non empty
+                if helm_chart.action() != &Action::Create || helm_chart.external_secrets().is_empty() {
+                    return Ok(DeployExternalSecretsResult {
+                        external_secrets_groups_with_values: vec![],
+                    });
                 }
-                let env_logger = EnvLogger::new(chart.as_service(), EnvironmentStep::Deploy, logger.clone());
+
+                let env_logger = EnvLogger::new(helm_chart.as_service(), EnvironmentStep::Deploy, logger.clone());
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
-                    chart.kube_name(),
-                    chart.name(),
-                    *chart.long_id(),
+                    helm_chart.kube_name(),
+                    helm_chart.name(),
+                    *helm_chart.long_id(),
                     "helm",
                     namespace,
-                    chart.external_secrets(),
+                    helm_chart.external_secrets(),
                     target.environment.long_id,
                     target.environment.project_long_id,
-                    chart.workspace_directory_path(),
-                    chart.lib_root_directory(),
+                    helm_chart.workspace_directory_path(),
+                    helm_chart.lib_root_directory(),
                     &target,
-                    chart.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
+                    helm_chart.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        let terraform_r = environment
+        let terraform_external_secrets_values = environment
             .terraform_services
             .iter()
-            .map(|terraform| {
-                if terraform.external_secrets().is_empty() {
-                    // Compute external secrets to delete after service deployment
-                    if external_secrets_exist_for_service(&kube_client, namespace, *terraform.long_id()) {
-                        external_secrets_to_delete_post_deployment.push(terraform.kube_name().to_string());
-                    }
-                    return Ok(HashMap::new());
-                }
-                let env_logger = EnvLogger::new(terraform.as_service(), EnvironmentStep::Deploy, logger.clone());
+            // Apply external secrets only if non empty
+            .filter(|app| !app.external_secrets().is_empty())
+            // INFO (qov-1569) We need to deploy external secrets regardless of the terraform service action
+            .map(|terraform_service| {
+                let env_logger =
+                    EnvLogger::new(terraform_service.as_service(), EnvironmentStep::Deploy, logger.clone());
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
-                    terraform.kube_name(),
-                    terraform.name(),
-                    *terraform.long_id(),
+                    terraform_service.kube_name(),
+                    terraform_service.name(),
+                    *terraform_service.long_id(),
                     "terraform",
                     namespace,
-                    terraform.external_secrets(),
+                    terraform_service.external_secrets(),
                     target.environment.long_id,
                     target.environment.project_long_id,
-                    terraform.workspace_directory_path(),
-                    terraform.lib_root_directory(),
+                    terraform_service.workspace_directory_path(),
+                    terraform_service.lib_root_directory(),
                     &target,
-                    terraform.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
+                    terraform_service.get_event_details(Stage::Environment(EnvironmentStep::Deploy)),
                     &progress_logger,
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
 
         EsoExternalSecretsPreBuild {
-            app_external_secrets_values: app_r,
-            job_external_secrets_values: job_r,
-            helm_external_secrets_values: helm_r,
-            terraform_external_secrets_values: terraform_r,
-            external_secrets_to_clean_after_environment_deployment: external_secrets_to_delete_post_deployment,
+            app_external_secrets_values,
+            container_external_secrets_values,
+            job_external_secrets_values,
+            helm_external_secrets_values,
+            terraform_external_secrets_values,
         }
     }; // DeploymentTarget dropped here — environment is mutable again
 
-    // Inject resolved values into Application build environment variables
-    for (app, resolved) in environment.applications.iter_mut().zip(app_resolved) {
-        if let Some(build) = app.build_mut() {
-            for (key, var_info) in resolved {
-                build.environment_variables.insert(key, var_info.value);
+    // And inject resolved values into Application build environment variables
+    for (app, deploy_external_secret_result) in environment.applications.iter_mut().zip(app_external_secrets_values) {
+        for external_secret_values in deploy_external_secret_result.external_secrets_groups_with_values {
+            if let Some(group) = app
+                .external_secrets_mut()
+                .iter_mut()
+                .find(|it| it.external_secret_kube_name == external_secret_values.external_secret_name)
+            {
+                group.secret_name = external_secret_values.target_secret_name.to_string();
+            }
+
+            if let Some(build) = app.build_mut() {
+                for (key, var_info) in external_secret_values.group_values {
+                    build.environment_variables.insert(key, var_info.value);
+                }
+            }
+        }
+    }
+
+    // No secret value to inject into build
+    // Check only if target secret name needs to be changed
+    for (container, deploy_external_secret_result) in
+        environment.containers.iter_mut().zip(container_external_secrets_values)
+    {
+        for external_secret_values in deploy_external_secret_result.external_secrets_groups_with_values {
+            if let Some(group) = container
+                .external_secrets_mut()
+                .iter_mut()
+                .find(|it| it.external_secret_kube_name == external_secret_values.external_secret_name)
+            {
+                group.secret_name = external_secret_values.target_secret_name.to_string();
             }
         }
     }
 
     // Inject resolved values into Job build environment variables
-    for (job, resolved) in environment.jobs.iter_mut().zip(job_resolved) {
-        if let Some(build) = job.build_mut() {
-            for (key, var_info) in resolved {
-                build.environment_variables.insert(key, var_info.value);
+    for (job, deploy_external_secret_result) in environment.jobs.iter_mut().zip(job_external_secrets_values) {
+        for external_secret_values in deploy_external_secret_result.external_secrets_groups_with_values {
+            if let Some(group) = job
+                .external_secrets_mut()
+                .iter_mut()
+                .find(|it| it.external_secret_kube_name == external_secret_values.external_secret_name)
+            {
+                group.secret_name = external_secret_values.target_secret_name.to_string();
+            }
+            if let Some(build) = job.build_mut() {
+                for (key, var_info) in external_secret_values.group_values {
+                    build.environment_variables.insert(key, var_info.value);
+                }
             }
         }
     }
 
     // Store resolved values in HelmChart for later use in chart preparation
-    for (chart, resolved) in environment.helm_charts.iter_mut().zip(helm_resolved) {
-        chart.set_resolved_eso_values(resolved);
+    for (helm_chart, deploy_external_secret_result) in
+        environment.helm_charts.iter_mut().zip(helm_external_secrets_values)
+    {
+        for external_secret_values in &deploy_external_secret_result.external_secrets_groups_with_values {
+            if let Some(group) = helm_chart
+                .external_secrets_mut()
+                .iter_mut()
+                .find(|it| it.external_secret_kube_name == external_secret_values.external_secret_name)
+            {
+                group.secret_name = external_secret_values.target_secret_name.to_string();
+            }
+        }
+        let all_secret_values = deploy_external_secret_result
+            .external_secrets_groups_with_values
+            .into_iter()
+            .flat_map(|g| g.group_values)
+            .collect::<HashMap<_, _>>();
+        helm_chart.set_resolved_eso_values(all_secret_values);
     }
 
     // Inject resolved values into TerraformService build environment variables
-    for (terraform, resolved) in environment.terraform_services.iter_mut().zip(terraform_resolved) {
-        if let Some(build) = terraform.build_mut() {
-            for (key, var_info) in resolved {
-                build.environment_variables.insert(key, var_info.value);
+    for (terraform_service, deploy_external_secret_result) in environment
+        .terraform_services
+        .iter_mut()
+        .zip(terraform_external_secrets_values)
+    {
+        for external_secret_values in deploy_external_secret_result.external_secrets_groups_with_values {
+            if let Some(group) = terraform_service
+                .external_secrets_mut()
+                .iter_mut()
+                .find(|it| it.external_secret_kube_name == external_secret_values.external_secret_name)
+            {
+                group.secret_name = external_secret_values.target_secret_name.to_string();
+            }
+            if let Some(build) = terraform_service.build_mut() {
+                for (key, var_info) in external_secret_values.group_values {
+                    build.environment_variables.insert(key, var_info.value);
+                }
             }
         }
     }
 
-    Ok(orphaned_kube_names)
+    Ok(())
 }
 
 /// Called after a Delete deployment regardless of success or failure.
@@ -263,26 +335,6 @@ pub fn uninstall_external_secrets_after_delete_successful(deployment_target: &De
         .collect();
 
     for kube_name in services_kube_names {
-        let companion_release = eso_companion_release_name(kube_name);
-        let companion_chart = ChartInfo::new_from_release_name(&companion_release, namespace);
-        if let Err(e) =
-            deployment_target
-                .helm
-                .uninstall(&companion_chart, &[], &CommandKiller::never(), &mut |_| {}, &mut |_| {})
-        {
-            warn!("Failed to uninstall external secrets for release '{companion_release}': {e}");
-        }
-    }
-}
-
-/// Uninstall ESO companion releases for the given kube names.
-pub fn uninstall_external_secrets_orphans(kube_names: &[String], deployment_target: &DeploymentTarget) {
-    if kube_names.is_empty() {
-        return;
-    }
-
-    let namespace = deployment_target.environment.namespace();
-    for kube_name in kube_names {
         let companion_release = eso_companion_release_name(kube_name);
         let companion_chart = ChartInfo::new_from_release_name(&companion_release, namespace);
         if let Err(e) =

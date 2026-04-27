@@ -1,4 +1,4 @@
-use crate::cmd::helm::HelmError;
+use crate::cmd::command::CommandKiller;
 use crate::environment::action::DeploymentAction;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::models::external_secret::ExternalSecretGroup;
@@ -12,14 +12,14 @@ use crate::runtime::block_on;
 use chrono::{DateTime, Utc};
 use k8s_openapi::api::core::v1::Secret;
 use kube::Api;
-use kube::api::ListParams;
+use kube::api::{DeleteParams, ListParams};
 use kube::core::DynamicObject;
 use kube::discovery::ApiResource;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 use uuid::Uuid;
 
 // Prefix shared with env variable replacement: `qovery.env.<KEY>`
@@ -30,12 +30,16 @@ const ESO_VERSION: &str = "v1";
 const ESO_KIND: &str = "ExternalSecret";
 const ESO_SYNC_TIMEOUT: Duration = Duration::from_secs(30);
 const ESO_POLL_INTERVAL: Duration = Duration::from_secs(3);
+const DATA_HASH_ANNOTATION: &str = "reconcile.external-secrets.io/data-hash";
 
 /// Returns the name of the companion Helm release that manages `ExternalSecret` objects
 /// for a given service. The companion release (`{kube_name}-qovery-eso`) is deployed and
 /// rolled back atomically together with the main service Helm release.
 pub fn eso_companion_release_name(kube_name: &str) -> String {
-    format!("{kube_name}-qovery-eso")
+    let suffix = "-qovery-eso";
+    let max_base_len = 53 - suffix.len();
+    let truncated = &kube_name[..kube_name.len().min(max_base_len)];
+    format!("{truncated}{suffix}")
 }
 
 /// Tera context passed to `lib/common/charts/q-external-secret/templates/external_secret.j2.yaml`.
@@ -49,9 +53,6 @@ pub struct EsoTeraContext {
     pub service_type: String,
     pub environment_id: String,
     pub project_id: String,
-    /// Unix epoch in seconds — written as the `force-sync` annotation so ESO re-fetches
-    /// on every deploy even when the spec hasn't changed.
-    pub force_sync: String,
     pub external_secrets: Vec<ExternalSecretGroup>,
 }
 
@@ -70,7 +71,6 @@ impl EsoTeraContext {
             service_type: service_type.to_string(),
             environment_id: environment_id.to_string(),
             project_id: project_id.to_string(),
-            force_sync: force_sync_annotation(),
             external_secrets,
         }
     }
@@ -100,13 +100,35 @@ pub fn external_secrets_exist_for_service(kube_client: &kube::Client, namespace:
     }
 }
 
+pub struct DeployExternalSecretsResult {
+    pub external_secrets_groups_with_values: Vec<ExternalSecretGroupValuesWithTargetSecretName>,
+}
+
+pub struct ExternalSecretGroupValuesWithTargetSecretName {
+    /// Values of the Secret fetched by the ExternalSecret
+    pub group_values: HashMap<String, VariableInfo>,
+    /// Kubernetes Secret name used by the service
+    /// The rule is:
+    /// * if the new secret generated contains the exact same values, fallback to previous secret used (to have an atomic service rollback)
+    /// * otherwise service will use the new secret generated
+    pub target_secret_name: String,
+    /// The External Secret name used by the service
+    pub external_secret_name: String,
+}
+
+struct ServiceSecret {
+    secret_name: String,
+    store_name: String,
+    external_secret_hash: String,
+}
+
 pub fn deploy_helm_external_secrets(
     kube_name: &str,
     service_name: &str,
     service_id: Uuid,
     service_type: &str,
     namespace: &str,
-    external_secrets: &[ExternalSecretGroup],
+    external_secret_groups: &[ExternalSecretGroup],
     environment_id: Uuid,
     project_id: Uuid,
     workspace_directory: &Path,
@@ -114,19 +136,69 @@ pub fn deploy_helm_external_secrets(
     target: &DeploymentTarget,
     event_details: EventDetails,
     logger: &EnvProgressLogger,
-) -> Result<HashMap<String, VariableInfo>, Box<EngineError>> {
+) -> Result<DeployExternalSecretsResult, Box<EngineError>> {
+    // Fetch current secrets
+    let current_service_secrets =
+        fetch_current_service_kubernetes_secrets(target.kube.client(), namespace, &service_id, external_secret_groups);
+
+    // Apply new external secrets
+    let deployment_start_time_utc = install_external_secrets(
+        kube_name,
+        service_id,
+        service_type,
+        namespace,
+        external_secret_groups,
+        environment_id,
+        project_id,
+        workspace_directory,
+        lib_root_directory,
+        target,
+        event_details.clone(),
+        logger,
+    )?;
+
+    let result = wait_and_fetch_eso_values(
+        service_name,
+        namespace,
+        target.kube.client(),
+        external_secret_groups,
+        &current_service_secrets,
+        event_details,
+        logger,
+        deployment_start_time_utc,
+    )?;
+
+    Ok(DeployExternalSecretsResult {
+        external_secrets_groups_with_values: result,
+    })
+}
+
+fn install_external_secrets(
+    kube_name: &str,
+    service_id: Uuid,
+    service_type: &str,
+    namespace: &str,
+    external_secret_groups: &[ExternalSecretGroup],
+    environment_id: Uuid,
+    project_id: Uuid,
+    workspace_directory: &Path,
+    lib_root_directory: &str,
+    target: &DeploymentTarget,
+    event_details: EventDetails,
+    logger: &EnvProgressLogger,
+) -> Result<DateTime<Utc>, Box<EngineError>> {
     let companion_release = eso_companion_release_name(kube_name);
 
     logger.info(format!(
         "🔐 Deploying ESO companion release '{companion_release}' ({} external secret group(s))",
-        external_secrets.len()
+        external_secret_groups.len()
     ));
 
     let tera_context = EsoTeraContext::new(
         service_id,
         service_type,
         namespace,
-        external_secrets.to_vec(),
+        external_secret_groups.to_vec(),
         environment_id,
         project_id,
     );
@@ -140,7 +212,7 @@ pub fn deploy_helm_external_secrets(
     };
 
     let helm_deployment = HelmDeployment::new(
-        event_details.clone(),
+        event_details,
         tera::Context::from_serialize(tera_context).unwrap_or_default(),
         PathBuf::from(helm_chart_eso_dir(lib_root_directory)),
         None,
@@ -149,51 +221,56 @@ pub fn deploy_helm_external_secrets(
 
     let deployment_start_time_utc = Utc::now();
     helm_deployment.on_create(target)?;
+    Ok(deployment_start_time_utc)
+}
 
-    let result = wait_and_fetch_eso_values(
-        service_name,
-        namespace,
-        target.kube.client(),
-        external_secrets,
-        event_details,
-        logger,
-        deployment_start_time_utc,
-    );
+fn fetch_current_service_kubernetes_secrets(
+    kube_client: kube::Client,
+    namespace: &str,
+    service_id: &Uuid,
+    external_secret_groups: &[ExternalSecretGroup],
+) -> Vec<ServiceSecret> {
+    let secret_api: Api<Secret> = Api::namespaced(kube_client, namespace);
+    let mut result = Vec::with_capacity(external_secret_groups.len());
 
-    // If any issue happens, we need to rollback to previous version
-    if result.is_err() {
-        if let Err(e) = rollback_helm_external_secrets(kube_name, target) {
-            logger.warning(format!("Failed to rollback ESO companion release: {e}"));
-        } else {
-            logger.info("External secrets have been rollback to previous version".to_string());
+    for group in external_secret_groups {
+        let label_selector = format!("qovery.com/service-id={service_id},qovery.com/store-name={}", group.store_name);
+        let list_params = ListParams::default().labels(&label_selector);
+
+        let secrets = match block_on(secret_api.list(&list_params)) {
+            Ok(list) => list.items,
+            Err(e) => {
+                info!(
+                    "Cannot fetch k8s Secret for service {service_id} / store '{}': {e}",
+                    group.store_name
+                );
+                continue;
+            }
+        };
+
+        for secret in secrets {
+            let secret_name = match secret.metadata.name {
+                Some(name) => name,
+                None => continue,
+            };
+            let external_secret_hash = match secret
+                .metadata
+                .annotations
+                .as_ref()
+                .and_then(|a| a.get(DATA_HASH_ANNOTATION))
+            {
+                Some(hash) => hash.clone(),
+                None => continue,
+            };
+            result.push(ServiceSecret {
+                secret_name,
+                store_name: group.store_name.clone(),
+                external_secret_hash,
+            });
         }
     }
 
     result
-}
-
-pub fn rollback_helm_external_secrets(kube_name: &str, target: &DeploymentTarget) -> Result<(), HelmError> {
-    let companion_release = eso_companion_release_name(kube_name);
-    let companion_chart = ChartInfo::new_from_release_name(&companion_release, target.environment.namespace());
-    target.helm.rollback(&companion_chart, &[])
-}
-
-/// Rolls back the ESO companion release if external secrets are configured, logging a warning on
-/// unexpected failures. `ReleaseDoesNotExist` is silently ignored (ESO was never deployed).
-pub fn rollback_external_secrets_if_needed(
-    kube_name: &str,
-    external_secrets: &[ExternalSecretGroup],
-    target: &DeploymentTarget,
-    logger: &EnvProgressLogger,
-) {
-    if !external_secrets.is_empty()
-        && let Err(eso_err) = rollback_helm_external_secrets(kube_name, target)
-    {
-        match eso_err {
-            HelmError::ReleaseDoesNotExist(_) => {}
-            _ => logger.warning(format!("Failed to rollback external secret(s): {eso_err}")),
-        }
-    }
 }
 
 pub fn helm_chart_eso_dir(lib_root_directory: &str) -> String {
@@ -229,25 +306,21 @@ fn eso_api_resource() -> ApiResource {
     }
 }
 
-fn force_sync_annotation() -> String {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .to_string()
-}
-
+/// Waits for External Secrets to be ready and fetches their values
+/// Targets either the new secret or the previous secret based on annotation `reconcile.external-secrets.io/data-hash`
+/// Returns the mapping between the external secret and the target secret name with decoded secret values
 fn wait_and_fetch_eso_values(
     service_name: &str,
     namespace: &str,
     kube_client: kube::Client,
-    external_secrets: &[ExternalSecretGroup],
+    external_secret_groups: &[ExternalSecretGroup],
+    current_service_secrets: &[ServiceSecret],
     event_details: EventDetails,
     logger: &EnvProgressLogger,
     deployment_start_time_utc: DateTime<Utc>,
-) -> Result<HashMap<String, VariableInfo>, Box<EngineError>> {
-    if external_secrets.is_empty() {
-        return Ok(HashMap::new());
+) -> Result<Vec<ExternalSecretGroupValuesWithTargetSecretName>, Box<EngineError>> {
+    if external_secret_groups.is_empty() {
+        return Ok(vec![]);
     }
 
     let to_error = |msg: String| -> Box<EngineError> {
@@ -264,9 +337,10 @@ fn wait_and_fetch_eso_values(
 
     // ── Wait for ESO Ready condition, then read k8s Secret values ─────────
     let secret_api: Api<Secret> = Api::namespaced(kube_client.clone(), namespace);
-    let mut result: HashMap<String, VariableInfo> = HashMap::new();
+    let mut result: Vec<ExternalSecretGroupValuesWithTargetSecretName> =
+        Vec::with_capacity(external_secret_groups.len());
 
-    for group in external_secrets {
+    for group in external_secret_groups {
         let eso_name = &group.external_secret_kube_name;
         logger.info(format!("⏳ Waiting for external secret '{eso_name}' to be synced by ESO..."));
 
@@ -325,22 +399,39 @@ fn wait_and_fetch_eso_values(
             thread::sleep(ESO_POLL_INTERVAL);
         }
 
-        // Read values from the synced k8s Secret.
-        let secret = block_on(secret_api.get(eso_name))
-            .map_err(|e| to_error(format!("Cannot read synced k8s Secret '{eso_name}': {e}")))?;
+        // Fetch new kube Secret hash
+        let new_secret_name = &group.secret_name;
+        let new_secret_hash = block_on(secret_api.get(new_secret_name.as_str()))
+            .ok()
+            .and_then(|s| s.metadata.annotations)
+            .and_then(|a| a.get(DATA_HASH_ANNOTATION).cloned());
+
+        // If the new secret hash matches the previous one, read values from the previous secret
+        // to guarantee atomic rollback: the service keeps pointing to an already-validated secret.
+        let target_secret_name = current_service_secrets
+            .iter()
+            .find(|s| s.store_name == group.store_name)
+            .filter(|s| new_secret_hash.as_deref() == Some(s.external_secret_hash.as_str()))
+            .map(|s| s.secret_name.as_str())
+            .unwrap_or(new_secret_name.as_str());
+
+        // Read values from the target secret (either the old one or the new one)
+        let secret = block_on(secret_api.get(target_secret_name))
+            .map_err(|e| to_error(format!("Cannot read synced k8s Secret '{target_secret_name}': {e}")))?;
 
         let data = secret.data.unwrap_or_default();
+        let mut secret_values: HashMap<String, VariableInfo> = HashMap::new();
         for entry in &group.entries {
             match data.get(&entry.env_var_key) {
                 Some(bytes) => {
                     // INFO (qov-1569) If upstream secrets are non-utf8, clients will need to encode it to base64 themselves
                     let value = String::from_utf8(bytes.0.clone()).map_err(|e| {
                         to_error(format!(
-                            "External secret key '{}' in secret '{eso_name}' is not valid UTF-8: {e}",
+                            "External secret key '{}' in secret '{target_secret_name}' is not valid UTF-8: {e}",
                             entry.env_var_key
                         ))
                     })?;
-                    result.insert(
+                    secret_values.insert(
                         entry.env_var_key.clone(),
                         VariableInfo {
                             value,
@@ -350,14 +441,88 @@ fn wait_and_fetch_eso_values(
                 }
                 None => {
                     return Err(to_error(format!(
-                        "External secret key '{}' was not found in synced secret '{eso_name}'. \
+                        "External secret key '{}' was not found in synced secret '{target_secret_name}'. \
                          Check your remote secret manager key path.",
                         entry.env_var_key
                     )));
                 }
             }
         }
+        result.push(ExternalSecretGroupValuesWithTargetSecretName {
+            group_values: secret_values,
+            target_secret_name: target_secret_name.to_string(),
+            external_secret_name: group.external_secret_kube_name.clone(),
+        })
     }
 
     Ok(result)
+}
+
+/// Uninstall External Secrets helm release for the given service.
+/// If helm release doesn't exist, it will be silently ignored.
+pub fn uninstall_service_external_secret(service_kube_name: &str, deployment_target: &DeploymentTarget) {
+    let namespace = deployment_target.environment.namespace();
+    let external_secrets_helm_release_name = eso_companion_release_name(service_kube_name);
+    let external_secrets_helm_chart = ChartInfo::new_from_release_name(&external_secrets_helm_release_name, namespace);
+    if let Err(e) = deployment_target.helm.uninstall(
+        &external_secrets_helm_chart,
+        &[],
+        &CommandKiller::never(),
+        &mut |_| {},
+        &mut |_| {},
+    ) {
+        warn!("Failed to uninstall external secrets for release '{external_secrets_helm_release_name}': {e}");
+    }
+    // TODO (qov-1569) Delete kube secrets remaining as they are not clean anymore by helm uninstall
+}
+
+/// Deletes Kubernetes Secrets that were previously created by ESO for a given service but are no
+/// longer in use (i.e. not present in `service_secret_names`).
+///
+/// A secret is considered an ESO-managed secret for this service when it has both:
+/// - annotation `reconcile.external-secrets.io/data-hash` (any value)
+/// - annotation `qovery.com/service-id` equal to the service UUID
+pub fn clean_unused_secrets_generated_by_eso(
+    kube_client: kube::Client,
+    namespace: &str,
+    service_id: &Uuid,
+    service_secret_names: Vec<String>,
+) {
+    // Get all secrets used by the service
+    // * those created by Qovery as usual
+    // * those created by ESO (previous & new)
+    let secret_api: Api<Secret> = Api::namespaced(kube_client, namespace);
+    let label_selector = format!("qovery.com/service-id={service_id}");
+    let secrets = match block_on(secret_api.list(&ListParams::default().labels(&label_selector))) {
+        Ok(list) => list,
+        Err(err) => {
+            error!("Failed to clean secrets in namespace {namespace} for service {service_id}: {err}");
+            return;
+        }
+    };
+
+    // Iterate on service's secrets and remove the unused
+    for secret in secrets.items {
+        let annotations = match secret.metadata.annotations.as_ref() {
+            Some(a) => a,
+            None => continue,
+        };
+
+        let has_eso_annotation = annotations.contains_key("reconcile.external-secrets.io/data-hash");
+
+        if !has_eso_annotation {
+            continue;
+        }
+
+        let secret_name = match secret.metadata.name.as_deref() {
+            Some(n) => n,
+            None => continue,
+        };
+
+        if !service_secret_names.iter().any(|s| s == secret_name)
+            && let Err(err) = block_on(secret_api.delete(secret_name, &DeleteParams::background()))
+        {
+            error!("Failed to delete unused ESO secret {secret_name} for service {service_id}: {err}");
+        }
+    }
 }
