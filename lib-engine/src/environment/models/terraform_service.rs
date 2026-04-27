@@ -104,7 +104,7 @@ impl<T: CloudProvider> TerraformService<T> {
     ) -> Result<Self, TerraformServiceError> {
         let event_details = mk_event_details(Transmitter::TerraformService(long_id, name.clone()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
-        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+        let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
 
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -455,6 +455,7 @@ pub trait TerraformServiceTrait: Service + DeploymentAction + Send {
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn job_max_duration(&self) -> &Duration;
     fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup];
     fn lib_root_directory(&self) -> &str;
     fn workspace_directory_path(&self) -> &Path;
 }
@@ -477,6 +478,10 @@ where
 
     fn external_secrets(&self) -> &[ExternalSecretGroup] {
         &self.external_secrets
+    }
+
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        &mut self.external_secrets
     }
 
     fn lib_root_directory(&self) -> &str {

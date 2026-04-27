@@ -102,7 +102,7 @@ impl<T: CloudProvider> HelmChart<T> {
             }
         }
 
-        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+        let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
         let event_details = mk_event_details(Transmitter::Helm(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
@@ -186,6 +186,10 @@ impl<T: CloudProvider> HelmChart<T> {
 
     pub fn external_secrets(&self) -> &[ExternalSecretGroup] {
         &self.external_secrets
+    }
+
+    pub fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        &mut self.external_secrets
     }
 
     pub fn kube_label_selector(&self) -> String {
@@ -331,6 +335,7 @@ pub trait HelmChartService: Service + DeploymentAction + Send {
     fn advanced_settings(&self) -> &HelmChartAdvancedSettings;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup];
     fn lib_root_directory(&self) -> &str;
     fn workspace_directory_path(&self) -> &Path;
     fn set_resolved_eso_values(&mut self, values: HashMap<String, VariableInfo>);
@@ -351,6 +356,9 @@ where
     }
     fn external_secrets(&self) -> &[ExternalSecretGroup] {
         HelmChart::external_secrets(self)
+    }
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        HelmChart::external_secrets_mut(self)
     }
     fn lib_root_directory(&self) -> &str {
         &self.lib_root_directory

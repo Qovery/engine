@@ -1,5 +1,4 @@
 use crate::environment::action::DeploymentAction;
-use crate::environment::action::deploy_external_secrets::rollback_external_secrets_if_needed;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::action::{JobPostRun, JobPreRun, JobRun, TaskContext};
 use crate::environment::action::deploy_job::common::{mk_deploy_post_run, mk_deploy_pre_run};
@@ -29,7 +28,7 @@ pub(super) fn run_cronjob<'a, T: CloudProvider>(
 where
     Job<T>: JobService,
 {
-    let task = move |logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
+    let task = move |_logger: &EnvProgressLogger, state: TaskContext| -> Result<TaskContext, Box<EngineError>> {
         let chart = super::common::build_job_chart_info(job, target);
 
         let helm = HelmDeployment::new(
@@ -43,10 +42,7 @@ where
         // simple case when the job is not force-trigger
         // Only install the helm chart
         if !job.is_force_trigger() {
-            if let Err(e) = helm.on_create(target) {
-                rollback_external_secrets_if_needed(job.kube_name(), job.external_secrets(), target, logger);
-                return Err(e);
-            }
+            helm.on_create(target)?;
             return Ok(state);
         }
 
@@ -57,10 +53,7 @@ where
         let cronjob_is_already_installed = block_on(k8s_cronjob_api.get(job.kube_name())).is_ok();
 
         // create cronjob
-        if let Err(e) = helm.on_create(target) {
-            rollback_external_secrets_if_needed(job.kube_name(), job.external_secrets(), target, logger);
-            return Err(e);
-        }
+        helm.on_create(target)?;
 
         // Cronjob have been installed, in order to trigger it, we need to create a job from the cronjob manually.
         let k8s_job_api: Api<K8sJob> = Api::namespaced(target.kube.client(), target.environment.namespace());

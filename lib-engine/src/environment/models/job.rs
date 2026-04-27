@@ -117,7 +117,7 @@ impl<T: CloudProvider> Job<T> {
         )
         .map_err(|err| JobError::InvalidConfig(format!("Can't create workspace directory: {err}")))?;
 
-        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+        let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
         let event_details = mk_event_details(Transmitter::Job(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
         Ok(Self {
@@ -366,6 +366,10 @@ impl<T: CloudProvider> Job<T> {
         &self.external_secrets
     }
 
+    pub fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        &mut self.external_secrets
+    }
+
     pub fn should_delete_shared_registry(&self) -> bool {
         self.should_delete_shared_registry
     }
@@ -464,6 +468,7 @@ pub trait JobService: Service + DeploymentAction + ToTeraContext + Send {
     fn max_restarts(&self) -> u32;
     fn is_force_trigger(&self) -> bool;
     fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup];
     fn lib_root_directory(&self) -> &str;
     fn workspace_directory_path(&self) -> &Path;
 }
@@ -530,6 +535,10 @@ where
 
     fn external_secrets(&self) -> &[ExternalSecretGroup] {
         Job::external_secrets(self)
+    }
+
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        Job::external_secrets_mut(self)
     }
 
     fn lib_root_directory(&self) -> &str {

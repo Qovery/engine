@@ -129,7 +129,7 @@ impl<T: CloudProvider> Application<T> {
 
         let event_details = mk_event_details(Transmitter::Application(long_id, name.to_string()));
         let mk_event_details = move |stage: Stage| EventDetails::clone_changing_stage(event_details.clone(), stage);
-        let external_secrets = build_external_secret_groups(&long_id, &kube_name, external_secrets);
+        let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
 
         Ok(Self {
             _marker: PhantomData,
@@ -382,6 +382,10 @@ impl<T: CloudProvider> Application<T> {
         &self.external_secrets
     }
 
+    pub fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        &mut self.external_secrets
+    }
+
     pub fn should_delete_shared_registry(&self) -> bool {
         self.should_delete_shared_registry
     }
@@ -465,6 +469,7 @@ pub trait ApplicationService: Service + DeploymentAction + ToTeraContext + Send 
     fn startup_timeout(&self) -> Duration;
     fn as_deployment_action(&self) -> &dyn DeploymentAction;
     fn external_secrets(&self) -> &[ExternalSecretGroup];
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup];
     fn lib_root_directory(&self) -> &str;
     fn workspace_directory_path(&self) -> &Path;
 }
@@ -526,6 +531,10 @@ where
 
     fn external_secrets(&self) -> &[ExternalSecretGroup] {
         Application::external_secrets(self)
+    }
+
+    fn external_secrets_mut(&mut self) -> &mut [ExternalSecretGroup] {
+        Application::external_secrets_mut(self)
     }
 
     fn lib_root_directory(&self) -> &str {

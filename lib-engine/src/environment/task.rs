@@ -5,10 +5,7 @@ use crate::environment::action::deploy_environment::EnvironmentDeployment;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::environment::models::environment::Environment;
 use crate::environment::report::logger::EnvLogger;
-use crate::environment::task_external_secret::deploy_services_external_secrets;
-use crate::environment::task_external_secret::{
-    uninstall_external_secrets_after_delete_successful, uninstall_external_secrets_orphans,
-};
+use crate::environment::task_external_secret::handle_service_external_secrets;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{EngineEvent, EnvironmentStep, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -331,14 +328,12 @@ impl EnvironmentTask {
 
             let logger = Arc::new(infra_ctx.kubernetes().logger().clone_dyn());
 
-            // Returns kube names of services to be clean after environment deployment
-            // Case: a "delete service" action needs to preserve secrets in case a rollback is necessary
-            let external_secrets_to_clean_after_environment_deployment =
-                if environment.action == service::Action::Create {
-                    deploy_services_external_secrets(&mut environment, infra_ctx, abort)?
-                } else {
-                    Vec::new()
-                };
+            // INFO (qov-1569) Trigger external secrets deployments only for a Create environment action
+            // Note: it doesn't mean that the underlying services are in Deploy state, but it prevents from
+            //       deploying external secrets on Pause / Restart / Delete env actions.
+            if environment.action == service::Action::Create {
+                handle_service_external_secrets(&mut environment, infra_ctx, abort)?;
+            }
 
             let services_to_build: Vec<&mut dyn Service> = environment
                 .applications
@@ -371,22 +366,9 @@ impl EnvironmentTask {
             }
             let mut env_deployment = EnvironmentDeployment::new(infra_ctx, &environment, abort, logger.clone())?;
             let deployment_ret = match environment.action {
-                service::Action::Create => {
-                    let ret = env_deployment.on_create();
-                    if ret.is_ok() {
-                        uninstall_external_secrets_orphans(
-                            &external_secrets_to_clean_after_environment_deployment,
-                            &env_deployment.deployment_target,
-                        );
-                    }
-                    ret
-                }
+                service::Action::Create => env_deployment.on_create(),
                 service::Action::Pause => env_deployment.on_pause(),
-                service::Action::Delete => {
-                    let ret = env_deployment.on_delete();
-                    uninstall_external_secrets_after_delete_successful(&env_deployment.deployment_target);
-                    ret
-                }
+                service::Action::Delete => env_deployment.on_delete(),
                 service::Action::Restart => env_deployment.on_restart(),
             };
             deployed_services = env_deployment.deployed_services.lock().map(|v| v.clone()).unwrap();

@@ -1,4 +1,5 @@
 use crate::environment::action::DeploymentAction;
+use crate::environment::action::deploy_external_secrets::uninstall_service_external_secret;
 use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::action::deploy_job::common::{mk_deploy_post_run, mk_deploy_pre_run};
 use crate::environment::action::deploy_job::cronjob::run_cronjob;
@@ -232,6 +233,9 @@ where
                 }
             }
         };
+
+        // Delete external secrets helm release if exists
+        uninstall_service_external_secret(&job.kube_name, target);
     };
 
     (Box::new(pre_run), Box::new(task), Box::new(post_run))
