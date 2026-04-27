@@ -63,7 +63,7 @@ default:
 
 # Factorized buildx init/login/teardown + dind
 .buildx:
-  extends: [.needs-docker]
+  extends: [.needs-docker, .on-demand-node, .nvme-node]
   before_script:
     - ci_helper init_buildkit_builder "$(echo "${CI_JOB_NAME}" | tr -d ' []:')" 8 30 50 ${IMAGE_ARCH}
     - ci_helper docker_login_public_prod_ecr
