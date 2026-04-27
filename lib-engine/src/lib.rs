@@ -34,3 +34,4 @@ mod template;
 mod tera_utils;
 mod unit_conversion;
 pub mod utilities;
+mod web_utils;

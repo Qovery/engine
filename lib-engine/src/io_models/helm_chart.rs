@@ -16,7 +16,8 @@ use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::models::ExternalSecret;
 use crate::io_models::services_common::{
-    GatewayApiStickySessionType, GitCredentials, PortIo, deserialize_gateway_api_sticky_session_type,
+    GatewayApiStickySessionType, GitCredentials, PortIo, default_gateway_api_sticky_session_type,
+    deserialize_gateway_api_sticky_session_type,
 };
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
@@ -41,7 +42,7 @@ pub struct HelmChartAdvancedSettings {
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
     #[serde(
-        default,
+        default = "default_gateway_api_sticky_session_type",
         alias = "network.gateway_api.sticky_session_type",
         alias = "network.gateway_api.sticky_session_header",
         deserialize_with = "deserialize_gateway_api_sticky_session_type"
