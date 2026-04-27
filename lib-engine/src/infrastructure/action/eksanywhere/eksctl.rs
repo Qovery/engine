@@ -1,4 +1,4 @@
-use crate::cmd::command::{ExecutableCommand, QoveryCommand};
+use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::environment::models::types::VersionsNumber;
 use crate::errors::{CommandError, EngineError};
 use crate::events::InfrastructureStep;
@@ -10,10 +10,15 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::EksAnywhere;
 use std::env;
 use std::path::Path;
+use std::time::Duration;
 
 const COMMAND_STDOUT_PREFIX: &str = "CMD│ ";
 const COMMAND_STDERR_PREFIX: &str = "CMD┃ ";
 const EKSCTL_VERBOSITY_LEVEL: &str = "2";
+const EKS_ANYWHERE_CONTROL_PLANE_WAIT_TIMEOUT: &str = "90m0s";
+const EKS_ANYWHERE_EXTERNAL_ETCD_WAIT_TIMEOUT: &str = "90m0s";
+const EKS_ANYWHERE_PER_MACHINE_WAIT_TIMEOUT: &str = "20m0s";
+const EKS_ANYWHERE_UPGRADE_CLUSTER_HARD_TIMEOUT: Duration = Duration::from_secs(3 * 60 * 60);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct EksAnywhereUpgradePlanSummary {
@@ -88,7 +93,12 @@ impl EksAnywhereUpgradeCommand {
                 config_path,
                 "--kubeconfig",
                 kubeconfig_path,
-                "--no-timeouts",
+                "--control-plane-wait-timeout",
+                EKS_ANYWHERE_CONTROL_PLANE_WAIT_TIMEOUT,
+                "--external-etcd-wait-timeout",
+                EKS_ANYWHERE_EXTERNAL_ETCD_WAIT_TIMEOUT,
+                "--per-machine-wait-timeout",
+                EKS_ANYWHERE_PER_MACHINE_WAIT_TIMEOUT,
                 "--skip-validations=vsphere-user-privilege",
                 "--skip-validations=pod-disruption",
                 "-v",
@@ -135,6 +145,13 @@ impl EksAnywhereUpgradeCommand {
     fn log_pre_execution_info(self, config_path_str: &str) {
         if let Self::PlanCluster = self {
             info!("Running `eksctl anywhere upgrade plan cluster` against {}", config_path_str);
+        }
+    }
+
+    fn hard_timeout(self) -> Option<Duration> {
+        match self {
+            Self::PlanCluster => None,
+            Self::UpgradeCluster => Some(EKS_ANYWHERE_UPGRADE_CLUSTER_HARD_TIMEOUT),
         }
     }
 }
@@ -242,16 +259,24 @@ fn run_eks_anywhere_upgrade_command(
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
 
-    if let Err(execution_error) = cmd.exec_with_output(
-        &mut |line| {
-            command.log_output_line(logger, line.as_str(), false);
-            stdout.push(line);
-        },
-        &mut |line| {
-            command.log_output_line(logger, line.as_str(), true);
-            stderr.push(line);
-        },
-    ) {
+    let mut stdout_output = |line: String| {
+        command.log_output_line(logger, line.as_str(), false);
+        stdout.push(line);
+    };
+    let mut stderr_output = |line: String| {
+        command.log_output_line(logger, line.as_str(), true);
+        stderr.push(line);
+    };
+
+    let execution_result = match command.hard_timeout() {
+        Some(timeout) => {
+            let command_killer = CommandKiller::from_timeout(timeout);
+            cmd.exec_with_abort(&mut stdout_output, &mut stderr_output, &command_killer)
+        }
+        None => cmd.exec_with_output(&mut stdout_output, &mut stderr_output),
+    };
+
+    if let Err(execution_error) = execution_result {
         logger.warn(format!("{COMMAND_STDERR_PREFIX}❌ {} failed.", command.log_running_label()));
         return Err(Box::new(EngineError::new_unknown(
             cluster.get_event_details(Infrastructure(InfrastructureStep::Create)),
