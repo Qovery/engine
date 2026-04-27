@@ -25,7 +25,8 @@ use crate::io_models::models::{
 };
 use crate::io_models::probe::Probe;
 use crate::io_models::services_common::{
-    GatewayApiStickySessionType, PortIo, deserialize_gateway_api_sticky_session_type,
+    GatewayApiStickySessionType, PortIo, default_gateway_api_sticky_session_type,
+    deserialize_gateway_api_sticky_session_type,
 };
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, MountedFile};
@@ -292,7 +293,7 @@ pub struct ContainerAdvancedSettings {
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
     pub network_gateway_api_sticky_session_enable: bool,
     #[serde(
-        default,
+        default = "default_gateway_api_sticky_session_type",
         alias = "network.gateway_api.sticky_session_type",
         alias = "network.gateway_api.sticky_session_header",
         deserialize_with = "deserialize_gateway_api_sticky_session_type"

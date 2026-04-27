@@ -410,8 +410,6 @@ impl CloudProvider {
             dynamodb_table: self.terraform_state_credentials.dynamodb_table.clone(),
         };
 
-        // TODO remove
-        warn!("PGG Cloud provider: {:?}", self.kind);
         match self.kind {
             cloud_provider::Kind::Aws => {
                 let (access_key_id, secret_access_key, session_token, vsphere_user, vsphere_password) =

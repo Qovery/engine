@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::environment::models::port::Port;
+use crate::web_utils::validate_http_header_name;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Protocol {
@@ -64,6 +65,10 @@ pub enum GatewayApiStickySessionType {
     SourceIp,
 }
 
+pub fn default_gateway_api_sticky_session_type() -> GatewayApiStickySessionType {
+    GatewayApiStickySessionType::Cookie
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum GatewayApiStickySessionTypeInput {
@@ -81,11 +86,32 @@ where
 
     Ok(match input {
         None => GatewayApiStickySessionType::Cookie,
-        Some(GatewayApiStickySessionTypeInput::Explicit(value)) => value,
+        Some(GatewayApiStickySessionTypeInput::Explicit(value)) => match value {
+            GatewayApiStickySessionType::Header { name } => {
+                validate_http_header_name(&name).map_err(serde::de::Error::custom)?;
+                GatewayApiStickySessionType::Header { name }
+            }
+            other => other,
+        },
         Some(GatewayApiStickySessionTypeInput::LegacyHeaderName(value)) => match value.as_str() {
             "Cookie" | "cookie" => GatewayApiStickySessionType::Cookie,
             "SourceIP" => GatewayApiStickySessionType::SourceIp,
-            name => GatewayApiStickySessionType::Header { name: name.to_string() },
+            name => {
+                if let Ok(parsed) = serde_json::from_str::<GatewayApiStickySessionType>(name) {
+                    return Ok(match parsed {
+                        GatewayApiStickySessionType::Header { name } => {
+                            validate_http_header_name(&name).map_err(serde::de::Error::custom)?;
+                            GatewayApiStickySessionType::Header { name }
+                        }
+                        other => other,
+                    });
+                }
+                validate_http_header_name(name).map_err(serde::de::Error::custom)?;
+                tracing::warn!(
+                    "legacy string sticky session header value is deprecated; prefer explicit format: {{\"Header\":{{\"name\":\"...\"}}}}"
+                );
+                GatewayApiStickySessionType::Header { name: name.to_string() }
+            }
         },
     })
 }
@@ -149,5 +175,46 @@ mod tests {
                 name: "Mcp-Session-Id".to_string(),
             }
         );
+    }
+
+    #[test]
+    fn sticky_session_type_supports_legacy_header_name_string() {
+        let parsed: TestSettings =
+            serde_json::from_str(r#"{"network.gateway_api.sticky_session_type":"Mcp-Session-Id"}"#)
+                .expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::Header {
+                name: "Mcp-Session-Id".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn sticky_session_type_rejects_json_encoded_string() {
+        let parsed: Result<TestSettings, _> =
+            serde_json::from_str(r#"{"network.gateway_api.sticky_session_type":"{\"Header\":\"X-Benjamin-Test\"}"}"#);
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn sticky_session_type_supports_json_string_with_header_object() {
+        let parsed: TestSettings = serde_json::from_str(
+            r#"{"network.gateway_api.sticky_session_type":"{\"Header\":{\"name\":\"X-Benjamin-Test\"}}"}"#,
+        )
+        .expect("settings should parse");
+        assert_eq!(
+            parsed.network_gateway_api_sticky_session_type,
+            GatewayApiStickySessionType::Header {
+                name: "X-Benjamin-Test".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn sticky_session_type_rejects_invalid_header_name() {
+        let parsed: Result<TestSettings, _> =
+            serde_json::from_str(r#"{"network.gateway_api.sticky_session_type":{"Header":{"name":"X Invalid"}}}"#);
+        assert!(parsed.is_err());
     }
 }
