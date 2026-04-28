@@ -10,6 +10,7 @@ pub struct ScalewayLoadBalancer {
 
 impl InteractWithLoadBalancer for ScalewayLoadBalancer {
     fn annotations(&self) -> Option<HashMap<String, String>> {
+        // Documentation: https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
         Some(HashMap::from([
             (
                 "service.beta.kubernetes.io/scw-loadbalancer-type".to_string(),
@@ -44,8 +45,7 @@ impl InteractWithLoadBalancer for ScalewayLoadBalancer {
                 "service.beta.kubernetes.io/scw-loadbalancer-timeout-server".to_string(),
                 "30s".to_string(),
             ),
-            // Validation rule, must have max 8 annotations
-            // Documentation: https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
+            // Default settings, no need to declare those, but just in case
             // (
             //     "service.beta.kubernetes.io/scw-loadbalancer-protocol-http".to_string(),
             //     "false".to_string(),

@@ -165,7 +165,10 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             for (key, value) in annotations {
                 chart_set_values.push(ChartSetValue {
                     // Escape dots in annotation keys to prevent Helm from treating them as nested maps
-                    key: format!("infrastructure.annotations.{}", key.replace('.', "\\.")),
+                    key: format!(
+                        "envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations.{}",
+                        key.replace('.', "\\.")
+                    ),
                     value,
                 });
             }
@@ -329,6 +332,7 @@ mod tests {
     use crate::infrastructure::models::load_balancer::LoadBalancer;
     use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::AwsAlbLoadBalancer;
     use crate::io_models::QoveryIdentifier;
+    use std::collections::HashSet;
     use std::env;
 
     fn get_domain() -> Domain {
@@ -484,5 +488,41 @@ mod tests {
             detection,
             XForwardedForClientIpDetection::TrustedCIDRs(returned) if returned == cidrs
         ));
+    }
+
+    #[test]
+    fn load_balancer_annotations_are_rendered_under_envoy_proxy_annotations() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            }),
+            QoveryClusterGatewayChartOptions::default(),
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let keys: HashSet<&str> = common_chart
+            .chart_info
+            .values
+            .iter()
+            .map(|entry| entry.key.as_str())
+            .collect();
+
+        assert!(
+            keys.iter().any(|key| {
+                key.starts_with("envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations.")
+            }),
+            "expected at least one envoy service annotation key"
+        );
+        assert!(
+            keys.iter().all(|key| !key.starts_with("infrastructure.annotations.")),
+            "gateway infrastructure annotations should no longer be used for LB service annotations"
+        );
     }
 }

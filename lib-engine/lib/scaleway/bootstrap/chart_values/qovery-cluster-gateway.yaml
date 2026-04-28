@@ -31,29 +31,33 @@ metrics:
     additionalLabels:
       release: kube-prometheus-stack
 
-infrastructure:
-  annotations:
-    # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-S, LB-GP-M, LB-GP-L, LB-GP-XL)
-    service.beta.kubernetes.io/scw-loadbalancer-type: "LB-S" # set-by-engine-code
-    service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
-    service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
-    # We use http healthcheck for the load balancer to speed up the detection of the instance being down
-    # during termination of the pods.
-    # With TCP healthcheck, the LB is going to keep the instance in the pool as long as the port is open,
-    # even if envoy will refuse new connections, because it is shutting down.
-    # Doing real http healthcheck, will minimize the time the LB will keep the instance in the pool.
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-type: "80:tcp;443:tcp"
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-http-uri: "80:/healthz;443:/healthz"
-    service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy: "false"
-    service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
-    service.beta.kubernetes.io/scw-loadbalancer-timeout-server: "30s"
+envoyProxy:
+  qoveryPublic:
+    provider:
+      kubernetes:
+        envoyService:
+          annotations:
+            # set Scaleway load balancer type https://www.scaleway.com/en/load-balancer/ (ex: LB-S, LB-GP-M, LB-GP-L, LB-GP-XL)
+            service.beta.kubernetes.io/scw-loadbalancer-type: "LB-S" # set-by-engine-code
+            service.beta.kubernetes.io/scw-loadbalancer-forward-port-algorithm: "leastconn"
+            service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v2: "false"
+            # We use http healthcheck for the load balancer to speed up the detection of the instance being down
+            # during termination of the pods.
+            # With TCP healthcheck, the LB is going to keep the instance in the pool as long as the port is open,
+            # even if envoy will refuse new connections, because it is shutting down.
+            # Doing real http healthcheck, will minimize the time the LB will keep the instance in the pool.
+            service.beta.kubernetes.io/scw-loadbalancer-health-check-type: "80:tcp;443:tcp"
+            service.beta.kubernetes.io/scw-loadbalancer-health-check-http-uri: "80:/healthz;443:/healthz"
+            service.beta.kubernetes.io/scw-loadbalancer-health-check-send-proxy: "false"
+            service.beta.kubernetes.io/scw-loadbalancer-use-hostname: "true"
+            service.beta.kubernetes.io/scw-loadbalancer-timeout-server: "30s"
 
-    # Validation rule, must have max 8 annotations
-    # service.beta.kubernetes.io/scw-loadbalancer-health-check-delay: "2s"
-    # service.beta.kubernetes.io/scw-loadbalancer-health-check-timeout: "2s"
-    # service.beta.kubernetes.io/scw-loadbalancer-health-check-max-retries: "2"
-    # service.beta.kubernetes.io/scw-loadbalancer-redispatch-attempt-count: "1"
-    # service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
-    # # Qovery managed DNS requires *.$domain (something like: *.<cluster_id>.<given_dns_name>)
-    # external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
-    # service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
+            # Additional LB annotations can be set here without hitting Gateway infrastructure annotation limits.
+            # service.beta.kubernetes.io/scw-loadbalancer-health-check-delay: "2s"
+            # service.beta.kubernetes.io/scw-loadbalancer-health-check-timeout: "2s"
+            # service.beta.kubernetes.io/scw-loadbalancer-health-check-max-retries: "2"
+            # service.beta.kubernetes.io/scw-loadbalancer-redispatch-attempt-count: "1"
+            # service.beta.kubernetes.io/scw-loadbalancer-protocol-http: "false"
+            # # Qovery managed DNS requires *.$domain (something like: *.<cluster_id>.<given_dns_name>)
+            # external-dns.alpha.kubernetes.io/hostname: "set-by-engine-code"
+            # service.beta.kubernetes.io/scw-loadbalancer-proxy-protocol-v1: "false"
