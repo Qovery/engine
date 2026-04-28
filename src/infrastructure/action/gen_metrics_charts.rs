@@ -720,6 +720,7 @@ mod tests {
             kubernetes_storage_class_fast_ssd: StorageClass(AwsStorageType::GP2.to_k8s_storage_class()),
             aws_iam_external_secrets_operator_role_arn: None,
             efs_file_system_id: None,
+            expected_load_balancer_subnet_count: 3,
         }
     }
 }

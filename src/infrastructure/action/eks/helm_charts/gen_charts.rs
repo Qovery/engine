@@ -18,9 +18,12 @@ use crate::infrastructure::helm_charts::{
     HelmChartTimeout, HelmChartVpaType, ToCommonHelmChart,
 };
 use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::io::AwsAlbLoadBalancerScheme;
+use crate::infrastructure::models::cloud_provider::io::LoadBalancerIpAllocationId;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
+use crate::infrastructure::models::kubernetes::aws::Options as AwsOptions;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
-use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::AwsAlbLoadBalancer;
+use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::{AwsAlbLoadBalancer, AwsEipAllocationId};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 use crate::errors::CommandError;
@@ -68,6 +71,65 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 use url::Url;
 
+fn expected_nlb_subnet_count(
+    aws_options: &AwsOptions,
+    lb_scheme: AwsAlbLoadBalancerScheme,
+    default_subnet_count: usize,
+) -> usize {
+    let Some(network) = &aws_options.user_provided_network else {
+        // Qovery-managed VPC EKS uses one subnet per configured zone.
+        return default_subnet_count;
+    };
+
+    let zone_subnets = match lb_scheme {
+        AwsAlbLoadBalancerScheme::InternetFacing => [
+            &network.eks_subnets_zone_a_ids,
+            &network.eks_subnets_zone_b_ids,
+            &network.eks_subnets_zone_c_ids,
+        ],
+        AwsAlbLoadBalancerScheme::Internal => [
+            &network.eks_private_subnets_zone_a_ids,
+            &network.eks_private_subnets_zone_b_ids,
+            &network.eks_private_subnets_zone_c_ids,
+        ],
+    };
+
+    zone_subnets.iter().filter(|subnets| !subnets.is_empty()).count()
+}
+
+fn parse_aws_eip_allocation_ids(
+    ids: Option<Vec<LoadBalancerIpAllocationId>>,
+    expected_subnet_count: usize,
+) -> Result<Option<Vec<AwsEipAllocationId>>, CommandError> {
+    let Some(ids) = ids else {
+        return Ok(None);
+    };
+    if ids.is_empty() {
+        return Ok(None);
+    }
+    if ids.len() < expected_subnet_count {
+        return Err(CommandError::new_from_safe_message(format!(
+            "Invalid AWS load balancer EIP allocation ids: got {}, but NLB uses {} subnet(s)/AZ(s) and requires the same number of EIP allocation IDs",
+            ids.len(),
+            expected_subnet_count
+        )));
+    }
+    if ids.len() > expected_subnet_count {
+        return Err(CommandError::new_from_safe_message(format!(
+            "Invalid AWS load balancer EIP allocation ids: got {}, but NLB uses {} subnet(s)/AZ(s) and requires the same number of EIP allocation IDs",
+            ids.len(),
+            expected_subnet_count
+        )));
+    }
+
+    Ok(Some(
+        ids.into_iter()
+            .map(AwsEipAllocationId::try_new)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?,
+    ))
+}
+
 pub(super) fn eks_helm_charts(
     chart_config_prerequisites: &EksChartsConfigPrerequisites,
     chart_prefix_path: Option<&str>,
@@ -108,6 +170,21 @@ pub(super) fn eks_helm_charts(
             .k8s_use_api_gateway
             .unwrap_or(false),
     );
+
+    let expected_aws_eip_count = expected_nlb_subnet_count(
+        &chart_config_prerequisites.infra_options,
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .aws_eks_alb_controller_load_balancer_scheme,
+        chart_config_prerequisites.expected_load_balancer_subnet_count,
+    );
+    let aws_eip_allocation_ids = parse_aws_eip_allocation_ids(
+        chart_config_prerequisites
+            .cluster_advanced_settings
+            .load_balancer_ip_allocation_ids
+            .clone(),
+        expected_aws_eip_count,
+    )?;
 
     // Qovery storage class
     let q_storage_class = QoveryStorageClassChart::new(
@@ -688,10 +765,7 @@ pub(super) fn eks_helm_charts(
                         .cluster_advanced_settings
                         .load_balancer_source_ranges
                         .clone(),
-                    load_balancer_ip_allocation_ids: chart_config_prerequisites
-                        .cluster_advanced_settings
-                        .load_balancer_ip_allocation_ids
-                        .clone(),
+                    load_balancer_eip_allocation_ids: aws_eip_allocation_ids.clone(),
                     load_balancer_scheme: chart_config_prerequisites
                         .cluster_advanced_settings
                         .aws_eks_alb_controller_load_balancer_scheme,
@@ -1120,4 +1194,162 @@ pub(super) fn eks_helm_charts(
         level_3, // <- after this point, VPA can be activated on pods
         level_4, level_5, level_6, level_7, level_8, level_9, level_10,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{expected_nlb_subnet_count, parse_aws_eip_allocation_ids};
+    use crate::infrastructure::models::cloud_provider::io::AwsAlbLoadBalancerScheme;
+    use crate::infrastructure::models::kubernetes::aws::{Options as AwsOptions, UserNetworkConfig};
+    use crate::io_models::engine_location::EngineLocation;
+    use crate::io_models::models::VpcQoveryNetworkMode;
+    use std::collections::HashMap;
+
+    fn make_minimal_aws_options(user_provided_network: Option<UserNetworkConfig>) -> AwsOptions {
+        AwsOptions {
+            ec2_zone_a_subnet_blocks: vec![],
+            ec2_zone_b_subnet_blocks: vec![],
+            ec2_zone_c_subnet_blocks: vec![],
+            eks_zone_a_subnet_blocks: vec![],
+            eks_zone_b_subnet_blocks: vec![],
+            eks_zone_c_subnet_blocks: vec![],
+            rds_zone_a_subnet_blocks: vec![],
+            rds_zone_b_subnet_blocks: vec![],
+            rds_zone_c_subnet_blocks: vec![],
+            documentdb_zone_a_subnet_blocks: vec![],
+            documentdb_zone_b_subnet_blocks: vec![],
+            documentdb_zone_c_subnet_blocks: vec![],
+            elasticache_zone_a_subnet_blocks: vec![],
+            elasticache_zone_b_subnet_blocks: vec![],
+            elasticache_zone_c_subnet_blocks: vec![],
+            vpc_qovery_network_mode: VpcQoveryNetworkMode::WithoutNatGateways,
+            vpc_cidr_block: "10.0.0.0/16".to_string(),
+            eks_cidr_subnet: "20".to_string(),
+            ec2_cidr_subnet: "20".to_string(),
+            vpc_custom_routing_table: vec![],
+            rds_cidr_subnet: "24".to_string(),
+            documentdb_cidr_subnet: "24".to_string(),
+            elasticache_cidr_subnet: "24".to_string(),
+            qovery_api_url: "https://api.qovery.com".to_string(),
+            qovery_grpc_url: "https://grpc.qovery.com".to_string(),
+            qovery_engine_url: "https://engine.qovery.com".to_string(),
+            jwt_token: "token".to_string(),
+            qovery_engine_location: EngineLocation::ClientSide,
+            grafana_admin_user: "admin".to_string(),
+            grafana_admin_password: "password".to_string(),
+            qovery_ssh_key: "ssh-rsa AAA".to_string(),
+            user_ssh_keys: vec![],
+            tls_email_report: "test@qovery.com".to_string(),
+            user_provided_network,
+            aws_addon_cni_version_override: None,
+            aws_addon_kube_proxy_version_override: None,
+            aws_addon_ebs_csi_version_override: None,
+            aws_addon_coredns_version_override: None,
+            aws_addon_pod_identity_version_override: None,
+            aws_addon_efs_csi_version_override: None,
+            ec2_exposed_port: None,
+            karpenter_parameters: None,
+            keda_parameters: None,
+            metrics_parameters: None,
+            resource_tags: HashMap::new(),
+            secrets_manager_accesses: None,
+        }
+    }
+
+    fn make_user_network_config() -> UserNetworkConfig {
+        UserNetworkConfig {
+            documentdb_subnets_zone_a_ids: vec![],
+            documentdb_subnets_zone_b_ids: vec![],
+            documentdb_subnets_zone_c_ids: vec![],
+            elasticache_subnets_zone_a_ids: vec![],
+            elasticache_subnets_zone_b_ids: vec![],
+            elasticache_subnets_zone_c_ids: vec![],
+            rds_subnets_zone_a_ids: vec![],
+            rds_subnets_zone_b_ids: vec![],
+            rds_subnets_zone_c_ids: vec![],
+            aws_vpc_eks_id: "vpc-123456".to_string(),
+            eks_subnets_zone_a_ids: vec!["subnet-public-a".to_string()],
+            eks_subnets_zone_b_ids: vec!["subnet-public-b".to_string()],
+            eks_subnets_zone_c_ids: vec![],
+            eks_private_subnets_zone_a_ids: vec!["subnet-private-a".to_string()],
+            eks_private_subnets_zone_b_ids: vec![],
+            eks_private_subnets_zone_c_ids: vec!["subnet-private-c".to_string()],
+            eks_create_nodes_in_private_subnet: true,
+        }
+    }
+
+    #[test]
+    fn parse_aws_eip_allocation_ids_accepts_none_and_empty() {
+        assert!(parse_aws_eip_allocation_ids(None, 3).unwrap().is_none());
+        assert!(parse_aws_eip_allocation_ids(Some(vec![]), 3).unwrap().is_none());
+    }
+
+    #[test]
+    fn parse_aws_eip_allocation_ids_rejects_less_than_three() {
+        let err = parse_aws_eip_allocation_ids(
+            Some(vec!["eipalloc-0123456789abcdef0".into(), "eipalloc-abcdef01234567890".into()]),
+            3,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("requires the same number of EIP allocation IDs")
+        );
+    }
+
+    #[test]
+    fn parse_aws_eip_allocation_ids_rejects_more_than_three() {
+        let err = parse_aws_eip_allocation_ids(
+            Some(vec![
+                "eipalloc-0123456789abcdef0".into(),
+                "eipalloc-abcdef01234567890".into(),
+                "eipalloc-11111111222222222".into(),
+                "eipalloc-33333333444444444".into(),
+            ]),
+            3,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("requires the same number of EIP allocation IDs")
+        );
+    }
+
+    #[test]
+    fn parse_aws_eip_allocation_ids_accepts_exactly_three_valid_ids() {
+        let parsed = parse_aws_eip_allocation_ids(
+            Some(vec![
+                "eipalloc-0123456789abcdef0".into(),
+                "eipalloc-abcdef01234567890".into(),
+                "eipalloc-11111111222222222".into(),
+            ]),
+            3,
+        )
+        .unwrap();
+        assert_eq!(parsed.unwrap().len(), 3);
+    }
+
+    #[test]
+    fn expected_nlb_subnet_count_defaults_to_three_without_user_network() {
+        let options = make_minimal_aws_options(None);
+        assert_eq!(
+            expected_nlb_subnet_count(&options, AwsAlbLoadBalancerScheme::InternetFacing, 3),
+            3
+        );
+    }
+
+    #[test]
+    fn expected_nlb_subnet_count_uses_public_subnets_for_internet_facing() {
+        let options = make_minimal_aws_options(Some(make_user_network_config()));
+        assert_eq!(
+            expected_nlb_subnet_count(&options, AwsAlbLoadBalancerScheme::InternetFacing, 3),
+            2
+        );
+    }
+
+    #[test]
+    fn expected_nlb_subnet_count_uses_private_subnets_for_internal() {
+        let options = make_minimal_aws_options(Some(make_user_network_config()));
+        assert_eq!(expected_nlb_subnet_count(&options, AwsAlbLoadBalancerScheme::Internal, 3), 2);
+    }
 }
