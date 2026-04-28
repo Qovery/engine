@@ -12,10 +12,12 @@ use crate::io_models::models::{EnvironmentVariable, ExternalSecret};
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::to_short_id;
 use itertools::Itertools;
+use regex::Regex;
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
 use std::time::Duration;
 use url::Url;
 use uuid::Uuid;
@@ -52,6 +54,9 @@ pub struct HelmChart<T: CloudProvider> {
     pub(crate) chart_workspace_directory: PathBuf,
     pub(crate) ports: Vec<Port>,
 }
+
+static INTERPOLATED_VARIABLE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\{\{([^}]+)}}").expect("valid regex"));
 
 // Here we define the common behavior among all providers
 impl<T: CloudProvider> HelmChart<T> {
@@ -211,6 +216,24 @@ impl<T: CloudProvider> HelmChart<T> {
         self.timeout
     }
 
+    /// As external secrets cannot be resolved & replaced on core side, the resolution
+    /// is done at runtime when accessing helm arguments
+    fn resolve_argument_referencing_external_secret(&self, value: &str) -> String {
+        if !value.contains("{{") {
+            return value.to_string();
+        }
+        INTERPOLATED_VARIABLE_REGEX
+            .replace_all(value, |caps: &regex::Captures| {
+                let key = &caps[1];
+                self.resolved_eso_values
+                    .get(key)
+                    .map(|v| v.value.as_str())
+                    .unwrap_or(&caps[0])
+                    .to_string()
+            })
+            .into_owned()
+    }
+
     fn helm_values_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> {
         let chart_dir = self.chart_workspace_directory();
         let values: Vec<Cow<'_, str>> = match &self.chart_values {
@@ -230,21 +253,24 @@ impl<T: CloudProvider> HelmChart<T> {
         values
             .into_iter()
             .flat_map(|v| [Cow::from("--values"), v])
-            .chain(
-                self.set_values
-                    .iter()
-                    .flat_map(|v| [Cow::from("--set"), Cow::from(format!("{}={}", v.0, v.1))]),
-            )
-            .chain(
-                self.set_string_values
-                    .iter()
-                    .flat_map(|v| [Cow::from("--set-string"), Cow::from(format!("{}={}", v.0, v.1))]),
-            )
-            .chain(
-                self.set_json_values
-                    .iter()
-                    .flat_map(|v| [Cow::from("--set-json"), Cow::from(format!("{}={}", v.0, v.1))]),
-            )
+            .chain(self.set_values.iter().flat_map(|v| {
+                [
+                    Cow::from("--set"),
+                    Cow::from(format!("{}={}", v.0, self.resolve_argument_referencing_external_secret(&v.1))),
+                ]
+            }))
+            .chain(self.set_string_values.iter().flat_map(|v| {
+                [
+                    Cow::from("--set-string"),
+                    Cow::from(format!("{}={}", v.0, self.resolve_argument_referencing_external_secret(&v.1))),
+                ]
+            }))
+            .chain(self.set_json_values.iter().flat_map(|v| {
+                [
+                    Cow::from("--set-json"),
+                    Cow::from(format!("{}={}", v.0, self.resolve_argument_referencing_external_secret(&v.1))),
+                ]
+            }))
     }
 
     pub fn helm_template_arguments(&self) -> impl Iterator<Item = Cow<'_, str>> {
@@ -408,4 +434,90 @@ fn to_relative_path(path: &Path) -> Result<PathBuf, HelmChartError> {
         .strip_prefix("/")
         .map_err(|err| HelmChartError::InvalidConfig(format!("Can't convert to relative path: {path:?} {err}")))?
         .to_path_buf())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::environment::models::aws::AwsAppExtraSettings;
+    use crate::environment::models::types::AWS;
+    use maplit::hashmap;
+
+    fn stub_helm_chart(resolved_eso_values: HashMap<String, VariableInfo>) -> HelmChart<AWS> {
+        HelmChart {
+            _marker: PhantomData,
+            mk_event_details: Box::new(|_| unreachable!()),
+            id: "test".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "test".to_string(),
+            kube_name: "test".to_string(),
+            lib_root_directory: "".to_string(),
+            action: Action::Create,
+            chart_source: HelmChartSource::Git {
+                git_url: Url::parse("https://example.com").unwrap(),
+                get_credentials: Box::new(|| unreachable!()),
+                commit_id: "abc".to_string(),
+                root_path: PathBuf::from(""),
+                ssh_keys: vec![],
+            },
+            chart_values: HelmValueSource::Raw { values: vec![] },
+            set_values: vec![],
+            set_string_values: vec![],
+            set_json_values: vec![],
+            command_args: vec![],
+            timeout: Duration::from_secs(60),
+            allow_cluster_wide_resources: false,
+            environment_variables: HashMap::new(),
+            external_secrets: vec![],
+            resolved_eso_values,
+            advanced_settings: HelmChartAdvancedSettings::default(),
+            _extra_settings: AwsAppExtraSettings {},
+            workspace_directory: PathBuf::from("/tmp"),
+            chart_workspace_directory: PathBuf::from("/tmp/chart"),
+            ports: vec![],
+        }
+    }
+
+    #[test]
+    fn should_replace_referenced_external_secret() {
+        let chart = stub_helm_chart(hashmap! {
+            "DB_PASSWORD".to_string() => VariableInfo { value: "s3cr3t".to_string(), is_secret: true },
+        });
+        assert_eq!(
+            chart.resolve_argument_referencing_external_secret("password={{DB_PASSWORD}}"),
+            "password=s3cr3t"
+        );
+    }
+
+    #[test]
+    fn should_replace_multiple_referenced_external_secrets() {
+        let chart = stub_helm_chart(hashmap! {
+            "HOST".to_string() => VariableInfo { value: "localhost".to_string(), is_secret: false },
+            "PORT".to_string() => VariableInfo { value: "5432".to_string(), is_secret: false },
+        });
+        assert_eq!(
+            chart.resolve_argument_referencing_external_secret("{{HOST}}:{{PORT}}"),
+            "localhost:5432"
+        );
+    }
+
+    #[test]
+    fn should_keep_initial_value_if_no_interpolation_is_present() {
+        let chart = stub_helm_chart(hashmap! {
+            "DB_PASSWORD".to_string() => VariableInfo { value: "s3cr3t".to_string(), is_secret: true },
+        });
+        assert_eq!(
+            chart.resolve_argument_referencing_external_secret("password=hardcoded"),
+            "password=hardcoded"
+        );
+    }
+
+    #[test]
+    fn should_keep_interpolated_value_if_no_external_secret_matches() {
+        let chart = stub_helm_chart(hashmap! {});
+        assert_eq!(
+            chart.resolve_argument_referencing_external_secret("password={{UNKNOWN_VAR}}"),
+            "password={{UNKNOWN_VAR}}"
+        );
+    }
 }
