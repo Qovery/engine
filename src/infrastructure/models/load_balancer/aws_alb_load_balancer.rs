@@ -11,6 +11,7 @@ pub struct AwsAlbLoadBalancer {
     pub cluster_id: QoveryIdentifier,
     pub organization_id: QoveryIdentifier,
     pub load_balancer_source_ranges: Vec<IpNet>,
+    pub load_balancer_ip_allocation_ids: Vec<String>,
     pub load_balancer_scheme: AwsAlbLoadBalancerScheme,
 }
 
@@ -69,6 +70,13 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
             );
         }
 
+        if !self.load_balancer_ip_allocation_ids.is_empty() {
+            annotations.insert(
+                "service.beta.kubernetes.io/aws-load-balancer-eip-allocations".to_string(),
+                self.load_balancer_ip_allocation_ids.join("\\,"),
+            );
+        }
+
         Some(annotations)
     }
 }
@@ -87,6 +95,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -103,6 +112,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -155,6 +165,7 @@ mod tests {
             cluster_id: cluster_id.clone(),
             organization_id: organization_id.clone(),
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::Internal,
         };
 
@@ -174,6 +185,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -198,6 +210,7 @@ mod tests {
                 "192.168.1.0/24".parse().unwrap(),
                 "fd01::/64".parse().unwrap(),
             ],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -217,10 +230,34 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
         let annotations = lb.annotations().unwrap();
         assert!(!annotations.contains_key("service.beta.kubernetes.io/load-balancer-source-ranges"));
+    }
+
+    #[test]
+    fn test_aws_alb_load_balancer_ip_allocation_ids_annotation_when_set() {
+        let cluster_id = QoveryIdentifier::new_random();
+        let organization_id = QoveryIdentifier::new_random();
+
+        let lb = AwsAlbLoadBalancer {
+            cluster_id,
+            organization_id,
+            load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![
+                "eipalloc-0123456789abcdef0".to_string(),
+                "eipalloc-abcdef01234567890".to_string(),
+            ],
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+        };
+
+        let annotations = lb.annotations().unwrap();
+        assert_eq!(
+            annotations.get("service.beta.kubernetes.io/aws-load-balancer-eip-allocations"),
+            Some(&"eipalloc-0123456789abcdef0\\,eipalloc-abcdef01234567890".to_string())
+        );
     }
 }
