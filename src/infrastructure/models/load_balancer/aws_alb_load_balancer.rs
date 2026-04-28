@@ -51,9 +51,11 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
                 "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol".to_string(),
                 "*".to_string(),
             ),
-            // Validation rule, must have max 8 annotations
-            // spec.infrastructure.annotations: Too many: 10: must have at most 8 items
-            // ("service.beta.kubernetes.io/aws-load-balancer-target-group-attributes".to_string(), "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300".to_string()), // Can use AWS defaults or set via AWS Load Balancer Controller configuration
+            // Default settings, no need to declare those, but just in case
+            // (
+            //     "service.beta.kubernetes.io/aws-load-balancer-target-group-attributes".to_string(),
+            //     "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300".to_string()
+            // ),
         ]);
 
         if !self.load_balancer_source_ranges.is_empty() {

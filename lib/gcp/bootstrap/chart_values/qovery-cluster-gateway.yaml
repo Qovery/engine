@@ -23,8 +23,12 @@ gateway:
       image: null
       tag: null
 
-infrastructure:
-  annotations:
+envoyProxy:
+  qoveryPublic:
+    provider:
+      kubernetes:
+        envoyService:
+          annotations: {}
 
 # metrics are enabled only when prometheus is installed
 metrics:

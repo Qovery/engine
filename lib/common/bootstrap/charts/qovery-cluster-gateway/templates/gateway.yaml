@@ -1,5 +1,26 @@
 # global gateways, one public per cluster
 ---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: qovery-cluster-public-gateway-envoy-proxy
+  namespace: {{ .Values.namespace | default .Release.Namespace }}
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        {{- if .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations }}
+        annotations:
+        {{- range $key, $value := .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations }}
+        {{- if $value }}
+          {{ $key }}: {{ tpl ($value | toString) $ | quote }}
+        {{- end }}
+        {{- end }}
+        {{- else }}
+        annotations: {}
+        {{- end }}
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
@@ -17,13 +38,11 @@ spec:
   allowedListeners:
     namespaces:
       from: All
-  {{- if .Values.infrastructure.annotations }}
   infrastructure:
-    annotations:
-    {{- range $key, $value := .Values.infrastructure.annotations }}
-      {{ $key }}: {{ tpl ($value | toString) $ | quote }}
-    {{- end }}
-  {{- end }}
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: qovery-cluster-public-gateway-envoy-proxy
   listeners:
   - name: http
     protocol: HTTP

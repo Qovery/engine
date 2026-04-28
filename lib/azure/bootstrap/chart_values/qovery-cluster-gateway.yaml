@@ -23,12 +23,16 @@ gateway:
       image: null
       tag: null
 
-infrastructure:
-  annotations:
-    # Proxy protocol is disabled due to compatibility issues with Envoy Gateway v1.6.1
-    # The ClientTrafficPolicy.enableProxyProtocol feature doesn't properly configure Envoy listeners
-    # Use X-Forwarded-For headers for client IP preservation instead
-    service.beta.kubernetes.io/azure-load-balancer-enable-proxy-protocol: "false"
+envoyProxy:
+  qoveryPublic:
+    provider:
+      kubernetes:
+        envoyService:
+          annotations:
+            # Proxy protocol is disabled due to compatibility issues with Envoy Gateway v1.6.1
+            # The ClientTrafficPolicy.enableProxyProtocol feature doesn't properly configure Envoy listeners
+            # Use X-Forwarded-For headers for client IP preservation instead
+            service.beta.kubernetes.io/azure-load-balancer-enable-proxy-protocol: "false"
 
 # metrics are enabled only when prometheus is installed
 metrics:
