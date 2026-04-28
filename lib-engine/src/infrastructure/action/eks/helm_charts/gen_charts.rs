@@ -686,7 +686,11 @@ pub(super) fn eks_helm_charts(
                     organization_id: QoveryIdentifier::new(chart_config_prerequisites.organization_long_id),
                     load_balancer_source_ranges: chart_config_prerequisites
                         .cluster_advanced_settings
-                        .aws_eks_alb_controller_load_balancer_source_ranges
+                        .load_balancer_source_ranges
+                        .clone(),
+                    load_balancer_ip_allocation_ids: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .load_balancer_ip_allocation_ids
                         .clone(),
                     load_balancer_scheme: chart_config_prerequisites
                         .cluster_advanced_settings

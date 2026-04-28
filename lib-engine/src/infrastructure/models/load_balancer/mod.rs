@@ -45,6 +45,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
@@ -100,6 +101,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -117,6 +119,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         });
         let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {});

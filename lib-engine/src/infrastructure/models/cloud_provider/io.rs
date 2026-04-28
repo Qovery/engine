@@ -369,6 +369,14 @@ pub struct ClusterAdvancedSettings {
     pub cluster_profile: ClusterProfile,
     #[serde(alias = "load_balancer.size")]
     pub load_balancer_size: String,
+    #[serde(
+        alias = "k8s.gateway.load_balancer_source_ranges",
+        alias = "aws.eks.alb_controller.load_balancer_source_ranges",
+        default
+    )]
+    pub load_balancer_source_ranges: Vec<IpNet>,
+    #[serde(alias = "k8s.gateway.load_balancer_ip_allocation_ids", default)]
+    pub load_balancer_ip_allocation_ids: Vec<String>,
     #[serde(alias = "registry.image_retention_time")]
     pub registry_image_retention_time_sec: u32,
     #[serde(alias = "pleco.resources_ttl")]
@@ -442,8 +450,6 @@ pub struct ClusterAdvancedSettings {
     pub aws_eks_alb_controller_vpa_min_memory_in_mib: u32,
     #[serde(alias = "aws.eks.alb_controller.vpa.memory.max_in_mib")]
     pub aws_eks_alb_controller_vpa_max_memory_in_mib: u32,
-    #[serde(alias = "aws.eks.alb_controller.load_balancer_source_ranges", default)]
-    pub aws_eks_alb_controller_load_balancer_source_ranges: Vec<IpNet>,
     #[serde(alias = "aws.eks.alb_controller.load_balancer_scheme", default)]
     pub aws_eks_alb_controller_load_balancer_scheme: AwsAlbLoadBalancerScheme,
     #[serde(alias = "aws.cloudwatch.eks_logs_retention_days")]
@@ -632,6 +638,8 @@ impl Default for ClusterAdvancedSettings {
         ClusterAdvancedSettings {
             cluster_profile: ClusterProfile::Medium,
             load_balancer_size: "lb-s".to_string(),
+            load_balancer_source_ranges: vec![],
+            load_balancer_ip_allocation_ids: vec![],
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,
@@ -706,7 +714,6 @@ impl Default for ClusterAdvancedSettings {
             aws_eks_alb_controller_vpa_max_vcpu_in_milli_cpu: 1000,
             aws_eks_alb_controller_vpa_min_memory_in_mib: 128,
             aws_eks_alb_controller_vpa_max_memory_in_mib: 2000,
-            aws_eks_alb_controller_load_balancer_source_ranges: vec![],
             aws_eks_alb_controller_load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             k8s_storage_class_fast_ssd: StorageClass("".to_string()),
             nginx_controller_custom_http_errors: None,
