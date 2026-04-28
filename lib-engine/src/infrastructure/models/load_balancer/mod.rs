@@ -45,7 +45,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
-            load_balancer_ip_allocation_ids: vec![],
+            load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
@@ -59,7 +59,9 @@ mod tests {
 
     #[test]
     fn test_load_balancer_enum_dispatch_gcp() {
-        let gcp_lb = gcp_load_balancer::GcpLoadBalancer {};
+        let gcp_lb = gcp_load_balancer::GcpLoadBalancer {
+            load_balancer_ip_allocations: None,
+        };
         let lb = LoadBalancer::Gcp(gcp_lb);
 
         let annotations = lb.annotations();
@@ -68,7 +70,9 @@ mod tests {
 
     #[test]
     fn test_load_balancer_enum_dispatch_azure() {
-        let azure_lb = azure_load_balancer::AzureLoadBalancer {};
+        let azure_lb = azure_load_balancer::AzureLoadBalancer {
+            load_balancer_ip_allocations: None,
+        };
         let lb = LoadBalancer::Azure(azure_lb);
 
         let annotations = lb.annotations();
@@ -79,6 +83,7 @@ mod tests {
     fn test_load_balancer_enum_dispatch_scaleway() {
         let scaleway_lb = scaleway_load_balancer::ScalewayLoadBalancer {
             size: Some("LB-M".to_string()),
+            load_balancer_ip_allocations: None,
         };
         let lb = LoadBalancer::Scaleway(scaleway_lb);
 
@@ -101,7 +106,7 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
-            load_balancer_ip_allocation_ids: vec![],
+            load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         };
 
@@ -119,11 +124,18 @@ mod tests {
             cluster_id,
             organization_id,
             load_balancer_source_ranges: vec![],
-            load_balancer_ip_allocation_ids: vec![],
+            load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
         });
-        let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {});
-        let _azure = LoadBalancer::Azure(azure_load_balancer::AzureLoadBalancer {});
-        let _scaleway = LoadBalancer::Scaleway(scaleway_load_balancer::ScalewayLoadBalancer { size: None });
+        let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {
+            load_balancer_ip_allocations: None,
+        });
+        let _azure = LoadBalancer::Azure(azure_load_balancer::AzureLoadBalancer {
+            load_balancer_ip_allocations: None,
+        });
+        let _scaleway = LoadBalancer::Scaleway(scaleway_load_balancer::ScalewayLoadBalancer {
+            size: None,
+            load_balancer_ip_allocations: None,
+        });
     }
 }

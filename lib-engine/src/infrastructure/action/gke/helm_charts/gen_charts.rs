@@ -42,7 +42,7 @@ use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
-use crate::infrastructure::models::load_balancer::gcp_load_balancer::GcpLoadBalancer;
+use crate::infrastructure::models::load_balancer::gcp_load_balancer::{GcpLoadBalancer, GcpLoadBalancerIpAllocation};
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
@@ -87,6 +87,33 @@ pub(super) fn gke_helm_charts(
             .k8s_use_api_gateway
             .unwrap_or(false),
     );
+
+    let gcp_load_balancer_ip_allocations = match chart_config_prerequisites
+        .cluster_advanced_settings
+        .load_balancer_ip_allocation_ids
+        .clone()
+    {
+        None => None,
+        Some(ids) if ids.is_empty() => None,
+        Some(ids) => {
+            // Documentation:
+            // https://docs.cloud.google.com/kubernetes-engine/docs/concepts/service-load-balancer-parameters#static_ip_address_parameters
+            // `networking.gke.io/load-balancer-ip-addresses` accepts one resource name (single-stack)
+            // or two resource names comma-delimited (dual-stack: IPv4 + IPv6 range).
+            if ids.len() > 2 {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "Invalid GCP load balancer IP allocation ids: got {}, but GKE supports at most 2 resource names (single-stack or dual-stack)",
+                    ids.len()
+                )));
+            }
+            Some(
+                ids.into_iter()
+                    .map(GcpLoadBalancerIpAllocation::try_new)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?,
+            )
+        }
+    };
 
     // Qovery storage class
     let q_storage_class_chart = QoveryStorageClassChart::new(
@@ -463,7 +490,9 @@ pub(super) fn gke_helm_charts(
                     // to avoid conflict with API Gateway which will declare *.cluster_id.domain.root
                     false => new_gateway_api_domain,
                 },
-                LoadBalancer::Gcp(GcpLoadBalancer {}),
+                LoadBalancer::Gcp(GcpLoadBalancer {
+                    load_balancer_ip_allocations: gcp_load_balancer_ip_allocations.clone(),
+                }),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(
                         &chart_config_prerequisites

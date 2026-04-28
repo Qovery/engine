@@ -362,6 +362,27 @@ pub struct Certificate {
     pub tls_key: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct LoadBalancerIpAllocationId(String);
+
+impl LoadBalancerIpAllocationId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl From<String> for LoadBalancerIpAllocationId {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for LoadBalancerIpAllocationId {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -376,7 +397,7 @@ pub struct ClusterAdvancedSettings {
     )]
     pub load_balancer_source_ranges: Vec<IpNet>,
     #[serde(alias = "k8s.gateway.load_balancer_ip_allocation_ids", default)]
-    pub load_balancer_ip_allocation_ids: Vec<String>,
+    pub load_balancer_ip_allocation_ids: Option<Vec<LoadBalancerIpAllocationId>>,
     #[serde(alias = "registry.image_retention_time")]
     pub registry_image_retention_time_sec: u32,
     #[serde(alias = "pleco.resources_ttl")]
@@ -639,7 +660,7 @@ impl Default for ClusterAdvancedSettings {
             cluster_profile: ClusterProfile::Medium,
             load_balancer_size: "lb-s".to_string(),
             load_balancer_source_ranges: vec![],
-            load_balancer_ip_allocation_ids: vec![],
+            load_balancer_ip_allocation_ids: None,
             registry_image_retention_time_sec: 31536000,
             pleco_resources_ttl: -1,
             loki_log_retention_in_week: 12,

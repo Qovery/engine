@@ -21,7 +21,9 @@ use crate::infrastructure::helm_charts::{
 use crate::infrastructure::models::cloud_provider::Kind;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
-use crate::infrastructure::models::load_balancer::scaleway_load_balancer::ScalewayLoadBalancer;
+use crate::infrastructure::models::load_balancer::scaleway_load_balancer::{
+    ScalewayLoadBalancer, ScwLoadBalancerIpAllocation,
+};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 
 use crate::errors::CommandError;
@@ -93,6 +95,33 @@ pub fn kapsule_helm_charts(
             .k8s_use_api_gateway
             .unwrap_or(false),
     );
+
+    let load_balancer_ip_allocations = match chart_config_prerequisites
+        .cluster_advanced_settings
+        .load_balancer_ip_allocation_ids
+        .clone()
+    {
+        None => None,
+        Some(ids) if ids.is_empty() => None,
+        Some(ids) => {
+            // Documentation:
+            // https://github.com/scaleway/scaleway-cloud-controller-manager/blob/master/docs/loadbalancer-annotations.md
+            // `service.beta.kubernetes.io/scw-loadbalancer-ip-ids` accepts one IP ID
+            // or two IP IDs comma-delimited.
+            if ids.len() > 2 {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "Invalid Scaleway load balancer IP allocation ids: got {}, but Scaleway supports at most 2 IDs",
+                    ids.len()
+                )));
+            }
+            Some(
+                ids.into_iter()
+                    .map(ScwLoadBalancerIpAllocation::try_new)
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?,
+            )
+        }
+    };
 
     let prometheus_operator_crds_chart = metrics_config
         .prometheus_operator_crds_chart
@@ -525,6 +554,7 @@ pub fn kapsule_helm_charts(
                             .load_balancer_size
                             .clone(),
                     ),
+                    load_balancer_ip_allocations: load_balancer_ip_allocations.clone(),
                 }),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(

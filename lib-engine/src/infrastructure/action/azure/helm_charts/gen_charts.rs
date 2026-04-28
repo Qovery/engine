@@ -41,7 +41,9 @@ use crate::infrastructure::models::cloud_provider::{Kind as CloudProviderKind, K
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::infrastructure::models::load_balancer::LoadBalancer;
-use crate::infrastructure::models::load_balancer::azure_load_balancer::AzureLoadBalancer;
+use crate::infrastructure::models::load_balancer::azure_load_balancer::{
+    AzureLoadBalancer, AzureLoadBalancerIpAllocationId,
+};
 use crate::io_models::QoveryIdentifier;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use std::collections::HashSet;
@@ -54,6 +56,44 @@ pub(super) fn aks_helm_charts(
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
+    let azure_load_balancer_ip_allocations = match chart_config_prerequisites
+        .cluster_advanced_settings
+        .load_balancer_ip_allocation_ids
+        .clone()
+    {
+        None => None,
+        Some(ids) if ids.is_empty() => None,
+        Some(ids) => {
+            let parsed = ids
+                .into_iter()
+                .map(AzureLoadBalancerIpAllocationId::try_new)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| CommandError::new_from_safe_message(e.to_string()))?;
+
+            let ipv4_count = parsed
+                .iter()
+                .filter(|id| matches!(id, AzureLoadBalancerIpAllocationId::Ipv4(_)))
+                .count();
+            let ipv6_count = parsed
+                .iter()
+                .filter(|id| matches!(id, AzureLoadBalancerIpAllocationId::Ipv6(_)))
+                .count();
+            if ipv4_count > 1 {
+                return Err(CommandError::new_from_safe_message(
+                    "Invalid Azure load balancer IP allocation ids: AKS supports at most one IPv4 per Service"
+                        .to_string(),
+                ));
+            }
+            if ipv6_count > 1 {
+                return Err(CommandError::new_from_safe_message(
+                    "Invalid Azure load balancer IP allocation ids: AKS supports at most one IPv6 per Service"
+                        .to_string(),
+                ));
+            }
+            Some(parsed)
+        }
+    };
+
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
@@ -424,7 +464,9 @@ pub(super) fn aks_helm_charts(
                     // to avoid conflict with API Gateway which will declare *.cluster_id.domain.root
                     false => new_gateway_api_domain,
                 },
-                LoadBalancer::Azure(AzureLoadBalancer {}),
+                LoadBalancer::Azure(AzureLoadBalancer {
+                    load_balancer_ip_allocations: azure_load_balancer_ip_allocations.clone(),
+                }),
                 QoveryClusterGatewayChartOptions {
                     x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(
                         &chart_config_prerequisites
