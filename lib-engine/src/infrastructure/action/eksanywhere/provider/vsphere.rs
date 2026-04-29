@@ -248,17 +248,26 @@ fn check_templates_with_govc(
 
     for (template, (_machine_configs, os_families, refs)) in templates_index {
         let mut planned_retag_tag: Option<String> = None;
-        let vm_info_err = run_govc_command(&["vm.info", "-json", template.as_str()], govc_env).err();
-        if let Some(err) = vm_info_err {
+        let template_exists = is_template_present_for_inventory_path(template.as_str(), govc_env)?;
+        if !template_exists {
+            let install_config = build_template_install_config(template.as_str(), &refs)?;
             if !install_missing {
-                return Err(CommandError::new(
-                    format!("Template `{template}` is not available in vSphere"),
-                    Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                    None,
+                let ova_url = resolve_ova_url_for_template_with_logging(
+                    cluster_config_path,
+                    install_config.template_name.as_str(),
+                    logger,
+                )?;
+                logger.warn(format!(
+                    "⚠️ Template `{}` not found in vSphere during dry-run. Apply mode will automatically import it from `{ova_url}`.",
+                    template_label(template.as_str())
                 ));
+                logger.info(format!(
+                    "ℹ️ Dry-run: skipping vSphere tag checks for missing template `{}`.",
+                    template_label(template.as_str())
+                ));
+                continue;
             }
 
-            let install_config = build_template_install_config(template.as_str(), &refs)?;
             logger.warn(format!(
                 "⚠️ Template `{}` not found. Non dry-run mode: automatic OVA import will be attempted.",
                 template_label(template.as_str())
@@ -272,23 +281,40 @@ fn check_templates_with_govc(
                 logger,
             )?;
 
-            run_govc_command(&["vm.info", "-json", template.as_str()], govc_env).map_err(|e| {
-                CommandError::new(
-                    format!("Template `{template}` is still not available in vSphere after import attempt"),
-                    Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
-                    None,
-                )
-            })?;
+            if !is_template_present_for_inventory_path(template.as_str(), govc_env)? {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "Template `{template}` is still not available in vSphere after import attempt"
+                )));
+            }
         }
 
-        let attached_tags =
-            run_govc_command(&["tags.attached.ls", "-r", template.as_str()], govc_env).map_err(|e| {
-                CommandError::new(
+        let attached_tags = match run_govc_command(&["tags.attached.ls", "-r", template.as_str()], govc_env) {
+            Ok(tags) => tags,
+            Err(err) if !install_missing && is_inventory_object_not_found_error(&err) => {
+                let install_config = build_template_install_config(template.as_str(), &refs)?;
+                let ova_url = resolve_ova_url_for_template_with_logging(
+                    cluster_config_path,
+                    install_config.template_name.as_str(),
+                    logger,
+                )?;
+                logger.warn(format!(
+                    "⚠️ Template `{}` cannot be resolved for tag inspection during dry-run. Apply mode will automatically import it from `{ova_url}`.",
+                    template_label(template.as_str())
+                ));
+                logger.info(format!(
+                    "ℹ️ Dry-run: skipping vSphere tag checks for template `{}`.",
+                    template_label(template.as_str())
+                ));
+                continue;
+            }
+            Err(e) => {
+                return Err(CommandError::new(
                     format!("Unable to list tags attached to template `{template}`"),
                     Some(e.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
                     None,
-                )
-            })?;
+                ));
+            }
+        };
         debug!(
             "vSphere preflight tag snapshot for template `{}`: {:?}",
             template, attached_tags
@@ -413,6 +439,21 @@ EKS Anywhere upgrade requires this exact tag; minor-compatible tags are not suff
     }
 
     Ok(())
+}
+
+fn is_template_present_for_inventory_path(
+    template_path: &str,
+    govc_env: &[(String, String)],
+) -> Result<bool, CommandError> {
+    match run_govc_command(&["vm.info", "-json", "-vm.ipath", template_path], govc_env) {
+        Ok(_) => Ok(true),
+        Err(err) if is_inventory_object_not_found_error(&err) => Ok(false),
+        Err(err) => Err(CommandError::new(
+            format!("Unable to verify template presence for `{template_path}` with `govc vm.info -vm.ipath`"),
+            Some(err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+            None,
+        )),
+    }
 }
 
 fn has_exact_eksd_release_tag(attached_tags: &[String], expected_tag: &str) -> bool {
@@ -1453,7 +1494,7 @@ fn is_category_prefixed_tag_name(category: &str, tag_name: &str) -> bool {
 }
 
 fn category_requires_prefixed_tag_name(category: &str) -> bool {
-    category.eq_ignore_ascii_case("eksdRelease")
+    category.eq_ignore_ascii_case("eksdRelease") || category.eq_ignore_ascii_case("os")
 }
 
 fn canonical_tag_name_for_category(category: &str, tag_value: &str) -> String {
@@ -1503,6 +1544,17 @@ fn is_tag_name_not_found(error: &CommandError) -> bool {
     let lower_error =
         format!("{}\n{}", error.message_safe(), error.message_raw().unwrap_or_default()).to_ascii_lowercase();
     lower_error.contains("tag \"") && lower_error.contains("\" not found")
+}
+
+fn is_inventory_object_not_found_error(error: &CommandError) -> bool {
+    let lower_error =
+        format!("{}\n{}", error.message_safe(), error.message_raw().unwrap_or_default()).to_ascii_lowercase();
+    (lower_error.contains("not found") || lower_error.contains("no such vm"))
+        && (lower_error.contains("/vm/")
+            || lower_error.contains("virtualmachine")
+            || lower_error.contains("vm.info")
+            || lower_error.contains("tags.attached.ls")
+            || lower_error.contains("no such vm"))
 }
 
 fn is_flag_not_defined_error(error: &CommandError) -> bool {

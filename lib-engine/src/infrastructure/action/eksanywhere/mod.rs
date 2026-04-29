@@ -1,3 +1,4 @@
+mod capi_backup;
 mod cluster_config_git;
 mod cluster_create;
 mod cluster_install;
@@ -59,9 +60,14 @@ impl InfrastructureAction for EksAnywhere {
     }
 
     fn post_create_deprecated_api_target_version(&self, _infra_ctx: &InfrastructureContext) -> Option<VersionsNumber> {
-        // For EKS Anywhere, keep the generic post-create Pluto check but target the
-        // cluster requested version directly (not requested+1) to avoid over-shooting.
-        Some(self.version().into())
+        // EKS Anywhere already runs a dedicated Pluto check based on the parsed
+        // `eksctl anywhere upgrade plan` target version.
+        // Skip the generic post-create Pluto check to avoid duplicate/conflicting logs.
+        None
+    }
+
+    fn should_log_post_create_deprecated_api_check_skip(&self) -> bool {
+        false
     }
 }
 

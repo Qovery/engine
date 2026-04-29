@@ -4,8 +4,6 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::{EksAnywhere, EksAnywhereClusterBackupParameters};
 use crate::runtime::block_on;
-use flate2::Compression;
-use flate2::write::GzEncoder;
 use k8s_openapi::api::batch::v1::Job;
 use k8s_openapi::api::core::v1::{Pod, Secret};
 use kube::ResourceExt;
@@ -14,11 +12,10 @@ use kube::core::{DynamicObject, GroupVersionKind};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::fs::{self, File};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant, SystemTime};
-use tar::Builder as TarBuilder;
+use std::time::{Duration, Instant};
 use tera::{Context as TeraContext, Tera};
 use tracing::{debug, info};
 use url::Url;
@@ -31,7 +28,6 @@ const JOB_TTL_SECONDS_AFTER_FINISHED: i32 = 3600;
 const JOB_POLL_INTERVAL_SECONDS: u64 = 5;
 const CAPI_MACHINE_API_VERSIONS: [&str; 4] = ["v1beta1", "v1beta2", "v1alpha4", "v1alpha3"];
 const ETCD_BACKUP_JOB_TEMPLATE_RELATIVE_PATH: &str = "etcd-backup/job.tpl.yaml";
-const CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS: u64 = 300;
 const CLIENT_CERT_KEY_CANDIDATES: [&str; 4] = ["tls.crt", "cert.crt", "client.crt", "apiserver-etcd-client.crt"];
 const CLIENT_PRIVATE_KEY_CANDIDATES: [&str; 4] = ["tls.key", "key.pem", "client.key", "apiserver-etcd-client.key"];
 const CA_CERT_KEY_CANDIDATES: [&str; 4] = ["ca.crt", "ca.pem", "etcd-ca.crt", "tls-ca.crt"];
@@ -142,77 +138,6 @@ pub(super) fn run_eks_anywhere_cluster_backup(
             Err(backup_error)
         }
     }
-}
-
-pub(super) fn upload_eks_anywhere_capi_backup(
-    cluster: &EksAnywhere,
-    cluster_config_path: &Path,
-    logger: &impl InfraLogger,
-) -> Result<(), CommandError> {
-    let Some(cluster_backup) = cluster
-        .options
-        .infrastructure_charts_parameters
-        .eks_anywhere_parameters
-        .as_ref()
-        .and_then(|params| params.cluster_backup.as_ref())
-    else {
-        return Ok(());
-    };
-
-    if !cluster_backup.enabled {
-        logger.info("Skipping CAPI backup upload: disabled in EKS Anywhere parameters.");
-        return Ok(());
-    }
-
-    log_section_title(logger, "📦", "EKS Anywhere CAPI backup upload");
-
-    let cluster_name = match cluster_name_from_config(cluster_config_path) {
-        Ok(Some(name)) => name,
-        Ok(None) => cluster.name().to_string(),
-        Err(err) => {
-            logger.warn(format!(
-                "Unable to infer cluster name from config file, fallback to Kubernetes name `{}`: {}",
-                cluster.name(),
-                err.message_safe()
-            ));
-            cluster.name().to_string()
-        }
-    };
-
-    let presigned_put_url =
-        validate_presigned_put_url(cluster_backup.s3.capi_presigned_put_url.as_str(), "CAPI backup")?;
-    info!(
-        "CAPI backup destination (pre-signed PUT URL): `{}`.",
-        redact_url_for_logs(&presigned_put_url)
-    );
-
-    let capi_backup_directory = find_latest_capi_backup_directory(cluster.temp_dir(), cluster_name.as_str())?;
-    debug!("Found CAPI backup directory `{}`.", capi_backup_directory.display());
-
-    let archive_file_name = format!(
-        "{}-{}.tar.gz",
-        capi_backup_directory_name(&capi_backup_directory)?,
-        short_random_suffix()
-    );
-    let archive_path = cluster.temp_dir().join(archive_file_name);
-
-    create_tar_gz_archive_from_directory(&capi_backup_directory, &archive_path)?;
-    debug!("Created CAPI backup archive `{}`.", archive_path.display());
-
-    let upload_result = upload_file_to_presigned_put_url(presigned_put_url.as_str(), &archive_path);
-    if let Err(cleanup_error) = fs::remove_file(&archive_path) {
-        logger.warn(format!(
-            "Cannot remove temporary CAPI backup archive `{}`: {}",
-            archive_path.display(),
-            cleanup_error
-        ));
-    }
-
-    upload_result?;
-
-    logger.info("CAPI backup archive uploaded.");
-    log_section_title(logger, "✅", "CAPI backup upload completed");
-    Ok(())
 }
 
 fn execute_cluster_backup_job(
@@ -647,144 +572,6 @@ fn debug_log_job_pods(pod_api: &Api<Pod>, job_name: &str) {
         snapshot.len(),
         snapshot
     );
-}
-
-fn find_latest_capi_backup_directory(root_directory: &Path, cluster_name: &str) -> Result<PathBuf, CommandError> {
-    let entries = fs::read_dir(root_directory).map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Cannot list directory `{}` to find CAPI backup folder: {e}",
-            root_directory.display()
-        ))
-    })?;
-
-    let mut candidates = Vec::new();
-    for entry in entries {
-        let entry = entry.map_err(|e| {
-            CommandError::new_from_safe_message(format!(
-                "Cannot read directory entry in `{}`: {e}",
-                root_directory.display()
-            ))
-        })?;
-
-        let file_type = entry.file_type().map_err(|e| {
-            CommandError::new_from_safe_message(format!("Cannot read entry type for `{}`: {e}", entry.path().display()))
-        })?;
-        if !file_type.is_dir() {
-            continue;
-        }
-
-        let entry_name = entry.file_name().to_string_lossy().to_string();
-        if !entry_name.contains("-backup-") {
-            continue;
-        }
-
-        let modified_at = entry
-            .metadata()
-            .and_then(|metadata| metadata.modified())
-            .unwrap_or(SystemTime::UNIX_EPOCH);
-
-        candidates.push((entry.path(), entry_name, modified_at));
-    }
-
-    if candidates.is_empty() {
-        return Err(CommandError::new_from_safe_message(format!(
-            "No CAPI backup directory found under `{}`.",
-            root_directory.display()
-        )));
-    }
-
-    let preferred_prefix = format!("{cluster_name}-backup-");
-    let mut preferred = candidates
-        .iter()
-        .filter(|(_, name, _)| name.starts_with(preferred_prefix.as_str()))
-        .cloned()
-        .collect::<Vec<_>>();
-    preferred.sort_by_key(|b| std::cmp::Reverse(b.2));
-
-    if let Some((path, _, _)) = preferred.first() {
-        return Ok(path.clone());
-    }
-
-    candidates.sort_by_key(|b| std::cmp::Reverse(b.2));
-    Ok(candidates[0].0.clone())
-}
-
-fn capi_backup_directory_name(capi_backup_directory: &Path) -> Result<String, CommandError> {
-    capi_backup_directory
-        .file_name()
-        .and_then(|name| name.to_str())
-        .map(str::to_string)
-        .ok_or_else(|| {
-            CommandError::new_from_safe_message(format!(
-                "Cannot derive CAPI backup directory name from path `{}`.",
-                capi_backup_directory.display()
-            ))
-        })
-}
-
-fn create_tar_gz_archive_from_directory(
-    source_directory: &Path,
-    destination_archive_path: &Path,
-) -> Result<(), CommandError> {
-    let archive_file = File::create(destination_archive_path).map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Cannot create CAPI backup archive `{}`: {e}",
-            destination_archive_path.display()
-        ))
-    })?;
-
-    let encoder = GzEncoder::new(archive_file, Compression::fast());
-    let mut tar_builder = TarBuilder::new(encoder);
-    let archive_root = capi_backup_directory_name(source_directory)?;
-    tar_builder
-        .append_dir_all(archive_root.as_str(), source_directory)
-        .map_err(|e| {
-            CommandError::new_from_safe_message(format!(
-                "Cannot append CAPI backup directory `{}` to archive `{}`: {e}",
-                source_directory.display(),
-                destination_archive_path.display()
-            ))
-        })?;
-
-    let encoder = tar_builder.into_inner().map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Cannot finalize CAPI backup tar archive `{}`: {e}",
-            destination_archive_path.display()
-        ))
-    })?;
-    encoder.finish().map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Cannot finalize CAPI backup gzip archive `{}`: {e}",
-            destination_archive_path.display()
-        ))
-    })?;
-
-    Ok(())
-}
-
-fn upload_file_to_presigned_put_url(presigned_put_url: &str, file_path: &Path) -> Result<(), CommandError> {
-    let file = File::open(file_path).map_err(|e| {
-        CommandError::new_from_safe_message(format!(
-            "Cannot open backup archive `{}` for upload: {e}",
-            file_path.display()
-        ))
-    })?;
-
-    reqwest::blocking::Client::builder()
-        .connect_timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| CommandError::new_from_safe_message(format!("Cannot create upload HTTP client: {e}")))?
-        .put(presigned_put_url)
-        .body(file)
-        .timeout(Duration::from_secs(CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS))
-        .send()
-        .map_err(|e| CommandError::new_from_safe_message(format!("CAPI backup upload request failed: {e}")))?
-        .error_for_status()
-        .map_err(|e| {
-            CommandError::new_from_safe_message(format!("CAPI backup upload returned an error status: {e}"))
-        })?;
-
-    Ok(())
 }
 
 fn discover_etcd_endpoint(kube: &kube::Client, cluster_name: &str) -> Result<String, CommandError> {

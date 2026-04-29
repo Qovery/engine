@@ -364,7 +364,7 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 #  ENGINE + EKS ANYWHERE FINAL IMAGE
 #
 ###########################################
-FROM run AS run-eksanywhere
+FROM run-slim AS run-eksanywhere
 
 ARG EKSCTL_VERSION
 ARG EKS_ANYWHERE_VERSION

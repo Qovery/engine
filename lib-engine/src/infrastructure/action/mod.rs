@@ -115,7 +115,7 @@ pub trait InfrastructureAction: Send + Sync {
 
                 let cluster = self.create_cluster(infra_ctx, cluster_has_been_upgraded);
 
-                if !infra_ctx.context().is_first_cluster_deployment() {
+                if cluster.is_ok() && !infra_ctx.context().is_first_cluster_deployment() {
                     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
                     let kube_client = infra_ctx.mk_kube_client()?;
                     let cluster_id = infra_ctx.context().cluster_long_id();
@@ -150,7 +150,7 @@ pub trait InfrastructureAction: Send + Sync {
                                 logger.warn(EventMessage::from(deprecation_error));
                             }
                         }
-                    } else {
+                    } else if self.should_log_post_create_deprecated_api_check_skip() {
                         logger.warn(
                             "Skipping deprecated API check after create: no target Kubernetes version available.",
                         );
@@ -180,6 +180,10 @@ pub trait InfrastructureAction: Send + Sync {
             Some(v) => Some(v.into()),
             None => Some(infra_ctx.kubernetes().version().clone().into()),
         }
+    }
+
+    fn should_log_post_create_deprecated_api_check_skip(&self) -> bool {
+        true
     }
 
     fn is_upgrade_required(&self, infra_ctx: &InfrastructureContext) -> Option<KubernetesUpgradeStatus> {
