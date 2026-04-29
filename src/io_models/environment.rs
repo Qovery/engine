@@ -19,6 +19,7 @@ use crate::io_models::job::Job;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::router::Router;
 use crate::io_models::terraform::TerraformService;
+use crate::io_models::variable_utils::VariableInfo;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::utilities::base64_replace_comma_to_new_line;
 use itertools::Itertools;
@@ -68,6 +69,47 @@ fn default_annotations_groups() -> BTreeMap<Uuid, AnnotationsGroup> {
 
 fn default_labels_groups() -> BTreeMap<Uuid, LabelsGroup> {
     BTreeMap::new()
+}
+
+fn resolve_basic_auth_secret(
+    gateway_api_basic_auth_env_var: &str,
+    ingress_basic_auth_env_var: &str,
+    environment_vars_with_infos: &BTreeMap<String, VariableInfo>,
+) -> Result<Option<String>, DomainError> {
+    // Temporary migration fallback:
+    // Prefer Gateway API basic auth env var, but fallback to legacy ingress env var
+    // while both stacks coexist. This should be removed when NGINX ingress is sunset.
+    if let Some(variable_infos) = environment_vars_with_infos.get(gateway_api_basic_auth_env_var) {
+        let secret = base64_replace_comma_to_new_line(variable_infos.value.clone()).map_err(|_| {
+            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                env_var_name: gateway_api_basic_auth_env_var.to_string(),
+                env_var_value: variable_infos.value.clone(),
+            })
+        })?;
+        return Ok(Some(secret));
+    }
+
+    if let Some(variable_infos) = environment_vars_with_infos.get(ingress_basic_auth_env_var) {
+        let secret = base64_replace_comma_to_new_line(variable_infos.value.clone()).map_err(|_| {
+            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                env_var_name: ingress_basic_auth_env_var.to_string(),
+                env_var_value: variable_infos.value.clone(),
+            })
+        })?;
+        return Ok(Some(secret));
+    }
+
+    if !gateway_api_basic_auth_env_var.is_empty() || !ingress_basic_auth_env_var.is_empty() {
+        return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
+            env_var_name: if !gateway_api_basic_auth_env_var.is_empty() {
+                gateway_api_basic_auth_env_var.to_string()
+            } else {
+                ingress_basic_auth_env_var.to_string()
+            },
+        }));
+    }
+
+    Ok(None)
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -154,33 +196,12 @@ impl EnvironmentRequest {
                                 Some(app.advanced_settings.network_ingress_denylist_source_range.clone());
                         }
                         // basic auth
-                        if app.advanced_settings.network_ingress_basic_auth_env_var != *"" {
-                            match app
-                                .environment_vars_with_infos
-                                .get(&app.advanced_settings.network_ingress_basic_auth_env_var)
-                            {
-                                Some(variable_infos) => {
-                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
-                                        .map_err(|_| {
-                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
-                                                env_var_name: app
-                                                    .advanced_settings
-                                                    .network_ingress_basic_auth_env_var
-                                                    .to_string(),
-                                                env_var_value: variable_infos.value.clone(),
-                                            })
-                                        })?;
-                                    router_advanced_settings.basic_auth = Some(secret);
-                                }
-                                None => {
-                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
-                                        env_var_name: app
-                                            .advanced_settings
-                                            .network_ingress_basic_auth_env_var
-                                            .to_string(),
-                                    }));
-                                }
-                            }
+                        if let Some(secret) = resolve_basic_auth_secret(
+                            &app.advanced_settings.network_gateway_api_basic_auth_env_var,
+                            &app.advanced_settings.network_ingress_basic_auth_env_var,
+                            &app.environment_vars_with_infos,
+                        )? {
+                            router_advanced_settings.basic_auth = Some(secret);
                         }
                     }
                 }
@@ -213,33 +234,12 @@ impl EnvironmentRequest {
                             );
                         }
                         // basic auth
-                        if container.advanced_settings.network_ingress_basic_auth_env_var != *"" {
-                            match container
-                                .environment_vars_with_infos
-                                .get(&container.advanced_settings.network_ingress_basic_auth_env_var)
-                            {
-                                Some(variable_infos) => {
-                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
-                                        .map_err(|_| {
-                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
-                                                env_var_name: container
-                                                    .advanced_settings
-                                                    .network_ingress_basic_auth_env_var
-                                                    .to_string(),
-                                                env_var_value: variable_infos.value.clone(),
-                                            })
-                                        })?;
-                                    router_advanced_settings.basic_auth = Some(secret);
-                                }
-                                None => {
-                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
-                                        env_var_name: container
-                                            .advanced_settings
-                                            .network_ingress_basic_auth_env_var
-                                            .to_string(),
-                                    }));
-                                }
-                            }
+                        if let Some(secret) = resolve_basic_auth_secret(
+                            &container.advanced_settings.network_gateway_api_basic_auth_env_var,
+                            &container.advanced_settings.network_ingress_basic_auth_env_var,
+                            &container.environment_vars_with_infos,
+                        )? {
+                            router_advanced_settings.basic_auth = Some(secret);
                         }
                     }
                 }
@@ -261,33 +261,12 @@ impl EnvironmentRequest {
                                 Some(helm.advanced_settings.network_ingress_denylist_source_range.clone());
                         }
                         // basic auth
-                        if helm.advanced_settings.network_ingress_basic_auth_env_var != *"" {
-                            match helm
-                                .environment_vars_with_infos
-                                .get(&helm.advanced_settings.network_ingress_basic_auth_env_var)
-                            {
-                                Some(variable_infos) => {
-                                    let secret = base64_replace_comma_to_new_line(variable_infos.value.clone())
-                                        .map_err(|_| {
-                                            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
-                                                env_var_name: helm
-                                                    .advanced_settings
-                                                    .network_ingress_basic_auth_env_var
-                                                    .to_string(),
-                                                env_var_value: variable_infos.value.clone(),
-                                            })
-                                        })?;
-                                    router_advanced_settings.basic_auth = Some(secret);
-                                }
-                                None => {
-                                    return Err(DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound {
-                                        env_var_name: helm
-                                            .advanced_settings
-                                            .network_ingress_basic_auth_env_var
-                                            .to_string(),
-                                    }));
-                                }
-                            }
+                        if let Some(secret) = resolve_basic_auth_secret(
+                            &helm.advanced_settings.network_gateway_api_basic_auth_env_var,
+                            &helm.advanced_settings.network_ingress_basic_auth_env_var,
+                            &helm.environment_vars_with_infos,
+                        )? {
+                            router_advanced_settings.basic_auth = Some(secret);
                         }
                     }
                 }
@@ -387,5 +366,88 @@ impl EnvironmentRequest {
             helm_charts,
             terraform_services,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_basic_auth_secret;
+    use crate::environment::models::router::RouterError;
+    use crate::io_models::environment::DomainError;
+    use crate::io_models::variable_utils::VariableInfo;
+    use base64::Engine;
+    use base64::engine::general_purpose::STANDARD;
+    use std::collections::BTreeMap;
+
+    fn var(value: String) -> VariableInfo {
+        VariableInfo { value, is_secret: true }
+    }
+
+    #[test]
+    fn resolve_basic_auth_secret_prefers_gateway_api_env_var() {
+        let mut env_vars = BTreeMap::new();
+        env_vars.insert("GW_BASIC_AUTH".to_string(), var(STANDARD.encode("gw-user:gw-pass")));
+        env_vars.insert("ING_BASIC_AUTH".to_string(), var(STANDARD.encode("ing-user:ing-pass")));
+
+        let secret = resolve_basic_auth_secret("GW_BASIC_AUTH", "ING_BASIC_AUTH", &env_vars)
+            .expect("gateway var should be resolved")
+            .expect("secret should be present");
+
+        let decoded = STANDARD
+            .decode(secret)
+            .expect("resolved secret should stay base64-encoded for k8s secret data");
+        assert_eq!(
+            String::from_utf8(decoded).expect("decoded secret should be valid utf-8"),
+            "gw-user:gw-pass"
+        );
+    }
+
+    #[test]
+    fn resolve_basic_auth_secret_falls_back_to_ingress_env_var() {
+        let mut env_vars = BTreeMap::new();
+        env_vars.insert("ING_BASIC_AUTH".to_string(), var(STANDARD.encode("ing-user:ing-pass")));
+
+        let secret = resolve_basic_auth_secret("GW_BASIC_AUTH", "ING_BASIC_AUTH", &env_vars)
+            .expect("ingress fallback should be resolved")
+            .expect("secret should be present");
+
+        let decoded = STANDARD
+            .decode(secret)
+            .expect("resolved secret should stay base64-encoded for k8s secret data");
+        assert_eq!(
+            String::from_utf8(decoded).expect("decoded secret should be valid utf-8"),
+            "ing-user:ing-pass"
+        );
+    }
+
+    #[test]
+    fn resolve_basic_auth_secret_returns_not_found_when_referenced_env_var_is_missing() {
+        let err = resolve_basic_auth_secret("GW_BASIC_AUTH", "", &BTreeMap::new()).expect_err("should fail");
+
+        match err {
+            DomainError::RouterError(RouterError::BasicAuthEnvVarNotFound { env_var_name }) => {
+                assert_eq!(env_var_name, "GW_BASIC_AUTH");
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resolve_basic_auth_secret_returns_decode_error_for_invalid_base64() {
+        let mut env_vars = BTreeMap::new();
+        env_vars.insert("GW_BASIC_AUTH".to_string(), var("not-base64".to_string()));
+
+        let err = resolve_basic_auth_secret("GW_BASIC_AUTH", "", &env_vars).expect_err("should fail");
+
+        match err {
+            DomainError::RouterError(RouterError::BasicAuthEnvVarBase64DecodeError {
+                env_var_name,
+                env_var_value,
+            }) => {
+                assert_eq!(env_var_name, "GW_BASIC_AUTH");
+                assert_eq!(env_var_value, "not-base64");
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
     }
 }

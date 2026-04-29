@@ -1260,6 +1260,14 @@ fn deploy_application_with_basic_auth_enabled_on_aws_eks() {
             .as_str();
 
         let app_id = environment.applications[0].long_id;
+        let basic_auth_value = "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9"; // user1:{SHA}...
+        environment.applications[0].environment_vars_with_infos.insert(
+            "HTPASSWD_CONTENT".to_string(),
+            VariableInfo {
+                value: basic_auth_value.to_string(),
+                is_secret: true,
+            },
+        );
         environment.applications[0]
             .advanced_settings
             .network_gateway_api_basic_auth_env_var = "HTPASSWD_CONTENT".to_string();
@@ -2550,6 +2558,14 @@ fn deploy_application_with_basic_auth_enabled_on_aws_eks_grpc() {
             .as_str();
 
         let app_id = environment.applications[0].long_id;
+        let basic_auth_value = "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9"; // user1:{SHA}...
+        environment.applications[0].environment_vars_with_infos.insert(
+            "HTPASSWD_CONTENT".to_string(),
+            VariableInfo {
+                value: basic_auth_value.to_string(),
+                is_secret: true,
+            },
+        );
         environment.applications[0]
             .advanced_settings
             .network_gateway_api_basic_auth_env_var = "HTPASSWD_CONTENT".to_string();
@@ -3148,7 +3164,12 @@ fn deploy_container_with_cors_enabled_on_aws_eks() {
                 path_rewrite: None,
             }],
             storages: vec![],
-            environment_vars_with_infos: BTreeMap::new(),
+            environment_vars_with_infos: btreemap! {
+                "HTPASSWD_CONTENT".to_string() => VariableInfo {
+                    value: "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9".to_string(), // user1:{SHA}...
+                    is_secret: true,
+                }
+            },
             mounted_files: vec![],
             readiness_probe: None,
             liveness_probe: None,
@@ -3352,7 +3373,12 @@ fn deploy_container_with_sticky_session_enabled_on_aws_eks() {
                 path_rewrite: None,
             }],
             storages: vec![],
-            environment_vars_with_infos: BTreeMap::new(),
+            environment_vars_with_infos: btreemap! {
+                "HTPASSWD_CONTENT".to_string() => VariableInfo {
+                    value: "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9".to_string(), // user1:{SHA}...
+                    is_secret: true,
+                }
+            },
             mounted_files: vec![],
             readiness_probe: None,
             liveness_probe: None,
@@ -4559,7 +4585,12 @@ fn deploy_container_with_basic_auth_enabled_on_aws_eks() {
                 path_rewrite: None,
             }],
             storages: vec![],
-            environment_vars_with_infos: BTreeMap::new(),
+            environment_vars_with_infos: btreemap! {
+                "HTPASSWD_CONTENT".to_string() => VariableInfo {
+                    value: "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9".to_string(), // user1:{SHA}...
+                    is_secret: true,
+                }
+            },
             mounted_files: vec![],
             readiness_probe: None,
             liveness_probe: None,
@@ -6093,7 +6124,12 @@ fn deploy_container_with_basic_auth_enabled_on_aws_eks_grpc() {
                 path_rewrite: None,
             }],
             storages: vec![],
-            environment_vars_with_infos: BTreeMap::new(),
+            environment_vars_with_infos: btreemap! {
+                "HTPASSWD_CONTENT".to_string() => VariableInfo {
+                    value: "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9".to_string(), // user1:{SHA}...
+                    is_secret: true,
+                }
+            },
             mounted_files: vec![],
             readiness_probe: None,
             liveness_probe: None,
@@ -8606,7 +8642,7 @@ fn deploy_helm_with_basic_auth_enabled_on_aws_eks() {
             .as_str();
 
         let helm_id = Uuid::new_v4();
-        let basic_auth_value = "dXNlcjE6JGFwcjEkSDZuWlg0OEkkWUpOWFJuSExLcy9KL3kxZUpMbHhZLgo="; // user1:password1
+        let basic_auth_value = "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9"; // user1:password1
 
         let mut env_vars = BTreeMap::new();
         env_vars.insert(
@@ -9938,7 +9974,7 @@ fn deploy_helm_with_basic_auth_enabled_on_aws_eks_grpc() {
             .as_str();
 
         let helm_id = Uuid::new_v4();
-        let basic_auth_value = "dXNlcjE6JGFwcjEkSDZuWlg0OEkkWUpOWFJuSExLcy9KL3kxZUpMbHhZLgo="; // user1:password1
+        let basic_auth_value = "dXNlcjE6e1NIQX00NHJTRkpROXF0SFdUQkF2cnNLZDVLL3AyajA9"; // user1:password1
 
         let mut env_vars = BTreeMap::new();
         env_vars.insert(

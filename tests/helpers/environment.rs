@@ -34,6 +34,7 @@ pub fn working_environment(
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let settings = ApplicationAdvancedSettings {
         network_ingress_sticky_session_enable: with_sticky,
+        network_gateway_api_sticky_session_enable: with_sticky,
         ..Default::default()
     };
 
@@ -644,7 +645,9 @@ pub fn environment_only_http_server(
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let settings = ApplicationAdvancedSettings {
         network_ingress_sticky_session_enable: with_sticky,
-        network_ingress_whitelist_source_range: with_ip_whitelist_source_range.unwrap_or_default(),
+        network_ingress_whitelist_source_range: with_ip_whitelist_source_range.clone().unwrap_or_default(),
+        network_gateway_api_sticky_session_enable: with_sticky,
+        network_gateway_api_whitelist_source_range: with_ip_whitelist_source_range.unwrap_or_default(),
         ..Default::default()
     };
 
