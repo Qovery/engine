@@ -14,7 +14,8 @@ use std::time::Duration;
 
 const COMMAND_STDOUT_PREFIX: &str = "CMD│ ";
 const COMMAND_STDERR_PREFIX: &str = "CMD┃ ";
-const EKSCTL_VERBOSITY_LEVEL: &str = "2";
+const EKSCTL_PLAN_VERBOSITY_LEVEL: &str = "2";
+const EKSCTL_APPLY_VERBOSITY_LEVEL: &str = "4";
 const EKS_ANYWHERE_CONTROL_PLANE_WAIT_TIMEOUT: &str = "90m0s";
 const EKS_ANYWHERE_EXTERNAL_ETCD_WAIT_TIMEOUT: &str = "90m0s";
 const EKS_ANYWHERE_PER_MACHINE_WAIT_TIMEOUT: &str = "20m0s";
@@ -58,6 +59,36 @@ impl EksAnywhereUpgradePlanSummary {
         self.kubernetes_major_upgrade_jump().is_some_and(|jump| jump > 1)
     }
 
+    pub fn kubernetes_minor_upgrade_jump(&self) -> Option<u64> {
+        let (current, next) = self.kubernetes_version_transition.as_ref()?;
+        let (current_major, current_minor) = extract_kubernetes_major_minor(current.as_str())?;
+        let (next_major, next_minor) = extract_kubernetes_major_minor(next.as_str())?;
+        if current_major != next_major {
+            return None;
+        }
+        Some(next_minor.saturating_sub(current_minor))
+    }
+
+    pub fn has_kubernetes_minor_upgrade_jump_over_one(&self) -> bool {
+        self.kubernetes_minor_upgrade_jump().is_some_and(|jump| jump > 1)
+    }
+
+    pub fn has_kubernetes_downgrade(&self) -> bool {
+        self.kubernetes_version_transition
+            .as_ref()
+            .is_some_and(|(current, next)| {
+                match (
+                    extract_kubernetes_major_minor(current.as_str()),
+                    extract_kubernetes_major_minor(next.as_str()),
+                ) {
+                    (Some((current_major, current_minor)), Some((next_major, next_minor))) => {
+                        (next_major, next_minor) < (current_major, current_minor)
+                    }
+                    _ => false,
+                }
+            })
+    }
+
     pub fn target_kubernetes_version(&self) -> Option<VersionsNumber> {
         let (_, next) = self.kubernetes_version_transition.as_ref()?;
         normalize_kubernetes_target_version_for_pluto(next)
@@ -83,7 +114,7 @@ impl EksAnywhereUpgradeCommand {
                 "--kubeconfig",
                 kubeconfig_path,
                 "-v",
-                EKSCTL_VERBOSITY_LEVEL,
+                EKSCTL_PLAN_VERBOSITY_LEVEL,
             ],
             Self::UpgradeCluster => vec![
                 "anywhere",
@@ -102,7 +133,7 @@ impl EksAnywhereUpgradeCommand {
                 "--skip-validations=vsphere-user-privilege",
                 "--skip-validations=pod-disruption",
                 "-v",
-                EKSCTL_VERBOSITY_LEVEL,
+                EKSCTL_APPLY_VERBOSITY_LEVEL,
             ],
         }
     }
@@ -555,4 +586,35 @@ fn log_section_title(logger: &impl InfraLogger, icon: &str, title: &str) {
     logger.info("");
     logger.info(format!("***** {icon} {title} *****"));
     logger.info("");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EksAnywhereUpgradePlanSummary;
+
+    #[test]
+    fn should_detect_minor_jump_over_one() {
+        let summary = EksAnywhereUpgradePlanSummary {
+            expected_eksd_release_tag: None,
+            kubernetes_version_transition: Some((
+                "v1.32.11-eks-1-32-33".to_string(),
+                "v1.34.3-eks-1-34-14".to_string(),
+            )),
+        };
+
+        assert!(summary.has_kubernetes_minor_upgrade_jump_over_one());
+    }
+
+    #[test]
+    fn should_allow_single_minor_step() {
+        let summary = EksAnywhereUpgradePlanSummary {
+            expected_eksd_release_tag: None,
+            kubernetes_version_transition: Some((
+                "v1.32.11-eks-1-32-33".to_string(),
+                "v1.33.7-eks-1-33-23".to_string(),
+            )),
+        };
+
+        assert!(!summary.has_kubernetes_minor_upgrade_jump_over_one());
+    }
 }

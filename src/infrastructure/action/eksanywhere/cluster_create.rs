@@ -1,8 +1,9 @@
 use super::EksAnywhereRunMode;
+use super::capi_backup::{run_eks_anywhere_capi_backup_before_upgrade, upload_eks_anywhere_capi_backup};
 use super::cluster_config_git::prepare_eks_anywhere_cluster_config;
 use super::cluster_install::install_eks_anywhere_charts;
 use super::eksctl::{run_eks_anywhere_upgrade_cluster, run_eks_anywhere_upgrade_plan};
-use super::etcd_backup::{run_eks_anywhere_cluster_backup, upload_eks_anywhere_capi_backup};
+use super::etcd_backup::run_eks_anywhere_cluster_backup;
 use super::provider::{
     EksAnywhereProviderMode, ParsedEksAnywhereClusterConfig, parse_eks_anywhere_cluster_config,
     run_provider_preflight_for_mode,
@@ -10,9 +11,11 @@ use super::provider::{
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::environment::models::types::VersionsNumber;
 use crate::errors::{CommandError, EngineError};
+use crate::events::EventMessage;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::InfraLogger;
+use crate::infrastructure::action::utils::mk_logger;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::EksAnywhere;
@@ -25,16 +28,24 @@ pub(super) fn create_eks_anywhere_cluster(
     logger: impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
     let run_mode = EksAnywhereRunMode::from_context(infra_ctx);
+    let mut should_run_post_create_pluto_check = false;
 
     if let Some(cluster_config_path) = prepare_eks_anywhere_cluster_config(cluster, &logger)?.as_ref() {
         log_section_title(&logger, "🧪", "EKS Anywhere preflight");
         logger.info(format!("Execution mode: {}.", run_mode.label()));
         log_command_version(&logger, "eksctl", &["version"]);
         log_command_version(&logger, "eksctl anywhere", &["anywhere", "version"]);
-        run_cluster_config_workflow(cluster, infra_ctx, cluster_config_path, run_mode, &logger)?;
+        should_run_post_create_pluto_check =
+            run_cluster_config_workflow(cluster, infra_ctx, cluster_config_path, run_mode, &logger)?;
     }
 
-    install_eks_anywhere_charts(cluster, infra_ctx, logger)
+    let charts_result = install_eks_anywhere_charts(cluster, infra_ctx, logger);
+    if charts_result.is_ok() && should_run_post_create_pluto_check {
+        let logger = mk_logger(cluster, InfrastructureStep::Create);
+        run_post_create_pluto_check_for_no_upgrade(cluster, infra_ctx, &logger);
+    }
+
+    charts_result
 }
 
 fn run_cluster_config_workflow(
@@ -43,7 +54,7 @@ fn run_cluster_config_workflow(
     cluster_config_path: &Path,
     run_mode: EksAnywhereRunMode,
     logger: &impl InfraLogger,
-) -> Result<(), Box<EngineError>> {
+) -> Result<bool, Box<EngineError>> {
     let parsed_cluster_config = parse_cluster_config(cluster_config_path, logger);
     let provider_mode = parsed_cluster_config.provider_mode();
     log_provider_mode(logger, provider_mode);
@@ -67,51 +78,62 @@ fn run_cluster_config_workflow(
     if run_mode.should_execute_upgrade_cluster() {
         run_eks_anywhere_cluster_backup(cluster, infra_ctx, cluster_config_path, logger)
             .map_err(|error| map_cluster_backup_error(cluster, error))?;
-        if let Err(upgrade_error) =
-            run_eks_anywhere_upgrade_cluster(cluster, cluster_config_path, infra_ctx.cloud_provider(), logger)
-        {
-            // Best-effort: even when upgrade fails, try uploading CAPI backup artifacts if they were generated.
-            match upload_eks_anywhere_capi_backup(cluster, cluster_config_path, logger) {
-                Ok(()) => logger.warn("Upgrade failed, but best-effort CAPI backup upload succeeded."),
-                Err(error) => logger.warn(format!(
-                    "Upgrade failed and best-effort CAPI backup upload also failed: {}",
-                    error.message_safe()
-                )),
-            }
-
-            return Err(upgrade_error);
+        let pre_upgrade_capi_backup_directory =
+            run_eks_anywhere_capi_backup_before_upgrade(cluster, cluster_config_path, logger)
+                .map_err(|error| map_capi_backup_creation_error(cluster, error))?;
+        if let Some(pre_upgrade_capi_backup_directory) = pre_upgrade_capi_backup_directory.as_deref() {
+            upload_eks_anywhere_capi_backup(cluster, pre_upgrade_capi_backup_directory, logger)
+                .map_err(|error| map_capi_backup_upload_error(cluster, error))?;
         }
 
-        upload_eks_anywhere_capi_backup(cluster, cluster_config_path, logger)
-            .map_err(|error| map_capi_backup_upload_error(cluster, error))?;
+        run_eks_anywhere_upgrade_cluster(cluster, cluster_config_path, infra_ctx.cloud_provider(), logger)?;
     } else {
         logger.info("Dry-run mode: skipping EKS Anywhere backup and upgrade execution.");
     }
 
-    Ok(())
+    Ok(!upgrade_plan_summary.has_kubernetes_version_change())
 }
 
 fn enforce_supported_kubernetes_version_jump(
     cluster: &EksAnywhere,
     upgrade_plan_summary: &super::eksctl::EksAnywhereUpgradePlanSummary,
 ) -> Result<(), Box<EngineError>> {
-    if !upgrade_plan_summary.has_kubernetes_major_upgrade_jump_over_one() {
+    let details = cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError));
+
+    if upgrade_plan_summary.has_kubernetes_downgrade() {
+        let message = match upgrade_plan_summary.kubernetes_version_transition.as_ref() {
+            Some((current, next)) => format!("Kubernetes downgrade `{current}` -> `{next}` is not allowed."),
+            None => "Kubernetes downgrade is not allowed.".to_string(),
+        };
+        return Err(Box::new(EngineError::new_unknown(
+            details,
+            "Kubernetes downgrade not allowed".to_string(),
+            Some(CommandError::new_from_safe_message(message)),
+            None,
+            None,
+        )));
+    }
+
+    if !upgrade_plan_summary.has_kubernetes_major_upgrade_jump_over_one()
+        && !upgrade_plan_summary.has_kubernetes_minor_upgrade_jump_over_one()
+    {
         return Ok(());
     }
 
-    let details = cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError));
     let message = match upgrade_plan_summary.kubernetes_version_transition.as_ref() {
         Some((current, next)) => format!(
-            "Unsupported Kubernetes upgrade path detected in upgrade plan: `{current}` -> `{next}`. \
-Only upgrades with a maximum +1 major version jump are allowed."
+            "Kubernetes upgrade `{current}` -> `{next}` is not allowed. \
+Upgrades greater than one minor version at a time are not supported."
         ),
-        None => "Unsupported Kubernetes upgrade path detected in upgrade plan: major version jump is greater than one."
-            .to_string(),
+        None => {
+            "Kubernetes upgrade is not allowed: upgrades greater than one minor version at a time are not supported."
+                .to_string()
+        }
     };
 
     Err(Box::new(EngineError::new_unknown(
         details,
-        "Unsupported Kubernetes major upgrade jump".to_string(),
+        "Kubernetes upgrade jump too large".to_string(),
         Some(CommandError::new_from_safe_message(message)),
         None,
         None,
@@ -126,7 +148,7 @@ fn run_pluto_check_before_upgrade_if_needed(
 ) -> Result<(), Box<EngineError>> {
     if !upgrade_plan_summary.has_kubernetes_version_change() {
         logger.info(
-            "No Kubernetes upgrade detected in plan; generic deprecated API compatibility check will run after create.",
+            "No Kubernetes upgrade detected in plan; pre-upgrade deprecated API check skipped (post-create check will run).",
         );
         return Ok(());
     }
@@ -151,6 +173,18 @@ fn run_pluto_check_before_upgrade_if_needed(
     run_pluto_compatibility_check(cluster, infra_ctx, &target_kubernetes_version, logger)?;
 
     Ok(())
+}
+
+fn run_post_create_pluto_check_for_no_upgrade(
+    cluster: &EksAnywhere,
+    infra_ctx: &InfrastructureContext,
+    logger: &impl InfraLogger,
+) {
+    let target_kubernetes_version: VersionsNumber = infra_ctx.kubernetes().version().clone().into();
+    if let Err(error) = run_pluto_compatibility_check(cluster, infra_ctx, &target_kubernetes_version, logger) {
+        // Non-blocking by design for the no-upgrade post-create check.
+        logger.warn(EventMessage::from(*error));
+    }
 }
 
 fn run_pluto_compatibility_check(
@@ -265,6 +299,16 @@ fn map_capi_backup_upload_error(cluster: &EksAnywhere, error: CommandError) -> B
     Box::new(EngineError::new_unknown(
         cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
         "EKS Anywhere CAPI backup upload failed".to_string(),
+        Some(error),
+        None,
+        None,
+    ))
+}
+
+fn map_capi_backup_creation_error(cluster: &EksAnywhere, error: CommandError) -> Box<EngineError> {
+    Box::new(EngineError::new_unknown(
+        cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
+        "EKS Anywhere CAPI backup creation failed".to_string(),
         Some(error),
         None,
         None,
