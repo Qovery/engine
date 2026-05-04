@@ -11,6 +11,18 @@ resource "aws_iam_role" "external_secrets_operator_role" {
     "Version" : "2012-10-17",
     "Statement" : [
       {
+        "Sid" : "AllowQoveryDeployerAssumeRole"
+        "Effect": "Allow",
+        "Principal": {
+            "AWS": [
+                "arn:aws:iam::283389881690:user/qovery-deployer",
+                "arn:aws:iam::283389881690:role/qovery-deployer"
+            ]
+        },
+        "Action": "sts:AssumeRole",
+        "Condition": {}
+      },
+      {
         "Sid" : "AllowExternalSecretsOperatorSA",
         "Effect" : "Allow",
         "Principal" : {
