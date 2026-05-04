@@ -148,7 +148,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Managed, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -174,7 +174,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -201,7 +201,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Managed, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -227,7 +227,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -253,7 +253,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Managed, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -279,7 +279,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -305,7 +305,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Managed, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -331,7 +331,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -363,7 +363,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -393,7 +393,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -422,7 +422,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<Azure, Container, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -452,7 +452,7 @@ impl Database {
                 Ok(Box::new(models::database::Database::<AWS, Container, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -478,7 +478,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Managed, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -506,7 +506,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Container, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -534,7 +534,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Managed, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -562,7 +562,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Container, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -590,7 +590,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Container, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -618,7 +618,7 @@ impl Database {
                 let db = models::database::Database::<SCW, Container, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -660,7 +660,7 @@ impl Database {
                 let db = models::database::Database::<OnPremise, Container, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -691,7 +691,7 @@ impl Database {
                 let db = models::database::Database::<OnPremise, Container, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -725,7 +725,7 @@ impl Database {
                 let db = models::database::Database::<OnPremise, Container, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -756,7 +756,7 @@ impl Database {
                 let db = models::database::Database::<OnPremise, Container, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -784,7 +784,7 @@ impl Database {
                 let db = models::database::Database::<GCP, Container, PostgresSQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -812,7 +812,7 @@ impl Database {
                 let db = models::database::Database::<GCP, Container, MySQL>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -840,7 +840,7 @@ impl Database {
                 let db = models::database::Database::<GCP, Container, Redis>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,
@@ -868,7 +868,7 @@ impl Database {
                 let db = models::database::Database::<GCP, Container, MongoDB>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name.clone(),
                     version,

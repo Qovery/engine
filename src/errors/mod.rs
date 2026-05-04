@@ -5,6 +5,7 @@ pub mod io;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
+use crate::blueprint::models::error::BlueprintError;
 use crate::cmd::docker::DockerError;
 use crate::cmd::helm::HelmError;
 use crate::cmd::terraform::{QuotaExceededError, TerraformError};
@@ -398,6 +399,12 @@ impl From<ObjectStorageError> for CommandError {
 impl From<DatabaseError> for CommandError {
     fn from(db_err: DatabaseError) -> Self {
         CommandError::new_from_safe_message(db_err.to_string())
+    }
+}
+
+impl From<BlueprintError> for CommandError {
+    fn from(value: BlueprintError) -> Self {
+        CommandError::new_from_safe_message(value.to_string())
     }
 }
 
@@ -1188,6 +1195,8 @@ pub enum Tag {
     AwsSdkDetachEC2Volumes,
     /// Base64DecodeIssue: represents an error while trying to decode a base64 string
     Base64DecodeIssue,
+    /// BlueprintError: represents a blueprint error
+    BlueprintError,
     /// CannotReadFile: Cannot read file
     CannotReadFile,
     /// InvalidJobOutputCannotBeSerialized: represents an error where Job output is not valid and cannot be serialized.
@@ -5430,6 +5439,17 @@ impl EngineError {
             Some(CommandError::from(deprecation_error)),
             None,
             hint_message,
+        )
+    }
+
+    pub fn new_blueprint_error(event_details: EventDetails, error: BlueprintError) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DatabaseError,
+            error.to_string(),
+            Some(error.into()),
+            None,
+            None,
         )
     }
 }

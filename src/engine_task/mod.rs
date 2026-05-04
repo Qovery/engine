@@ -17,6 +17,7 @@ pub trait Task: Send + Sync {
     fn cancel_checker(&self) -> Box<dyn Abort>;
     fn is_terminated(&self) -> bool;
     fn await_terminated(&self) -> broadcast::Receiver<()>;
+    fn info_context(&self) -> Context;
 }
 
 pub fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), anyhow::Error> {

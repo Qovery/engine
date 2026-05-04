@@ -1,0 +1,78 @@
+use serde::{Deserialize, Serialize};
+
+use crate::events;
+
+#[derive(Deserialize, Serialize)]
+pub enum EnvironmentStep {
+    Build,
+    Built,
+    BuiltError,
+    Cancel,
+    Cancelled,
+    Deploy,
+    Executing,
+    Deployed,
+    DeployedError,
+    Pause,
+    Paused,
+    PausedError,
+    Delete,
+    Deleted,
+    DeletedError,
+    LoadConfiguration,
+    Start,
+    Terminated,
+    ValidateApiInput,
+    ValidateSystemRequirements,
+    RetrieveClusterConfig,
+    RetrieveClusterResources,
+    UnderMigration,
+    GlobalError,
+    JobOutput,
+    DatabaseOutput,
+    Recap,
+    Restart,
+    Restarted,
+    RestartedError,
+    TerraformServiceOutput,
+    TerraformResources,
+}
+
+impl From<events::EnvironmentStep> for EnvironmentStep {
+    fn from(step: events::EnvironmentStep) -> Self {
+        match step {
+            events::EnvironmentStep::Build => EnvironmentStep::Build,
+            events::EnvironmentStep::Deploy => EnvironmentStep::Deploy,
+            events::EnvironmentStep::Executing => EnvironmentStep::Executing,
+            events::EnvironmentStep::Delete => EnvironmentStep::Delete,
+            events::EnvironmentStep::Pause => EnvironmentStep::Pause,
+            events::EnvironmentStep::LoadConfiguration => EnvironmentStep::LoadConfiguration,
+            events::EnvironmentStep::Built => EnvironmentStep::Built,
+            events::EnvironmentStep::Deployed => EnvironmentStep::Deployed,
+            events::EnvironmentStep::Paused => EnvironmentStep::Paused,
+            events::EnvironmentStep::Deleted => EnvironmentStep::Deleted,
+            events::EnvironmentStep::Start => EnvironmentStep::Start,
+            events::EnvironmentStep::Cancel => EnvironmentStep::Cancel,
+            events::EnvironmentStep::Cancelled => EnvironmentStep::Cancelled,
+            events::EnvironmentStep::Terminated => EnvironmentStep::Terminated,
+            events::EnvironmentStep::BuiltError => EnvironmentStep::BuiltError,
+            events::EnvironmentStep::DeployedError => EnvironmentStep::DeployedError,
+            events::EnvironmentStep::PausedError => EnvironmentStep::PausedError,
+            events::EnvironmentStep::DeletedError => EnvironmentStep::DeletedError,
+            events::EnvironmentStep::ValidateApiInput => EnvironmentStep::ValidateApiInput,
+            events::EnvironmentStep::ValidateSystemRequirements => EnvironmentStep::ValidateSystemRequirements,
+            events::EnvironmentStep::RetrieveClusterConfig => EnvironmentStep::RetrieveClusterConfig,
+            events::EnvironmentStep::RetrieveClusterResources => EnvironmentStep::RetrieveClusterResources,
+            events::EnvironmentStep::UnderMigration => EnvironmentStep::UnderMigration,
+            events::EnvironmentStep::Restart => EnvironmentStep::Restart,
+            events::EnvironmentStep::Restarted => EnvironmentStep::Restarted,
+            events::EnvironmentStep::RestartedError => EnvironmentStep::RestartedError,
+            events::EnvironmentStep::JobOutput => EnvironmentStep::JobOutput,
+            events::EnvironmentStep::DatabaseOutput => EnvironmentStep::DatabaseOutput,
+            events::EnvironmentStep::Recap => EnvironmentStep::Recap,
+            events::EnvironmentStep::GlobalError => EnvironmentStep::GlobalError,
+            events::EnvironmentStep::TerraformServiceOutput => EnvironmentStep::TerraformServiceOutput,
+            events::EnvironmentStep::TerraformResources => EnvironmentStep::TerraformResources,
+        }
+    }
+}

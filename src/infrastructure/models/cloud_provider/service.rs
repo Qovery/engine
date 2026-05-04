@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use crate::infrastructure::models::build_platform::Build;
+use crate::io_models;
 use strum_macros::EnumIter;
 use tera::Context as TeraContext;
 use tokio::time::{Instant, sleep};
@@ -53,7 +54,16 @@ pub enum Action {
     Delete,
     Restart,
 }
-
+impl From<io_models::Action> for Action {
+    fn from(value: io_models::Action) -> Self {
+        match value {
+            io_models::Action::Create => Action::Create,
+            io_models::Action::Pause => Action::Pause,
+            io_models::Action::Delete => Action::Delete,
+            io_models::Action::Restart => Action::Restart,
+        }
+    }
+}
 impl Action {
     pub fn to_environment_step(&self) -> EnvironmentStep {
         match self {

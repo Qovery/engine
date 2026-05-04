@@ -1,6 +1,5 @@
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::infrastructure::models::build_platform::{Credentials, SshKey};
-use crate::infrastructure::models::cloud_provider::service;
 use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::utilities::{to_qovery_name, to_short_id};
@@ -17,6 +16,7 @@ use uuid::Uuid;
 pub mod annotations_group;
 pub mod application;
 mod azure;
+pub mod blueprint;
 pub mod container;
 pub mod context;
 pub mod database;
@@ -123,7 +123,7 @@ impl Display for QoveryIdentifier {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Copy, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Action {
     Create,
@@ -132,16 +132,6 @@ pub enum Action {
     Restart,
 }
 
-impl Action {
-    pub fn to_service_action(&self) -> service::Action {
-        match self {
-            Action::Create => service::Action::Create,
-            Action::Pause => service::Action::Pause,
-            Action::Delete => service::Action::Delete,
-            Action::Restart => service::Action::Restart,
-        }
-    }
-}
 impl Display for Action {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

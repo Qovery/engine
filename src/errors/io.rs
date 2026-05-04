@@ -30,6 +30,7 @@ pub enum Tag {
     AwsSdkListElasticacheClusters,
     AwsSdkListRdsInstances,
     Base64DecodeIssue,
+    BlueprintError,
     BuilderCloningRepositoryError,
     BuilderDockerCannotBuildContainerImage,
     BuilderDockerCannotExtractEnvVarsFromDockerfile,
@@ -514,6 +515,7 @@ impl From<errors::Tag> for Tag {
             errors::Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected => {
                 Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected
             }
+            errors::Tag::BlueprintError => Tag::BlueprintError,
         }
     }
 }

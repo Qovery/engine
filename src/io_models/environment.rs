@@ -375,7 +375,7 @@ impl EnvironmentRequest {
             self.kube_name.clone(),
             self.project_long_id,
             self.organization_long_id,
-            self.action.to_service_action(),
+            self.action.into(),
             context,
             self.max_parallel_build,
             self.max_parallel_deploy,
