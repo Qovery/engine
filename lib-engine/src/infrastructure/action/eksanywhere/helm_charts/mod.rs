@@ -9,6 +9,7 @@ use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::eksanywhere::{EksAnywhere, EksAnywhereOptions};
+use crate::infrastructure::models::kubernetes::keda::{KedaAvailability, KedaResourceProfile};
 use crate::io_models::context::Features;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
 use crate::io_models::loki::LokiParameters;
@@ -17,6 +18,7 @@ use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 mod gen_charts;
+pub mod gen_keda_charts;
 pub mod metal_lb_chart;
 pub mod metal_lb_config_chart;
 
@@ -25,6 +27,7 @@ pub struct EksAnywhereChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
+    pub cluster_name: String,
     pub cluster_long_id: uuid::Uuid,
     pub cluster_creation_date: DateTime<Utc>,
     pub ff_log_history_enabled: bool,
@@ -32,6 +35,9 @@ pub struct EksAnywhereChartsConfigPrerequisites {
     pub dns_provider_config: DnsProviderConfiguration,
     pub lets_encrypt_config: LetsEncryptConfig,
     pub infra_options: EksAnywhereOptions,
+    pub is_keda_enabled: bool,
+    pub keda_resource_profile: KedaResourceProfile,
+    pub keda_availability: KedaAvailability,
     pub metrics_parameters: Option<MetricsParameters>,
     pub loki_parameters: LokiParameters,
     pub cluster_advanced_settings: ClusterAdvancedSettings,
@@ -43,6 +49,7 @@ impl EksAnywhereChartsConfigPrerequisites {
         organization_id: String,
         organization_long_id: uuid::Uuid,
         cluster_id: String,
+        cluster_name: String,
         cluster_long_id: uuid::Uuid,
         cluster_creation_date: DateTime<Utc>,
         ff_log_history_enabled: bool,
@@ -50,6 +57,9 @@ impl EksAnywhereChartsConfigPrerequisites {
         dns_provider_config: DnsProviderConfiguration,
         lets_encrypt_config: LetsEncryptConfig,
         infra_options: EksAnywhereOptions,
+        is_keda_enabled: bool,
+        keda_resource_profile: KedaResourceProfile,
+        keda_availability: KedaAvailability,
         metrics_parameters: Option<MetricsParameters>,
         loki_parameters: LokiParameters,
         cluster_advanced_settings: ClusterAdvancedSettings,
@@ -59,6 +69,7 @@ impl EksAnywhereChartsConfigPrerequisites {
             organization_id,
             organization_long_id,
             cluster_id,
+            cluster_name,
             cluster_long_id,
             cluster_creation_date,
             ff_log_history_enabled,
@@ -66,6 +77,9 @@ impl EksAnywhereChartsConfigPrerequisites {
             dns_provider_config,
             lets_encrypt_config,
             infra_options,
+            is_keda_enabled,
+            keda_resource_profile,
+            keda_availability,
             metrics_parameters,
             loki_parameters,
             cluster_advanced_settings,
@@ -93,10 +107,12 @@ impl HelmInfraResources for EksAnywhereHelmsDeployment<'_> {
     }
 
     fn new_chart_prerequisite(&self, infra_ctx: &InfrastructureContext) -> Self::ChartPrerequisite {
+        let keda_params = self.cluster.get_keda_parameters();
         EksAnywhereChartsConfigPrerequisites::new(
             infra_ctx.context().organization_short_id().to_string(),
             *infra_ctx.context().organization_long_id(),
             self.cluster.short_id().to_string(),
+            self.cluster.cluster_name(),
             self.cluster.long_id,
             self.cluster.created_at,
             self.cluster.context.is_feature_enabled(&Features::LogsHistory),
@@ -107,6 +123,15 @@ impl HelmInfraResources for EksAnywhereHelmsDeployment<'_> {
                 self.cluster.context.is_test_cluster(),
             ),
             self.cluster.options.clone(),
+            keda_params.as_ref().map(|params| params.enabled).unwrap_or(false),
+            keda_params
+                .as_ref()
+                .map(|params| params.resource_profile)
+                .unwrap_or_default(),
+            keda_params
+                .as_ref()
+                .map(|params| params.availability)
+                .unwrap_or_default(),
             self.cluster.options.metrics_parameters.clone(),
             LokiParameters::from_advanced_settings(self.cluster.advanced_settings()),
             self.cluster.advanced_settings().clone(),

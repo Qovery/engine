@@ -56,7 +56,18 @@ impl EksAnywhereUpgradePlanSummary {
     }
 
     pub fn has_kubernetes_major_upgrade_jump_over_one(&self) -> bool {
-        self.kubernetes_major_upgrade_jump().is_some_and(|jump| jump > 1)
+        let Some((current, next)) = self.kubernetes_version_transition.as_ref() else {
+            return false;
+        };
+
+        if current.eq_ignore_ascii_case(next) {
+            return false;
+        }
+
+        match self.kubernetes_major_upgrade_jump() {
+            Some(jump) => jump > 1,
+            None => true,
+        }
     }
 
     pub fn kubernetes_minor_upgrade_jump(&self) -> Option<u64> {

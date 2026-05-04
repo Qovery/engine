@@ -19,9 +19,11 @@ use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
 use crate::environment::models::domain::Domain;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::eksanywhere::helm_charts::EksAnywhereChartsConfigPrerequisites;
+use crate::infrastructure::action::eksanywhere::helm_charts::gen_keda_charts::generate_keda_charts;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_chart::MetalLbChart;
 use crate::infrastructure::action::eksanywhere::helm_charts::metal_lb_config_chart::MetalLbConfigChart;
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
+use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::external_dns_chart::{
     ExternalDNSChart, ExternalDNSSecretChart, ExternalDNSSourcesMode,
@@ -44,6 +46,22 @@ pub(super) fn eks_anywhere_helm_charts(
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let get_chart_override_fn =
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
+
+    let prometheus_namespace = HelmChartNamespaces::Prometheus;
+    let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
+    let metrics_config = generate_metrics_config(
+        CloudProviderMetricsConfig::EksAnywhere(chart_config_prerequisites),
+        chart_prefix_path,
+        &prometheus_internal_url,
+        prometheus_namespace,
+        get_chart_override_fn.clone(),
+    )?;
+
+    let prometheus_operator_crds_chart = metrics_config.prometheus_operator_crds_chart.map(Box::new);
+    let kube_prometheus_stack_chart = metrics_config.kube_prometheus_stack_chart.map(Box::new);
+    let thanos_chart = metrics_config.thanos_chart.map(Box::new);
+    let alert_config_chart = metrics_config.alert_config_chart.map(Box::new);
+    let prometheus_adapter_chart = metrics_config.prometheus_adapter_chart.map(Box::new);
 
     let gateway_api_rollout_status = GatewayApiRolloutStatus::NotDeployed;
 
@@ -152,6 +170,13 @@ pub(super) fn eks_anywhere_helm_charts(
             .aws_metrics_server_replicas,
     )
     .to_common_helm_chart()?;
+
+    // KEDA
+    let keda_charts = generate_keda_charts(
+        chart_prefix_path,
+        chart_config_prerequisites,
+        chart_config_prerequisites.is_keda_enabled,
+    )?;
 
     // Nginx ingress
     let nginx_ingress = Some(
@@ -320,9 +345,9 @@ pub(super) fn eks_anywhere_helm_charts(
         UpdateStrategy::RollingUpdate,
         true,
         false,
-        None,
-        None,
-        None,
+        metrics_config.metrics_query_url,
+        metrics_config.prometheus_service_url,
+        metrics_config.alert_manager_service_url,
         get_chart_override_fn.clone(),
     )
     .to_common_helm_chart()?;
@@ -404,7 +429,13 @@ pub(super) fn eks_anywhere_helm_charts(
     ));
 
     // Set deploying order
-    let level_0: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(q_priority_class_chart))];
+    let mut level_0: Vec<Option<Box<dyn HelmChart>>> = vec![
+        Some(Box::new(q_priority_class_chart)),
+        Some(Box::new(keda_charts.keda_crd_chart)),
+    ];
+    if let Some(chart) = prometheus_operator_crds_chart {
+        level_0.push(Some(chart));
+    }
 
     let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         // This chart is required in order to install CRDs and declare later charts with VPA
@@ -425,17 +456,29 @@ pub(super) fn eks_anywhere_helm_charts(
         )),
     ];
 
-    let level_2: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
+    let mut level_2: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(vpa))];
+    if let Some(chart) = kube_prometheus_stack_chart {
+        level_2.push(Some(chart));
+    }
 
     let mut level_3: Vec<Option<Box<dyn HelmChart>>> = vec![];
+    if let Some(chart) = thanos_chart {
+        level_3.push(Some(chart));
+    }
+    if let Some(chart) = alert_config_chart {
+        level_3.push(Some(chart));
+    }
     if let Some(promtail_chart) = promtail {
         level_3.push(Some(Box::new(promtail_chart)));
     }
     if let Some(loki_chart) = loki {
         level_3.push(Some(Box::new(loki_chart)));
     }
+    if let Some(chart) = prometheus_adapter_chart {
+        level_3.push(Some(chart));
+    }
 
-    let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![];
+    let level_4: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(keda_charts.keda_chart))];
     let level_5: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(external_dns_secret)), qovery_cert_manager_webhook];
 
