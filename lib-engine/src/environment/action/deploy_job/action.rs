@@ -235,7 +235,7 @@ where
         };
 
         // Delete external secrets helm release if exists
-        uninstall_service_external_secret(&job.kube_name, target);
+        uninstall_service_external_secret(&job.kube_name, job.long_id(), target);
     };
 
     (Box::new(pre_run), Box::new(task), Box::new(post_run))

@@ -220,7 +220,7 @@ impl<T: CloudProvider> DeploymentAction for HelmChart<T> {
                 })?;
 
             // Delete external secrets helm release if exists
-            uninstall_service_external_secret(&self.kube_name, target);
+            uninstall_service_external_secret(&self.kube_name, &self.long_id, target);
 
             Ok(())
         };
