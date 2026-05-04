@@ -15,7 +15,6 @@ use crate::{engine_task, hack};
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
 use tokio::sync::broadcast;
-
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
@@ -73,22 +72,6 @@ impl InfrastructureTask {
             },
             log_file_writer,
         }
-    }
-
-    fn info_context(&self) -> Context {
-        Context::new(
-            self.request.organization_long_id,
-            self.request.kubernetes.long_id,
-            self.request.id.to_string(),
-            self.workspace_root_dir.to_string(),
-            self.lib_root_dir.to_string(),
-            self.request.test_cluster,
-            self.request.features.clone(),
-            self.request.metadata.clone(),
-            self.docker.clone(),
-            self.qovery_api.clone(),
-            self.request.event_details(),
-        )
     }
 
     fn get_event_details(&self, step: InfrastructureStep) -> EventDetails {
@@ -196,7 +179,7 @@ impl Task for InfrastructureTask {
         let ret = infra_ctx
             .kubernetes()
             .as_infra_actions()
-            .run(&infra_ctx, self.request.action.to_service_action());
+            .run(&infra_ctx, self.request.action.into());
         self.handle_transaction_result(self.logger.clone(), ret);
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
@@ -237,5 +220,21 @@ impl Task for InfrastructureTask {
 
     fn await_terminated(&self) -> broadcast::Receiver<()> {
         self.is_terminated.1.resubscribe()
+    }
+
+    fn info_context(&self) -> Context {
+        Context::new(
+            self.request.organization_long_id,
+            self.request.kubernetes.long_id,
+            self.request.id.to_string(),
+            self.workspace_root_dir.to_string(),
+            self.lib_root_dir.to_string(),
+            self.request.test_cluster,
+            self.request.features.clone(),
+            self.request.metadata.clone(),
+            self.docker.clone(),
+            self.qovery_api.clone(),
+            self.request.event_details(),
+        )
     }
 }

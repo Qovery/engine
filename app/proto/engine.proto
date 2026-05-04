@@ -26,6 +26,7 @@ enum DeploymentType {
   Unknown = 0; // empty value in proto map to 0
   Environment = 1;
   Infrastructure = 2;
+  Blueprint = 3;
 }
 
 message DeploymentRequest {

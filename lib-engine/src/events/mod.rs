@@ -8,8 +8,9 @@ extern crate derivative;
 extern crate url;
 
 use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
-use crate::infrastructure::models::cloud_provider::Kind;
+use crate::infrastructure::models::cloud_provider::{Kind, service};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::engine_request::BlueprintEngineRequest;
 use crate::metrics_registry::StepRecord;
 use derivative::Derivative;
 use std::fmt::{Display, Formatter};
@@ -256,6 +257,9 @@ pub enum Stage {
     Infrastructure(InfrastructureStep),
     /// Environment: environment stage in the engine (applications operations).
     Environment(EnvironmentStep),
+
+    /// Blueprint: Blueprint stage in the engine (applications operations).
+    Blueprint(BlueprintStep),
 }
 
 impl Stage {
@@ -264,12 +268,14 @@ impl Stage {
         match &self {
             Stage::Infrastructure(step) => step.to_string(),
             Stage::Environment(step) => step.to_string(),
+            Stage::Blueprint(step) => step.to_string(),
         }
     }
 
     pub fn is_core_output(&self) -> bool {
         match self {
             Stage::Infrastructure(_) => false,
+            Stage::Blueprint(_) => false,
             Stage::Environment(step) => step.is_core_output(),
         }
     }
@@ -283,6 +289,7 @@ impl Display for Stage {
             match &self {
                 Stage::Infrastructure(_) => "infrastructure",
                 Stage::Environment(_) => "environment",
+                Stage::Blueprint(_) => "blueprint",
             },
         )
     }
@@ -537,6 +544,65 @@ impl Display for EnvironmentStep {
     }
 }
 
+impl From<service::Action> for EnvironmentStep {
+    fn from(value: service::Action) -> Self {
+        match value {
+            service::Action::Create => EnvironmentStep::Deploy,
+            service::Action::Pause => EnvironmentStep::Pause,
+            service::Action::Delete => EnvironmentStep::Delete,
+            service::Action::Restart => EnvironmentStep::Restart,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlueprintStep {
+    Cancel,
+    Cancelled,
+    Delete,
+    Deploy,
+    Deployed,
+    DeployedError,
+    LoadConfiguration,
+    Pause,
+    Restart,
+    Start,
+    Terminated,
+}
+
+impl From<service::Action> for BlueprintStep {
+    fn from(value: service::Action) -> Self {
+        match value {
+            service::Action::Create => BlueprintStep::Deploy,
+            service::Action::Pause => BlueprintStep::Pause,
+            service::Action::Delete => BlueprintStep::Delete,
+            service::Action::Restart => BlueprintStep::Restart,
+        }
+    }
+}
+
+impl Display for BlueprintStep {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match &self {
+                BlueprintStep::Cancel => "cancel",
+                BlueprintStep::Cancelled => "cancelled",
+                BlueprintStep::Delete => "delete",
+                BlueprintStep::Deploy => "deploy",
+                BlueprintStep::Deployed => "deployed",
+                BlueprintStep::DeployedError => "deployed-error",
+                BlueprintStep::LoadConfiguration => "load-configuration",
+                BlueprintStep::Pause => "pause",
+                BlueprintStep::Restart => "restart",
+                BlueprintStep::Start => "start",
+                BlueprintStep::Terminated => "terminated",
+            },
+        )
+    }
+}
+
 /// TransmitterId: represents a transmitter unique identifier.
 type TransmitterId = Uuid;
 /// TransmitterName: represents a transmitter name.
@@ -547,6 +613,8 @@ type TransmitterName = String;
 pub enum Transmitter {
     /// TaskManager: engine main task manager.
     TaskManager(TransmitterId, TransmitterName),
+    /// Blueprint: Blueprint engine part.
+    Blueprint(TransmitterId, TransmitterName),
     /// BuildPlatform: platform aiming to build applications images.
     BuildPlatform(TransmitterId, TransmitterName),
     /// ContainerRegistry: container registry engine part.
@@ -598,6 +666,7 @@ impl Display for Transmitter {
                 Transmitter::Job(id, name) => format!("job({id}, {name})"),
                 Transmitter::Helm(id, name) => format!("helm_chart({id}, {name})"),
                 Transmitter::TerraformService(id, name) => format!("terraform_service({id}, {name})"),
+                Transmitter::Blueprint(id, name) => format!("blueprint({id}, {name})"),
             }
         )
     }
@@ -619,7 +688,18 @@ pub struct EventDetails {
     /// transmitter: source triggering the event.
     transmitter: Transmitter,
 }
-
+impl From<BlueprintEngineRequest> for EventDetails {
+    fn from(value: BlueprintEngineRequest) -> Self {
+        EventDetails::new(
+            Some(value.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(value.organization_long_id),
+            QoveryIdentifier::new(value.kubernetes.long_id),
+            value.id.to_string(),
+            Stage::Blueprint(service::Action::from(value.action).into()),
+            Transmitter::Environment(value.target_environment.long_id, value.target_environment.name.clone()),
+        )
+    }
+}
 impl EventDetails {
     /// Creates a new EventDetails.
     ///
@@ -715,6 +795,20 @@ impl EventDetails {
                 | EnvironmentStep::TerraformServiceOutput
                 | EnvironmentStep::TerraformResources => return,
             },
+            //TODO: Update
+            Stage::Blueprint(blueprint_step) => match blueprint_step {
+                BlueprintStep::Cancel => todo!(),
+                BlueprintStep::Cancelled => todo!(),
+                BlueprintStep::Deployed => todo!(),
+                BlueprintStep::DeployedError => todo!(),
+                BlueprintStep::LoadConfiguration => todo!(),
+                BlueprintStep::Start => return,
+                BlueprintStep::Terminated => return,
+                BlueprintStep::Delete => todo!(),
+                BlueprintStep::Deploy => todo!(),
+                BlueprintStep::Pause => todo!(),
+                BlueprintStep::Restart => todo!(),
+            },
         };
     }
 
@@ -730,6 +824,10 @@ impl EventDetails {
         if let Stage::Environment(_) = &self.stage {
             self.stage = Stage::Environment(EnvironmentStep::Recap)
         }
+    }
+
+    pub fn update_stage(&mut self, stage: Stage) {
+        self.stage = stage;
     }
 
     /// TODO(benjaminch): remove this dirty hack

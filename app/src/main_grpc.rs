@@ -10,6 +10,7 @@ use std::net::TcpStream;
 
 use chrono::Utc;
 use clap::Parser;
+use qovery_engine::blueprint::task::BlueprintTask;
 use std::convert::TryFrom;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -50,7 +51,9 @@ use qovery_engine::events::{
 use qovery_engine::git_initialize_opts;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::QoveryIdentifier;
-use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
+use qovery_engine::io_models::engine_request::{
+    BlueprintEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
+};
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
 use qovery_engine::metrics_registry::MetricsRegistry;
@@ -94,6 +97,23 @@ fn to_engine_task(
 ) -> Result<Arc<dyn Task>, serde_json::Error> {
     let mk_task = || -> Result<Arc<dyn Task>, serde_json::Error> {
         match task_selector {
+            TaskSelector::Blueprint => {
+                let request = serde_json::from_slice::<BlueprintEngineRequest>(msg.as_bytes())?;
+                let qovery_api = Box::new(GrpcCoreServiceApi::new(
+                    request.deployment_jwt_token.clone(),
+                    grpc_client.clone(),
+                ));
+                Ok(Arc::new(BlueprintTask::new(
+                    request,
+                    workspace_root_dir.to_string(),
+                    lib_root_dir.to_string(),
+                    mk_docker(),
+                    logger,
+                    metrics_registry,
+                    qovery_api,
+                    Some(log_file_writer),
+                )))
+            }
             TaskSelector::Infrastructure => {
                 let request = serde_json::from_slice::<InfrastructureEngineRequest>(msg.as_bytes())?;
                 let qovery_api = Box::new(GrpcCoreServiceApi::new(
@@ -352,10 +372,10 @@ pub fn main() -> io::Result<()> {
     };
     let docker = Arc::new(docker);
 
-    let task_selector = if cli.deployment_type == "ENVIRONMENT" {
-        TaskSelector::Environment
-    } else {
-        TaskSelector::Infrastructure
+    let task_selector = match cli.deployment_type.as_str() {
+        "ENVIRONMENT" => TaskSelector::Environment,
+        "BLUEPRINT" => TaskSelector::Blueprint,
+        _ => TaskSelector::Infrastructure,
     };
 
     let task_executor = async move {

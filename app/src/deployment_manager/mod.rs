@@ -127,6 +127,9 @@ impl DeploymentManager {
             TaskSelector::Environment => DeploymentRequest {
                 deployment_type: DeploymentType::Environment as i32,
             },
+            TaskSelector::Blueprint => DeploymentRequest {
+                deployment_type: DeploymentType::Blueprint as i32,
+            },
         };
 
         Self {
@@ -493,6 +496,7 @@ mod test {
     use qovery_engine::events::EngineEvent;
 
     use qovery_engine::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
+    use qovery_engine::io_models::context::Context;
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex, RwLock};
@@ -631,6 +635,10 @@ mod test {
 
         fn await_terminated(&self) -> Receiver<()> {
             self.is_terminated.1.resubscribe()
+        }
+
+        fn info_context(&self) -> Context {
+            todo!()
         }
     }
 

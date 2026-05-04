@@ -92,22 +92,6 @@ impl EnvironmentTask {
         }
     }
 
-    fn info_context(&self) -> Context {
-        Context::new(
-            self.request.organization_long_id,
-            self.request.kubernetes.long_id,
-            self.request.id.to_string(),
-            self.workspace_root_dir.to_string(),
-            self.lib_root_dir.to_string(),
-            self.request.test_cluster,
-            self.request.features.clone(),
-            self.request.metadata.clone(),
-            self.docker.clone(),
-            self.qovery_api.clone(),
-            self.request.event_details(),
-        )
-    }
-
     fn infrastructure_context(&self) -> Result<InfrastructureContext, Box<EngineError>> {
         self.request.to_infrastructure_context(
             &self.info_context(),
@@ -549,12 +533,7 @@ impl Task for EnvironmentTask {
                 return;
             }
         };
-        let env_step = self
-            .request
-            .target_environment
-            .action
-            .to_service_action()
-            .to_environment_step();
+        let env_step = service::Action::from(self.request.target_environment.action).into();
         let event_details = self.get_event_details(env_step);
         let environment = match self.request.target_environment.to_environment_domain(
             infra_context.context(),
@@ -715,6 +694,22 @@ impl Task for EnvironmentTask {
 
     fn await_terminated(&self) -> broadcast::Receiver<()> {
         self.is_terminated.1.resubscribe()
+    }
+
+    fn info_context(&self) -> Context {
+        Context::new(
+            self.request.organization_long_id,
+            self.request.kubernetes.long_id,
+            self.request.id.to_string(),
+            self.workspace_root_dir.to_string(),
+            self.lib_root_dir.to_string(),
+            self.request.test_cluster,
+            self.request.features.clone(),
+            self.request.metadata.clone(),
+            self.docker.clone(),
+            self.qovery_api.clone(),
+            self.request.event_details(),
+        )
     }
 }
 

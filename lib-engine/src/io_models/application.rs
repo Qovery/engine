@@ -508,7 +508,7 @@ impl Application {
                 Ok(Box::new(models::application::Application::<AWS>::new(
                     context,
                     self.long_id,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     self.name.as_str(),
                     self.kube_name,
                     self.public_domain,
@@ -545,7 +545,7 @@ impl Application {
             CPKind::Azure => Ok(Box::new(models::application::Application::<Azure>::new(
                 context,
                 self.long_id,
-                self.action.to_service_action(),
+                self.action.into(),
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
@@ -581,7 +581,7 @@ impl Application {
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
                 self.long_id,
-                self.action.to_service_action(),
+                self.action.into(),
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
@@ -617,7 +617,7 @@ impl Application {
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
                 self.long_id,
-                self.action.to_service_action(),
+                self.action.into(),
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,
@@ -653,7 +653,7 @@ impl Application {
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
                 self.long_id,
-                self.action.to_service_action(),
+                self.action.into(),
                 self.name.as_str(),
                 self.kube_name,
                 self.public_domain,

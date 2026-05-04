@@ -2,4 +2,5 @@
 pub enum TaskSelector {
     Infrastructure,
     Environment,
+    Blueprint,
 }

@@ -15,6 +15,7 @@ use std::{io, process};
 
 use dirs::home_dir;
 use dotenv::dotenv;
+use qovery_engine::blueprint::task::BlueprintTask;
 use tracing::error;
 use tracing_subscriber::{EnvFilter, fmt::time::UtcTime, prelude::*};
 use url::Url;
@@ -25,7 +26,9 @@ use qovery_engine::engine_task::Task;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::infrastructure::task::InfrastructureTask;
-use qovery_engine::io_models::engine_request::{EnvironmentEngineRequest, InfrastructureEngineRequest};
+use qovery_engine::io_models::engine_request::{
+    BlueprintEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
+};
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::MetricsRegistry;
 
@@ -186,6 +189,28 @@ pub fn using_json_path_parameter(
     let file = BufReader::new(File::open(deploy_from_file)?);
 
     let task: Box<dyn Task> = match deployment_type {
+        TaskSelector::Blueprint => {
+            let mut deserialized_request = serde_json::Deserializer::from_reader(file);
+            let mut request: BlueprintEngineRequest = serde_path_to_error::deserialize(&mut deserialized_request)
+                .map_err(|err| {
+                    error!("Impossible to parse json file: {}", err);
+                    process::exit(1);
+                })
+                .unwrap();
+            request.test_cluster = test_cluster;
+            Box::new(BlueprintTask::new(
+                request,
+                workspace_root_dir,
+                lib_root_dir,
+                docker,
+                logger,
+                metrics_registry,
+                Box::new(StaticQoveryApi {
+                    versions: get_qovery_app_version("api.qovery.com").unwrap(),
+                }),
+                None,
+            ))
+        }
         TaskSelector::Environment => {
             let mut deserialized_req = serde_json::Deserializer::from_reader(file);
             let mut request: EnvironmentEngineRequest = serde_path_to_error::deserialize(&mut deserialized_req)

@@ -382,7 +382,7 @@ impl HelmChart {
                     self.long_id,
                     self.name,
                     self.kube_name,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     Self::to_chart_source_domain(
                         self.chart_source.clone(),
                         &ssh_keys,
@@ -410,7 +410,7 @@ impl HelmChart {
                     self.long_id,
                     self.name,
                     self.kube_name,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     Self::to_chart_source_domain(
                         self.chart_source.clone(),
                         &ssh_keys,
@@ -438,7 +438,7 @@ impl HelmChart {
                     self.long_id,
                     self.name,
                     self.kube_name,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     Self::to_chart_source_domain(
                         self.chart_source.clone(),
                         &ssh_keys,
@@ -466,7 +466,7 @@ impl HelmChart {
                     self.long_id,
                     self.name,
                     self.kube_name,
-                    self.action.to_service_action(),
+                    self.action.into(),
                     Self::to_chart_source_domain(
                         self.chart_source.clone(),
                         &ssh_keys,
@@ -493,7 +493,7 @@ impl HelmChart {
                 self.long_id,
                 self.name,
                 self.kube_name,
-                self.action.to_service_action(),
+                self.action.into(),
                 Self::to_chart_source_domain(
                     self.chart_source.clone(),
                     &ssh_keys,

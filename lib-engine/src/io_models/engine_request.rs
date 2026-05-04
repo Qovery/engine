@@ -8,7 +8,7 @@ use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
-use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::events::{BlueprintStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
@@ -41,6 +41,7 @@ use crate::infrastructure::models::kubernetes::scaleway::kapsule::Kapsule;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesVersion, event_details};
 use crate::infrastructure::models::{build_platform, cloud_provider, container_registry, dns_provider, kubernetes};
 use crate::io_models;
+use crate::io_models::blueprint::BlueprintRequest;
 use crate::io_models::context::{Context, Features, Metadata};
 use crate::io_models::environment::EnvironmentRequest;
 use crate::io_models::models::NodeGroups;
@@ -65,6 +66,7 @@ use url::Url;
 use uuid::Uuid;
 
 pub type EnvironmentEngineRequest = EngineRequest<EnvironmentRequest>;
+pub type BlueprintEngineRequest = EngineRequest<BlueprintRequest>;
 pub type InfrastructureEngineRequest = EngineRequest<Option<()>>;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -228,6 +230,19 @@ impl InfrastructureEngineRequest {
     }
 }
 
+impl BlueprintEngineRequest {
+    pub fn event_details(&self) -> EventDetails {
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(self.kubernetes.long_id),
+            self.id.to_string(),
+            Stage::Blueprint(BlueprintStep::from(cloud_provider::service::Action::from(self.action))),
+            Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
+        )
+    }
+}
+
 impl EnvironmentEngineRequest {
     pub fn event_details(&self) -> EventDetails {
         let kubernetes = &self.kubernetes;
@@ -237,7 +252,7 @@ impl EnvironmentEngineRequest {
             QoveryIdentifier::new(self.organization_long_id),
             QoveryIdentifier::new(kubernetes.long_id),
             self.id.to_string(),
-            Stage::Environment(self.action.to_service_action().to_environment_step()),
+            Stage::Environment(cloud_provider::service::Action::from(self.action).to_environment_step()),
             Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
         )
     }
