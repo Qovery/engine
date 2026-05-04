@@ -145,7 +145,7 @@ impl ExternalDNSChart {
                 config.aws_secret_access_key.hash(&mut hasher);
             }
         }
-        format!("{:x}", hasher.finish())
+        format!("0x{:x}", hasher.finish())
     }
 }
 
