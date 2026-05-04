@@ -29,3 +29,6 @@ dist/
 .speckit/
 .claude/**
 __pycache__/
+# Code graph
+evaluate/
+.code-review-graph/

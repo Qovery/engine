@@ -1,10 +1,24 @@
 [tools]
+python = "3.14"
+uv = "latest"
 
 [env]
 RUST_LOG = "info"
 WORKSPACE_ROOT_DIR = "{{config_root}}/lib-engine"
 LIB_ROOT_DIR = "{{config_root}}/lib-engine/lib"
 CI_PROJECT_TITLE = "test"
+
+[tasks."graph:install"]
+description = "Install code-review-graph via uv"
+run = "uv tool install 'code-review-graph[communities,embeddings]'"
+
+[tasks."graph:build"]
+description = "Build code-review-graph for current repo"
+run = "code-review-graph build"
+
+[tasks.graph]
+description = "Install and build the graph"
+depends = ["graph:install", "graph:build"]
 
 [tasks.get-test-secrets]
 description = "Get test secrets to be able to launch the engine tests"
