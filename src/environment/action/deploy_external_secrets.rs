@@ -458,9 +458,14 @@ fn wait_and_fetch_eso_values(
     Ok(result)
 }
 
-/// Uninstall External Secrets helm release for the given service.
+/// Uninstall External Secrets helm release for the given service and delete all orphaned k8s
+/// Secrets that ESO left behind due to `creationPolicy: Orphan`.
 /// If helm release doesn't exist, it will be silently ignored.
-pub fn uninstall_service_external_secret(service_kube_name: &str, deployment_target: &DeploymentTarget) {
+pub fn uninstall_service_external_secret(
+    service_kube_name: &str,
+    service_id: &Uuid,
+    deployment_target: &DeploymentTarget,
+) {
     let namespace = deployment_target.environment.namespace();
     let external_secrets_helm_release_name = eso_companion_release_name(service_kube_name);
     let external_secrets_helm_chart = ChartInfo::new_from_release_name(&external_secrets_helm_release_name, namespace);
@@ -473,7 +478,13 @@ pub fn uninstall_service_external_secret(service_kube_name: &str, deployment_tar
     ) {
         warn!("Failed to uninstall external secrets for release '{external_secrets_helm_release_name}': {e}");
     }
-    // TODO (qov-1569) Delete kube secrets remaining as they are not clean anymore by helm uninstall
+    delete_all_eso_secrets_for_service(deployment_target.kube.client(), namespace, service_id);
+}
+
+/// Deletes all Kubernetes Secrets that were created by ESO for a given service.
+/// Used when the service itself is being deleted — no secrets should remain.
+pub fn delete_all_eso_secrets_for_service(kube_client: kube::Client, namespace: &str, service_id: &Uuid) {
+    clean_unused_secrets_generated_by_eso(kube_client, namespace, service_id, vec![]);
 }
 
 /// Deletes Kubernetes Secrets that were previously created by ESO for a given service but are no

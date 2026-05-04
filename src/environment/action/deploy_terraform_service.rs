@@ -91,7 +91,7 @@ where
             Box::new(|_logger: &EnvProgressLogger| -> Result<TaskContext, Box<EngineError>> { Ok(TaskContext {}) });
         let mut post_run: TerraformPostRun = Box::new(|_logger: &EnvSuccessLogger, _state: TaskContext| {
             // Delete external secrets helm release if exists
-            uninstall_service_external_secret(&self.kube_name, target);
+            uninstall_service_external_secret(&self.kube_name, self.long_id(), target);
         });
 
         let (mut pod_tx, rx) = {
