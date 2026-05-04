@@ -1,5 +1,3 @@
-#global:
-#  imageRegistry: ""
 # Use the one deployed by Prometheus Operator
 objstoreConfig: set-by-engine-code
 

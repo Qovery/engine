@@ -874,35 +874,27 @@ fn select_single_full_cert_secret(
     cluster_name: &str,
     available_secrets: &[EtcdSecretCandidate],
 ) -> Result<Option<String>, CommandError> {
-    let default_secret_name = format!("{cluster_name}-etcd-certs");
-    let cluster_prefix = format!("{cluster_name}-");
-
-    let mut candidates = available_secrets
+    let candidates: Vec<&EtcdSecretCandidate> = available_secrets
         .iter()
-        .filter(|secret| {
-            secret_has_client_material(secret)
-                && secret_has_strong_ca_material(secret)
-                && secret.name.ends_with("-etcd-certs")
+        .filter(|s| {
+            secret_has_client_material(s) && secret_has_strong_ca_material(s) && s.name.ends_with("-etcd-certs")
         })
-        .map(|secret| {
-            let mut score = 500_i32;
-            if secret.name == default_secret_name {
-                score += 1_000;
-            } else if secret.name.starts_with(&cluster_prefix) {
-                score += 700;
-            }
+        .collect();
 
-            (secret.name.clone(), score)
-        })
-        .collect::<Vec<_>>();
-
-    if candidates.is_empty() {
-        return Ok(None);
+    let preferred = format!("{cluster_name}-etcd-certs");
+    if candidates.iter().any(|s| s.name == preferred) {
+        return Ok(Some(preferred));
     }
 
-    let selected =
-        pick_best_secret_name("full etcd cert secret", cluster_name, EKSA_SYSTEM_NAMESPACE, &mut candidates)?;
-    Ok(Some(selected))
+    match candidates.as_slice() {
+        [] => Ok(None),
+        [one] => Ok(Some(one.name.clone())),
+        many => Err(CommandError::new_from_safe_message(format!(
+            "Ambiguous full etcd cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`: {}. \
+Configure `certs_secret_name` explicitly to resolve the ambiguity.",
+            many.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")
+        ))),
+    }
 }
 
 fn select_client_secret_name(
@@ -910,42 +902,49 @@ fn select_client_secret_name(
     available_secrets: &[EtcdSecretCandidate],
     excluded_secret_name: Option<&str>,
 ) -> Result<String, CommandError> {
-    let cluster_prefix = format!("{cluster_name}-");
-    let expected_name = format!("{cluster_name}-apiserver-etcd-client");
-
-    let mut candidates = available_secrets
+    let candidates: Vec<&EtcdSecretCandidate> = available_secrets
         .iter()
-        .filter(|secret| excluded_secret_name.is_none_or(|excluded| secret.name != excluded))
-        .filter(|secret| secret_has_client_material(secret))
-        .map(|secret| {
-            let mut score = 100_i32;
-            if secret.name == expected_name {
-                score += 1_000;
-            }
-            if secret.name.starts_with(&cluster_prefix) {
-                score += 200;
-            }
-            if secret.name.ends_with("-apiserver-etcd-client") {
-                score += 500;
-            }
-            if secret.name.contains("apiserver-etcd-client") {
-                score += 300;
-            }
-            if secret.name.ends_with("-etcd-client") {
-                score += 200;
-            }
-            if secret.name.ends_with("-etcd-certs") {
-                score += 250;
-            }
-            if secret_has_strong_ca_material(secret) {
-                score += 50;
-            }
+        .filter(|s| excluded_secret_name.is_none_or(|e| s.name != e))
+        .filter(|s| secret_has_client_material(s))
+        .collect();
 
-            (secret.name.clone(), score)
-        })
+    for name in [
+        format!("{cluster_name}-apiserver-etcd-client"),
+        format!("{cluster_name}-etcd-certs"),
+        format!("{cluster_name}-etcd-client"),
+    ] {
+        if candidates.iter().any(|s| s.name == name) {
+            return Ok(name);
+        }
+    }
+
+    let cluster_prefix = format!("{cluster_name}-");
+    let cluster_candidates = candidates
+        .iter()
+        .copied()
+        .filter(|s| s.name.starts_with(&cluster_prefix))
         .collect::<Vec<_>>();
+    match cluster_candidates.as_slice() {
+        [one] => return Ok(one.name.clone()),
+        many if many.len() > 1 => {
+            return Err(CommandError::new_from_safe_message(format!(
+                "Ambiguous etcd client cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`: {}",
+                many.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")
+            )));
+        }
+        _ => {}
+    }
 
-    pick_best_secret_name("etcd client cert secret", cluster_name, EKSA_SYSTEM_NAMESPACE, &mut candidates)
+    match candidates.as_slice() {
+        [] => Err(CommandError::new_from_safe_message(format!(
+            "Cannot find etcd client cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`"
+        ))),
+        [one] => Ok(one.name.clone()),
+        many => Err(CommandError::new_from_safe_message(format!(
+            "Ambiguous etcd client cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`: {}",
+            many.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")
+        ))),
+    }
 }
 
 fn select_ca_secret_name(
@@ -953,86 +952,41 @@ fn select_ca_secret_name(
     available_secrets: &[EtcdSecretCandidate],
     excluded_secret_name: Option<&str>,
 ) -> Result<String, CommandError> {
-    let cluster_prefix = format!("{cluster_name}-");
-    let expected_etcd_name = format!("{cluster_name}-etcd");
-    let expected_managed_etcd_name = format!("{cluster_name}-managed-etcd");
-    let expected_legacy_certs_name = format!("{cluster_name}-etcd-certs");
-
-    let mut candidates = available_secrets
+    let candidates: Vec<&EtcdSecretCandidate> = available_secrets
         .iter()
-        .filter(|secret| excluded_secret_name.is_none_or(|excluded| secret.name != excluded))
-        .filter(|secret| secret_has_ca_material(secret))
-        .map(|secret| {
-            let mut score = 100_i32;
-            if secret.name == expected_etcd_name {
-                score += 1_000;
-            }
-            if secret.name == expected_managed_etcd_name {
-                score += 950;
-            }
-            if secret.name == expected_legacy_certs_name {
-                score += 900;
-            }
-            if secret.name.starts_with(&cluster_prefix) {
-                score += 200;
-            }
-            if secret.name.ends_with("-etcd-certs") {
-                score += 500;
-            }
-            if secret.name.ends_with("-managed-etcd") {
-                score += 450;
-            }
-            if secret.name.ends_with("-etcd") {
-                score += 400;
-            }
-            if secret_has_strong_ca_material(secret) {
-                score += 150;
-            } else {
-                score += 20;
-            }
-            if secret.name.contains("apiserver-etcd-client") {
-                score -= 450;
-            }
-            if secret_has_client_material(secret) {
-                score -= 100;
-            }
+        .filter(|s| excluded_secret_name.is_none_or(|e| s.name != e))
+        .filter(|s| secret_has_ca_material(s))
+        .collect();
 
-            (secret.name.clone(), score)
-        })
-        .collect::<Vec<_>>();
-
-    pick_best_secret_name("etcd CA cert secret", cluster_name, EKSA_SYSTEM_NAMESPACE, &mut candidates)
-}
-
-fn pick_best_secret_name(
-    secret_kind: &str,
-    cluster_name: &str,
-    namespace: &str,
-    candidates: &mut [(String, i32)],
-) -> Result<String, CommandError> {
-    if candidates.is_empty() {
-        return Err(CommandError::new_from_safe_message(format!(
-            "Cannot find {secret_kind} for cluster `{cluster_name}` in namespace `{namespace}`"
-        )));
+    for name in [
+        format!("{cluster_name}-etcd"),
+        format!("{cluster_name}-managed-etcd"),
+        format!("{cluster_name}-etcd-certs"),
+    ] {
+        if candidates.iter().any(|s| s.name == name) {
+            return Ok(name);
+        }
     }
 
-    candidates.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
-
-    let top_score = candidates[0].1;
-    let top_candidates = candidates
+    // In the fallback, prefer secrets with a dedicated CA key (ca.crt/ca.pem)
+    // over those matched only via the tls.crt fallback (e.g. apiserver-etcd-client).
+    let strong: Vec<&EtcdSecretCandidate> = candidates
         .iter()
-        .take_while(|(_, score)| *score == top_score)
-        .map(|(name, _)| name.as_str())
-        .collect::<Vec<_>>();
+        .copied()
+        .filter(|s| secret_has_strong_ca_material(s))
+        .collect();
+    let pool: &[&EtcdSecretCandidate] = if strong.is_empty() { &candidates } else { &strong };
 
-    if top_candidates.len() > 1 {
-        return Err(CommandError::new_from_safe_message(format!(
-            "Ambiguous {secret_kind} for cluster `{cluster_name}` in namespace `{namespace}`: {}",
-            top_candidates.join(", ")
-        )));
+    match pool {
+        [] => Err(CommandError::new_from_safe_message(format!(
+            "Cannot find etcd CA cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`"
+        ))),
+        [one] => Ok(one.name.clone()),
+        many => Err(CommandError::new_from_safe_message(format!(
+            "Ambiguous etcd CA cert secret for cluster `{cluster_name}` in namespace `{EKSA_SYSTEM_NAMESPACE}`: {}",
+            many.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")
+        ))),
     }
-
-    Ok(candidates[0].0.clone())
 }
 
 fn secret_has_client_material(secret: &EtcdSecretCandidate) -> bool {
@@ -1256,6 +1210,40 @@ mod tests {
     }
 
     #[test]
+    fn should_prefer_strong_ca_over_fallback_tls_crt_in_ca_selection() {
+        // apiserver-etcd-client has tls.crt (fallback CA match) but cluster-a-etcd has ca.crt (strong match)
+        // The strong candidate should win even though both pass secret_has_ca_material.
+        let selection = select_etcd_certs_secret_names(
+            "cluster-a",
+            None,
+            &[
+                secret_candidate("cluster-a-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-a-custom-ca", &["ca.crt"]),
+                secret_candidate("cluster-a-fallback-only", &["tls.crt"]),
+            ],
+        )
+        .expect("cert secrets should be selected");
+
+        assert_eq!(selection.ca_secret_name, "cluster-a-custom-ca");
+        assert_eq!(selection.ca_cert_key, "ca.crt");
+    }
+
+    #[test]
+    fn should_fail_when_full_cert_secret_selection_is_ambiguous() {
+        let error = select_etcd_certs_secret_names(
+            "cluster-a",
+            None,
+            &[
+                secret_candidate("cluster-x-etcd-certs", &["ca.crt", "tls.crt", "tls.key"]),
+                secret_candidate("cluster-y-etcd-certs", &["ca.crt", "tls.crt", "tls.key"]),
+            ],
+        )
+        .expect_err("selection should fail when multiple full-cert secrets match");
+
+        assert!(error.message_safe().contains("Ambiguous full etcd cert secret"));
+    }
+
+    #[test]
     fn should_fail_when_client_secret_selection_is_ambiguous() {
         let error = select_etcd_certs_secret_names(
             "cluster-a",
@@ -1268,6 +1256,42 @@ mod tests {
         .expect_err("selection should fail");
 
         assert!(error.message_safe().contains("Ambiguous etcd client cert secret"));
+    }
+
+    #[test]
+    fn should_prefer_cluster_prefixed_client_secret_when_other_cluster_secret_exists() {
+        let selection = select_etcd_certs_secret_names(
+            "cluster-a",
+            None,
+            &[
+                secret_candidate("cluster-a-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-b-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-a-etcd", &["ca.crt"]),
+            ],
+        )
+        .expect("selection should prefer single cluster-prefixed client secret");
+
+        assert_eq!(selection.client_secret_name, "cluster-a-custom-client");
+    }
+
+    #[test]
+    fn should_fail_when_multiple_cluster_prefixed_client_secrets_exist() {
+        let error = select_etcd_certs_secret_names(
+            "cluster-a",
+            None,
+            &[
+                secret_candidate("cluster-a-first-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-a-second-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-b-custom-client", &["tls.crt", "tls.key"]),
+                secret_candidate("cluster-a-etcd", &["ca.crt"]),
+            ],
+        )
+        .expect_err("selection should fail when multiple cluster-prefixed client secrets exist");
+
+        assert!(error.message_safe().contains("Ambiguous etcd client cert secret"));
+        assert!(error.message_safe().contains("cluster-a-first-custom-client"));
+        assert!(error.message_safe().contains("cluster-a-second-custom-client"));
+        assert!(!error.message_safe().contains("cluster-b-custom-client"));
     }
 
     #[test]

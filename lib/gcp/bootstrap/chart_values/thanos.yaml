@@ -1,4 +1,3 @@
-# todo(pmavro): use our registry
 #global:
 #  imageRegistry: ""
 # Use the one deployed by Prometheus Operator

@@ -7,6 +7,8 @@ mod etcd_backup;
 mod helm_charts;
 mod provider;
 
+pub(crate) use helm_charts::EksAnywhereChartsConfigPrerequisites;
+
 use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;

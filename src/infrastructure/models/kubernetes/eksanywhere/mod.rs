@@ -4,6 +4,7 @@ use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
+use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::infrastructure::models::kubernetes::{Kind, Kubernetes, KubernetesVersion, event_details};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
@@ -81,6 +82,10 @@ impl EksAnywhere {
 
         Ok(cluster)
     }
+
+    pub fn get_keda_parameters(&self) -> Option<KedaParameters> {
+        self.options.keda_parameters.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -88,6 +93,7 @@ pub struct EksAnywhereOptions {
     pub qovery_grpc_url: String,
     pub qovery_engine_url: String,
     pub metrics_parameters: Option<MetricsParameters>,
+    pub keda_parameters: Option<KedaParameters>,
     pub jwt_token: String,
     pub infrastructure_charts_parameters: InfrastructureChartsParameters,
     pub tls_email_report: String,
@@ -98,6 +104,7 @@ impl EksAnywhereOptions {
         qovery_grpc_url: String,
         qovery_engine_url: String,
         metrics_parameters: Option<MetricsParameters>,
+        keda_parameters: Option<KedaParameters>,
         jwt_token: String,
         infrastructure_charts_parameters: InfrastructureChartsParameters,
         tls_email_report: String,
@@ -106,6 +113,7 @@ impl EksAnywhereOptions {
             qovery_grpc_url,
             qovery_engine_url,
             metrics_parameters,
+            keda_parameters,
             jwt_token,
             infrastructure_charts_parameters,
             tls_email_report,
@@ -282,6 +290,14 @@ impl Kubernetes for EksAnywhere {
         &self.advanced_settings
     }
 
+    fn is_keda_enabled(&self) -> bool {
+        self.options
+            .keda_parameters
+            .as_ref()
+            .map(|keda| keda.enabled)
+            .unwrap_or(false)
+    }
+
     fn loadbalancer_l4_annotations(&self, _cloud_provider_lb_name: Option<&str>) -> Vec<(String, String)> {
         Vec::with_capacity(0)
     }
@@ -380,6 +396,29 @@ mod tests {
                 .infrastructure_charts_parameters
                 .eks_anywhere_parameters
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn should_parse_keda_parameters_for_eks_anywhere_options() {
+        let mut payload = base_eks_anywhere_options();
+        payload["keda_parameters"] = json!({
+            "enabled": true,
+            "resource_profile": "NORMAL",
+            "availability": "HIGH"
+        });
+
+        let options: EksAnywhereOptions = serde_json::from_value(payload).expect("options should deserialize");
+        let keda_parameters = options.keda_parameters.expect("keda_parameters should be present");
+
+        assert!(keda_parameters.enabled);
+        assert_eq!(
+            keda_parameters.resource_profile,
+            crate::infrastructure::models::kubernetes::keda::KedaResourceProfile::Normal
+        );
+        assert_eq!(
+            keda_parameters.availability,
+            crate::infrastructure::models::kubernetes::keda::KedaAvailability::High
         );
     }
 
