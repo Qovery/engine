@@ -37,8 +37,8 @@ pub struct BlueprintVariable {
     pub is_secret: bool,
 }
 
-// Generic map of spec field overrides sent by q-core when the user overrides
-// fields marked `overridable: true` in the QBM.
+// Spec field overrides sent by q-core. q-core resolves which fields the user
+// can override and bakes the final values here before sending to the engine.
 //
 // The engine applies these with highest precedence:
 //   spec_overrides > qbm.yml spec > hardcoded platform default

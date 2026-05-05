@@ -1,4 +1,7 @@
 use crate::blueprint::models::error::BlueprintError;
+use crate::blueprint::models::info::BlueprintInfo;
+use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintKind, QoveryBlueprintManifest};
+use crate::blueprint::models::spec::ResolvedBlueprintSpec;
 use crate::cmd::docker::Docker;
 use crate::cmd::git;
 use crate::engine_task::Task;
@@ -14,7 +17,6 @@ use crate::logger::Logger;
 use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHandle, StepStatus};
 use crate::{engine_task, hack};
 use git2::{Cred, CredentialType};
-use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
@@ -189,6 +191,49 @@ impl BlueprintTask {
         Ok(full_path)
     }
 
+    /// Parse the QBM manifest from the blueprint directory.
+    fn parse_manifest(&self, blueprint_dir: &Path) -> Result<QoveryBlueprintManifest, Box<EngineError>> {
+        let event_details = self.get_event_details(BlueprintStep::LoadConfiguration);
+        let qbm_path = blueprint_dir.join("qbm.yml");
+
+        if !qbm_path.exists() {
+            return Err(Box::new(EngineError::new_invalid_engine_payload(
+                event_details,
+                &format!("qbm.yml not found at {}", qbm_path.display()),
+                None,
+            )));
+        }
+
+        let manifest = QoveryBlueprintManifest::parse(&qbm_path).map_err(|e| {
+            Box::new(EngineError::new_invalid_engine_payload(
+                event_details.clone(),
+                &format!("Failed to parse qbm.yml: {}", e),
+                None,
+            ))
+        })?;
+
+        if manifest.kind != BlueprintKind::ServiceBlueprint {
+            return Err(Box::new(EngineError::new_invalid_engine_payload(
+                event_details,
+                "Only ServiceBlueprint is supported. StackBlueprint orchestration is handled by q-core.",
+                None,
+            )));
+        }
+
+        self.logger.log(EngineEvent::Info(
+            event_details,
+            EventMessage::new(
+                format!(
+                    "Parsed QBM manifest — engine: {:?}, credentials: {:?}, timeout: {:?}",
+                    manifest.spec.engine, manifest.spec.credentials.default, manifest.spec.timeout,
+                ),
+                None,
+            ),
+        ));
+
+        Ok(manifest)
+    }
+
     fn stop_total_steps_records(deployment_ret: &Result<(), Box<EngineError>>, record: StepRecordHandle) {
         let step_status = match deployment_ret {
             Ok(()) => StepStatus::Success,
@@ -199,45 +244,7 @@ impl BlueprintTask {
     }
 
     fn get_blueprint_info(&self) -> Result<BlueprintInfo, BlueprintError> {
-        BlueprintInfo::from_tag(&self.request.target_environment.tag)
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct BlueprintInfo {
-    pub provider: String,
-    pub service_name: String,
-    pub service_version: String,
-    pub manifest_version: String,
-}
-
-impl BlueprintInfo {
-    pub fn from_tag(tag: &str) -> Result<Self, BlueprintError> {
-        let split: Vec<&str> = tag.split('/').collect();
-        if split.len() != 4 {
-            return Err(BlueprintError::InvalidTagFormat);
-        }
-
-        Ok(BlueprintInfo {
-            provider: split[0].into(),
-            service_name: split[1].into(),
-            service_version: split[2].into(),
-            manifest_version: split[3].into(),
-        })
-    }
-
-    pub fn path(&self) -> String {
-        format!("{}/{}/{}", self.provider, self.service_name, self.service_version)
-    }
-}
-
-impl Display for BlueprintInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "provider={}, service={}, service version={}, manifest version={}",
-            self.provider, self.service_name, self.service_version, self.manifest_version
-        )
+        BlueprintInfo::try_new(self.request.target_environment.tag.as_str())
     }
 }
 
@@ -286,8 +293,21 @@ impl Task for BlueprintTask {
 
         let deployment_ret = (|| -> Result<(), Box<EngineError>> {
             // 2. Clone blueprint repo
-            let _ = self.clone_blueprint_repo(&infra_context)?;
-            //TODO: Next step: Manifest Parsing
+            let blueprint_dir = self.clone_blueprint_repo(&infra_context)?;
+
+            // 3. Parse QBM manifest
+            let manifest = self.parse_manifest(&blueprint_dir)?;
+
+            // 4. Resolve spec (QBM defaults + spec_overrides + platform defaults)
+            let resolved_spec =
+                ResolvedBlueprintSpec::resolve(&manifest.spec, &self.request.target_environment.spec_overrides);
+
+            self.logger.log(EngineEvent::Info(
+                self.get_event_details(BlueprintStep::LoadConfiguration),
+                EventMessage::new(format!("Resolved blueprint spec: {:?}", resolved_spec), None),
+            ));
+
+            //TODO: Next step: Execute blueprint (terraform apply / helm upgrade)
 
             Ok(())
         })();
@@ -388,91 +408,5 @@ impl Task for BlueprintTask {
             self.qovery_api.clone(),
             self.request.event_details(),
         )
-    }
-}
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::blueprint::models::error::BlueprintError;
-
-    // -- BlueprintInfo::from_tag --
-
-    #[test]
-    fn from_tag_parses_terraform_blueprint() {
-        let info = BlueprintInfo::from_tag("aws/postgres/16/1.0.0").unwrap();
-        assert_eq!(info.provider, "aws");
-        assert_eq!(info.service_name, "postgres");
-        assert_eq!(info.service_version, "16");
-        assert_eq!(info.manifest_version, "1.0.0");
-    }
-
-    #[test]
-    fn from_tag_parses_helm_blueprint() {
-        let info = BlueprintInfo::from_tag("helm/redis/7/2.1.0").unwrap();
-        assert_eq!(info.provider, "helm");
-        assert_eq!(info.service_name, "redis");
-        assert_eq!(info.service_version, "7");
-        assert_eq!(info.manifest_version, "2.1.0");
-    }
-
-    #[test]
-    fn from_tag_parses_versionless_service() {
-        let info = BlueprintInfo::from_tag("aws/s3/1/1.0.0").unwrap();
-        assert_eq!(info.provider, "aws");
-        assert_eq!(info.service_name, "s3");
-        assert_eq!(info.service_version, "1");
-        assert_eq!(info.manifest_version, "1.0.0");
-    }
-
-    #[test]
-    fn from_tag_rejects_too_few_segments() {
-        let err = BlueprintInfo::from_tag("aws/s3/1.0.0").unwrap_err();
-        assert_eq!(err, BlueprintError::InvalidTagFormat);
-    }
-
-    #[test]
-    fn from_tag_rejects_too_many_segments() {
-        let err = BlueprintInfo::from_tag("aws/s3/1/1.0.0/extra").unwrap_err();
-        assert_eq!(err, BlueprintError::InvalidTagFormat);
-    }
-
-    #[test]
-    fn from_tag_rejects_empty_string() {
-        let err = BlueprintInfo::from_tag("").unwrap_err();
-        assert_eq!(err, BlueprintError::InvalidTagFormat);
-    }
-
-    #[test]
-    fn from_tag_rejects_single_segment() {
-        let err = BlueprintInfo::from_tag("aws").unwrap_err();
-        assert_eq!(err, BlueprintError::InvalidTagFormat);
-    }
-
-    // -- BlueprintInfo::path --
-
-    #[test]
-    fn path_returns_three_segments() {
-        let info = BlueprintInfo::from_tag("aws/postgres/17/1.1.0").unwrap();
-        assert_eq!(info.path(), "aws/postgres/17");
-    }
-
-    #[test]
-    fn path_excludes_manifest_version() {
-        let info = BlueprintInfo::from_tag("helm/redis/7/3.0.0").unwrap();
-        // path must not contain the manifest version
-        assert!(!info.path().contains("3.0.0"));
-        assert_eq!(info.path(), "helm/redis/7");
-    }
-
-    // -- BlueprintInfo Display --
-
-    #[test]
-    fn display_contains_all_fields() {
-        let info = BlueprintInfo::from_tag("gcp/cloud-sql/15/1.2.3").unwrap();
-        let display = format!("{}", info);
-        assert!(display.contains("provider=gcp"));
-        assert!(display.contains("service=cloud-sql"));
-        assert!(display.contains("service version=15"));
-        assert!(display.contains("manifest version=1.2.3"));
     }
 }
