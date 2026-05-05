@@ -55,6 +55,27 @@ resource "aws_iam_role_policy_attachment" "karpenter_ssm_managed_instance_core" 
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_role_policy" "karpenter_node_ecr_public" {
+  name = "KarpenterNodeECRPublic-${var.kubernetes_cluster_name}"
+  role = aws_iam_role.karpenter_node_role.name
+  policy = jsonencode(
+    {
+      "Version" : "2012-10-17",
+      "Statement" : [
+        {
+          "Sid" : "AllowECRPublicGetAuthorizationToken",
+          "Effect" : "Allow",
+          "Action" : [
+            "ecr-public:GetAuthorizationToken",
+            "sts:GetServiceBearerToken"
+          ],
+          "Resource" : "*"
+        }
+      ]
+    }
+  )
+}
+
 ## Karpenter Controller Role
 
 resource "aws_iam_role" "karpenter_controller_role" {
