@@ -108,7 +108,7 @@ where
                 );
             }
 
-            Ok(())
+            result
         };
 
         execute_long_deployment(ApplicationDeploymentReporter::new(self, target, Action::Create), long_task)
