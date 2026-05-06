@@ -110,6 +110,29 @@ spec:
         {%- endif %}
       {%- endif %}
   {%- endif %}
+  {%- if resolved_gateway_api_retry_num_retries or resolved_gateway_api_retry_num_retries == 0 %}
+  retry:
+    numRetries: {{ resolved_gateway_api_retry_num_retries }}
+    {%- if resolved_gateway_api_retry_per_try_timeout_seconds or resolved_gateway_api_retry_per_try_timeout_seconds == 0 %}
+    perRetry:
+      timeout: {{ resolved_gateway_api_retry_per_try_timeout_seconds }}s
+    {%- endif %}
+    {%- if resolved_gateway_api_retry_retry_on_triggers | length > 0 or resolved_gateway_api_retry_http_status_codes | length > 0 %}
+    retryOn:
+      {%- if resolved_gateway_api_retry_retry_on_triggers | length > 0 %}
+      triggers:
+        {%- for trigger in resolved_gateway_api_retry_retry_on_triggers %}
+        - {{ trigger }}
+        {%- endfor %}
+      {%- endif %}
+      {%- if resolved_gateway_api_retry_http_status_codes | length > 0 %}
+      httpStatusCodes:
+        {%- for status_code in resolved_gateway_api_retry_http_status_codes %}
+        - {{ status_code }}
+        {%- endfor %}
+      {%- endif %}
+    {%- endif %}
+  {%- endif %}
   {%- set service_request_timeout = advanced_settings.network_gateway_api_http_request_timeout_seconds %}
   {%- set service_idle_timeout = advanced_settings.network_gateway_api_http_connection_idle_timeout_seconds %}
   {%- set service_max_stream_duration = advanced_settings.network_gateway_api_http_max_stream_duration_seconds %}

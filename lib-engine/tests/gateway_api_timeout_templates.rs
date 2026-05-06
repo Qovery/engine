@@ -12,10 +12,64 @@ const HTTP_ROUTE_TEMPLATE: &str =
 const GRPC_ROUTE_TEMPLATE: &str =
     include_str!("../lib/common/charts/q-ingress-tls/templates/gateway-grpc-route.j2.yaml");
 
+#[derive(Clone, Default)]
+struct RetrySettings {
+    num_retries: Option<u32>,
+    retry_on: String,
+    http_status_codes: String,
+    per_try_timeout_seconds: Option<u32>,
+}
+
+#[derive(Clone, Default)]
+struct ResolvedRetrySettings {
+    num_retries: Option<u32>,
+    retry_on_triggers: Vec<String>,
+    http_status_codes: Vec<String>,
+    per_try_timeout_seconds: Option<u32>,
+}
+
+fn no_retry_settings() -> RetrySettings {
+    RetrySettings::default()
+}
+
+fn parse_csv_setting_to_vec(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn select_retry_csv_with_fallback(service_value: &str, cluster_value: &str) -> Vec<String> {
+    if !service_value.trim().is_empty() {
+        return parse_csv_setting_to_vec(service_value);
+    }
+    if !cluster_value.trim().is_empty() {
+        return parse_csv_setting_to_vec(cluster_value);
+    }
+    Vec::new()
+}
+
+fn resolve_retry_settings(service_retry: &RetrySettings, cluster_retry: &RetrySettings) -> ResolvedRetrySettings {
+    ResolvedRetrySettings {
+        num_retries: service_retry.num_retries.or(cluster_retry.num_retries),
+        retry_on_triggers: select_retry_csv_with_fallback(&service_retry.retry_on, &cluster_retry.retry_on),
+        http_status_codes: select_retry_csv_with_fallback(
+            &service_retry.http_status_codes,
+            &cluster_retry.http_status_codes,
+        ),
+        per_try_timeout_seconds: service_retry
+            .per_try_timeout_seconds
+            .or(cluster_retry.per_try_timeout_seconds),
+    }
+}
+
 fn base_advanced_settings(
     service_request_timeout: Option<u32>,
     service_idle_timeout: Option<u32>,
     service_max_stream_duration: Option<u32>,
+    service_retry: &RetrySettings,
 ) -> serde_json::Value {
     json!({
         "network_gateway_api_sticky_session_enable": false,
@@ -23,6 +77,10 @@ fn base_advanced_settings(
         "network_gateway_api_route_limit_rps": null,
         "network_gateway_api_route_limit_source_cidrs": "",
         "network_gateway_api_route_limit_headers": "",
+        "network_gateway_api_retry_num_retries": service_retry.num_retries,
+        "network_gateway_api_retry_retry_on": service_retry.retry_on,
+        "network_gateway_api_retry_http_status_codes": service_retry.http_status_codes,
+        "network_gateway_api_retry_per_try_timeout_seconds": service_retry.per_try_timeout_seconds,
         "network_gateway_api_custom_http_errors": null,
         "network_gateway_api_circuit_breaker_max_connections": null,
         "network_gateway_api_circuit_breaker_max_pending_requests": null,
@@ -43,6 +101,29 @@ fn render_http_policy(
     cluster_read_timeout: Option<u32>,
     cluster_max_stream_duration: Option<u32>,
 ) -> String {
+    render_http_policy_with_retry(
+        service_request_timeout,
+        service_idle_timeout,
+        service_max_stream_duration,
+        cluster_send_timeout,
+        cluster_read_timeout,
+        cluster_max_stream_duration,
+        no_retry_settings(),
+        no_retry_settings(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_http_policy_with_retry(
+    service_request_timeout: Option<u32>,
+    service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
+    cluster_send_timeout: Option<u32>,
+    cluster_read_timeout: Option<u32>,
+    cluster_max_stream_duration: Option<u32>,
+    service_retry: RetrySettings,
+    cluster_retry: RetrySettings,
+) -> String {
     let mut tera = Tera::default();
     tera.add_raw_template("template", HTTP_TEMPLATE)
         .expect("HTTP template should parse");
@@ -59,7 +140,12 @@ fn render_http_policy(
     context.insert("labels_group", &json!({ "common": {} }));
     context.insert(
         "advanced_settings",
-        &base_advanced_settings(service_request_timeout, service_idle_timeout, service_max_stream_duration),
+        &base_advanced_settings(
+            service_request_timeout,
+            service_idle_timeout,
+            service_max_stream_duration,
+            &service_retry,
+        ),
     );
     context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
     context.insert(
@@ -69,6 +155,30 @@ fn render_http_policy(
     context.insert(
         "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
         &cluster_max_stream_duration,
+    );
+    context.insert("cluster_envoy_gateway_api_retry_num_retries", &cluster_retry.num_retries);
+    context.insert("cluster_envoy_gateway_api_retry_retry_on", &cluster_retry.retry_on);
+    context.insert(
+        "cluster_envoy_gateway_api_retry_http_status_codes",
+        &cluster_retry.http_status_codes,
+    );
+    context.insert(
+        "cluster_envoy_gateway_api_retry_per_try_timeout_seconds",
+        &cluster_retry.per_try_timeout_seconds,
+    );
+    let resolved_retry = resolve_retry_settings(&service_retry, &cluster_retry);
+    context.insert("resolved_gateway_api_retry_num_retries", &resolved_retry.num_retries);
+    context.insert(
+        "resolved_gateway_api_retry_retry_on_triggers",
+        &resolved_retry.retry_on_triggers,
+    );
+    context.insert(
+        "resolved_gateway_api_retry_http_status_codes",
+        &resolved_retry.http_status_codes,
+    );
+    context.insert(
+        "resolved_gateway_api_retry_per_try_timeout_seconds",
+        &resolved_retry.per_try_timeout_seconds,
     );
 
     tera.render("template", &context).expect("HTTP template should render")
@@ -81,6 +191,29 @@ fn render_grpc_policy(
     cluster_send_timeout: Option<u32>,
     cluster_read_timeout: Option<u32>,
     cluster_max_stream_duration: Option<u32>,
+) -> String {
+    render_grpc_policy_with_retry(
+        service_request_timeout,
+        service_idle_timeout,
+        service_max_stream_duration,
+        cluster_send_timeout,
+        cluster_read_timeout,
+        cluster_max_stream_duration,
+        no_retry_settings(),
+        no_retry_settings(),
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_grpc_policy_with_retry(
+    service_request_timeout: Option<u32>,
+    service_idle_timeout: Option<u32>,
+    service_max_stream_duration: Option<u32>,
+    cluster_send_timeout: Option<u32>,
+    cluster_read_timeout: Option<u32>,
+    cluster_max_stream_duration: Option<u32>,
+    service_retry: RetrySettings,
+    cluster_retry: RetrySettings,
 ) -> String {
     let mut tera = Tera::default();
     tera.add_raw_template("template", GRPC_TEMPLATE)
@@ -101,7 +234,12 @@ fn render_grpc_policy(
     context.insert("labels_group", &json!({ "common": {} }));
     context.insert(
         "advanced_settings",
-        &base_advanced_settings(service_request_timeout, service_idle_timeout, service_max_stream_duration),
+        &base_advanced_settings(
+            service_request_timeout,
+            service_idle_timeout,
+            service_max_stream_duration,
+            &service_retry,
+        ),
     );
     context.insert("cluster_envoy_gateway_api_http_request_timeout_seconds", &cluster_send_timeout);
     context.insert(
@@ -111,6 +249,30 @@ fn render_grpc_policy(
     context.insert(
         "cluster_envoy_gateway_api_http_max_stream_duration_seconds",
         &cluster_max_stream_duration,
+    );
+    context.insert("cluster_envoy_gateway_api_retry_num_retries", &cluster_retry.num_retries);
+    context.insert("cluster_envoy_gateway_api_retry_retry_on", &cluster_retry.retry_on);
+    context.insert(
+        "cluster_envoy_gateway_api_retry_http_status_codes",
+        &cluster_retry.http_status_codes,
+    );
+    context.insert(
+        "cluster_envoy_gateway_api_retry_per_try_timeout_seconds",
+        &cluster_retry.per_try_timeout_seconds,
+    );
+    let resolved_retry = resolve_retry_settings(&service_retry, &cluster_retry);
+    context.insert("resolved_gateway_api_retry_num_retries", &resolved_retry.num_retries);
+    context.insert(
+        "resolved_gateway_api_retry_retry_on_triggers",
+        &resolved_retry.retry_on_triggers,
+    );
+    context.insert(
+        "resolved_gateway_api_retry_http_status_codes",
+        &resolved_retry.http_status_codes,
+    );
+    context.insert(
+        "resolved_gateway_api_retry_per_try_timeout_seconds",
+        &resolved_retry.per_try_timeout_seconds,
     );
 
     tera.render("template", &context).expect("gRPC template should render")
@@ -264,6 +426,195 @@ fn http_policy_prioritizes_service_max_stream_duration_over_cluster_default() {
     let rendered = render_http_policy(None, None, Some(300), Some(42), Some(120), Some(600));
     assert!(rendered.contains("maxStreamDuration: 300s"));
     assert!(!rendered.contains("maxStreamDuration: 600s"));
+}
+
+#[test]
+fn with_no_retry_settings_retry_block_is_not_rendered() {
+    let rendered = render_http_policy(None, None, None, None, None, None);
+    assert!(!rendered.contains("\n  retry:"));
+}
+
+#[test]
+fn service_num_retries_renders_retry_num_retries() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(2),
+            ..no_retry_settings()
+        },
+        no_retry_settings(),
+    );
+    assert!(rendered.contains("numRetries: 2"));
+}
+
+#[test]
+fn service_retry_on_renders_retry_on_triggers() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(2),
+            retry_on: "connect-failure, reset,refused-stream".to_string(),
+            ..no_retry_settings()
+        },
+        no_retry_settings(),
+    );
+    assert!(rendered.contains("triggers:"));
+    assert!(rendered.contains("- connect-failure"));
+    assert!(rendered.contains("- reset"));
+    assert!(rendered.contains("- refused-stream"));
+}
+
+#[test]
+fn service_http_status_codes_renders_retry_on_http_status_codes() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(2),
+            http_status_codes: "503,504".to_string(),
+            ..no_retry_settings()
+        },
+        no_retry_settings(),
+    );
+    assert!(rendered.contains("httpStatusCodes:"));
+    assert!(rendered.contains("- 503"));
+    assert!(rendered.contains("- 504"));
+}
+
+#[test]
+fn service_per_try_timeout_seconds_renders_per_retry_timeout() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(2),
+            per_try_timeout_seconds: Some(2),
+            ..no_retry_settings()
+        },
+        no_retry_settings(),
+    );
+    assert!(rendered.contains("perRetry:"));
+    assert!(rendered.contains("timeout: 2s"));
+}
+
+#[test]
+fn service_settings_override_cluster_settings() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(2),
+            retry_on: "connect-failure".to_string(),
+            http_status_codes: "503".to_string(),
+            per_try_timeout_seconds: Some(2),
+        },
+        RetrySettings {
+            num_retries: Some(4),
+            retry_on: "reset".to_string(),
+            http_status_codes: "504".to_string(),
+            per_try_timeout_seconds: Some(5),
+        },
+    );
+    assert!(rendered.contains("numRetries: 2"));
+    assert!(!rendered.contains("numRetries: 4"));
+    assert!(rendered.contains("- connect-failure"));
+    assert!(!rendered.contains("- reset"));
+    assert!(rendered.contains("- 503"));
+    assert!(!rendered.contains("- 504"));
+    assert!(rendered.contains("timeout: 2s"));
+    assert!(!rendered.contains("timeout: 5s"));
+}
+
+#[test]
+fn cluster_settings_are_used_when_service_settings_are_absent() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        no_retry_settings(),
+        RetrySettings {
+            num_retries: Some(2),
+            retry_on: "connect-failure, reset, refused-stream".to_string(),
+            http_status_codes: "503".to_string(),
+            per_try_timeout_seconds: Some(2),
+        },
+    );
+    assert!(rendered.contains("numRetries: 2"));
+    assert!(rendered.contains("- connect-failure"));
+    assert!(rendered.contains("- reset"));
+    assert!(rendered.contains("- refused-stream"));
+    assert!(rendered.contains("- 503"));
+    assert!(rendered.contains("timeout: 2s"));
+}
+
+#[test]
+fn num_retries_zero_renders_retry_num_retries_zero() {
+    let rendered = render_http_policy_with_retry(
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        RetrySettings {
+            num_retries: Some(0),
+            ..no_retry_settings()
+        },
+        no_retry_settings(),
+    );
+    assert!(rendered.contains("numRetries: 0"));
+}
+
+#[test]
+fn http_and_grpc_templates_render_retry_consistently() {
+    let service_retry = RetrySettings {
+        num_retries: Some(2),
+        retry_on: "retriable-status-codes".to_string(),
+        http_status_codes: "503".to_string(),
+        per_try_timeout_seconds: Some(2),
+    };
+    let rendered_http =
+        render_http_policy_with_retry(None, None, None, None, None, None, service_retry.clone(), no_retry_settings());
+    let rendered_grpc =
+        render_grpc_policy_with_retry(None, None, None, None, None, None, service_retry, no_retry_settings());
+
+    for snippet in [
+        "numRetries: 2",
+        "retryOn:",
+        "- retriable-status-codes",
+        "httpStatusCodes:",
+        "- 503",
+        "perRetry:",
+        "timeout: 2s",
+    ] {
+        assert!(rendered_http.contains(snippet));
+        assert!(rendered_grpc.contains(snippet));
+    }
 }
 
 #[test]

@@ -109,6 +109,126 @@ pub mod http_status_codes {
     }
 }
 
+pub mod gateway_api_retry_triggers {
+    use super::*;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+    pub enum GatewayApiRetryTrigger {
+        #[serde(rename = "5xx")]
+        FiveXx,
+        #[serde(rename = "gateway-error")]
+        GatewayError,
+        #[serde(rename = "reset")]
+        Reset,
+        #[serde(rename = "reset-before-request")]
+        ResetBeforeRequest,
+        #[serde(rename = "connect-failure")]
+        ConnectFailure,
+        #[serde(rename = "retriable-4xx")]
+        Retriable4xx,
+        #[serde(rename = "refused-stream")]
+        RefusedStream,
+        #[serde(rename = "retriable-status-codes")]
+        RetriableStatusCodes,
+        #[serde(rename = "cancelled")]
+        Cancelled,
+        #[serde(rename = "deadline-exceeded")]
+        DeadlineExceeded,
+        #[serde(rename = "internal")]
+        Internal,
+        #[serde(rename = "resource-exhausted")]
+        ResourceExhausted,
+        #[serde(rename = "unavailable")]
+        Unavailable,
+    }
+
+    impl GatewayApiRetryTrigger {
+        fn parse(value: &str) -> Option<Self> {
+            match value {
+                "5xx" => Some(Self::FiveXx),
+                "gateway-error" => Some(Self::GatewayError),
+                "reset" => Some(Self::Reset),
+                "reset-before-request" => Some(Self::ResetBeforeRequest),
+                "connect-failure" => Some(Self::ConnectFailure),
+                "retriable-4xx" => Some(Self::Retriable4xx),
+                "refused-stream" => Some(Self::RefusedStream),
+                "retriable-status-codes" => Some(Self::RetriableStatusCodes),
+                "cancelled" => Some(Self::Cancelled),
+                "deadline-exceeded" => Some(Self::DeadlineExceeded),
+                "internal" => Some(Self::Internal),
+                "resource-exhausted" => Some(Self::ResourceExhausted),
+                "unavailable" => Some(Self::Unavailable),
+                _ => None,
+            }
+        }
+    }
+
+    impl std::fmt::Display for GatewayApiRetryTrigger {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let value = match self {
+                Self::FiveXx => "5xx",
+                Self::GatewayError => "gateway-error",
+                Self::Reset => "reset",
+                Self::ResetBeforeRequest => "reset-before-request",
+                Self::ConnectFailure => "connect-failure",
+                Self::Retriable4xx => "retriable-4xx",
+                Self::RefusedStream => "refused-stream",
+                Self::RetriableStatusCodes => "retriable-status-codes",
+                Self::Cancelled => "cancelled",
+                Self::DeadlineExceeded => "deadline-exceeded",
+                Self::Internal => "internal",
+                Self::ResourceExhausted => "resource-exhausted",
+                Self::Unavailable => "unavailable",
+            };
+            write!(f, "{value}")
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Vec<GatewayApiRetryTrigger>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // q-core sends retry triggers as a single CSV string, not a JSON array.
+        // We convert that input into typed enum variants during deserialization.
+        let opt: Option<String> = Option::deserialize(deserializer)?;
+        match opt {
+            None => Ok(None),
+            Some(s) if s.trim().is_empty() => Ok(None),
+            Some(s) => {
+                let triggers = s
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|entry| !entry.is_empty())
+                    .map(|entry| {
+                        GatewayApiRetryTrigger::parse(entry)
+                            .ok_or_else(|| de::Error::custom(format!("Invalid Gateway API retry trigger '{entry}'",)))
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                if triggers.is_empty() {
+                    Ok(None)
+                } else {
+                    Ok(Some(triggers))
+                }
+            }
+        }
+    }
+
+    pub fn serialize<S>(triggers: &Option<Vec<GatewayApiRetryTrigger>>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match triggers {
+            None => serializer.serialize_none(),
+            Some(triggers) if triggers.is_empty() => serializer.serialize_none(),
+            Some(triggers) => {
+                let s = triggers.iter().map(ToString::to_string).collect::<Vec<_>>().join(",");
+                serializer.serialize_str(&s)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod http_status_codes_tests {
     use super::*;
@@ -365,5 +485,66 @@ mod http_status_codes_tests {
         let json = r#"{"codes": "503,404,502,400"}"#;
         let result: TestStruct = serde_json::from_str(json).expect("Failed to deserialize");
         assert_eq!(result.codes, Some(vec![503, 404, 502, 400]));
+    }
+}
+
+#[cfg(test)]
+mod gateway_api_retry_triggers_tests {
+    use super::gateway_api_retry_triggers;
+    use super::gateway_api_retry_triggers::GatewayApiRetryTrigger;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize, PartialEq)]
+    struct TestStruct {
+        #[serde(with = "gateway_api_retry_triggers", default)]
+        triggers: Option<Vec<GatewayApiRetryTrigger>>,
+    }
+
+    #[test]
+    fn test_gateway_api_retry_triggers_deserialize_none() {
+        let json = r#"{"triggers": null}"#;
+        let result: TestStruct = serde_json::from_str(json).expect("Failed to deserialize");
+        assert_eq!(result.triggers, None);
+    }
+
+    #[test]
+    fn test_gateway_api_retry_triggers_deserialize_empty_string() {
+        let json = r#"{"triggers": ""}"#;
+        let result: TestStruct = serde_json::from_str(json).expect("Failed to deserialize");
+        assert_eq!(result.triggers, None);
+    }
+
+    #[test]
+    fn test_gateway_api_retry_triggers_deserialize_csv() {
+        let json = r#"{"triggers":"connect-failure, reset, retriable-status-codes"}"#;
+        let result: TestStruct = serde_json::from_str(json).expect("Failed to deserialize");
+        assert_eq!(
+            result.triggers,
+            Some(vec![
+                GatewayApiRetryTrigger::ConnectFailure,
+                GatewayApiRetryTrigger::Reset,
+                GatewayApiRetryTrigger::RetriableStatusCodes,
+            ])
+        );
+    }
+
+    #[test]
+    fn test_gateway_api_retry_triggers_deserialize_invalid_value() {
+        let json = r#"{"triggers":"connect-failure,not-a-trigger"}"#;
+        let result = serde_json::from_str::<TestStruct>(json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_gateway_api_retry_triggers_serialize_csv() {
+        let input = TestStruct {
+            triggers: Some(vec![
+                GatewayApiRetryTrigger::ConnectFailure,
+                GatewayApiRetryTrigger::Reset,
+                GatewayApiRetryTrigger::RetriableStatusCodes,
+            ]),
+        };
+        let json = serde_json::to_string(&input).expect("Failed to serialize");
+        assert_eq!(json, r#"{"triggers":"connect-failure,reset,retriable-status-codes"}"#);
     }
 }

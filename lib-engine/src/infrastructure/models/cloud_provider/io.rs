@@ -10,6 +10,7 @@ use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2Am
 use crate::infrastructure::models::cluster_profile::ClusterProfile as ClusterProfileModel;
 use crate::io_models::loki::LokiDeploymentMode;
 use crate::io_models::models::StorageClass as StorageClassModel;
+use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
 use crate::{errors::EngineError, events::EventDetails};
 use base64::Engine;
 use base64::engine::general_purpose;
@@ -586,6 +587,20 @@ pub struct ClusterAdvancedSettings {
     pub envoy_gateway_api_http_stream_idle_timeout_seconds: Option<u32>,
     #[serde(alias = "envoy.gateway_api.http_max_stream_duration_seconds")]
     pub envoy_gateway_api_http_max_stream_duration_seconds: Option<u32>,
+    #[serde(alias = "envoy.gateway_api.retry.num_retries")]
+    pub envoy_gateway_api_retry_num_retries: Option<u32>,
+    #[serde(
+        alias = "envoy.gateway_api.retry.retry_on",
+        with = "crate::io_models::types::gateway_api_retry_triggers"
+    )]
+    pub envoy_gateway_api_retry_retry_on: Option<Vec<GatewayApiRetryTrigger>>,
+    #[serde(
+        alias = "envoy.gateway_api.retry.http_status_codes",
+        with = "crate::io_models::types::http_status_codes"
+    )]
+    pub envoy_gateway_api_retry_http_status_codes: Option<Vec<u16>>,
+    #[serde(alias = "envoy.gateway_api.retry.per_try_timeout_seconds")]
+    pub envoy_gateway_api_retry_per_try_timeout_seconds: Option<u32>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs", default)]
@@ -720,6 +735,10 @@ impl Default for ClusterAdvancedSettings {
             envoy_gateway_api_http_connection_idle_timeout_seconds: None,
             envoy_gateway_api_http_stream_idle_timeout_seconds: None,
             envoy_gateway_api_http_max_stream_duration_seconds: None,
+            envoy_gateway_api_retry_num_retries: None,
+            envoy_gateway_api_retry_retry_on: None,
+            envoy_gateway_api_retry_http_status_codes: None,
+            envoy_gateway_api_retry_per_try_timeout_seconds: None,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
             envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: vec![],
             envoy_access_log_format: None,
@@ -788,6 +807,7 @@ mod tests {
         ClusterAdvancedSettings, InputError, LogFormatEscaping, RegistryMirroringMode,
         validate_aws_cloudwatch_eks_logs_retention_days,
     };
+    use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
     use crate::{
         events::{EventDetails, Stage, Transmitter},
         io_models::QoveryIdentifier,
@@ -1106,6 +1126,10 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, None);
         assert_eq!(settings.envoy_gateway_api_http_stream_idle_timeout_seconds, None);
         assert_eq!(settings.envoy_gateway_api_http_max_stream_duration_seconds, None);
+        assert_eq!(settings.envoy_gateway_api_retry_num_retries, None);
+        assert_eq!(settings.envoy_gateway_api_retry_retry_on, None);
+        assert_eq!(settings.envoy_gateway_api_retry_http_status_codes, None);
+        assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, None);
     }
 
     #[test]
@@ -1115,7 +1139,11 @@ mod tests {
             "envoy.gateway_api.http_request_timeout_seconds": 90,
             "envoy.gateway_api.http_connection_idle_timeout_seconds": 120,
             "envoy.gateway_api.http_stream_idle_timeout_seconds": 300,
-            "envoy.gateway_api.http_max_stream_duration_seconds": 600
+            "envoy.gateway_api.http_max_stream_duration_seconds": 600,
+            "envoy.gateway_api.retry.num_retries": 2,
+            "envoy.gateway_api.retry.retry_on": "connect-failure,reset",
+            "envoy.gateway_api.retry.http_status_codes": "503",
+            "envoy.gateway_api.retry.per_try_timeout_seconds": 2
         }
         "#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
@@ -1123,6 +1151,13 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, Some(120));
         assert_eq!(settings.envoy_gateway_api_http_stream_idle_timeout_seconds, Some(300));
         assert_eq!(settings.envoy_gateway_api_http_max_stream_duration_seconds, Some(600));
+        assert_eq!(settings.envoy_gateway_api_retry_num_retries, Some(2));
+        assert_eq!(
+            settings.envoy_gateway_api_retry_retry_on,
+            Some(vec![GatewayApiRetryTrigger::ConnectFailure, GatewayApiRetryTrigger::Reset,])
+        );
+        assert_eq!(settings.envoy_gateway_api_retry_http_status_codes, Some(vec![503]));
+        assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, Some(2));
     }
 
     #[test]

@@ -19,6 +19,7 @@ use crate::io_models::services_common::{
     GatewayApiStickySessionType, GitCredentials, PortIo, default_gateway_api_sticky_session_type,
     deserialize_gateway_api_sticky_session_type,
 };
+use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
 use crate::io_models::variable_utils::{VariableInfo, default_environment_vars_with_info};
 use crate::io_models::{Action, fetch_git_token, ssh_keys_from_env_vars};
 use base64::Engine;
@@ -72,6 +73,20 @@ pub struct HelmChartAdvancedSettings {
     pub network_gateway_api_route_limit_source_cidrs: String,
     #[serde(alias = "network.gateway_api.route_limit_headers")]
     pub network_gateway_api_route_limit_headers: String,
+    #[serde(alias = "network.gateway_api.retry.num_retries")]
+    pub network_gateway_api_retry_num_retries: Option<u32>,
+    #[serde(
+        alias = "network.gateway_api.retry.retry_on",
+        with = "crate::io_models::types::gateway_api_retry_triggers"
+    )]
+    pub network_gateway_api_retry_retry_on: Option<Vec<GatewayApiRetryTrigger>>,
+    #[serde(
+        alias = "network.gateway_api.retry.http_status_codes",
+        with = "crate::io_models::types::http_status_codes"
+    )]
+    pub network_gateway_api_retry_http_status_codes: Option<Vec<u16>>,
+    #[serde(alias = "network.gateway_api.retry.per_try_timeout_seconds")]
+    pub network_gateway_api_retry_per_try_timeout_seconds: Option<u32>,
     #[serde(alias = "network.gateway_api.add_headers")]
     pub network_gateway_api_add_headers: BTreeMap<String, String>,
     #[serde(alias = "network.gateway_api.proxy_set_headers")]
@@ -209,6 +224,10 @@ impl Default for HelmChartAdvancedSettings {
             network_gateway_api_route_limit_rps: None,
             network_gateway_api_route_limit_source_cidrs: "".to_string(),
             network_gateway_api_route_limit_headers: "".to_string(),
+            network_gateway_api_retry_num_retries: None,
+            network_gateway_api_retry_retry_on: None,
+            network_gateway_api_retry_http_status_codes: None,
+            network_gateway_api_retry_per_try_timeout_seconds: None,
             network_gateway_api_add_headers: BTreeMap::new(),
             network_gateway_api_proxy_set_headers: BTreeMap::new(),
             network_gateway_api_custom_http_errors: None,
