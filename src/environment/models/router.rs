@@ -9,6 +9,7 @@ use crate::errors::EngineError;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::infrastructure::models::build_platform::Build;
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, ServiceType, default_tera_context};
 use crate::infrastructure::models::kubernetes::Kind;
 use crate::io_models::annotations_group::AnnotationsGroup;
@@ -18,6 +19,7 @@ use crate::io_models::models::{
     CustomDomain, CustomDomainDataTemplate, EnvironmentVariable, HostDataTemplate, HostPathType, Route,
 };
 use crate::io_models::services_common::Protocol;
+use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
 use crate::utilities::to_short_id;
 use std::collections::{BTreeMap, BTreeSet};
 use std::marker::PhantomData;
@@ -119,6 +121,43 @@ struct GatewayHttpRouteRuleSignature {
     weight: u32,
 }
 
+#[derive(Clone, Debug, Default)]
+struct GatewayApiBackendTrafficPolicySettings {
+    gateway_api_retry_num_retries: Option<u32>,
+    gateway_api_retry_retry_on_triggers: Vec<GatewayApiRetryTrigger>,
+    gateway_api_retry_http_status_codes: Vec<u16>,
+    gateway_api_retry_per_try_timeout_seconds: Option<u32>,
+}
+
+fn select_gateway_api_retry_vec_with_fallback<T: Clone>(service_value: &[T], cluster_value: &Option<Vec<T>>) -> Vec<T> {
+    if !service_value.is_empty() {
+        return service_value.to_vec();
+    }
+    cluster_value.clone().unwrap_or_default()
+}
+
+fn resolve_gateway_api_backend_traffic_policy_settings(
+    service_settings: &GatewayApiBackendTrafficPolicySettings,
+    cluster_advanced_settings: &ClusterAdvancedSettings,
+) -> GatewayApiBackendTrafficPolicySettings {
+    GatewayApiBackendTrafficPolicySettings {
+        gateway_api_retry_num_retries: service_settings
+            .gateway_api_retry_num_retries
+            .or(cluster_advanced_settings.envoy_gateway_api_retry_num_retries),
+        gateway_api_retry_retry_on_triggers: select_gateway_api_retry_vec_with_fallback(
+            &service_settings.gateway_api_retry_retry_on_triggers,
+            &cluster_advanced_settings.envoy_gateway_api_retry_retry_on,
+        ),
+        gateway_api_retry_http_status_codes: select_gateway_api_retry_vec_with_fallback(
+            &service_settings.gateway_api_retry_http_status_codes,
+            &cluster_advanced_settings.envoy_gateway_api_retry_http_status_codes,
+        ),
+        gateway_api_retry_per_try_timeout_seconds: service_settings
+            .gateway_api_retry_per_try_timeout_seconds
+            .or(cluster_advanced_settings.envoy_gateway_api_retry_per_try_timeout_seconds),
+    }
+}
+
 impl<T: CloudProvider> Router<T> {
     pub fn new(
         context: &Context,
@@ -190,7 +229,7 @@ impl<T: CloudProvider> Router<T> {
             .service_long_id;
 
         // Check if the service is an application
-        let (service_name, ports, gateway_http_route_headers_signature) =
+        let (service_name, ports, gateway_http_route_headers_signature, service_gateway_api_policy_settings) =
             if let Some(application) = &environment.applications.iter().find(|app| app.long_id() == &service_id) {
                 // advanced settings
                 context.insert("advanced_settings", &application.advanced_settings());
@@ -230,6 +269,24 @@ impl<T: CloudProvider> Router<T> {
                         &application.advanced_settings().network_gateway_api_add_headers,
                         &application.advanced_settings().network_gateway_api_proxy_set_headers,
                     ),
+                    GatewayApiBackendTrafficPolicySettings {
+                        gateway_api_retry_num_retries: application
+                            .advanced_settings()
+                            .network_gateway_api_retry_num_retries,
+                        gateway_api_retry_retry_on_triggers: application
+                            .advanced_settings()
+                            .network_gateway_api_retry_retry_on
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_http_status_codes: application
+                            .advanced_settings()
+                            .network_gateway_api_retry_http_status_codes
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_per_try_timeout_seconds: application
+                            .advanced_settings()
+                            .network_gateway_api_retry_per_try_timeout_seconds,
+                    },
                 )
             } else if let Some(container) = &environment
                 .containers
@@ -274,6 +331,24 @@ impl<T: CloudProvider> Router<T> {
                         &container.advanced_settings().network_gateway_api_add_headers,
                         &container.advanced_settings().network_gateway_api_proxy_set_headers,
                     ),
+                    GatewayApiBackendTrafficPolicySettings {
+                        gateway_api_retry_num_retries: container
+                            .advanced_settings()
+                            .network_gateway_api_retry_num_retries,
+                        gateway_api_retry_retry_on_triggers: container
+                            .advanced_settings()
+                            .network_gateway_api_retry_retry_on
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_http_status_codes: container
+                            .advanced_settings()
+                            .network_gateway_api_retry_http_status_codes
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_per_try_timeout_seconds: container
+                            .advanced_settings()
+                            .network_gateway_api_retry_per_try_timeout_seconds,
+                    },
                 )
             } else {
                 let helm_chart = environment
@@ -320,6 +395,24 @@ impl<T: CloudProvider> Router<T> {
                         &helm_chart.advanced_settings().network_gateway_api_add_headers,
                         &helm_chart.advanced_settings().network_gateway_api_proxy_set_headers,
                     ),
+                    GatewayApiBackendTrafficPolicySettings {
+                        gateway_api_retry_num_retries: helm_chart
+                            .advanced_settings()
+                            .network_gateway_api_retry_num_retries,
+                        gateway_api_retry_retry_on_triggers: helm_chart
+                            .advanced_settings()
+                            .network_gateway_api_retry_retry_on
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_http_status_codes: helm_chart
+                            .advanced_settings()
+                            .network_gateway_api_retry_http_status_codes
+                            .clone()
+                            .unwrap_or_default(),
+                        gateway_api_retry_per_try_timeout_seconds: helm_chart
+                            .advanced_settings()
+                            .network_gateway_api_retry_per_try_timeout_seconds,
+                    },
                 )
             };
 
@@ -429,6 +522,11 @@ impl<T: CloudProvider> Router<T> {
             && gateway_api_crds_available
             && kubectl_should_deploy_listenerset(&target.kube.client());
 
+        let resolved_gateway_api_policy_settings = resolve_gateway_api_backend_traffic_policy_settings(
+            &service_gateway_api_policy_settings,
+            kubernetes.advanced_settings(),
+        );
+
         context.insert(
             "cluster_envoy_gateway_api_http_request_timeout_seconds",
             &kubernetes
@@ -446,6 +544,40 @@ impl<T: CloudProvider> Router<T> {
             &kubernetes
                 .advanced_settings()
                 .envoy_gateway_api_http_max_stream_duration_seconds,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_retry_num_retries",
+            &kubernetes.advanced_settings().envoy_gateway_api_retry_num_retries,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_retry_retry_on",
+            &kubernetes.advanced_settings().envoy_gateway_api_retry_retry_on,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_retry_http_status_codes",
+            &kubernetes.advanced_settings().envoy_gateway_api_retry_http_status_codes,
+        );
+        context.insert(
+            "cluster_envoy_gateway_api_retry_per_try_timeout_seconds",
+            &kubernetes
+                .advanced_settings()
+                .envoy_gateway_api_retry_per_try_timeout_seconds,
+        );
+        context.insert(
+            "resolved_gateway_api_retry_num_retries",
+            &resolved_gateway_api_policy_settings.gateway_api_retry_num_retries,
+        );
+        context.insert(
+            "resolved_gateway_api_retry_retry_on_triggers",
+            &resolved_gateway_api_policy_settings.gateway_api_retry_retry_on_triggers,
+        );
+        context.insert(
+            "resolved_gateway_api_retry_http_status_codes",
+            &resolved_gateway_api_policy_settings.gateway_api_retry_http_status_codes,
+        );
+        context.insert(
+            "resolved_gateway_api_retry_per_try_timeout_seconds",
+            &resolved_gateway_api_policy_settings.gateway_api_retry_per_try_timeout_seconds,
         );
         context.insert("k8s_deploy_api_gateway", &kubernetes.advanced_settings().k8s_deploy_api_gateway);
         context.insert("k8s_use_api_gateway", &kubernetes.advanced_settings().k8s_use_api_gateway);
