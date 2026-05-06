@@ -26,10 +26,10 @@ metadata:
        {{ value }}
     {%- endfor %}
 spec:
-  targetRef:
-    group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: {{ sanitized_name }}{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ sanitized_name }}{%- if num_routes > 1 %}-{{ route_index + 1 }}{%- endif %}
   {%- if advanced_settings.network_gateway_api_sticky_session_enable == true %}
   loadBalancer:
     type: ConsistentHash
