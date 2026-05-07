@@ -28,6 +28,21 @@ pub struct BlueprintRequest {
 
     #[serde(default)]
     pub spec_overrides: Option<BlueprintSpecOverrides>,
+
+    /// Qovery API token for the Qovery Terraform provider. Resolved by q-core from
+    /// the user's selected API token. Set as QOVERY_API_TOKEN env var.
+    pub qovery_api_token: String,
+
+    /// Environment ID where the service will be created.
+    pub environment_id: String,
+
+    /// For blueprint updates: the Qovery service ID (UUID) of the terraform/helm service
+    /// created by a previous BlueprintTask run. When present, the engine generates a
+    /// terraform import block so the Qovery provider reads the current service config
+    /// from the API before applying changes.
+    /// None on first creation, Some(service_id) on updates.
+    #[serde(default)]
+    pub import_id: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -75,7 +90,9 @@ mod tests {
                 { "name": "password", "value": "s3cret", "is_secret": true }
             ],
             "git_url": "https://github.com/org/catalog.git",
-            "tag": "aws/postgres/16/1.0.0"
+            "tag": "aws/postgres/16/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx"
         }"#;
         let req: BlueprintRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.tag, "aws/postgres/16/1.0.0");
@@ -87,8 +104,11 @@ mod tests {
         // Defaults
         assert!(req.git_credentials.is_none());
         assert!(req.spec_overrides.is_none());
+        assert!(req.import_id.is_none());
         assert_eq!(req.max_parallel_build, 1);
         assert_eq!(req.max_parallel_deploy, 1);
+        assert_eq!(req.qovery_api_token, "test-token-xxx");
+        assert_eq!(req.environment_id, "env-uuid-xxx");
     }
 
     #[test]
@@ -103,6 +123,8 @@ mod tests {
             "variables": [],
             "git_url": "https://github.com/org/catalog.git",
             "tag": "helm/redis/7/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
             "spec_overrides": {
                 "credentials": "env",
                 "timeout": 7200,
@@ -129,6 +151,8 @@ mod tests {
             "variables": [],
             "git_url": "https://github.com/org/catalog.git",
             "tag": "aws/s3/1/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
             "provider": "aws",
             "service_name": "s3",
             "service_version": "1",
@@ -136,6 +160,26 @@ mod tests {
         }"#;
         let req: BlueprintRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.tag, "aws/s3/1/1.0.0");
+    }
+
+    #[test]
+    fn deserialize_with_import_id() {
+        let json = r#"{
+            "execution_id": "exec-4",
+            "long_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "name": "test",
+            "kube_name": "test",
+            "project_long_id": "11111111-2222-3333-4444-555555555555",
+            "organization_long_id": "22222222-3333-4444-5555-666666666666",
+            "variables": [],
+            "git_url": "https://github.com/org/catalog.git",
+            "tag": "aws/s3/1/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
+            "import_id": "existing-service-uuid-123"
+        }"#;
+        let req: BlueprintRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.import_id, Some("existing-service-uuid-123".to_string()));
     }
 
     #[test]

@@ -6,18 +6,55 @@
 //   3. Platform defaults (hardcoded here)
 
 use crate::blueprint::models::qovery_blueprint_manifest::{
-    BlueprintChart, BlueprintEngine, BlueprintOutput, BlueprintSpec, CredentialMode,
+    BackendMode, BlueprintChart, BlueprintEngine, BlueprintOutput, BlueprintResources, BlueprintSpec, CredentialMode,
 };
 use crate::io_models::blueprint::BlueprintSpecOverrides;
+use serde::Serialize;
+use std::collections::HashMap;
 
 const DEFAULT_TF_TIMEOUT_SEC: u64 = 1800;
 const DEFAULT_HELM_TIMEOUT_SEC: u64 = 600;
+
+const DEFAULT_JOB_CPU_MILLI: u32 = 500;
+const DEFAULT_JOB_RAM_MIB: u32 = 512;
+const DEFAULT_JOB_STORAGE_GIB: u32 = 20;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct JobResources {
+    pub cpu_milli: u32,
+    pub ram_mib: u32,
+    pub storage_gib: u32,
+}
+
+/// Variable representation for Tera template rendering.
+#[derive(Serialize)]
+pub struct TemplateVariable {
+    pub name: String,
+    pub value: String,
+    pub is_secret: bool,
+}
 
 /// Whether to use the `terraform` or `tofu` binary.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TerraformFlavor {
     Terraform,
     OpenTofu,
+}
+
+/// Resolved backend configuration for the created Terraform service.
+/// Maps to the `backend` attribute on `qovery_terraform_service`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResolvedBackend {
+    /// Qovery-managed Kubernetes backend. The created service uses `backend { kubernetes {} }`.
+    /// State is managed by Qovery in a K8s Secret.
+    Qovery,
+    /// Blueprint-managed backend. The user provides backend type + config at creation time.
+    /// The Qovery Terraform provider passes this to the platform, which generates
+    /// backend.tf during the service's Docker image build.
+    Blueprint {
+        backend_type: String,
+        config: HashMap<String, String>,
+    },
 }
 
 /// Resolved spec — engine-specific, all values concrete.
@@ -33,8 +70,10 @@ pub struct ResolvedTerraformSpec {
     /// Cloud provider the blueprint targets (e.g. "aws", "gcp", "azure").
     pub provider: String,
     pub credential_mode: CredentialMode,
+    pub backend: ResolvedBackend,
     pub timeout_sec: u64,
     pub outputs: Vec<BlueprintOutput>,
+    pub job_resources: JobResources,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -55,22 +94,30 @@ impl ResolvedBlueprintSpec {
         match &spec.engine {
             BlueprintEngine::Terraform { provider, outputs } => {
                 let timeout_sec = resolve_timeout(spec, overrides, DEFAULT_TF_TIMEOUT_SEC);
+                let backend = resolve_backend(spec, overrides);
+                let job_resources = resolve_job_resources(spec.resources.as_ref(), overrides);
                 ResolvedBlueprintSpec::Terraform(ResolvedTerraformSpec {
                     flavor: TerraformFlavor::Terraform,
                     provider: provider.clone(),
                     credential_mode,
+                    backend,
                     timeout_sec,
                     outputs: outputs.clone(),
+                    job_resources,
                 })
             }
             BlueprintEngine::Opentofu { provider, outputs } => {
                 let timeout_sec = resolve_timeout(spec, overrides, DEFAULT_TF_TIMEOUT_SEC);
+                let backend = resolve_backend(spec, overrides);
+                let job_resources = resolve_job_resources(spec.resources.as_ref(), overrides);
                 ResolvedBlueprintSpec::Terraform(ResolvedTerraformSpec {
                     flavor: TerraformFlavor::OpenTofu,
                     provider: provider.clone(),
                     credential_mode,
+                    backend,
                     timeout_sec,
                     outputs: outputs.clone(),
+                    job_resources,
                 })
             }
             BlueprintEngine::Helm { chart, outputs } => {
@@ -115,11 +162,111 @@ fn resolve_timeout(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrid
     spec.timeout.unwrap_or(default)
 }
 
+/// Resolve backend: spec_overrides.backend > qbm.spec.backend.default > Qovery.
+/// When mode is Blueprint, the backend config comes from the QBM spec (not from overrides).
+fn resolve_backend(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrides>) -> ResolvedBackend {
+    let mode = if let Some(mode_str) = overrides
+        .as_ref()
+        .and_then(|o| o.get("backend"))
+        .and_then(|v| v.as_str())
+    {
+        match mode_str {
+            "blueprint" => BackendMode::Blueprint,
+            _ => BackendMode::Qovery,
+        }
+    } else {
+        spec.backend.default.clone()
+    };
+
+    match mode {
+        BackendMode::Qovery => ResolvedBackend::Qovery,
+        BackendMode::Blueprint => {
+            let (backend_type, config) = spec
+                .backend
+                .blueprint
+                .as_ref()
+                .map(|c| (c.backend_type.clone(), c.config.clone()))
+                .unwrap_or_else(|| ("local".to_string(), HashMap::new()));
+            ResolvedBackend::Blueprint { backend_type, config }
+        }
+    }
+}
+
+/// Parse a Kubernetes-style CPU string (e.g. "500m", "1000m", "2") to millicores.
+fn parse_milli(s: &str) -> Option<u32> {
+    let s = s.trim();
+    if let Some(stripped) = s.strip_suffix('m') {
+        stripped.parse::<u32>().ok()
+    } else {
+        // Whole cores (e.g. "2" → 2000m)
+        s.parse::<u32>().ok().map(|v| v * 1000)
+    }
+}
+
+/// Parse a Kubernetes-style memory string (e.g. "512Mi", "1Gi", "256") to MiB.
+fn parse_mib(s: &str) -> Option<u32> {
+    let s = s.trim();
+    if let Some(stripped) = s.strip_suffix("Gi") {
+        stripped.parse::<u32>().ok().map(|v| v * 1024)
+    } else if let Some(stripped) = s.strip_suffix("Mi") {
+        stripped.parse::<u32>().ok()
+    } else {
+        // Bare number treated as MiB
+        s.parse::<u32>().ok()
+    }
+}
+
+/// Parse a storage string (e.g. "20Gi", "10") to GiB.
+fn parse_gib(s: &str) -> Option<u32> {
+    let s = s.trim();
+    if let Some(stripped) = s.strip_suffix("Gi") {
+        stripped.parse::<u32>().ok()
+    } else {
+        // Bare number treated as GiB
+        s.parse::<u32>().ok()
+    }
+}
+
+/// Resolve job resources: spec_overrides.resources > qbm.spec.resources > platform defaults.
+fn resolve_job_resources(
+    qbm_resources: Option<&BlueprintResources>,
+    overrides: &Option<BlueprintSpecOverrides>,
+) -> JobResources {
+    let override_resources = overrides.as_ref().and_then(|o| o.get("resources"));
+
+    let cpu_milli = override_resources
+        .and_then(|r| r.get("cpu"))
+        .and_then(|v| v.as_str())
+        .and_then(parse_milli)
+        .or_else(|| qbm_resources.and_then(|r| r.cpu.as_deref()).and_then(parse_milli))
+        .unwrap_or(DEFAULT_JOB_CPU_MILLI);
+
+    let ram_mib = override_resources
+        .and_then(|r| r.get("ram"))
+        .and_then(|v| v.as_str())
+        .and_then(parse_mib)
+        .or_else(|| qbm_resources.and_then(|r| r.ram.as_deref()).and_then(parse_mib))
+        .unwrap_or(DEFAULT_JOB_RAM_MIB);
+
+    let storage_gib = override_resources
+        .and_then(|r| r.get("storage"))
+        .and_then(|v| v.as_str())
+        .and_then(parse_gib)
+        .or_else(|| qbm_resources.and_then(|r| r.storage.as_deref()).and_then(parse_gib))
+        .unwrap_or(DEFAULT_JOB_STORAGE_GIB);
+
+    JobResources {
+        cpu_milli,
+        ram_mib,
+        storage_gib,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::blueprint::models::qovery_blueprint_manifest::{
-        BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintSpec,
+        BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintSpec,
     };
     use std::collections::HashMap;
 
@@ -130,9 +277,11 @@ mod tests {
                 outputs: vec![],
             },
             credentials: BlueprintCredentials::default(),
+            backend: BlueprintBackend::default(),
             timeout: Some(3600),
             arguments: vec![],
             allow_cluster_wide_resources: false,
+            resources: None,
         }
     }
 
@@ -143,9 +292,11 @@ mod tests {
                 outputs: vec![],
             },
             credentials: BlueprintCredentials::default(),
+            backend: BlueprintBackend::default(),
             timeout: None,
             arguments: vec![],
             allow_cluster_wide_resources: false,
+            resources: None,
         }
     }
 
@@ -160,9 +311,11 @@ mod tests {
                 outputs: vec![],
             },
             credentials: BlueprintCredentials::default(),
+            backend: BlueprintBackend::default(),
             timeout: None,
             arguments: vec!["--atomic".into()],
             allow_cluster_wide_resources: true,
+            resources: None,
         }
     }
 
@@ -173,9 +326,11 @@ mod tests {
                 outputs: vec![],
             },
             credentials: BlueprintCredentials::default(),
+            backend: BlueprintBackend::default(),
             timeout: None,
             arguments: vec![],
             allow_cluster_wide_resources: false,
+            resources: None,
         }
     }
 
@@ -304,6 +459,63 @@ mod tests {
         assert_eq!(tf.timeout_sec, 900);
     }
 
+    // -- Backend overrides --
+
+    #[test]
+    fn backend_defaults_to_qovery() {
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &None));
+        assert_eq!(tf.backend, ResolvedBackend::Qovery);
+    }
+
+    #[test]
+    fn backend_override_to_blueprint_uses_qbm_config() {
+        // QBM has no blueprint backend config (default spec) → falls back to local backend
+        let mut overrides = HashMap::new();
+        overrides.insert("backend".into(), serde_json::json!("blueprint"));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        assert_eq!(
+            tf.backend,
+            ResolvedBackend::Blueprint {
+                backend_type: "local".to_string(),
+                config: HashMap::new(),
+            }
+        );
+    }
+
+    #[test]
+    fn backend_override_to_blueprint_with_qbm_config() {
+        use crate::blueprint::models::qovery_blueprint_manifest::BlueprintBackendConfig;
+
+        let mut spec = tf_spec();
+        spec.backend.blueprint = Some(BlueprintBackendConfig {
+            backend_type: "s3".to_string(),
+            config: HashMap::from([
+                ("bucket".to_string(), "my-state-bucket".to_string()),
+                ("region".to_string(), "eu-west-3".to_string()),
+            ]),
+        });
+
+        let mut overrides = HashMap::new();
+        overrides.insert("backend".into(), serde_json::json!("blueprint"));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &Some(overrides)));
+        match &tf.backend {
+            ResolvedBackend::Blueprint { backend_type, config } => {
+                assert_eq!(backend_type, "s3");
+                assert_eq!(config["bucket"], "my-state-bucket");
+                assert_eq!(config["region"], "eu-west-3");
+            }
+            _ => panic!("expected Blueprint backend"),
+        }
+    }
+
+    #[test]
+    fn backend_override_unknown_value_falls_back_to_qovery() {
+        let mut overrides = HashMap::new();
+        overrides.insert("backend".into(), serde_json::json!("something_else"));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        assert_eq!(tf.backend, ResolvedBackend::Qovery);
+    }
+
     // -- Empty overrides --
 
     #[test]
@@ -312,5 +524,61 @@ mod tests {
         let resolved_empty = ResolvedBlueprintSpec::resolve(&tf_spec(), &empty);
         let resolved_none = ResolvedBlueprintSpec::resolve(&tf_spec(), &None);
         assert_eq!(resolved_empty, resolved_none);
+    }
+
+    // -- Job resources --
+
+    #[test]
+    fn job_resources_defaults_when_no_qbm_resources() {
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &None));
+        assert_eq!(tf.job_resources.cpu_milli, 500);
+        assert_eq!(tf.job_resources.ram_mib, 512);
+        assert_eq!(tf.job_resources.storage_gib, 20);
+    }
+
+    #[test]
+    fn job_resources_from_qbm() {
+        use crate::blueprint::models::qovery_blueprint_manifest::BlueprintResources;
+        let mut spec = tf_spec();
+        spec.resources = Some(BlueprintResources {
+            cpu: Some("1000m".into()),
+            ram: Some("2Gi".into()),
+            storage: Some("50Gi".into()),
+        });
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &None));
+        assert_eq!(tf.job_resources.cpu_milli, 1000);
+        assert_eq!(tf.job_resources.ram_mib, 2048);
+        assert_eq!(tf.job_resources.storage_gib, 50);
+    }
+
+    #[test]
+    fn job_resources_overrides_beat_qbm() {
+        use crate::blueprint::models::qovery_blueprint_manifest::BlueprintResources;
+        let mut spec = tf_spec();
+        spec.resources = Some(BlueprintResources {
+            cpu: Some("500m".into()),
+            ram: Some("512Mi".into()),
+            storage: Some("10Gi".into()),
+        });
+        let mut overrides = HashMap::new();
+        overrides.insert(
+            "resources".into(),
+            serde_json::json!({ "cpu": "2000m", "ram": "4Gi", "storage": "100Gi" }),
+        );
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &Some(overrides)));
+        assert_eq!(tf.job_resources.cpu_milli, 2000);
+        assert_eq!(tf.job_resources.ram_mib, 4096);
+        assert_eq!(tf.job_resources.storage_gib, 100);
+    }
+
+    #[test]
+    fn job_resources_partial_override() {
+        let mut overrides = HashMap::new();
+        overrides.insert("resources".into(), serde_json::json!({ "cpu": "750m" }));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        assert_eq!(tf.job_resources.cpu_milli, 750);
+        // ram and storage fall back to defaults
+        assert_eq!(tf.job_resources.ram_mib, 512);
+        assert_eq!(tf.job_resources.storage_gib, 20);
     }
 }

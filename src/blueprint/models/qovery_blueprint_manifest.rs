@@ -6,6 +6,7 @@
 
 use serde::de::Error as DeError;
 use serde::{Deserialize, Deserializer};
+use std::collections::HashMap;
 use std::path::Path;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -34,6 +35,48 @@ pub enum CredentialMode {
     Env,
 }
 
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct BlueprintBackend {
+    #[serde(default)]
+    pub default: BackendMode,
+    /// Blueprint backend configuration. Only used when `default` is `Blueprint`.
+    #[serde(default)]
+    pub blueprint: Option<BlueprintBackendConfig>,
+}
+
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum BackendMode {
+    #[default]
+    Qovery,
+    Blueprint,
+}
+
+// Blueprint backend configuration for the underlying terraform service.
+// When backend.default is "blueprint", the user provides the backend type and config
+// at service creation time (e.g. "s3" with bucket/region). The engine passes this
+// to the Qovery Terraform provider which creates the service with the appropriate
+// backend configuration. The platform generates and injects backend.tf for the
+// created service.
+// Credentials should NOT be here — they are provided via environment variables at runtime.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct BlueprintBackendConfig {
+    /// Terraform backend type (e.g. "s3", "gcs", "azurerm").
+    #[serde(rename = "type")]
+    pub backend_type: String,
+    /// Static backend config (bucket, region, etc.).
+    #[serde(default)]
+    pub config: HashMap<String, String>,
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct BlueprintResources {
+    pub cpu: Option<String>,
+    pub ram: Option<String>,
+    #[serde(default)]
+    pub storage: Option<String>,
+}
+
 /// Intermediate helper for flat YAML deserialization.
 /// Needed because the QBM spec has engine/provider/chart/outputs at the same level,
 /// but we route them into the BlueprintEngine enum. Serde can auto-derive this flat
@@ -47,20 +90,26 @@ struct BlueprintSpecRaw {
     outputs: Vec<BlueprintOutput>,
     #[serde(default)]
     credentials: Option<BlueprintCredentials>,
+    #[serde(default)]
+    backend: Option<BlueprintBackend>,
     timeout: Option<u64>,
     #[serde(default)]
     arguments: Vec<String>,
     #[serde(default, rename = "allowClusterWideResources")]
     allow_cluster_wide_resources: bool,
+    #[serde(default)]
+    resources: Option<BlueprintResources>,
 }
 
 #[derive(Debug, Clone)]
 pub struct BlueprintSpec {
     pub engine: BlueprintEngine,
     pub credentials: BlueprintCredentials,
+    pub backend: BlueprintBackend,
     pub timeout: Option<u64>,
     pub arguments: Vec<String>,
     pub allow_cluster_wide_resources: bool,
+    pub resources: Option<BlueprintResources>,
 }
 
 impl<'de> Deserialize<'de> for BlueprintSpec {
@@ -104,9 +153,11 @@ impl<'de> Deserialize<'de> for BlueprintSpec {
         Ok(BlueprintSpec {
             engine,
             credentials: raw.credentials.unwrap_or_default(),
+            backend: raw.backend.unwrap_or_default(),
             timeout: raw.timeout,
             arguments: raw.arguments,
             allow_cluster_wide_resources: raw.allow_cluster_wide_resources,
+            resources: raw.resources,
         })
     }
 }
