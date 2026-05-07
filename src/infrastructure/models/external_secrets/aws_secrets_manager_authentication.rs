@@ -22,7 +22,7 @@ pub enum AwsAuthenticationMode {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AwsAuthenticationModeKey {
     Automatic,
-    ArnRole,
+    RoleArn,
     StaticCreds,
 }
 
@@ -39,7 +39,7 @@ impl TryFrom<&str> for AwsAuthenticationModeKey {
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         match s {
             "AUTOMATIC" => Ok(Self::Automatic),
-            "ARN_ROLE" => Ok(Self::ArnRole),
+            "ROLE_ARN" => Ok(Self::RoleArn),
             "STATIC_CREDENTIALS" => Ok(Self::StaticCreds),
             _ => Err(SecretsManagerConversionError {
                 message: format!("unknown AWS authentication mode: {}", s),
@@ -86,11 +86,11 @@ impl AwsAuthenticationMode {
         let auth_mode = AwsAuthenticationModeKey::try_from(mode)?;
         match auth_mode {
             AwsAuthenticationModeKey::Automatic => Ok(AwsAuthenticationMode::Automatic),
-            AwsAuthenticationModeKey::ArnRole => {
+            AwsAuthenticationModeKey::RoleArn => {
                 let arn_role = auth
                     .get("arn_role")
                     .ok_or_else(|| SecretsManagerConversionError {
-                        message: "missing authentication.arn_role for ARN_ROLE mode".to_string(),
+                        message: "missing authentication.arn_role for ROLE_ARN mode".to_string(),
                     })?
                     .clone();
                 Ok(AwsAuthenticationMode::ArnRole { arn_role })
@@ -133,8 +133,8 @@ mod tests {
             AwsAuthenticationModeKey::Automatic
         );
         assert_eq!(
-            AwsAuthenticationModeKey::try_from("ARN_ROLE").unwrap(),
-            AwsAuthenticationModeKey::ArnRole
+            AwsAuthenticationModeKey::try_from("ROLE_ARN").unwrap(),
+            AwsAuthenticationModeKey::RoleArn
         );
         assert_eq!(
             AwsAuthenticationModeKey::try_from("STATIC_CREDENTIALS").unwrap(),
@@ -157,7 +157,7 @@ mod tests {
     #[test]
     fn test_parse_authentication_arn_role() {
         let auth = auth_map(&[("arn_role", "arn:aws:iam::123456789012:role/my-role")]);
-        let result = AwsAuthenticationMode::try_parse("ARN_ROLE", &auth).unwrap();
+        let result = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth).unwrap();
         assert_eq!(
             result,
             AwsAuthenticationMode::ArnRole {
@@ -168,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_parse_authentication_arn_role_missing_field() {
-        let err = AwsAuthenticationMode::try_parse("ARN_ROLE", &auth_map(&[])).unwrap_err();
+        let err = AwsAuthenticationMode::try_parse("ROLE_ARN", &auth_map(&[])).unwrap_err();
         assert!(err.message.contains("missing authentication.arn_role"));
     }
 
@@ -271,7 +271,7 @@ mod tests {
     fn test_parse_aws_connection_secrets_manager_with_arn_role() {
         let endpoint = auth_map(&[("region", "eu-west-3")]);
         let auth = auth_map(&[("arn_role", "arn:aws:iam::123456789012:role/my-role")]);
-        let result = AwsConnection::try_parse("AWS_SECRETS_MANAGER", &endpoint, "ARN_ROLE", &auth).unwrap();
+        let result = AwsConnection::try_parse("AWS_SECRETS_MANAGER", &endpoint, "ROLE_ARN", &auth).unwrap();
         assert_eq!(result.source, AwsSecretsManagerSource::AwsSecretsManager);
         assert_eq!(
             result.authentication_mode,
