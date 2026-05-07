@@ -36,7 +36,7 @@ tags:
 
 # to configure all the node pools (later we can have a section by node pool)
 global_node_pools:
-  terminationGracePeriod: 1h
+  terminationGracePeriod: 4h
 stableNodePool:
   requirements: []
   consolidateAfter: 30s
