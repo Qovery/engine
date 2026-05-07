@@ -1,3 +1,4 @@
+use crate::blueprint::action::deploy_terraform;
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintKind, QoveryBlueprintManifest};
@@ -116,29 +117,29 @@ impl BlueprintTask {
         secrets
     }
 
-    /// Clone the blueprint repository and return the path to the blueprint directory.
-    fn clone_blueprint_repo(&self, infra_ctx: &InfrastructureContext) -> Result<PathBuf, Box<EngineError>> {
+    /// Clone the blueprint repository and return the path + parsed tag info.
+    fn clone_blueprint_repo(
+        &self,
+        infra_ctx: &InfrastructureContext,
+    ) -> Result<(PathBuf, BlueprintInfo), Box<EngineError>> {
         let event_details = self.get_event_details(BlueprintStep::LoadConfiguration);
         let request = &self.request.target_environment;
 
         let workspace = infra_ctx.context().workspace_root_dir();
         let clone_dir = Path::new(workspace).join("blueprint").join(&request.execution_id);
 
-        // Clean up if exists from a previous run
         if clone_dir.exists() {
             let _ = fs::remove_dir_all(&clone_dir);
         }
 
         fs::create_dir_all(&clone_dir).map_err(|e| {
-            Box::new(EngineError::new_invalid_engine_payload(
+            Box::new(EngineError::new_blueprint_error(
                 event_details.clone(),
-                &format!("Failed to create clone directory: {}", e),
-                None,
+                BlueprintError::WorkspaceError(e.to_string()),
             ))
         })?;
 
-        let blueprint_info = self
-            .get_blueprint_info()
+        let blueprint_info = BlueprintInfo::try_new(&request.tag)
             .map_err(|e| Box::new(EngineError::new_blueprint_error(event_details.clone(), e)))?;
 
         self.logger.log(EngineEvent::Info(
@@ -146,18 +147,16 @@ impl BlueprintTask {
             EventMessage::new(
                 format!(
                     "Cloning blueprint repository {} at {} ({})",
-                    request.git_url, request.tag, blueprint_info,
+                    request.git_url, request.tag, blueprint_info
                 ),
                 None,
             ),
         ));
 
-        // Clone the repository
         let git_url = url::Url::parse(&request.git_url).map_err(|e| {
-            Box::new(EngineError::new_invalid_engine_payload(
+            Box::new(EngineError::new_blueprint_error(
                 event_details.clone(),
-                &format!("Invalid git URL '{}': {}", request.git_url, e),
-                None,
+                BlueprintError::InvalidGitUrl(request.git_url.clone(), e.to_string()),
             ))
         })?;
 
@@ -170,25 +169,21 @@ impl BlueprintTask {
             None => vec![],
         })
         .map_err(|e| {
-            Box::new(EngineError::new_invalid_engine_payload(
+            Box::new(EngineError::new_blueprint_error(
                 event_details.clone(),
-                &format!("Failed to clone blueprint repo: {:?}", e),
-                None,
+                BlueprintError::CloneError(format!("{:?}", e)),
             ))
         })?;
 
-        // Resolve blueprint path (subdirectory or repo root)
         let full_path = clone_dir.join(blueprint_info.path());
-
         if !full_path.exists() {
-            return Err(Box::new(EngineError::new_invalid_engine_payload(
+            return Err(Box::new(EngineError::new_blueprint_error(
                 event_details,
-                &format!("Blueprint path '{}' does not exist in the repository", blueprint_info),
-                None,
+                BlueprintError::BlueprintPathNotFound(blueprint_info.path()),
             )));
         }
 
-        Ok(full_path)
+        Ok((full_path, blueprint_info))
     }
 
     /// Parse the QBM manifest from the blueprint directory.
@@ -197,26 +192,23 @@ impl BlueprintTask {
         let qbm_path = blueprint_dir.join("qbm.yml");
 
         if !qbm_path.exists() {
-            return Err(Box::new(EngineError::new_invalid_engine_payload(
+            return Err(Box::new(EngineError::new_blueprint_error(
                 event_details,
-                &format!("qbm.yml not found at {}", qbm_path.display()),
-                None,
+                BlueprintError::ManifestNotFound(qbm_path.display().to_string()),
             )));
         }
 
         let manifest = QoveryBlueprintManifest::parse(&qbm_path).map_err(|e| {
-            Box::new(EngineError::new_invalid_engine_payload(
+            Box::new(EngineError::new_blueprint_error(
                 event_details.clone(),
-                &format!("Failed to parse qbm.yml: {}", e),
-                None,
+                BlueprintError::ManifestParseError(e.to_string()),
             ))
         })?;
 
         if manifest.kind != BlueprintKind::ServiceBlueprint {
-            return Err(Box::new(EngineError::new_invalid_engine_payload(
+            return Err(Box::new(EngineError::new_blueprint_error(
                 event_details,
-                "Only ServiceBlueprint is supported. StackBlueprint orchestration is handled by q-core.",
-                None,
+                BlueprintError::UnsupportedBlueprintKind,
             )));
         }
 
@@ -241,10 +233,6 @@ impl BlueprintTask {
             Err(_) => StepStatus::Error,
         };
         record.stop(step_status);
-    }
-
-    fn get_blueprint_info(&self) -> Result<BlueprintInfo, BlueprintError> {
-        BlueprintInfo::try_new(self.request.target_environment.tag.as_str())
     }
 }
 
@@ -293,12 +281,12 @@ impl Task for BlueprintTask {
 
         let deployment_ret = (|| -> Result<(), Box<EngineError>> {
             // 2. Clone blueprint repo
-            let blueprint_dir = self.clone_blueprint_repo(&infra_context)?;
+            let (blueprint_dir, blueprint_info) = self.clone_blueprint_repo(&infra_context)?;
 
             // 3. Parse QBM manifest
             let manifest = self.parse_manifest(&blueprint_dir)?;
 
-            // 4. Resolve spec (QBM defaults + spec_overrides + platform defaults)
+            // 4. Resolve spec
             let resolved_spec =
                 ResolvedBlueprintSpec::resolve(&manifest.spec, &self.request.target_environment.spec_overrides);
 
@@ -307,7 +295,49 @@ impl Task for BlueprintTask {
                 EventMessage::new(format!("Resolved blueprint spec: {:?}", resolved_spec), None),
             ));
 
-            //TODO: Next step: Execute blueprint (terraform apply / helm upgrade)
+            // 5. Execute
+            let event_details = self.get_event_details(BlueprintStep::Deploy);
+            let is_dry_run = infra_context.context().is_dry_run_deploy();
+
+            match resolved_spec {
+                ResolvedBlueprintSpec::Terraform(tf_spec) => {
+                    self.logger.log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Executing Terraform blueprint (provider={}, flavor={:?})",
+                                tf_spec.provider, tf_spec.flavor
+                            ),
+                            None,
+                        ),
+                    ));
+
+                    deploy_terraform::execute(
+                        &blueprint_dir,
+                        &self.lib_root_dir,
+                        &tf_spec,
+                        &self.request.target_environment,
+                        &blueprint_info,
+                        is_dry_run,
+                        &event_details,
+                        self.logger.as_ref(),
+                    )?;
+
+                    self.logger.log(EngineEvent::Info(
+                        event_details,
+                        EventMessage::new(
+                            "Terraform blueprint completed — service created via Qovery provider".to_string(),
+                            None,
+                        ),
+                    ));
+                }
+                ResolvedBlueprintSpec::Helm(_) => {
+                    return Err(Box::new(EngineError::new_blueprint_error(
+                        event_details,
+                        BlueprintError::HelmNotImplemented,
+                    )));
+                }
+            }
 
             Ok(())
         })();
