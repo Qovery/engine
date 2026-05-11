@@ -135,9 +135,8 @@ kubeEtcd:
 
 kubelet:
   serviceMonitor:
-    ## Disable scrapping from resource service, because it's already handled by cAvisor service, as per the official doc:
-    ## Enable scraping /metrics/resource from kubelet's service
-    ## This is disabled by default because container metrics are already exposed by cAdvisor
+    ## Keep /metrics/resource disabled because cAdvisor already exposes container metrics.
+    ## Scraping both endpoints creates duplicate container CPU/memory series.
     resource: false
     # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
     resourcePath: "/metrics/resource"
