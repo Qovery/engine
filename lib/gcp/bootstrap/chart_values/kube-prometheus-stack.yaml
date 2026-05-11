@@ -138,7 +138,9 @@ kubeEtcd:
 kubelet:
   namespace: qovery
   serviceMonitor:
-    resource: true
+    ## Keep /metrics/resource disabled because cAdvisor already exposes container metrics.
+    ## Scraping both endpoints creates duplicate container CPU/memory series.
+    resource: false
     # From kubernetes 1.18, /metrics/resource/v1alpha1 renamed to /metrics/resource
     resourcePath: "/metrics/resource"
 
