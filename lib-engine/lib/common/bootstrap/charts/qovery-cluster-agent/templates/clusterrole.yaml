@@ -68,6 +68,10 @@ rules:
       - apps
     resources:
       - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+      - jobs
     verbs:
       - get
       - list
