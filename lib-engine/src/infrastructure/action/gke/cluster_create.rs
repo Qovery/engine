@@ -58,7 +58,7 @@ pub(super) fn create_gke_cluster(
             cluster.template_directory.clone(),
             cluster.temp_dir().join("helms"),
             event_details.clone(),
-            vec![],
+            envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
             cluster.context().is_dry_run_deploy(),
         ),
         qovery_terraform_output,
