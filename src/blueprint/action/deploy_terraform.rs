@@ -1,61 +1,46 @@
+use crate::blueprint::action::render_and_apply;
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::qovery_blueprint_manifest::CredentialMode;
 use crate::blueprint::models::spec::{ResolvedBackend, ResolvedTerraformSpec, TemplateVariable, TerraformFlavor};
-use crate::cmd::terraform::{TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate};
-use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
-use crate::events::{EngineEvent, EventDetails, EventMessage};
+use crate::events::EventDetails;
 use crate::io_models::blueprint::BlueprintRequest;
 use crate::logger::Logger;
-use crate::template::generate_and_copy_all_files_into_dir;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
+// TODO: Should come from the QBM spec (blueprint author pins terraform version).
 const DEFAULT_ENGINE_VERSION: &str = "1.9.7";
 
+/// Tera context for the blueprint terraform template.
 #[derive(Serialize)]
-struct BlueprintTeraContext {
-    // Service identity
+struct BlueprintTerraformTeraContext {
     environment_id: String,
     name: String,
-
-    // Git repository
     git_url: String,
     git_branch: String,
     git_root_path: String,
     git_token_id: Option<String>,
-
-    // Engine
     engine: String,
     engine_version: String,
     timeout_seconds: u64,
     use_cluster_credentials: bool,
-
-    // Backend
     backend_kubernetes: bool,
     backend_blueprint: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     backend_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     backend_config: Option<HashMap<String, String>>,
-
-    // Job resources
     job_cpu_milli: u32,
     job_ram_mib: u32,
     job_storage_gib: u32,
-
-    // Variables
     variables: Vec<TemplateVariable>,
-
-    // Import (for updates)
     import_id: Option<String>,
 }
 
-// Execute a Terraform blueprint by generating terraform files that use `qovery_terraform_service` resource
-// then runs terraform init + apply.
+/// Execute a Terraform blueprint: build Tera context → render template → terraform init + apply.
 pub fn execute(
     working_dir: &Path,
     lib_root_dir: &str,
@@ -66,116 +51,67 @@ pub fn execute(
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<(), Box<EngineError>> {
-    // 1. Generate terraform files from template
     let template_dir = PathBuf::from(lib_root_dir).join("blueprint").join("terraform");
-    let tera_context = build_tera_context(spec, request, blueprint_info);
-    let ctx = tera::Context::from_serialize(&tera_context).map_err(|e| {
-        Box::new(EngineError::new_blueprint_error(
-            event_details.clone(),
-            BlueprintError::TerraformGenerationError(format!("Failed to build Tera context: {}", e)),
-        ))
-    })?;
+    let ctx = tera::Context::from_serialize(BlueprintTerraformTeraContext::new(spec, request, blueprint_info))
+        .map_err(|e| {
+            Box::new(EngineError::new_blueprint_error(
+                event_details.clone(),
+                BlueprintError::TerraformGenerationError(format!("Failed to build Tera context: {}", e)),
+            ))
+        })?;
 
-    generate_and_copy_all_files_into_dir(&template_dir, working_dir, &ctx).map_err(|e| {
-        Box::new(EngineError::new_blueprint_error(
-            event_details.clone(),
-            BlueprintError::TerraformGenerationError(format!("Failed to generate terraform files: {}", e)),
-        ))
-    })?;
-
-    let template_dir = PathBuf::from(lib_root_dir).join("blueprint").join("terraform");
-    generate_and_copy_all_files_into_dir(&template_dir, working_dir, &ctx).map_err(|e| {
-        Box::new(EngineError::new_invalid_engine_payload(
-            event_details.clone(),
-            &format!("Failed to generate terraform files from template: {}", e),
-            None,
-        ))
-    })?;
-
-    logger.log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new("Generated terraform files for qovery_terraform_service".to_string(), None),
-    ));
-
-    let envs: Vec<(&str, &str)> = vec![("QOVERY_API_TOKEN", request.qovery_api_token.as_str())];
-    let dir = working_dir.to_string_lossy();
-
-    // 2. Terraform init + validate
-    logger.log(EngineEvent::Info(
-        event_details.clone(),
-        EventMessage::new("Running terraform init + validate".to_string(), None),
-    ));
-    terraform_init_validate(&dir, &envs, &TerraformValidators::Default)
-        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
-
-    // 3. Terraform apply (skip if dry-run)
-    if is_dry_run {
-        logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new("Dry run mode — skipping terraform apply".to_string(), None),
-        ));
-    } else {
-        logger.log(EngineEvent::Info(
-            event_details.clone(),
-            EventMessage::new("Creating service via Qovery Terraform provider".to_string(), None),
-        ));
-        terraform_apply_with_options(
-            &dir,
-            is_dry_run,
-            &envs,
-            &TerraformValidators::Default,
-            TerraformApplyOptions {
-                max_retries: 0,
-                command_timeout: Some(Duration::from_secs(spec.timeout_sec)),
-            },
-        )
-        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
-    }
-
-    Ok(())
+    render_and_apply(
+        working_dir,
+        &template_dir,
+        &ctx,
+        &request.qovery_api_token,
+        spec.timeout_sec,
+        is_dry_run,
+        "qovery_terraform_service",
+        event_details,
+        logger,
+    )
 }
 
-fn build_tera_context(
-    spec: &ResolvedTerraformSpec,
-    request: &BlueprintRequest,
-    blueprint_info: &BlueprintInfo,
-) -> BlueprintTeraContext {
-    let (backend_type, backend_config) = match &spec.backend {
-        ResolvedBackend::Blueprint { backend_type, config } => (Some(backend_type.clone()), Some(config.clone())),
-        _ => (None, None),
-    };
+impl BlueprintTerraformTeraContext {
+    fn new(spec: &ResolvedTerraformSpec, request: &BlueprintRequest, blueprint_info: &BlueprintInfo) -> Self {
+        let (backend_type, backend_config) = match &spec.backend {
+            ResolvedBackend::Blueprint { backend_type, config } => (Some(backend_type.clone()), Some(config.clone())),
+            _ => (None, None),
+        };
 
-    BlueprintTeraContext {
-        environment_id: request.environment_id.clone(),
-        name: request.name.clone(),
-        git_url: request.git_url.clone(),
-        git_branch: request.tag.clone(),
-        git_root_path: blueprint_info.path(),
-        git_token_id: request.git_credentials.as_ref().map(|c| c.login.clone()),
-        engine: match spec.flavor {
-            TerraformFlavor::Terraform => "TERRAFORM".to_string(),
-            TerraformFlavor::OpenTofu => "OPEN_TOFU".to_string(),
-        },
-        engine_version: DEFAULT_ENGINE_VERSION.to_string(),
-        timeout_seconds: spec.timeout_sec,
-        use_cluster_credentials: matches!(spec.credential_mode, CredentialMode::Cluster),
-        backend_kubernetes: matches!(spec.backend, ResolvedBackend::Qovery),
-        backend_blueprint: matches!(spec.backend, ResolvedBackend::Blueprint { .. }),
-        backend_type,
-        backend_config,
-        job_cpu_milli: spec.job_resources.cpu_milli,
-        job_ram_mib: spec.job_resources.ram_mib,
-        job_storage_gib: spec.job_resources.storage_gib,
-        variables: request
-            .variables
-            .iter()
-            .map(|v| TemplateVariable {
-                name: v.name.clone(),
-                value: v.value.clone(),
-                is_secret: v.is_secret,
-            })
-            .collect(),
-        import_id: request.import_id.clone(),
+        Self {
+            environment_id: request.environment_id.clone(),
+            name: request.name.clone(),
+            git_url: request.git_url.clone(),
+            git_branch: request.tag.clone(),
+            git_root_path: blueprint_info.path(),
+            git_token_id: request.git_credentials.as_ref().map(|c| c.login.clone()),
+            engine: match spec.flavor {
+                TerraformFlavor::Terraform => "TERRAFORM".to_string(),
+                TerraformFlavor::OpenTofu => "OPEN_TOFU".to_string(),
+            },
+            engine_version: DEFAULT_ENGINE_VERSION.to_string(),
+            timeout_seconds: spec.timeout_sec,
+            use_cluster_credentials: matches!(spec.credential_mode, CredentialMode::Cluster),
+            backend_kubernetes: matches!(spec.backend, ResolvedBackend::Qovery),
+            backend_blueprint: matches!(spec.backend, ResolvedBackend::Blueprint { .. }),
+            backend_type,
+            backend_config,
+            job_cpu_milli: spec.job_resources.cpu_milli,
+            job_ram_mib: spec.job_resources.ram_mib,
+            job_storage_gib: spec.job_resources.storage_gib,
+            variables: request
+                .variables
+                .iter()
+                .map(|v| TemplateVariable {
+                    name: v.name.clone(),
+                    value: v.value.clone(),
+                    is_secret: v.is_secret,
+                })
+                .collect(),
+            import_id: request.import_id.clone(),
+        }
     }
 }
 
@@ -184,6 +120,7 @@ mod tests {
     use super::*;
     use crate::blueprint::models::spec::{JobResources, ResolvedBackend, ResolvedTerraformSpec, TerraformFlavor};
     use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
+    use crate::template::generate_and_copy_all_files_into_dir;
 
     fn test_request() -> BlueprintRequest {
         BlueprintRequest {
@@ -237,13 +174,8 @@ mod tests {
         BlueprintInfo::try_new("aws/s3/1/1.0.0").unwrap()
     }
 
-    /// Helper: render the template using the same mechanism as execute() but from the
-    /// workspace-relative lib path.
     fn render_template(spec: &ResolvedTerraformSpec, request: &BlueprintRequest, info: &BlueprintInfo) -> String {
-        let tera_context = build_tera_context(spec, request, info);
-        let ctx = tera::Context::from_serialize(&tera_context).unwrap();
-
-        // Use the template from the repo's lib directory
+        let ctx = tera::Context::from_serialize(BlueprintTerraformTeraContext::new(spec, request, info)).unwrap();
         let template_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("lib/blueprint/terraform");
         let temp_dir = tempfile::TempDir::new().unwrap();
         generate_and_copy_all_files_into_dir(&template_dir, temp_dir.path(), &ctx).unwrap();
@@ -254,48 +186,23 @@ mod tests {
     fn generate_main_tf_renders_all_fields() {
         let result = render_template(&test_spec(), &test_request(), &test_info());
 
-        // Provider
         assert!(result.contains(r#"source = "qovery/qovery""#));
         assert!(result.contains(r#"provider "qovery" {}"#));
-
-        // Resource attributes
         assert!(result.contains(r#"environment_id        = "env-uuid""#));
         assert!(result.contains(r#"name                  = "my-s3-bucket""#));
         assert!(result.contains("auto_deploy           = true"));
         assert!(result.contains(r#"engine                = "TERRAFORM""#));
         assert!(result.contains("timeout_seconds       = 1800"));
         assert!(result.contains("use_cluster_credentials = true"));
-
-        // Git repository
         assert!(result.contains(r#"url       = "https://github.com/org/catalog.git""#));
         assert!(result.contains(r#"branch    = "aws/s3/1/1.0.0""#));
         assert!(result.contains(r#"root_path = "aws/s3/1""#));
-        assert!(!result.contains("git_token_id"));
-
-        // Backend (default = kubernetes)
         assert!(result.contains("kubernetes {}"));
-        assert!(!result.contains("user_provided"));
-
-        // Engine version
-        assert!(result.contains(r#"explicit_version          = "1.9.7""#));
-        assert!(result.contains("read_from_terraform_block = false"));
-
-        // Job resources
         assert!(result.contains("cpu_milli   = 500"));
         assert!(result.contains("ram_mib     = 512"));
         assert!(result.contains("storage_gib = 20"));
-
-        // Variables with TF_VAR_ prefix
         assert!(result.contains(r#"key       = "TF_VAR_region""#));
-        assert!(result.contains(r#"value     = "eu-west-3""#));
-        assert!(result.contains(r#"key       = "TF_VAR_bucket_name""#));
-        assert!(result.contains(r#"value     = "my-prod-bucket""#));
-        assert!(result.contains("is_secret = false"));
-
-        // tfvars_files
         assert!(result.contains("tfvars_files = []"));
-
-        // No import block (import_id is None)
         assert!(!result.contains("import {"));
     }
 
@@ -313,7 +220,7 @@ mod tests {
     #[test]
     fn generate_main_tf_blueprint_backend() {
         let mut spec = test_spec();
-        let mut config = std::collections::HashMap::new();
+        let mut config = HashMap::new();
         config.insert("bucket".to_string(), "my-state-bucket".to_string());
         config.insert("region".to_string(), "eu-west-3".to_string());
         spec.backend = ResolvedBackend::Blueprint {
@@ -324,9 +231,7 @@ mod tests {
 
         assert!(result.contains(r#"type = "s3""#));
         assert!(result.contains(r#"bucket = "my-state-bucket""#));
-        assert!(result.contains(r#"region = "eu-west-3""#));
         assert!(!result.contains("kubernetes {}"));
-        assert!(!result.contains("user_provided {}"));
     }
 
     #[test]

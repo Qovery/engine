@@ -1,4 +1,4 @@
-use crate::blueprint::action::deploy_terraform;
+use crate::blueprint::action::{deploy_helm, deploy_terraform};
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintKind, QoveryBlueprintManifest};
@@ -331,11 +331,36 @@ impl Task for BlueprintTask {
                         ),
                     ));
                 }
-                ResolvedBlueprintSpec::Helm(_) => {
-                    return Err(Box::new(EngineError::new_blueprint_error(
+                ResolvedBlueprintSpec::Helm(helm_spec) => {
+                    self.logger.log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Executing Helm blueprint (chart={}/{})",
+                                helm_spec.chart.name, helm_spec.chart.version
+                            ),
+                            None,
+                        ),
+                    ));
+
+                    deploy_helm::execute(
+                        &blueprint_dir,
+                        &self.lib_root_dir,
+                        &helm_spec,
+                        &self.request.target_environment,
+                        &blueprint_info,
+                        is_dry_run,
+                        &event_details,
+                        self.logger.as_ref(),
+                    )?;
+
+                    self.logger.log(EngineEvent::Info(
                         event_details,
-                        BlueprintError::HelmNotImplemented,
-                    )));
+                        EventMessage::new(
+                            "Helm blueprint completed — service created via Qovery provider".to_string(),
+                            None,
+                        ),
+                    ));
                 }
             }
 

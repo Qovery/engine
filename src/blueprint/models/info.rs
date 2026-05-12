@@ -43,6 +43,10 @@ impl BlueprintInfo {
     pub fn path(&self) -> String {
         format!("{}/{}/{}", self.tag.provider, self.tag.service_name, self.tag.service_version)
     }
+
+    pub fn service_name(&self) -> &str {
+        &self.tag.service_name
+    }
 }
 
 impl Display for BlueprintInfo {
