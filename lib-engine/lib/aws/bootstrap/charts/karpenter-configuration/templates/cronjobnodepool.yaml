@@ -28,7 +28,7 @@ spec:
       expireAfter: 720h # 30 * 24h = 720h
       terminationGracePeriod: {{ .Values.global_node_pools.terminationGracePeriod }}
   disruption:
-    consolidationPolicy: WhenEmpty
+    consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: {{ .Values.cronjobNodePool.consolidateAfter }}
     budgets:
       # By default, 10% is set: it applies for any kind of disruption (Empty, Drifted, Underutilized)

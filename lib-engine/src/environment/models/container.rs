@@ -582,6 +582,7 @@ pub(crate) struct ClusterTeraContext {
     pub(crate) name: String,
     pub(crate) region: String,
     pub(crate) zone: String,
+    pub(crate) is_karpenter_enabled: bool,
 }
 
 impl From<&dyn Kubernetes> for ClusterTeraContext {
@@ -591,6 +592,7 @@ impl From<&dyn Kubernetes> for ClusterTeraContext {
             name: k.name().to_string(),
             region: k.region().to_string(),
             zone: k.default_zone().unwrap_or("").to_string(),
+            is_karpenter_enabled: k.is_karpenter_enabled(),
         }
     }
 }
