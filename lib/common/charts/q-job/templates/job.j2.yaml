@@ -55,6 +55,7 @@ spec:
         {%- endfor %}
       annotations:
         qovery.com/service-version: {{ service.version }}
+        karpenter.sh/do-not-disrupt: "true"
         {%- for key, value in annotations_group.pods %}
         {{ key }}: |-
            {{ value }}

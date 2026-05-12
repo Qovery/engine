@@ -196,7 +196,7 @@ impl<T: CloudProvider> Job<T> {
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();
-        let mut deployment_affinity_node_preferred = BTreeMap::<String, String>::new();
+        let deployment_affinity_node_preferred = BTreeMap::<String, String>::new();
         let is_stateful_set = false;
         let is_gpu = (self.gpu_request.is_some_and(|v| v.to_gpu_count() > 0))
             || (self.gpu_limit.is_some_and(|v| v.to_gpu_count() > 0));
@@ -209,19 +209,22 @@ impl<T: CloudProvider> Job<T> {
             );
         }
 
-        // Target cronjob nodepool for cron-scheduled jobs (soft affinity for safe fallback)
+        // Target cronjob nodepool for cron-scheduled jobs (hard affinity to force placement)
         if !is_gpu
             && matches!(self.schedule, JobSchedule::Cron { .. })
             && kubernetes.is_karpenter_cronjob_nodepool_enabled()
         {
-            // Add toleration (harmless if nodepool doesn't exist)
+            // Add toleration so the pod can land on a tainted cronjob nodepool node
             tolerations
                 .entry("nodepool/cronjob".to_string())
                 .or_insert_with(|| "NoSchedule".to_string());
 
-            // Use preferred (soft) affinity so pods fall back to default nodepool
-            // if cronjob nodepool is removed without redeploying
-            deployment_affinity_node_preferred
+            // Use required (hard) affinity. Soft affinity let cronjob pods schedule on
+            // the default nodepool whenever it had spare capacity, so Karpenter never
+            // provisioned cronjob-pool nodes and the dedicated nodepool stayed empty.
+            // Hard affinity forces unschedulability until a cronjob-pool node exists,
+            // triggering Karpenter to provision one.
+            deployment_affinity_node_required
                 .entry("karpenter.sh/nodepool".to_string())
                 .or_insert_with(|| "cronjob".to_string());
         }
@@ -617,31 +620,31 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
-    fn renders_cronjob_template_with_preferred_cronjob_nodepool_affinity() {
+    fn renders_cronjob_template_with_required_cronjob_nodepool_affinity() {
         let rendered = render_template(
             include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"),
             build_job_tera_context(true),
         );
 
-        assert!(rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
+        assert!(rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/nodepool"));
         assert!(rendered.contains("- cronjob"));
         assert!(rendered.contains("key: \"nodepool/cronjob\""));
-        assert!(!rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+        assert!(!rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
     }
 
     #[test]
-    fn renders_job_template_with_preferred_cronjob_nodepool_affinity() {
+    fn renders_job_template_with_required_cronjob_nodepool_affinity() {
         let rendered = render_template(
             include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"),
             build_job_tera_context(false),
         );
 
-        assert!(rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
+        assert!(rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/nodepool"));
         assert!(rendered.contains("- cronjob"));
         assert!(rendered.contains("key: \"nodepool/cronjob\""));
-        assert!(!rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+        assert!(!rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
     }
 
     fn render_template(template: &str, context: JobTeraContext) -> String {
@@ -653,8 +656,14 @@ mod tests {
         let mut tolerations = BTreeMap::new();
         tolerations.insert("nodepool/cronjob".to_string(), "NoSchedule".to_string());
 
-        let mut deployment_affinity_node_preferred = BTreeMap::new();
-        deployment_affinity_node_preferred.insert("karpenter.sh/nodepool".to_string(), "cronjob".to_string());
+        let deployment_affinity_node_preferred = BTreeMap::new();
+        let mut deployment_affinity_node_required = BTreeMap::new();
+        deployment_affinity_node_required.insert("karpenter.sh/nodepool".to_string(), "cronjob".to_string());
+
+        let advanced_settings = JobAdvancedSettings {
+            deployment_affinity_node_required,
+            ..Default::default()
+        };
 
         JobTeraContext {
             organization_long_id: Uuid::new_v4(),
@@ -667,6 +676,7 @@ mod tests {
                 name: "test-cluster".to_string(),
                 region: "eu-west-3".to_string(),
                 zone: "eu-west-3a".to_string(),
+                is_karpenter_enabled: true,
             },
             namespace: "test-namespace".to_string(),
             service: ServiceTeraContext {
@@ -702,7 +712,7 @@ mod tests {
                 },
                 readiness_probe: None,
                 liveness_probe: None,
-                advanced_settings: JobAdvancedSettings::default(),
+                advanced_settings,
                 tolerations,
                 deployment_affinity_node_preferred,
             },
