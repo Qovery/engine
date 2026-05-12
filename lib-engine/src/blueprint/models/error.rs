@@ -23,9 +23,6 @@ pub enum BlueprintError {
     #[error("Terraform execution failed: {0}")]
     TerraformExecutionError(String),
 
-    #[error("Helm blueprint execution is not yet implemented")]
-    HelmNotImplemented,
-
     #[error("Invalid git URL '{0}': {1}")]
     InvalidGitUrl(String, String),
 
