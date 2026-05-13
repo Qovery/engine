@@ -26,6 +26,7 @@ impl AwsPodIdentityAddon {
                 KubernetesVersion::V1_32 { .. } => "v1.3.10-eksbuild.2",
                 KubernetesVersion::V1_33 { .. } => "v1.3.10-eksbuild.2",
                 KubernetesVersion::V1_34 { .. } => "v1.3.10-eksbuild.2",
+                KubernetesVersion::V1_35 { .. } => "v1.3.10-eksbuild.2",
             }
             .to_string(),
         }
@@ -164,6 +165,16 @@ mod tests {
             },
             TestCase {
                 k8s_version: KubernetesVersion::V1_34 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsPodIdentityAddon {
+                    version: "v1.3.10-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_35 {
                     prefix: None,
                     patch: None,
                     suffix: None,
