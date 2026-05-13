@@ -26,6 +26,7 @@ impl AwsKubeProxyAddon {
                 KubernetesVersion::V1_32 { .. } => "v1.32.6-eksbuild.2",
                 KubernetesVersion::V1_33 { .. } => "v1.33.0-eksbuild.2",
                 KubernetesVersion::V1_34 { .. } => "v1.34.5-eksbuild.2",
+                KubernetesVersion::V1_35 { .. } => "v1.35.3-eksbuild.5",
             }
             .to_string(),
         }
@@ -170,6 +171,16 @@ mod tests {
                 },
                 expected: AwsKubeProxyAddon {
                     version: "v1.34.5-eksbuild.2".to_string(),
+                },
+            },
+            TestCase {
+                k8s_version: KubernetesVersion::V1_35 {
+                    prefix: None,
+                    patch: None,
+                    suffix: None,
+                },
+                expected: AwsKubeProxyAddon {
+                    version: "v1.35.3-eksbuild.5".to_string(),
                 },
             },
         ];

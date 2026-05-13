@@ -47,7 +47,7 @@ pub const GCP_MANAGED_DATABASE_INSTANCE_TYPE: &str = ""; // TODO: once managed D
 
 pub static GCP_RESOURCE_TTL: Lazy<Duration> = Lazy::new(|| Duration::from_secs(4 * 60 * 60)); // 4 hours
 
-pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_34 {
+pub const GCP_KUBERNETES_VERSION: KubernetesVersion = KubernetesVersion::V1_35 {
     prefix: None,
     patch: None,
     suffix: None,

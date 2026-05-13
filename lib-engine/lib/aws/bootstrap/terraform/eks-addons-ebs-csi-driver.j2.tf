@@ -75,6 +75,7 @@ resource "aws_iam_policy" "ebs_csi_policy" {
         "ec2:ModifyVolume",
         "ec2:DescribeAvailabilityZones",
         "ec2:DescribeInstances",
+        "ec2:DescribeInstanceTypes",
         "ec2:DescribeSnapshots",
         "ec2:DescribeTags",
         "ec2:DescribeVolumes",

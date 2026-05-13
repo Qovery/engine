@@ -118,7 +118,9 @@ impl KarpenterConfigurationChart {
                     | KubernetesVersion::V1_30 { .. }
                     | KubernetesVersion::V1_31 { .. }
                     | KubernetesVersion::V1_32 { .. } => Ec2Ami::AmazonLinux2,
-                    KubernetesVersion::V1_33 { .. } | KubernetesVersion::V1_34 { .. } => Ec2Ami::AmazonLinux2023,
+                    KubernetesVersion::V1_33 { .. }
+                    | KubernetesVersion::V1_34 { .. }
+                    | KubernetesVersion::V1_35 { .. } => Ec2Ami::AmazonLinux2023,
                 },
             },
             aws_storage_type,
