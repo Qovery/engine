@@ -285,6 +285,7 @@ impl Cluster<Google, GkeOptions> for Gke {
                 custom_services_ipv4_cidr_block: None,
             },
             vpc_network_mode,
+            None,
             secrets
                 .LETS_ENCRYPT_EMAIL_REPORT
                 .expect("LETS_ENCRYPT_EMAIL_REPORT is not set in secrets"),

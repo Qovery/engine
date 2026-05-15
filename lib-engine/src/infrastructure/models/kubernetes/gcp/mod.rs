@@ -11,7 +11,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::engine_request::{ChartValuesOverrideName, ChartValuesOverrideValues};
-use crate::io_models::models::{CpuArchitecture, VpcQoveryNetworkMode};
+use crate::io_models::models::{CpuArchitecture, NatGatewayParameters, VpcQoveryNetworkMode};
 use crate::logger::Logger;
 
 use crate::environment::models::ToCloudProviderFormat;
@@ -119,6 +119,7 @@ pub struct GkeOptions {
     // VPC
     pub vpc_mode: VpcMode,
     pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
+    pub nat_gateway_parameters: Option<NatGatewayParameters>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: Time,
@@ -144,6 +145,7 @@ impl GkeOptions {
         qovery_engine_location: EngineLocation,
         vpc_mode: VpcMode,
         vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
+        nat_gateway_parameters: Option<NatGatewayParameters>,
         tls_email_report: String,
         cluster_maintenance_start_time: Time,
         cluster_maintenance_end_time: Option<Time>,
@@ -163,6 +165,7 @@ impl GkeOptions {
             qovery_engine_location,
             vpc_mode,
             vpc_qovery_network_mode,
+            nat_gateway_parameters,
             tls_email_report,
             cluster_maintenance_start_time,
             cluster_maintenance_end_time,

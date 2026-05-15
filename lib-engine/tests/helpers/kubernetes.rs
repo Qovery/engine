@@ -642,6 +642,7 @@ pub fn get_environment_test_kubernetes(
                     })
                 }
             });
+            options.nat_gateway_parameters = nat_gateway_parameters;
 
             let envoy_vcpu_request_in_milli_cpu = if matches!(&node_manager, NodeManager::AutoPilot) {
                 500

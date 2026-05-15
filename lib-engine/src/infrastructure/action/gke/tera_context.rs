@@ -140,6 +140,24 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
         }
     }
 
+    // NAT Gateway static egress IPs: only meaningful when NAT Gateway is enabled.
+    let gcp_static_egress_ips_enabled = matches!(
+        &cluster.options.vpc_qovery_network_mode,
+        Some(VpcQoveryNetworkMode::WithNatGateways)
+    ) && cluster
+        .options
+        .nat_gateway_parameters
+        .as_ref()
+        .is_some_and(|p| p.gcp_static_ips_enabled());
+    let gcp_static_egress_ips_count = cluster
+        .options
+        .nat_gateway_parameters
+        .as_ref()
+        .and_then(|p| p.gcp_static_ips_count())
+        .unwrap_or(2);
+    context.insert("gcp_static_egress_ips_enabled", &gcp_static_egress_ips_enabled);
+    context.insert("gcp_static_egress_ips_count", &gcp_static_egress_ips_count);
+
     match &cluster.options.vpc_mode {
         VpcMode::Automatic {
             custom_cluster_ipv4_cidr_block,

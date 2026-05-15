@@ -196,9 +196,34 @@ impl ToTerraformString for NatGatewayType {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
 pub struct NatGatewayParameters {
-    pub nat_gateway_type: NatGatewayType,
+    #[serde(default, alias = "natGatewayType")]
+    pub nat_gateway_type: Option<NatGatewayType>,
+    #[serde(default, alias = "gcpParameters")]
+    pub gcp_parameters: Option<GcpNatGatewayParameters>,
+}
+
+#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
+pub struct GcpNatGatewayParameters {
+    #[serde(default, alias = "staticIpsEnabled")]
+    pub static_ips_enabled: bool,
+    #[serde(default, alias = "staticIpsCount")]
+    pub static_ips_count: Option<u16>,
+}
+
+impl NatGatewayParameters {
+    pub fn scaleway_nat_gateway_type(&self) -> Option<&NatGatewayType> {
+        self.nat_gateway_type.as_ref()
+    }
+
+    pub fn gcp_static_ips_enabled(&self) -> bool {
+        self.gcp_parameters.as_ref().is_some_and(|gcp| gcp.static_ips_enabled)
+    }
+
+    pub fn gcp_static_ips_count(&self) -> Option<u16> {
+        self.gcp_parameters.as_ref().and_then(|gcp| gcp.static_ips_count)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -478,7 +503,8 @@ mod tests {
     use crate::environment::models::domain::ToTerraformString;
     use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
     use crate::io_models::models::{
-        HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
+        GcpNatGatewayParameters, HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
+        NatGatewayParameters, NatGatewayType,
     };
     use serde::Deserialize;
     use serde_derive::Serialize;
@@ -692,7 +718,7 @@ mod tests {
 
     #[test]
     fn test_nat_gateway_parameters_deserialization_with_alias() {
-        // setup
+        // setup (Scaleway top-level payload)
         let test_cases = vec![
             (
                 r#"{"nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-S"}}"#,
@@ -720,10 +746,11 @@ mod tests {
             assert!(result.is_ok(), "Failed to deserialize with alias: {:?}", result.err());
             let nat_gateway = result.unwrap();
             assert_eq!(
-                nat_gateway.nat_gateway_type,
-                NatGatewayType::Scaleway(expected_type),
+                nat_gateway.scaleway_nat_gateway_type(),
+                Some(&NatGatewayType::Scaleway(expected_type)),
                 "Failed for JSON with alias: {json}",
             );
+            assert_eq!(nat_gateway.gcp_static_ips_count(), None);
         }
     }
 
@@ -731,7 +758,11 @@ mod tests {
     fn test_nat_gateway_parameters_roundtrip_serialization() {
         // setup
         let original = NatGatewayParameters {
-            nat_gateway_type: NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium),
+            nat_gateway_type: Some(NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium)),
+            gcp_parameters: Some(GcpNatGatewayParameters {
+                static_ips_enabled: true,
+                static_ips_count: Some(2),
+            }),
         };
 
         // execute: serialize then deserialize
@@ -764,6 +795,59 @@ mod tests {
 
         // verify - should fail because "InvalidType" is not a valid gateway type
         assert!(result.is_err(), "Should fail with invalid gateway type");
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_static_ips_enabled_only() {
+        // setup (GCP nested payload)
+        let json = r#"{"gcp_parameters":{"static_ips_enabled":true}}"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify
+        assert!(result.is_ok(), "Should parse static_ips_enabled without nat_gateway_type");
+        let nat_gateway = result.unwrap();
+        assert_eq!(nat_gateway.scaleway_nat_gateway_type(), None);
+        assert!(nat_gateway.gcp_static_ips_enabled());
+        assert_eq!(nat_gateway.gcp_static_ips_count(), None);
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_static_ips_count() {
+        // setup (GCP nested payload with camelCase aliases)
+        let json = r#"{"gcpParameters":{"staticIpsEnabled":true,"staticIpsCount":1}}"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify
+        assert!(result.is_ok(), "Should parse staticIpsCount");
+        let nat_gateway = result.unwrap();
+        assert!(nat_gateway.gcp_static_ips_enabled());
+        assert_eq!(nat_gateway.gcp_static_ips_count(), Some(1));
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_provider_specific_shape() {
+        // setup (new payload shape)
+        let json = r#"{
+          "nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-L"},
+          "gcp_parameters":{"static_ips_enabled":true,"static_ips_count":2}
+        }"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify
+        assert!(result.is_ok(), "Should parse provider-specific shape");
+        let nat_gateway = result.unwrap();
+        assert_eq!(
+            nat_gateway.scaleway_nat_gateway_type(),
+            Some(&NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large))
+        );
+        assert!(nat_gateway.gcp_static_ips_enabled());
+        assert_eq!(nat_gateway.gcp_static_ips_count(), Some(2));
     }
 
     #[test]

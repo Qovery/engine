@@ -4,7 +4,7 @@ use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::eso::SecretsManagerAccessDto;
 use crate::io_models::metrics::MetricsParameters;
-use crate::io_models::models::VpcQoveryNetworkMode;
+use crate::io_models::models::{NatGatewayParameters, VpcQoveryNetworkMode};
 use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -51,6 +51,8 @@ pub struct GkeOptions {
     pub user_provided_network: Option<UserProvidedVPCNetwork>,
     #[serde(default)]
     pub vpc_qovery_network_mode: Option<VpcQoveryNetworkMode>,
+    #[serde(default)]
+    pub nat_gateway_parameters: Option<NatGatewayParameters>,
 
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: String,
@@ -131,6 +133,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             value.qovery_engine_location,
             vpc_mode,
             value.vpc_qovery_network_mode,
+            value.nat_gateway_parameters,
             value.tls_email_report,
             Time::parse(
                 value.cluster_maintenance_start_time.as_str(),
@@ -179,6 +182,7 @@ mod tests {
             services_ipv4_cidr_block: None,
             user_provided_network: None,
             vpc_qovery_network_mode: None,
+            nat_gateway_parameters: None,
             metrics_parameters: None,
             keda_parameters: None,
             secrets_manager_accesses: None,

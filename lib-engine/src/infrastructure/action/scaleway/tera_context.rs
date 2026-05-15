@@ -226,9 +226,11 @@ fn kapsule_tera_context(cluster: &Kapsule, infra_ctx: &InfrastructureContext) ->
             context.insert(
                 "public_gateway_type",
                 &match &cluster.options.nat_gateway_parameters {
-                    Some(nat_gateway_parameters) => {
-                        nat_gateway_parameters.nat_gateway_type.to_terraform_format_string()
-                    }
+                    Some(nat_gateway_parameters) => match nat_gateway_parameters.scaleway_nat_gateway_type() {
+                        Some(nat_gateway_type) => nat_gateway_type.to_terraform_format_string(),
+                        // default nat gateway type
+                        None => ScalewayPublicGatewayType::Small.to_terraform_format_string(),
+                    },
                     None => {
                         // default nat gateway type
                         ScalewayPublicGatewayType::Small.to_terraform_format_string()

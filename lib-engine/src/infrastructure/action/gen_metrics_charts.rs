@@ -603,6 +603,7 @@ mod tests {
                     custom_services_ipv4_cidr_block: None,
                 },
                 vpc_qovery_network_mode: None,
+                nat_gateway_parameters: None,
                 cluster_maintenance_start_time: Time::MIDNIGHT,
                 cluster_maintenance_end_time: None,
                 tls_email_report: String::new(),
