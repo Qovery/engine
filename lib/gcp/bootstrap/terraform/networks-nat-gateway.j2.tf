@@ -30,11 +30,34 @@ resource "google_compute_route" "gke-master-default-gw" {
   ]
 }
 
+{% if gcp_static_egress_ips_enabled %}
+resource "google_compute_address" "nat" {
+  count        = {{ gcp_static_egress_ips_count }}
+  project      = var.project_id
+  name         = "${var.vpc_name}-nat-${count.index + 1}"
+  region       = var.region
+  address_type = "EXTERNAL"
+  network_tier = "PREMIUM"
+
+  description = jsonencode(local.tags_common) # limited length to 2048 chars
+
+  lifecycle {
+    create_before_destroy = true
+    ignore_changes = [description]
+  }
+}
+{% endif %}
+
 resource "google_compute_router_nat" "nat" {
   name                               = google_compute_router.router.name
   router                             = google_compute_router.router.name
   region                             = google_compute_router.router.region
+{% if gcp_static_egress_ips_enabled %}
+  nat_ip_allocate_option             = "MANUAL_ONLY"
+  nat_ips                            = google_compute_address.nat[*].self_link
+{% else %}
   nat_ip_allocate_option             = "AUTO_ONLY"
+{% endif %}
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 
   log_config {
