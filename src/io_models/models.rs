@@ -176,16 +176,26 @@ impl Display for VpcQoveryNetworkMode {
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone)]
-#[serde(tag = "provider", content = "type")]
+#[serde(tag = "provider")]
 #[serde(rename_all = "lowercase")]
 pub enum NatGatewayType {
-    Scaleway(ScalewayPublicGatewayType),
+    Scaleway {
+        #[serde(rename = "type")]
+        nat_gateway_type: ScalewayPublicGatewayType,
+    },
+    Gcp {
+        #[serde(default, alias = "staticIpsEnabled")]
+        static_ips_enabled: bool,
+        #[serde(default, alias = "staticIpsCount")]
+        static_ips_count: Option<u16>,
+    },
 }
 
 impl Display for NatGatewayType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            NatGatewayType::Scaleway(gateway_type) => write!(f, "{gateway_type}"),
+            NatGatewayType::Scaleway { nat_gateway_type } => write!(f, "{nat_gateway_type}"),
+            NatGatewayType::Gcp { .. } => write!(f, "gcp"),
         }
     }
 }
@@ -200,29 +210,28 @@ impl ToTerraformString for NatGatewayType {
 pub struct NatGatewayParameters {
     #[serde(default, alias = "natGatewayType")]
     pub nat_gateway_type: Option<NatGatewayType>,
-    #[serde(default, alias = "gcpParameters")]
-    pub gcp_parameters: Option<GcpNatGatewayParameters>,
-}
-
-#[derive(Serialize, Deserialize, PartialEq, Eq, Debug, Clone, Default)]
-pub struct GcpNatGatewayParameters {
-    #[serde(default, alias = "staticIpsEnabled")]
-    pub static_ips_enabled: bool,
-    #[serde(default, alias = "staticIpsCount")]
-    pub static_ips_count: Option<u16>,
 }
 
 impl NatGatewayParameters {
     pub fn scaleway_nat_gateway_type(&self) -> Option<&NatGatewayType> {
-        self.nat_gateway_type.as_ref()
+        match self.nat_gateway_type.as_ref() {
+            Some(NatGatewayType::Scaleway { .. }) => self.nat_gateway_type.as_ref(),
+            _ => None,
+        }
     }
 
     pub fn gcp_static_ips_enabled(&self) -> bool {
-        self.gcp_parameters.as_ref().is_some_and(|gcp| gcp.static_ips_enabled)
+        match self.nat_gateway_type.as_ref() {
+            Some(NatGatewayType::Gcp { static_ips_enabled, .. }) => *static_ips_enabled,
+            _ => false,
+        }
     }
 
     pub fn gcp_static_ips_count(&self) -> Option<u16> {
-        self.gcp_parameters.as_ref().and_then(|gcp| gcp.static_ips_count)
+        match self.nat_gateway_type.as_ref() {
+            Some(NatGatewayType::Gcp { static_ips_count, .. }) => *static_ips_count,
+            _ => None,
+        }
     }
 }
 
@@ -503,8 +512,7 @@ mod tests {
     use crate::environment::models::domain::ToTerraformString;
     use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
     use crate::io_models::models::{
-        GcpNatGatewayParameters, HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit,
-        NatGatewayParameters, NatGatewayType,
+        HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
     };
     use serde::Deserialize;
     use serde_derive::Serialize;
@@ -747,7 +755,9 @@ mod tests {
             let nat_gateway = result.unwrap();
             assert_eq!(
                 nat_gateway.scaleway_nat_gateway_type(),
-                Some(&NatGatewayType::Scaleway(expected_type)),
+                Some(&NatGatewayType::Scaleway {
+                    nat_gateway_type: expected_type
+                }),
                 "Failed for JSON with alias: {json}",
             );
             assert_eq!(nat_gateway.gcp_static_ips_count(), None);
@@ -757,20 +767,28 @@ mod tests {
     #[test]
     fn test_nat_gateway_parameters_roundtrip_serialization() {
         // setup
-        let original = NatGatewayParameters {
-            nat_gateway_type: Some(NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium)),
-            gcp_parameters: Some(GcpNatGatewayParameters {
-                static_ips_enabled: true,
-                static_ips_count: Some(2),
-            }),
-        };
+        let test_cases = vec![
+            NatGatewayParameters {
+                nat_gateway_type: Some(NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Medium,
+                }),
+            },
+            NatGatewayParameters {
+                nat_gateway_type: Some(NatGatewayType::Gcp {
+                    static_ips_enabled: true,
+                    static_ips_count: Some(3),
+                }),
+            },
+        ];
 
-        // execute: serialize then deserialize
-        let json = serde_json::to_string(&original).expect("Failed to serialize");
-        let deserialized: NatGatewayParameters = serde_json::from_str(&json).expect("Failed to deserialize");
+        for original in test_cases {
+            // execute: serialize then deserialize
+            let json = serde_json::to_string(&original).expect("Failed to serialize");
+            let deserialized: NatGatewayParameters = serde_json::from_str(&json).expect("Failed to deserialize");
 
-        // verify
-        assert_eq!(original, deserialized);
+            // verify
+            assert_eq!(original, deserialized);
+        }
     }
 
     #[test]
@@ -799,8 +817,8 @@ mod tests {
 
     #[test]
     fn test_nat_gateway_parameters_deserialization_static_ips_enabled_only() {
-        // setup (GCP nested payload)
-        let json = r#"{"gcp_parameters":{"static_ips_enabled":true}}"#;
+        // setup (GCP payload under nat_gateway_type)
+        let json = r#"{"nat_gateway_type":{"provider":"gcp","static_ips_enabled":true}}"#;
 
         // execute
         let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
@@ -815,8 +833,8 @@ mod tests {
 
     #[test]
     fn test_nat_gateway_parameters_deserialization_static_ips_count() {
-        // setup (GCP nested payload with camelCase aliases)
-        let json = r#"{"gcpParameters":{"staticIpsEnabled":true,"staticIpsCount":1}}"#;
+        // setup (GCP payload with camelCase field aliases)
+        let json = r#"{"nat_gateway_type":{"provider":"gcp","staticIpsEnabled":true,"staticIpsCount":1}}"#;
 
         // execute
         let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
@@ -833,7 +851,7 @@ mod tests {
         // setup (new payload shape)
         let json = r#"{
           "nat_gateway_type":{"provider":"scaleway","type":"VPC-GW-L"},
-          "gcp_parameters":{"static_ips_enabled":true,"static_ips_count":2}
+          "ignored_extra_field":{"static_ips_enabled":true,"static_ips_count":2}
         }"#;
 
         // execute
@@ -844,9 +862,29 @@ mod tests {
         let nat_gateway = result.unwrap();
         assert_eq!(
             nat_gateway.scaleway_nat_gateway_type(),
-            Some(&NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large))
+            Some(&NatGatewayType::Scaleway {
+                nat_gateway_type: ScalewayPublicGatewayType::Large
+            })
         );
-        assert!(nat_gateway.gcp_static_ips_enabled());
+        assert!(!nat_gateway.gcp_static_ips_enabled());
+        assert_eq!(nat_gateway.gcp_static_ips_count(), None);
+    }
+
+    #[test]
+    fn test_nat_gateway_parameters_deserialization_gcp_payload_under_nat_gateway_type() {
+        // setup (backward compatibility with core payload shape)
+        let json = r#"{
+          "nat_gateway_type":{"provider":"gcp","static_ips_enabled":false,"static_ips_count":2}
+        }"#;
+
+        // execute
+        let result: Result<NatGatewayParameters, _> = serde_json::from_str(json);
+
+        // verify
+        assert!(result.is_ok(), "Should parse gcp payload under nat_gateway_type");
+        let nat_gateway = result.unwrap();
+        assert_eq!(nat_gateway.scaleway_nat_gateway_type(), None);
+        assert!(!nat_gateway.gcp_static_ips_enabled());
         assert_eq!(nat_gateway.gcp_static_ips_count(), Some(2));
     }
 
@@ -854,10 +892,30 @@ mod tests {
     fn test_nat_gateway_type_to_string() {
         // setup
         let test_cases = vec![
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Small), "VPC-GW-S"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium), "VPC-GW-M"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large), "VPC-GW-L"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::XLarge), "VPC-GW-XL"),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Small,
+                },
+                "VPC-GW-S",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Medium,
+                },
+                "VPC-GW-M",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Large,
+                },
+                "VPC-GW-L",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::XLarge,
+                },
+                "VPC-GW-XL",
+            ),
         ];
 
         for (gateway_type, expected) in test_cases {
@@ -873,10 +931,30 @@ mod tests {
     fn test_nat_gateway_type_to_terraform_format_string() {
         // setup
         let test_cases = vec![
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Small), "VPC-GW-S"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium), "VPC-GW-M"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::Large), "VPC-GW-L"),
-            (NatGatewayType::Scaleway(ScalewayPublicGatewayType::XLarge), "VPC-GW-XL"),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Small,
+                },
+                "VPC-GW-S",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Medium,
+                },
+                "VPC-GW-M",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::Large,
+                },
+                "VPC-GW-L",
+            ),
+            (
+                NatGatewayType::Scaleway {
+                    nat_gateway_type: ScalewayPublicGatewayType::XLarge,
+                },
+                "VPC-GW-XL",
+            ),
         ];
 
         for (gateway_type, expected) in test_cases {
@@ -893,7 +971,9 @@ mod tests {
         // setup
         for scaleway_gateway_type in ScalewayPublicGatewayType::iter() {
             // execute
-            let nat_gateway_type = NatGatewayType::Scaleway(scaleway_gateway_type.clone());
+            let nat_gateway_type = NatGatewayType::Scaleway {
+                nat_gateway_type: scaleway_gateway_type.clone(),
+            };
             let display_result = nat_gateway_type.to_string();
             let terraform_result = nat_gateway_type.to_terraform_format_string();
 
@@ -911,7 +991,9 @@ mod tests {
         use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
         use crate::io_models::models::NatGatewayType;
 
-        let nat_gateway_type = NatGatewayType::Scaleway(ScalewayPublicGatewayType::Medium);
+        let nat_gateway_type = NatGatewayType::Scaleway {
+            nat_gateway_type: ScalewayPublicGatewayType::Medium,
+        };
 
         // execute
         let display_result = format!("{nat_gateway_type}");
