@@ -1,5 +1,9 @@
 use async_trait::async_trait;
+use aws_sdk_ec2::operation::create_tags::CreateTagsError;
 use aws_sdk_ec2::operation::describe_subnets::{DescribeSubnetsError, DescribeSubnetsOutput};
+use aws_sdk_ec2::operation::describe_vpc_attribute::DescribeVpcAttributeError;
+use aws_sdk_ec2::operation::describe_vpcs::DescribeVpcsError;
+use aws_sdk_ec2::types::{Tag, Vpc};
 use aws_sdk_eks::error::SdkError;
 use aws_sdk_eks::operation::delete_nodegroup::{DeleteNodegroupError, DeleteNodegroupOutput};
 use aws_sdk_eks::operation::describe_nodegroup::{DescribeNodegroupError, DescribeNodegroupOutput};
@@ -51,6 +55,21 @@ pub trait QoveryAwsSdkConfigEks {
         &self,
         subnet_ids: Vec<String>,
     ) -> Result<HashMap<String, HashMap<String, String>>, SdkError<DescribeSubnetsError>>;
+
+    async fn describe_vpc_by_id(&self, vpc_id: &str) -> Result<Option<Vpc>, SdkError<DescribeVpcsError>>;
+
+    async fn describe_vpc_dns_hostnames_enabled(
+        &self,
+        vpc_id: &str,
+    ) -> Result<bool, SdkError<DescribeVpcAttributeError>>;
+
+    async fn tag_vpc(&self, vpc_id: &str, tags: Vec<(String, String)>) -> Result<(), SdkError<CreateTagsError>>;
+
+    async fn tag_subnets(
+        &self,
+        subnet_ids: Vec<String>,
+        tags: Vec<(String, String)>,
+    ) -> Result<(), SdkError<CreateTagsError>>;
 
     async fn update_nodegroup_version(
         &self,
@@ -183,6 +202,74 @@ impl QoveryAwsSdkConfigEks for SdkConfig {
         }
 
         Ok(subnets_tags_by_id)
+    }
+
+    async fn describe_vpc_by_id(&self, vpc_id: &str) -> Result<Option<Vpc>, SdkError<DescribeVpcsError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        match client.describe_vpcs().vpc_ids(vpc_id).send().await {
+            Ok(output) => Ok(output.vpcs().first().cloned()),
+            Err(e) => {
+                let is_not_found = e
+                    .as_service_error()
+                    .map(|se| {
+                        use aws_sdk_ec2::error::ProvideErrorMetadata;
+                        se.code() == Some("InvalidVpcID.NotFound")
+                    })
+                    .unwrap_or(false);
+                if is_not_found { Ok(None) } else { Err(e) }
+            }
+        }
+    }
+
+    async fn describe_vpc_dns_hostnames_enabled(
+        &self,
+        vpc_id: &str,
+    ) -> Result<bool, SdkError<DescribeVpcAttributeError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        let output = client
+            .describe_vpc_attribute()
+            .vpc_id(vpc_id)
+            .attribute(aws_sdk_ec2::types::VpcAttributeName::EnableDnsHostnames)
+            .send()
+            .await?;
+        Ok(output.enable_dns_hostnames().and_then(|v| v.value()).unwrap_or(false))
+    }
+
+    async fn tag_vpc(&self, vpc_id: &str, tags: Vec<(String, String)>) -> Result<(), SdkError<CreateTagsError>> {
+        let client = aws_sdk_ec2::Client::new(self);
+        let aws_tags: Vec<Tag> = tags
+            .into_iter()
+            .map(|(k, v)| Tag::builder().key(k).value(v).build())
+            .collect();
+        client
+            .create_tags()
+            .resources(vpc_id)
+            .set_tags(Some(aws_tags))
+            .send()
+            .await?;
+        Ok(())
+    }
+
+    async fn tag_subnets(
+        &self,
+        subnet_ids: Vec<String>,
+        tags: Vec<(String, String)>,
+    ) -> Result<(), SdkError<CreateTagsError>> {
+        if subnet_ids.is_empty() {
+            return Ok(());
+        }
+        let client = aws_sdk_ec2::Client::new(self);
+        let aws_tags: Vec<Tag> = tags
+            .into_iter()
+            .map(|(k, v)| Tag::builder().key(k).value(v).build())
+            .collect();
+        client
+            .create_tags()
+            .set_resources(Some(subnet_ids))
+            .set_tags(Some(aws_tags))
+            .send()
+            .await?;
+        Ok(())
     }
 
     async fn update_nodegroup_version(

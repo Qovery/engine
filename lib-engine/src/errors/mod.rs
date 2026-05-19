@@ -4969,6 +4969,51 @@ impl EngineError {
         )
     }
 
+    pub fn new_aws_eks_custom_vpc_misconfiguration(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DoNotRespectCloudProviderBestPractices,
+            raw_error.message_safe.clone(),
+            Some(raw_error),
+            Url::parse(
+                "https://www.qovery.com/docs/configuration/integrations/kubernetes/eks/managed#use-your-existing-vpc",
+            )
+            .ok(),
+            None,
+        )
+    }
+
+    pub fn new_aws_eks_custom_vpc_alb_misconfiguration(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DoNotRespectCloudProviderBestPractices,
+            raw_error.message_safe.clone(),
+            Some(raw_error),
+            Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html").ok(),
+            None,
+        )
+    }
+
+    pub fn new_aws_eks_custom_vpc_dns_misconfiguration(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::DoNotRespectCloudProviderBestPractices,
+            raw_error.message_safe.clone(),
+            Some(raw_error),
+            Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/network-reqs.html").ok(),
+            None,
+        )
+    }
+
     /// Creates new error when getting load balancers from the cloud provider
     ///
     /// Arguments:
