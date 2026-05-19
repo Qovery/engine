@@ -7,7 +7,13 @@ use crate::infrastructure::helm_charts::{
 };
 use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::AwsAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
+use crate::runtime::block_on;
 use kube::Client;
+use kube::api::{Api, ApiResource, ListParams};
+use kube::core::DynamicObject;
+use retry::delay::Fixed;
+use retry::{OperationResult, retry};
+use serde::Deserialize;
 
 pub struct EsoChart {
     chart_path: HelmChartPath,
@@ -188,6 +194,33 @@ impl ToCommonHelmChart for EsoChart {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClusterSecretStoreCondition {
+    #[serde(rename = "type")]
+    condition_type: String,
+    status: String,
+    reason: Option<String>,
+    #[allow(dead_code)]
+    message: Option<String>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct ClusterSecretStoreStatus {
+    conditions: Option<Vec<ClusterSecretStoreCondition>>,
+}
+
+fn cluster_secret_store_api_resource() -> ApiResource {
+    ApiResource {
+        group: "external-secrets.io".to_string(),
+        version: "v1".to_string(),
+        api_version: "external-secrets.io/v1".to_string(),
+        kind: "ClusterSecretStore".to_string(),
+        plural: "clustersecretstores".to_string(),
+    }
+}
+
 #[derive(Clone)]
 pub struct EsoChartChecker {}
 
@@ -204,8 +237,54 @@ impl Default for EsoChartChecker {
 }
 
 impl ChartInstallationChecker for EsoChartChecker {
-    fn verify_installation(&self, _kube_client: &Client) -> Result<(), CommandError> {
-        Ok(())
+    fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
+        let kube_client = kube_client.clone();
+        let api_resource = cluster_secret_store_api_resource();
+
+        // Retry: 12 attempts x 10 seconds = 2 minutes max
+        let result = retry(Fixed::from_millis(10_000).take(12), || {
+            let stores_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &api_resource);
+
+            let stores = match block_on(stores_api.list(&ListParams::default())) {
+                Ok(list) => list,
+                Err(e) => {
+                    return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                        "Failed to list ClusterSecretStores: {e}"
+                    )));
+                }
+            };
+
+            if stores.items.is_empty() {
+                return OperationResult::Ok(());
+            }
+
+            for store in stores.items {
+                let store_name = store.metadata.name.as_deref().unwrap_or("<unknown>");
+                let status: ClusterSecretStoreStatus = store
+                    .data
+                    .get("status")
+                    .and_then(|v| ClusterSecretStoreStatus::deserialize(v).ok())
+                    .unwrap_or_default();
+
+                let is_valid =
+                    status.conditions.as_deref().unwrap_or_default().iter().any(|c| {
+                        c.condition_type == "Ready" && c.status == "True" && c.reason.as_deref() == Some("Valid")
+                    });
+
+                if !is_valid {
+                    return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                        "The cluster store '{store_name}' is not valid: please ensure your Secret Manager Access is configured correctly"
+                    )));
+                }
+            }
+
+            OperationResult::Ok(())
+        });
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(retry::Error { error, .. }) => Err(error),
+        }
     }
 
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
