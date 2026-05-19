@@ -108,6 +108,10 @@ impl ToCommonHelmChart for PromtailChart {
                         value: source_registry.image_path("pub-mirror-promtail"),
                     },
                     ChartSetValue {
+                        key: "image.tag".to_string(),
+                        value: "3.6.7".to_string(),
+                    },
+                    ChartSetValue {
                         key: "config.clients[0].url".to_string(),
                         value: format!("http://{}/loki/api/v1/push", self.loki_kube_dns_name),
                     },
