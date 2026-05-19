@@ -32,7 +32,12 @@ use retry::delay::Fixed;
 use retry::{Error, OperationResult};
 use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
-use url::Url;
+const TAG_KEY_CLUSTER_ID: &str = "ClusterId";
+const TAG_KEY_K8S_CLUSTER: &str = "kubernetes.io/cluster/";
+const TAG_KEY_ROLE_ELB: &str = "kubernetes.io/role/elb";
+const TAG_KEY_ROLE_INTERNAL_ELB: &str = "kubernetes.io/role/internal-elb";
+const TAG_VALUE_SHARED: &str = "shared";
+const TAG_VALUE_ELB: &str = "1";
 
 pub fn create_eks_cluster(
     kubernetes: &EKS,
@@ -168,14 +173,31 @@ pub fn create_eks_cluster(
         }
     }
 
-    precheck_custom_vpc_alb_subnet_tags(
+    if let Err(e) = tag_custom_vpc_with_cluster_id(kubernetes, &aws_conn) {
+        logger.warn(format!("Could not apply ClusterId tag on custom VPC: {e}. Managed database provisioning may fail if this tag is absent."));
+    }
+    if let Err(e) = tag_custom_vpc_eks_subnets(kubernetes, &aws_conn) {
+        logger.warn(format!("Could not apply required tags on custom VPC EKS subnets: {e}. ALB controller subnet discovery and routing may fail if tags are absent."));
+    }
+    // Dry runs skip auto-tagging (no AWS mutations), so the ALB tag precheck must also be relaxed:
+    // tags that would be applied on a real deploy are absent during dry run, causing false failures.
+    let alb_tag_strict_mode =
+        infra_ctx.context().is_first_cluster_deployment() && !kubernetes.context.is_dry_run_deploy();
+    precheck_custom_vpc_alb_subnet_tags(kubernetes, &aws_conn, event_details.clone(), &logger, alb_tag_strict_mode)?;
+    precheck_custom_vpc_exists_and_dns_hostnames(
         kubernetes,
         &aws_conn,
         event_details.clone(),
         &logger,
         infra_ctx.context().is_first_cluster_deployment(),
     )?;
-
+    precheck_custom_vpc_db_subnets_exist(
+        kubernetes,
+        &aws_conn,
+        event_details.clone(),
+        &logger,
+        infra_ctx.context().is_first_cluster_deployment(),
+    )?;
     // Deploy Karpenter nodegroup and install Karpenter charts if migration is enabled
     logger.info("Checking if Karpenter nodegroup should be deployed...");
     if should_deploy_karpenter_nodegroup(kubernetes, infra_ctx, &logger) {
@@ -281,12 +303,11 @@ fn precheck_custom_vpc_alb_subnet_tags(
                 return Ok(());
             }
 
-            return Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+            return Err(Box::new(EngineError::new_aws_eks_custom_vpc_alb_misconfiguration(
                 event_details.clone(),
                 CommandError::new_from_safe_message(format!(
                     "Cannot validate custom VPC subnet tags required by AWS ALB controller: {error}"
                 )),
-                Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html").ok(),
             )));
         }
     };
@@ -319,10 +340,9 @@ fn precheck_custom_vpc_alb_subnet_tags(
         "ALB controller requires subnet tags on custom VPC before Terraform during cluster creation. Fix the following and retry: {}",
         validation_errors.join(" ; ")
     );
-    Err(Box::new(EngineError::new_error_do_not_respect_cloud_provider_best_practices(
+    Err(Box::new(EngineError::new_aws_eks_custom_vpc_alb_misconfiguration(
         event_details,
         CommandError::new_from_safe_message(remediation_message),
-        Url::parse("https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html").ok(),
     )))
 }
 
@@ -437,6 +457,213 @@ fn validate_subnet_any_role_tag(
         validation_errors.insert(format!(
             "Subnet `{subnet_id}` is in both public/private lists and must have at least one role tag with value `1`: `kubernetes.io/role/elb` or `kubernetes.io/role/internal-elb`."
         ));
+    }
+}
+
+fn get_user_network_config_if_taggable(
+    kubernetes: &EKS,
+) -> Option<&crate::infrastructure::models::kubernetes::aws::UserNetworkConfig> {
+    if !kubernetes.is_network_managed_by_user() || kubernetes.context.is_dry_run_deploy() {
+        return None;
+    }
+    kubernetes.options.user_provided_network.as_ref()
+}
+
+fn tag_custom_vpc_with_cluster_id(kubernetes: &EKS, aws_conn: &aws_types::SdkConfig) -> Result<(), String> {
+    let Some(user_network_config) = get_user_network_config_if_taggable(kubernetes) else {
+        return Ok(());
+    };
+
+    let vpc_id = &user_network_config.aws_vpc_eks_id;
+    let cluster_id = kubernetes.short_id().to_string();
+
+    block_on(aws_conn.tag_vpc(vpc_id, vec![(TAG_KEY_CLUSTER_ID.to_string(), cluster_id)])).map_err(|e| e.to_string())
+}
+
+fn tag_custom_vpc_eks_subnets(kubernetes: &EKS, aws_conn: &aws_types::SdkConfig) -> Result<(), String> {
+    let Some(user_network_config) = get_user_network_config_if_taggable(kubernetes) else {
+        return Ok(());
+    };
+
+    let public_subnet_ids = collect_unique_subnet_ids([
+        user_network_config.eks_subnets_zone_a_ids.as_slice(),
+        user_network_config.eks_subnets_zone_b_ids.as_slice(),
+        user_network_config.eks_subnets_zone_c_ids.as_slice(),
+    ]);
+    let private_subnet_ids = collect_unique_subnet_ids([
+        user_network_config.eks_private_subnets_zone_a_ids.as_slice(),
+        user_network_config.eks_private_subnets_zone_b_ids.as_slice(),
+        user_network_config.eks_private_subnets_zone_c_ids.as_slice(),
+    ]);
+    let all_subnet_ids = collect_unique_subnet_ids([public_subnet_ids.as_slice(), private_subnet_ids.as_slice()]);
+
+    let cluster_tag_key = format!("{}{}", TAG_KEY_K8S_CLUSTER, kubernetes.cluster_name());
+
+    if !all_subnet_ids.is_empty() {
+        block_on(aws_conn.tag_subnets(all_subnet_ids, vec![(cluster_tag_key, TAG_VALUE_SHARED.to_string())]))
+            .map_err(|e| e.to_string())?;
+    }
+    if !public_subnet_ids.is_empty() {
+        block_on(aws_conn.tag_subnets(
+            public_subnet_ids,
+            vec![(TAG_KEY_ROLE_ELB.to_string(), TAG_VALUE_ELB.to_string())],
+        ))
+        .map_err(|e| e.to_string())?;
+    }
+    if !private_subnet_ids.is_empty() {
+        block_on(aws_conn.tag_subnets(
+            private_subnet_ids,
+            vec![(TAG_KEY_ROLE_INTERNAL_ELB.to_string(), TAG_VALUE_ELB.to_string())],
+        ))
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+fn precheck_custom_vpc_exists_and_dns_hostnames(
+    kubernetes: &EKS,
+    aws_conn: &aws_types::SdkConfig,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+    requested_strict_mode: bool,
+) -> Result<(), Box<EngineError>> {
+    if kubernetes.kind() != KubernetesKind::Eks {
+        return Ok(());
+    }
+
+    if !kubernetes.is_network_managed_by_user() {
+        return Ok(());
+    }
+
+    let Some(user_network_config) = kubernetes.options.user_provided_network.as_ref() else {
+        return Ok(());
+    };
+
+    let vpc_id = &user_network_config.aws_vpc_eks_id;
+
+    let vpc = match block_on(aws_conn.describe_vpc_by_id(vpc_id)) {
+        Ok(v) => v,
+        Err(error) => {
+            if is_update_relaxed_mode(requested_strict_mode) {
+                logger.warn(format!(
+                    "Cannot validate custom VPC {vpc_id} existence during cluster update. Continuing. Error: {error}"
+                ));
+                return Ok(());
+            }
+            return Err(Box::new(EngineError::new_aws_eks_custom_vpc_misconfiguration(
+                event_details,
+                CommandError::new_from_safe_message(format!("Cannot describe VPC {vpc_id}: {error}")),
+            )));
+        }
+    };
+
+    if vpc.is_none() {
+        let msg = format!("Custom VPC {vpc_id} not found. Verify the VPC ID in your network configuration.");
+        if is_update_relaxed_mode(requested_strict_mode) {
+            logger.warn(format!(
+                "Custom VPC {vpc_id} not found during cluster update. Continuing. {msg}"
+            ));
+            return Ok(());
+        }
+        return Err(Box::new(EngineError::new_aws_eks_custom_vpc_misconfiguration(
+            event_details,
+            CommandError::new_from_safe_message(msg),
+        )));
+    }
+
+    let dns_enabled = match block_on(aws_conn.describe_vpc_dns_hostnames_enabled(vpc_id)) {
+        Ok(v) => v,
+        Err(error) => {
+            if is_update_relaxed_mode(requested_strict_mode) {
+                logger.warn(format!(
+                    "Cannot validate DNS hostnames on VPC {vpc_id} during cluster update. Continuing. Error: {error}"
+                ));
+                return Ok(());
+            }
+            return Err(Box::new(EngineError::new_aws_eks_custom_vpc_dns_misconfiguration(
+                event_details,
+                CommandError::new_from_safe_message(format!(
+                    "Cannot check DNS hostnames attribute on VPC {vpc_id}: {error}"
+                )),
+            )));
+        }
+    };
+
+    if !dns_enabled {
+        let msg = format!(
+            "Custom VPC {vpc_id} has enable_dns_hostnames=false. Fix: aws ec2 modify-vpc-attribute --vpc-id {vpc_id} --enable-dns-hostnames '{{\"Value\":true}}'"
+        );
+        if is_update_relaxed_mode(requested_strict_mode) {
+            logger.warn(format!(
+                "Custom VPC DNS hostnames are disabled on {vpc_id}. This will become mandatory. {msg}"
+            ));
+            return Ok(());
+        }
+        return Err(Box::new(EngineError::new_aws_eks_custom_vpc_dns_misconfiguration(
+            event_details,
+            CommandError::new_from_safe_message(msg),
+        )));
+    }
+
+    Ok(())
+}
+
+fn precheck_custom_vpc_db_subnets_exist(
+    kubernetes: &EKS,
+    aws_conn: &aws_types::SdkConfig,
+    event_details: EventDetails,
+    logger: &impl InfraLogger,
+    requested_strict_mode: bool,
+) -> Result<(), Box<EngineError>> {
+    if kubernetes.kind() != KubernetesKind::Eks {
+        return Ok(());
+    }
+
+    if !kubernetes.is_network_managed_by_user() {
+        return Ok(());
+    }
+
+    let Some(user_network_config) = kubernetes.options.user_provided_network.as_ref() else {
+        return Ok(());
+    };
+
+    let all_db_subnet_ids = collect_unique_subnet_ids([
+        user_network_config.rds_subnets_zone_a_ids.as_slice(),
+        user_network_config.rds_subnets_zone_b_ids.as_slice(),
+        user_network_config.rds_subnets_zone_c_ids.as_slice(),
+        user_network_config.documentdb_subnets_zone_a_ids.as_slice(),
+        user_network_config.documentdb_subnets_zone_b_ids.as_slice(),
+        user_network_config.documentdb_subnets_zone_c_ids.as_slice(),
+        user_network_config.elasticache_subnets_zone_a_ids.as_slice(),
+        user_network_config.elasticache_subnets_zone_b_ids.as_slice(),
+        user_network_config.elasticache_subnets_zone_c_ids.as_slice(),
+    ]);
+
+    if all_db_subnet_ids.is_empty() {
+        return Ok(());
+    }
+
+    // AWS DescribeSubnets returns InvalidSubnetID.NotFound error (not partial results) if any subnet is missing.
+    // The Err branch catches missing subnets; Ok means all subnets exist.
+    let checked_ids = all_db_subnet_ids.join(", ");
+    match block_on(aws_conn.describe_subnets_by_ids(all_db_subnet_ids)) {
+        Ok(_) => Ok(()),
+        Err(error) => {
+            let remediation = format!(
+                "One or more database subnets not found in AWS. Checked: [{checked_ids}]. AWS error: {error}. Verify the subnet IDs in your network configuration."
+            );
+            if is_update_relaxed_mode(requested_strict_mode) {
+                logger.warn(format!(
+                    "Database subnet IDs non-compliant. This will become mandatory. {remediation}"
+                ));
+                return Ok(());
+            }
+            Err(Box::new(EngineError::new_aws_eks_custom_vpc_misconfiguration(
+                event_details,
+                CommandError::new_from_safe_message(remediation),
+            )))
+        }
     }
 }
 
