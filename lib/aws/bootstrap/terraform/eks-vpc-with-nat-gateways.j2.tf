@@ -214,7 +214,17 @@ resource "aws_route_table" "eks_cluster" {
   {% for route in vpc_custom_routing_table %}
   route {
     cidr_block = "{{ route.destination }}"
+    # pcx-*, tgw-* and igw-* are explicitly remapped to fix perpetual Terraform drift
+    # observed on customer clusters. Other target types (vpce-*, nat-*, eni-*, etc.)
+    # are intentionally kept as gateway_id fallback until validated in production.
+    # See: https://gitlab.com/qovery/backend/engine/-/merge_requests/2532
+    {% if route.target is starting_with("pcx-") %}
+    vpc_peering_connection_id = "{{ route.target }}"
+    {% elif route.target is starting_with("tgw-") %}
+    transit_gateway_id = "{{ route.target }}"
+    {% else %}
     gateway_id = "{{ route.target }}"
+    {% endif %}
   }
   {% endfor %}
 
@@ -314,7 +324,17 @@ resource "aws_route_table" "eks_cluster_zone_a_private" {
   {% for route in vpc_custom_routing_table %}
   route {
     cidr_block = "{{ route.destination }}"
+    # pcx-*, tgw-* and igw-* are explicitly remapped to fix perpetual Terraform drift
+    # observed on customer clusters. Other target types (vpce-*, nat-*, eni-*, etc.)
+    # are intentionally kept as gateway_id fallback until validated in production.
+    # See: https://gitlab.com/qovery/backend/engine/-/merge_requests/2532
+    {% if route.target is starting_with("pcx-") %}
+    vpc_peering_connection_id = "{{ route.target }}"
+    {% elif route.target is starting_with("tgw-") %}
+    transit_gateway_id = "{{ route.target }}"
+    {% else %}
     gateway_id = "{{ route.target }}"
+    {% endif %}
   }
   {% endfor %}
 
@@ -339,7 +359,17 @@ resource "aws_route_table" "eks_cluster_zone_b_private" {
   {% for route in vpc_custom_routing_table %}
   route {
     cidr_block = "{{ route.destination }}"
+    # pcx-*, tgw-* and igw-* are explicitly remapped to fix perpetual Terraform drift
+    # observed on customer clusters. Other target types (vpce-*, nat-*, eni-*, etc.)
+    # are intentionally kept as gateway_id fallback until validated in production.
+    # See: https://gitlab.com/qovery/backend/engine/-/merge_requests/2532
+    {% if route.target is starting_with("pcx-") %}
+    vpc_peering_connection_id = "{{ route.target }}"
+    {% elif route.target is starting_with("tgw-") %}
+    transit_gateway_id = "{{ route.target }}"
+    {% else %}
     gateway_id = "{{ route.target }}"
+    {% endif %}
   }
   {% endfor %}
 
@@ -364,7 +394,17 @@ resource "aws_route_table" "eks_cluster_zone_c_private" {
   {% for route in vpc_custom_routing_table %}
   route {
     cidr_block = "{{ route.destination }}"
+    # pcx-*, tgw-* and igw-* are explicitly remapped to fix perpetual Terraform drift
+    # observed on customer clusters. Other target types (vpce-*, nat-*, eni-*, etc.)
+    # are intentionally kept as gateway_id fallback until validated in production.
+    # See: https://gitlab.com/qovery/backend/engine/-/merge_requests/2532
+    {% if route.target is starting_with("pcx-") %}
+    vpc_peering_connection_id = "{{ route.target }}"
+    {% elif route.target is starting_with("tgw-") %}
+    transit_gateway_id = "{{ route.target }}"
+    {% else %}
     gateway_id = "{{ route.target }}"
+    {% endif %}
   }
   {% endfor %}
 
