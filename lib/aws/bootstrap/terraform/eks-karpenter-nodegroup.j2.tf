@@ -6,6 +6,14 @@
 resource "aws_launch_template" "karpenter_nodegroup" {
   name_prefix = "karpenter-controller-${var.kubernetes_cluster_id}-"
 
+  # Promote each new launch-template version to the default so that
+  # EKS UpdateNodegroupVersion (called by Karpenter::refresh_controller_ami
+  # without an explicit launchTemplate argument) resolves to the latest
+  # version instead of the initial v1. Without this, the AMI refresh
+  # silently reverts the nodegroup's launch_template version back to the
+  # default, causing perpetual drift on the aws_eks_node_group plan.
+  update_default_version = true
+
   metadata_options {
     http_endpoint = "enabled"
     http_tokens = var.ec2_metadata_imds_version
