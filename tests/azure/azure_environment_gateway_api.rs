@@ -6955,6 +6955,45 @@ fn deploy_application_with_force_ssl_redirect_on_azure_aks_http() {
                     panic!("ACME pass-through rule should have matches");
                 }
 
+                let acme_backends = acme_rule.get("backendRefs").and_then(|v| v.as_array());
+                assert!(
+                    acme_backends.map(|b| !b.is_empty()).unwrap_or(false),
+                    "Rule 0 should declare at least one backendRef to avoid Envoy 500 direct responses"
+                );
+                if let Some(acme_backends) = acme_backends {
+                    assert!(
+                        acme_backends.iter().all(|backend| backend
+                            .get("weight")
+                            .and_then(|w| w.as_i64())
+                            .map(|w| w > 0)
+                            .unwrap_or(false)),
+                        "Rule 0 backendRefs should all have a strictly positive weight"
+                    );
+
+                    let principal_route_name = redirect.name_any().replacen("-ssl-redir", "", 1);
+
+                    let expected_principal_backend_count = http_routes
+                        .items
+                        .iter()
+                        .find(|candidate| candidate.name_any() == principal_route_name)
+                        .and_then(|principal_route| {
+                            principal_route
+                                .data
+                                .get("spec")
+                                .and_then(|s| s.get("rules"))
+                                .and_then(|v| v.as_array())
+                                .map(|rules| rules.len())
+                        });
+
+                    if let Some(expected_backend_count) = expected_principal_backend_count {
+                        assert_eq!(
+                            acme_backends.len(),
+                            expected_backend_count,
+                            "Rule 0 backendRefs count should match the principal HTTPRoute backendRefs count"
+                        );
+                    }
+                }
+
                 // Rule 1: Redirect all other HTTP traffic to HTTPS.
                 let redirect_rule = &rules[1];
                 if let Some(filters) = redirect_rule.get("filters").and_then(|v| v.as_array()) {
@@ -7247,6 +7286,45 @@ fn deploy_container_with_force_ssl_redirect_on_azure_aks_http() {
                     );
                 } else {
                     panic!("ACME pass-through rule should have matches");
+                }
+
+                let acme_backends = acme_rule.get("backendRefs").and_then(|v| v.as_array());
+                assert!(
+                    acme_backends.map(|b| !b.is_empty()).unwrap_or(false),
+                    "Rule 0 should declare at least one backendRef to avoid Envoy 500 direct responses"
+                );
+                if let Some(acme_backends) = acme_backends {
+                    assert!(
+                        acme_backends.iter().all(|backend| backend
+                            .get("weight")
+                            .and_then(|w| w.as_i64())
+                            .map(|w| w > 0)
+                            .unwrap_or(false)),
+                        "Rule 0 backendRefs should all have a strictly positive weight"
+                    );
+
+                    let principal_route_name = redirect.name_any().replacen("-ssl-redir", "", 1);
+
+                    let expected_principal_backend_count = http_routes
+                        .items
+                        .iter()
+                        .find(|candidate| candidate.name_any() == principal_route_name)
+                        .and_then(|principal_route| {
+                            principal_route
+                                .data
+                                .get("spec")
+                                .and_then(|s| s.get("rules"))
+                                .and_then(|v| v.as_array())
+                                .map(|rules| rules.len())
+                        });
+
+                    if let Some(expected_backend_count) = expected_principal_backend_count {
+                        assert_eq!(
+                            acme_backends.len(),
+                            expected_backend_count,
+                            "Rule 0 backendRefs count should match the principal HTTPRoute backendRefs count"
+                        );
+                    }
                 }
 
                 // Rule 1: Redirect all other HTTP traffic to HTTPS.
