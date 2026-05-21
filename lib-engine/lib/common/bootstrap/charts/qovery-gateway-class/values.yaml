@@ -32,13 +32,13 @@ gatewayClass:
           matchLabels:
             app.kubernetes.io/component: proxy
         topologyKey: kubernetes.io/hostname
-        maxSkew: 2
+        maxSkew: 1
         whenUnsatisfiable: ScheduleAnyway
     tolerations: null
     pdb:
       enabled: true
       minAvailable: null
-      maxUnavailable: 20%
+      maxUnavailable: 1
   qoveryPrivate:
     enable: true
     hpa:
@@ -72,10 +72,10 @@ gatewayClass:
           matchLabels:
             app.kubernetes.io/component: proxy
         topologyKey: kubernetes.io/hostname
-        maxSkew: 2
+        maxSkew: 1
         whenUnsatisfiable: ScheduleAnyway
     tolerations: null
     pdb:
       enabled: true
       minAvailable: null
-      maxUnavailable: 20%
+      maxUnavailable: 1

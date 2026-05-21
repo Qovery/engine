@@ -36,10 +36,12 @@ envoyProxy:
             service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
             service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "set-by-engine-code"
             service.beta.kubernetes.io/aws-load-balancer-proxy-protocol: "*"
-            # Can use AWS defaults or set via AWS Load Balancer Controller configuration.
-            # This entry is intentionally placed on EnvoyProxy envoyService annotations,
-            # not Gateway.spec.infrastructure.annotations, to avoid Gateway's max-8 validation limit.
-            # service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: "target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=300"
+            # Set NLB target-group drain behavior on Envoy service annotations to reduce
+            # TCP RSTs during pod/node rescheduling windows with externalTrafficPolicy=Local.
+            # Keep this on EnvoyProxy envoyService annotations (not Gateway annotations)
+            # to avoid Gateway's infrastructure annotation limit.
+            # Keep draining values aligned with Envoy drainTimeout (currently 60s default).
+            service.beta.kubernetes.io/aws-load-balancer-target-group-attributes: "deregistration_delay.timeout_seconds=60,target_health_state.unhealthy.connection_termination.enabled=false,target_health_state.unhealthy.draining_interval_seconds=60"
 
 # metrics are enabled only when prometheus is installed
 metrics:

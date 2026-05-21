@@ -33,6 +33,10 @@ envoyProxy:
             # The ClientTrafficPolicy.enableProxyProtocol feature doesn't properly configure Envoy listeners
             # Use X-Forwarded-For headers for client IP preservation instead
             service.beta.kubernetes.io/azure-load-balancer-enable-proxy-protocol: "false"
+            # Reduce client-facing TCP RSTs on idle timeout during rollout/drain windows.
+            service.beta.kubernetes.io/azure-load-balancer-disable-tcp-reset: "true"
+            # Keep idle TCP flows longer on Standard LB to better absorb transient backend churn.
+            service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout: "30"
 
 # metrics are enabled only when prometheus is installed
 metrics:
