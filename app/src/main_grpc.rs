@@ -191,7 +191,7 @@ struct Cli {
     #[arg(long, default_value = "[::]:8080", env = "HTTP_LISTEN_ON")]
     http_listen_on: String,
 
-    /// Deployment type engine is going to execute. Can be "ENVIRONMENT" or "INFRASTRUCTURE"
+    /// Deployment type engine is going to execute. Can be "ENVIRONMENT", "INFRASTRUCTURE" or "BLUEPRINT"
     #[arg(long, default_value = "ENVIRONMENT", env = "DEPLOYMENT_TYPE")]
     deployment_type: String,
 

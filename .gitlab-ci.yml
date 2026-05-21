@@ -1180,3 +1180,21 @@ gitlab-release:
   rules:
     - if: $CI_COMMIT_TAG
       when: manual
+
+7-deploy-qovery-blueprint-engines:
+  stage: deploy-prod
+  extends: [.needs-docker, .resources-minimal]
+  retry: 0
+  environment:
+    name: blueprint-production
+    url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/8a14ee85-a66b-46f7-83e3-5cbeb4d5ed8b/settings/general
+    deployment_tier: production
+  needs:
+    - gitlab-release
+  script:
+    - ./helper.sh deploy_engines_blueprint_static_ip
+  tags:
+    - k8s-runner
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual

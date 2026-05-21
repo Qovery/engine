@@ -172,7 +172,6 @@ environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.DEPLOYMENT_TYPE="INFRASTRUCTURE",\
-environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
 environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
 environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
 environmentVariables.CLUSTER_ID="6d9f665a-c203-4b02-8d49-ee05ad3f1137",\
@@ -231,6 +230,39 @@ engineResources.limits.ephemeral-storage="20Gi",\
 engineResources.requests.cpu="300m",\
 engineResources.requests.memory="3Gi",\
 engineResources.requests.ephemeral-storage="20Gi"
+}
+
+function deploy_engines_blueprint_static_ip() {
+  tag=$(generate_image_tag)
+  AWS_ACCESS_KEY_ID="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_ACCESS_KEY" \
+  AWS_SECRET_ACCESS_KEY="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEPLOY_SECRET_KEY" \
+  AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
+  helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-engine-blueprint qovery-engine \
+  $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
+  --set image.tag="$tag",\
+fullnameOverride="qovery-engine-blueprint",\
+environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
+environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
+environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
+environmentVariables.DEPLOYMENT_TYPE="BLUEPRINT",\
+environmentVariables.GRPC_SERVER="https://engine.qovery.com:443",\
+environmentVariables.ORGANIZATION_ID="51937012-8377-4e0f-84cf-7f5f38a0154b",\
+environmentVariables.CLUSTER_ID="8a14ee85-a66b-46f7-83e3-5cbeb4d5ed8b",\
+environmentVariables.CLUSTER_JWT_TOKEN="$ENVIRONMENT_CLUSTER_STATIC_IP_JWT_TOKEN",\
+networkPolicies.enabled="true",\
+rbac.clusterPermission="none",\
+buildContainer.enabled="false",\
+metrics.enabled="true",\
+terminationGracePeriodSeconds="14400",\
+autoscaler.enabled="true",\
+autoscaler.maxReplicas="50",\
+autoscaler.minReplicas="1",\
+autoscaler.averageValue="0.5",\
+engineResources.limits.cpu="1",\
+engineResources.limits.memory="4Gi",\
+engineResources.requests.cpu="300m",\
+engineResources.requests.memory="3Gi"
 }
 
 ## Tests
@@ -516,6 +548,10 @@ deploy_engines_infra_static_ip)
 # Deploy on the engines dedicated for customer's environments deployments on cluster with static ip
 deploy_engines_environment_static_ip)
   deploy_engines_environment_static_ip
+  ;;
+# Deploy on the engines dedicated for customer's blueprint deployments on cluster static-IP cluster
+deploy_engines_blueprint_static_ip)
+  deploy_engines_blueprint_static_ip
   ;;
 aws_self_hosted)
   run_tests test-aws-self-hosted $commit_id 20
