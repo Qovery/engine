@@ -164,6 +164,7 @@ impl ToCommonHelmChart for EsoConfigChart {
                     SecretsManagerConnection::Gcp(conn) => {
                         let project_id = &conn.project_id;
                         let authentication_mode = &conn.authentication_mode;
+                        let region = &conn.region;
                         // Set common fields
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].name", idx),
@@ -176,6 +177,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].projectId", idx),
                             value: project_id.clone(),
+                        });
+                        values.push(ChartSetValue {
+                            key: format!("authentications[{}].region", idx),
+                            value: region.clone(),
                         });
 
                         // Set authentication-specific fields
@@ -724,7 +729,7 @@ mod tests {
             Some(vec![SecretsManagerAccess {
                 id: "gcp-workload".to_string(),
                 connection: SecretsManagerConnection::Gcp(GcpConnection {
-                    region: "us-central1".to_string(),
+                    region: "europe-west9".to_string(),
                     project_id: "my-gcp-project-123456".to_string(),
                     authentication_mode: GcpAuthenticationMode::Automatic,
                 }),
@@ -762,6 +767,11 @@ mod tests {
         assert!(
             values
                 .iter()
+                .any(|v| v.key == "authentications[0].region" && v.value == "europe-west9")
+        );
+        assert!(
+            values
+                .iter()
                 .any(|v| v.key == "authentications[0].serviceAccount.name"
                     && v.value == "external-secrets-operator-sa")
         );
@@ -784,7 +794,7 @@ mod tests {
             Some(vec![SecretsManagerAccess {
                 id: "gcp-static".to_string(),
                 connection: SecretsManagerConnection::Gcp(GcpConnection {
-                    region: "us-central1".to_string(),
+                    region: "europe-west9".to_string(),
                     project_id: "my-gcp-project-789012".to_string(),
                     authentication_mode: GcpAuthenticationMode::JsonCredentials {
                         content: json_creds.to_string(),
@@ -821,6 +831,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].projectId" && v.value == "my-gcp-project-789012")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].region" && v.value == "europe-west9")
         );
         assert!(
             values_json
