@@ -69,5 +69,5 @@ spec:
       name: qovery-cluster-public-gateway
   {{- if .Values.gateway.qoveryPublic.enableProxyProtocol }}
   proxyProtocol:
-    optional: false
+    optional: {{ if and .Values.gateway.qoveryPublic.proxyProtocol (hasKey .Values.gateway.qoveryPublic.proxyProtocol "optional") }}{{ .Values.gateway.qoveryPublic.proxyProtocol.optional }}{{ else }}true{{ end }}
   {{- end }}

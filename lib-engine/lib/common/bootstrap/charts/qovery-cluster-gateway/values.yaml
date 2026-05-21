@@ -8,6 +8,8 @@ gateway:
     enable: true
     annotations: {}
     enableProxyProtocol: true
+    proxyProtocol:
+      optional: true
     withUnderscoresAction: "DropHeader"
     xForwardedFor:
       numberTrustedHops: null

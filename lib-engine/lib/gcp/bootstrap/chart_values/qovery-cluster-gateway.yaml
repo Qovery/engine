@@ -7,6 +7,8 @@ gateway:
   qoveryPublic:
     enable: true
     enableProxyProtocol: false
+    proxyProtocol:
+      optional: true
     withUnderscoresAction: "DropHeader"
     xForwardedFor:
       numberTrustedHops: null
