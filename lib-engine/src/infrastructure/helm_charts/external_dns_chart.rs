@@ -22,6 +22,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub enum ExternalDNSSource {
     GatewayHttpRoute,
+    GatewayGrpcRoute,
     GatewayTcpRoute,
     GatewayUdpRoute,
     GatewayTlsRoute,
@@ -33,6 +34,7 @@ impl Display for ExternalDNSSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let source_str = match *self {
             ExternalDNSSource::GatewayHttpRoute => "gateway-httproute",
+            ExternalDNSSource::GatewayGrpcRoute => "gateway-grpcroute",
             ExternalDNSSource::GatewayTcpRoute => "gateway-tcproute",
             ExternalDNSSource::GatewayUdpRoute => "gateway-udproute",
             ExternalDNSSource::GatewayTlsRoute => "gateway-tlsroute",
@@ -47,7 +49,11 @@ impl ExternalDNSSource {
     fn is_gateway_api(&self) -> bool {
         matches!(
             self,
-            Self::GatewayHttpRoute | Self::GatewayTcpRoute | Self::GatewayUdpRoute | Self::GatewayTlsRoute
+            Self::GatewayHttpRoute
+                | Self::GatewayGrpcRoute
+                | Self::GatewayTcpRoute
+                | Self::GatewayUdpRoute
+                | Self::GatewayTlsRoute
         )
     }
 }
