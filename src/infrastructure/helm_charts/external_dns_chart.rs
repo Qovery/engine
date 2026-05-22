@@ -92,11 +92,13 @@ impl ExternalDNSChart {
         match kubernetes_kind {
             KubernetesKind::Gke => vec![
                 ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayGrpcRoute,
                 ExternalDNSSource::GatewayTcpRoute,
                 ExternalDNSSource::GatewayUdpRoute,
             ],
             _ => vec![
                 ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayGrpcRoute,
                 ExternalDNSSource::GatewayTcpRoute,
                 ExternalDNSSource::GatewayUdpRoute,
                 ExternalDNSSource::GatewayTlsRoute,
@@ -861,6 +863,7 @@ mod tests {
             ExternalDNSSource::Ingress,
             ExternalDNSSource::GatewayTlsRoute,
             ExternalDNSSource::GatewayUdpRoute,
+            ExternalDNSSource::GatewayGrpcRoute,
             ExternalDNSSource::GatewayTcpRoute,
             ExternalDNSSource::GatewayHttpRoute,
         ];
@@ -873,6 +876,7 @@ mod tests {
             sources,
             vec![
                 ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayGrpcRoute,
                 ExternalDNSSource::GatewayTcpRoute,
                 ExternalDNSSource::GatewayUdpRoute,
                 ExternalDNSSource::GatewayTlsRoute,
