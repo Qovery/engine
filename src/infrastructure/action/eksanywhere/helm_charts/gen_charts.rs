@@ -99,6 +99,7 @@ pub(super) fn eks_anywhere_helm_charts(
         HelmChartNamespaces::Qovery,
         get_chart_override_fn.clone(),
         ExternalDNSSourcesMode::Ingress,
+        KubernetesKind::EksAnywhere,
     )
     .to_common_helm_chart()?;
 

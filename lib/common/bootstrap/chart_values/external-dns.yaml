@@ -38,6 +38,9 @@ extraArgs: {} #set-by-engine-code
 # set the sources to watch
 sources: [] # set-by-engine-code
 
+# Enable Gateway API ListenerSet support when Gateway sources are watched
+enableGatewayListenerSets: false # set-by-engine-code
+
 # env variables are dynamically set by engine code based on provider
 # For PDNS: PDNS_API_KEY will be set
 # For Cloudflare: CF_API_TOKEN, CF_API_KEY, CF_API_EMAIL will be set

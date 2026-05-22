@@ -1,17 +1,23 @@
 annotations:
   artifacthub.io/changes: |-
     - kind: added
-      description: "Add option to set annotationPrefix (#5889) @lexfrei."
+      description: "Add value .sourceNamespace to watch a namespace which is different from the one that external-dns is installed into when .namespaced is true."
+    - kind: added
+      description: "Add option to enable Gateway API ListenerSet support."
+    - kind: added
+      description: "Add support for bool in extraArgs."
+    - kind: added
+      description: "Add value .namespaceOverride to render chart resources into a namespace different from the release namespace, for subchart installs that want their own namespace."
     - kind: changed
-      description: "Grant networking.k8s.io/ingresses and gateway.solo.io/gateways permissions when using gloo-proxy source."
-    - kind: changed
-      description: "Update ExternalDNS OCI image version to v0.20.0."
+      description: "Update ExternalDNS OCI image version to v0.21.0."
     - kind: fixed
-      description: "Fixed the missing schema for .provider.webhook."
+      description: "Avoid creating cluster-scoped RBAC for Gateway API sources when running namespaced with gatewayNamespace set. Namespace listing permissions are now only added when gatewayNamespace is unset."
     - kind: fixed
-      description: "Fixed incorrect indentation of selector labels under spec.template.spec.topologySpreadConstraints when topologySpreadConstraints is set."
+      description: "Ensure container arguments are passed in as strings (#6264) @KhooHaoYit."
+    - kind: fixed
+      description: "Ensure container arguments are passed in as strings when extraArgs is a map (#6284) @vflaux."
 apiVersion: v2
-appVersion: 0.20.0
+appVersion: 0.21.0
 description: ExternalDNS synchronizes exposed Kubernetes Services and Ingresses with
   DNS providers.
 home: https://github.com/kubernetes-sigs/external-dns/
@@ -32,4 +38,4 @@ name: external-dns
 sources:
 - https://github.com/kubernetes-sigs/external-dns/
 type: application
-version: 1.20.0
+version: 1.21.1
