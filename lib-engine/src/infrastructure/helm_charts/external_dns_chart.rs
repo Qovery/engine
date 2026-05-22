@@ -8,6 +8,7 @@ use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
+use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
 use crate::io_models::models::{CustomerHelmChartsOverride, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use itertools::Itertools;
 use kube::Client;
@@ -42,6 +43,16 @@ impl Display for ExternalDNSSource {
     }
 }
 
+impl ExternalDNSSource {
+    fn is_gateway_api(&self) -> bool {
+        matches!(
+            self,
+            Self::GatewayHttpRoute | Self::GatewayTcpRoute | Self::GatewayUdpRoute | Self::GatewayTlsRoute
+        )
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
 pub enum ExternalDNSSourcesMode {
     GatewayApi,
     Ingress,
@@ -63,6 +74,30 @@ pub struct ExternalDNSChart {
 }
 
 impl ExternalDNSChart {
+    fn gateway_api_sources_for(kubernetes_kind: KubernetesKind) -> Vec<ExternalDNSSource> {
+        // HACK(QOV-1926): on GKE, the Gateway API CRDs are managed by GKE's addon manager
+        // (standard channel from Gateway API v1.5+), which only serves TLSRoute at `v1`.
+        // external-dns 0.21.0 still hardcodes the TLSRoute informer to `v1alpha2`, so the
+        // informer fails to sync and external-dns exits fatally after 60s with
+        // `failed to sync *v1alpha2.TLSRoute: context deadline exceeded`.
+        // Restrict this to managed GKE (`Kind::Gke`), which is Autopilot in our deployments.
+        // Remove this special-case (and the `kubernetes_kind` parameter, if no longer used)
+        // once upstream supports v1: https://github.com/kubernetes-sigs/external-dns/issues/6247.
+        match kubernetes_kind {
+            KubernetesKind::Gke => vec![
+                ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayTcpRoute,
+                ExternalDNSSource::GatewayUdpRoute,
+            ],
+            _ => vec![
+                ExternalDNSSource::GatewayHttpRoute,
+                ExternalDNSSource::GatewayTcpRoute,
+                ExternalDNSSource::GatewayUdpRoute,
+                ExternalDNSSource::GatewayTlsRoute,
+            ],
+        }
+    }
+
     pub fn new(
         chart_prefix_path: Option<&str>,
         dns_provider_configuration: DnsProviderConfiguration,
@@ -73,7 +108,10 @@ impl ExternalDNSChart {
         namespace: HelmChartNamespaces,
         customer_helm_chart_fn: Arc<dyn Fn(String) -> Option<CustomerHelmChartsOverride>>,
         source_mode: ExternalDNSSourcesMode,
+        kubernetes_kind: KubernetesKind,
     ) -> ExternalDNSChart {
+        let gateway_api_sources = Self::gateway_api_sources_for(kubernetes_kind);
+
         ExternalDNSChart {
             chart_prefix_path: chart_prefix_path.map(|s| s.to_string()),
             chart_path: HelmChartPath::new(
@@ -94,28 +132,17 @@ impl ExternalDNSChart {
             namespace,
             customer_helm_chart_vpa_override: customer_helm_chart_fn(Self::chart_name().add(".vpa")),
             sources: match source_mode {
-                ExternalDNSSourcesMode::GatewayApi => vec![
-                    ExternalDNSSource::GatewayHttpRoute,
-                    ExternalDNSSource::GatewayTcpRoute,
-                    ExternalDNSSource::GatewayUdpRoute,
-                    ExternalDNSSource::GatewayTlsRoute,
-                    ExternalDNSSource::Service,
-                ]
-                .into_iter()
-                .collect(),
-                ExternalDNSSourcesMode::Ingress => vec![ExternalDNSSource::Ingress, ExternalDNSSource::Service]
+                ExternalDNSSourcesMode::GatewayApi => gateway_api_sources
+                    .into_iter()
+                    .chain([ExternalDNSSource::Service])
+                    .collect(),
+                ExternalDNSSourcesMode::Ingress => [ExternalDNSSource::Ingress, ExternalDNSSource::Service]
                     .into_iter()
                     .collect(),
-                ExternalDNSSourcesMode::All => vec![
-                    ExternalDNSSource::GatewayHttpRoute,
-                    ExternalDNSSource::GatewayTcpRoute,
-                    ExternalDNSSource::GatewayUdpRoute,
-                    ExternalDNSSource::GatewayTlsRoute,
-                    ExternalDNSSource::Ingress,
-                    ExternalDNSSource::Service,
-                ]
-                .into_iter()
-                .collect(),
+                ExternalDNSSourcesMode::All => gateway_api_sources
+                    .into_iter()
+                    .chain([ExternalDNSSource::Ingress, ExternalDNSSource::Service])
+                    .collect(),
             },
         }
     }
@@ -220,6 +247,18 @@ impl ToCommonHelmChart for ExternalDNSChart {
             values.push(ChartSetValue {
                 key: format!("sources[{index}]",),
                 value: source.to_string(),
+            });
+        }
+
+        // Enable Gateway API ListenerSet support only when at least one Gateway-API source is
+        // active. Setting `--gateway-listener-sets` on clusters without the ListenerSet CRD
+        // (e.g. Ingress-only deployments) would make the informer fail to sync, mirroring the
+        // TLSRoute crash class. Qovery's envoy-gateway-crd chart installs ListenerSet whenever
+        // it deploys, so gating on Gateway sources matches CRD availability.
+        if self.sources.iter().any(ExternalDNSSource::is_gateway_api) {
+            values.push(ChartSetValue {
+                key: "enableGatewayListenerSets".to_string(),
+                value: "true".to_string(),
             });
         }
 
@@ -565,6 +604,7 @@ mod tests {
     };
     use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
     use crate::infrastructure::models::dns_provider::cloudflare::CloudflareDnsConfig;
+    use crate::infrastructure::models::kubernetes::Kind as KubernetesKind;
     use crate::io_models::models::CustomerHelmChartsOverride;
     use std::env;
     use std::sync::Arc;
@@ -587,6 +627,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
             ExternalDNSSourcesMode::GatewayApi,
+            KubernetesKind::Eks,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -624,6 +665,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
             ExternalDNSSourcesMode::GatewayApi,
+            KubernetesKind::Eks,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -665,6 +707,7 @@ mod tests {
             HelmChartNamespaces::KubeSystem,
             Arc::new(|_chart_name: String| -> Option<CustomerHelmChartsOverride> { None }),
             ExternalDNSSourcesMode::GatewayApi,
+            KubernetesKind::Eks,
         );
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -830,6 +873,90 @@ mod tests {
                 ExternalDNSSource::Ingress,
                 ExternalDNSSource::Service,
             ]
+        );
+    }
+
+    fn make_external_dns_chart(kind: KubernetesKind, source_mode: ExternalDNSSourcesMode) -> ExternalDNSChart {
+        ExternalDNSChart::new(
+            None,
+            DnsProviderConfiguration::Cloudflare(CloudflareDnsConfig {
+                cloudflare_email: "whatever".to_string(),
+                cloudflare_api_token: "whatever".to_string(),
+                cloudflare_proxied: false,
+            }),
+            "whatever".to_string(),
+            "whatever".to_string(),
+            UpdateStrategy::RollingUpdate,
+            false,
+            HelmChartNamespaces::KubeSystem,
+            Arc::new(|_| None),
+            source_mode,
+            kind,
+        )
+    }
+
+    /// QOV-1926 — TLSRoute must be excluded from the sources set on managed GKE (standard-
+    /// channel Gateway API CRDs only serve `v1`, while external-dns 0.21.0 still watches
+    /// `v1alpha2`). All other Kubernetes kinds keep TLSRoute in the sources set. Both
+    /// gateway-aware source modes (`GatewayApi` and `All`) must honor this exclusion.
+    #[test]
+    fn external_dns_chart_excludes_tls_route_only_on_managed_gke() {
+        use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSSource;
+
+        for mode in [ExternalDNSSourcesMode::GatewayApi, ExternalDNSSourcesMode::All] {
+            let mode_label = format!("{mode:?}");
+            let gcp = make_external_dns_chart(KubernetesKind::Gke, mode);
+            assert!(
+                !gcp.sources.contains(&ExternalDNSSource::GatewayTlsRoute),
+                "TLSRoute must be excluded on managed GKE in {mode_label} mode"
+            );
+            assert!(gcp.sources.contains(&ExternalDNSSource::GatewayHttpRoute));
+            assert!(gcp.sources.contains(&ExternalDNSSource::Service));
+
+            for kind in [
+                KubernetesKind::Eks,
+                KubernetesKind::Aks,
+                KubernetesKind::ScwKapsule,
+                KubernetesKind::OnPremiseSelfManaged,
+                KubernetesKind::GkeSelfManaged,
+            ] {
+                let label = format!("{kind:?}");
+                let chart = make_external_dns_chart(kind, mode);
+                assert!(
+                    chart.sources.contains(&ExternalDNSSource::GatewayTlsRoute),
+                    "TLSRoute should remain enabled on {label} in {mode_label} mode"
+                );
+            }
+        }
+    }
+
+    /// QOV-1926 — `enableGatewayListenerSets` must be set to `true` whenever any
+    /// Gateway-API source is active, and must NOT be set otherwise (so the YAML default
+    /// `false` wins). Setting it on a cluster without the ListenerSet CRD makes the
+    /// informer fail to sync.
+    #[test]
+    fn external_dns_chart_emits_enable_gateway_listener_sets_only_when_gateway_sources_active() {
+        let key = "enableGatewayListenerSets";
+
+        for mode in [ExternalDNSSourcesMode::GatewayApi, ExternalDNSSourcesMode::All] {
+            let mode_label = format!("{mode:?}");
+            let chart = make_external_dns_chart(KubernetesKind::Eks, mode)
+                .to_common_helm_chart()
+                .unwrap();
+            let entry = chart.chart_info.values.iter().find(|v| v.key == key);
+            assert_eq!(
+                entry.map(|v| v.value.as_str()),
+                Some("true"),
+                "{key}=true must be emitted in {mode_label} mode"
+            );
+        }
+
+        let ingress_chart = make_external_dns_chart(KubernetesKind::Eks, ExternalDNSSourcesMode::Ingress)
+            .to_common_helm_chart()
+            .unwrap();
+        assert!(
+            ingress_chart.chart_info.values.iter().all(|v| v.key != key),
+            "{key} must not be emitted in Ingress-only mode (would crash the informer without the ListenerSet CRD)"
         );
     }
 }

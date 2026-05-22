@@ -103,6 +103,12 @@
 - Avoid embedding complex branching in templates and YAML when Rust can express it.
 - Keep templates simple to make updates and diffs easier to review.
 
+### Constructor Parameters vs Builder Methods
+
+- Encode mandatory preconditions as constructor parameters, not opt-in builder methods.
+- Reserve builder methods for optional configuration.
+- Prefer touching every call site over a chained mutator that hides a required choice.
+
 ## Repository-Specific Tooling
 
 ### Compatibility
@@ -112,6 +118,13 @@
 - Always merge `CLAUDE.md` instructions with `@AGENT.md` instructions.
 - Apply the stricter rule when instructions overlap.
 - Apply the more specific rule when instructions overlap.
+
+### Cloud Provider Abstractions
+
+- Pass `cloud_provider::Kind` to abstractions whose behavior varies per provider.
+- Centralize provider-specific rules inside the abstraction, not at each call site.
+- Test cross-provider abstractions by exercising every `Kind` variant when behavior diverges.
+- Tag upstream-pending workarounds with `HACK(QOV-XXXX)`, link the tracking issue, and state the removal condition.
 
 ### code-review-graph MCP
 
