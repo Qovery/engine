@@ -140,8 +140,19 @@ variable "cluster_is_private" {
 
 variable "master_authorized_networks" {
   type        = list(object({ cidr_block = string, display_name = string }))
-  description = "List of master authorized networks. If none are provided, disallow external access (except the cluster node IPs, which GKE automatically whitelists)."
-  default     = []
+  description = "List of master authorized networks. If none are provided, authorized networks are disabled and the public endpoint remains reachable from any source IP."
+  {% if master_authorized_networks|length > 0 %}
+  default = [
+    {% for network in master_authorized_networks %}
+    {
+      cidr_block   = "{{ network.cidr_block }}"
+      display_name = "{{ network.display_name }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+  {% else %}
+  default = []
+  {% endif %}
 }
 
 variable "auto_create_subnetworks" {
@@ -489,4 +500,3 @@ variable "timeouts" {
     error_message = "Only create, update, delete timeouts can be specified."
   }
 }
-

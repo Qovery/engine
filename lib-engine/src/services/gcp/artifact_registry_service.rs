@@ -1,24 +1,22 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::io::JsonCredentials as IoJsonCredentials;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::runtime::block_on;
-use crate::services::gcp::google_cloud_sdk_types::{from_gcp_repository, new_gcp_credentials_file_from_credentials};
-use google_cloud_artifact_registry::client::{Client, ClientConfig};
-use google_cloud_googleapis::devtools::artifact_registry::v1::repository::Format;
-use google_cloud_googleapis::devtools::artifact_registry::v1::{
-    CreateRepositoryRequest, DeletePackageRequest, DeleteRepositoryRequest, GetRepositoryRequest,
-    ListDockerImagesRequest, Repository as GcpRepository,
-};
+use crate::services::gcp::google_cloud_sdk_types::from_gcp_repository;
+use google_cloud_artifactregistry_v1::client::ArtifactRegistry;
+use google_cloud_artifactregistry_v1::model::Repository as GcpRepository;
+use google_cloud_artifactregistry_v1::model::repository::Format;
+use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
+use google_cloud_lro::Poller;
 use governor::middleware::NoOpMiddleware;
 use governor::state::{InMemoryState, NotKeyed};
 use governor::{RateLimiter, clock};
-use std::borrow::BorrowMut;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use thiserror::Error;
-use tokio::sync::Mutex;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ArtifactRegistryServiceError {
@@ -63,7 +61,7 @@ enum ArtifactRegistryResourceKind {
 }
 
 pub struct ArtifactRegistryService {
-    client: Arc<Mutex<Client>>,
+    client: ArtifactRegistry,
     write_repository_rate_limiter:
         Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     write_image_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
@@ -79,24 +77,27 @@ impl ArtifactRegistryService {
             Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
         >,
     ) -> Result<Self, ArtifactRegistryServiceError> {
+        let service_account_json = serde_json::to_value(IoJsonCredentials::from(google_credentials)).map_err(|e| {
+            ArtifactRegistryServiceError::CannotCreateService {
+                raw_error_message: e.to_string(),
+            }
+        })?;
+
+        let client = block_on(async move {
+            let credentials = ServiceAccountCredentialsBuilder::new(service_account_json)
+                .build()
+                .map_err(|e| format!("Failed to build GCP service account credentials: {e}"))?;
+
+            ArtifactRegistry::builder()
+                .with_credentials(credentials)
+                .build()
+                .await
+                .map_err(|e| format!("Failed to build Artifact Registry client: {e}"))
+        })
+        .map_err(|e| ArtifactRegistryServiceError::CannotCreateService { raw_error_message: e })?;
+
         Ok(Self {
-            client: Arc::new(Mutex::from(
-                block_on(Client::new(
-                    block_on(ClientConfig::default().with_credentials(
-                        new_gcp_credentials_file_from_credentials(google_credentials).map_err(|e| {
-                            ArtifactRegistryServiceError::CannotCreateService {
-                                raw_error_message: e.to_string(),
-                            }
-                        })?,
-                    ))
-                    .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
-                        raw_error_message: e.to_string(),
-                    })?,
-                ))
-                .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
-                    raw_error_message: e.to_string(),
-                })?,
-            )),
+            client,
             write_repository_rate_limiter,
             write_image_rate_limiter,
         })
@@ -143,17 +144,16 @@ impl ArtifactRegistryService {
             repository_name
         );
 
-        let gcp_repository: GcpRepository =
-            block_on(self.client.clone().blocking_lock_owned().borrow_mut().get_repository(
-                GetRepositoryRequest {
-                    name: repository_identifier.to_string(),
-                },
-                None,
-            ))
-            .map_err(|e| ArtifactRegistryServiceError::CannotGetRepository {
-                repository_name: repository_identifier.to_string(),
-                raw_error_message: e.to_string(),
-            })?;
+        let gcp_repository: GcpRepository = block_on(
+            self.client
+                .get_repository()
+                .set_name(repository_identifier.to_string())
+                .send(),
+        )
+        .map_err(|e| ArtifactRegistryServiceError::CannotGetRepository {
+            repository_name: repository_identifier.to_string(),
+            raw_error_message: e.to_string(),
+        })?;
 
         from_gcp_repository(project_id, location, gcp_repository).map_err(|e| {
             ArtifactRegistryServiceError::CannotGetRepository {
@@ -175,50 +175,28 @@ impl ArtifactRegistryService {
             ArtifactRegistryResourceKind::Repository,
         )?;
 
-        let gcp_repository = match block_on(
-            block_on(
-                self.client
-                    .clone()
-                    .blocking_lock_owned()
-                    .borrow_mut()
-                    .create_repository(
-                        // TODO(ENG-1808): add repository TTL
-                        CreateRepositoryRequest {
-                            parent: format!(
-                                "projects/{}/locations/{}",
-                                project_id,
-                                location.to_cloud_provider_format(),
-                            ),
-                            repository_id: repository_name.to_string(),
-                            repository: Some(GcpRepository {
-                                name: repository_name.to_string(),
-                                format: Format::Docker.into(),
-                                labels,
-                                ..Default::default()
-                            }),
-                        },
-                        None,
-                    ),
-            )
-            .as_mut()
-            .map_err(|e| ArtifactRegistryServiceError::CannotCreateRepository {
-                repository_name: repository_name.to_string(),
-                raw_error_message: e.to_string(),
-            })?
-            .wait(None),
+        let gcp_repository = block_on(
+            self.client
+                .create_repository()
+                .set_parent(format!(
+                    "projects/{}/locations/{}",
+                    project_id,
+                    location.to_cloud_provider_format(),
+                ))
+                .set_repository_id(repository_name.to_string())
+                .set_repository(
+                    GcpRepository::new()
+                        .set_name(repository_name.to_string())
+                        .set_format(Format::Docker)
+                        .set_labels(labels),
+                )
+                .poller()
+                .until_done(),
         )
         .map_err(|e| ArtifactRegistryServiceError::CannotCreateRepository {
             repository_name: repository_name.to_string(),
             raw_error_message: e.to_string(),
-        })? {
-            Some(r) => r,
-            None => {
-                return Err(ArtifactRegistryServiceError::CannotGetRepository {
-                    repository_name: repository_name.to_string(),
-                    raw_error_message: "Operation returned an empty repository".to_string(),
-                });
-            }
-        };
+        })?;
 
         from_gcp_repository(project_id, location, gcp_repository).map_err(|e| {
             ArtifactRegistryServiceError::CannotGetRepository {
@@ -248,20 +226,15 @@ impl ArtifactRegistryService {
 
         let delete_repository_result = block_on(
             self.client
-                .clone()
-                .blocking_lock_owned()
-                .borrow_mut()
-                .delete_repository(
-                    DeleteRepositoryRequest {
-                        name: repository_identifier.to_string(),
-                    },
-                    None,
-                ),
+                .delete_repository()
+                .set_name(repository_identifier.to_string())
+                .poller()
+                .until_done(),
         );
         match delete_repository_result {
             Ok(_) => {}
             Err(status) => {
-                if status.code() != google_cloud_gax::grpc::Code::NotFound {
+                if !is_not_found_error(&status) {
                     return Err(ArtifactRegistryServiceError::CannotDeleteRepository {
                         repository_name: repository_identifier,
                         raw_error_message: status.to_string(),
@@ -297,23 +270,16 @@ impl ArtifactRegistryService {
             // list all images for the repository, trying to find the requested image having the requested tag
             match block_on(
                 self.client
-                    .clone()
-                    .blocking_lock_owned()
-                    .borrow_mut()
-                    .list_docker_images(
-                        ListDockerImagesRequest {
-                            parent: format!(
-                                "projects/{}/locations/{}/repositories/{}",
-                                project_id,
-                                location.to_cloud_provider_format(),
-                                repository_name
-                            ),
-                            page_token: next_page_token.to_string(),
-                            page_size: 100,
-                            ..Default::default()
-                        },
-                        None,
-                    ),
+                    .list_docker_images()
+                    .set_parent(format!(
+                        "projects/{}/locations/{}/repositories/{}",
+                        project_id,
+                        location.to_cloud_provider_format(),
+                        repository_name
+                    ))
+                    .set_page_token(next_page_token.to_string())
+                    .set_page_size(100)
+                    .send(),
             ) {
                 Ok(docker_images_list_response) => {
                     next_page_token = docker_images_list_response.next_page_token;
@@ -372,18 +338,19 @@ impl ArtifactRegistryService {
 
         // Note: deleting the whole package here, not just the tag / version
         // if needed, deleting image tag only is doable
-        block_on(self.client.clone().blocking_lock_owned().borrow_mut().delete_package(
-            DeletePackageRequest {
-                name: format!(
+        block_on(
+            self.client
+                .delete_package()
+                .set_name(format!(
                     "projects/{}/locations/{}/repositories/{}/packages/{}",
                     project_id,
                     location.to_cloud_provider_format(),
                     repository_name,
                     image_name,
-                ),
-            },
-            None,
-        ))
+                ))
+                .poller()
+                .until_done(),
+        )
         .map_err(|e| ArtifactRegistryServiceError::CannotDeleteDockerImage {
             repository_name: repository_name.to_string(),
             image_name: image_name.to_string(),
@@ -391,4 +358,13 @@ impl ArtifactRegistryService {
             raw_error_message: e.to_string(),
         })
     }
+}
+
+fn is_not_found_error(error: &google_cloud_artifactregistry_v1::Error) -> bool {
+    if error.http_status_code() == Some(404) {
+        return true;
+    }
+
+    let message = error.to_string().to_lowercase();
+    message.contains("not_found") || message.contains("not found")
 }

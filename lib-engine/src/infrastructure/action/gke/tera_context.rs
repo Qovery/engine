@@ -3,7 +3,9 @@ use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::environment::models::types::Percentage;
 use crate::errors::EngineError;
 use crate::infrastructure::action::ToInfraTeraContext;
+use crate::infrastructure::action::utils::{generate_public_access_cidrs, is_api_access_restricted};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
 use crate::infrastructure::models::kubernetes::Kubernetes;
@@ -11,6 +13,7 @@ use crate::infrastructure::models::kubernetes::gcp::{Gke, VpcMode};
 use crate::io_models::context::Features;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use crate::string::terraform_list_format;
+use serde::Serialize;
 use tera::Context as TeraContext;
 use time::format_description;
 
@@ -43,6 +46,13 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     context.insert(
         "resource_expiration_in_seconds",
         &cluster.advanced_settings().pleco_resources_ttl,
+    );
+    context.insert(
+        "master_authorized_networks",
+        &compute_master_authorized_networks(
+            cluster.advanced_settings(),
+            cluster.qovery_allowed_public_access_cidrs.as_ref(),
+        ),
     );
 
     // thanos
@@ -357,6 +367,30 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     Ok(context)
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+struct MasterAuthorizedNetwork {
+    cidr_block: String,
+    display_name: String,
+}
+
+fn compute_master_authorized_networks(
+    advanced_settings: &ClusterAdvancedSettings,
+    qovery_allowed_public_access_cidrs: Option<&Vec<String>>,
+) -> Vec<MasterAuthorizedNetwork> {
+    let public_access_cidrs = generate_public_access_cidrs(advanced_settings, qovery_allowed_public_access_cidrs);
+    if !is_api_access_restricted(&public_access_cidrs) {
+        return Vec::new();
+    }
+
+    public_access_cidrs
+        .into_iter()
+        .map(|cidr| MasterAuthorizedNetwork {
+            cidr_block: cidr.clone(),
+            display_name: cidr,
+        })
+        .collect()
+}
+
 #[derive(Debug, PartialEq)]
 struct SecretsManagerConfig {
     enable_automatic_eso: bool,
@@ -372,5 +406,46 @@ fn compute_secrets_manager_config(accesses: &[SecretsManagerAccess]) -> SecretsM
     });
     SecretsManagerConfig {
         enable_automatic_eso: has_automatic_accesses,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_not_configure_master_authorized_networks_when_api_is_unrestricted() {
+        let advanced_settings = ClusterAdvancedSettings::default();
+
+        let networks = compute_master_authorized_networks(&advanced_settings, None);
+
+        assert!(networks.is_empty());
+    }
+
+    #[test]
+    fn should_configure_master_authorized_networks_when_api_is_restricted() {
+        let advanced_settings = ClusterAdvancedSettings {
+            qovery_static_ip_mode: Some(true),
+            k8s_api_allowed_public_access_cidrs: Some(vec!["203.0.113.10/32".to_string()]),
+            ..Default::default()
+        };
+        let qovery_allowed_public_access_cidrs = vec!["198.51.100.5/32".to_string()];
+
+        let networks =
+            compute_master_authorized_networks(&advanced_settings, Some(&qovery_allowed_public_access_cidrs));
+
+        assert_eq!(
+            networks,
+            vec![
+                MasterAuthorizedNetwork {
+                    cidr_block: "198.51.100.5/32".to_string(),
+                    display_name: "198.51.100.5/32".to_string(),
+                },
+                MasterAuthorizedNetwork {
+                    cidr_block: "203.0.113.10/32".to_string(),
+                    display_name: "203.0.113.10/32".to_string(),
+                }
+            ]
+        );
     }
 }

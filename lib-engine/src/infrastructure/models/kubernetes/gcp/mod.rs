@@ -194,6 +194,7 @@ pub struct Gke {
     pub customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
+    pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     pub credentials: JsonCredentials,
 }
 
@@ -212,6 +213,7 @@ impl Gke {
         customer_helm_charts_override: Option<HashMap<ChartValuesOverrideName, ChartValuesOverrideValues>>,
         kubeconfig: Option<String>,
         temp_dir: PathBuf,
+        qovery_allowed_public_access_cidrs: Option<Vec<String>>,
     ) -> Result<Self, Box<EngineError>> {
         let event_details = EventDetails::new(
             Some(cloud_provider::Kind::Gcp),
@@ -283,6 +285,7 @@ impl Gke {
             customer_helm_charts_override,
             kubeconfig,
             temp_dir,
+            qovery_allowed_public_access_cidrs,
             credentials: creds,
         };
 

@@ -9,6 +9,7 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::action::delete_kube_apps::prepare_kube_upgrade;
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
+use crate::infrastructure::action::gke::maybe_disable_master_authorized_networks;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::utilities::envs_to_string;
@@ -48,6 +49,7 @@ pub(super) fn upgrade_gke_cluster(
     };
 
     let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;
+    maybe_disable_master_authorized_networks(cluster, &logger, event_details.clone())?;
     tera_context.insert(
         "kubernetes_cluster_version",
         format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),

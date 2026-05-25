@@ -727,6 +727,7 @@ impl KubernetesDto {
                     decoded_helm_charts_override,
                     self.kubeconfig.clone(),
                     temp_dir,
+                    self.qovery_allowed_public_access_cidrs.clone(),
                 ) {
                     Ok(res) => Ok(Box::new(res)),
                     Err(e) => Err(e),
