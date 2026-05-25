@@ -564,8 +564,6 @@ pub enum BlueprintStep {
     Deployed,
     DeployedError,
     LoadConfiguration,
-    Pause,
-    Restart,
     Start,
     Terminated,
 }
@@ -574,9 +572,12 @@ impl From<service::Action> for BlueprintStep {
     fn from(value: service::Action) -> Self {
         match value {
             service::Action::Create => BlueprintStep::Deploy,
-            service::Action::Pause => BlueprintStep::Pause,
             service::Action::Delete => BlueprintStep::Delete,
-            service::Action::Restart => BlueprintStep::Restart,
+            // Blueprints render terraform/helm; Pause/Restart are container-lifecycle ops
+            // handled by the env engine on the materialized service, never by the blueprint engine.
+            service::Action::Pause | service::Action::Restart => {
+                panic!("Blueprint engine does not handle action {value:?}")
+            }
         }
     }
 }
@@ -594,8 +595,6 @@ impl Display for BlueprintStep {
                 BlueprintStep::Deployed => "deployed",
                 BlueprintStep::DeployedError => "deployed-error",
                 BlueprintStep::LoadConfiguration => "load-configuration",
-                BlueprintStep::Pause => "pause",
-                BlueprintStep::Restart => "restart",
                 BlueprintStep::Start => "start",
                 BlueprintStep::Terminated => "terminated",
             },
@@ -795,19 +794,16 @@ impl EventDetails {
                 | EnvironmentStep::TerraformServiceOutput
                 | EnvironmentStep::TerraformResources => return,
             },
-            //TODO: Update
             Stage::Blueprint(blueprint_step) => match blueprint_step {
-                BlueprintStep::Cancel => todo!(),
-                BlueprintStep::Cancelled => todo!(),
-                BlueprintStep::Deployed => todo!(),
-                BlueprintStep::DeployedError => todo!(),
-                BlueprintStep::LoadConfiguration => todo!(),
-                BlueprintStep::Start => return,
-                BlueprintStep::Terminated => return,
-                BlueprintStep::Delete => todo!(),
-                BlueprintStep::Deploy => todo!(),
-                BlueprintStep::Pause => todo!(),
-                BlueprintStep::Restart => todo!(),
+                BlueprintStep::Deploy
+                | BlueprintStep::Deployed
+                | BlueprintStep::LoadConfiguration
+                | BlueprintStep::Delete => Stage::Blueprint(BlueprintStep::DeployedError),
+                BlueprintStep::Start
+                | BlueprintStep::Terminated
+                | BlueprintStep::Cancel
+                | BlueprintStep::Cancelled
+                | BlueprintStep::DeployedError => return,
             },
         };
     }

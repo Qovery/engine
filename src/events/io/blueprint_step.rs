@@ -11,8 +11,6 @@ pub enum BlueprintStep {
     Deployed,
     DeployedError,
     LoadConfiguration,
-    Pause,
-    Restart,
     Start,
     Terminated,
 }
@@ -27,8 +25,6 @@ impl From<events::BlueprintStep> for BlueprintStep {
             events::BlueprintStep::Deployed => BlueprintStep::Deployed,
             events::BlueprintStep::DeployedError => BlueprintStep::DeployedError,
             events::BlueprintStep::LoadConfiguration => BlueprintStep::LoadConfiguration,
-            events::BlueprintStep::Pause => BlueprintStep::Pause,
-            events::BlueprintStep::Restart => BlueprintStep::Restart,
             events::BlueprintStep::Start => BlueprintStep::Start,
             events::BlueprintStep::Terminated => BlueprintStep::Terminated,
         }
