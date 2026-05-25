@@ -674,6 +674,7 @@ pub fn get_environment_test_kubernetes(
                     None,
                     kubeconfig,
                     temp_dir,
+                    None,
                 )
                 .expect("Cannot instantiate GKE"),
             )

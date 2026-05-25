@@ -6,6 +6,7 @@ use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraRes
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::gke::helm_charts::GkeHelmsDeployment;
+use crate::infrastructure::action::gke::maybe_disable_master_authorized_networks;
 use crate::infrastructure::action::kubectl_utils::check_workers_on_create;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -29,6 +30,7 @@ pub(super) fn create_gke_cluster(
         logger.error(*err.clone(), None::<&str>);
         return Err(err);
     }
+    maybe_disable_master_authorized_networks(cluster, &logger, event_details.clone())?;
 
     // Terraform deployment dedicated to cloud resources
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
