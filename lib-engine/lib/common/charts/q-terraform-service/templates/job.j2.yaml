@@ -51,11 +51,20 @@ spec:
         {%- endfor %}
       annotations:
         qovery.com/service-version: {{ service.version }}
+        karpenter.sh/do-not-disrupt: "true"
         {%- for key, value in annotations_group.pods %}
         {{ key }}: |-
            {{ value }}
         {%- endfor %}
     spec:
+      {%- if service.tolerations %}
+      tolerations:
+        {%- for key, value in service.tolerations %}
+        - key: "{{ key }}"
+          operator: "Exists"
+          effect: "{{ value }}"
+        {%- endfor %}
+      {%- endif %}
       securityContext:
         fsGroup: 1000
       affinity:

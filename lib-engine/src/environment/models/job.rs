@@ -209,24 +209,16 @@ impl<T: CloudProvider> Job<T> {
             );
         }
 
-        // Target cronjob nodepool for cron-scheduled jobs (hard affinity to force placement)
-        if !is_gpu
-            && matches!(self.schedule, JobSchedule::Cron { .. })
-            && kubernetes.is_karpenter_cronjob_nodepool_enabled()
-        {
-            // Add toleration so the pod can land on a tainted cronjob nodepool node
-            tolerations
-                .entry("nodepool/cronjob".to_string())
-                .or_insert_with(|| "NoSchedule".to_string());
-
-            // Use required (hard) affinity. Soft affinity let cronjob pods schedule on
-            // the default nodepool whenever it had spare capacity, so Karpenter never
-            // provisioned cronjob-pool nodes and the dedicated nodepool stayed empty.
-            // Hard affinity forces unschedulability until a cronjob-pool node exists,
-            // triggering Karpenter to provision one.
-            deployment_affinity_node_required
-                .entry("karpenter.sh/nodepool".to_string())
-                .or_insert_with(|| "cronjob".to_string());
+        // Pin all non-GPU jobs (cron and lifecycle) to the dedicated cronjob nodepool.
+        // Hard affinity is required: soft affinity let the scheduler place pods on the default
+        // nodepool whenever it had spare capacity, keeping the dedicated nodepool permanently empty.
+        if !is_gpu && kubernetes.is_karpenter_cronjob_nodepool_enabled() {
+            utils::target_karpenter_node_pool(
+                KarpenterNodePoolType::Cronjob,
+                &mut deployment_affinity_node_required,
+                &mut tolerations,
+                false,
+            );
         }
 
         let mut advanced_settings = self.advanced_settings.clone();
