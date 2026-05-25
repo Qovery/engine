@@ -130,19 +130,38 @@ recommender:
 
 ## Utilize In-Place Pod Vertical Scaling
 
-Since version 1.4, VPA supports Kubernetes' in-place pod vertical scaling feature. To use this feature, you will need to
+Since VPA 1.6.0, the `InPlaceOrRecreate` update mode is GA and enabled by default.
+No feature gate configuration is required.
 
-- have a Kubernetes cluster supporting this feature (feature flag `InPlacePodVerticalScaling` enabled)
-- enable the VPA feature flag for updater and admission controller:
-  ```
-  admissionController:
-    extraArgs:
-      "feature-gates": "InPlaceOrRecreate=true"
-  updater:
-    extraArgs:
-      "feature-gates": "InPlaceOrRecreate=true"
-  ```
-- configure the respective VPA resources with `spec.updatePolicy.updateMode: "InPlaceOrRecreate"`
+To use in-place scaling, configure your VPA resources with:
+
+```yaml
+spec:
+  updatePolicy:
+    updateMode: "InPlaceOrRecreate"
+```
+
+Note: your Kubernetes cluster must support in-place pod resizing
+(`InPlacePodVerticalScaling` is GA since Kubernetes 1.33).
+
+### Optional: Skip disruption budget checks for in-place updates
+
+VPA 1.6.0 introduces an opt-in flag that skips PDB checks for in-place updates
+when **all** containers have `NotRequired` resize policy (i.e. no pod restart needed).
+Disruption budgets are still respected when any container has `RestartContainer`
+resize policy.
+
+```yaml
+updater:
+  extraArgs:
+    "in-place-skip-disruption-budget": "true"
+```
+
+### Deprecated: `Auto` update mode
+
+The `Auto` update mode is deprecated since VPA 1.5 and will be removed in a future
+release. It currently behaves identically to `Recreate`. Migrate to either
+`Recreate` or `InPlaceOrRecreate`.
 
 For more information, see [VPA docs](https://github.com/kubernetes/autoscaler/blob/master/vertical-pod-autoscaler/docs/features.md#in-place-updates-inplaceorrecreate) and [Kubernetes docs](https://kubernetes.io/docs/tasks/configure-pod-container/resize-container-resources/).
 
@@ -192,7 +211,7 @@ For more information, see [VPA docs](https://github.com/kubernetes/autoscaler/bl
 | recommender.podMonitor | object | `{"annotations":{},"enabled":false,"labels":{}}` | Enables a prometheus operator podMonitor for the recommender |
 | updater.enabled | bool | `true` | If true, the updater component will be deployed |
 | updater.annotations | object | `{}` | Annotations to add to the updater deployment |
-| updater.extraArgs | object | `{}` | A key-value map of flags to pass to the updater |
+| updater.extraArgs | object | `{}` | A key-value map of flags to pass to the updater. Since VPA 1.6.0: set "in-place-skip-disruption-budget": "true" to skip PDB checks for in-place updates when all containers have NotRequired resize policy. |
 | updater.replicaCount | int | `1` |  |
 | updater.revisionHistoryLimit | int | `10` | The number of old replicasets to retain, default is 10, 0 will garbage-collect old replicasets |
 | updater.podDisruptionBudget | object | `{}` | This is the setting for the pod disruption budget |
