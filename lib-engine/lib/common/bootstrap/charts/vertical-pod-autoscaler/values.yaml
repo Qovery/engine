@@ -129,7 +129,9 @@ updater:
   enabled: true
   # updater.annotations -- Annotations to add to the updater deployment
   annotations: {}
-  # updater.extraArgs -- A key-value map of flags to pass to the updater
+  # updater.extraArgs -- A key-value map of flags to pass to the updater.
+  # Since VPA 1.6.0: set "in-place-skip-disruption-budget": "true" to skip
+  # PDB checks for in-place updates when all containers have NotRequired resize policy.
   extraArgs: {}
   replicaCount: 1
   # updater.revisionHistoryLimit -- The number of old replicasets to retain, default is 10, 0 will garbage-collect old replicasets
