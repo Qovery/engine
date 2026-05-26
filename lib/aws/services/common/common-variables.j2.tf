@@ -17,6 +17,12 @@ variable "kubernetes_cluster_id" {
   type        = string
 }
 
+variable "kubernetes_cluster_long_id" {
+  description = "Kubernetes cluster long ID (UUID)"
+  default     = "{{ kubernetes_cluster_long_id }}"
+  type        = string
+}
+
 variable "region_cluster_name" {
   description = "AWS region to store terraform state and lock"
   default     = "{{ region }}-{{ cluster_name }}"
@@ -26,6 +32,12 @@ variable "region_cluster_name" {
 variable "q_project_id" {
   description = "Qovery project ID"
   default     = "{{ project_id }}"
+  type        = string
+}
+
+variable "q_project_long_id" {
+  description = "Qovery project long ID (UUID)"
+  default     = "{{ project_long_id }}"
   type        = string
 }
 
@@ -41,14 +53,23 @@ variable "q_environment_id" {
   type        = string
 }
 
+variable "q_environment_long_id" {
+  description = "Qovery client environment long ID (UUID)"
+  default     = "{{ environment_long_id }}"
+  type        = string
+}
+
 variable "database_tags" {
   description = "Qovery database tags"
   default     = {
     "cluster_id"                                                                     = "{{ kubernetes_cluster_id }}"
+    "cluster_long_id"                                                                = "{{ kubernetes_cluster_long_id }}"
     "region"                                                                         = "{{ region }}"
     "q_client_id"                                                                    = "{{ owner_id }}"
     "q_environment_id"                                                               = "{{ environment_id }}"
+    "q_environment_long_id"                                                          = "{{ environment_long_id }}"
     "q_project_id"                                                                   = "{{ project_id }}"
+    "q_project_long_id"                                                              = "{{ project_long_id }}"
     {% if resource_expiration_in_seconds > -1 %}
     "ttl"                                                                            = "{{ resource_expiration_in_seconds }}"
     {% endif %}
