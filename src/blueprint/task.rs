@@ -161,7 +161,7 @@ impl BlueprintTask {
         })?;
 
         let git_creds = request.git_credentials.clone();
-        git::clone_at_commit(&git_url, &request.tag, &clone_dir, &|_username: &str| match &git_creds {
+        git::clone_at_tag(&git_url, &request.tag, &clone_dir, &|_username: &str| match &git_creds {
             Some(creds) => vec![(
                 CredentialType::USER_PASS_PLAINTEXT,
                 Cred::userpass_plaintext(&creds.login, &creds.access_token).unwrap(),

@@ -30,6 +30,38 @@ pub fn git_initialize_opts(
     }
 }
 
+// Clones a repository at a given tag. clone_at_commit passes the raw tag/commit string as the
+// fetch refspec — for hierarchical tag names like "aws/postgres/17/1.0.1" no local ref ends up
+// written.
+// This function uses the explicit "refs/tags/<tag>:refs/tags/<tag>"
+// mapping so the tag lands in local refs/tags/<tag> and revparse_single resolves it.
+pub fn clone_at_tag<P>(
+    repository_url: &Url,
+    tag: &str,
+    into_dir: P,
+    get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+) -> Result<(), BuildError>
+where
+    P: AsRef<Path>,
+{
+    let tag_ref = format!("refs/tags/{tag}");
+    let tag_refspec = format!("+{tag_ref}:{tag_ref}");
+    let repo =
+        fetch(repository_url, into_dir, get_credentials, &tag_refspec).map_err(|error| BuildError::GitError {
+            application: tag.into(),
+            git_cmd: GitCmd::Fetch,
+            context: format!("url: {repository_url}/ tag: {tag}"),
+            raw_error: error,
+        })?;
+    let _ = checkout(&repo, &tag_ref).map_err(|error| BuildError::GitError {
+        application: "".to_string(),
+        git_cmd: GitCmd::Checkout,
+        context: tag.to_string(),
+        raw_error: error,
+    })?;
+    Ok(())
+}
+
 pub fn clone_at_commit<P>(
     repository_url: &Url,
     commit_id: &str,
@@ -282,7 +314,7 @@ fn remote_fetch(
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::git::{checkout, clone_at_commit, fetch, file_content_at_commit};
+    use crate::cmd::git::{checkout, clone_at_commit, clone_at_tag, fetch, file_content_at_commit};
     use base64::Engine;
     use base64::engine::general_purpose;
     use git2::{Cred, CredentialType, Repository, Signature};
@@ -393,6 +425,35 @@ mod tests {
             assert!(matches!(repo, Ok(_)));
         }
         */
+    }
+
+    #[test]
+    fn test_clone_at_tag_resolves_hierarchical_tag() {
+        // Regression: blueprint catalog tags use the hierarchical form
+        // "provider/service/major/version" (e.g. "aws/postgres/17/1.0.1"). clone_at_commit fails
+        // on these because git can't resolve the bare refspec to a local ref. clone_at_tag must
+        // write refs/tags/<tag> locally and successfully check it out.
+        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone_at_tag".to_string());
+        let tag = "aws/postgres/17/1.0.1";
+
+        let result = clone_at_tag(
+            &Url::parse("https://github.com/Qovery/service-catalog.git").unwrap(),
+            tag,
+            clone_dir.path(),
+            &|_| vec![],
+        );
+        assert!(result.is_ok(), "clone_at_tag failed: {:?}", result.err());
+
+        // Working tree should contain the catalog path for this tag.
+        let qbm_path = Path::new(&clone_dir.path()).join("aws/postgres/17/qbm.yml");
+        assert!(qbm_path.exists(), "expected blueprint file at {qbm_path:?} after tag checkout");
+
+        // The local tag ref should now exist so a subsequent revparse can resolve it.
+        let repo = Repository::open(clone_dir.path()).expect("repo should open");
+        let tag_ref = repo
+            .find_reference(&format!("refs/tags/{tag}"))
+            .expect("local tag ref should exist after clone_at_tag");
+        assert!(tag_ref.target().is_some(), "tag ref should point to an object");
     }
 
     #[test]
