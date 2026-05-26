@@ -653,11 +653,18 @@ impl Helm {
         url_with_credentials: &Url,
         skip_tls_verification: bool,
     ) -> Result<(), HelmError> {
-        let url_with_chart_name = match engine_helm_registry.get_url().join(chart_name) {
+        let registry_url = engine_helm_registry.get_url();
+        let url_with_chart_name = match registry_url.join(chart_name) {
             Ok(url_with_chart_name) => url_with_chart_name,
-            Err(_) => {
-                error!("Can't join chart_name to registry url");
-                return Err(InvalidRepositoryConfig("Can't join chart_name to registry url".to_string()));
+            Err(e) => {
+                error!(
+                    "Can't join chart_name '{}' to registry url '{}': {}",
+                    chart_name, registry_url, e
+                );
+                return Err(InvalidRepositoryConfig(format!(
+                    "Can't build chart FQDN: failed to join chart name '{}' to registry URL '{}': {}",
+                    chart_name, registry_url, e
+                )));
             }
         };
 
@@ -714,7 +721,7 @@ impl Helm {
                 CommandError::TimeoutError(_) => Err(HelmError::Timeout(chart_name.to_string(), PULL, stderr_msg)),
                 CommandError::Killed(_) => Err(HelmError::Killed(chart_name.to_string(), PULL)),
                 _ => {
-                    let url = {
+                    let url_without_credentials = {
                         let mut url = url_with_credentials.clone();
                         let _ = url.set_password(None);
                         url
@@ -725,9 +732,7 @@ impl Helm {
                         errors::CommandError::new(
                             format!(
                                 "Helm failed to pull chart {} at version {} from {}",
-                                chart_name,
-                                chart_version,
-                                url.as_str()
+                                chart_name, chart_version, url_without_credentials
                             ),
                             Some(stderr_msg),
                             Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
