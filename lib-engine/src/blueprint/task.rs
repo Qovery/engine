@@ -313,7 +313,6 @@ impl Task for BlueprintTask {
                     ));
 
                     deploy_terraform::execute(
-                        &blueprint_dir,
                         &self.lib_root_dir,
                         &tf_spec,
                         &self.request.target_environment,

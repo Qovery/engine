@@ -59,7 +59,6 @@ pub fn execute(
 
     // 3. Render
     render_and_apply(
-        working_dir,
         &template_dir,
         &ctx,
         &request.qovery_api_token,

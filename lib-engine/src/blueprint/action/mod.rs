@@ -13,8 +13,11 @@ use std::time::Duration;
 
 /// Common logic for blueprint actions: render Tera template → terraform init → terraform apply.
 /// Used by both deploy_terraform and deploy_helm.
+///
+/// Renders into an isolated tempdir rather than the cloned catalog directory. Catalogs declare
+/// their own providers (e.g. `terraform { required_providers { aws = ... } }`) which
+/// collide with the engine's `terraform { required_providers { qovery } }` block if rendered alongside.
 pub(crate) fn render_and_apply(
-    working_dir: &Path,
     template_dir: &Path,
     tera_context: &tera::Context,
     qovery_api_token: &str,
@@ -24,6 +27,14 @@ pub(crate) fn render_and_apply(
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<(), Box<EngineError>> {
+    let engine_workspace = tempfile::TempDir::new().map_err(|e| {
+        Box::new(EngineError::new_blueprint_error(
+            event_details.clone(),
+            BlueprintError::WorkspaceError(format!("Failed to create engine terraform workspace: {}", e)),
+        ))
+    })?;
+    let working_dir = engine_workspace.path();
+
     // 1. Generate terraform files from template
     generate_and_copy_all_files_into_dir(template_dir, working_dir, tera_context).map_err(|e| {
         Box::new(EngineError::new_blueprint_error(

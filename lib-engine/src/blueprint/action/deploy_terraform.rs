@@ -9,7 +9,7 @@ use crate::io_models::blueprint::BlueprintRequest;
 use crate::logger::Logger;
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 // TODO: Should come from the QBM spec (blueprint author pins terraform version).
 const DEFAULT_ENGINE_VERSION: &str = "1.9.7";
@@ -42,7 +42,6 @@ struct BlueprintTerraformTeraContext {
 
 /// Execute a Terraform blueprint: build Tera context → render template → terraform init + apply.
 pub fn execute(
-    working_dir: &Path,
     lib_root_dir: &str,
     spec: &ResolvedTerraformSpec,
     request: &BlueprintRequest,
@@ -61,7 +60,6 @@ pub fn execute(
         })?;
 
     render_and_apply(
-        working_dir,
         &template_dir,
         &ctx,
         &request.qovery_api_token,
