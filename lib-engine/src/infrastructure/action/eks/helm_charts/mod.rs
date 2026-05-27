@@ -10,6 +10,7 @@ use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::models::{CpuArchitecture, StorageClass};
 
 use crate::errors::EngineError;
+use crate::infrastructure::helm_charts::eso_config_chart::check_stores_not_in_use;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 
 use crate::environment::models::domain::ToHelmString;
@@ -208,5 +209,24 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
+    }
+
+    fn validate_helm_charts_info(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        charts_prerequisites: &Self::ChartPrerequisite,
+    ) -> Result<(), Box<EngineError>> {
+        let secrets_manager_accesses = charts_prerequisites
+            .infra_options
+            .secrets_manager_accesses()
+            .map_err(|e| {
+                Box::new(EngineError::new_helm_charts_setup_error(
+                    self.context.event_details.clone(),
+                    crate::errors::CommandError::new_from_safe_message(e.to_string()),
+                ))
+            })?;
+        let kube_client = infra_ctx.mk_kube_client()?;
+        check_stores_not_in_use(&kube_client, &secrets_manager_accesses)
+            .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
     }
 }

@@ -211,13 +211,23 @@ struct ClusterSecretStoreStatus {
     conditions: Option<Vec<ClusterSecretStoreCondition>>,
 }
 
-fn cluster_secret_store_api_resource() -> ApiResource {
+pub fn cluster_secret_store_api_resource() -> ApiResource {
     ApiResource {
         group: "external-secrets.io".to_string(),
         version: "v1".to_string(),
         api_version: "external-secrets.io/v1".to_string(),
         kind: "ClusterSecretStore".to_string(),
         plural: "clustersecretstores".to_string(),
+    }
+}
+
+pub fn external_secret_api_resource() -> ApiResource {
+    ApiResource {
+        group: "external-secrets.io".to_string(),
+        version: "v1".to_string(),
+        api_version: "external-secrets.io/v1".to_string(),
+        kind: "ExternalSecret".to_string(),
+        plural: "externalsecrets".to_string(),
     }
 }
 
