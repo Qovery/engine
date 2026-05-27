@@ -28,6 +28,8 @@ gateway:
 
 envoyProxy:
   qoveryPublic:
+    accessLog:
+      format: ""
     provider:
       kubernetes:
         envoyService:

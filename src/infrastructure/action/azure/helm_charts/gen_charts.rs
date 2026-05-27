@@ -499,6 +499,10 @@ pub(super) fn aks_helm_charts(
                         .cluster_advanced_settings
                         .envoy_default_backend_tag
                         .clone(),
+                    access_log_format: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_access_log_format
+                        .clone(),
                     reconcile_gateway_cert_refs: false,
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),

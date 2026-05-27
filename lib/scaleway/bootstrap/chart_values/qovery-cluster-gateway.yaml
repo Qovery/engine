@@ -35,6 +35,8 @@ metrics:
 
 envoyProxy:
   qoveryPublic:
+    accessLog:
+      format: "set-by-engine"
     provider:
       kubernetes:
         envoyService:
