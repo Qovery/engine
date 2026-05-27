@@ -14,6 +14,7 @@ pub mod beyla_chart;
 pub mod cert_manager_chart;
 pub mod cert_manager_config_chart;
 pub mod coredns_config_chart;
+mod envoy;
 pub mod envoy_gateway_chart;
 pub mod envoy_gateway_crd_chart;
 pub mod eso_chart;

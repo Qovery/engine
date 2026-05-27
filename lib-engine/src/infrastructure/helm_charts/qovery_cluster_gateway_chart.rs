@@ -3,6 +3,7 @@ use crate::errors::CommandError;
 use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
 };
+use crate::infrastructure::helm_charts::envoy::access_log_format;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
@@ -51,6 +52,7 @@ pub struct QoveryClusterGatewayChartOptions {
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
     pub default_backend_image: Option<String>, // default backend container image (e.g., "registry.k8s.io/ingress-nginx/custom-error-pages")
     pub default_backend_tag: Option<String>,   // default backend container image tag (e.g., "v1.1.1")
+    pub access_log_format: Option<String>,     // custom JSON access log format to apply on cluster-level EnvoyProxy
     pub reconcile_gateway_cert_refs: bool,     // reconcile Gateway TLS certificateRefs post-install/upgrade
 }
 
@@ -99,6 +101,7 @@ impl QoveryClusterGatewayChart {
 
 impl ToCommonHelmChart for QoveryClusterGatewayChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_string = vec![];
         let mut chart_set_values = vec![ChartSetValue {
             key: "dns.domain".to_string(),
             value: self.domain.wildcarded().to_string(),
@@ -161,6 +164,20 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             });
         }
 
+        let encoded_format = self
+            .chart_options
+            .access_log_format
+            .as_ref()
+            .map(|f| f.trim())
+            .filter(|f| !f.is_empty())
+            .map(|f| access_log_format::encode_envoy_access_log_format(&Self::chart_name(), f))
+            .transpose()?
+            .unwrap_or_default();
+        values_string.push(ChartSetValue {
+            key: "envoyProxy.qoveryPublic.accessLog.format".to_string(),
+            value: encoded_format,
+        });
+
         if let Some(annotations) = self.load_balancer.annotations() {
             for (key, value) in annotations {
                 chart_set_values.push(ChartSetValue {
@@ -192,6 +209,7 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 path: self.chart_path.to_string(),
                 values_files: vec![self.chart_values_path.to_string()],
                 values: chart_set_values,
+                values_string,
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryClusterGatewayChartInstallationChecker::new(
@@ -528,5 +546,36 @@ mod tests {
             keys.iter().all(|key| !key.starts_with("infrastructure.annotations.")),
             "gateway infrastructure annotations should no longer be used for LB service annotations"
         );
+    }
+
+    #[test]
+    fn custom_access_log_format_is_encoded_for_cluster_gateway_envoy_proxy() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_eip_allocation_ids: None,
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            }),
+            QoveryClusterGatewayChartOptions {
+                access_log_format: Some(r#"{"correlation_id":"%REQ(X-REQUEST-ID)%"}"#.to_string()),
+                ..Default::default()
+            },
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let access_log_entry = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .find(|entry| entry.key == "envoyProxy.qoveryPublic.accessLog.format")
+            .expect("access log format value should be set");
+
+        assert!(!access_log_entry.value.is_empty(), "access log format should be base64 encoded");
     }
 }

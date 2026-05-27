@@ -525,6 +525,10 @@ pub(super) fn gke_helm_charts(
                         .cluster_advanced_settings
                         .envoy_default_backend_tag
                         .clone(),
+                    access_log_format: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_access_log_format
+                        .clone(),
                     // Keep dynamically added Gateway TLS certificateRefs during cluster updates.
                     reconcile_gateway_cert_refs: chart_config_prerequisites
                         .cluster_advanced_settings
