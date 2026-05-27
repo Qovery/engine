@@ -210,6 +210,9 @@ mod tests {
         assert!(result.contains(r#"chart_name         = "redis""#));
         assert!(result.contains(r#"chart_version      = "25.3.11""#));
         assert!(result.contains("helm_repository_id = qovery_helm_repository.blueprint_repo.id"));
+        assert!(result.contains("source = {"));
+        assert!(result.contains("helm_repository = {"));
+        assert!(result.contains("values_override = {"));
         assert!(result.contains(r#""--atomic""#));
         assert!(!result.contains("import {"));
     }
@@ -221,6 +224,7 @@ mod tests {
 
         assert!(result.contains("blueprint-values"));
         assert!(result.contains("auth:"));
+        assert!(result.contains("file = {"));
     }
 
     #[test]

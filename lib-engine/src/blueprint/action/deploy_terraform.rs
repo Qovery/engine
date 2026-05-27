@@ -195,7 +195,11 @@ mod tests {
         assert!(result.contains(r#"url       = "https://github.com/org/catalog.git""#));
         assert!(result.contains(r#"branch    = "aws/s3/1/1.0.0""#));
         assert!(result.contains(r#"root_path = "aws/s3/1""#));
-        assert!(result.contains("kubernetes {}"));
+        assert!(result.contains("backend = {"));
+        assert!(result.contains("kubernetes = {}"));
+        assert!(result.contains("git_repository = {"));
+        assert!(result.contains("engine_version = {"));
+        assert!(result.contains("job_resources = {"));
         assert!(result.contains("cpu_milli   = 500"));
         assert!(result.contains("ram_mib     = 512"));
         assert!(result.contains("storage_gib = 20"));
@@ -227,9 +231,10 @@ mod tests {
         };
         let result = render_template(&spec, &test_request(), &test_info());
 
+        assert!(result.contains("blueprint = {"));
         assert!(result.contains(r#"type = "s3""#));
         assert!(result.contains(r#"bucket = "my-state-bucket""#));
-        assert!(!result.contains("kubernetes {}"));
+        assert!(!result.contains("kubernetes = {}"));
     }
 
     #[test]
