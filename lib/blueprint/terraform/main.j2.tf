@@ -16,7 +16,7 @@ resource "qovery_terraform_service" "blueprint" {
   timeout_seconds       = {{ timeout_seconds }}
   use_cluster_credentials = {{ use_cluster_credentials }}
 
-  git_repository {
+  git_repository = {
     url       = "{{ git_url }}"
     branch    = "{{ git_branch }}"
     root_path = "{{ git_root_path }}"
@@ -25,11 +25,11 @@ resource "qovery_terraform_service" "blueprint" {
 {% endif %}
   }
 
-  backend {
+  backend = {
 {% if backend_kubernetes %}
-    kubernetes {}
+    kubernetes = {}
 {% elif backend_blueprint %}
-    blueprint {
+    blueprint = {
       type = "{{ backend_type }}"
 {% if backend_config %}
       config = {
@@ -40,16 +40,16 @@ resource "qovery_terraform_service" "blueprint" {
 {% endif %}
     }
 {% else %}
-    user_provided {}
+    user_provided = {}
 {% endif %}
   }
 
-  engine_version {
+  engine_version = {
     explicit_version          = "{{ engine_version }}"
     read_from_terraform_block = false
   }
 
-  job_resources {
+  job_resources = {
     cpu_milli   = {{ job_cpu_milli }}
     ram_mib     = {{ job_ram_mib }}
     storage_gib = {{ job_storage_gib }}

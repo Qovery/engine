@@ -26,17 +26,17 @@ resource "qovery_helm" "blueprint" {
   timeout_sec                  = {{ timeout_sec }}
 {% endif %}
 
-  source {
-    helm_repository {
+  source = {
+    helm_repository = {
       helm_repository_id = qovery_helm_repository.blueprint_repo.id
       chart_name         = "{{ chart_name }}"
       chart_version      = "{{ chart_version }}"
     }
   }
 
-  values_override {
+  values_override = {
 {% if rendered_values %}
-    file {
+    file = {
       raw = {
         "blueprint-values" = {
           content = <<-EOT
