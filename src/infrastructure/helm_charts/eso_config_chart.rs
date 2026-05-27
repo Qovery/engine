@@ -2,14 +2,21 @@ use crate::errors::CommandError;
 use crate::helm::{
     ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmAction, HelmChartError, HelmChartNamespaces,
 };
-use crate::infrastructure::helm_charts::eso_chart::EsoClusterOutputs;
+use crate::infrastructure::helm_charts::eso_chart::{
+    EsoClusterOutputs, cluster_secret_store_api_resource, external_secret_api_resource,
+};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
 use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::AwsAuthenticationMode;
 use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
+use crate::runtime::block_on;
+use itertools::Itertools;
 use kube::Client;
+use kube::api::{Api, ListParams};
+use kube::core::DynamicObject;
+use std::collections::{BTreeSet, HashSet};
 
 pub struct EsoConfigChart {
     chart_path: HelmChartPath,
@@ -255,6 +262,82 @@ impl ChartInstallationChecker for EsoConfigChartChecker {
     fn clone_dyn(&self) -> Box<dyn ChartInstallationChecker> {
         Box::new(self.clone())
     }
+}
+
+/// Checks that no ClusterSecretStore being removed is still referenced by an ExternalSecret.
+/// Called before applying the ESO config chart to prevent silently breaking services.
+pub(crate) fn check_stores_not_in_use(
+    kube_client: &Client,
+    secrets_manager_accesses: &[SecretsManagerAccess],
+) -> Result<(), CommandError> {
+    let cluster_secret_store_api_resource = cluster_secret_store_api_resource();
+    let stores_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &cluster_secret_store_api_resource);
+    let stores = match block_on(stores_api.list(&ListParams::default())) {
+        Ok(list) => list,
+        // CRDs are not installed: this means ESO is not installed
+        // We can safely return as no check is needed
+        Err(kube::Error::Api(e)) if e.code == 404 => return Ok(()),
+        Err(e) => {
+            return Err(CommandError::new_from_safe_message(format!(
+                "Failed to list ClusterSecretStores: {e}"
+            )));
+        }
+    };
+
+    let external_secret_api_resource = external_secret_api_resource();
+    let es_api: Api<DynamicObject> = Api::all_with(kube_client.clone(), &external_secret_api_resource);
+    let retained_cluster_store_ids: HashSet<String> = secrets_manager_accesses.iter().map(|a| a.id.clone()).collect();
+
+    for store in stores.items {
+        let store_name = match &store.metadata.name {
+            Some(n) => n.clone(),
+            None => continue,
+        };
+
+        let secret_manager_access_id = match store
+            .metadata
+            .labels
+            .as_ref()
+            .and_then(|labels| labels.get("qovery.com/secret-manager-access-id"))
+        {
+            Some(id) => id.clone(),
+            None => continue, // Only check stores managed by Qovery
+        };
+
+        // Store is still in the desired list — nothing to remove
+        if retained_cluster_store_ids.contains(&secret_manager_access_id) {
+            continue;
+        }
+
+        let external_secrets = match block_on(
+            es_api.list(&ListParams::default().labels(format!("qovery.com/store-name={store_name}").as_str())),
+        ) {
+            Ok(list) => list,
+            // This shouldn't happen as a check is done above on ClusterSecretStore, but just in case
+            // We can safely return as no check is needed
+            Err(kube::Error::Api(e)) if e.code == 404 => continue,
+            Err(e) => {
+                return Err(CommandError::new_from_safe_message(format!(
+                    "Failed to list ExternalSecrets: {e}"
+                )));
+            }
+        };
+
+        if !external_secrets.items.is_empty() {
+            let linked_services_ids: BTreeSet<String> = external_secrets
+                .items
+                .iter()
+                .filter_map(|es| es.metadata.labels.as_ref()?.get("qovery.com/service-id").cloned())
+                .collect::<BTreeSet<_>>();
+            let linked_services_ids_str = linked_services_ids.iter().join("\n - ");
+            return Err(CommandError::new_from_safe_message(format!(
+                "Secret Manager Access removal issue: {} services need to be redeployed\n - {linked_services_ids_str}",
+                linked_services_ids.len()
+            )));
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

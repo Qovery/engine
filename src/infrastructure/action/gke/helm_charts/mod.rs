@@ -7,6 +7,7 @@ use crate::helm::HelmChart;
 use crate::infrastructure::action::deploy_helms::{HelmInfraContext, HelmInfraResources};
 use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::gke::helm_charts::gen_charts::gke_helm_charts;
+use crate::infrastructure::helm_charts::eso_config_chart::check_stores_not_in_use;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::cloud_provider::io::ClusterAdvancedSettings;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
@@ -183,5 +184,16 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             infra_ctx.dns_provider().domain(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
+    }
+
+    fn validate_helm_charts_info(
+        &self,
+        infra_ctx: &InfrastructureContext,
+        charts_prerequisites: &Self::ChartPrerequisite,
+    ) -> Result<(), Box<EngineError>> {
+        let secrets_manager_accesses = charts_prerequisites.infra_options.secrets_manager_accesses.clone();
+        let kube_client = infra_ctx.mk_kube_client()?;
+        check_stores_not_in_use(&kube_client, &secrets_manager_accesses)
+            .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
     }
 }

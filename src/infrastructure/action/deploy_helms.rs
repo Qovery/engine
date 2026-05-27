@@ -173,11 +173,23 @@ pub(super) trait HelmInfraResources {
         config: Self::ChartPrerequisite,
     ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, Box<EngineError>>;
 
+    fn validate_helm_charts_info(
+        &self,
+        _infra_ctx: &InfrastructureContext,
+        _charts_prerequisites: &Self::ChartPrerequisite,
+    ) -> Result<(), Box<EngineError>> {
+        Ok(())
+    }
+
     fn deploy_charts(
         &self,
         infra_ctx: &InfrastructureContext,
         logger: &impl InfraLogger,
     ) -> Result<(), Box<EngineError>> {
+        let chart_configs = self.new_chart_prerequisite(infra_ctx);
+        logger.info("✔️ Ensuring helm charts configurations are valid");
+        self.validate_helm_charts_info(infra_ctx, &chart_configs)?;
+
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         logger.info("⚓ Preparing Helm files on disk");
         logger.info("⚓ 📥 chart is going to be updated");
@@ -185,7 +197,7 @@ pub(super) trait HelmInfraResources {
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
 
         self.charts_context().prepare_helm_files_on_disk()?;
-        let chart_configs = self.new_chart_prerequisite(infra_ctx);
+
         let ev_details = &self.charts_context().event_details;
         let mut charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
         let chart_count = enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy);
