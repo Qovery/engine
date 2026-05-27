@@ -2,7 +2,9 @@ pub mod deploy_helm;
 pub mod deploy_terraform;
 
 use crate::blueprint::models::error::BlueprintError;
-use crate::cmd::terraform::{TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate};
+use crate::cmd::terraform::{
+    TerraformApplyOptions, terraform_apply_with_options, terraform_init_validate, terraform_plan_internal,
+};
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -59,7 +61,15 @@ pub(crate) fn render_and_apply(
     terraform_init_validate(&dir, &envs, &TerraformValidators::Default)
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
-    // 3. Terraform apply (skip if dry-run)
+    // 3. Terraform plan — writes `tf_plan` which `terraform_apply_with_options` consumes
+    logger.log(EngineEvent::Info(
+        event_details.clone(),
+        EventMessage::new("Running terraform plan".to_string(), None),
+    ));
+    terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false)
+        .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
+
+    // 4. Terraform apply (skip if dry-run)
     if is_dry_run {
         logger.log(EngineEvent::Info(
             event_details.clone(),
