@@ -116,6 +116,7 @@ pub enum Tag {
     DockerError,
     DockerPullImageError,
     DockerPushImageError,
+    ExternalSecretFailedToResolve,
     HelmChartUninstallError,
     HelmChartsDeployError,
     HelmChartsSetupError,
@@ -516,6 +517,7 @@ impl From<errors::Tag> for Tag {
                 Tag::CannotUpgradeClusterDeprecatedKubernetesApiCallDetected
             }
             errors::Tag::BlueprintError => Tag::BlueprintError,
+            errors::Tag::ExternalSecretFailedToResolve => Tag::ExternalSecretFailedToResolve,
         }
     }
 }

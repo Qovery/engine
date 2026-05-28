@@ -1241,6 +1241,8 @@ pub enum Tag {
     CannotCreateAwsServiceLinkedRoleForSpotInstance,
     /// CannotUpgradeClusterDeprecatedKubernetesApiCallDetected: represents an error while trying to upgrade a cluster having deprecated Kubernetes API calls
     CannotUpgradeClusterDeprecatedKubernetesApiCallDetected,
+    /// ExternalSecretFailedToResolve: represents an error while trying to resolve external secrets
+    ExternalSecretFailedToResolve,
 }
 
 impl Tag {
@@ -5493,6 +5495,18 @@ impl EngineError {
             Tag::DatabaseError,
             error.to_string(),
             Some(error.into()),
+            None,
+            None,
+        )
+    }
+
+    /// Creates new error while trying to resolve external secrets
+    pub fn new_external_secrets_failed_to_resolve(event_details: EventDetails, safe_message: String) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::ExternalSecretFailedToResolve,
+            safe_message,
+            None,
             None,
             None,
         )

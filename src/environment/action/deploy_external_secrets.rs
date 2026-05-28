@@ -5,7 +5,7 @@ use crate::environment::models::external_secret::ExternalSecretGroup;
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
-use crate::helm::{ChartInfo, HelmChartError, HelmChartNamespaces};
+use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::io_models::variable_utils::VariableInfo;
 use crate::runtime::block_on;
@@ -28,7 +28,7 @@ pub const EXTERNAL_SECRET_PREFIX: &str = "qovery.env.";
 const ESO_GROUP: &str = "external-secrets.io";
 const ESO_VERSION: &str = "v1";
 const ESO_KIND: &str = "ExternalSecret";
-const ESO_SYNC_TIMEOUT: Duration = Duration::from_secs(30);
+const ESO_SYNC_TIMEOUT: Duration = Duration::from_secs(15);
 const ESO_POLL_INTERVAL: Duration = Duration::from_secs(3);
 const DATA_HASH_ANNOTATION: &str = "reconcile.external-secrets.io/data-hash";
 
@@ -124,7 +124,6 @@ struct ServiceSecret {
 
 pub fn deploy_helm_external_secrets(
     kube_name: &str,
-    service_name: &str,
     service_id: Uuid,
     service_type: &str,
     namespace: &str,
@@ -158,7 +157,6 @@ pub fn deploy_helm_external_secrets(
     )?;
 
     let result = wait_and_fetch_eso_values(
-        service_name,
         namespace,
         target.kube.client(),
         external_secret_groups,
@@ -310,7 +308,6 @@ fn eso_api_resource() -> ApiResource {
 /// Targets either the new secret or the previous secret based on annotation `reconcile.external-secrets.io/data-hash`
 /// Returns the mapping between the external secret and the target secret name with decoded secret values
 fn wait_and_fetch_eso_values(
-    service_name: &str,
     namespace: &str,
     kube_client: kube::Client,
     external_secret_groups: &[ExternalSecretGroup],
@@ -323,13 +320,10 @@ fn wait_and_fetch_eso_values(
         return Ok(vec![]);
     }
 
-    let to_error = |msg: String| -> Box<EngineError> {
-        Box::new(EngineError::new_helm_chart_error(
+    let to_error = |safe_message: String| -> Box<EngineError> {
+        Box::new(EngineError::new_external_secrets_failed_to_resolve(
             event_details.clone(),
-            HelmChartError::CreateTemplateError {
-                chart_name: service_name.to_string(),
-                msg,
-            },
+            safe_message,
         ))
     };
 
@@ -340,16 +334,17 @@ fn wait_and_fetch_eso_values(
     let mut result: Vec<ExternalSecretGroupValuesWithTargetSecretName> =
         Vec::with_capacity(external_secret_groups.len());
 
-    for group in external_secret_groups {
-        let eso_name = &group.external_secret_kube_name;
-        logger.info(format!("⏳ Waiting for external secret '{eso_name}' to be synced by ESO..."));
+    logger.info("⏳ Resolving your external secrets".to_string());
 
+    for external_secret_group in external_secret_groups.iter() {
+        let external_secret_kube_name = &external_secret_group.external_secret_kube_name;
         let deadline = std::time::Instant::now() + ESO_SYNC_TIMEOUT;
 
         // Poll the ESO ExternalSecret status until Ready=True or Ready=False.
         loop {
-            let eso_obj = block_on(eso_api.get(eso_name))
-                .map_err(|e| to_error(format!("Cannot read ExternalSecret '{eso_name}' status: {e}")))?;
+            let eso_obj = block_on(eso_api.get(external_secret_kube_name)).map_err(|e| {
+                to_error(format!("Cannot read ExternalSecret '{external_secret_kube_name}' status: {e}"))
+            })?;
 
             let status: EsoStatus = eso_obj
                 .data
@@ -365,7 +360,11 @@ fn wait_and_fetch_eso_values(
                 break;
             }
 
-            // If the Ready condition is set & has been updated since last deployment, it means the external secret has been synced
+            // The secret is synced only if all conditions are met:
+            // - the Ready condition is set
+            // - it has been updated since last deployment
+            // - the status is "True"
+            // Otherwise we fallback to the timeout block because deploying more than 1 time a failing ExternalSecret won't update the last_transition_time
             if let Some(ready) = status
                 .conditions
                 .as_deref()
@@ -378,29 +377,42 @@ fn wait_and_fetch_eso_values(
                         .is_some_and(|t| t > deployment_start_time_utc)
                 })
                 .find(|c| c.condition_type == "Ready")
+                && ready.status == "True"
             {
-                if ready.status == "True" {
-                    break; // synced — proceed to read the secret
-                }
-                // Ready=False: surface the ESO message immediately
-                let reason = ready.reason.as_deref().unwrap_or("unknown");
-                let message = ready.message.as_deref().unwrap_or("no message provided by ESO");
-                return Err(to_error(format!(
-                    "External secret '{eso_name}' failed to sync (reason: {reason}): {message}."
-                )));
+                break; // synced — proceed to read the secret
             }
 
+            // If the timeout is reached, it means an error happened (i.e secret doesn't exist anymore)
             if std::time::Instant::now() >= deadline {
-                return Err(to_error(format!(
-                    "Timeout waiting for external secret '{eso_name}' to sync. Ensure your external secrets are valid."
-                )));
+                let error_messages = status
+                    .conditions
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|c| {
+                        format!(
+                            "{}: '{}'",
+                            c.reason.as_deref().unwrap_or("Unknown reason"),
+                            c.message.as_deref().unwrap_or("no message provided")
+                        )
+                    })
+                    .collect::<Vec<String>>();
+                let detail = if error_messages.is_empty() {
+                    "No error message found".to_string()
+                } else {
+                    error_messages.join(", ")
+                };
+                let user_message = format!(
+                    "❗An issue happened when attempting to resolve your external secrets. You need to ensure the external secrets referenced in your environment / service still exist ({detail})"
+                );
+                return Err(to_error(user_message));
             }
 
             thread::sleep(ESO_POLL_INTERVAL);
         }
 
         // Fetch new kube Secret hash
-        let new_secret_name = &group.secret_name;
+        let new_secret_name = &external_secret_group.secret_name;
         let new_secret_hash = block_on(secret_api.get(new_secret_name.as_str()))
             .ok()
             .and_then(|s| s.metadata.annotations)
@@ -410,7 +422,7 @@ fn wait_and_fetch_eso_values(
         // to guarantee atomic rollback: the service keeps pointing to an already-validated secret.
         let target_secret_name = current_service_secrets
             .iter()
-            .find(|s| s.store_name == group.store_name)
+            .find(|s| s.store_name == external_secret_group.store_name)
             .filter(|s| new_secret_hash.as_deref() == Some(s.external_secret_hash.as_str()))
             .map(|s| s.secret_name.as_str())
             .unwrap_or(new_secret_name.as_str());
@@ -421,7 +433,7 @@ fn wait_and_fetch_eso_values(
 
         let data = secret.data.unwrap_or_default();
         let mut secret_values: HashMap<String, VariableInfo> = HashMap::new();
-        for entry in &group.entries {
+        for entry in &external_secret_group.entries {
             match data.get(&entry.env_var_key) {
                 Some(bytes) => {
                     // INFO (qov-1569) If upstream secrets are non-utf8, clients will need to encode it to base64 themselves
@@ -451,7 +463,7 @@ fn wait_and_fetch_eso_values(
         result.push(ExternalSecretGroupValuesWithTargetSecretName {
             group_values: secret_values,
             target_secret_name: target_secret_name.to_string(),
-            external_secret_name: group.external_secret_kube_name.clone(),
+            external_secret_name: external_secret_group.external_secret_kube_name.clone(),
         })
     }
 

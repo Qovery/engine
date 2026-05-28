@@ -60,7 +60,6 @@ pub fn handle_service_external_secrets(
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
                     app.kube_name(),
-                    app.name(),
                     *app.long_id(),
                     "application",
                     namespace,
@@ -93,7 +92,6 @@ pub fn handle_service_external_secrets(
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
                     container.kube_name(),
-                    container.name(),
                     *container.long_id(),
                     "container",
                     namespace,
@@ -132,7 +130,6 @@ pub fn handle_service_external_secrets(
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
                     job.kube_name(),
-                    job.name(),
                     *job.long_id(),
                     service_type,
                     namespace,
@@ -169,7 +166,6 @@ pub fn handle_service_external_secrets(
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
                     helm_chart.kube_name(),
-                    helm_chart.name(),
                     *helm_chart.long_id(),
                     "helm",
                     namespace,
@@ -197,7 +193,6 @@ pub fn handle_service_external_secrets(
                 let progress_logger = EnvProgressLogger::new(&env_logger);
                 deploy_helm_external_secrets(
                     terraform_service.kube_name(),
-                    terraform_service.name(),
                     *terraform_service.long_id(),
                     "terraform",
                     namespace,
