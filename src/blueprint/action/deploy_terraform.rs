@@ -84,7 +84,7 @@ impl BlueprintTerraformTeraContext {
             git_url: request.git_url.clone(),
             git_branch: request.tag.clone(),
             git_root_path: blueprint_info.path(),
-            git_token_id: request.git_credentials.as_ref().map(|c| c.login.clone()),
+            git_token_id: request.git_token_id.clone(),
             engine: match spec.flavor {
                 TerraformFlavor::Terraform => "TERRAFORM".to_string(),
                 TerraformFlavor::OpenTofu => "OPEN_TOFU".to_string(),
@@ -145,6 +145,7 @@ mod tests {
             git_url: "https://github.com/org/catalog.git".into(),
             tag: "aws/s3/1/1.0.0".into(),
             git_credentials: None,
+            git_token_id: None,
             spec_overrides: None,
             qovery_api_token: "test-token".into(),
             environment_id: "env-uuid".into(),
@@ -206,6 +207,22 @@ mod tests {
         assert!(result.contains(r#"key       = "TF_VAR_region""#));
         assert!(result.contains("tfvars_files = []"));
         assert!(!result.contains("import {"));
+    }
+
+    #[test]
+    fn generate_main_tf_omits_git_token_id_when_none() {
+        let result = render_template(&test_spec(), &test_request(), &test_info());
+
+        assert!(!result.contains("git_token_id"));
+    }
+
+    #[test]
+    fn generate_main_tf_renders_git_token_id_when_set() {
+        let mut request = test_request();
+        request.git_token_id = Some("01999999-aaaa-bbbb-cccc-ddddeeeeffff".into());
+        let result = render_template(&test_spec(), &request, &test_info());
+
+        assert!(result.contains(r#"git_token_id = "01999999-aaaa-bbbb-cccc-ddddeeeeffff""#));
     }
 
     #[test]

@@ -26,6 +26,12 @@ pub struct BlueprintRequest {
     #[serde(default)]
     pub git_credentials: Option<GitCredentials>,
 
+    /// UUID of a Qovery git token resource. Rendered into
+    /// `qovery_terraform_service.git_repository.git_token_id` so the qovery terraform
+    /// provider can pass it to api.qovery.com at resource-create time.
+    #[serde(default)]
+    pub git_token_id: Option<String>,
+
     #[serde(default)]
     pub spec_overrides: Option<BlueprintSpecOverrides>,
 
@@ -103,6 +109,7 @@ mod tests {
         assert_eq!(req.variables[1].value, "s3cret");
         // Defaults
         assert!(req.git_credentials.is_none());
+        assert!(req.git_token_id.is_none());
         assert!(req.spec_overrides.is_none());
         assert!(req.import_id.is_none());
         assert_eq!(req.max_parallel_build, 1);
@@ -160,6 +167,26 @@ mod tests {
         }"#;
         let req: BlueprintRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.tag, "aws/s3/1/1.0.0");
+    }
+
+    #[test]
+    fn deserialize_with_git_token_id() {
+        let json = r#"{
+            "execution_id": "exec-5",
+            "long_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "name": "test",
+            "kube_name": "test",
+            "project_long_id": "11111111-2222-3333-4444-555555555555",
+            "organization_long_id": "22222222-3333-4444-5555-666666666666",
+            "variables": [],
+            "git_url": "https://github.com/Qovery/service-catalog.git",
+            "tag": "aws/postgres/17/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
+            "git_token_id": "01999999-aaaa-bbbb-cccc-ddddeeeeffff"
+        }"#;
+        let req: BlueprintRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(req.git_token_id, Some("01999999-aaaa-bbbb-cccc-ddddeeeeffff".to_string()));
     }
 
     #[test]

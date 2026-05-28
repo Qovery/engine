@@ -153,6 +153,7 @@ mod tests {
             git_url: "https://github.com/org/catalog.git".into(),
             tag: "helm/redis/7/1.0.0".into(),
             git_credentials: None,
+            git_token_id: None,
             spec_overrides: None,
             qovery_api_token: "test-token".into(),
             environment_id: "env-uuid".into(),
