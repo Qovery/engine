@@ -5,6 +5,7 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     NginxHttpSnippet as NginxHttpSnippetModel, NginxLimitRequestStatusCode as NginxLimitRequestStatusCodeModel,
     NginxServerSnippet as NginxServerSnippetModel,
 };
+use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::EnvoyGatewayApiPathEscapedSlashesAction as EnvoyGatewayApiPathEscapedSlashesActionModel;
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2AmiModel;
 use crate::infrastructure::models::cluster_profile::ClusterProfile as ClusterProfileModel;
@@ -48,6 +49,54 @@ fn default_aws_eks_ec2_ami() -> Ec2Ami {
 
 fn default_aws_alb_controller_replicas() -> u32 {
     2
+}
+
+fn default_envoy_gateway_api_path_escaped_slashes_action() -> EnvoyGatewayApiPathEscapedSlashesAction {
+    EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+pub enum EnvoyGatewayApiPathEscapedSlashesAction {
+    #[serde(rename = "KeepUnchanged")]
+    KeepUnchanged, // Preserve %2F as-is in the upstream path.
+    #[serde(rename = "RejectRequest")]
+    RejectRequest, // Reject requests containing escaped slashes.
+    #[serde(rename = "UnescapeAndForward")]
+    UnescapeAndForward, // Decode %2F to / and forward upstream.
+    #[default]
+    #[serde(rename = "UnescapeAndRedirect")]
+    UnescapeAndRedirect, // Decode %2F and redirect client to normalized path.
+}
+
+impl Display for EnvoyGatewayApiPathEscapedSlashesAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged => "KeepUnchanged",
+            EnvoyGatewayApiPathEscapedSlashesAction::RejectRequest => "RejectRequest",
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndForward => "UnescapeAndForward",
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect => "UnescapeAndRedirect",
+        };
+        write!(f, "{value}")
+    }
+}
+
+impl EnvoyGatewayApiPathEscapedSlashesAction {
+    pub fn to_model(&self) -> EnvoyGatewayApiPathEscapedSlashesActionModel {
+        match self {
+            EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged => {
+                EnvoyGatewayApiPathEscapedSlashesActionModel::KeepUnchanged
+            }
+            EnvoyGatewayApiPathEscapedSlashesAction::RejectRequest => {
+                EnvoyGatewayApiPathEscapedSlashesActionModel::RejectRequest
+            }
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndForward => {
+                EnvoyGatewayApiPathEscapedSlashesActionModel::UnescapeAndForward
+            }
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect => {
+                EnvoyGatewayApiPathEscapedSlashesActionModel::UnescapeAndRedirect
+            }
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize)]
@@ -628,6 +677,13 @@ pub struct ClusterAdvancedSettings {
     pub envoy_gateway_api_retry_http_status_codes: Option<Vec<u16>>,
     #[serde(alias = "envoy.gateway_api.retry.per_try_timeout_seconds")]
     pub envoy_gateway_api_retry_per_try_timeout_seconds: Option<u32>,
+    #[serde(alias = "envoy.gateway_api.path.disable_merge_slashes", default)]
+    pub envoy_gateway_api_path_disable_merge_slashes: bool,
+    #[serde(
+        alias = "envoy.gateway_api.path.escaped_slashes_action",
+        default = "default_envoy_gateway_api_path_escaped_slashes_action"
+    )]
+    pub envoy_gateway_api_path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.number_trusted_hops")]
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs", default)]
@@ -767,6 +823,8 @@ impl Default for ClusterAdvancedSettings {
             envoy_gateway_api_retry_retry_on: None,
             envoy_gateway_api_retry_http_status_codes: None,
             envoy_gateway_api_retry_per_try_timeout_seconds: None,
+            envoy_gateway_api_path_disable_merge_slashes: false,
+            envoy_gateway_api_path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
             envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: vec![],
             envoy_access_log_format: None,
@@ -832,8 +890,8 @@ mod tests {
     use uuid::Uuid;
 
     use crate::infrastructure::models::cloud_provider::io::{
-        ClusterAdvancedSettings, InputError, LogFormatEscaping, RegistryMirroringMode,
-        validate_aws_cloudwatch_eks_logs_retention_days,
+        ClusterAdvancedSettings, EnvoyGatewayApiPathEscapedSlashesAction, InputError, LogFormatEscaping,
+        RegistryMirroringMode, validate_aws_cloudwatch_eks_logs_retention_days,
     };
     use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
     use crate::{
@@ -1158,6 +1216,11 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_retry_retry_on, None);
         assert_eq!(settings.envoy_gateway_api_retry_http_status_codes, None);
         assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, None);
+        assert!(!settings.envoy_gateway_api_path_disable_merge_slashes);
+        assert_eq!(
+            settings.envoy_gateway_api_path_escaped_slashes_action,
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect
+        );
     }
 
     #[test]
@@ -1171,7 +1234,9 @@ mod tests {
             "envoy.gateway_api.retry.num_retries": 2,
             "envoy.gateway_api.retry.retry_on": "connect-failure,reset",
             "envoy.gateway_api.retry.http_status_codes": "503",
-            "envoy.gateway_api.retry.per_try_timeout_seconds": 2
+            "envoy.gateway_api.retry.per_try_timeout_seconds": 2,
+            "envoy.gateway_api.path.disable_merge_slashes": true,
+            "envoy.gateway_api.path.escaped_slashes_action": "KeepUnchanged"
         }
         "#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
@@ -1186,6 +1251,11 @@ mod tests {
         );
         assert_eq!(settings.envoy_gateway_api_retry_http_status_codes, Some(vec![503]));
         assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, Some(2));
+        assert!(settings.envoy_gateway_api_path_disable_merge_slashes);
+        assert_eq!(
+            settings.envoy_gateway_api_path_escaped_slashes_action,
+            EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged
+        );
     }
 
     #[test]

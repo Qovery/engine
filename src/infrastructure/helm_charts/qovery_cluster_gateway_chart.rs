@@ -44,9 +44,32 @@ impl XForwardedForClientIpDetection {
 }
 
 #[derive(Default)]
+pub enum EnvoyGatewayApiPathEscapedSlashesAction {
+    KeepUnchanged,      // Preserve %2F as-is in the upstream path.
+    RejectRequest,      // Reject requests containing escaped slashes.
+    UnescapeAndForward, // Decode %2F to / and forward upstream.
+    #[default]
+    UnescapeAndRedirect, // Decode %2F and redirect client to normalized path.
+}
+
+impl std::fmt::Display for EnvoyGatewayApiPathEscapedSlashesAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let value = match self {
+            EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged => "KeepUnchanged",
+            EnvoyGatewayApiPathEscapedSlashesAction::RejectRequest => "RejectRequest",
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndForward => "UnescapeAndForward",
+            EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect => "UnescapeAndRedirect",
+        };
+        write!(f, "{value}")
+    }
+}
+
+#[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
     pub x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
     pub http_stream_idle_timeout_seconds: Option<u32>, // stream idle timeout for downstream HTTP streams
+    pub path_disable_merge_slashes: bool, // preserve duplicate slashes behavior at gateway-level path handling
+    pub path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction, // escaped slash handling action for gateway-level path handling
     pub custom_http_errors_default: Option<String>, // comma-separated HTTP status codes for gateway-level custom error pages
     pub compression_enable: bool, // enable response compression (brotli quality=6 and gzip level=6, matching nginx defaults)
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
@@ -147,6 +170,14 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 value: stream_idle_timeout_seconds.to_string(),
             });
         }
+        chart_set_values.push(ChartSetValue {
+            key: "gateway.qoveryPublic.path.disableMergeSlashes".to_string(),
+            value: self.chart_options.path_disable_merge_slashes.to_string(),
+        });
+        chart_set_values.push(ChartSetValue {
+            key: "gateway.qoveryPublic.path.escapedSlashesAction".to_string(),
+            value: self.chart_options.path_escaped_slashes_action.to_string(),
+        });
 
         if let Some(ref custom_http_errors) = self.chart_options.custom_http_errors_default {
             chart_set_values.push(ChartSetValue {

@@ -16,6 +16,9 @@ gateway:
     timeout:
       http:
         streamIdleTimeoutSeconds: null
+    path:
+      disableMergeSlashes: false
+      escapedSlashesAction: "UnescapeAndRedirect"
     customHttpErrors:
       default: null
     compression:
