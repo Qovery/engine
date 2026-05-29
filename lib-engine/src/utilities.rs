@@ -75,6 +75,34 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     tag
 }
 
+pub fn compute_cache_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
+    root_path: P,
+    dockerfile_path: &Option<T>,
+    docker_extra_files_to_inject: &[GitRepositoryExtraFile],
+    docker_target_build_stage: &Option<String>,
+) -> String {
+    let mut hasher = DefaultHasher::new();
+
+    root_path.hash(&mut hasher);
+
+    if dockerfile_path.is_some() {
+        dockerfile_path.hash(&mut hasher);
+    }
+
+    if let Some(build_stage) = docker_target_build_stage {
+        build_stage.hash(&mut hasher);
+    }
+
+    if !docker_extra_files_to_inject.is_empty() {
+        docker_extra_files_to_inject.iter().for_each(|extra_file| {
+            extra_file.content.hash(&mut hasher);
+            extra_file.path.hash(&mut hasher);
+        });
+    }
+
+    format!("cache-{}", hasher.finish())
+}
+
 /// Sanitize a string to be a valid Kubernetes label value.
 /// Rules: max 63 chars, only [a-zA-Z0-9._-], must start and end with alphanumeric.
 /// Keeps the last 63 characters (most discriminating part for mirrored image tags).
@@ -137,7 +165,9 @@ pub fn envs_to_string(env_var: Vec<(&str, &str)>) -> Vec<(String, String)> {
 #[cfg(test)]
 mod tests_utilities {
     use crate::infrastructure::models::build_platform::{DockerfileFragment, GitRepositoryExtraFile};
-    use crate::utilities::{base64_replace_comma_to_new_line, compute_image_tag, sanitize_k8s_label_value};
+    use crate::utilities::{
+        base64_replace_comma_to_new_line, compute_cache_tag, compute_image_tag, sanitize_k8s_label_value,
+    };
     use base64::Engine;
     use base64::engine::general_purpose;
     use std::collections::BTreeMap;
@@ -354,6 +384,89 @@ mod tests_utilities {
         );
 
         assert_ne!(tag_with_inline, tag_with_inline_2);
+    }
+
+    #[test]
+    fn test_compute_cache_tag_stable_across_commits() {
+        // Same config, different commits → same cache tag
+        let tag1 = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
+        let tag2 = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
+        assert_eq!(tag1, tag2);
+        assert!(tag1.starts_with("cache-"));
+    }
+
+    #[test]
+    fn test_compute_cache_tag_changes_with_dockerfile_path() {
+        let tag1 = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
+        let tag2 = compute_cache_tag("/".to_string(), &Some("Dockerfile.prod".to_string()), &[], &None);
+        assert_ne!(tag1, tag2);
+    }
+
+    #[test]
+    fn test_compute_cache_tag_changes_with_build_stage() {
+        let tag1 = compute_cache_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &[],
+            &Some("builder".to_string()),
+        );
+        let tag2 = compute_cache_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &[],
+            &Some("runner".to_string()),
+        );
+        assert_ne!(tag1, tag2);
+    }
+
+    #[test]
+    fn test_compute_cache_tag_changes_with_extra_files() {
+        let tag1 = compute_cache_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("entrypoint.sh"),
+                content: "#!/bin/sh\necho v1".to_string(),
+            }],
+            &None,
+        );
+        let tag2 = compute_cache_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &[GitRepositoryExtraFile {
+                path: PathBuf::from("entrypoint.sh"),
+                content: "#!/bin/sh\necho v2".to_string(),
+            }],
+            &None,
+        );
+        assert_ne!(tag1, tag2);
+    }
+
+    #[test]
+    fn test_compute_cache_tag_stable_despite_env_vars() {
+        // env_vars not in cache key → same tag regardless of env changes
+        let tag_no_env = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
+        // compute_cache_tag doesn't accept env_vars — this test confirms the API
+        assert!(tag_no_env.starts_with("cache-"));
+    }
+
+    #[test]
+    fn test_compute_cache_tag_independent_of_image_tag() {
+        // cache tag and image tag for the same params must differ (different hash inputs)
+        let image_tag = compute_image_tag(
+            "/".to_string(),
+            &Some("Dockerfile".to_string()),
+            &None,
+            &[],
+            &std::collections::BTreeMap::new(),
+            "abc123",
+            &None,
+            &None,
+        );
+        let cache_tag = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
+        assert_ne!(image_tag, cache_tag);
+        assert!(cache_tag.starts_with("cache-"));
+        assert!(!image_tag.starts_with("cache-"));
     }
 
     #[test]

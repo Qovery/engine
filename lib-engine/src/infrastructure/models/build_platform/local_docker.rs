@@ -174,7 +174,7 @@ impl LocalDocker {
             false => Some(ContainerImage::new(
                 build.image.registry_url.clone(),
                 build.image.name(),
-                vec!["cache".to_string()],
+                vec![build.compute_cache_tag()],
             )),
         };
 
