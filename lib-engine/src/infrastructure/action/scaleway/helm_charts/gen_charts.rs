@@ -569,6 +569,13 @@ pub fn kapsule_helm_charts(
                     http_stream_idle_timeout_seconds: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_gateway_api_http_stream_idle_timeout_seconds,
+                    path_disable_merge_slashes: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_gateway_api_path_disable_merge_slashes,
+                    path_escaped_slashes_action: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_gateway_api_path_escaped_slashes_action
+                        .to_model(),
                     custom_http_errors_default: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_custom_http_errors_default

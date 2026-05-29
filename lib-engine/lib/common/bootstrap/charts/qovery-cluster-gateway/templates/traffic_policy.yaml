@@ -60,6 +60,9 @@ spec:
     http:
       streamIdleTimeout: "{{ $streamIdleTimeoutSeconds }}s"
   {{- end }}
+  path:
+    disableMergeSlashes: {{ .Values.gateway.qoveryPublic.path.disableMergeSlashes }}
+    escapedSlashesAction: {{ .Values.gateway.qoveryPublic.path.escapedSlashesAction }}
   headers:
     enableEnvoyHeaders: true # add the "X-Envoy-" headers to requests and responses
     withUnderscoresAction: {{ .Values.gateway.qoveryPublic.withUnderscoresAction }} # avoid rejecting requests when intermediaries send underscored headers

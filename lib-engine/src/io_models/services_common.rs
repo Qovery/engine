@@ -69,6 +69,19 @@ pub fn default_gateway_api_sticky_session_type() -> GatewayApiStickySessionType 
     GatewayApiStickySessionType::Cookie
 }
 
+pub fn default_gateway_api_escaped_slashes_action() -> GatewayApiEscapedSlashesAction {
+    GatewayApiEscapedSlashesAction::UnescapeAndRedirect
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash, Default)]
+pub enum GatewayApiEscapedSlashesAction {
+    KeepUnchanged,      // Preserve %2F as-is in the upstream path.
+    RejectRequest,      // Reject requests containing escaped slashes.
+    UnescapeAndForward, // Decode %2F to / and forward upstream.
+    #[default]
+    UnescapeAndRedirect, // Decode %2F and redirect client to normalized path.
+}
+
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum GatewayApiStickySessionTypeInput {

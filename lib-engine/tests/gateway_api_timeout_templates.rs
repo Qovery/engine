@@ -89,7 +89,9 @@ fn base_advanced_settings(
         "network_gateway_api_http_connection_idle_timeout_seconds": service_idle_timeout,
         "network_gateway_api_http_max_stream_duration_seconds": service_max_stream_duration,
         "network_gateway_api_tcp_keepalive_idle_time_seconds": null,
-        "network_gateway_api_tcp_keepalive_interval_seconds": null
+        "network_gateway_api_tcp_keepalive_interval_seconds": null,
+        "network_gateway_api_path_disable_merge_slashes": false,
+        "network_gateway_api_path_escaped_slashes_action": "UnescapeAndRedirect"
     })
 }
 

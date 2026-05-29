@@ -16,7 +16,8 @@ use crate::io_models::container::Registry;
 use crate::io_models::context::Context;
 use crate::io_models::models::ExternalSecret;
 use crate::io_models::services_common::{
-    GatewayApiStickySessionType, GitCredentials, PortIo, default_gateway_api_sticky_session_type,
+    GatewayApiEscapedSlashesAction, GatewayApiStickySessionType, GitCredentials, PortIo,
+    default_gateway_api_escaped_slashes_action, default_gateway_api_sticky_session_type,
     deserialize_gateway_api_sticky_session_type,
 };
 use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
@@ -112,6 +113,13 @@ pub struct HelmChartAdvancedSettings {
     pub network_gateway_api_http_connection_idle_timeout_seconds: Option<u32>,
     #[serde(alias = "network.gateway_api.http_max_stream_duration_seconds")]
     pub network_gateway_api_http_max_stream_duration_seconds: Option<u32>,
+    #[serde(alias = "network.gateway_api.path_disable_merge_slashes")]
+    pub network_gateway_api_path_disable_merge_slashes: bool,
+    #[serde(
+        default = "default_gateway_api_escaped_slashes_action",
+        alias = "network.gateway_api.path_escaped_slashes_action"
+    )]
+    pub network_gateway_api_path_escaped_slashes_action: GatewayApiEscapedSlashesAction,
 
     // Ingress
     #[serde(alias = "network.ingress.proxy_body_size_mb")]
@@ -239,6 +247,8 @@ impl Default for HelmChartAdvancedSettings {
             network_gateway_api_http_request_timeout_seconds: None,
             network_gateway_api_http_connection_idle_timeout_seconds: None,
             network_gateway_api_http_max_stream_duration_seconds: None,
+            network_gateway_api_path_disable_merge_slashes: false,
+            network_gateway_api_path_escaped_slashes_action: GatewayApiEscapedSlashesAction::UnescapeAndRedirect,
         }
     }
 }
