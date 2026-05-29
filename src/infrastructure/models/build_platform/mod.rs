@@ -10,7 +10,7 @@ use crate::environment::models::abort::Abort;
 use crate::io_models::container::Registry;
 use crate::io_models::models::CpuArchitecture;
 use crate::metrics_registry::MetricsRegistry;
-use crate::utilities::compute_image_tag;
+use crate::utilities::{compute_cache_tag, compute_image_tag};
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::hash::Hash;
 use std::path::PathBuf;
@@ -149,6 +149,15 @@ impl Build {
             &self.git_repository.docker_target_build_stage,
             &self.dockerfile_fragment,
         );
+    }
+
+    pub fn compute_cache_tag(&self) -> String {
+        compute_cache_tag(
+            &self.git_repository.root_path,
+            &self.git_repository.dockerfile_path,
+            &self.git_repository.extra_files_to_inject,
+            &self.git_repository.docker_target_build_stage,
+        )
     }
 }
 
