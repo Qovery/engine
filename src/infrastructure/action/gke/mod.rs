@@ -70,7 +70,7 @@ use super::utils::{from_terraform_value, mk_logger};
 // the list (static IP mode turned off). We explicitly disable MAN via gcloud before Terraform
 // apply when static_ip_mode=false to keep the cluster state aligned.
 // Reference: https://github.com/hashicorp/terraform-provider-google/issues/10198
-fn maybe_disable_master_authorized_networks(
+fn disable_master_authorized_networks_if_necessary(
     cluster: &Gke,
     logger: &impl InfraLogger,
     event_details: EventDetails,

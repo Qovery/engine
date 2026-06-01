@@ -65,8 +65,16 @@ fn test_github_cr() {
         );
         context
             .docker
-            .mirror(&source_img, &dest_img, &mut |_| {}, &mut |_| {}, &CommandKiller::never())
-            .unwrap();
+            .mirror(
+                &source_img,
+                &dest_img,
+                &mut |line| println!("[docker mirror stdout] {line}"),
+                &mut |line| eprintln!("[docker mirror stderr] {line}"),
+                &CommandKiller::never(),
+            )
+            .unwrap_or_else(|err| {
+                panic!("Failed to mirror first image from {:?} to {:?}: {err:?}", source_img, dest_img)
+            });
         let source_img = ContainerImage::new(
             Url::parse("https://public.ecr.aws/").unwrap(),
             "r3m4q3r9/qovery-ci".to_string(),
@@ -81,8 +89,16 @@ fn test_github_cr() {
         );
         context
             .docker
-            .mirror(&source_img, &dest_img, &mut |_| {}, &mut |_| {}, &CommandKiller::never())
-            .unwrap();
+            .mirror(
+                &source_img,
+                &dest_img,
+                &mut |line| println!("[docker mirror stdout] {line}"),
+                &mut |line| eprintln!("[docker mirror stderr] {line}"),
+                &CommandKiller::never(),
+            )
+            .unwrap_or_else(|err| {
+                panic!("Failed to mirror second image from {:?} to {:?}: {err:?}", source_img, dest_img)
+            });
 
         // then
         let image = Image {

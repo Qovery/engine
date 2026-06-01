@@ -912,17 +912,6 @@ where
                 )));
             }
         }
-
-        // check kube-proxy version
-        match VersionsNumber::from_str(node.status.node_info.kube_proxy_version.as_str()) {
-            Ok(vn) => workers_version.push(vn),
-            Err(_) => {
-                return Err(Box::new(EngineError::new_cannot_determine_k8s_kube_proxy_version(
-                    event_details,
-                    node.status.node_info.kube_proxy_version.to_string(),
-                )));
-            }
-        }
     }
 
     check_kubernetes_upgrade_status(requested_version, masters_version, workers_version, event_details, logger)
@@ -1174,28 +1163,28 @@ fn check_kubernetes_upgrade_status(
 
     let mut workers_oldest_version = deployed_workers_version[0].clone();
 
-    for node in deployed_workers_version {
+    for worker_version in deployed_workers_version {
         total_workers += 1;
-        match compare_kubernetes_cluster_versions_for_upgrade(&node, &wished_version) {
+        match compare_kubernetes_cluster_versions_for_upgrade(&worker_version, &wished_version) {
             Ok(x) => {
                 if x.older_version_detected {
                     older_workers_version_detected = x.older_version_detected;
-                    workers_oldest_version = node.clone();
+                    workers_oldest_version = worker_version.clone();
                 };
                 if x.upgraded_required {
-                    workers_oldest_version = node;
+                    workers_oldest_version = worker_version;
                     match required_upgrade_on {
                         Some(KubernetesNodesType::Masters) => {}
                         _ => required_upgrade_on = Some(KubernetesNodesType::Workers),
                     };
+                    non_up_to_date_workers += 1;
                 };
-                non_up_to_date_workers += 1;
             }
             Err(e) => {
                 return Err(Box::new(
                     EngineError::new_k8s_version_upgrade_deployed_vs_requested_versions_inconsistency(
                         event_details,
-                        node,
+                        worker_version,
                         wished_version,
                         e,
                     ),
