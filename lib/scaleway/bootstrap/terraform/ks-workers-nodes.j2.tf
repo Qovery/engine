@@ -23,6 +23,15 @@ resource "scaleway_k8s_pool" "kubernetes_cluster_workers_{{ loop.index }}" {
   max_size            = "{{ scw_ks_worker_node.max_nodes }}"
   wait_for_pool_ready = true
 
+  # Surge a replacement node before removing one during a version upgrade.
+  # Without this block Scaleway uses its default (max_surge = 0, max_unavailable = 1),
+  # which drains and removes a node before adding its replacement, dropping capacity
+  # and causing pod outages on tightly-packed pools.
+  upgrade_policy {
+    max_surge       = 1
+    max_unavailable = 1
+  }
+
   root_volume_size_in_gb = {{ scw_ks_worker_node.disk_size_in_gib }}
 
 {% if create_private_network and enable_public_gateway_nat %}
