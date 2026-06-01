@@ -704,7 +704,7 @@ pub(super) fn gke_helm_charts(
         level_0.push(Some(Box::new(chart)));
     }
 
-    let mut level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
+    let level_1: Vec<Option<Box<dyn HelmChart>>> = vec![
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
@@ -716,7 +716,7 @@ pub(super) fn gke_helm_charts(
         level_2.push(Some(Box::new(chart)));
     }
 
-    let mut level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
+    let level_3: Vec<Option<Box<dyn HelmChart>>> = vec![loki, thanos_chart, alert_config];
     let level_4: Vec<Option<Box<dyn HelmChart>>> =
         vec![Some(Box::new(cert_manager)), Some(Box::new(keda_charts.keda_chart))];
     let mut level_5: Vec<Option<Box<dyn HelmChart>>> =
@@ -725,7 +725,7 @@ pub(super) fn gke_helm_charts(
     if let Some(chart) = qovery_cluster_gateway {
         level_5.push(Some(Box::new(chart)));
     }
-    let level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
+    let mut level_6: Vec<Option<Box<dyn HelmChart>>> = vec![Some(Box::new(external_dns_chart))];
     let mut level_7: Vec<Option<Box<dyn HelmChart>>> = Vec::with_capacity(2);
     // Add Nginx ingress
     if let Some(chart) = nginx_ingress {
@@ -747,14 +747,15 @@ pub(super) fn gke_helm_charts(
     // Needed to handle property uninstallation: config depends on crds
     match eso_charts.helm_action {
         HelmAction::Deploy => {
-            level_0.push(Some(Box::new(eso_charts.eso_requirements_chart)));
-            level_1.push(Some(Box::new(eso_charts.eso_chart)));
-            level_3.push(Some(Box::new(eso_charts.eso_config_chart)));
+            // The requirements chart need to install a self signed issuer so it must be installed after cert-manager chart
+            level_5.push(Some(Box::new(eso_charts.eso_requirements_chart)));
+            level_6.push(Some(Box::new(eso_charts.eso_chart)));
+            level_7.push(Some(Box::new(eso_charts.eso_config_chart)));
         }
         HelmAction::Destroy => {
-            level_0.push(Some(Box::new(eso_charts.eso_config_chart)));
-            level_1.push(Some(Box::new(eso_charts.eso_chart)));
-            level_3.push(Some(Box::new(eso_charts.eso_requirements_chart)));
+            level_5.push(Some(Box::new(eso_charts.eso_config_chart)));
+            level_6.push(Some(Box::new(eso_charts.eso_chart)));
+            level_7.push(Some(Box::new(eso_charts.eso_requirements_chart)));
         }
     }
 
