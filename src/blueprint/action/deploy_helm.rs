@@ -15,6 +15,7 @@ struct BlueprintHelmTeraContext {
     organization_id: String,
     environment_id: String,
     name: String,
+    description: String,
     execution_id: String,
     service_name: String,
     chart_repository: String,
@@ -114,6 +115,7 @@ impl BlueprintHelmTeraContext {
             organization_id: request.organization_long_id.to_string(),
             environment_id: request.environment_id.clone(),
             name: request.name.clone(),
+            description: spec.description.clone(),
             execution_id: request.execution_id.clone(),
             service_name: blueprint_info.service_name().to_string(),
             chart_repository: spec.chart.repository.clone(),
@@ -133,6 +135,7 @@ impl BlueprintHelmTeraContext {
 mod tests {
     use super::*;
     use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintChart, CredentialMode};
+    use crate::blueprint::models::spec::DEFAULT_BLUEPRINT_DESCRIPTION;
     use crate::io_models::blueprint::BlueprintVariable;
     use crate::template::generate_and_copy_all_files_into_dir;
     use std::fs;
@@ -178,6 +181,7 @@ mod tests {
                 name: "redis".into(),
                 version: "25.3.11".into(),
             },
+            description: DEFAULT_BLUEPRINT_DESCRIPTION.into(),
             credential_mode: CredentialMode::Cluster,
             timeout_sec: 600,
             arguments: vec!["--atomic".into()],
@@ -216,6 +220,7 @@ mod tests {
         assert!(result.contains(r#"resource "qovery_helm" "blueprint""#));
         assert!(result.contains(r#"environment_id               = "env-uuid""#));
         assert!(result.contains(r#"name                         = "my-redis""#));
+        assert!(result.contains(r#"description                  = "Deployed from blueprint""#));
         assert!(result.contains("allow_cluster_wide_resources = false"));
         assert!(result.contains("auto_deploy                  = false"));
         assert!(result.contains("timeout_sec                  = 600"));
@@ -227,6 +232,28 @@ mod tests {
         assert!(result.contains("values_override = {"));
         assert!(result.contains(r#""--atomic""#));
         assert!(!result.contains("import {"));
+    }
+
+    #[test]
+    fn generate_helm_tf_falls_back_to_placeholder_description_when_qbm_absent() {
+        let result = render_template(&test_spec(), &test_request(), &test_info(), None);
+        assert!(result.contains(r#"description                  = "Deployed from blueprint""#));
+    }
+
+    #[test]
+    fn generate_helm_tf_renders_description_from_qbm_metadata() {
+        let mut spec = test_spec();
+        spec.description = "Redis cache for staging".into();
+        let result = render_template(&spec, &test_request(), &test_info(), None);
+        assert!(result.contains(r#"description                  = "Redis cache for staging""#));
+    }
+
+    #[test]
+    fn generate_helm_tf_escapes_hcl_special_chars_in_description() {
+        let mut spec = test_spec();
+        spec.description = r#"Redis cache ("prod") — cost: ${price}\path"#.into();
+        let result = render_template(&spec, &test_request(), &test_info(), None);
+        assert!(result.contains(r#"description                  = "Redis cache (\"prod\") — cost: $${price}\\path""#));
     }
 
     #[test]

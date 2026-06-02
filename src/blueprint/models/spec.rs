@@ -7,6 +7,7 @@
 
 use crate::blueprint::models::qovery_blueprint_manifest::{
     BackendMode, BlueprintChart, BlueprintEngine, BlueprintOutput, BlueprintResources, BlueprintSpec, CredentialMode,
+    QoveryBlueprintManifest,
 };
 use crate::io_models::blueprint::BlueprintSpecOverrides;
 use serde::Serialize;
@@ -18,6 +19,8 @@ const DEFAULT_HELM_TIMEOUT_SEC: u64 = 600;
 const DEFAULT_JOB_CPU_MILLI: u32 = 500;
 const DEFAULT_JOB_RAM_MIB: u32 = 512;
 const DEFAULT_JOB_STORAGE_GIB: u32 = 20;
+
+pub const DEFAULT_BLUEPRINT_DESCRIPTION: &str = "Deployed from blueprint";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct JobResources {
@@ -69,6 +72,7 @@ pub struct ResolvedTerraformSpec {
     pub flavor: TerraformFlavor,
     /// Cloud provider the blueprint targets (e.g. "aws", "gcp", "azure").
     pub provider: String,
+    pub description: String,
     pub credential_mode: CredentialMode,
     pub backend: ResolvedBackend,
     pub timeout_sec: u64,
@@ -79,6 +83,7 @@ pub struct ResolvedTerraformSpec {
 #[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedHelmSpec {
     pub chart: BlueprintChart,
+    pub description: String,
     pub credential_mode: CredentialMode,
     pub timeout_sec: u64,
     pub arguments: Vec<String>,
@@ -88,7 +93,15 @@ pub struct ResolvedHelmSpec {
 
 impl ResolvedBlueprintSpec {
     /// Resolve the effective spec from the QBM defaults + optional overrides.
-    pub fn resolve(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrides>) -> Self {
+    pub fn resolve(manifest: &QoveryBlueprintManifest, overrides: &Option<BlueprintSpecOverrides>) -> Self {
+        let spec = &manifest.spec;
+        let description = manifest
+            .metadata
+            .description
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(DEFAULT_BLUEPRINT_DESCRIPTION)
+            .to_string();
         let credential_mode = resolve_credential_mode(spec, overrides);
 
         match &spec.engine {
@@ -99,6 +112,7 @@ impl ResolvedBlueprintSpec {
                 ResolvedBlueprintSpec::Terraform(ResolvedTerraformSpec {
                     flavor: TerraformFlavor::Terraform,
                     provider: provider.clone(),
+                    description,
                     credential_mode,
                     backend,
                     timeout_sec,
@@ -113,6 +127,7 @@ impl ResolvedBlueprintSpec {
                 ResolvedBlueprintSpec::Terraform(ResolvedTerraformSpec {
                     flavor: TerraformFlavor::OpenTofu,
                     provider: provider.clone(),
+                    description,
                     credential_mode,
                     backend,
                     timeout_sec,
@@ -124,6 +139,7 @@ impl ResolvedBlueprintSpec {
                 let timeout_sec = resolve_timeout(spec, overrides, DEFAULT_HELM_TIMEOUT_SEC);
                 ResolvedBlueprintSpec::Helm(ResolvedHelmSpec {
                     chart: chart.clone(),
+                    description,
                     credential_mode,
                     timeout_sec,
                     arguments: spec.arguments.clone(),
@@ -266,9 +282,18 @@ fn resolve_job_resources(
 mod tests {
     use super::*;
     use crate::blueprint::models::qovery_blueprint_manifest::{
-        BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintSpec,
+        BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintKind, BlueprintMetadata,
+        BlueprintSpec,
     };
     use std::collections::HashMap;
+
+    fn manifest(spec: BlueprintSpec) -> QoveryBlueprintManifest {
+        QoveryBlueprintManifest {
+            kind: BlueprintKind::ServiceBlueprint,
+            metadata: BlueprintMetadata::default(),
+            spec,
+        }
+    }
 
     fn tf_spec() -> BlueprintSpec {
         BlueprintSpec {
@@ -352,7 +377,7 @@ mod tests {
 
     #[test]
     fn tf_uses_qbm_values_when_no_overrides() {
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
         assert_eq!(tf.flavor, TerraformFlavor::Terraform);
         assert_eq!(tf.provider, "aws");
         assert_eq!(tf.credential_mode, CredentialMode::Cluster);
@@ -361,13 +386,13 @@ mod tests {
 
     #[test]
     fn tf_uses_platform_defaults_when_qbm_omits() {
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&minimal_tf_spec(), &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(minimal_tf_spec()), &None));
         assert_eq!(tf.timeout_sec, DEFAULT_TF_TIMEOUT_SEC);
     }
 
     #[test]
     fn opentofu_resolves_to_terraform_variant_with_opentofu_flavor() {
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&opentofu_spec(), &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(opentofu_spec()), &None));
         assert_eq!(tf.flavor, TerraformFlavor::OpenTofu);
         assert_eq!(tf.provider, "gcp");
         assert_eq!(tf.timeout_sec, DEFAULT_TF_TIMEOUT_SEC);
@@ -377,20 +402,20 @@ mod tests {
 
     #[test]
     fn helm_uses_default_timeout() {
-        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&helm_spec(), &None));
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
         assert_eq!(helm.timeout_sec, DEFAULT_HELM_TIMEOUT_SEC);
     }
 
     #[test]
     fn helm_carries_arguments_and_cluster_wide() {
-        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&helm_spec(), &None));
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
         assert_eq!(helm.arguments, vec!["--atomic"]);
         assert!(helm.allow_cluster_wide_resources);
     }
 
     #[test]
     fn helm_carries_chart() {
-        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&helm_spec(), &None));
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
         assert_eq!(helm.chart.name, "redis");
         assert_eq!(helm.chart.version, "20.11.3");
     }
@@ -401,7 +426,7 @@ mod tests {
     fn credential_override_string_shorthand() {
         let mut overrides = HashMap::new();
         overrides.insert("credentials".into(), serde_json::json!("env"));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.credential_mode, CredentialMode::Env);
     }
 
@@ -409,7 +434,7 @@ mod tests {
     fn credential_override_unknown_value_falls_back_to_cluster() {
         let mut overrides = HashMap::new();
         overrides.insert("credentials".into(), serde_json::json!("something_else"));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.credential_mode, CredentialMode::Cluster);
     }
 
@@ -417,7 +442,7 @@ mod tests {
     fn credential_override_on_helm() {
         let mut overrides = HashMap::new();
         overrides.insert("credentials".into(), serde_json::json!("env"));
-        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&helm_spec(), &Some(overrides)));
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &Some(overrides)));
         assert_eq!(helm.credential_mode, CredentialMode::Env);
     }
 
@@ -427,7 +452,7 @@ mod tests {
     fn timeout_override_on_terraform() {
         let mut overrides = HashMap::new();
         overrides.insert("timeout".into(), serde_json::json!(7200));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.timeout_sec, 7200);
     }
 
@@ -435,7 +460,7 @@ mod tests {
     fn timeout_override_beats_qbm() {
         let mut overrides = HashMap::new();
         overrides.insert("timeout".into(), serde_json::json!(300));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.timeout_sec, 300);
     }
 
@@ -443,7 +468,7 @@ mod tests {
     fn timeout_override_on_helm() {
         let mut overrides = HashMap::new();
         overrides.insert("timeout".into(), serde_json::json!(120));
-        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&helm_spec(), &Some(overrides)));
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &Some(overrides)));
         assert_eq!(helm.timeout_sec, 120);
     }
 
@@ -454,7 +479,7 @@ mod tests {
         let mut overrides = HashMap::new();
         overrides.insert("credentials".into(), serde_json::json!("env"));
         overrides.insert("timeout".into(), serde_json::json!(900));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.credential_mode, CredentialMode::Env);
         assert_eq!(tf.timeout_sec, 900);
     }
@@ -463,7 +488,7 @@ mod tests {
 
     #[test]
     fn backend_defaults_to_qovery() {
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
         assert_eq!(tf.backend, ResolvedBackend::Qovery);
     }
 
@@ -472,7 +497,7 @@ mod tests {
         // QBM has no blueprint backend config (default spec) → falls back to local backend
         let mut overrides = HashMap::new();
         overrides.insert("backend".into(), serde_json::json!("blueprint"));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(
             tf.backend,
             ResolvedBackend::Blueprint {
@@ -497,7 +522,7 @@ mod tests {
 
         let mut overrides = HashMap::new();
         overrides.insert("backend".into(), serde_json::json!("blueprint"));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &Some(overrides)));
         match &tf.backend {
             ResolvedBackend::Blueprint { backend_type, config } => {
                 assert_eq!(backend_type, "s3");
@@ -512,7 +537,7 @@ mod tests {
     fn backend_override_unknown_value_falls_back_to_qovery() {
         let mut overrides = HashMap::new();
         overrides.insert("backend".into(), serde_json::json!("something_else"));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.backend, ResolvedBackend::Qovery);
     }
 
@@ -521,16 +546,54 @@ mod tests {
     #[test]
     fn empty_overrides_map_same_as_none() {
         let empty: Option<BlueprintSpecOverrides> = Some(HashMap::new());
-        let resolved_empty = ResolvedBlueprintSpec::resolve(&tf_spec(), &empty);
-        let resolved_none = ResolvedBlueprintSpec::resolve(&tf_spec(), &None);
+        let resolved_empty = ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &empty);
+        let resolved_none = ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None);
         assert_eq!(resolved_empty, resolved_none);
+    }
+
+    // -- Metadata description --
+
+    #[test]
+    fn description_propagates_from_qbm_metadata_to_terraform() {
+        let mut m = manifest(tf_spec());
+        m.metadata.description = Some("S3 bucket with encryption".into());
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&m, &None));
+        assert_eq!(tf.description, "S3 bucket with encryption");
+    }
+
+    #[test]
+    fn description_falls_back_to_default_when_absent() {
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
+        assert_eq!(tf.description, DEFAULT_BLUEPRINT_DESCRIPTION);
+    }
+
+    #[test]
+    fn description_falls_back_to_default_when_qbm_empty_string() {
+        let mut m = manifest(tf_spec());
+        m.metadata.description = Some(String::new());
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&m, &None));
+        assert_eq!(tf.description, DEFAULT_BLUEPRINT_DESCRIPTION);
+    }
+
+    #[test]
+    fn description_propagates_to_helm() {
+        let mut m = manifest(helm_spec());
+        m.metadata.description = Some("Redis cache".into());
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&m, &None));
+        assert_eq!(helm.description, "Redis cache");
+    }
+
+    #[test]
+    fn description_falls_back_to_default_on_helm_when_absent() {
+        let helm = expect_helm(ResolvedBlueprintSpec::resolve(&manifest(helm_spec()), &None));
+        assert_eq!(helm.description, DEFAULT_BLUEPRINT_DESCRIPTION);
     }
 
     // -- Job resources --
 
     #[test]
     fn job_resources_defaults_when_no_qbm_resources() {
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
         assert_eq!(tf.job_resources.cpu_milli, 500);
         assert_eq!(tf.job_resources.ram_mib, 512);
         assert_eq!(tf.job_resources.storage_gib, 20);
@@ -545,7 +608,7 @@ mod tests {
             ram: Some("2Gi".into()),
             storage: Some("50Gi".into()),
         });
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &None));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &None));
         assert_eq!(tf.job_resources.cpu_milli, 1000);
         assert_eq!(tf.job_resources.ram_mib, 2048);
         assert_eq!(tf.job_resources.storage_gib, 50);
@@ -565,7 +628,7 @@ mod tests {
             "resources".into(),
             serde_json::json!({ "cpu": "2000m", "ram": "4Gi", "storage": "100Gi" }),
         );
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&spec, &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &Some(overrides)));
         assert_eq!(tf.job_resources.cpu_milli, 2000);
         assert_eq!(tf.job_resources.ram_mib, 4096);
         assert_eq!(tf.job_resources.storage_gib, 100);
@@ -575,7 +638,7 @@ mod tests {
     fn job_resources_partial_override() {
         let mut overrides = HashMap::new();
         overrides.insert("resources".into(), serde_json::json!({ "cpu": "750m" }));
-        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&tf_spec(), &Some(overrides)));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(tf.job_resources.cpu_milli, 750);
         // ram and storage fall back to defaults
         assert_eq!(tf.job_resources.ram_mib, 512);
