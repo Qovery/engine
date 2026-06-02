@@ -6,7 +6,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::errors::CommandError;
-use crate::tera_utils::{Base64EncodeFilter, NginxHeaderValueEscapeFilter, TeraFilter};
+use crate::tera_utils::{
+    Base64EncodeFilter, HclHeredocEscapeFilter, HclStringEscapeFilter, NginxHeaderValueEscapeFilter, TeraFilter,
+};
 use tera::Error as TeraError;
 use tera::{Context, Tera};
 use walkdir::WalkDir;
@@ -95,6 +97,8 @@ where
         NginxHeaderValueEscapeFilter::name(),
         NginxHeaderValueEscapeFilter::implementation(),
     );
+    tera.register_filter(HclStringEscapeFilter::name(), HclStringEscapeFilter::implementation());
+    tera.register_filter(HclHeredocEscapeFilter::name(), HclHeredocEscapeFilter::implementation());
 
     let files = WalkDir::new(root_dir_str)
         .follow_links(true)

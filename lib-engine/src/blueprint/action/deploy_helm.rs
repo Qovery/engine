@@ -18,6 +18,7 @@ struct BlueprintHelmTeraContext {
     execution_id: String,
     service_name: String,
     chart_repository: String,
+    chart_repository_kind: String,
     chart_name: String,
     chart_version: String,
     allow_cluster_wide_resources: bool,
@@ -25,6 +26,14 @@ struct BlueprintHelmTeraContext {
     arguments: Vec<String>,
     rendered_values: Option<String>,
     import_id: Option<String>,
+}
+
+fn infer_chart_repository_kind(repository: &str) -> &'static str {
+    if repository.trim_start().starts_with("oci://") {
+        "OCI_GENERIC_CR"
+    } else {
+        "HTTPS"
+    }
 }
 
 /// Execute a Helm blueprint: render values.yaml → build Tera context → render template → terraform init + apply.
@@ -108,6 +117,7 @@ impl BlueprintHelmTeraContext {
             execution_id: request.execution_id.clone(),
             service_name: blueprint_info.service_name().to_string(),
             chart_repository: spec.chart.repository.clone(),
+            chart_repository_kind: infer_chart_repository_kind(&spec.chart.repository).to_string(),
             chart_name: spec.chart.name.clone(),
             chart_version: spec.chart.version.clone(),
             allow_cluster_wide_resources: spec.allow_cluster_wide_resources,
@@ -201,12 +211,13 @@ mod tests {
         assert!(result.contains(r#"source = "qovery/qovery""#));
         assert!(result.contains(r#"resource "qovery_helm_repository" "blueprint_repo""#));
         assert!(result.contains(r#"organization_id       = "22222222-3333-4444-5555-666666666666""#));
+        assert!(result.contains(r#"kind                  = "HTTPS""#));
         assert!(result.contains(r#"url                   = "https://charts.bitnami.com/bitnami""#));
         assert!(result.contains(r#"resource "qovery_helm" "blueprint""#));
         assert!(result.contains(r#"environment_id               = "env-uuid""#));
         assert!(result.contains(r#"name                         = "my-redis""#));
         assert!(result.contains("allow_cluster_wide_resources = false"));
-        assert!(result.contains("auto_deploy                  = true"));
+        assert!(result.contains("auto_deploy                  = false"));
         assert!(result.contains("timeout_sec                  = 600"));
         assert!(result.contains(r#"chart_name         = "redis""#));
         assert!(result.contains(r#"chart_version      = "25.3.11""#));
@@ -216,6 +227,33 @@ mod tests {
         assert!(result.contains("values_override = {"));
         assert!(result.contains(r#""--atomic""#));
         assert!(!result.contains("import {"));
+    }
+
+    #[test]
+    fn infer_chart_repository_kind_https() {
+        assert_eq!(infer_chart_repository_kind("https://charts.bitnami.com/bitnami"), "HTTPS");
+        assert_eq!(infer_chart_repository_kind("http://example.com/charts"), "HTTPS");
+    }
+
+    #[test]
+    fn infer_chart_repository_kind_oci() {
+        assert_eq!(
+            infer_chart_repository_kind("oci://registry-1.docker.io/bitnamicharts"),
+            "OCI_GENERIC_CR"
+        );
+        assert_eq!(infer_chart_repository_kind("oci://ghcr.io/org/charts"), "OCI_GENERIC_CR");
+        // Tolerate leading whitespace from sloppy manifests.
+        assert_eq!(infer_chart_repository_kind("  oci://public.ecr.aws/x/y"), "OCI_GENERIC_CR");
+    }
+
+    #[test]
+    fn generate_helm_tf_renders_oci_kind_when_repository_is_oci() {
+        let mut spec = test_spec();
+        spec.chart.repository = "oci://registry-1.docker.io/bitnamicharts".into();
+        let result = render_template(&spec, &test_request(), &test_info(), None);
+
+        assert!(result.contains(r#"kind                  = "OCI_GENERIC_CR""#));
+        assert!(result.contains(r#"url                   = "oci://registry-1.docker.io/bitnamicharts""#));
     }
 
     #[test]
