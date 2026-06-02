@@ -529,6 +529,22 @@ pub(super) fn gke_helm_charts(
                         .cluster_advanced_settings
                         .envoy_access_log_format
                         .clone(),
+                    hpa_config: Some(HpaConfig {
+                        min_replicas: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_min_number_instances,
+                        max_replicas: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_max_number_instances,
+                        cpu_average_utilization_percentage: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_cpu_average_utilization_percentage_threshold
+                            .clone(),
+                        memory_average_utilization_percentage: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_memory_average_utilization_percentage_threshold
+                            .clone(),
+                    }),
                     // Keep dynamically added Gateway TLS certificateRefs during cluster updates.
                     reconcile_gateway_cert_refs: chart_config_prerequisites
                         .cluster_advanced_settings
@@ -536,6 +552,7 @@ pub(super) fn gke_helm_charts(
                         .unwrap_or(false),
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),
+                false,
             )
             .to_common_helm_chart()?,
         );

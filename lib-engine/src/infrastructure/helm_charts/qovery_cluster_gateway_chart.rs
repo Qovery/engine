@@ -1,7 +1,7 @@
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces,
+    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, HelmChartError, HelmChartNamespaces, HpaConfig,
 };
 use crate::infrastructure::helm_charts::envoy::access_log_format;
 use crate::infrastructure::helm_charts::{
@@ -52,6 +52,7 @@ pub struct QoveryClusterGatewayChartOptions {
     pub default_backend_enable: bool, // enable default backend deployment (matches nginx defaultBackend.enabled)
     pub default_backend_image: Option<String>, // default backend container image (e.g., "registry.k8s.io/ingress-nginx/custom-error-pages")
     pub default_backend_tag: Option<String>,   // default backend container image tag (e.g., "v1.1.1")
+    pub hpa_config: Option<HpaConfig>,         // HPA for the Gateway-level EnvoyProxy that owns the data plane
     pub access_log_format: Option<String>,     // custom JSON access log format to apply on cluster-level EnvoyProxy
     pub reconcile_gateway_cert_refs: bool,     // reconcile Gateway TLS certificateRefs post-install/upgrade
 }
@@ -59,6 +60,7 @@ pub struct QoveryClusterGatewayChartOptions {
 pub struct QoveryClusterGatewayChart {
     chart_path: HelmChartPath,
     chart_values_path: HelmChartValuesFilePath,
+    additional_chart_path: Option<HelmChartValuesFilePath>,
     namespace: HelmChartNamespaces,
     domain: Domain,
     load_balancer: LoadBalancer,
@@ -74,6 +76,7 @@ impl QoveryClusterGatewayChart {
         load_balancer: LoadBalancer,
         chart_options: QoveryClusterGatewayChartOptions,
         metrics_enabled: bool,
+        karpenter_enabled: bool,
     ) -> Self {
         QoveryClusterGatewayChart {
             chart_path: HelmChartPath::new(
@@ -86,6 +89,14 @@ impl QoveryClusterGatewayChart {
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 QoveryClusterGatewayChart::chart_name(),
             ),
+            additional_chart_path: match karpenter_enabled {
+                true => Some(HelmChartValuesFilePath::new(
+                    chart_prefix_path,
+                    HelmChartDirectoryLocation::CloudProviderFolder,
+                    format!("{}-with-karpenter", QoveryClusterGatewayChart::chart_name()),
+                )),
+                false => None,
+            },
             namespace,
             domain,
             load_balancer,
@@ -101,6 +112,11 @@ impl QoveryClusterGatewayChart {
 
 impl ToCommonHelmChart for QoveryClusterGatewayChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, HelmChartError> {
+        let mut values_files = vec![self.chart_values_path.to_string()];
+        if let Some(additional_chart_path) = &self.additional_chart_path {
+            values_files.push(additional_chart_path.to_string());
+        }
+
         let mut values_string = vec![];
         let mut chart_set_values = vec![ChartSetValue {
             key: "dns.domain".to_string(),
@@ -164,6 +180,61 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             });
         }
 
+        if let Some(hpa_config) = &self.chart_options.hpa_config {
+            chart_set_values.push(ChartSetValue {
+                key: "envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.minReplicas".to_string(),
+                value: hpa_config.min_replicas.to_string(),
+            });
+            chart_set_values.push(ChartSetValue {
+                key: "envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.maxReplicas".to_string(),
+                value: hpa_config.max_replicas.to_string(),
+            });
+
+            let mut metric_index = 0;
+            if let Some(cpu) = &hpa_config.cpu_average_utilization_percentage {
+                let metric_prefix =
+                    format!("envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.metrics[{metric_index}]");
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.type"),
+                    value: "Resource".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.name"),
+                    value: "cpu".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.target.type"),
+                    value: "Utilization".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.target.averageUtilization"),
+                    value: cpu.as_u8_percent().to_string(),
+                });
+                metric_index += 1;
+            }
+
+            if let Some(memory) = &hpa_config.memory_average_utilization_percentage {
+                let metric_prefix =
+                    format!("envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.metrics[{metric_index}]");
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.type"),
+                    value: "Resource".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.name"),
+                    value: "memory".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.target.type"),
+                    value: "Utilization".to_string(),
+                });
+                chart_set_values.push(ChartSetValue {
+                    key: format!("{metric_prefix}.resource.target.averageUtilization"),
+                    value: memory.as_u8_percent().to_string(),
+                });
+            }
+        }
+
         let encoded_format = self
             .chart_options
             .access_log_format
@@ -207,7 +278,7 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 name: QoveryClusterGatewayChart::chart_name(),
                 namespace: self.namespace.clone(),
                 path: self.chart_path.to_string(),
-                values_files: vec![self.chart_values_path.to_string()],
+                values_files,
                 values: chart_set_values,
                 values_string,
                 ..Default::default()
@@ -337,7 +408,7 @@ mod tests {
     use ipnet::IpNet;
 
     use crate::environment::models::domain::Domain;
-    use crate::helm::HelmChartNamespaces;
+    use crate::helm::{HelmChartNamespaces, HpaConfig};
     use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
         QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
     };
@@ -374,6 +445,7 @@ mod tests {
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
+            false,
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -409,6 +481,7 @@ mod tests {
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             }),
             QoveryClusterGatewayChartOptions::default(),
+            false,
             false,
         );
 
@@ -449,6 +522,7 @@ mod tests {
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
             }),
             QoveryClusterGatewayChartOptions::default(),
+            false,
             false,
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
@@ -526,6 +600,7 @@ mod tests {
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
+            false,
         );
 
         let common_chart = chart.to_common_helm_chart().expect("chart should render");
@@ -549,6 +624,43 @@ mod tests {
     }
 
     #[test]
+    fn hpa_config_is_rendered_under_gateway_level_envoy_proxy() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_eip_allocation_ids: None,
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            }),
+            QoveryClusterGatewayChartOptions {
+                hpa_config: Some(HpaConfig {
+                    min_replicas: 2,
+                    max_replicas: 25,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            false,
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let values: HashSet<(&str, &str)> = common_chart
+            .chart_info
+            .values
+            .iter()
+            .map(|entry| (entry.key.as_str(), entry.value.as_str()))
+            .collect();
+
+        assert!(values.contains(&("envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.minReplicas", "2")));
+        assert!(values.contains(&("envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa.maxReplicas", "25")));
+    }
+
+    #[test]
     fn custom_access_log_format_is_encoded_for_cluster_gateway_envoy_proxy() {
         let chart = QoveryClusterGatewayChart::new(
             None,
@@ -565,6 +677,7 @@ mod tests {
                 access_log_format: Some(r#"{"correlation_id":"%REQ(X-REQUEST-ID)%"}"#.to_string()),
                 ..Default::default()
             },
+            false,
             false,
         );
 

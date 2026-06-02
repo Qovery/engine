@@ -806,9 +806,26 @@ pub(super) fn eks_helm_charts(
                         .cluster_advanced_settings
                         .envoy_access_log_format
                         .clone(),
+                    hpa_config: Some(HpaConfig {
+                        min_replicas: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_min_number_instances,
+                        max_replicas: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_max_number_instances,
+                        cpu_average_utilization_percentage: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_cpu_average_utilization_percentage_threshold
+                            .clone(),
+                        memory_average_utilization_percentage: chart_config_prerequisites
+                            .cluster_advanced_settings
+                            .envoy_hpa_memory_average_utilization_percentage_threshold
+                            .clone(),
+                    }),
                     reconcile_gateway_cert_refs: false,
                 },
                 chart_config_prerequisites.metrics_parameters.is_some(),
+                chart_config_prerequisites.is_karpenter_enabled,
             )
             .to_common_helm_chart()?,
         );
