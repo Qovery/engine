@@ -9,19 +9,19 @@ terraform {
 provider "qovery" {}
 
 resource "qovery_terraform_service" "blueprint" {
-  environment_id        = "{{ environment_id }}"
-  name                  = "{{ name }}"
-  auto_deploy           = true
-  engine                = "{{ engine }}"
+  environment_id        = "{{ environment_id | hcl_string }}"
+  name                  = "{{ name | hcl_string }}"
+  auto_deploy           = false
+  engine                = "{{ engine | hcl_string }}"
   timeout_seconds       = {{ timeout_seconds }}
   use_cluster_credentials = {{ use_cluster_credentials }}
 
   git_repository = {
-    url       = "{{ git_url }}"
-    branch    = "{{ git_branch }}"
-    root_path = "{{ git_root_path }}"
+    url       = "{{ git_url | hcl_string }}"
+    branch    = "{{ git_branch | hcl_string }}"
+    root_path = "{{ git_root_path | hcl_string }}"
 {% if git_token_id %}
-    git_token_id = "{{ git_token_id }}"
+    git_token_id = "{{ git_token_id | hcl_string }}"
 {% endif %}
   }
 
@@ -30,11 +30,11 @@ resource "qovery_terraform_service" "blueprint" {
     kubernetes = {}
 {% elif backend_blueprint %}
     blueprint = {
-      type = "{{ backend_type }}"
+      type = "{{ backend_type | hcl_string }}"
 {% if backend_config %}
       config = {
 {% for key, value in backend_config %}
-        {{ key }} = "{{ value }}"
+        {{ key }} = "{{ value | hcl_string }}"
 {% endfor %}
       }
 {% endif %}
@@ -45,7 +45,7 @@ resource "qovery_terraform_service" "blueprint" {
   }
 
   engine_version = {
-    explicit_version          = "{{ engine_version }}"
+    explicit_version          = "{{ engine_version | hcl_string }}"
     read_from_terraform_block = false
   }
 
@@ -60,8 +60,8 @@ resource "qovery_terraform_service" "blueprint" {
   variables = [
 {% for var in variables %}
     {
-      key       = "TF_VAR_{{ var.name }}"
-      value     = "{{ var.value }}"
+      key       = "TF_VAR_{{ var.name | hcl_string }}"
+      value     = "{{ var.value | hcl_string }}"
       is_secret = {{ var.is_secret }}
     },
 {% endfor %}
@@ -71,6 +71,6 @@ resource "qovery_terraform_service" "blueprint" {
 {% if import_id %}
 import {
   to = qovery_terraform_service.blueprint
-  id = "{{ import_id }}"
+  id = "{{ import_id | hcl_string }}"
 }
 {% endif %}

@@ -83,7 +83,7 @@ impl BlueprintTerraformTeraContext {
             name: request.name.clone(),
             git_url: request.git_url.clone(),
             git_branch: request.tag.clone(),
-            git_root_path: blueprint_info.path(),
+            git_root_path: format!("/{}", blueprint_info.path()),
             git_token_id: request.git_token_id.clone(),
             engine: match spec.flavor {
                 TerraformFlavor::Terraform => "TERRAFORM".to_string(),
@@ -189,13 +189,13 @@ mod tests {
         assert!(result.contains(r#"provider "qovery" {}"#));
         assert!(result.contains(r#"environment_id        = "env-uuid""#));
         assert!(result.contains(r#"name                  = "my-s3-bucket""#));
-        assert!(result.contains("auto_deploy           = true"));
+        assert!(result.contains("auto_deploy           = false"));
         assert!(result.contains(r#"engine                = "TERRAFORM""#));
         assert!(result.contains("timeout_seconds       = 1800"));
         assert!(result.contains("use_cluster_credentials = true"));
         assert!(result.contains(r#"url       = "https://github.com/org/catalog.git""#));
         assert!(result.contains(r#"branch    = "aws/s3/1/1.0.0""#));
-        assert!(result.contains(r#"root_path = "aws/s3/1""#));
+        assert!(result.contains(r#"root_path = "/aws/s3/1""#));
         assert!(result.contains("backend = {"));
         assert!(result.contains("kubernetes = {}"));
         assert!(result.contains("git_repository = {"));
@@ -277,5 +277,21 @@ mod tests {
 
         assert!(result.contains(r#"key       = "TF_VAR_db_password""#));
         assert!(result.contains("is_secret = true"));
+    }
+
+    #[test]
+    fn generate_main_tf_escapes_hcl_special_chars_in_variable_value() {
+        // A variable value containing characters that would otherwise break HCL parsing
+        // (or trigger HCL string interpolation) must be escaped, not interpolated.
+        let mut request = test_request();
+        request.variables = vec![BlueprintVariable {
+            name: "secret".into(),
+            value: r#"a"b\c${not_a_var}"#.into(),
+            is_secret: true,
+        }];
+        let result = render_template(&test_spec(), &request, &test_info());
+
+        // Each problematic char appears escaped in the rendered HCL.
+        assert!(result.contains(r#"value     = "a\"b\\c$${not_a_var}""#));
     }
 }

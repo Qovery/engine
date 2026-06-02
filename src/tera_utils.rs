@@ -34,6 +34,59 @@ impl<'a> TeraFilter<'a> for Base64EncodeFilter {
     }
 }
 
+/// Escapes a string so it can be safely embedded inside a double-quoted HCL string literal.
+/// Escapes `\`, `"`, HCL interpolation markers `${` / `%{`, and control chars (\n, \r, \t).
+pub struct HclStringEscapeFilter {}
+
+impl HclStringEscapeFilter {
+    fn escape_chars(s: &str) -> String {
+        s.replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace("${", "$${")
+            .replace("%{", "%%{")
+            .replace('\n', "\\n")
+            .replace('\r', "\\r")
+            .replace('\t', "\\t")
+    }
+}
+
+impl<'a> TeraFilter<'a> for HclStringEscapeFilter {
+    fn name() -> &'a str {
+        "hcl_string"
+    }
+
+    fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error> {
+        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, Error> {
+            let s = try_get_value!("hcl_string", "value", String, value);
+            Ok(Value::String(HclStringEscapeFilter::escape_chars(&s)))
+        }
+    }
+}
+
+/// Escapes a multi-line string for embedding inside an HCL heredoc (`<<-EOT ... EOT`).
+/// Heredocs preserve raw bytes but still parse `${...}` and `%{...}` interpolation —
+/// escape only those.
+pub struct HclHeredocEscapeFilter {}
+
+impl HclHeredocEscapeFilter {
+    fn escape_chars(s: &str) -> String {
+        s.replace("${", "$${").replace("%{", "%%{")
+    }
+}
+
+impl<'a> TeraFilter<'a> for HclHeredocEscapeFilter {
+    fn name() -> &'a str {
+        "hcl_heredoc"
+    }
+
+    fn implementation() -> fn(&Value, &HashMap<String, Value>) -> Result<Value, Error> {
+        |value: &Value, _: &HashMap<String, Value>| -> Result<Value, Error> {
+            let s = try_get_value!("hcl_heredoc", "value", String, value);
+            Ok(Value::String(HclHeredocEscapeFilter::escape_chars(&s)))
+        }
+    }
+}
+
 /// Encodes string value to base 64.
 pub struct NginxHeaderValueEscapeFilter {}
 
@@ -98,6 +151,60 @@ mod tests {
 
         // verify:
         assert_eq!(Base64EncodeFilter::base64_encode(TEST_STR), result);
+    }
+
+    #[test]
+    fn test_hcl_string_escape_filter() {
+        let cases = vec![
+            ("plain", "plain"),
+            ("with \"quote\"", "with \\\"quote\\\""),
+            ("back\\slash", "back\\\\slash"),
+            ("${var}", "$${var}"),
+            ("%{if x}y%{endif}", "%%{if x}y%%{endif}"),
+            ("line1\nline2", "line1\\nline2"),
+            ("tab\there", "tab\\there"),
+            ("crlf\r\n", "crlf\\r\\n"),
+            // Backslash escape runs first, so a quote in the input becomes \" without
+            // the inserted backslash being double-escaped.
+            ("a\"b", "a\\\"b"),
+            // Literal backslash followed by ${ must remain literal: \${var} → \\$${var}
+            ("\\${x}", "\\\\$${x}"),
+        ];
+
+        for (input, expected) in cases {
+            let result = HclStringEscapeFilter::implementation()(&to_value(input).unwrap(), &HashMap::new()).unwrap();
+            assert_eq!(result, to_value(expected).unwrap(), "input: {input:?}");
+        }
+    }
+
+    #[test]
+    fn test_hcl_string_escape_filter_in_template() {
+        let mut tera = Tera::default();
+        tera.add_raw_template("test", r#"value = "{{ input | hcl_string }}""#)
+            .unwrap();
+        tera.register_filter(HclStringEscapeFilter::name(), HclStringEscapeFilter::implementation());
+
+        let mut context = Context::new();
+        context.insert("input", r#"breaks "and" ${interp}"#);
+
+        let result = tera.render("test", &context).unwrap();
+        assert_eq!(result, r#"value = "breaks \"and\" $${interp}""#);
+    }
+
+    #[test]
+    fn test_hcl_heredoc_escape_filter() {
+        let cases = vec![
+            ("plain text\nwith newlines", "plain text\nwith newlines"),
+            ("has ${var}", "has $${var}"),
+            ("has %{if x}", "has %%{if x}"),
+            // Quotes and backslashes are literal in heredocs — no escaping.
+            ("with \"quote\" and \\slash", "with \"quote\" and \\slash"),
+        ];
+
+        for (input, expected) in cases {
+            let result = HclHeredocEscapeFilter::implementation()(&to_value(input).unwrap(), &HashMap::new()).unwrap();
+            assert_eq!(result, to_value(expected).unwrap(), "input: {input:?}");
+        }
     }
 
     #[test]
