@@ -53,6 +53,15 @@ spec:
   provider:
     type: Kubernetes
     kubernetes:
+      {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyDeployment }}
+      envoyDeployment: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyHpa }}
+      envoyHpa: {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyPDB }}
+      envoyPDB: {{- toYaml . | nindent 8 }}
+      {{- end }}
       envoyService:
         {{- if .Values.envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations }}
         annotations:

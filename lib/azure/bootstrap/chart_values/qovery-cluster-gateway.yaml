@@ -31,6 +31,26 @@ envoyProxy:
       format: "set-by-engine"
     provider:
       kubernetes:
+        envoyDeployment:
+          pod:
+            affinity: null
+            topologySpreadConstraints:
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: proxy
+                topologyKey: topology.kubernetes.io/zone
+                maxSkew: 1
+                whenUnsatisfiable: ScheduleAnyway
+              - labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: proxy
+                topologyKey: kubernetes.io/hostname
+                maxSkew: 1
+                whenUnsatisfiable: ScheduleAnyway
+            tolerations: null
+        envoyHpa: {}
+        envoyPDB:
+          maxUnavailable: 1
         envoyService:
           annotations:
             # Proxy protocol is disabled due to compatibility issues with Envoy Gateway v1.6.1
