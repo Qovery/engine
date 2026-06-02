@@ -2,6 +2,7 @@ use kube::Api;
 use kube::Client;
 use retry::OperationResult;
 use retry::delay::Fixed;
+use std::time::Duration;
 
 use crate::helm::{HpaConfig, HpaMode};
 use crate::infrastructure::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType};
@@ -81,6 +82,7 @@ impl EnvoyGatewayChart {
 
 impl ToCommonHelmChart for EnvoyGatewayChart {
     fn to_common_helm_chart(&self) -> Result<CommonChart, crate::helm::HelmChartError> {
+        let chart_timeout = Duration::from_secs(60 * 20);
         let mut chart_info = ChartInfo {
             name: EnvoyGatewayChart::chart_name(),
             path: self.chart_path.to_string(),
@@ -105,6 +107,9 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
                     value: self.chart_resources.request_memory.to_helm_chart_value(),
                 },
             ],
+            // Because of ALB, svc can take some time to start
+            // rolling out the deployment can take a lot of time based on provider, region and cluster size, so we set a long timeout to avoid killing the deployment too early
+            timeout_in_seconds: chart_timeout.as_secs() as i64,
             ..Default::default()
         };
 
@@ -190,7 +195,10 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
 
         Ok(CommonChart {
             chart_info,
-            chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new(self.namespace.clone()))),
+            chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new(
+                self.namespace.clone(),
+                Duration::from_secs(60 * 10),
+            ))),
             vertical_pod_autoscaler: None,
             pre_execute_action: None,
         })
@@ -200,11 +208,21 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
 #[derive(Clone)]
 pub struct EnvoyGatewayChartChecker {
     namespace: HelmChartNamespaces,
+    readiness_timeout: Duration,
 }
 
 impl EnvoyGatewayChartChecker {
-    pub fn new(namespace: HelmChartNamespaces) -> Self {
-        Self { namespace }
+    const RETRY_INTERVAL: Duration = Duration::from_secs(5);
+
+    pub fn new(namespace: HelmChartNamespaces, readiness_timeout: Duration) -> Self {
+        Self {
+            namespace,
+            readiness_timeout,
+        }
+    }
+
+    fn retry_attempts_for_timeout(timeout: Duration) -> usize {
+        timeout.as_millis().div_ceil(Self::RETRY_INTERVAL.as_millis()).max(1) as usize
     }
 
     fn has_condition_true_for_generation(gateway: &Gateway, conditions_type: &str, expected_generation: i64) -> bool {
@@ -222,7 +240,7 @@ impl EnvoyGatewayChartChecker {
 
 impl Default for EnvoyGatewayChartChecker {
     fn default() -> Self {
-        Self::new(HelmChartNamespaces::Qovery)
+        Self::new(HelmChartNamespaces::Qovery, Duration::from_secs(60 * 10))
     }
 }
 
@@ -232,35 +250,40 @@ impl ChartInstallationChecker for EnvoyGatewayChartChecker {
         let namespace = self.namespace.to_string();
         let kube_client = kube_client.clone();
 
-        let result = retry::retry(Fixed::from_millis(5000).take(36), || {
-            // Retry every 5 seconds for up to 3 minutes.
-            let gateways: Api<Gateway> = Api::namespaced(kube_client.clone(), namespace.as_str());
+        let result = retry::retry(
+            Fixed::from_millis(Self::RETRY_INTERVAL.as_millis() as u64)
+                .take(Self::retry_attempts_for_timeout(self.readiness_timeout)),
+            || {
+                // Give Gateway API conditions their own bounded window after Helm reports success.
+                let gateways: Api<Gateway> = Api::namespaced(kube_client.clone(), namespace.as_str());
 
-            let gateway = match block_on(gateways.get(gateway_name)) {
-                Ok(result) => result,
-                Err(e) => {
-                    let err = CommandError::new(
-                        format!("Error trying to get gateway (name={gateway_name}, namespace={namespace})"),
-                        Some(e.to_string()),
-                        None,
-                    );
+                let gateway = match block_on(gateways.get(gateway_name)) {
+                    Ok(result) => result,
+                    Err(e) => {
+                        let err = CommandError::new(
+                            format!("Error trying to get gateway (name={gateway_name}, namespace={namespace})"),
+                            Some(e.to_string()),
+                            None,
+                        );
+                        return OperationResult::Retry(err);
+                    }
+                };
+
+                let expected_generation = gateway.metadata.generation.unwrap_or_default();
+                let is_accepted = Self::has_condition_true_for_generation(&gateway, "Accepted", expected_generation);
+                let is_programmed =
+                    Self::has_condition_true_for_generation(&gateway, "Programmed", expected_generation);
+
+                if !is_accepted || !is_programmed {
+                    let err = CommandError::new_from_safe_message(format!(
+                        "Waiting for gateway to be accepted and programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation})"
+                    ));
                     return OperationResult::Retry(err);
                 }
-            };
 
-            let expected_generation = gateway.metadata.generation.unwrap_or_default();
-            let is_accepted = Self::has_condition_true_for_generation(&gateway, "Accepted", expected_generation);
-            let is_programmed = Self::has_condition_true_for_generation(&gateway, "Programmed", expected_generation);
-
-            if !is_accepted || !is_programmed {
-                let err = CommandError::new_from_safe_message(format!(
-                    "Waiting for gateway to be accepted and programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation})"
-                ));
-                return OperationResult::Retry(err);
-            }
-
-            OperationResult::Ok(())
-        });
+                OperationResult::Ok(())
+            },
+        );
 
         match result {
             Ok(_) => Ok(()),
@@ -276,12 +299,15 @@ impl ChartInstallationChecker for EnvoyGatewayChartChecker {
 #[cfg(test)]
 mod tests {
     use crate::helm::{HelmChartNamespaces, PriorityClass};
-    use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
+    use crate::infrastructure::helm_charts::envoy_gateway_chart::{
+        EnvoyGatewayChart, EnvoyGatewayChartChecker, EnvoyGatewayOptions,
+    };
     use crate::infrastructure::helm_charts::{
         HelmChartDirectoryLocation, HelmChartResourcesConstraintType, HelmChartType, ToCommonHelmChart,
         get_helm_path_kubernetes_provider_sub_folder_name, get_helm_values_set_in_code_but_absent_in_values_file,
     };
     use std::env;
+    use std::time::Duration;
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -386,6 +412,33 @@ mod tests {
             missing_fields.is_none(),
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
+        );
+    }
+
+    #[test]
+    fn envoy_gateway_checker_retry_budget_matches_chart_timeout() {
+        let chart = EnvoyGatewayChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            HelmChartNamespaces::Qovery,
+            PriorityClass::Default,
+            HelmChartResourcesConstraintType::ChartDefault,
+            EnvoyGatewayOptions::default(),
+        );
+        let common_chart = chart.to_common_helm_chart().unwrap();
+        assert_eq!(
+            EnvoyGatewayChartChecker::retry_attempts_for_timeout(Duration::from_secs(
+                common_chart.chart_info.timeout_in_seconds as u64,
+            )),
+            240
+        );
+    }
+
+    #[test]
+    fn envoy_gateway_checker_retry_budget_matches_checker_timeout() {
+        assert_eq!(
+            EnvoyGatewayChartChecker::retry_attempts_for_timeout(Duration::from_secs(10 * 60)),
+            120
         );
     }
 }
