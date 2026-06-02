@@ -4,7 +4,7 @@ use crate::environment::action::deploy_helm::HelmDeployment;
 use crate::environment::models::external_secret::ExternalSecretGroup;
 use crate::environment::report::logger::EnvProgressLogger;
 use crate::errors::EngineError;
-use crate::events::EventDetails;
+use crate::events::{EngineEvent, EventDetails, EventMessage};
 use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::io_models::variable_utils::VariableInfo;
@@ -321,10 +321,12 @@ fn wait_and_fetch_eso_values(
     }
 
     let to_error = |safe_message: String| -> Box<EngineError> {
-        Box::new(EngineError::new_external_secrets_failed_to_resolve(
-            event_details.clone(),
-            safe_message,
-        ))
+        let error = EngineError::new_external_secrets_failed_to_resolve(event_details.clone(), safe_message.clone());
+        logger.log(EngineEvent::Error(
+            error.clone(),
+            Some(EventMessage::new_from_safe(safe_message)),
+        ));
+        Box::new(error)
     };
 
     let eso_api: Api<DynamicObject> = Api::namespaced_with(kube_client.clone(), namespace, &eso_api_resource());
