@@ -11,6 +11,7 @@ provider "qovery" {}
 resource "qovery_terraform_service" "blueprint" {
   environment_id        = "{{ environment_id | hcl_string }}"
   name                  = "{{ name | hcl_string }}"
+  description           = "{{ description | hcl_string }}"
   auto_deploy           = false
   engine                = "{{ engine | hcl_string }}"
   timeout_seconds       = {{ timeout_seconds }}

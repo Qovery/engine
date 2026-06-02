@@ -19,6 +19,7 @@ const DEFAULT_ENGINE_VERSION: &str = "1.9.7";
 struct BlueprintTerraformTeraContext {
     environment_id: String,
     name: String,
+    description: String,
     git_url: String,
     git_branch: String,
     git_root_path: String,
@@ -81,6 +82,7 @@ impl BlueprintTerraformTeraContext {
         Self {
             environment_id: request.environment_id.clone(),
             name: request.name.clone(),
+            description: spec.description.clone(),
             git_url: request.git_url.clone(),
             git_branch: request.tag.clone(),
             git_root_path: format!("/{}", blueprint_info.path()),
@@ -116,7 +118,9 @@ impl BlueprintTerraformTeraContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blueprint::models::spec::{JobResources, ResolvedBackend, ResolvedTerraformSpec, TerraformFlavor};
+    use crate::blueprint::models::spec::{
+        DEFAULT_BLUEPRINT_DESCRIPTION, JobResources, ResolvedBackend, ResolvedTerraformSpec, TerraformFlavor,
+    };
     use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
     use crate::template::generate_and_copy_all_files_into_dir;
 
@@ -157,6 +161,7 @@ mod tests {
         ResolvedTerraformSpec {
             flavor: TerraformFlavor::Terraform,
             provider: "aws".into(),
+            description: DEFAULT_BLUEPRINT_DESCRIPTION.into(),
             credential_mode: CredentialMode::Cluster,
             backend: ResolvedBackend::Qovery,
             timeout_sec: 1800,
@@ -189,6 +194,7 @@ mod tests {
         assert!(result.contains(r#"provider "qovery" {}"#));
         assert!(result.contains(r#"environment_id        = "env-uuid""#));
         assert!(result.contains(r#"name                  = "my-s3-bucket""#));
+        assert!(result.contains(r#"description           = "Deployed from blueprint""#));
         assert!(result.contains("auto_deploy           = false"));
         assert!(result.contains(r#"engine                = "TERRAFORM""#));
         assert!(result.contains("timeout_seconds       = 1800"));
@@ -207,6 +213,30 @@ mod tests {
         assert!(result.contains(r#"key       = "TF_VAR_region""#));
         assert!(result.contains("tfvars_files = []"));
         assert!(!result.contains("import {"));
+    }
+
+    #[test]
+    fn generate_main_tf_falls_back_to_placeholder_description_when_qbm_omits_it() {
+        let result = render_template(&test_spec(), &test_request(), &test_info());
+        assert!(result.contains(r#"description           = "Deployed from blueprint""#));
+    }
+
+    #[test]
+    fn generate_main_tf_renders_description_from_qbm_metadata() {
+        let mut spec = test_spec();
+        spec.description = "S3 bucket with encryption, versioning, and lifecycle rules".into();
+        let result = render_template(&spec, &test_request(), &test_info());
+        assert!(
+            result.contains(r#"description           = "S3 bucket with encryption, versioning, and lifecycle rules""#)
+        );
+    }
+
+    #[test]
+    fn generate_main_tf_escapes_hcl_special_chars_in_description() {
+        let mut spec = test_spec();
+        spec.description = r#"Redis cache ("prod") — cost: ${price}\path"#.into();
+        let result = render_template(&spec, &test_request(), &test_info());
+        assert!(result.contains(r#"description           = "Redis cache (\"prod\") — cost: $${price}\\path""#));
     }
 
     #[test]

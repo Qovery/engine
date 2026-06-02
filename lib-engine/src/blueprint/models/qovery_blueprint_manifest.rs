@@ -12,7 +12,15 @@ use std::path::Path;
 #[derive(Deserialize, Debug, Clone)]
 pub struct QoveryBlueprintManifest {
     pub kind: BlueprintKind,
+    #[serde(default)]
+    pub metadata: BlueprintMetadata,
     pub spec: BlueprintSpec,
+}
+
+#[derive(Deserialize, Debug, Clone, Default, PartialEq)]
+pub struct BlueprintMetadata {
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone, PartialEq)]
@@ -415,5 +423,26 @@ spec:
         assert!(manifest.spec.timeout.is_none());
         assert!(manifest.spec.arguments.is_empty());
         assert!(!manifest.spec.allow_cluster_wide_resources);
+        assert!(manifest.metadata.description.is_none());
+    }
+
+    #[test]
+    fn parses_metadata_description() {
+        let yaml = r#"
+apiVersion: "qovery.com/v2"
+kind: ServiceBlueprint
+metadata:
+  name: "aws-s3"
+  version: "1.0.1"
+  description: "S3 bucket with encryption, versioning, and lifecycle rules"
+spec:
+  engine: terraform
+  provider: aws
+"#;
+        let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(
+            manifest.metadata.description.as_deref(),
+            Some("S3 bucket with encryption, versioning, and lifecycle rules"),
+        );
     }
 }

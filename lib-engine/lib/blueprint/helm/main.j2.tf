@@ -19,7 +19,7 @@ resource "qovery_helm_repository" "blueprint_repo" {
 resource "qovery_helm" "blueprint" {
   environment_id               = "{{ environment_id | hcl_string }}"
   name                         = "{{ name | hcl_string }}"
-  description                  = "Deployed from blueprint"
+  description                  = "{{ description | hcl_string }}"
   allow_cluster_wide_resources = {{ allow_cluster_wide_resources }}
   auto_deploy                  = false
 {% if timeout_sec %}

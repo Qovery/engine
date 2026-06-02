@@ -288,7 +288,7 @@ impl Task for BlueprintTask {
 
             // 4. Resolve spec
             let resolved_spec =
-                ResolvedBlueprintSpec::resolve(&manifest.spec, &self.request.target_environment.spec_overrides);
+                ResolvedBlueprintSpec::resolve(&manifest, &self.request.target_environment.spec_overrides);
 
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(BlueprintStep::LoadConfiguration),
