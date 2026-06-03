@@ -60,6 +60,9 @@ resource "google_compute_router_nat" "nat" {
 {% endif %}
   source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
 
+  # Preserve provider v4 default. Provider v5 flipped the default to false, which would change NAT behavior on existing clusters.
+  enable_endpoint_independent_mapping = true
+
   log_config {
     enable = false
     filter = "ERRORS_ONLY"
