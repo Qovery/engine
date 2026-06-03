@@ -26,10 +26,8 @@ pub fn upgrade_kapsule_cluster(
     // Upgrade nodes
     //
     logger.info("Preparing nodes for upgrade for Kubernetes cluster.");
-    logger.info("Checking clusters content health.");
-
-    // disable all replicas with issues to avoid upgrade failures
-    prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, event_details.clone(), &logger)?;
+    logger.info("Cleaning up stale workload artifacts before upgrade.");
+    prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, &logger)?;
 
     logger.info("Upgrading Kubernetes nodes.");
     let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;

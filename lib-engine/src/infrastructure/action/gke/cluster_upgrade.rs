@@ -32,10 +32,10 @@ pub(super) fn upgrade_gke_cluster(
     //
     logger.info("Preparing nodes for upgrade for Kubernetes cluster.");
     logger.info("Upgrading Kubernetes nodes.");
-    logger.info("Checking clusters content health.");
+    logger.info("Cleaning up stale workload artifacts before upgrade.");
 
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
-    prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, event_details.clone(), &logger)?;
+    prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, &logger)?;
 
     let requested_version = kubernetes_upgrade_status.requested_version.to_string();
     let kubernetes_version = match KubernetesVersion::from_str(requested_version.as_str()) {

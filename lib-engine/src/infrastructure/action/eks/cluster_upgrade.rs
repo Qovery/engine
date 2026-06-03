@@ -111,9 +111,8 @@ pub fn upgrade_eks_cluster(
     );
 
     logger.info("Start upgrading process for worker nodes.");
-    logger.info("Checking clusters content health");
-    // disable all replicas with issues to avoid upgrade failures
-    prepare_kube_upgrade(kubernetes as &dyn Kubernetes, infra_ctx, event_details.clone(), &logger)?;
+    logger.info("Cleaning up stale workload artifacts before upgrading worker nodes.");
+    prepare_kube_upgrade(kubernetes as &dyn Kubernetes, infra_ctx, &logger)?;
 
     if !infra_ctx.kubernetes().is_karpenter_enabled() {
         // Disable cluster autoscaler deployment and be sure we re-enable it on exist
