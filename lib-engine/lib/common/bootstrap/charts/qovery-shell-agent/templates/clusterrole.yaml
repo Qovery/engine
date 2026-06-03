@@ -9,7 +9,6 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - pods
       - pods/log
       - namespaces
       - nodes
@@ -17,6 +16,17 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - delete
+      - patch
   - apiGroups:
       - ""
     resources:
@@ -29,6 +39,14 @@ rules:
       - list
       - watch
       - create
+  - apiGroups:
+      - ""
+    resources:
+      - pods/ephemeralcontainers
+    verbs:
+      - get
+      - patch
+      - update
   - apiGroups:
       - "batch"
     resources:
