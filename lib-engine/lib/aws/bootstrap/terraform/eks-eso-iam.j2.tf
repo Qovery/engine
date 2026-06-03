@@ -64,7 +64,10 @@ resource "aws_iam_policy" "external_secrets_operator_iam_policy" {
           {% endif -%}
           {% if enable_parameter_store_iam_permissions -%}
           [
-            "ssm:GetParameter*",
+            "ssm:GetParameter",
+            "ssm:GetParameters",
+            "ssm:GetParameterHistory",
+            "ssm:GetParametersByPath",
             "ssm:ListTagsForResource"
           ],
           {% else -%}
