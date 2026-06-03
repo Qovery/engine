@@ -21,11 +21,11 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 4.80.0, < 5.0, !=4.65.0, !=4.65.1"
+      version = ">= 7.0.0, < 8.0.0"
     }
     google-beta = {
       source  = "hashicorp/google-beta"
-      version = ">= 4.80.0, < 5.0, !=4.65.0, !=4.65.1"
+      version = ">= 7.0.0, < 8.0.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -48,4 +48,7 @@ terraform {
 provider "google" {
   project     = var.project_id
   region      = var.region
+
+  # Skip the goog-terraform-provisioned attribution label that v6 adds to every resource by default.
+  add_terraform_attribution_label = false
 }

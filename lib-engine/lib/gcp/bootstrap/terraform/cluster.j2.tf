@@ -27,6 +27,9 @@ resource "google_container_cluster" "primary" {
   project         = var.project_id
   resource_labels = local.tags_gke
 
+  # Engine manages cluster lifecycle (create/destroy). Required since provider v5 which defaults this to true.
+  deletion_protection = false
+
   location          = local.location
   node_locations    = local.node_locations
   # cluster_ipv4_cidr = configuration declared in ip_allocation_policy var.cluster_ipv4_cidr
