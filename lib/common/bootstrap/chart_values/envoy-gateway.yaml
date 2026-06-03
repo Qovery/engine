@@ -10,11 +10,10 @@ service:
   annotations: {} # set-by-engine
 
 hpa:
-  enabled: false # set-by-engine
-  minReplicas: 1 # set-by-engine
-  maxReplicas: 1 # set-by-engine
+  enabled: false
 
 deployment:
+  replicas: 1 # set-by-engine
   envoyGateway:
     resources:
       limits:

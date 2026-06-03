@@ -51,6 +51,10 @@ fn default_aws_alb_controller_replicas() -> u32 {
     2
 }
 
+fn default_envoy_gateway_controller_replicas() -> u32 {
+    2
+}
+
 fn default_envoy_gateway_api_path_escaped_slashes_action() -> EnvoyGatewayApiPathEscapedSlashesAction {
     EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect
 }
@@ -639,14 +643,11 @@ pub struct ClusterAdvancedSettings {
     pub envoy_hpa_min_number_instances: u32,
     #[serde(alias = "envoy.hpa.max_number_instances")]
     pub envoy_hpa_max_number_instances: u32,
-    #[serde(alias = "envoy.gateway.hpa.cpu_average_utilization_percentage_threshold")]
-    pub envoy_gateway_hpa_cpu_average_utilization_percentage_threshold: Option<Percentage>,
-    #[serde(alias = "envoy.gateway.hpa.memory_average_utilization_percentage_threshold")]
-    pub envoy_gateway_hpa_memory_average_utilization_percentage_threshold: Option<Percentage>,
-    #[serde(alias = "envoy.gateway.hpa.min_number_instances")]
-    pub envoy_gateway_hpa_min_number_instances: u32,
-    #[serde(alias = "envoy.gateway.hpa.max_number_instances")]
-    pub envoy_gateway_hpa_max_number_instances: u32,
+    #[serde(
+        alias = "envoy.gateway_controller.replicas",
+        default = "default_envoy_gateway_controller_replicas"
+    )]
+    pub envoy_gateway_controller_replicas: u32,
     #[serde(alias = "envoy.vcpu.request_in_milli_cpu")]
     pub envoy_vcpu_request_in_milli_cpu: u32,
     #[serde(alias = "envoy.vcpu.limit_in_milli_cpu")]
@@ -807,10 +808,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_hpa_memory_average_utilization_percentage_threshold: None,
             envoy_hpa_min_number_instances: 2,
             envoy_hpa_max_number_instances: 25,
-            envoy_gateway_hpa_cpu_average_utilization_percentage_threshold: None,
-            envoy_gateway_hpa_memory_average_utilization_percentage_threshold: None,
-            envoy_gateway_hpa_min_number_instances: 2,
-            envoy_gateway_hpa_max_number_instances: 5,
+            envoy_gateway_controller_replicas: 2,
             envoy_vcpu_request_in_milli_cpu: 100,
             envoy_vcpu_limit_in_milli_cpu: 1000,
             envoy_memory_request_in_mib: 256,
@@ -846,6 +844,16 @@ impl ClusterAdvancedSettings {
                 event_details,
                 self.aws_cloudwatch_eks_logs_retention_days,
                 CLOUDWATCH_RETENTION_DAYS,
+            )));
+        }
+
+        if self.envoy_gateway_controller_replicas == 0 {
+            return Err(Box::new(EngineError::new_invalid_engine_payload_invalid_field_value(
+                event_details,
+                InputError::InvalidInputFieldValue {
+                    field_name: "envoy.gateway_controller.replicas".to_string(),
+                    message: "must be greater than 0".to_string(),
+                },
             )));
         }
 
@@ -1227,6 +1235,7 @@ mod tests {
     fn test_envoy_gateway_api_http_timeouts_deserialization() {
         let data = r#"
         {
+            "envoy.gateway_controller.replicas": 3,
             "envoy.gateway_api.http_request_timeout_seconds": 90,
             "envoy.gateway_api.http_connection_idle_timeout_seconds": 120,
             "envoy.gateway_api.http_stream_idle_timeout_seconds": 300,
@@ -1240,6 +1249,7 @@ mod tests {
         }
         "#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+        assert_eq!(settings.envoy_gateway_controller_replicas, 3);
         assert_eq!(settings.envoy_gateway_api_http_request_timeout_seconds, Some(90));
         assert_eq!(settings.envoy_gateway_api_http_connection_idle_timeout_seconds, Some(120));
         assert_eq!(settings.envoy_gateway_api_http_stream_idle_timeout_seconds, Some(300));
@@ -1256,6 +1266,40 @@ mod tests {
             settings.envoy_gateway_api_path_escaped_slashes_action,
             EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged
         );
+    }
+
+    #[test]
+    fn test_envoy_gateway_controller_replicas_deserialization_defaults_when_missing() {
+        let data = r#"
+        {
+            "envoy.gateway_api.http_request_timeout_seconds": 90
+        }
+        "#;
+
+        let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
+
+        assert_eq!(settings.envoy_gateway_controller_replicas, 2);
+        assert_eq!(settings.envoy_gateway_api_http_request_timeout_seconds, Some(90));
+    }
+
+    #[test]
+    fn test_envoy_gateway_controller_replicas_validation_rejects_zero() {
+        let settings = ClusterAdvancedSettings {
+            envoy_gateway_controller_replicas: 0,
+            ..Default::default()
+        };
+        let event_details = EventDetails::new(
+            None,
+            QoveryIdentifier::default(),
+            QoveryIdentifier::default(),
+            "".to_string(),
+            Stage::Infrastructure(crate::events::InfrastructureStep::ValidateApiInput),
+            Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
+        );
+
+        let result = settings.validate(event_details);
+
+        assert!(result.is_err());
     }
 
     #[test]

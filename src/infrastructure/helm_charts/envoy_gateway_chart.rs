@@ -4,7 +4,6 @@ use retry::OperationResult;
 use retry::delay::Fixed;
 use std::time::Duration;
 
-use crate::helm::{HpaConfig, HpaMode};
 use crate::infrastructure::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::runtime::block_on;
@@ -18,16 +17,12 @@ use crate::{
 };
 
 pub struct EnvoyGatewayOptions {
-    pub hpa_mode: HpaMode,
+    pub replicas: u32,
 }
 
 impl Default for EnvoyGatewayOptions {
     fn default() -> Self {
-        Self {
-            hpa_mode: HpaMode::Enabled {
-                config: HpaConfig::default(),
-            },
-        }
+        Self { replicas: 1 }
     }
 }
 
@@ -121,77 +116,19 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
             });
         }
 
-        // Set HPA mode
-        if let HpaMode::Enabled { config } = &self.options.hpa_mode {
-            chart_info.values.push(ChartSetValue {
-                key: "hpa.enabled".to_string(),
-                value: "true".to_string(),
-            });
-            chart_info.values.push(ChartSetValue {
-                key: "hpa.minReplicas".to_string(),
-                value: config.min_replicas.to_string(),
-            });
-            chart_info.values.push(ChartSetValue {
-                key: "hpa.maxReplicas".to_string(),
-                value: config.max_replicas.to_string(),
-            });
-
-            let mut hpa_metric_index = 0;
-            if let Some(cpu_target) = config.cpu_average_utilization_percentage.as_ref() {
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].type"),
-                    value: "Resource".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.name"),
-                    value: "cpu".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.type"),
-                    value: "Utilization".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.averageUtilization"),
-                    value: cpu_target.as_u8_percent().to_string(),
-                });
-                hpa_metric_index += 1;
-            }
-
-            if let Some(memory_target) = config.memory_average_utilization_percentage.as_ref() {
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].type"),
-                    value: "Resource".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.name"),
-                    value: "memory".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.type"),
-                    value: "Utilization".to_string(),
-                });
-                chart_info.values.push(ChartSetValue {
-                    key: format!("hpa.metrics[{hpa_metric_index}].resource.target.averageUtilization"),
-                    value: memory_target.as_u8_percent().to_string(),
-                });
-            }
-
-            // Adjust PDB
-            chart_info.values.push(ChartSetValue {
-                key: "podDisruptionBudget.maxUnavailable".to_string(),
-                value: "20%".to_string(),
-            });
-        } else {
-            chart_info.values.push(ChartSetValue {
-                key: "hpa.enabled".to_string(),
-                value: "false".to_string(),
-            });
-            // Adjust PDB
-            chart_info.values.push(ChartSetValue {
-                key: "podDisruptionBudget.maxUnavailable".to_string(),
-                value: 1.to_string(),
-            });
-        }
+        chart_info.values.push(ChartSetValue {
+            key: "hpa.enabled".to_string(),
+            value: false.to_string(),
+        });
+        chart_info.values.push(ChartSetValue {
+            key: "deployment.replicas".to_string(),
+            value: self.options.replicas.to_string(),
+        });
+        // Keep the fixed-replica invariants explicit in Rust instead of relying on chart defaults.
+        chart_info.values.push(ChartSetValue {
+            key: "podDisruptionBudget.maxUnavailable".to_string(),
+            value: 1.to_string(),
+        });
 
         Ok(CommonChart {
             chart_info,
@@ -439,6 +376,42 @@ mod tests {
         assert_eq!(
             EnvoyGatewayChartChecker::retry_attempts_for_timeout(Duration::from_secs(10 * 60)),
             120
+        );
+    }
+
+    #[test]
+    fn envoy_gateway_chart_sets_fixed_replicas() {
+        let chart = EnvoyGatewayChart::new(
+            None,
+            HelmChartDirectoryLocation::CommonFolder,
+            HelmChartNamespaces::Qovery,
+            PriorityClass::Default,
+            HelmChartResourcesConstraintType::ChartDefault,
+            EnvoyGatewayOptions { replicas: 3 },
+        );
+
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|value| value.key == "hpa.enabled" && value.value == "false")
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|value| value.key == "deployment.replicas" && value.value == "3")
+        );
+        assert!(
+            common_chart
+                .chart_info
+                .values
+                .iter()
+                .any(|value| value.key == "podDisruptionBudget.maxUnavailable" && value.value == "1")
         );
     }
 }

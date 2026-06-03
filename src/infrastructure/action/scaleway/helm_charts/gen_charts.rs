@@ -653,24 +653,9 @@ pub fn kapsule_helm_charts(
                     )),
                 }),
                 EnvoyGatewayOptions {
-                    hpa_mode: HpaMode::Enabled {
-                        config: HpaConfig {
-                            min_replicas: chart_config_prerequisites
-                                .cluster_advanced_settings
-                                .envoy_gateway_hpa_min_number_instances,
-                            max_replicas: chart_config_prerequisites
-                                .cluster_advanced_settings
-                                .envoy_gateway_hpa_max_number_instances,
-                            cpu_average_utilization_percentage: chart_config_prerequisites
-                                .cluster_advanced_settings
-                                .envoy_gateway_hpa_cpu_average_utilization_percentage_threshold
-                                .clone(),
-                            memory_average_utilization_percentage: chart_config_prerequisites
-                                .cluster_advanced_settings
-                                .envoy_gateway_hpa_memory_average_utilization_percentage_threshold
-                                .clone(),
-                        },
-                    },
+                    replicas: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .envoy_gateway_controller_replicas,
                 },
             )
             .to_common_helm_chart()?,
