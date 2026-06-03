@@ -11,7 +11,6 @@ use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::gcp::GKE_AUTOPILOT_PROTECTED_K8S_NAMESPACES;
 use crate::infrastructure::models::kubernetes::{Kubernetes, uninstall_cert_manager, uninstall_gateway_api};
 use crate::runtime::block_on;
-use crate::services::kube_client::SelectK8sResourceBy;
 use k8s_openapi::api::core::v1::Namespace;
 use k8s_openapi::api::policy::v1::PodDisruptionBudget;
 use kube::Api;
@@ -272,72 +271,8 @@ fn get_never_delete_namespaces() -> &'static [&'static str] {
 pub(super) fn prepare_kube_upgrade(
     cluster: &dyn Kubernetes,
     infra_ctx: &InfrastructureContext,
-    event_details: EventDetails,
-    logger: &impl InfraLogger,
+    _logger: &impl InfraLogger,
 ) -> Result<(), Box<EngineError>> {
-    let kube_client = infra_ctx.mk_kube_client()?;
-    let deployments = block_on(kube_client.get_deployments(event_details.clone(), None, SelectK8sResourceBy::All))?;
-    for deploy in deployments {
-        let status = match deploy.status {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let replicas = status.replicas.unwrap_or(0);
-        let ready_replicas = status.ready_replicas.unwrap_or(0);
-
-        // if number of replicas > 0: it is not already disabled
-        // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
-        if replicas > 0 && ready_replicas == 0 {
-            logger.info(format!(
-                "Deployment {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-            ));
-            block_on(kube_client.set_deployment_replicas_number(
-                event_details.clone(),
-                deploy.metadata.name.as_str(),
-                deploy.metadata.namespace.as_str(),
-                0,
-            ))?;
-        } else {
-            info!(
-                "Deployment {}/{} has {}/{} replicas ready. No action needed.",
-                deploy.metadata.name, deploy.metadata.namespace, ready_replicas, replicas
-            );
-        }
-    }
-
-    // same with statefulsets
-    let statefulsets = block_on(kube_client.get_statefulsets(event_details.clone(), None, SelectK8sResourceBy::All))?;
-    for sts in statefulsets {
-        let status = match sts.status {
-            Some(s) => s,
-            None => continue,
-        };
-
-        let ready_replicas = status.ready_replicas.unwrap_or(0);
-
-        // if number of replicas > 0: it is not already disabled
-        // ready_replicas == 0: there is something in progress (rolling restart...) so we should not touch it
-        if status.replicas > 0 && ready_replicas == 0 {
-            logger.info(format!(
-                "Statefulset {}/{} has {}/{} replicas ready. Scaling to 0 replicas to avoid upgrade failure.",
-                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-            ));
-            block_on(kube_client.set_statefulset_replicas_number(
-                event_details.clone(),
-                sts.metadata.name.as_str(),
-                sts.metadata.namespace.as_str(),
-                0,
-            ))?;
-        } else {
-            info!(
-                "Statefulset {}/{} has {}/{} replicas ready. No action needed.",
-                sts.metadata.name, sts.metadata.namespace, ready_replicas, status.replicas
-            );
-        }
-    }
-
     delete_crashlooping_pods(
         cluster,
         None,
