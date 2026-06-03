@@ -1200,14 +1200,14 @@ pub(super) fn eks_helm_charts(
     match eso_charts.helm_action {
         HelmAction::Deploy => {
             // The requirements chart need to install a self signed issuer so it must be installed after cert-manager chart
-            level_5.push(Box::new(eso_charts.eso_requirements_chart));
-            level_6.push(Box::new(eso_charts.eso_chart));
-            level_7.push(Box::new(eso_charts.eso_config_chart));
+            level_6.push(Box::new(eso_charts.eso_requirements_chart));
+            level_7.push(Box::new(eso_charts.eso_chart));
+            level_8.push(Box::new(eso_charts.eso_config_chart));
         }
         HelmAction::Destroy => {
-            level_5.push(Box::new(eso_charts.eso_config_chart));
-            level_6.push(Box::new(eso_charts.eso_chart));
-            level_7.push(Box::new(eso_charts.eso_requirements_chart));
+            level_6.push(Box::new(eso_charts.eso_config_chart));
+            level_7.push(Box::new(eso_charts.eso_chart));
+            level_8.push(Box::new(eso_charts.eso_requirements_chart));
         }
     }
 
