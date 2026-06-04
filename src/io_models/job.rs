@@ -188,6 +188,8 @@ pub struct Job {
     pub ram_limit_in_mib: u32,
     pub gpu_request: Option<u32>,
     pub gpu_limit: Option<u32>,
+    #[serde(default)]
+    pub ephemeral_storage_in_gib: Option<u32>,
     /// Key is a String, Value is a base64 encoded String
     /// Use BTreeMap to get Hash trait which is not available on HashMap
     #[serde(default = "default_environment_vars_with_info")]
@@ -454,6 +456,7 @@ impl Job {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 environment_variables,
                 external_secrets,
                 self.mounted_files
@@ -490,6 +493,7 @@ impl Job {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 environment_variables,
                 external_secrets,
                 self.mounted_files
@@ -526,6 +530,7 @@ impl Job {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 environment_variables,
                 external_secrets,
                 self.mounted_files
@@ -562,6 +567,7 @@ impl Job {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 environment_variables,
                 external_secrets,
                 self.mounted_files
@@ -598,6 +604,7 @@ impl Job {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 environment_variables,
                 external_secrets,
                 self.mounted_files
@@ -617,5 +624,30 @@ impl Job {
         };
 
         Ok(service)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn deserializes_ephemeral_storage_in_gib_when_present() {
+        #[derive(serde::Deserialize)]
+        struct Partial {
+            #[serde(default)]
+            ephemeral_storage_in_gib: Option<u32>,
+        }
+        let p: Partial = serde_json::from_str(r#"{"ephemeral_storage_in_gib": 5}"#).unwrap();
+        assert_eq!(p.ephemeral_storage_in_gib, Some(5));
+    }
+
+    #[test]
+    fn ephemeral_storage_in_gib_defaults_to_none_when_absent() {
+        #[derive(serde::Deserialize)]
+        struct Partial {
+            #[serde(default)]
+            ephemeral_storage_in_gib: Option<u32>,
+        }
+        let p: Partial = serde_json::from_str("{}").unwrap();
+        assert_eq!(p.ephemeral_storage_in_gib, None);
     }
 }

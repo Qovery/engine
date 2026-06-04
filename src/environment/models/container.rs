@@ -66,6 +66,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
     pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
+    pub(crate) ephemeral_storage_in_gib: Option<u32>,
     pub(crate) min_instances: u32,
     pub(crate) max_instances: u32,
     pub(crate) public_domain: String,
@@ -134,6 +135,7 @@ impl<T: CloudProvider> Container<T> {
         ram_limit: KubernetesMemoryResourceUnit,
         gpu_request: Option<KubernetesGpuResourceUnit>,
         gpu_limit: Option<KubernetesGpuResourceUnit>,
+        ephemeral_storage_in_gib: Option<u32>,
         min_instances: u32,
         max_instances: u32,
         public_domain: String,
@@ -191,6 +193,7 @@ impl<T: CloudProvider> Container<T> {
             ram_limit,
             gpu_request,
             gpu_limit,
+            ephemeral_storage_in_gib,
             min_instances,
             max_instances,
             public_domain,
@@ -325,6 +328,10 @@ impl<T: CloudProvider> Container<T> {
                 ram_limit_in_mib: self.ram_limit.to_string(),
                 gpu_request: self.gpu_request.map(u32::from),
                 gpu_limit: self.gpu_limit.map(u32::from),
+                ephemeral_storage_in_gib: self
+                    .ephemeral_storage_in_gib
+                    .filter(|&n| n > 0)
+                    .map(|n| format!("{n}Gi")),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),
@@ -623,6 +630,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) ram_limit_in_mib: String,
     pub(crate) gpu_request: Option<u32>,
     pub(crate) gpu_limit: Option<u32>,
+    pub(crate) ephemeral_storage_in_gib: Option<String>,
     pub(crate) min_instances: u32,
     pub(crate) max_instances: u32,
     pub(crate) public_domain: String,
@@ -751,5 +759,135 @@ pub fn get_container_with_invalid_storage_size<T: CloudProvider>(
                 false => Ok(Some(invalid_storage)),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ContainerTeraContext, ServiceTeraContext};
+    use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
+    use crate::environment::models::container::ClusterTeraContext;
+    use crate::environment::models::labels_group::LabelsGroupTeraContext;
+    use crate::io_models::container::ContainerAdvancedSettings;
+    use std::collections::BTreeMap;
+    use tera::{Context, Tera};
+    use uuid::Uuid;
+
+    fn render_template(template: &str, context: ContainerTeraContext) -> String {
+        let tera_context = Context::from_serialize(context).expect("container tera context should serialize");
+        Tera::one_off(template, &tera_context, false).expect("template should render")
+    }
+
+    fn build_container_tera_context(ephemeral_storage_in_gib: Option<String>) -> ContainerTeraContext {
+        ContainerTeraContext {
+            organization_long_id: Uuid::new_v4(),
+            project_long_id: Uuid::new_v4(),
+            environment_short_id: "env123456".to_string(),
+            environment_long_id: Uuid::new_v4(),
+            deployment_id: "deploy123456".to_string(),
+            cluster: ClusterTeraContext {
+                long_id: Uuid::new_v4(),
+                name: "test-cluster".to_string(),
+                region: "eu-west-3".to_string(),
+                zone: "eu-west-3a".to_string(),
+                is_karpenter_enabled: false,
+            },
+            namespace: "test-namespace".to_string(),
+            service: ServiceTeraContext {
+                short_id: "cnt123456".to_string(),
+                long_id: Uuid::new_v4(),
+                r#type: "container",
+                name: "test-container".to_string(),
+                user_unsafe_name: "test container".to_string(),
+                image_full: "registry.example.com/test-image:latest".to_string(),
+                image_tag_label: "latest".to_string(),
+                image_tag: "latest".to_string(),
+                version: "test-image:latest".to_string(),
+                command_args: vec![],
+                entrypoint: None,
+                cpu_request_in_milli: "250m".to_string(),
+                cpu_limit_in_milli: "250m".to_string(),
+                ram_request_in_mib: "256Mi".to_string(),
+                ram_limit_in_mib: "256Mi".to_string(),
+                gpu_request: None,
+                gpu_limit: None,
+                ephemeral_storage_in_gib,
+                min_instances: 1,
+                max_instances: 1,
+                public_domain: "test.example.com".to_string(),
+                ports: vec![],
+                ports_layer4_public: vec![],
+                default_port: None,
+                storages: vec![],
+                readiness_probe: None,
+                liveness_probe: None,
+                advanced_settings: ContainerAdvancedSettings::default(),
+                legacy_deployment_matchlabels: false,
+                legacy_volumeclaim_template: false,
+                legacy_deployment_from_scaleway: false,
+                tolerations: BTreeMap::new(),
+                autoscaling: None,
+            },
+            registry: None,
+            environment_variables: vec![],
+            external_secrets: vec![],
+            mounted_files: vec![],
+            resource_expiration_in_seconds: None,
+            loadbalancer_l4_annotations: vec![],
+            annotations_group: AnnotationsGroupTeraContext::new(vec![]),
+            labels_group: LabelsGroupTeraContext::new(vec![]),
+        }
+    }
+
+    #[test]
+    fn renders_deployment_template_with_ephemeral_storage() {
+        let ctx = build_container_tera_context(Some("5Gi".to_string()));
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+        assert_eq!(
+            rendered.matches("ephemeral-storage: 5Gi").count(),
+            2,
+            "ephemeral-storage should appear in both requests and limits"
+        );
+    }
+
+    #[test]
+    fn renders_statefulset_template_with_ephemeral_storage() {
+        use crate::io_models::models::StorageDataTemplate;
+        let mut ctx = build_container_tera_context(Some("5Gi".to_string()));
+        // statefulset.j2.yaml only renders when storages.len() > 0
+        ctx.service.storages = vec![StorageDataTemplate {
+            id: "stor1".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "data".to_string(),
+            storage_type: "gp2".to_string(),
+            size_in_gib: 10,
+            mount_point: "/data".to_string(),
+            snapshot_retention_in_days: 0,
+        }];
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
+            ctx,
+        );
+        assert_eq!(
+            rendered.matches("ephemeral-storage: 5Gi").count(),
+            2,
+            "ephemeral-storage should appear in both requests and limits"
+        );
+    }
+
+    #[test]
+    fn renders_deployment_template_without_ephemeral_storage_when_unset() {
+        let ctx = build_container_tera_context(None);
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+        assert!(
+            !rendered.contains("ephemeral-storage"),
+            "ephemeral-storage should be absent when not set"
+        );
     }
 }

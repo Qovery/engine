@@ -474,6 +474,8 @@ pub struct Application {
     pub ram_limit_in_mib: u32,
     pub gpu_request: Option<u32>,
     pub gpu_limit: Option<u32>,
+    #[serde(default)]
+    pub ephemeral_storage_in_gib: Option<u32>,
     pub min_instances: u32,
     pub max_instances: u32,
     pub storage: Vec<Storage>,
@@ -575,6 +577,7 @@ impl Application {
                     KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                     self.gpu_request.map(KubernetesGpuResourceUnit),
                     self.gpu_limit.map(KubernetesGpuResourceUnit),
+                    self.ephemeral_storage_in_gib,
                     self.should_delete_shared_registry,
                     autoscaling_domain.clone(),
                 )?))
@@ -612,6 +615,7 @@ impl Application {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
             )?)),
@@ -648,6 +652,7 @@ impl Application {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
             )?)),
@@ -684,6 +689,7 @@ impl Application {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
             )?)),
@@ -720,6 +726,7 @@ impl Application {
                 KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
                 self.gpu_request.map(KubernetesGpuResourceUnit),
                 self.gpu_limit.map(KubernetesGpuResourceUnit),
+                self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
             )?)),
@@ -839,5 +846,47 @@ impl Storage {
             mount_point: self.mount_point.clone(),
             snapshot_retention_in_days: self.snapshot_retention_in_days,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Application;
+
+    const MINIMAL_APP_JSON: &str = r#"{
+        "long_id": "00000000-0000-0000-0000-000000000001",
+        "name": "test-app",
+        "action": "CREATE",
+        "git_url": "https://github.com/test/test",
+        "kube_name": "test-app",
+        "branch": "main",
+        "commit_id": "abc123",
+        "public_domain": "test.example.com",
+        "ports": [],
+        "cpu_request_in_milli": 100,
+        "cpu_limit_in_milli": 100,
+        "ram_request_in_mib": 256,
+        "ram_limit_in_mib": 256,
+        "min_instances": 1,
+        "max_instances": 1,
+        "storage": [],
+        "command_args": [],
+        "container_registries": []
+    }"#;
+
+    #[test]
+    fn deserializes_ephemeral_storage_in_gib_when_present() {
+        let json = format!(
+            r#"{{"ephemeral_storage_in_gib": 5, {}}}"#,
+            &MINIMAL_APP_JSON[1..MINIMAL_APP_JSON.len() - 1]
+        );
+        let app: Application = serde_json::from_str(&json).unwrap();
+        assert_eq!(app.ephemeral_storage_in_gib, Some(5));
+    }
+
+    #[test]
+    fn ephemeral_storage_in_gib_defaults_to_none_when_absent() {
+        let app: Application = serde_json::from_str(MINIMAL_APP_JSON).unwrap();
+        assert_eq!(app.ephemeral_storage_in_gib, None);
     }
 }
