@@ -61,7 +61,7 @@ resource "qovery_terraform_service" "blueprint" {
   variables = [
 {% for var in variables %}
     {
-      key       = "TF_VAR_{{ var.name | hcl_string }}"
+      key       = "{{ var.name | hcl_string }}"
       value     = "{{ var.value | hcl_string }}"
       is_secret = {{ var.is_secret }}
     },
