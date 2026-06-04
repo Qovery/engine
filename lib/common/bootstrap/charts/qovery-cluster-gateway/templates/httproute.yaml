@@ -10,6 +10,9 @@ metadata:
   namespace: {{ .Values.namespace | default .Release.Namespace }}
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "{{ .Values.dns.domain }}"
+    {{- if .Values.dns.cloudflareProxied }}
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
+    {{- end }}
 spec:
   parentRefs:
     - name: qovery-cluster-public-gateway # TODO(benjamin): make it param

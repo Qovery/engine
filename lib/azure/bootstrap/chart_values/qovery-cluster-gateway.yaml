@@ -1,5 +1,6 @@
 dns:
   domain: set-by-engine-code
+  cloudflareProxied: false # set-by-engine-code
 
 certManagerNamespace: "qovery"
 

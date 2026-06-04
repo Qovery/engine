@@ -50,6 +50,13 @@ impl DnsProviderConfiguration {
         }
         .to_string()
     }
+
+    pub fn cloudflare_proxied(&self) -> bool {
+        match self {
+            DnsProviderConfiguration::Cloudflare(config) => config.cloudflare_proxied,
+            DnsProviderConfiguration::QoveryDns(_) | DnsProviderConfiguration::Route53(_) => false,
+        }
+    }
 }
 
 pub trait DnsProvider: Send + Sync {

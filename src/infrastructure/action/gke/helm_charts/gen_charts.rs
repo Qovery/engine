@@ -495,6 +495,7 @@ pub(super) fn gke_helm_charts(
                     load_balancer_ip_allocations: gcp_load_balancer_ip_allocations.clone(),
                 }),
                 QoveryClusterGatewayChartOptions {
+                    dns_cloudflare_proxied: chart_config_prerequisites.dns_provider_config.cloudflare_proxied(),
                     x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection::from_trusted_cidrs_and_hops(
                         &chart_config_prerequisites
                             .cluster_advanced_settings
