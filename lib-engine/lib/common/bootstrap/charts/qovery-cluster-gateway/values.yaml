@@ -1,5 +1,6 @@
 dns:
   domain: ""
+  cloudflareProxied: false
 
 certManagerNamespace: "cert-manager"
 

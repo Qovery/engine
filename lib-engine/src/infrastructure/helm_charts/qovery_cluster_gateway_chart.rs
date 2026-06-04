@@ -66,6 +66,7 @@ impl std::fmt::Display for EnvoyGatewayApiPathEscapedSlashesAction {
 
 #[derive(Default)]
 pub struct QoveryClusterGatewayChartOptions {
+    pub dns_cloudflare_proxied: bool, // render provider-specific Cloudflare proxy annotation on bootstrap Gateway routes
     pub x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
     pub http_stream_idle_timeout_seconds: Option<u32>, // stream idle timeout for downstream HTTP streams
     pub path_disable_merge_slashes: bool, // preserve duplicate slashes behavior at gateway-level path handling
@@ -145,6 +146,10 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
             key: "dns.domain".to_string(),
             value: self.domain.wildcarded().to_string(),
         }];
+        chart_set_values.push(ChartSetValue {
+            key: "dns.cloudflareProxied".to_string(),
+            value: self.chart_options.dns_cloudflare_proxied.to_string(),
+        });
 
         match &self.chart_options.x_forwarded_for_client_ip_detection {
             XForwardedForClientIpDetection::TrustedHops(num_hops) => {
@@ -721,5 +726,37 @@ mod tests {
             .expect("access log format value should be set");
 
         assert!(!access_log_entry.value.is_empty(), "access log format should be base64 encoded");
+    }
+
+    #[test]
+    fn cloudflare_proxy_setting_is_rendered_for_bootstrap_gateway_dns_route() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_eip_allocation_ids: None,
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            }),
+            QoveryClusterGatewayChartOptions {
+                dns_cloudflare_proxied: true,
+                ..Default::default()
+            },
+            false,
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let values: HashSet<(&str, &str)> = common_chart
+            .chart_info
+            .values
+            .iter()
+            .map(|entry| (entry.key.as_str(), entry.value.as_str()))
+            .collect();
+
+        assert!(values.contains(&("dns.cloudflareProxied", "true")));
     }
 }
