@@ -210,7 +210,7 @@ mod tests {
         assert!(result.contains("cpu_milli   = 500"));
         assert!(result.contains("ram_mib     = 512"));
         assert!(result.contains("storage_gib = 20"));
-        assert!(result.contains(r#"key       = "TF_VAR_region""#));
+        assert!(result.contains(r#"key       = "region""#));
         assert!(result.contains("tfvars_files = []"));
         assert!(!result.contains("import {"));
     }
@@ -305,7 +305,7 @@ mod tests {
         }];
         let result = render_template(&test_spec(), &request, &test_info());
 
-        assert!(result.contains(r#"key       = "TF_VAR_db_password""#));
+        assert!(result.contains(r#"key       = "db_password""#));
         assert!(result.contains("is_secret = true"));
     }
 
