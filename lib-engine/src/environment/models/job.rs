@@ -60,6 +60,7 @@ pub struct Job<T: CloudProvider> {
     pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
     pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
+    pub(crate) ephemeral_storage_in_gib: Option<u32>,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
     pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) mounted_files: BTreeSet<MountedFile>,
@@ -97,6 +98,7 @@ impl<T: CloudProvider> Job<T> {
         ram_limit_in_mib: KubernetesMemoryResourceUnit,
         gpu_request: Option<KubernetesGpuResourceUnit>,
         gpu_limit: Option<KubernetesGpuResourceUnit>,
+        ephemeral_storage_in_gib: Option<u32>,
         environment_variables: Vec<EnvironmentVariable>,
         external_secrets: BTreeMap<String, ExternalSecret>,
         mounted_files: BTreeSet<MountedFile>,
@@ -146,6 +148,7 @@ impl<T: CloudProvider> Job<T> {
             ram_limit_in_mib,
             gpu_request,
             gpu_limit,
+            ephemeral_storage_in_gib,
             environment_variables,
             external_secrets,
             mounted_files,
@@ -276,6 +279,10 @@ impl<T: CloudProvider> Job<T> {
                 ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 gpu_request: self.gpu_request.map(u32::from),
                 gpu_limit: self.gpu_limit.map(u32::from),
+                ephemeral_storage_in_gib: self
+                    .ephemeral_storage_in_gib
+                    .filter(|&n| n > 0)
+                    .map(|n| format!("{n}Gi")),
                 default_port: self.default_port,
                 max_nb_restart: self.max_nb_restart,
                 max_duration_in_sec: self.max_duration.as_secs(),
@@ -568,6 +575,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) ram_limit_in_mib: String,
     pub(crate) gpu_request: Option<u32>,
     pub(crate) gpu_limit: Option<u32>,
+    pub(crate) ephemeral_storage_in_gib: Option<String>,
     pub(crate) default_port: Option<u16>,
     pub(crate) max_nb_restart: u32,
     pub(crate) max_duration_in_sec: u64,
@@ -639,6 +647,40 @@ mod tests {
         assert!(!rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
     }
 
+    #[test]
+    fn renders_job_template_with_ephemeral_storage() {
+        let mut ctx = build_job_tera_context(false);
+        ctx.service.ephemeral_storage_in_gib = Some("5Gi".to_string());
+        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        assert_eq!(
+            rendered.matches("ephemeral-storage: 5Gi").count(),
+            2,
+            "ephemeral-storage should appear in both requests and limits"
+        );
+    }
+
+    #[test]
+    fn renders_cronjob_template_with_ephemeral_storage() {
+        let mut ctx = build_job_tera_context(true);
+        ctx.service.ephemeral_storage_in_gib = Some("5Gi".to_string());
+        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"), ctx);
+        assert_eq!(
+            rendered.matches("ephemeral-storage: 5Gi").count(),
+            2,
+            "ephemeral-storage should appear in both requests and limits"
+        );
+    }
+
+    #[test]
+    fn renders_job_template_without_ephemeral_storage_when_unset() {
+        let ctx = build_job_tera_context(false);
+        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        assert!(
+            !rendered.contains("ephemeral-storage"),
+            "ephemeral-storage should be absent when not set"
+        );
+    }
+
     fn render_template(template: &str, context: JobTeraContext) -> String {
         let tera_context = Context::from_serialize(context).expect("job tera context should serialize");
         Tera::one_off(template, &tera_context, false).expect("template should render")
@@ -688,6 +730,7 @@ mod tests {
                 ram_limit_in_mib: "256Mi".to_string(),
                 gpu_request: None,
                 gpu_limit: None,
+                ephemeral_storage_in_gib: None,
                 default_port: None,
                 max_nb_restart: 1,
                 max_duration_in_sec: 120,

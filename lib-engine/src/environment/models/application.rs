@@ -61,6 +61,7 @@ pub struct Application<T: CloudProvider> {
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
     pub(crate) gpu_limit: Option<KubernetesGpuResourceUnit>,
+    pub(crate) ephemeral_storage_in_gib: Option<u32>,
     pub(crate) min_instances: u32,
     pub(crate) max_instances: u32,
     pub(crate) build: Build,
@@ -115,6 +116,7 @@ impl<T: CloudProvider> Application<T> {
         ram_limit: KubernetesMemoryResourceUnit,
         gpu_request: Option<KubernetesGpuResourceUnit>,
         gpu_limit: Option<KubernetesGpuResourceUnit>,
+        ephemeral_storage_in_gib: Option<u32>,
         should_delete_shared_registry: bool,
         autoscaling: Option<AutoscalingConfig>,
     ) -> Result<Self, ApplicationError> {
@@ -147,6 +149,7 @@ impl<T: CloudProvider> Application<T> {
             ram_limit,
             gpu_request,
             gpu_limit,
+            ephemeral_storage_in_gib,
             min_instances,
             max_instances,
             build,
@@ -255,6 +258,10 @@ impl<T: CloudProvider> Application<T> {
                 ram_limit_in_mib: self.ram_limit.to_string(),
                 gpu_request: self.gpu_request.map(u32::from),
                 gpu_limit: self.gpu_limit.map(u32::from),
+                ephemeral_storage_in_gib: self
+                    .ephemeral_storage_in_gib
+                    .filter(|&n| n > 0)
+                    .map(|n| format!("{n}Gi")),
                 min_instances: self.min_instances,
                 max_instances: self.max_instances,
                 public_domain: self.public_domain.clone(),

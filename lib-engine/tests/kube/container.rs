@@ -94,6 +94,7 @@ fn should_increase_container_storage_size() {
             KubernetesMemoryResourceUnit::MebiByte(resized_container.ram_limit_in_mib),
             None,
             None,
+            None,
             resized_container.min_instances,
             resized_container.max_instances,
             resized_container.public_domain.clone(),

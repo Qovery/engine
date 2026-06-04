@@ -287,11 +287,17 @@ spec:
               {%- if service.gpu_limit and service.gpu_limit > 0 %}
               nvidia.com/gpu: {{ service.gpu_limit }}
               {%- endif %}
+              {%- if service.ephemeral_storage_in_gib %}
+              ephemeral-storage: {{ service.ephemeral_storage_in_gib }}
+              {%- endif %}
             requests:
               cpu: {{ service.cpu_request_in_milli }}
               memory: {{ service.ram_request_in_mib }}
               {%- if service.gpu_request and service.gpu_request > 0 %}
               nvidia.com/gpu: {{ service.gpu_request }}
+              {%- endif %}
+              {%- if service.ephemeral_storage_in_gib %}
+              ephemeral-storage: {{ service.ephemeral_storage_in_gib }}
               {%- endif %}
 
 {%- endif %}

@@ -108,6 +108,7 @@ fn should_increase_app_storage_size() {
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_limit_in_mib),
             None,
             None,
+            None,
             true,
             None,
         )
