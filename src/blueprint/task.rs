@@ -11,6 +11,7 @@ use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
 use crate::log_file_writer::LogFileWriter;
@@ -279,6 +280,8 @@ impl Task for BlueprintTask {
         let record =
             metrics_registry.start_record(self.request.target_environment.long_id, StepLabel::Service, StepName::Total);
 
+        let mut target_env = self.request.target_environment.clone();
+
         let deployment_ret = (|| -> Result<(), Box<EngineError>> {
             // 2. Clone blueprint repo
             let (blueprint_dir, blueprint_info) = self.clone_blueprint_repo(&infra_context)?;
@@ -286,9 +289,11 @@ impl Task for BlueprintTask {
             // 3. Parse QBM manifest
             let manifest = self.parse_manifest(&blueprint_dir)?;
 
-            // 4. Resolve spec
-            let resolved_spec =
-                ResolvedBlueprintSpec::resolve(&manifest, &self.request.target_environment.spec_overrides);
+            // 4. Inject context variables
+            inject_context_variables(&mut target_env, &self.request.kubernetes.region, &self.request.kubernetes.name);
+
+            // 5. Resolve spec
+            let resolved_spec = ResolvedBlueprintSpec::resolve(&manifest, &target_env.spec_overrides);
 
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(BlueprintStep::LoadConfiguration),
@@ -315,7 +320,7 @@ impl Task for BlueprintTask {
                     deploy_terraform::execute(
                         &self.lib_root_dir,
                         &tf_spec,
-                        &self.request.target_environment,
+                        &target_env,
                         &blueprint_info,
                         is_dry_run,
                         &event_details,
@@ -346,7 +351,7 @@ impl Task for BlueprintTask {
                         &blueprint_dir,
                         &self.lib_root_dir,
                         &helm_spec,
-                        &self.request.target_environment,
+                        &target_env,
                         &blueprint_info,
                         is_dry_run,
                         &event_details,
@@ -462,5 +467,101 @@ impl Task for BlueprintTask {
             self.qovery_api.clone(),
             self.request.event_details(),
         )
+    }
+}
+
+fn inject_context_variables(target_env: &mut BlueprintRequest, cluster_region: &str, cluster_name: &str) {
+    if !target_env.variables.iter().any(|v| v.name == "region") {
+        target_env.variables.push(BlueprintVariable {
+            name: "region".to_string(),
+            value: cluster_region.to_string(),
+            is_secret: false,
+        });
+    }
+    if !target_env.variables.iter().any(|v| v.name == "qovery_cluster_name") {
+        target_env.variables.push(BlueprintVariable {
+            name: "qovery_cluster_name".to_string(),
+            value: cluster_name.to_string(),
+            is_secret: false,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_inject_context_variables() {
+        let mut request = BlueprintRequest {
+            execution_id: "exec-1".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "test".to_string(),
+            kube_name: "test".to_string(),
+            project_long_id: Uuid::new_v4(),
+            organization_long_id: Uuid::new_v4(),
+            max_parallel_build: 1,
+            max_parallel_deploy: 1,
+            variables: vec![],
+            git_url: "https://github.com/test/test".to_string(),
+            tag: "v1".to_string(),
+            git_credentials: None,
+            git_token_id: None,
+            spec_overrides: None,
+            qovery_api_token: "token".to_string(),
+            environment_id: "env-1".to_string(),
+            import_id: None,
+        };
+
+        inject_context_variables(&mut request, "eu-west-3", "my-cluster");
+
+        assert!(
+            request
+                .variables
+                .iter()
+                .any(|v| v.name == "region" && v.value == "eu-west-3")
+        );
+        assert!(
+            request
+                .variables
+                .iter()
+                .any(|v| v.name == "qovery_cluster_name" && v.value == "my-cluster")
+        );
+    }
+
+    #[test]
+    fn test_inject_context_variables_does_not_overwrite() {
+        let mut request = BlueprintRequest {
+            execution_id: "exec-1".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "test".to_string(),
+            kube_name: "test".to_string(),
+            project_long_id: Uuid::new_v4(),
+            organization_long_id: Uuid::new_v4(),
+            max_parallel_build: 1,
+            max_parallel_deploy: 1,
+            variables: vec![BlueprintVariable {
+                name: "region".to_string(),
+                value: "us-east-1".to_string(),
+                is_secret: false,
+            }],
+            git_url: "https://github.com/test/test".to_string(),
+            tag: "v1".to_string(),
+            git_credentials: None,
+            git_token_id: None,
+            spec_overrides: None,
+            qovery_api_token: "token".to_string(),
+            environment_id: "env-1".to_string(),
+            import_id: None,
+        };
+
+        inject_context_variables(&mut request, "eu-west-3", "my-cluster");
+
+        assert_eq!(request.variables.len(), 2);
+        assert_eq!(request.variables[0].name, "region");
+        assert_eq!(request.variables[0].value, "us-east-1"); // Not overwritten
+        assert_eq!(request.variables[1].name, "qovery_cluster_name");
+        assert_eq!(request.variables[1].value, "my-cluster");
     }
 }
