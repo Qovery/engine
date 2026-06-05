@@ -36,8 +36,10 @@ use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
 use retry::OperationResult;
 use retry::delay::Fixed;
+use serde_yaml::Value;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -373,6 +375,93 @@ impl Gke {
 
         Ok(())
     }
+
+    pub fn write_runtime_kubeconfig_with_access_token_if_needed(&self) -> Result<bool, Box<EngineError>> {
+        let GcpCredentials::AccessToken(access_token_credentials) = &self.credentials else {
+            return Ok(false);
+        };
+
+        let kubeconfig_path = self.kubeconfig_local_file_path();
+        let event_details = self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration));
+        let kubeconfig = fs::read_to_string(&kubeconfig_path).map_err(|error| {
+            Box::new(EngineError::new_cannot_read_file(
+                event_details.clone(),
+                EngineCommandError::new(
+                    "Cannot read local kubeconfig file before rewriting it".to_string(),
+                    Some(error.to_string()),
+                    None,
+                ),
+            ))
+        })?;
+        let rewrite =
+            rewrite_kubeconfig_with_access_token_if_needed(&kubeconfig, &access_token_credentials.access_token)
+                .map_err(|error| {
+                    Box::new(EngineError::new_cannot_get_cluster_error(
+                        event_details.clone(),
+                        EngineCommandError::new(
+                            "Cannot rewrite local kubeconfig file for runtime access token auth".to_string(),
+                            Some(error),
+                            None,
+                        ),
+                    ))
+                })?;
+        if let Some(rewritten_kubeconfig) = rewrite {
+            write_kubeconfig_on_disk(&kubeconfig_path, &rewritten_kubeconfig, event_details)?;
+        } else {
+            return Ok(false);
+        }
+
+        Ok(true)
+    }
+}
+
+fn rewrite_kubeconfig_with_access_token_if_needed(
+    kubeconfig: &str,
+    access_token: &str,
+) -> Result<Option<String>, String> {
+    let mut kubeconfig =
+        serde_yaml::from_str::<Value>(kubeconfig).map_err(|error| format!("Cannot parse kubeconfig YAML: {error}"))?;
+    let kubeconfig = kubeconfig
+        .as_mapping_mut()
+        .ok_or_else(|| "Kubeconfig root is not a map".to_string())?;
+    let Some(users) = kubeconfig
+        .get_mut(Value::String("users".to_string()))
+        .and_then(Value::as_sequence_mut)
+    else {
+        return Ok(None);
+    };
+
+    let user_key = Value::String("user".to_string());
+    let exec_key = Value::String("exec".to_string());
+    let token_key = Value::String("token".to_string());
+    let mut modified = false;
+
+    for user_entry in users.iter_mut() {
+        let Some(user_mapping) = user_entry.as_mapping_mut() else {
+            continue;
+        };
+        let Some(user) = user_mapping.get_mut(&user_key).and_then(Value::as_mapping_mut) else {
+            continue;
+        };
+        let has_qovery_exec = user
+            .get(&exec_key)
+            .and_then(Value::as_mapping)
+            .and_then(|exec| exec.get("command").and_then(Value::as_str))
+            .is_some_and(|command| command == "qovery");
+        if has_qovery_exec {
+            user.insert(token_key.clone(), Value::String(access_token.to_string()));
+            user.remove(&exec_key);
+            modified = true;
+        }
+    }
+
+    if !modified {
+        return Ok(None);
+    }
+
+    serde_yaml::to_string(&kubeconfig)
+        .map(Some)
+        .map_err(|error| format!("Cannot serialize kubeconfig: {error}"))
 }
 
 impl Kubernetes for Gke {
@@ -464,5 +553,127 @@ impl GcpStorageType {
             GcpStorageType::Balanced => "gcp-pd-balanced",
         }
         .to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_rewrite_exec_user_auth_to_token() {
+        let original = r#"
+apiVersion: v1
+clusters:
+  - cluster:
+      server: https://1.2.3.4
+      certificate-authority-data: abc
+    name: test
+contexts:
+  - context:
+      cluster: test
+      user: gke-user
+    name: test
+users:
+  - name: gke-user
+    user:
+      exec:
+        apiVersion: client.authentication.k8s.io/v1
+        command: qovery
+        args:
+          - cluster
+          - get-token
+          - --cluster-id
+          - my-cluster
+        interactiveMode: IfAvailable
+"#;
+
+        let rewritten = rewrite_kubeconfig_with_access_token_if_needed(original, "new-token")
+            .expect("failed rewriting kubeconfig")
+            .expect("expected kubeconfig rewrite");
+
+        let parsed = serde_yaml::from_str::<Value>(&rewritten)
+            .unwrap_or_else(|err| panic!("failed parsing rewritten kubeconfig: {err}"));
+        let users = parsed
+            .as_mapping()
+            .and_then(|yaml| yaml.get(Value::String("users".into())))
+            .and_then(Value::as_sequence)
+            .unwrap_or_else(|| {
+                panic!("rewritten kubeconfig does not contain users");
+            });
+        assert_eq!(users.len(), 1);
+
+        let user = users[0].as_mapping().unwrap();
+        let user_auth = user
+            .get(Value::String("user".into()))
+            .and_then(Value::as_mapping)
+            .unwrap();
+        assert_eq!(
+            user_auth.get(Value::String("token".into())),
+            Some(&Value::String("new-token".to_string()))
+        );
+        assert!(!user_auth.contains_key(Value::String("exec".into())));
+    }
+
+    #[test]
+    fn should_not_rewrite_when_users_are_missing() {
+        let original = r#"
+apiVersion: v1
+clusters: []
+contexts: []
+"#;
+
+        let rewritten =
+            rewrite_kubeconfig_with_access_token_if_needed(original, "new-token").expect("failed rewriting kubeconfig");
+        assert!(rewritten.is_none());
+    }
+
+    #[test]
+    fn should_skip_users_entry_without_user_block() {
+        let original = r#"
+apiVersion: v1
+clusters:
+  - cluster:
+      server: https://1.2.3.4
+      certificate-authority-data: abc
+    name: test
+contexts:
+  - context:
+      cluster: test
+      user: gke-user
+    name: test
+users:
+  - name: gke-user
+"#;
+
+        let rewritten =
+            rewrite_kubeconfig_with_access_token_if_needed(original, "new-token").expect("failed rewriting kubeconfig");
+        assert!(rewritten.is_none());
+    }
+
+    #[test]
+    fn should_not_rewrite_when_qovery_exec_is_missing() {
+        let original = r#"
+apiVersion: v1
+clusters:
+  - cluster:
+      server: https://1.2.3.4
+      certificate-authority-data: abc
+    name: test
+contexts:
+  - context:
+      cluster: test
+      user: gke-user
+    name: test
+users:
+  - name: gke-user
+    user:
+      token: existing-token
+"#;
+
+        let should_rewrite =
+            rewrite_kubeconfig_with_access_token_if_needed(original, "new-token").expect("failed parsing kubeconfig");
+
+        assert!(should_rewrite.is_none());
     }
 }

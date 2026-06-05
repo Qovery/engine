@@ -54,6 +54,7 @@ pub(super) fn create_gke_cluster(
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
+    cluster.write_runtime_kubeconfig_with_access_token_if_needed()?;
 
     // Ensure all nodes are ready on Kubernetes
     check_workers_on_create(cluster, infra_ctx.cloud_provider(), None)
