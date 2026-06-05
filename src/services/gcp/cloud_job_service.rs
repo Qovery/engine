@@ -1,7 +1,7 @@
 use crate::cmd::command::ExecutableCommand;
 use crate::cmd::command::QoveryCommand;
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::GcpCredentials;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::services::gcp::auth_service::GoogleAuthService;
 use std::collections::HashMap;
@@ -26,20 +26,22 @@ pub struct CloudJob {
 
 // TODO(ENG-1809): this service implementation needs to be done using rust SDK for GCP
 pub struct CloudJobService {
-    credentials: JsonCredentials,
+    credentials: GcpCredentials,
     is_ready: bool,
 }
 
 impl CloudJobService {
-    pub fn new(google_credentials: JsonCredentials) -> Result<Self, CloudJobServiceError> {
+    pub fn new_with_credentials(credentials: GcpCredentials) -> Result<Self, CloudJobServiceError> {
         // Not optimized, but will be removed once using rust SDK for GCP, prevent from having to inject this service in all services above
-        if let Err(e) = GoogleAuthService::activate_service_account(&google_credentials) {
+        if let GcpCredentials::ServiceAccount(google_credentials) = &credentials
+            && let Err(e) = GoogleAuthService::activate_service_account(google_credentials.as_ref())
+        {
             return Err(CloudJobServiceError::CannotInitializeCloudJobService {
                 raw_error_message: e.to_string(),
             });
         }
         Ok(CloudJobService {
-            credentials: google_credentials,
+            credentials,
             is_ready: true,
         })
     }
@@ -85,33 +87,52 @@ impl CloudJobService {
             job_labels_args = labels_args.join(",")
         }
 
-        match QoveryCommand::new(
-            "gcloud",
-            vec![
-                "run",
-                "jobs",
-                "create",
-                job_name,
-                format!("--image={job_image_with_tag}").as_str(),
-                format!("--command={job_command}").as_str(),
-                job_command_args.as_str(),
-                format!("--service-account={service_account_email}").as_str(),
-                format!("--region={}", region.to_cloud_provider_format()).as_str(),
-                match execute_now {
-                    true => "--execute-now",
-                    false => "",
-                },
-                format!("--project={project_id}").as_str(),
-                format!("--labels={job_labels_args}").as_str(),
-            ]
-            .into_iter()
-            .filter(|&x| !x.is_empty())
-            .collect::<Vec<&str>>()
-            .as_slice(),
-            &[self.credentials.cloudsdk_config()],
-        )
-        .exec()
-        {
+        let access_token_file = match &self.credentials {
+            GcpCredentials::ServiceAccount(_) => None,
+            GcpCredentials::AccessToken(credentials) => Some(
+                GoogleAuthService::write_access_token_file(credentials.access_token.as_str()).map_err(|e| {
+                    CloudJobServiceError::CannotCreateCloudJob {
+                        job_name: job_name.to_string(),
+                        raw_error_message: e.to_string(),
+                    }
+                })?,
+            ),
+        };
+
+        let mut args = Vec::new();
+        if let Some(access_token_file) = &access_token_file {
+            args.push(format!(
+                "--access-token-file={}",
+                access_token_file.path().to_str().unwrap_or_default()
+            ));
+        }
+        args.extend([
+            "run".to_string(),
+            "jobs".to_string(),
+            "create".to_string(),
+            job_name.to_string(),
+            format!("--image={job_image_with_tag}"),
+            format!("--command={job_command}"),
+            job_command_args,
+            match service_account_email.is_empty() {
+                true => "".to_string(),
+                false => format!("--service-account={service_account_email}"),
+            },
+            format!("--region={}", region.to_cloud_provider_format()),
+            match execute_now {
+                true => "--execute-now".to_string(),
+                false => "".to_string(),
+            },
+            format!("--project={project_id}"),
+            format!("--labels={job_labels_args}"),
+        ]);
+        let args = args
+            .iter()
+            .filter(|arg| !arg.is_empty())
+            .map(String::as_str)
+            .collect::<Vec<&str>>();
+
+        match QoveryCommand::new("gcloud", args.as_slice(), &[self.credentials.cloudsdk_config()]).exec() {
             Ok(_) => Ok(CloudJob {
                 _name: job_name.to_string(),
             }),

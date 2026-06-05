@@ -57,7 +57,7 @@ data "google_compute_network" "vpc" {
 # This is a dirty workaround allowing to get subnetworks self links via data after network creation
 # `for_each` doesn't seem to like the when using not yet created resources
 locals {
-    vpc_logs_flow_gcloud_commands = [for i, subnetwork in data.google_compute_network.vpc.subnetworks_self_links : "gcloud compute networks subnets update ${subnetwork} {% if vpc_enable_flow_logs %} --enable-flow-logs --logging-flow-sampling=${var.vpc_flow_logs_sampling} {% else %} --no-enable-flow-logs {% endif %} --project=${var.project_id}"]
+    vpc_logs_flow_gcloud_commands = [for i, subnetwork in data.google_compute_network.vpc.subnetworks_self_links : "gcloud {% if gcp_wif_credentials %}--access-token-file={{ gcp_access_token_file }}{% endif %} compute networks subnets update ${subnetwork} {% if vpc_enable_flow_logs %} --enable-flow-logs --logging-flow-sampling=${var.vpc_flow_logs_sampling} {% else %} --no-enable-flow-logs {% endif %} --project=${var.project_id}"]
 }
 
 resource "null_resource" "set_subnetwork_vpc_log_flow" {

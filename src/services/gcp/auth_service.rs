@@ -3,7 +3,7 @@ use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as IOJsonCredentials;
 use std::fs::File;
 use std::io::Write;
-use tempfile::tempdir;
+use tempfile::{NamedTempFile, tempdir};
 use thiserror::Error;
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
@@ -13,11 +13,28 @@ pub enum AuthServiceError {
         service_account_email: String,
         raw_error_message: String,
     },
+    #[error("Cannot write GCP access token file, error: `{raw_error_message}`")]
+    CannotWriteAccessTokenFile { raw_error_message: String },
 }
 
 pub struct GoogleAuthService {}
 
 impl GoogleAuthService {
+    pub fn write_access_token_file(access_token: &str) -> Result<NamedTempFile, AuthServiceError> {
+        let mut file = NamedTempFile::with_prefix("gcp-access-token-").map_err(|e| {
+            AuthServiceError::CannotWriteAccessTokenFile {
+                raw_error_message: format!("Cannot create temp file for GCP access token, error: {e}"),
+            }
+        })?;
+
+        file.write_all(access_token.as_bytes())
+            .map_err(|e| AuthServiceError::CannotWriteAccessTokenFile {
+                raw_error_message: format!("Cannot write GCP access token to temp file, error: {e}"),
+            })?;
+
+        Ok(file)
+    }
+
     pub fn activate_service_account(google_credentials: &JsonCredentials) -> Result<(), AuthServiceError> {
         let dir = tempdir().map_err(|e| AuthServiceError::CannotActivateServiceAccount {
             service_account_email: google_credentials.client_email.clone(),

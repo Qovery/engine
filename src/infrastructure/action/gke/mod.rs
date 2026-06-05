@@ -5,6 +5,7 @@ mod cluster_upgrade;
 pub(crate) mod helm_charts;
 mod tera_context;
 
+use crate::environment::models::gcp::GcpCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as IoJsonCredentials;
 use crate::errors::CommandError as EngineCommandError;
 use crate::errors::EngineError;
@@ -21,6 +22,7 @@ use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesUpgradeStatus, send_progress_on_long_task};
 use crate::runtime::block_on;
+use crate::services::gcp::google_cloud_sdk_types::new_google_auth_credentials_from_access_token;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
 use google_cloud_container_v1::client::ClusterManager;
 use google_cloud_container_v1::model::operation::Status as GkeOperationStatus;
@@ -125,35 +127,47 @@ fn disable_master_authorized_networks_if_necessary(
 fn gke_cluster_resource_name(cluster: &Gke) -> String {
     format!(
         "projects/{}/locations/{}/clusters/{}",
-        cluster.credentials.project_id,
+        cluster.credentials.project_id(),
         cluster.region(),
         cluster.cluster_name()
     )
 }
 
 fn gke_client(cluster: &Gke, event_details: EventDetails) -> Result<ClusterManager, Box<EngineError>> {
-    let service_account_json =
-        serde_json::to_value(IoJsonCredentials::from(cluster.credentials.clone())).map_err(|err| {
-            Box::new(EngineError::new_cannot_get_cluster_error(
-                event_details.clone(),
-                EngineCommandError::new_from_safe_message(format!(
-                    "Failed to serialize GCP service account credentials: {err}"
-                )),
-            ))
-        })?;
+    let client = match &cluster.credentials {
+        GcpCredentials::ServiceAccount(credentials) => {
+            let service_account_json = serde_json::to_value(IoJsonCredentials::from(credentials.as_ref().clone()))
+                .map_err(|err| {
+                    Box::new(EngineError::new_cannot_get_cluster_error(
+                        event_details.clone(),
+                        EngineCommandError::new_from_safe_message(format!(
+                            "Failed to serialize GCP service account credentials: {err}"
+                        )),
+                    ))
+                })?;
 
-    block_on(async move {
-        let credentials = ServiceAccountCredentialsBuilder::new(service_account_json)
-            .build()
-            .map_err(|err| format!("Failed to create GCP credentials for GKE API client: {err}"))?;
+            block_on(async move {
+                let credentials = ServiceAccountCredentialsBuilder::new(service_account_json)
+                    .build()
+                    .map_err(|err| format!("Failed to create GCP credentials for GKE API client: {err}"))?;
 
-        ClusterManager::builder()
-            .with_credentials(credentials)
-            .build()
-            .await
-            .map_err(|err| format!("Failed to create GKE API client: {err}"))
-    })
-    .map_err(|err_message| {
+                ClusterManager::builder()
+                    .with_credentials(credentials)
+                    .build()
+                    .await
+                    .map_err(|err| format!("Failed to create GKE API client: {err}"))
+            })
+        }
+        GcpCredentials::AccessToken(credentials) => block_on(async move {
+            ClusterManager::builder()
+                .with_credentials(new_google_auth_credentials_from_access_token(credentials))
+                .build()
+                .await
+                .map_err(|err| format!("Failed to create GKE API client: {err}"))
+        }),
+    };
+
+    client.map_err(|err_message| {
         Box::new(EngineError::new_cannot_get_cluster_error(
             event_details,
             EngineCommandError::new_from_safe_message(err_message),

@@ -1,7 +1,10 @@
 use crate::environment::models::ToCloudProviderFormat;
+use crate::environment::models::gcp::GcpCredentials;
 use crate::environment::models::third_parties::LetsEncryptConfig;
 use crate::environment::models::types::Percentage;
+use crate::errors::CommandError as EngineCommandError;
 use crate::errors::EngineError;
+use crate::events::{InfrastructureStep, Stage::Infrastructure};
 use crate::infrastructure::action::ToInfraTeraContext;
 use crate::infrastructure::action::utils::{generate_public_access_cidrs, is_api_access_restricted};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -14,6 +17,7 @@ use crate::io_models::context::Features;
 use crate::io_models::models::VpcQoveryNetworkMode;
 use crate::string::terraform_list_format;
 use serde::Serialize;
+use std::io::Write;
 use tera::Context as TeraContext;
 use time::format_description;
 
@@ -68,41 +72,75 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
 
     // GCP
     // credentials
-    context.insert("gcp_json_credentials_raw", &cluster.credentials.r#type.to_string());
-    context.insert("gcp_json_credentials_type", &cluster.credentials.r#type.to_string());
-    context.insert(
-        "gcp_json_credentials_private_key_id",
-        &cluster.credentials.private_key_id.to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_private_key",
-        &cluster
-            .credentials
-            .private_key
-            .as_str()
-            .escape_default() // escape new lines to have \n instead
-            .to_string(),
-    );
-    context.insert(
-        "gcp_json_credentials_client_email",
-        &cluster.credentials.client_email.to_string(),
-    );
-    context.insert("gcp_json_credentials_client_id", &cluster.credentials.client_id.to_string());
-    context.insert("gcp_json_credentials_auth_uri", cluster.credentials.auth_uri.as_str());
-    context.insert("gcp_json_credentials_token_uri", cluster.credentials.token_uri.as_str());
-    context.insert(
-        "gcp_json_credentials_auth_provider_x509_cert_url",
-        cluster.credentials.auth_provider_x509_cert_url.as_str(),
-    );
-    context.insert(
-        "gcp_json_credentials_client_x509_cert_url",
-        cluster.credentials.client_x509_cert_url.as_str(),
-    );
-    context.insert(
-        "gcp_json_credentials_universe_domain",
-        &cluster.credentials.universe_domain.to_string(),
-    );
-    context.insert("gcp_project_id", cluster.credentials.project_id.as_str());
+    match &cluster.credentials {
+        GcpCredentials::ServiceAccount(credentials) => {
+            context.insert("gcp_json_credentials_raw", &credentials.r#type.to_string());
+            context.insert("gcp_json_credentials_type", &credentials.r#type.to_string());
+            context.insert("gcp_json_credentials_private_key_id", &credentials.private_key_id.to_string());
+            context.insert(
+                "gcp_json_credentials_private_key",
+                &credentials
+                    .private_key
+                    .as_str()
+                    .escape_default() // escape new lines to have \n instead
+                    .to_string(),
+            );
+            context.insert("gcp_json_credentials_client_email", &credentials.client_email.to_string());
+            context.insert("gcp_json_credentials_client_id", &credentials.client_id.to_string());
+            context.insert("gcp_json_credentials_auth_uri", credentials.auth_uri.as_str());
+            context.insert("gcp_json_credentials_token_uri", credentials.token_uri.as_str());
+            context.insert(
+                "gcp_json_credentials_auth_provider_x509_cert_url",
+                credentials.auth_provider_x509_cert_url.as_str(),
+            );
+            context.insert(
+                "gcp_json_credentials_client_x509_cert_url",
+                credentials.client_x509_cert_url.as_str(),
+            );
+            context.insert("gcp_json_credentials_universe_domain", &credentials.universe_domain.to_string());
+        }
+        GcpCredentials::AccessToken(_) => {
+            context.insert("gcp_json_credentials_raw", "");
+            context.insert("gcp_json_credentials_type", "");
+            context.insert("gcp_json_credentials_private_key_id", "");
+            context.insert("gcp_json_credentials_private_key", "");
+            context.insert("gcp_json_credentials_client_email", "");
+            context.insert("gcp_json_credentials_client_id", "");
+            context.insert("gcp_json_credentials_auth_uri", "");
+            context.insert("gcp_json_credentials_token_uri", "");
+            context.insert("gcp_json_credentials_auth_provider_x509_cert_url", "");
+            context.insert("gcp_json_credentials_client_x509_cert_url", "");
+            context.insert("gcp_json_credentials_universe_domain", "");
+        }
+    }
+
+    // For WIF/AccessToken credentials, gcloud CLI needs a token file for Terraform local-exec
+    // provisioners (e.g. networks.j2.tf). The persisted kubeconfig must not embed this token
+    // because it expires; it uses `qovery cluster get-token` instead.
+    let (gcp_wif_credentials, gcp_access_token_file_path) = match &cluster.credentials {
+        GcpCredentials::ServiceAccount(_) => (false, String::new()),
+        GcpCredentials::AccessToken(credentials) => {
+            let token_file_path = cluster.temp_dir.join("gcp-access-token");
+            let file_path = match std::fs::File::create(&token_file_path)
+                .and_then(|mut f| f.write_all(credentials.access_token.as_bytes()))
+            {
+                Ok(_) => token_file_path.to_string_lossy().into_owned(),
+                Err(e) => {
+                    return Err(Box::new(EngineError::new_cannot_get_cluster_error(
+                        cluster.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                        EngineCommandError::new_from_safe_message(format!(
+                            "Cannot write GCP access token file for Terraform local-exec: {e}"
+                        )),
+                    )));
+                }
+            };
+            (true, file_path)
+        }
+    };
+    context.insert("gcp_wif_credentials", &gcp_wif_credentials);
+    context.insert("gcp_access_token_file", &gcp_access_token_file_path);
+
+    context.insert("gcp_project_id", cluster.credentials.project_id());
     context.insert("gcp_region", &cluster.region.to_cloud_provider_format());
     context.insert(
         "gcp_zones",
@@ -218,7 +256,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             context.insert("vpc_use_existing", &true);
             context.insert(
                 "network_project_id",
-                vpc_project_id.as_ref().unwrap_or(&cluster.credentials.project_id), // If no project set, use the current one
+                vpc_project_id.as_deref().unwrap_or(cluster.credentials.project_id()), // If no project set, use the current one
             );
             context.insert("vpc_name", &vpc_name);
             context.insert("subnetwork", subnetwork_name.as_deref().unwrap_or(""));

@@ -1,6 +1,6 @@
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::environment::models::gcp::{GcpCredentials, JsonCredentials};
 use crate::infrastructure::models::build_platform::Image;
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::errors::ContainerRegistryError;
@@ -38,33 +38,57 @@ impl GoogleArtifactRegistry {
         credentials: JsonCredentials,
         service: Arc<ArtifactRegistryService>,
     ) -> Result<Self, ContainerRegistryError> {
+        Self::new_with_credentials(context, long_id, name, project_id, region, credentials.into(), service)
+    }
+
+    pub fn new_with_credentials(
+        context: Context,
+        long_id: Uuid,
+        name: &str,
+        project_id: &str,
+        region: GcpRegion,
+        credentials: GcpCredentials,
+        service: Arc<ArtifactRegistryService>,
+    ) -> Result<Self, ContainerRegistryError> {
         // Be sure we are logged on the registry
-        let login = "_json_key".to_string();
-        let secret_token = serde_json::to_string(&JsonCredentialsIo::from(credentials.clone())).map_err(|e| {
-            ContainerRegistryError::CannotInstantiateClient {
-                raw_error_message: e.to_string(),
-            }
-        })?;
         let registry_raw_url = format!("https://{}-docker.pkg.dev", region.to_cloud_provider_format());
 
         let mut registry =
             Url::parse(registry_raw_url.as_str()).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
                 registry_url: registry_raw_url,
             })?;
-        let _ = registry.set_username(&login);
-        let _ = registry.set_password(Some(&secret_token));
 
-        if context
-            .docker
-            .login_artifact_registry(
-                &registry,
-                credentials.client_email.as_str(),
-                &secret_token,
-                &[credentials.cloudsdk_config()],
-            )
-            .is_err()
-        {
-            return Err(ContainerRegistryError::InvalidCredentials);
+        match &credentials {
+            GcpCredentials::ServiceAccount(credentials) => {
+                let login = "_json_key".to_string();
+                let secret_token = serde_json::to_string(&JsonCredentialsIo::from(credentials.as_ref().clone()))
+                    .map_err(|e| ContainerRegistryError::CannotInstantiateClient {
+                        raw_error_message: e.to_string(),
+                    })?;
+                let _ = registry.set_username(&login);
+                let _ = registry.set_password(Some(&secret_token));
+
+                if context
+                    .docker
+                    .login_artifact_registry(
+                        &registry,
+                        credentials.client_email.as_str(),
+                        &secret_token,
+                        &[credentials.cloudsdk_config()],
+                    )
+                    .is_err()
+                {
+                    return Err(ContainerRegistryError::InvalidCredentials);
+                }
+            }
+            GcpCredentials::AccessToken(credentials) => {
+                let _ = registry.set_username("oauth2accesstoken");
+                let _ = registry.set_password(Some(credentials.access_token.as_str()));
+
+                if context.docker.login(&registry).is_err() {
+                    return Err(ContainerRegistryError::InvalidCredentials);
+                }
+            }
         }
 
         let project_name = project_id.to_string();

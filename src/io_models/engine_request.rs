@@ -4,8 +4,8 @@ use serde_json::Value;
 
 use crate::environment::models::azure::Credentials;
 use crate::environment::models::domain::Domain;
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
+use crate::environment::models::gcp::{GcpAccessTokenCredentials, GcpCredentials, JsonCredentials};
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
 use crate::events::{BlueprintStep, EventDetails, InfrastructureStep, Stage, Transmitter};
@@ -359,7 +359,7 @@ fn deserialize_cloud_provider_options_by_kind(
             let parsed = serde_json::from_value::<CloudProviderOptions>(options)
                 .map_err(|e| format!("Cannot deserialize GCP cloud provider options: {e}"))?;
             match parsed {
-                CloudProviderOptions::Gcp { .. } => Ok(parsed),
+                CloudProviderOptions::Gcp { .. } | CloudProviderOptions::GcpAccessToken { .. } => Ok(parsed),
                 _ => Err("Invalid GCP cloud provider options payload".to_string()),
             }
         }
@@ -520,17 +520,32 @@ impl CloudProvider {
                 )))
             }
             cloud_provider::Kind::Gcp => {
-                let CloudProviderOptions::Gcp { gcp_credentials } = &self.options else {
-                    return None;
-                };
-                let Ok(credentials) = JsonCredentials::try_from(gcp_credentials.clone()) else {
-                    return None;
+                let credentials = match &self.options {
+                    CloudProviderOptions::Gcp { gcp_credentials } => {
+                        let Ok(credentials) = JsonCredentials::try_from(gcp_credentials.clone()) else {
+                            return None;
+                        };
+                        GcpCredentials::ServiceAccount(Box::new(credentials))
+                    }
+                    CloudProviderOptions::GcpAccessToken {
+                        project_id,
+                        access_token,
+                        access_token_expiration,
+                        ..
+                    } => GcpCredentials::AccessToken(GcpAccessTokenCredentials::new(
+                        project_id.to_string(),
+                        access_token.to_string(),
+                        access_token_expiration
+                            .as_deref()
+                            .and_then(|expiration| expiration.parse::<i64>().ok()),
+                    )),
+                    _ => return None,
                 };
                 let Ok(region) = GcpRegion::from_str(region) else {
                     return None;
                 };
 
-                Some(Box::new(Google::new(
+                Some(Box::new(Google::new_with_credentials(
                     self.long_id,
                     credentials,
                     region,
@@ -938,26 +953,21 @@ impl ContainerRegistry {
                 )?))
             }
             ContainerRegistry::GcpArtifactRegistry { long_id, name, options } => {
-                let credentials = JsonCredentials::try_from(
-                    options
-                        .gcp_credentials
-                        .clone()
-                        .ok_or_else(|| anyhow!("cannot find gcp credentials"))?,
-                )
-                .map_err(|err| anyhow!("cannot deserialize gcp credentials: {:?}", err))?;
+                let credentials = options.to_credentials()?;
+                let project_id = credentials.project_id().to_string();
 
                 Ok(container_registry::ContainerRegistry::GcpArtifactRegistry(
-                    GoogleArtifactRegistry::new(
+                    GoogleArtifactRegistry::new_with_credentials(
                         context,
                         long_id,
                         &name,
-                        &credentials.project_id,
+                        project_id.as_str(),
                         GcpRegion::from_str(&options.region)
                             .map_err(|err| anyhow!("cannot deserialize gcp region: {:?}", err))?,
                         credentials.clone(),
                         Arc::new(
-                            ArtifactRegistryService::new(
-                                credentials.clone(),
+                            ArtifactRegistryService::new_with_credentials(
+                                credentials,
                                 Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                                 Some(Arc::from(RateLimiter::direct(Quota::per_minute(nonzero!(10_u32))))),
                             )
@@ -1159,7 +1169,24 @@ pub enum CloudProviderOptions {
         // Allow to deserialize string field to its struct counterpart
         gcp_credentials: JsonCredentialsIo,
     },
+    GcpAccessToken {
+        #[serde(alias = "gcp_credentials_type")]
+        credentials_type: GcpCredentialsType,
+        #[serde(alias = "gcp_project_id")]
+        project_id: String,
+        #[derivative(Debug = "ignore")]
+        #[serde(alias = "gcp_access_token")]
+        access_token: String,
+        #[serde(default, alias = "gcp_access_token_expiration")]
+        access_token_expiration: Option<String>,
+    },
     OnPremise(OnPremiseOptions),
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GcpCredentialsType {
+    AccessToken,
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
@@ -1169,7 +1196,8 @@ pub struct OnPremiseOptions {}
 
 #[cfg(test)]
 mod tests {
-    use super::{CloudProvider, CloudProviderOptions, TerraformStateCredentials};
+    use super::{CloudProvider, CloudProviderOptions, GcpCrOptions, TerraformStateCredentials};
+    use crate::environment::models::gcp::GcpCredentials;
     use crate::infrastructure::models::{cloud_provider, kubernetes};
     use serde_json::json;
     use uuid::Uuid;
@@ -1410,6 +1438,65 @@ mod tests {
             _ => panic!("expected Aws variant"),
         }
     }
+
+    #[test]
+    fn should_build_gcp_provider_from_access_token_options() {
+        let options = serde_json::from_value::<CloudProviderOptions>(json!({
+            "gcp_credentials_type": "access_token",
+            "gcp_project_id": "customer-project",
+            "gcp_access_token": "ya29.temporary-token",
+            "gcp_access_token_expiration": "1800000000000"
+        }))
+        .expect("cloud provider options should parse");
+
+        let cloud_provider = CloudProvider {
+            kind: cloud_provider::Kind::Gcp,
+            id: "gcp-id".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "gcp".to_string(),
+            zones: vec![],
+            options,
+            terraform_state_credentials: TerraformStateCredentials {
+                access_key_id: "AKIAxxxxxxxxxxxx".to_string(),
+                secret_access_key: "xxxxxxxxxxxxxxxxxxxxxxxx".to_string(),
+                region: "eu-west-3".to_string(),
+                s3_bucket: "terraform-state".to_string(),
+                dynamodb_table: "terraform-locks".to_string(),
+            },
+        };
+
+        let engine_provider = cloud_provider
+            .to_engine_cloud_provider("europe-west9", kubernetes::Kind::Gke)
+            .expect("gcp cloud provider should be built");
+
+        let envs = engine_provider.credentials_environment_variables();
+        assert!(envs.contains(&("GOOGLE_OAUTH_ACCESS_TOKEN", "ya29.temporary-token")));
+        assert!(envs.contains(&("GOOGLE_PROJECT", "customer-project")));
+        assert!(!envs.iter().any(|(key, _)| *key == "GOOGLE_CREDENTIALS"));
+    }
+
+    #[test]
+    fn should_parse_gcp_artifact_registry_access_token_options() {
+        let options = serde_json::from_value::<GcpCrOptions>(json!({
+            "region": "europe-west9",
+            "gcp_credentials_type": "access_token",
+            "gcp_project_id": "customer-project",
+            "gcp_access_token": "ya29.registry-token",
+            "gcp_access_token_expiration": "1800000000000"
+        }))
+        .expect("gcp artifact registry options should parse");
+
+        let credentials = options.to_credentials().expect("credentials should be built");
+
+        match credentials {
+            GcpCredentials::AccessToken(credentials) => {
+                assert_eq!(credentials.project_id, "customer-project");
+                assert_eq!(credentials.access_token, "ya29.registry-token");
+                assert_eq!(credentials.expiration_timestamp_ms, Some(1_800_000_000_000));
+            }
+            GcpCredentials::ServiceAccount(_) => panic!("expected access token credentials"),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
@@ -1472,11 +1559,53 @@ pub enum GithubCrRepoType {
 #[derive(Serialize, Deserialize, Clone, Derivative)]
 pub struct GcpCrOptions {
     #[derivative(Debug = "ignore")]
-    #[serde(alias = "json_credentials")]
+    #[serde(default, alias = "json_credentials")]
     #[serde(deserialize_with = "try_gcp_credentials_from_str")]
     // Allow to deserialize string field to its struct counterpart
     pub gcp_credentials: Option<JsonCredentialsIo>,
+    #[serde(default, alias = "gcp_credentials_type")]
+    pub credentials_type: Option<GcpCredentialsType>,
+    #[serde(default, alias = "gcp_project_id")]
+    pub project_id: Option<String>,
+    #[derivative(Debug = "ignore")]
+    #[serde(default, alias = "gcp_access_token")]
+    pub access_token: Option<String>,
+    #[serde(default, alias = "gcp_access_token_expiration")]
+    pub access_token_expiration: Option<String>,
     region: String,
+}
+
+impl GcpCrOptions {
+    fn to_credentials(&self) -> Result<GcpCredentials, anyhow::Error> {
+        match &self.credentials_type {
+            Some(GcpCredentialsType::AccessToken) => {
+                let project_id = self
+                    .project_id
+                    .clone()
+                    .ok_or_else(|| anyhow!("cannot find gcp project id for access token credentials"))?;
+                let access_token = self
+                    .access_token
+                    .clone()
+                    .ok_or_else(|| anyhow!("cannot find gcp access token credentials"))?;
+                Ok(GcpCredentials::AccessToken(GcpAccessTokenCredentials::new(
+                    project_id,
+                    access_token,
+                    self.access_token_expiration
+                        .as_deref()
+                        .and_then(|expiration| expiration.parse::<i64>().ok()),
+                )))
+            }
+            None => {
+                let gcp_credentials = self
+                    .gcp_credentials
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("cannot find gcp credentials"))?;
+                let credentials = JsonCredentials::try_from(gcp_credentials.clone())
+                    .map_err(|err| anyhow!("cannot deserialize gcp credentials: {:?}", err))?;
+                Ok(GcpCredentials::ServiceAccount(Box::new(credentials)))
+            }
+        }
+    }
 }
 
 /// Allow to properly deserialize JSON credentials from string, making sure to escape \n from keys strings

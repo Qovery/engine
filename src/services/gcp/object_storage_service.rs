@@ -1,10 +1,12 @@
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::{GcpCredentials, JsonCredentials};
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion as GcpCloudJobRegion;
 use crate::infrastructure::models::object_storage::{Bucket, BucketObject};
 use crate::runtime::block_on;
 use crate::services::gcp::cloud_job_service::CloudJobService;
-use crate::services::gcp::google_cloud_sdk_types::new_gcp_credentials_file_from_credentials;
+use crate::services::gcp::google_cloud_sdk_types::{
+    FixedTokenSourceProvider, new_gcp_credentials_file_from_credentials,
+};
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_storage::client::{Client, ClientConfig};
 use google_cloud_storage::http::buckets::Lifecycle;
@@ -36,6 +38,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
+use tracing::{debug, info};
 
 #[derive(Clone, Error, Debug, PartialEq, Eq)]
 pub enum ObjectStorageServiceError {
@@ -123,6 +126,10 @@ enum StorageResourceKind {
 pub struct ObjectStorageService {
     client: Client,
     client_email: String,
+    is_using_access_token: bool,
+    access_token_expiration_timestamp_ms: Option<i64>,
+    access_token_length: Option<usize>,
+    access_token_has_whitespace: bool,
     project_id: String,
     write_bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     write_object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
@@ -136,24 +143,96 @@ impl ObjectStorageService {
         bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
         object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
     ) -> Result<Self, ObjectStorageServiceError> {
-        Ok(Self {
-            client: Client::new(
-                block_on(ClientConfig::default().with_credentials(
-                    new_gcp_credentials_file_from_credentials(google_credentials.clone()).map_err(|e| {
-                        ObjectStorageServiceError::CannotCreateService {
-                            raw_error_message: e.to_string(),
-                        }
+        Self::new_with_credentials(google_credentials.into(), bucket_rate_limiter, object_rate_limiter)
+    }
+
+    pub fn new_with_credentials(
+        credentials: GcpCredentials,
+        bucket_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+        object_rate_limiter: Option<Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>>,
+    ) -> Result<Self, ObjectStorageServiceError> {
+        let (
+            client,
+            client_email,
+            project_id,
+            is_using_access_token,
+            access_token_expiration_timestamp_ms,
+            access_token_length,
+            access_token_has_whitespace,
+        ) = match &credentials {
+            GcpCredentials::ServiceAccount(google_credentials) => (
+                Client::new(
+                    block_on(ClientConfig::default().with_credentials(
+                        new_gcp_credentials_file_from_credentials(google_credentials.as_ref().clone()).map_err(
+                            |e| ObjectStorageServiceError::CannotCreateService {
+                                raw_error_message: e.to_string(),
+                            },
+                        )?,
+                    ))
+                    .map_err(|e| ObjectStorageServiceError::CannotCreateService {
+                        raw_error_message: e.to_string(),
                     })?,
-                ))
-                .map_err(|e| ObjectStorageServiceError::CannotCreateService {
-                    raw_error_message: e.to_string(),
-                })?,
+                ),
+                google_credentials.client_email.to_string(),
+                google_credentials.project_id.to_string(),
+                false,
+                None,
+                None,
+                false,
             ),
+            GcpCredentials::AccessToken(access_token_credentials) => {
+                let access_token_length = Some(access_token_credentials.access_token.len());
+                let access_token_has_whitespace =
+                    access_token_credentials.access_token.chars().any(char::is_whitespace);
+                let config = ClientConfig {
+                    project_id: Some(access_token_credentials.project_id.clone()),
+                    token_source_provider: Some(Box::new(FixedTokenSourceProvider::new(
+                        access_token_credentials.access_token.clone(),
+                    ))),
+                    ..Default::default()
+                };
+                (
+                    Client::new(config),
+                    String::new(),
+                    access_token_credentials.project_id.to_string(),
+                    true,
+                    access_token_credentials.expiration_timestamp_ms,
+                    access_token_length,
+                    access_token_has_whitespace,
+                )
+            }
+        };
+
+        info!(
+            credential_type = if is_using_access_token {
+                "access_token"
+            } else {
+                "service_account"
+            },
+            project_id,
+            client_email_set = !client_email.is_empty(),
+            "Creating GCP object storage service",
+        );
+        if is_using_access_token {
+            debug!(
+                access_token_expiration_timestamp_ms,
+                access_token_length,
+                access_token_has_whitespace,
+                "Using temporary access token credentials for GCP object storage service",
+            );
+        }
+
+        Ok(Self {
+            client,
             write_bucket_rate_limiter: bucket_rate_limiter,
             write_object_rate_limiter: object_rate_limiter,
-            client_email: google_credentials.client_email.to_string(),
-            project_id: google_credentials.project_id.to_string(),
-            cloud_job_service: Arc::from(CloudJobService::new(google_credentials).map_err(|e| {
+            client_email,
+            is_using_access_token,
+            access_token_expiration_timestamp_ms,
+            access_token_length,
+            access_token_has_whitespace,
+            project_id,
+            cloud_job_service: Arc::from(CloudJobService::new_with_credentials(credentials).map_err(|e| {
                 ObjectStorageServiceError::CannotCreateService {
                     raw_error_message: e.to_string(),
                 }
@@ -287,6 +366,21 @@ impl ObjectStorageService {
         bucket_logging_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
     ) -> Result<Bucket, ObjectStorageServiceError> {
+        debug!(
+            target_project_id = project_id,
+            bucket_name,
+            location = bucket_location.to_cloud_provider_format(),
+            service_project_id = self.project_id,
+            is_using_access_token = self.is_using_access_token,
+            access_token_expiration_timestamp_ms = self.access_token_expiration_timestamp_ms,
+            access_token_length = self.access_token_length,
+            access_token_has_whitespace = self.access_token_has_whitespace,
+            service_account_email_set = !self.client_email.is_empty(),
+            bucket_versioning_activated,
+            bucket_logging_activated,
+            "Preparing GCS bucket creation",
+        );
+
         // Minimal TTL is 1 day for Google storage
         let bucket_ttl = bucket_ttl.map(|ttl| max(ttl, Duration::from_secs(60 * 60 * 24)));
 
@@ -366,15 +460,25 @@ impl ObjectStorageService {
 
         match block_on(self.client.insert_bucket(&create_bucket_request)) {
             Ok(created_bucket) => {
+                debug!(bucket_name, "GCS bucket created successfully");
                 Bucket::try_from(created_bucket).map_err(|e| ObjectStorageServiceError::CannotCreateBucket {
                     bucket_name: bucket_name.to_string(),
                     raw_error_message: e.to_string(),
                 })
             }
-            Err(e) => Err(ObjectStorageServiceError::CannotCreateBucket {
-                bucket_name: bucket_name.to_string(),
-                raw_error_message: e.to_string(),
-            }),
+            Err(e) => {
+                debug!(
+                    target_project_id = project_id,
+                    service_project_id = self.project_id,
+                    is_using_access_token = self.is_using_access_token,
+                    bucket_name,
+                    "GCS bucket creation failed",
+                );
+                Err(ObjectStorageServiceError::CannotCreateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
+            }
         }
     }
 

@@ -14,6 +14,7 @@ use crate::infrastructure::models::kubernetes::Kubernetes;
 use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::object_storage::ObjectStorage;
 use crate::utilities::envs_to_string;
+use scopeguard::guard;
 use std::path::PathBuf;
 
 pub(super) fn create_gke_cluster(
@@ -33,6 +34,7 @@ pub(super) fn create_gke_cluster(
     disable_master_authorized_networks_if_necessary(cluster, &logger, event_details.clone())?;
 
     // Terraform deployment dedicated to cloud resources
+    let gcp_access_token_file_path = cluster.temp_dir().join("gcp-access-token");
     let tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     let tf_resources = TerraformInfraResources::new(
         tera_context.clone(),
@@ -42,7 +44,12 @@ pub(super) fn create_gke_cluster(
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let qovery_terraform_output: GkeQoveryTerraformOutput = {
+        let _remove_access_token_file = guard(gcp_access_token_file_path, |path| {
+            let _ = std::fs::remove_file(path);
+        });
+        tf_resources.create(&logger)?
+    };
     update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     // Configure kubectl to be able to connect to cluster
