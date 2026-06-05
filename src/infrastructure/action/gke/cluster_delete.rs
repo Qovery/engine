@@ -53,6 +53,7 @@ pub(super) fn delete_gke_cluster(
 
     // Configure kubectl to be able to connect to cluster
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
+    cluster.write_runtime_kubeconfig_with_access_token_if_needed()?;
 
     // delete all PDBs first, because those will prevent node deletion
     if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {

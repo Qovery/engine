@@ -36,6 +36,7 @@ pub(super) fn upgrade_gke_cluster(
     logger.info("Cleaning up stale workload artifacts before upgrade.");
 
     let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(benjaminch): properly handle this error
+    cluster.write_runtime_kubeconfig_with_access_token_if_needed()?;
     prepare_kube_upgrade(cluster as &dyn Kubernetes, infra_ctx, &logger)?;
 
     let requested_version = kubernetes_upgrade_status.requested_version.to_string();
