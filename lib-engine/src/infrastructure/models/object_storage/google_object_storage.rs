@@ -1,3 +1,4 @@
+use crate::environment::models::ToCloudProviderFormat;
 use crate::infrastructure::models::object_storage::errors::ObjectStorageError;
 use crate::infrastructure::models::object_storage::{Bucket, BucketDeleteStrategy, BucketObject};
 use crate::infrastructure::models::object_storage::{Kind, ObjectStorage};
@@ -8,6 +9,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::debug;
 use uuid::Uuid;
 
 pub struct GoogleOS {
@@ -68,13 +70,20 @@ impl ObjectStorage for GoogleOS {
         bucket_versioning_activated: bool,
         bucket_logging_activated: bool,
     ) -> Result<Bucket, ObjectStorageError> {
+        debug!(
+            project_id = self.project_id,
+            region = self.region.to_cloud_provider_format(),
+            bucket_name,
+            "Creating GCP object storage bucket via GoogleOS",
+        );
+
         if let Ok(existing_bucket) = self.get_bucket(bucket_name) {
             return Ok(existing_bucket);
         }
 
         let creation_date: DateTime<Utc> = Utc::now();
         // TODO(benjaminch): Add bucket versioning option
-        match self.service.create_bucket(
+        let result = self.service.create_bucket(
             self.project_id.as_str(),
             bucket_name,
             self.region.clone(),
@@ -90,12 +99,17 @@ impl ObjectStorage for GoogleOS {
                     format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                 ),
             ])),
-        ) {
+        );
+
+        match result {
             Ok(o) => Ok(o),
-            Err(e) => Err(ObjectStorageError::CannotCreateBucket {
-                bucket_name: bucket_name.to_string(),
-                raw_error_message: e.to_string(),
-            }),
+            Err(e) => {
+                debug!(bucket_name, project_id = self.project_id, "GoogleOS.create_bucket failed");
+                Err(ObjectStorageError::CannotCreateBucket {
+                    bucket_name: bucket_name.to_string(),
+                    raw_error_message: e.to_string(),
+                })
+            }
         }
     }
 

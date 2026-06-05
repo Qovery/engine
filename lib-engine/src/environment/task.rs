@@ -472,6 +472,9 @@ impl EnvironmentTask {
                     secrets.push(json_credentials_raw);
                 }
             }
+            CloudProviderOptions::GcpAccessToken { access_token, .. } => {
+                secrets.push(access_token.to_string());
+            }
             CloudProviderOptions::Azure { .. } => {}
             CloudProviderOptions::OnPremise(_) => {}
         };

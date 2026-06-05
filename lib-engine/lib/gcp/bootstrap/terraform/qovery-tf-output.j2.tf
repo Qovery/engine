@@ -35,11 +35,23 @@ preferences: {}
 users:
 - name: gke_${replace(var.kubernetes_cluster_id, "-", "_")}
   user:
+{%- if gcp_wif_credentials %}
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      interactiveMode: IfAvailable
+      command: qovery
+      args:
+      - cluster
+      - get-token
+      - --cluster-id
+      - {{ kubernetes_cluster_long_id }}
+{%- else %}
     exec:
       apiVersion: client.authentication.k8s.io/v1beta1
       command: gke-gcloud-auth-plugin
       installHint: Install gke-gcloud-auth-plugin for use with kubectl by following
         https://cloud.google.com/blog/products/containers-kubernetes/kubectl-auth-changes-in-gke
       provideClusterInfo: true
+{%- endif %}
 KUBECONFIG
 }

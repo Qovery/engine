@@ -13,6 +13,7 @@ use crate::infrastructure::action::gke::disable_master_authorized_networks_if_ne
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::utilities::envs_to_string;
+use scopeguard::guard;
 use std::str::FromStr;
 
 pub(super) fn upgrade_gke_cluster(
@@ -50,6 +51,7 @@ pub(super) fn upgrade_gke_cluster(
 
     let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     disable_master_authorized_networks_if_necessary(cluster, &logger, event_details.clone())?;
+    let gcp_access_token_file_path = cluster.temp_dir().join("gcp-access-token");
     tera_context.insert(
         "kubernetes_cluster_version",
         format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
@@ -63,7 +65,12 @@ pub(super) fn upgrade_gke_cluster(
         cluster.context().is_dry_run_deploy(),
     );
 
-    let _tf_output: GkeQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let _tf_output: GkeQoveryTerraformOutput = {
+        let _remove_access_token_file = guard(gcp_access_token_file_path, |path| {
+            let _ = std::fs::remove_file(path);
+        });
+        tf_resources.create(&logger)?
+    };
 
     check_control_plane_on_upgrade(cluster, infra_ctx.cloud_provider(), kubernetes_version).map_err(|e| {
         Box::new(EngineError::new_k8s_node_not_ready_with_requested_version(

@@ -59,6 +59,7 @@ impl TryFrom<JsonCredentials> for GkeJsonCredentials {
     type Error = String;
 
     fn try_from(value: JsonCredentials) -> Result<Self, Self::Error> {
+        let raw_json = value.try_raw().map_err(|e| e.to_string())?;
         Ok(GkeJsonCredentials {
             r#type: GkeJsonCredentialsType::from(value.r#type),
             cloudsdk_config_path: PathBuf::from("/tmp/").join(format!("gcloud-{}", value.client_id)),
@@ -74,6 +75,7 @@ impl TryFrom<JsonCredentials> for GkeJsonCredentials {
                 .map_err(|_e| "Cannot parse client_x509_cert_url to URL")?,
             project_id: value.project_id,
             universe_domain: value.universe_domain,
+            raw_json,
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
-use crate::errors::EngineError;
+use crate::errors::{CommandError as EngineCommandError, EngineError};
 use crate::events::Stage::Infrastructure;
 use crate::events::{EventDetails, InfrastructureStep, Transmitter};
 use crate::infrastructure::action::kubeconfig_helper::write_kubeconfig_on_disk;
@@ -23,7 +23,7 @@ use crate::services::gcp::auth_service::GoogleAuthService;
 use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use crate::services::gcp::object_storage_service::ObjectStorageService;
 
-use crate::environment::models::gcp::JsonCredentials;
+use crate::environment::models::gcp::GcpCredentials;
 use crate::infrastructure::action::InfrastructureAction;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::external_secrets::SecretsManagerAccess;
@@ -195,7 +195,7 @@ pub struct Gke {
     pub kubeconfig: Option<String>,
     pub temp_dir: PathBuf,
     pub qovery_allowed_public_access_cidrs: Option<Vec<String>>,
-    pub credentials: JsonCredentials,
+    pub credentials: GcpCredentials,
 }
 
 impl Gke {
@@ -228,9 +228,9 @@ impl Gke {
         let cloud_provider = gcp_cloud_provider
             .as_gcp()
             .ok_or_else(|| Box::new(EngineError::new_bad_cast(event_details.clone(), "Cloudprovider is not GCP")))?;
-        let creds = cloud_provider.json_credentials.clone();
+        let creds = cloud_provider.credentials.clone();
         let object_storage_service_client = retry::retry(Fixed::from(Duration::from_secs(20)).take(3), || {
-            match ObjectStorageService::new(
+            match ObjectStorageService::new_with_credentials(
                 creds.clone(),
                 // A rate limiter making sure to keep the QPS under quotas while bucket writes requests
                 // Max default quotas are 0.5 RPS
@@ -264,7 +264,7 @@ impl Gke {
             &short_id,
             long_id,
             name,
-            &creds.project_id,
+            creds.project_id(),
             GcpStorageRegion::from(region.clone()),
             Arc::new(object_storage_service_client),
         );
@@ -320,21 +320,50 @@ impl Gke {
         // Configure kubectl to be able to connect to cluster
         // https://cloud.google.com/kubernetes-engine/docs/how-to/cluster-access-for-kubectl#gcloud_1
 
-        if let Err(e) = GoogleAuthService::activate_service_account(&self.credentials) {
+        if let GcpCredentials::ServiceAccount(credentials) = &self.credentials
+            && let Err(e) = GoogleAuthService::activate_service_account(credentials.as_ref())
+        {
             error!("Cannot activate service account: {}", e);
             // TODO(ENG-1803): introduce an EngineError for it and handle it properly
         }
 
+        let access_token_file = match &self.credentials {
+            GcpCredentials::ServiceAccount(_) => None,
+            GcpCredentials::AccessToken(credentials) => {
+                let file = GoogleAuthService::write_access_token_file(&credentials.access_token).map_err(|e| {
+                    Box::new(EngineError::new_cannot_get_cluster_error(
+                        self.get_event_details(Infrastructure(InfrastructureStep::LoadConfiguration)),
+                        EngineCommandError::new(
+                            "Cannot write GCP access token file for gcloud".to_string(),
+                            Some(e.to_string()),
+                            None,
+                        ),
+                    ))
+                })?;
+                Some(file)
+            }
+        };
+
+        let mut args = Vec::new();
+        if let Some(access_token_file) = &access_token_file {
+            args.push(format!(
+                "--access-token-file={}",
+                access_token_file.path().to_str().unwrap_or_default()
+            ));
+        }
+        args.extend([
+            "container".to_string(),
+            "clusters".to_string(),
+            "get-credentials".to_string(),
+            self.cluster_name(),
+            format!("--region={}", self.region.to_cloud_provider_format()),
+            format!("--project={}", self.credentials.project_id()),
+        ]);
+        let args = args.iter().map(String::as_str).collect::<Vec<&str>>();
+
         let _ = QoveryCommand::new(
             "gcloud",
-            &[
-                "container",
-                "clusters",
-                "get-credentials",
-                self.cluster_name().as_str(),
-                format!("--region={}", self.region.to_cloud_provider_format()).as_str(),
-                format!("--project={}", self.credentials.project_id).as_str(),
-            ],
+            args.as_slice(),
             infra_ctx
                 .cloud_provider()
                 .credentials_environment_variables()

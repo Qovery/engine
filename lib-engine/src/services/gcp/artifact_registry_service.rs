@@ -1,10 +1,12 @@
 use crate::environment::models::ToCloudProviderFormat;
-use crate::environment::models::gcp::JsonCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as IoJsonCredentials;
+use crate::environment::models::gcp::{GcpCredentials, JsonCredentials};
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::runtime::block_on;
-use crate::services::gcp::google_cloud_sdk_types::from_gcp_repository;
+use crate::services::gcp::google_cloud_sdk_types::{
+    from_gcp_repository, new_google_auth_credentials_from_access_token,
+};
 use google_cloud_artifactregistry_v1::client::ArtifactRegistry;
 use google_cloud_artifactregistry_v1::model::Repository as GcpRepository;
 use google_cloud_artifactregistry_v1::model::repository::Format;
@@ -77,23 +79,51 @@ impl ArtifactRegistryService {
             Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
         >,
     ) -> Result<Self, ArtifactRegistryServiceError> {
-        let service_account_json = serde_json::to_value(IoJsonCredentials::from(google_credentials)).map_err(|e| {
-            ArtifactRegistryServiceError::CannotCreateService {
-                raw_error_message: e.to_string(),
+        Self::new_with_credentials(
+            google_credentials.into(),
+            write_repository_rate_limiter,
+            write_image_rate_limiter,
+        )
+    }
+
+    pub fn new_with_credentials(
+        credentials: GcpCredentials,
+        write_repository_rate_limiter: Option<
+            Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+        >,
+        write_image_rate_limiter: Option<
+            Arc<RateLimiter<NotKeyed, InMemoryState, clock::DefaultClock, NoOpMiddleware>>,
+        >,
+    ) -> Result<Self, ArtifactRegistryServiceError> {
+        let client = match credentials {
+            GcpCredentials::ServiceAccount(google_credentials) => {
+                let service_account_json = serde_json::to_value(IoJsonCredentials::from(
+                    google_credentials.as_ref().clone(),
+                ))
+                .map_err(|e| ArtifactRegistryServiceError::CannotCreateService {
+                    raw_error_message: e.to_string(),
+                })?;
+
+                block_on(async move {
+                    let credentials = ServiceAccountCredentialsBuilder::new(service_account_json)
+                        .build()
+                        .map_err(|e| format!("Failed to build GCP service account credentials: {e}"))?;
+
+                    ArtifactRegistry::builder()
+                        .with_credentials(credentials)
+                        .build()
+                        .await
+                        .map_err(|e| format!("Failed to build Artifact Registry client: {e}"))
+                })
             }
-        })?;
-
-        let client = block_on(async move {
-            let credentials = ServiceAccountCredentialsBuilder::new(service_account_json)
-                .build()
-                .map_err(|e| format!("Failed to build GCP service account credentials: {e}"))?;
-
-            ArtifactRegistry::builder()
-                .with_credentials(credentials)
-                .build()
-                .await
-                .map_err(|e| format!("Failed to build Artifact Registry client: {e}"))
-        })
+            GcpCredentials::AccessToken(access_token_credentials) => block_on(async move {
+                ArtifactRegistry::builder()
+                    .with_credentials(new_google_auth_credentials_from_access_token(&access_token_credentials))
+                    .build()
+                    .await
+                    .map_err(|e| format!("Failed to build Artifact Registry client: {e}"))
+            }),
+        }
         .map_err(|e| ArtifactRegistryServiceError::CannotCreateService { raw_error_message: e })?;
 
         Ok(Self {

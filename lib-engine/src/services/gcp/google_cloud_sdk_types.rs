@@ -1,6 +1,6 @@
 use crate::environment::models::ToCloudProviderFormat;
 use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
-use crate::environment::models::gcp::{CredentialsError, JsonCredentials};
+use crate::environment::models::gcp::{CredentialsError, GcpAccessTokenCredentials, JsonCredentials};
 use crate::infrastructure::models::cloud_provider::gcp::locations::GcpRegion;
 use crate::infrastructure::models::container_registry::{DockerImage, Repository};
 use crate::infrastructure::models::object_storage::{Bucket, BucketRegion};
@@ -9,11 +9,17 @@ use crate::services::gcp::object_storage_regions::GcpStorageRegion;
 use google_cloud_artifactregistry_v1::model::{
     DockerImage as GcpDockerImage, Package as GcpPackage, Repository as GcpRepository,
 };
+use google_cloud_auth::credentials::{CacheableResource, Credentials, CredentialsProvider, EntityTag};
+use google_cloud_auth::errors::CredentialsError as GoogleCredentialsError;
 use google_cloud_storage::client::google_cloud_auth::credentials::CredentialsFile;
 use google_cloud_storage::http::buckets::Bucket as GcpBucket;
 use google_cloud_storage::http::buckets::lifecycle::rule::ActionType;
+use google_cloud_token::{TokenSource, TokenSourceProvider};
+use http::header::AUTHORIZATION;
+use http::{Extensions, HeaderMap, HeaderValue};
 use regex::Regex;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
 
 /// Handle conversion and deal with external types for Google cloud
@@ -33,6 +39,101 @@ pub fn new_gcp_credentials_file_from_credentials(
             raw_error_message: e.to_string(),
         }
     })
+}
+
+#[derive(Clone)]
+pub struct FixedAccessTokenCredentials {
+    access_token: String,
+    entity_tag: EntityTag,
+}
+
+impl std::fmt::Debug for FixedAccessTokenCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FixedAccessTokenCredentials")
+            .field("access_token", &"****")
+            .field("entity_tag", &self.entity_tag)
+            .finish()
+    }
+}
+
+impl FixedAccessTokenCredentials {
+    pub fn new(access_token: String) -> Self {
+        Self {
+            access_token,
+            entity_tag: EntityTag::new(),
+        }
+    }
+}
+
+impl CredentialsProvider for FixedAccessTokenCredentials {
+    async fn headers(&self, extensions: Extensions) -> Result<CacheableResource<HeaderMap>, GoogleCredentialsError> {
+        if let Some(tag) = extensions.get::<EntityTag>()
+            && self.entity_tag.eq(tag)
+        {
+            return Ok(CacheableResource::NotModified);
+        }
+
+        let mut headers = HeaderMap::new();
+        let header = HeaderValue::from_str(format!("Bearer {}", self.access_token).as_str()).map_err(|e| {
+            GoogleCredentialsError::from_msg(
+                false,
+                format!("Cannot create Authorization header from GCP access token: {e}"),
+            )
+        })?;
+        headers.insert(AUTHORIZATION, header);
+
+        Ok(CacheableResource::New {
+            entity_tag: self.entity_tag.clone(),
+            data: headers,
+        })
+    }
+
+    async fn universe_domain(&self) -> Option<String> {
+        None
+    }
+}
+
+pub fn new_google_auth_credentials_from_access_token(credentials: &GcpAccessTokenCredentials) -> Credentials {
+    FixedAccessTokenCredentials::new(credentials.access_token.clone()).into()
+}
+
+#[derive(Clone)]
+pub struct FixedTokenSource {
+    access_token: String,
+}
+
+impl std::fmt::Debug for FixedTokenSource {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FixedTokenSource")
+            .field("access_token", &"****")
+            .finish()
+    }
+}
+
+#[async_trait::async_trait]
+impl TokenSource for FixedTokenSource {
+    async fn token(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+        Ok(format!("Bearer {}", self.access_token))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FixedTokenSourceProvider {
+    token_source: Arc<FixedTokenSource>,
+}
+
+impl FixedTokenSourceProvider {
+    pub fn new(access_token: String) -> Self {
+        Self {
+            token_source: Arc::new(FixedTokenSource { access_token }),
+        }
+    }
+}
+
+impl TokenSourceProvider for FixedTokenSourceProvider {
+    fn token_source(&self) -> Arc<dyn TokenSource> {
+        self.token_source.clone()
+    }
 }
 
 impl TryFrom<GcpBucket> for Bucket {
