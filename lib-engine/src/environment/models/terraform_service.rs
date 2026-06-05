@@ -293,6 +293,7 @@ impl<T: CloudProvider> TerraformService<T> {
             annotations_group: self.annotations_group.clone(),
             labels_group: self.labels_group.clone(),
             environment_variables,
+            external_secrets: self.external_secrets.clone(),
             backend_config: BackendConfigTeraContext {
                 secret_name: self.backend.kube_secret_name.to_owned(),
                 configs: backend_config,
@@ -603,6 +604,7 @@ pub(crate) struct TerraformServiceTeraContext {
     pub(crate) annotations_group: AnnotationsGroupTeraContext,
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) environment_variables: Vec<EnvironmentVariable>,
+    pub(crate) external_secrets: Vec<ExternalSecretGroup>,
     pub(crate) backend_config: BackendConfigTeraContext,
 }
 
@@ -816,6 +818,7 @@ mod tests {
                 annotations_group: AnnotationsGroupTeraContext::new(vec![]),
                 labels_group: LabelsGroupTeraContext::new(vec![]),
                 environment_variables: vec![],
+                external_secrets: vec![],
                 backend_config: BackendConfigTeraContext {
                     secret_name: "backend-config".to_string(),
                     configs: vec![],
@@ -875,6 +878,7 @@ mod tests {
             annotations_group: AnnotationsGroupTeraContext::new(vec![]),
             labels_group: LabelsGroupTeraContext::new(vec![]),
             environment_variables: vec![],
+            external_secrets: vec![],
             backend_config: BackendConfigTeraContext {
                 secret_name: "backend-config".to_string(),
                 configs: vec![],
