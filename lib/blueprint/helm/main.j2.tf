@@ -18,6 +18,7 @@ resource "qovery_helm_repository" "blueprint_repo" {
 
 resource "qovery_helm" "blueprint" {
   environment_id               = "{{ environment_id | hcl_string }}"
+  blueprint_id                 = "{{ blueprint_id | hcl_string }}"
   name                         = "{{ name | hcl_string }}"
   description                  = "{{ description | hcl_string }}"
   allow_cluster_wide_resources = {{ allow_cluster_wide_resources }}
