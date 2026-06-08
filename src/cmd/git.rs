@@ -67,6 +67,7 @@ pub fn clone_at_commit<P>(
     commit_id: &str,
     into_dir: P,
     get_credentials: &impl Fn(&str) -> Vec<(CredentialType, Cred)>,
+    skip_submodules: bool,
 ) -> Result<(), BuildError>
 where
     P: AsRef<Path>,
@@ -86,7 +87,7 @@ where
     })?;
 
     // check submodules if needed
-    {
+    if !skip_submodules {
         let submodules = repo.submodules().map_err(|error| BuildError::GitError {
             application: "".to_string(),
             git_cmd: GitCmd::SubmoduleUpdate,
@@ -541,11 +542,34 @@ mod tests {
             commit_id,
             Path::new(&clone_dir.path),
             &get_credentials,
+            false,
         );
         assert!(repo.is_ok());
         assert!(PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
 
         // Valid commit
+        let repo = Repository::open(&clone_dir.path);
+        assert!(repo.is_ok());
+        assert_eq!(repo.unwrap().head().unwrap().target().unwrap().to_string(), commit_id);
+    }
+
+    #[test]
+    fn test_git_submodule_skipped_when_disabled() {
+        // Same repo as test_git_submodule_with_ssh_key: its submodule requires an SSH key.
+        // With skip_submodules, the clone must succeed without any credentials and
+        // the submodule directory must stay empty.
+        let commit_id = "9a9c1f4373c8128151a9def9ea3d838fa2ed33e8";
+        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_submodule_skip".to_string());
+        let repo = clone_at_commit(
+            &Url::parse("https://github.com/Qovery/engine-testing.git").unwrap(),
+            commit_id,
+            Path::new(&clone_dir.path),
+            &|_| Vec::new(),
+            true,
+        );
+        assert!(repo.is_ok());
+        assert!(!PathBuf::from(format!("{}/dumb-logger/README.md", clone_dir.path())).exists());
+
         let repo = Repository::open(&clone_dir.path);
         assert!(repo.is_ok());
         assert_eq!(repo.unwrap().head().unwrap().target().unwrap().to_string(), commit_id);

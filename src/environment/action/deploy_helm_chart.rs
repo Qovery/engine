@@ -514,8 +514,14 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             let git_creds =
                 get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {e}")))?;
 
-            git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
-                .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {e}")))?;
+            git::clone_at_commit(
+                git_url,
+                commit_id,
+                &tmpdir,
+                &git_credentials_callback(&git_creds, ssh_keys),
+                false,
+            )
+            .map_err(|e| to_error(format!("Cannot clone helm chart git repository due to {e}")))?;
 
             fs::rename(tmpdir.path().join(root_path), this.chart_workspace_directory())
                 .map_err(|e| to_error(format!("Cannot move helm chart directory due to {e}")))?;
@@ -586,8 +592,14 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             let git_creds =
                 get_credentials().map_err(|e| to_error(format!("Cannot get git credentials due to {e}")))?;
 
-            git::clone_at_commit(git_url, commit_id, &tmpdir, &git_credentials_callback(&git_creds, ssh_keys))
-                .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {e}")))?;
+            git::clone_at_commit(
+                git_url,
+                commit_id,
+                &tmpdir,
+                &git_credentials_callback(&git_creds, ssh_keys),
+                false,
+            )
+            .map_err(|e| to_error(format!("Cannot clone helm values git repository due to {e}")))?;
 
             for value in values_path {
                 let Some(filename) = value.file_name() else {

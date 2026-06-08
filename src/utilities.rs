@@ -32,6 +32,7 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     commit_id: &str,
     docker_target_build_stage: &Option<String>,
     dockerfile_fragment: &Option<DockerfileFragment>,
+    skip_submodules: bool,
 ) -> String {
     // Image tag == hash(root_path) + commit_id truncate to 127 char
     // https://github.com/distribution/distribution/blob/6affafd1f030087d88f88841bf66a8abe2bf4d24/reference/regexp.go#L41
@@ -68,6 +69,8 @@ pub fn compute_image_tag<P: AsRef<Path> + Hash, T: AsRef<Path> + Hash>(
     if let Some(fragment) = dockerfile_fragment {
         fragment.hash(&mut hasher);
     }
+
+    skip_submodules.hash(&mut hasher);
 
     let mut tag = format!("{}-{}", hasher.finish(), commit_id);
     tag.truncate(127);
@@ -184,6 +187,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         let image_tag_2 = compute_image_tag(
@@ -195,6 +199,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         assert_ne!(image_tag, image_tag_2);
@@ -208,6 +213,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         assert_ne!(image_tag, image_tag_3);
@@ -221,6 +227,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         assert_eq!(image_tag_3, image_tag_3_2);
@@ -234,6 +241,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         let mut env_vars_5 = BTreeMap::new();
@@ -248,6 +256,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
 
         assert_eq!(image_tag_4, image_tag_5);
@@ -261,6 +270,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
         assert_ne!(image_tag_4, image_tag_5);
 
@@ -276,6 +286,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
         assert_ne!(image_tag_5, image_tag_6);
 
@@ -291,6 +302,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &None,
             &None,
+            false,
         );
         assert_ne!(image_tag_6, image_tag_7);
 
@@ -304,6 +316,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &Some("stage1".to_string()),
             &None,
+            false,
         );
 
         let image_tag_9 = compute_image_tag(
@@ -315,6 +328,7 @@ mod tests_utilities {
             "63d8c437337416a7067d3f358197ac47d003fab9",
             &Some("stage2".to_string()),
             &None,
+            false,
         );
 
         assert_ne!(image_tag_8, image_tag_9);
@@ -334,6 +348,7 @@ mod tests_utilities {
             "abc123",
             &None,
             &None,
+            false,
         );
 
         // With inline dockerfile_fragment
@@ -348,6 +363,7 @@ mod tests_utilities {
             &Some(DockerfileFragment::Inline {
                 content: "RUN apk add jq".to_string(),
             }),
+            false,
         );
 
         assert_ne!(tag_no_fragment, tag_with_inline);
@@ -364,6 +380,7 @@ mod tests_utilities {
             &Some(DockerfileFragment::File {
                 path: "/custom/fragment.dockerfile".to_string(),
             }),
+            false,
         );
 
         assert_ne!(tag_no_fragment, tag_with_file);
@@ -381,6 +398,7 @@ mod tests_utilities {
             &Some(DockerfileFragment::Inline {
                 content: "RUN apk add curl".to_string(),
             }),
+            false,
         );
 
         assert_ne!(tag_with_inline, tag_with_inline_2);
@@ -462,6 +480,7 @@ mod tests_utilities {
             "abc123",
             &None,
             &None,
+            false,
         );
         let cache_tag = compute_cache_tag("/".to_string(), &Some("Dockerfile".to_string()), &[], &None);
         assert_ne!(image_tag, cache_tag);

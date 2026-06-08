@@ -510,6 +510,7 @@ impl BuildPlatform for LocalDocker {
                 &build.git_repository.commit_id,
                 &repository_root_path,
                 &get_credentials,
+                build.git_repository.skip_submodules,
             ) {
                 let message = raw_error.message();
                 let git_error_class = raw_error.class();

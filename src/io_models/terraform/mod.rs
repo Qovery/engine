@@ -54,6 +54,8 @@ pub struct TerraformServiceAdvancedSettings {
     pub build_ram_max_in_gib: u32,
     #[serde(default, alias = "build.ephemeral_storage_in_gib")]
     pub build_ephemeral_storage_in_gib: Option<u32>,
+    #[serde(default, alias = "build.skip_git_submodules")]
+    pub build_skip_git_submodules: bool,
 
     #[serde(alias = "security.service_account_name")]
     pub security_service_account_name: String,
@@ -72,6 +74,7 @@ impl Default for TerraformServiceAdvancedSettings {
             build_cpu_max_in_milli: 4000,
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
+            build_skip_git_submodules: false,
             security_service_account_name: "".to_string(),
             security_read_only_root_filesystem: false,
             security_automount_service_account_token: false,
@@ -593,6 +596,7 @@ impl TerraformService {
                 root_path: root_path.clone(),
                 extra_files_to_inject,
                 docker_target_build_stage: None,
+                skip_submodules: self.advanced_settings.build_skip_git_submodules,
             },
             image: self.to_image(commit_id.to_string(), registry_url, cluster_id, git_url.as_str()),
             environment_variables: build_env_vars,
