@@ -24,6 +24,12 @@ variable "organization_long_id" {
   type        = string
 }
 
+variable "qovery_deployed_with_engine_version" {
+  description = "Qovery engine version the cluster was deployed with"
+  default     = "{{ qovery_deployed_with_engine_version }}"
+  type        = string
+}
+
 # AWS specific
 variable "aws_availability_zones" {
   description = "AWS availability zones"

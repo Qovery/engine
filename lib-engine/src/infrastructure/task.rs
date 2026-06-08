@@ -2,6 +2,7 @@ use crate::cmd::docker::Docker;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus};
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
@@ -18,6 +19,7 @@ use tokio::sync::broadcast;
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
+    engine_version: VersionsNumber,
     docker: Arc<Docker>,
     request: InfrastructureEngineRequest,
     logger: Box<dyn Logger>,
@@ -33,6 +35,7 @@ impl InfrastructureTask {
         request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
+        engine_version: VersionsNumber,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
@@ -60,6 +63,7 @@ impl InfrastructureTask {
         InfrastructureTask {
             workspace_root_dir,
             lib_root_dir,
+            engine_version,
             docker,
             request,
             logger,
@@ -229,6 +233,7 @@ impl Task for InfrastructureTask {
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
+            self.engine_version.clone(),
             self.request.test_cluster,
             self.request.features.clone(),
             self.request.metadata.clone(),

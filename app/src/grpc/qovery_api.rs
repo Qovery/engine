@@ -154,6 +154,10 @@ impl QoveryApi for GrpcCoreServiceApi {
                     vpc_id: cluster_outputs_request.cluster_vpc_id.clone(),
                     network: cluster_outputs_request.network.clone(),
                     private_network_id: cluster_outputs_request.private_network_id.clone(),
+                    qovery_deployed_with_engine_version: cluster_outputs_request
+                        .qovery_deployed_with_engine_version
+                        .as_ref()
+                        .map(ToString::to_string),
                     external_secrets_automatic_authentication: cluster_outputs_request
                         .external_secrets_automatic_authentication
                         .as_ref()

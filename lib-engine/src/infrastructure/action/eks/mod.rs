@@ -12,6 +12,7 @@ mod sdk;
 mod tera_context;
 mod utils;
 
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::infrastructure::action::InfrastructureAction;
@@ -95,7 +96,7 @@ impl InfrastructureAction for EKS {
     }
 }
 
-use super::utils::{from_terraform_value, mk_logger};
+use super::utils::{from_terraform_optional_version_number, from_terraform_value, mk_logger};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AwsEksQoveryTerraformOutput {
@@ -150,4 +151,7 @@ pub struct AwsEksQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub efs_file_system_id: Option<String>,
+    #[serde(deserialize_with = "from_terraform_optional_version_number")]
+    #[serde(default)]
+    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
 }

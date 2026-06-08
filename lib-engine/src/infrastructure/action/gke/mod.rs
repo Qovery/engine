@@ -7,6 +7,7 @@ mod tera_context;
 
 use crate::environment::models::gcp::GcpCredentials;
 use crate::environment::models::gcp::io::JsonCredentials as IoJsonCredentials;
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::CommandError as EngineCommandError;
 use crate::errors::EngineError;
 use crate::events::EventDetails;
@@ -67,7 +68,7 @@ impl InfrastructureAction for Gke {
     }
 }
 
-use super::utils::{from_terraform_value, mk_logger};
+use super::utils::{from_terraform_optional_version_number, from_terraform_value, mk_logger};
 
 // Workaround for a Terraform Google provider bug: switching GKE master authorized networks
 // from enabled to disabled is not reliably handled when the desired Terraform config removes
@@ -347,4 +348,7 @@ pub struct GkeQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub external_secrets_operator_service_account_email: Option<String>,
+    #[serde(deserialize_with = "from_terraform_optional_version_number")]
+    #[serde(default)]
+    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
 }

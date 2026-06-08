@@ -8,6 +8,7 @@ use crate::cmd::git;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -28,6 +29,8 @@ use tokio::sync::broadcast;
 pub struct BlueprintTask {
     workspace_root_dir: String,
     lib_root_dir: String,
+    engine_version: VersionsNumber,
+
     docker: Arc<Docker>,
     request: BlueprintEngineRequest,
     cancel_requested: Arc<AtomicAbortStatus>,
@@ -44,6 +47,7 @@ impl BlueprintTask {
         request: BlueprintEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
+        engine_version: VersionsNumber,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
@@ -56,6 +60,7 @@ impl BlueprintTask {
         BlueprintTask {
             workspace_root_dir,
             lib_root_dir,
+            engine_version,
             docker,
             request,
             logger: logger.with_secrets(secrets),
@@ -463,6 +468,7 @@ impl Task for BlueprintTask {
             self.request.id.to_string(),
             self.workspace_root_dir.to_string(),
             self.lib_root_dir.to_string(),
+            self.engine_version.clone(),
             self.request.test_cluster,
             self.request.features.clone(),
             self.request.metadata.clone(),

@@ -1,3 +1,9 @@
+variable "qovery_deployed_with_engine_version" {
+  description = "Qovery engine version the cluster was deployed with"
+  default     = "{{ qovery_deployed_with_engine_version }}"
+  type        = string
+}
+
 variable "kubernetes_cluster_name" {
   description = "The name of the AKS cluster"
   type        = string

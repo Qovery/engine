@@ -164,6 +164,7 @@ message ClusterOutputsUpdateRequest {
   optional string network = 10;
   optional string privateNetworkId = 11;
   optional ExternalSecretsAuthentication externalSecretsAutomaticAuthentication = 12;
+  optional string qoveryDeployedWithEngineVersion = 13;
 }
 
 message TerraformResourcesRequest {

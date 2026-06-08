@@ -1,5 +1,11 @@
 # Qovery
 
+variable "qovery_deployed_with_engine_version" {
+  description = "Qovery engine version the cluster was deployed with"
+  default     = "{{ qovery_deployed_with_engine_version }}"
+  type        = string
+}
+
 variable "cloud_provider" {
   description = "Cloud provider name"
   default = "scw"

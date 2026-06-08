@@ -208,8 +208,10 @@ build-engine-ci-image:
     - ci_helper teardown_buildkit_builder "${CI_JOB_NAME}"
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - ENGINE_TAG_VERSION="$(./helper.sh generate_engine_tag_version)"
     - docker buildx build --platform=linux/amd64,linux/arm64
       --target=engine_ci
+      --build-arg ENGINE_TAG_VERSION="${ENGINE_TAG_VERSION}"
       -t public.ecr.aws/r3m4q3r9/qovery-ci:engine-$(date +%Y-%m-%dT%H-%M-%S)
       --push .
   tags:
@@ -225,11 +227,13 @@ release-image:
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - ENGINE_TAG_VERSION="$(./helper.sh generate_engine_tag_version)"
     - docker buildx build --platform=linux/${IMAGE_ARCH}
       --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-${IMAGE_ARCH}"
       --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-${IMAGE_ARCH}"
       --target=run
       --build-arg CI_COMMIT_SHORT_SHA=${CI_COMMIT_SHORT_SHA}
+      --build-arg ENGINE_TAG_VERSION="${ENGINE_TAG_VERSION}"
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-${IMAGE_ARCH}
       --push .
   parallel:
@@ -251,10 +255,12 @@ release-image-slim:
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - ENGINE_TAG_VERSION="$(./helper.sh generate_engine_tag_version)"
     - docker buildx build --platform=linux/${IMAGE_ARCH}
       --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-${IMAGE_ARCH}"
       --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-slim-${IMAGE_ARCH}"
       --target=run-slim
+      --build-arg ENGINE_TAG_VERSION="${ENGINE_TAG_VERSION}"
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-slim-${IMAGE_ARCH}
       --push .
   parallel:
@@ -276,10 +282,12 @@ release-image-eksanywhere:
   retry: 0
   script:
     - eval $(ci_helper print_aws_ctx 'CI_BUILDER')
+    - ENGINE_TAG_VERSION="$(./helper.sh generate_engine_tag_version)"
     - docker buildx build --platform=linux/${IMAGE_ARCH}
       --cache-from "type=registry,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksanywhere-${IMAGE_ARCH}"
       --cache-to   "type=registry,mode=max,image-manifest=true,oci-mediatypes=true,ref=283389881690.dkr.ecr.eu-west-3.amazonaws.com/engine:cache-eksanywhere-${IMAGE_ARCH}"
       --target=run-eksanywhere
+      --build-arg ENGINE_TAG_VERSION="${ENGINE_TAG_VERSION}"
       -t public.ecr.aws/r3m4q3r9/engine:${CI_COMMIT_SHA:0:7}-eksanywhere-${IMAGE_ARCH}
       --push .
   parallel:

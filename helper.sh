@@ -104,6 +104,10 @@ function generate_image_tag() {
   git describe --exact-match --tags
 }
 
+function generate_engine_tag_version() {
+  git describe --exact-match --tags 2>/dev/null || true
+}
+
 
 #############################
 # Build and image functions #
@@ -651,6 +655,9 @@ unit_tests)
   ;;
 cargo_version)
   cargo_version
+  ;;
+generate_engine_tag_version)
+  generate_engine_tag_version
   ;;
 lint)
   lint

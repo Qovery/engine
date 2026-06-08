@@ -79,8 +79,10 @@ FROM $RUST_IMAGE AS build
 ARG TERRAFORM_VERSION
 ARG CI_SCCACHE_REDIS_ENDPOINT
 ARG CI_SCCACHE_REDIS_PASSWORD
+ARG ENGINE_TAG_VERSION=""
 ENV CI_SCCACHE_REDIS_URL=$CI_SCCACHE_REDIS_ENDPOINT
 ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
+ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
 ENV CARGO_FLAGS="--release --bin engine_grpc --bin engine_post_renderer"
 
@@ -196,12 +198,14 @@ EOF
 FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-trixie-slim AS run
 
 ARG BIN_DEST_FOLDER
+ARG ENGINE_TAG_VERSION=""
 
 ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
 ENV TF_PLUGIN_CACHE_DIR=$HOME_DIR/.terraform.d/plugin-cache
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
 ENV ARCHIVE_BUCKET_NAME=qovery-engine-deployment-archive
+ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 
 ARG HELM_VERSION
 ARG KUBECTL_VERSION
@@ -290,10 +294,12 @@ CMD ["/usr/bin/dumb-init", "--verbose", "--single-child", "--", "./run.sh"]
 FROM public.ecr.aws/r3m4q3r9/qovery-ci:debian-trixie-slim AS run-slim
 
 ARG BIN_DEST_FOLDER
+ARG ENGINE_TAG_VERSION=""
 
 ENV HOME_DIR="/home/qovery"
 ENV BIN_DIR=$HOME_DIR/binaries
 ENV BIN_DEST_FOLDER=$BIN_DEST_FOLDER
+ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 
 ARG HELM_VERSION
 ARG KUBECTL_VERSION
