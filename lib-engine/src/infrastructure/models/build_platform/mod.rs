@@ -148,6 +148,7 @@ impl Build {
             &self.git_repository.commit_id,
             &self.git_repository.docker_target_build_stage,
             &self.dockerfile_fragment,
+            self.git_repository.skip_submodules,
         );
     }
 
@@ -196,6 +197,7 @@ pub struct GitRepository {
     pub root_path: PathBuf,
     pub extra_files_to_inject: Vec<GitRepositoryExtraFile>,
     pub docker_target_build_stage: Option<String>,
+    pub skip_submodules: bool,
 }
 impl GitRepository {
     fn credentials(&self) -> Option<anyhow::Result<Credentials>> {

@@ -112,6 +112,9 @@ pub struct ApplicationAdvancedSettings {
     #[serde(default)]
     #[serde(alias = "build.disable_buildkit_cache")]
     pub build_disable_buildkit_cache: bool,
+    #[serde(default)]
+    #[serde(alias = "build.skip_git_submodules")]
+    pub build_skip_git_submodules: bool,
 
     // Gateway API
     #[serde(alias = "network.gateway_api.enable_sticky_session")]
@@ -285,6 +288,7 @@ impl Default for ApplicationAdvancedSettings {
             build_ram_max_in_gib: 8,
             build_ephemeral_storage_in_gib: None,
             build_disable_buildkit_cache: false,
+            build_skip_git_submodules: false,
             network_ingress_proxy_body_size_mb: 100,
             network_ingress_force_ssl_redirect: true,
             network_ingress_cors_enable: false,
@@ -793,6 +797,7 @@ impl Application {
                 root_path,
                 extra_files_to_inject: vec![],
                 docker_target_build_stage: self.docker_target_build_stage.clone(),
+                skip_submodules: self.advanced_settings.build_skip_git_submodules,
             },
             image: self.to_image(registry_url, cluster_id),
             environment_variables: self

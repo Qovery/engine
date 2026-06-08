@@ -206,6 +206,7 @@ mod tests {
             VALID_COMMIT,
             &repo_path,
             &|_| Vec::new(),
+            false,
         )
         .unwrap();
         let cmd = GitLfs::default();
@@ -242,6 +243,7 @@ mod tests {
                 "9df822462e3e7215548e492bc2c15a50a92fed39",
                 &repo_path,
                 &|_| Vec::new(),
+                false,
             )
             .unwrap();
 
@@ -264,6 +266,7 @@ mod tests {
                 VALID_COMMIT,
                 &repo_path,
                 &|_| Vec::new(),
+                false,
             )
             .unwrap();
 
@@ -287,6 +290,7 @@ mod tests {
                 VALID_COMMIT,
                 &repo_path,
                 &|_| Vec::new(),
+                false,
             )
             .unwrap();
 
