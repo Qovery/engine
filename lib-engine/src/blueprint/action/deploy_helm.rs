@@ -27,6 +27,7 @@ struct BlueprintHelmTeraContext {
     arguments: Vec<String>,
     rendered_values: Option<String>,
     import_id: Option<String>,
+    blueprint_id: String,
 }
 
 fn infer_chart_repository_kind(repository: &str) -> &'static str {
@@ -127,6 +128,7 @@ impl BlueprintHelmTeraContext {
             arguments: spec.arguments.clone(),
             rendered_values,
             import_id: request.import_id.clone(),
+            blueprint_id: request.long_id.to_string(),
         }
     }
 }
@@ -291,6 +293,13 @@ mod tests {
         assert!(result.contains("blueprint-values"));
         assert!(result.contains("auth:"));
         assert!(result.contains("file = {"));
+    }
+
+    #[test]
+    fn generate_helm_tf_renders_blueprint_id_from_long_id() {
+        let result = render_template(&test_spec(), &test_request(), &test_info(), None);
+
+        assert!(result.contains(r#"blueprint_id                 = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee""#));
     }
 
     #[test]

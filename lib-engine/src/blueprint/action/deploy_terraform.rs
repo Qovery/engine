@@ -39,6 +39,7 @@ struct BlueprintTerraformTeraContext {
     job_storage_gib: u32,
     variables: Vec<TemplateVariable>,
     import_id: Option<String>,
+    blueprint_id: String,
 }
 
 /// Execute a Terraform blueprint: build Tera context → render template → terraform init + apply.
@@ -111,6 +112,7 @@ impl BlueprintTerraformTeraContext {
                 })
                 .collect(),
             import_id: request.import_id.clone(),
+            blueprint_id: request.long_id.to_string(),
         }
     }
 }
@@ -253,6 +255,13 @@ mod tests {
         let result = render_template(&test_spec(), &request, &test_info());
 
         assert!(result.contains(r#"git_token_id = "01999999-aaaa-bbbb-cccc-ddddeeeeffff""#));
+    }
+
+    #[test]
+    fn generate_main_tf_renders_blueprint_id_from_long_id() {
+        let result = render_template(&test_spec(), &test_request(), &test_info());
+
+        assert!(result.contains(r#"blueprint_id          = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee""#));
     }
 
     #[test]

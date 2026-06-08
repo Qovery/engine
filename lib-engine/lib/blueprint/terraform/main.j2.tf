@@ -10,6 +10,7 @@ provider "qovery" {}
 
 resource "qovery_terraform_service" "blueprint" {
   environment_id        = "{{ environment_id | hcl_string }}"
+  blueprint_id          = "{{ blueprint_id | hcl_string }}"
   name                  = "{{ name | hcl_string }}"
   description           = "{{ description | hcl_string }}"
   auto_deploy           = false
