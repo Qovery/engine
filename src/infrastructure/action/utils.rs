@@ -1,3 +1,4 @@
+use crate::environment::models::types::VersionsNumber;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::{InfraLogger, InfraLoggerImpl};
@@ -18,6 +19,25 @@ where
     }
 
     TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
+}
+
+pub fn from_terraform_optional_version_number<'de, D>(deserializer: D) -> Result<Option<VersionsNumber>, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    use serde::Deserialize;
+    use serde::de::Error;
+    use std::str::FromStr;
+
+    #[derive(serde_derive::Deserialize)]
+    struct TerraformJsonValue<T> {
+        value: T,
+    }
+
+    let value = TerraformJsonValue::<Option<String>>::deserialize(deserializer)?.value;
+    value
+        .map(|version| VersionsNumber::from_str(&version).map_err(D::Error::custom))
+        .transpose()
 }
 
 /// CIDR that allows unrestricted access (all IPs).

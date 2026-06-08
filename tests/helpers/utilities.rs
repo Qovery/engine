@@ -42,6 +42,7 @@ use qovery_engine::constants::{
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
+use qovery_engine::environment::models::types::VersionsNumber;
 use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
@@ -120,6 +121,10 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
     }
     let secrets = FuncTestsSecrets::new();
     let versions = get_qovery_app_version(&secrets.QOVERY_API_URL.unwrap()).unwrap();
+    let engine_version = env::var("ENGINE_TAG_VERSION")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse::<VersionsNumber>()
+        .expect("ENGINE_TAG_VERSION must be a valid engine version");
 
     Context::new(
         organization_id,
@@ -127,6 +132,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         execution_id.to_string(),
         home_dir,
         lib_root_dir,
+        engine_version,
         true,
         enabled_features,
         Option::from(metadata),

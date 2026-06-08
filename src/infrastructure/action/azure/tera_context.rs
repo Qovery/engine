@@ -22,6 +22,10 @@ fn aks_tera_context(cluster: &AKS, infra_ctx: &InfrastructureContext) -> Result<
     let mut context = TeraContext::new();
 
     // Qovery
+    context.insert(
+        "qovery_deployed_with_engine_version",
+        &infra_ctx.context().engine_version().to_string(),
+    );
     context.insert("organization_id", infra_ctx.context().organization_short_id());
     context.insert("organization_long_id", &infra_ctx.context().organization_long_id().to_string());
     context.insert("object_storage_kubeconfig_bucket", &cluster.kubeconfig_bucket_name());

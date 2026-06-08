@@ -232,6 +232,10 @@ pub fn eks_tera_context(
     );
 
     // Qovery
+    context.insert(
+        "qovery_deployed_with_engine_version",
+        &kubernetes.context.engine_version().to_string(),
+    );
     context.insert("organization_id", kubernetes.context.organization_short_id());
     context.insert("organization_long_id", &kubernetes.context.organization_long_id().to_string());
     context.insert("qovery_api_url", &qovery_api_url);

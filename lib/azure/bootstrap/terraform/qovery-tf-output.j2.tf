@@ -1,3 +1,5 @@
+output "qovery_deployed_with_engine_version" { value = var.qovery_deployed_with_engine_version }
+
 output "kubeconfig" {
     sensitive = true
     depends_on = [azurerm_kubernetes_cluster.primary]

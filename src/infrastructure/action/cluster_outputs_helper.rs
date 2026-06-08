@@ -1,3 +1,4 @@
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -59,6 +60,7 @@ pub struct ClusterOutputsRequest {
     pub network: Option<String>,
     pub private_network_id: Option<String>,
     pub external_secrets_automatic_authentication: Option<ExternalSecretsAuthentication>,
+    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
 }
 
 impl IntoClusterOutputsRequest for AwsEksQoveryTerraformOutput {
@@ -78,6 +80,7 @@ impl IntoClusterOutputsRequest for AwsEksQoveryTerraformOutput {
                 .aws_iam_external_secrets_operator_role_arn
                 .as_ref()
                 .map(|arn| ExternalSecretsAuthentication::EksRoleArn(arn.clone())),
+            qovery_deployed_with_engine_version: self.qovery_deployed_with_engine_version.clone(),
         }
     }
 }
@@ -96,6 +99,7 @@ impl IntoClusterOutputsRequest for ScalewayQoveryTerraformOutput {
             cluster_self_link: None,
             network: None,
             external_secrets_automatic_authentication: None,
+            qovery_deployed_with_engine_version: self.qovery_deployed_with_engine_version.clone(),
         }
     }
 }
@@ -117,6 +121,7 @@ impl IntoClusterOutputsRequest for GkeQoveryTerraformOutput {
                 .external_secrets_operator_service_account_email
                 .as_ref()
                 .map(|sa| ExternalSecretsAuthentication::GkeServiceAccount(sa.clone())),
+            qovery_deployed_with_engine_version: self.qovery_deployed_with_engine_version.clone(),
         }
     }
 }
@@ -135,6 +140,7 @@ impl IntoClusterOutputsRequest for AksQoveryTerraformOutput {
             network: None,
             private_network_id: None,
             external_secrets_automatic_authentication: None,
+            qovery_deployed_with_engine_version: self.qovery_deployed_with_engine_version.clone(),
         }
     }
 }

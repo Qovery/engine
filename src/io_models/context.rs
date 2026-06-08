@@ -1,5 +1,6 @@
 use crate::cmd::docker::Docker;
 use crate::engine_task::qovery_api::QoveryApi;
+use crate::environment::models::types::VersionsNumber;
 use crate::events::{EventDetails, Transmitter};
 use crate::io_models::QoveryIdentifier;
 use crate::utilities::to_short_id;
@@ -19,6 +20,7 @@ pub struct Context {
     execution_id: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    engine_version: VersionsNumber,
     test_cluster: bool,
     features: Vec<Features>,
     metadata: Option<Metadata>,
@@ -34,6 +36,7 @@ impl Context {
         execution_id: String,
         workspace_root_dir: String,
         lib_root_dir: String,
+        engine_version: VersionsNumber,
         test_cluster: bool,
         features: Vec<Features>,
         metadata: Option<Metadata>,
@@ -50,6 +53,7 @@ impl Context {
             execution_id,
             workspace_root_dir,
             lib_root_dir,
+            engine_version,
             test_cluster,
             features,
             metadata,
@@ -100,6 +104,10 @@ impl Context {
 
     pub fn lib_root_dir(&self) -> &str {
         self.lib_root_dir.as_str()
+    }
+
+    pub fn engine_version(&self) -> &VersionsNumber {
+        &self.engine_version
     }
 
     pub fn metadata(&self) -> Option<&Metadata> {

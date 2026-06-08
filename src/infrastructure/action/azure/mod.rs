@@ -5,7 +5,8 @@ mod cluster_upgrade;
 pub(crate) mod helm_charts;
 mod tera_context;
 
-use super::utils::{from_terraform_value, mk_logger};
+use super::utils::{from_terraform_optional_version_number, from_terraform_value, mk_logger};
+use crate::environment::models::types::VersionsNumber;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::infrastructure::action::InfrastructureAction;
@@ -79,4 +80,7 @@ pub struct AksQoveryTerraformOutput {
     #[serde(deserialize_with = "from_terraform_value")]
     #[serde(default)]
     pub thanos_storage_account: Option<String>,
+    #[serde(deserialize_with = "from_terraform_optional_version_number")]
+    #[serde(default)]
+    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
 }
