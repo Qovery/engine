@@ -40,10 +40,10 @@ use crate::grpc::GrpcEngineClient;
 use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, load_engine_version};
+use crate::utils::{check_libs_directory, load_deployed_engine_version};
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::Task;
-use qovery_engine::environment::models::types::VersionsNumber;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::{
@@ -89,7 +89,7 @@ fn to_engine_task(
     msg: String,
     workspace_root_dir: &str,
     lib_root_dir: &str,
-    engine_version: &VersionsNumber,
+    deployed_engine_version: &DeployedEngineVersion,
     mk_docker: Box<dyn Fn() -> Arc<Docker>>,
     task_selector: &TaskSelector,
     grpc_client: &GrpcEngineClient,
@@ -109,7 +109,7 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    engine_version.clone(),
+                    deployed_engine_version.clone(),
                     mk_docker(),
                     logger,
                     metrics_registry,
@@ -127,7 +127,7 @@ fn to_engine_task(
                     request,
                     workspace_root_dir.to_string(),
                     lib_root_dir.to_string(),
-                    engine_version.clone(),
+                    deployed_engine_version.clone(),
                     // We need to clone docker to generate a new docker config for each task
                     mk_docker(),
                     logger,
@@ -145,7 +145,7 @@ fn to_engine_task(
                 Ok(Arc::new(EnvironmentTask::new(
                     request,
                     workspace_root_dir.to_string(),
-                    engine_version.clone(),
+                    deployed_engine_version.clone(),
                     lib_root_dir.to_string(),
                     // We need to clone docker to generate a new docker config for each task
                     mk_docker(),
@@ -274,7 +274,7 @@ pub fn main() -> io::Result<()> {
         .init();
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
-    let engine_version = load_engine_version(build_info::ENGINE_VERSION);
+    let deployed_engine_version = load_deployed_engine_version(build_info::ENGINE_VERSION);
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
     let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
@@ -410,7 +410,7 @@ pub fn main() -> io::Result<()> {
                 payload,
                 &cli.workspace_root_dir,
                 &cli.lib_root_dir,
-                &engine_version,
+                &deployed_engine_version,
                 {
                     let docker = docker.clone();
                     Box::new(move || Arc::new(docker.as_ref().clone()))

@@ -8,7 +8,7 @@ use crate::cmd::git;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
-use crate::environment::models::types::VersionsNumber;
+use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -29,7 +29,7 @@ use tokio::sync::broadcast;
 pub struct BlueprintTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    engine_version: VersionsNumber,
+    engine_version: DeployedEngineVersion,
 
     docker: Arc<Docker>,
     request: BlueprintEngineRequest,
@@ -47,7 +47,7 @@ impl BlueprintTask {
         request: BlueprintEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
-        engine_version: VersionsNumber,
+        engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,

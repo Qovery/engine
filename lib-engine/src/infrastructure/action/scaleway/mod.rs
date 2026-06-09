@@ -1,4 +1,4 @@
-use crate::environment::models::types::VersionsNumber;
+use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::infrastructure::action::InfrastructureAction;
@@ -52,7 +52,7 @@ impl InfrastructureAction for Kapsule {
     }
 }
 
-use super::utils::{from_terraform_optional_version_number, from_terraform_value, mk_logger};
+use super::utils::{from_terraform_value, mk_logger};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScalewayQoveryTerraformOutput {
@@ -66,7 +66,7 @@ pub struct ScalewayQoveryTerraformOutput {
     pub cluster_id: String,
     #[serde(deserialize_with = "from_terraform_value")]
     pub private_network_id: String,
-    #[serde(deserialize_with = "from_terraform_optional_version_number")]
+    #[serde(deserialize_with = "super::utils::from_terraform_optional_deployed_engine_version")]
     #[serde(default)]
-    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
+    pub qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
 }

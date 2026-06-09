@@ -24,7 +24,7 @@ use uuid::Uuid;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::Task;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
-use qovery_engine::environment::models::types::VersionsNumber;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::engine_request::{
@@ -37,7 +37,7 @@ use crate::constants::ASCII_BANNER;
 use crate::logger::composite_logger::CompositeLogger;
 
 use crate::models::TaskSelector;
-use crate::utils::{check_libs_directory, check_versions_from, load_engine_version};
+use crate::utils::{check_libs_directory, check_versions_from, load_deployed_engine_version};
 use qovery_engine::metrics_registry::StdMetricsRegistry;
 use qovery_engine::msg_publisher::StdMsgPublisher;
 use reqwest::header;
@@ -78,7 +78,7 @@ pub fn main() -> io::Result<()> {
         .with_timer(UtcTime::rfc_3339())
         .init();
 
-    let engine_version = load_engine_version(build_info::ENGINE_VERSION);
+    let deployed_engine_version = load_deployed_engine_version(build_info::ENGINE_VERSION);
     let engine_id = env::var("ID").unwrap_or_else(|_| generate_id().to_string());
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let test_cluster_env_var = env::var("TEST_CLUSTER");
@@ -91,7 +91,7 @@ pub fn main() -> io::Result<()> {
     let metrics_registry = Box::new(StdMetricsRegistry::new(Box::new(StdMsgPublisher::new())));
 
     info!("engine id: {}", engine_id.as_str());
-    info!("engine version : {}", engine_version);
+    info!("engine version : {}", build_info::ENGINE_VERSION);
     info!(
         "running from current directory: {}",
         env::current_dir().unwrap().to_str().unwrap()
@@ -148,7 +148,7 @@ pub fn main() -> io::Result<()> {
                 test_cluster,
                 TaskSelector::Infrastructure,
                 docker,
-                engine_version,
+                deployed_engine_version,
                 metrics_registry,
             ),
             "env" => using_json_path_parameter(
@@ -159,7 +159,7 @@ pub fn main() -> io::Result<()> {
                 test_cluster,
                 TaskSelector::Environment,
                 docker,
-                engine_version,
+                deployed_engine_version,
                 metrics_registry,
             ),
             _ => {
@@ -183,7 +183,7 @@ pub fn using_json_path_parameter(
     test_cluster: bool,
     deployment_type: TaskSelector,
     docker: Arc<Docker>,
-    engine_version: VersionsNumber,
+    deployed_engine_version: DeployedEngineVersion,
     metrics_registry: Box<dyn MetricsRegistry>,
 ) -> Result<(), Error> {
     // check if file json config file exist
@@ -209,7 +209,7 @@ pub fn using_json_path_parameter(
                 request,
                 workspace_root_dir,
                 lib_root_dir,
-                engine_version.clone(),
+                deployed_engine_version.clone(),
                 docker,
                 logger,
                 metrics_registry,
@@ -232,7 +232,7 @@ pub fn using_json_path_parameter(
             Box::new(EnvironmentTask::new(
                 request,
                 workspace_root_dir,
-                engine_version.clone(),
+                deployed_engine_version.clone(),
                 lib_root_dir,
                 docker,
                 logger,
@@ -255,7 +255,7 @@ pub fn using_json_path_parameter(
                 request,
                 workspace_root_dir,
                 lib_root_dir,
-                engine_version.clone(),
+                deployed_engine_version.clone(),
                 docker,
                 logger,
                 metrics_registry,

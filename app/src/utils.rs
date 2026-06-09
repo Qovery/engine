@@ -3,7 +3,7 @@ extern crate prometheus;
 use crate::custom_error::ErrorKind::BinVersion;
 use crate::custom_error::{EngineInitError, ErrorKind};
 use qovery_engine::cmd;
-use qovery_engine::environment::models::types::VersionsNumber;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
@@ -69,13 +69,13 @@ pub fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
     Ok(())
 }
 
-pub fn load_engine_version(build_version_fallback: &str) -> VersionsNumber {
+pub fn load_deployed_engine_version(build_version_fallback: &str) -> DeployedEngineVersion {
     let raw_engine_version = env::var("ENGINE_TAG_VERSION")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| build_version_fallback.to_string());
 
     raw_engine_version
-        .parse::<VersionsNumber>()
-        .expect("engine version must be a valid engine version")
+        .parse::<DeployedEngineVersion>()
+        .expect("engine version must be a valid version or commit id")
 }

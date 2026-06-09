@@ -4,7 +4,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::action::deploy_environment::EnvironmentDeployment;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
 use crate::environment::models::environment::Environment;
-use crate::environment::models::types::VersionsNumber;
+use crate::environment::models::types::DeployedEngineVersion;
 use crate::environment::report::logger::EnvLogger;
 use crate::environment::task_external_secret::handle_service_external_secrets;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
@@ -45,7 +45,7 @@ pub struct DeploymentOption {
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
-    engine_version: VersionsNumber,
+    engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
     cancel_requested: Arc<AtomicAbortStatus>,
@@ -61,7 +61,7 @@ impl EnvironmentTask {
     pub fn new(
         request: EnvironmentEngineRequest,
         workspace_root_dir: String,
-        engine_version: VersionsNumber,
+        engine_version: DeployedEngineVersion,
         lib_root_dir: String,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
