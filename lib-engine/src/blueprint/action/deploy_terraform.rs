@@ -40,6 +40,7 @@ struct BlueprintTerraformTeraContext {
     variables: Vec<TemplateVariable>,
     import_id: Option<String>,
     blueprint_id: String,
+    icon_uri: String,
 }
 
 /// Execute a Terraform blueprint: build Tera context → render template → terraform init + apply.
@@ -113,6 +114,7 @@ impl BlueprintTerraformTeraContext {
                 .collect(),
             import_id: request.import_id.clone(),
             blueprint_id: request.long_id.to_string(),
+            icon_uri: request.icon.clone(),
         }
     }
 }
@@ -156,6 +158,7 @@ mod tests {
             qovery_api_token: "test-token".into(),
             environment_id: "env-uuid".into(),
             import_id: None,
+            icon: String::new(),
         }
     }
 
