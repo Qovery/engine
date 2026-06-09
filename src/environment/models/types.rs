@@ -173,6 +173,67 @@ impl fmt::Display for VersionsNumber {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct TaggedDeployedEngineVersion {
+    raw: String,
+    parsed: VersionsNumber,
+}
+
+impl TaggedDeployedEngineVersion {
+    pub fn raw(&self) -> &str {
+        &self.raw
+    }
+
+    pub fn parsed(&self) -> &VersionsNumber {
+        &self.parsed
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum DeployedEngineVersion {
+    Version(TaggedDeployedEngineVersion),
+    CommitId(String),
+}
+
+impl fmt::Display for DeployedEngineVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DeployedEngineVersion::Version(version) => f.write_str(version.raw()),
+            DeployedEngineVersion::CommitId(commit_id) => f.write_str(commit_id),
+        }
+    }
+}
+
+impl FromStr for DeployedEngineVersion {
+    type Err = CommandError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        let normalized = trimmed.trim_start_matches('v');
+
+        let is_version_like =
+            normalized.chars().next().is_some_and(|char| char.is_ascii_digit()) && normalized.contains('.');
+        if is_version_like {
+            return VersionsNumber::from_str(trimmed).map(|parsed| {
+                DeployedEngineVersion::Version(TaggedDeployedEngineVersion {
+                    raw: trimmed.to_string(),
+                    parsed,
+                })
+            });
+        }
+
+        let is_commit_id = (7..=40).contains(&trimmed.len()) && trimmed.chars().all(|char| char.is_ascii_hexdigit());
+
+        if is_commit_id {
+            return Ok(DeployedEngineVersion::CommitId(trimmed.to_string()));
+        }
+
+        Err(CommandError::new_from_safe_message(format!(
+            "invalid deployed engine version or commit id: {value}"
+        )))
+    }
+}
+
 pub struct VersionsNumberBuilder {
     major: Arc<str>,
     minor: Option<Arc<str>>,
@@ -513,6 +574,43 @@ mod tests {
             // validate:
             assert_eq!(test_case.expected, result);
         }
+    }
+
+    #[test]
+    fn test_deployed_engine_version_from_str_parses_semver() {
+        let result = DeployedEngineVersion::from_str("v1.2.3").unwrap();
+
+        assert_eq!(
+            result,
+            DeployedEngineVersion::Version(TaggedDeployedEngineVersion {
+                raw: "v1.2.3".to_string(),
+                parsed: VersionsNumber {
+                    major: "1".to_string(),
+                    minor: Some("2".to_string()),
+                    patch: Some("3".to_string()),
+                    suffix: None,
+                },
+            })
+        );
+        assert_eq!(result.to_string(), "v1.2.3");
+    }
+
+    #[test]
+    fn test_deployed_engine_version_from_str_parses_commit_id() {
+        let result = DeployedEngineVersion::from_str("cfb400b9cfd46d60857451cc123fdcab61bf40e").unwrap();
+
+        assert_eq!(
+            result,
+            DeployedEngineVersion::CommitId("cfb400b9cfd46d60857451cc123fdcab61bf40e".to_string())
+        );
+        assert_eq!(result.to_string(), "cfb400b9cfd46d60857451cc123fdcab61bf40e");
+    }
+
+    #[test]
+    fn test_deployed_engine_version_from_str_rejects_invalid_value() {
+        let result = DeployedEngineVersion::from_str("unknown");
+
+        assert!(result.is_err());
     }
 
     #[test]

@@ -42,7 +42,7 @@ use qovery_engine::constants::{
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, StaticQoveryApi};
 use qovery_engine::environment::models::ToCloudProviderFormat;
 use qovery_engine::environment::models::database::DatabaseInstanceType;
-use qovery_engine::environment::models::types::VersionsNumber;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::report::obfuscation_service::{ObfuscationService, StdObfuscationService};
 use qovery_engine::errors::CommandError;
 use qovery_engine::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
@@ -60,6 +60,22 @@ use qovery_engine::io_models::variable_utils::VariableInfo;
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::{MetricsRegistry, StdMetricsRegistry};
 use qovery_engine::msg_publisher::StdMsgPublisher;
+
+fn load_deployed_engine_version() -> DeployedEngineVersion {
+    let raw_engine_version = env::var("ENGINE_TAG_VERSION")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            env::var("CI_COMMIT_SHORT_SHA")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+        })
+        .unwrap_or_else(|| "0000000".to_string());
+
+    raw_engine_version
+        .parse::<DeployedEngineVersion>()
+        .expect("ENGINE_TAG_VERSION must be a valid version or commit id")
+}
 
 pub fn get_qovery_app_version(api_fqdn: &str) -> anyhow::Result<HashMap<EngineServiceType, String>> {
     #[derive(Deserialize)]
@@ -121,10 +137,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
     }
     let secrets = FuncTestsSecrets::new();
     let versions = get_qovery_app_version(&secrets.QOVERY_API_URL.unwrap()).unwrap();
-    let engine_version = env::var("ENGINE_TAG_VERSION")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse::<VersionsNumber>()
-        .expect("ENGINE_TAG_VERSION must be a valid engine version");
+    let engine_version = load_deployed_engine_version();
 
     Context::new(
         organization_id,

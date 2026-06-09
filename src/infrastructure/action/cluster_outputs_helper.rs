@@ -1,4 +1,4 @@
-use crate::environment::models::types::VersionsNumber;
+use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -60,7 +60,7 @@ pub struct ClusterOutputsRequest {
     pub network: Option<String>,
     pub private_network_id: Option<String>,
     pub external_secrets_automatic_authentication: Option<ExternalSecretsAuthentication>,
-    pub qovery_deployed_with_engine_version: Option<VersionsNumber>,
+    pub qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
 }
 
 impl IntoClusterOutputsRequest for AwsEksQoveryTerraformOutput {

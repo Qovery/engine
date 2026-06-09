@@ -229,4 +229,3 @@ variable "authorized_ip_ranges" {
     {%- endfor -%}
   ]
 }
-

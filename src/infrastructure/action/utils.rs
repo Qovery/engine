@@ -1,4 +1,4 @@
-use crate::environment::models::types::VersionsNumber;
+use crate::environment::models::types::DeployedEngineVersion;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
 use crate::infrastructure::action::{InfraLogger, InfraLoggerImpl};
@@ -21,7 +21,9 @@ where
     TerraformJsonValue::deserialize(deserializer).map(|o: TerraformJsonValue<T>| o.value)
 }
 
-pub fn from_terraform_optional_version_number<'de, D>(deserializer: D) -> Result<Option<VersionsNumber>, D::Error>
+pub fn from_terraform_optional_deployed_engine_version<'de, D>(
+    deserializer: D,
+) -> Result<Option<DeployedEngineVersion>, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
@@ -36,7 +38,7 @@ where
 
     let value = TerraformJsonValue::<Option<String>>::deserialize(deserializer)?.value;
     value
-        .map(|version| VersionsNumber::from_str(&version).map_err(D::Error::custom))
+        .map(|version| DeployedEngineVersion::from_str(&version).map_err(D::Error::custom))
         .transpose()
 }
 
@@ -265,5 +267,85 @@ mod tests {
         assert_eq!(value.aws_number, 12);
         assert_eq!(value.aws_float, 12.64);
         assert!(!value.aws_list.is_empty());
+    }
+
+    #[test]
+    fn test_terraform_optional_deployed_engine_version_parses_version() {
+        #[derive(serde_derive::Deserialize)]
+        struct TestStruct {
+            #[serde(
+                rename = "qovery_deployed_with_engine_version",
+                deserialize_with = "from_terraform_optional_deployed_engine_version"
+            )]
+            _qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
+        }
+
+        let json = r#"
+{
+  "qovery_deployed_with_engine_version": {
+    "sensitive": false,
+    "type": "string",
+    "value": "v1.2.3"
+  }
+}
+        "#;
+
+        let value: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(value._qovery_deployed_with_engine_version, Some("v1.2.3".parse().unwrap()));
+    }
+
+    #[test]
+    fn test_terraform_optional_deployed_engine_version_parses_commit_id() {
+        #[derive(serde_derive::Deserialize)]
+        struct TestStruct {
+            #[serde(
+                rename = "qovery_deployed_with_engine_version",
+                deserialize_with = "from_terraform_optional_deployed_engine_version"
+            )]
+            _qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
+        }
+
+        let json = r#"
+{
+  "qovery_deployed_with_engine_version": {
+    "sensitive": false,
+    "type": "string",
+    "value": "cfb400b9cfd46d60857451cc123fdcab61bf40e"
+  }
+}
+        "#;
+
+        let value: TestStruct = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            value._qovery_deployed_with_engine_version,
+            Some(DeployedEngineVersion::CommitId(
+                "cfb400b9cfd46d60857451cc123fdcab61bf40e".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_terraform_optional_deployed_engine_version_rejects_invalid_value() {
+        #[derive(serde_derive::Deserialize)]
+        struct TestStruct {
+            #[serde(
+                rename = "qovery_deployed_with_engine_version",
+                deserialize_with = "from_terraform_optional_deployed_engine_version"
+            )]
+            _qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
+        }
+
+        let json = r#"
+{
+  "qovery_deployed_with_engine_version": {
+    "sensitive": false,
+    "type": "string",
+    "value": "unknown"
+  }
+}
+        "#;
+
+        let result = serde_json::from_str::<TestStruct>(json);
+        assert!(result.is_err());
     }
 }
