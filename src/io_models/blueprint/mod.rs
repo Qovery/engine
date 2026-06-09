@@ -49,6 +49,10 @@ pub struct BlueprintRequest {
     /// None on first creation, Some(service_id) on updates.
     #[serde(default)]
     pub import_id: Option<String>,
+
+    /// URL of the icon representing this blueprint service in the Qovery console.
+    #[serde(default)]
+    pub icon: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -112,10 +116,34 @@ mod tests {
         assert!(req.git_token_id.is_none());
         assert!(req.spec_overrides.is_none());
         assert!(req.import_id.is_none());
+        assert_eq!(req.icon, "");
         assert_eq!(req.max_parallel_build, 1);
         assert_eq!(req.max_parallel_deploy, 1);
         assert_eq!(req.qovery_api_token, "test-token-xxx");
         assert_eq!(req.environment_id, "env-uuid-xxx");
+    }
+
+    #[test]
+    fn deserialize_with_icon() {
+        let json = r#"{
+            "execution_id": "exec-6",
+            "long_id": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+            "name": "test",
+            "kube_name": "test",
+            "project_long_id": "11111111-2222-3333-4444-555555555555",
+            "organization_long_id": "22222222-3333-4444-5555-666666666666",
+            "variables": [],
+            "git_url": "https://github.com/Qovery/service-catalog.git",
+            "tag": "aws/postgres/16/1.0.0",
+            "qovery_api_token": "test-token-xxx",
+            "environment_id": "env-uuid-xxx",
+            "icon": "https://raw.githubusercontent.com/Qovery/service-catalog/main/icons/postgresql.svg"
+        }"#;
+        let req: BlueprintRequest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            req.icon,
+            "https://raw.githubusercontent.com/Qovery/service-catalog/main/icons/postgresql.svg"
+        );
     }
 
     #[test]

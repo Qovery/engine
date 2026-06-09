@@ -13,6 +13,7 @@ resource "qovery_terraform_service" "blueprint" {
   blueprint_id          = "{{ blueprint_id | hcl_string }}"
   name                  = "{{ name | hcl_string }}"
   description           = "{{ description | hcl_string }}"
+  icon_uri              = "{{ icon_uri | hcl_string }}"
   auto_deploy           = false
   engine                = "{{ engine | hcl_string }}"
   timeout_seconds       = {{ timeout_seconds }}

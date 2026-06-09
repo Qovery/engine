@@ -521,6 +521,7 @@ mod tests {
             qovery_api_token: "token".to_string(),
             environment_id: "env-1".to_string(),
             import_id: None,
+            icon: String::new(),
         };
 
         inject_context_variables(&mut request, "eu-west-3", "my-cluster");
@@ -563,6 +564,7 @@ mod tests {
             qovery_api_token: "token".to_string(),
             environment_id: "env-1".to_string(),
             import_id: None,
+            icon: String::new(),
         };
 
         inject_context_variables(&mut request, "eu-west-3", "my-cluster");

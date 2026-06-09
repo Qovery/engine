@@ -21,6 +21,7 @@ resource "qovery_helm" "blueprint" {
   blueprint_id                 = "{{ blueprint_id | hcl_string }}"
   name                         = "{{ name | hcl_string }}"
   description                  = "{{ description | hcl_string }}"
+  icon_uri                     = "{{ icon_uri | hcl_string }}"
   allow_cluster_wide_resources = {{ allow_cluster_wide_resources }}
   auto_deploy                  = false
 {% if timeout_sec %}
