@@ -131,6 +131,7 @@ google-cloud-token = "0.1.2"
 google-cloud-container-v1 = "1.10.0"
 google-cloud-lro = "1.6.0"
 tokio-util = "0.7.15"
+google-cloud-compute-v1 = { version = "3.1.0", default-features = false, features = ["default-rustls-provider", "firewalls"] }
 
 [dev-dependencies]
 bstr = "1.12.0"

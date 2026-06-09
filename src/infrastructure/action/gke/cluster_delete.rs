@@ -8,9 +8,11 @@ use crate::infrastructure::action::gke::GkeQoveryTerraformOutput;
 use crate::infrastructure::action::{InfraLogger, ToInfraTeraContext};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::kubernetes::Kubernetes;
-use crate::infrastructure::models::kubernetes::gcp::Gke;
+use crate::infrastructure::models::kubernetes::gcp::{Gke, VpcMode};
 use crate::infrastructure::models::object_storage::ObjectStorage;
+use crate::runtime::block_on;
 use crate::utilities::envs_to_string;
+use google_cloud_lro::Poller as _;
 use scopeguard::guard;
 use std::collections::HashSet;
 
@@ -62,6 +64,12 @@ pub(super) fn delete_gke_cluster(
 
     delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
+    // GKE's in-cluster cloud-controller creates `k8s-*-node-http-hc` firewall rules (LoadBalancer /
+    // node health-check) that Terraform does not track. They can linger after Service deletion and
+    // block the VPC deletion during `terraform destroy`. Best-effort cleanup, only for the
+    // Qovery-managed VPC (Terraform deletes the network only in that case).
+    delete_leftover_node_http_hc_firewall_rules(cluster, &logger);
+
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(&[], &logger)?;
 
@@ -96,4 +104,79 @@ fn delete_object_storage(cluster: &Gke, logger: &impl InfraLogger) -> Result<(),
     }
 
     Ok(())
+}
+
+/// Best-effort removal of the GKE-managed `k8s-*-node-http-hc` firewall rules that Terraform does
+/// not track and that can block the VPC deletion during `terraform destroy`.
+///
+/// Only runs when Qovery manages the VPC (`VpcMode::Automatic`). With a user-provided VPC the
+/// network is never deleted by Terraform (it is a `data` source), so there is nothing to unblock,
+/// and the network may be shared with other clusters — we must not touch it.
+fn delete_leftover_node_http_hc_firewall_rules(cluster: &Gke, logger: &impl InfraLogger) {
+    if !matches!(cluster.options.vpc_mode, VpcMode::Automatic { .. }) {
+        return;
+    }
+
+    let network = cluster.cluster_name();
+    let project_id = cluster.credentials.project_id();
+
+    let firewalls = match super::firewalls_client(cluster) {
+        Ok(c) => c,
+        Err(e) => {
+            logger.warn(format!(
+                "Cannot create GCP Firewalls API client to clean up leftover firewall rules, skipping: {e}"
+            ));
+            return;
+        }
+    };
+
+    // List all project firewalls and filter client-side: the Compute REST API filter syntax
+    // differs from the gcloud CLI and rejects `~` (regex) as an invalid operator.
+    let network_suffix = format!("/networks/{network}");
+
+    let rule_names: Vec<String> = match block_on(async { firewalls.list().set_project(project_id).send().await }) {
+        Ok(response) => response
+            .items
+            .into_iter()
+            .filter(|r| {
+                r.name
+                    .as_deref()
+                    .is_some_and(|n| n.starts_with("k8s-") && n.ends_with("-node-http-hc"))
+                    && r.network.as_deref().is_some_and(|n| n.ends_with(&network_suffix))
+            })
+            .filter_map(|r| r.name)
+            .collect(),
+        Err(e) => {
+            logger.warn(format!(
+                "Cannot list leftover Kubernetes firewall rules for network `{network}`, skipping cleanup: {e}"
+            ));
+            return;
+        }
+    };
+
+    if rule_names.is_empty() {
+        return;
+    }
+
+    logger.info(format!(
+        "Deleting {} leftover Kubernetes firewall rule(s) blocking VPC deletion: {}",
+        rule_names.len(),
+        rule_names.join(", ")
+    ));
+
+    for name in &rule_names {
+        if let Err(e) = block_on(async {
+            firewalls
+                .delete()
+                .set_project(project_id)
+                .set_firewall(name)
+                .poller()
+                .until_done()
+                .await
+        }) {
+            logger.warn(format!(
+                "Cannot delete leftover Kubernetes firewall rule `{name}`, terraform destroy may fail: {e}"
+            ));
+        }
+    }
 }

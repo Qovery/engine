@@ -23,7 +23,9 @@ use crate::infrastructure::models::kubernetes::gcp::Gke;
 use crate::infrastructure::models::kubernetes::{Kubernetes, KubernetesUpgradeStatus, send_progress_on_long_task};
 use crate::runtime::block_on;
 use crate::services::gcp::google_cloud_sdk_types::new_google_auth_credentials_from_access_token;
+use google_cloud_auth::credentials::Credentials as GoogleCloudCredentials;
 use google_cloud_auth::credentials::service_account::Builder as ServiceAccountCredentialsBuilder;
+use google_cloud_compute_v1::client::Firewalls;
 use google_cloud_container_v1::client::ClusterManager;
 use google_cloud_container_v1::model::operation::Status as GkeOperationStatus;
 use google_cloud_container_v1::model::{
@@ -131,6 +133,34 @@ fn gke_cluster_resource_name(cluster: &Gke) -> String {
         cluster.region(),
         cluster.cluster_name()
     )
+}
+
+fn build_service_account_credentials(sa: IoJsonCredentials) -> Result<GoogleCloudCredentials, String> {
+    let json = serde_json::to_value(sa)
+        .map_err(|err| format!("Failed to serialize GCP service account credentials: {err}"))?;
+    ServiceAccountCredentialsBuilder::new(json)
+        .build()
+        .map_err(|err| format!("Failed to build GCP service account credentials: {err}"))
+}
+
+fn gcp_credentials(cluster: &Gke) -> Result<GoogleCloudCredentials, String> {
+    match &cluster.credentials {
+        GcpCredentials::ServiceAccount(sa) => {
+            build_service_account_credentials(IoJsonCredentials::from(sa.as_ref().clone()))
+        }
+        GcpCredentials::AccessToken(at) => Ok(new_google_auth_credentials_from_access_token(at)),
+    }
+}
+
+pub(super) fn firewalls_client(cluster: &Gke) -> Result<Firewalls, String> {
+    block_on(async move {
+        let credentials = gcp_credentials(cluster)?;
+        Firewalls::builder()
+            .with_credentials(credentials)
+            .build()
+            .await
+            .map_err(|err| format!("Failed to create GCP Firewalls API client: {err}"))
+    })
 }
 
 fn gke_client(cluster: &Gke, event_details: EventDetails) -> Result<ClusterManager, Box<EngineError>> {
