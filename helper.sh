@@ -165,9 +165,11 @@ function deploy_engines_infra_static_ip() { ## Release GA to prod
   AWS_DEFAULT_REGION="$AWS_PROD_INFRA_STATIC_IP_DEFAULT_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_INFRA_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace $name qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
-  --set image.tag="$tag",\
+  --set-string \
+  image.tag="$tag",\
 fullnameOverride="$name",\
 environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
@@ -203,6 +205,7 @@ buildContainer.enabled="true",\
 buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="true",\
 buildContainer.environmentVariables.BUILDER_CPU_ARCHITECTURES="AMD64\,ARM64",\
 buildContainer.environmentVariables.BUILDER_ROOTLESS_ENABLED="false",\
+environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
@@ -239,9 +242,11 @@ function deploy_engines_blueprint_static_ip() {
   AWS_DEFAULT_REGION="$AWS_PROD_ENVIRONMENT_STATIC_IP_DEFAULT_REGION" \
   helm upgrade --kubeconfig="$AWS_PROD_ENVIRONMENT_STATIC_IP_KUBECONFIG" --install --create-namespace --history-max 50 --wait --timeout 3600s --namespace qovery-engine-blueprint qovery-engine \
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
-  --set image.tag="$tag",\
+  --set-string \
+image.tag="$tag",\
 fullnameOverride="qovery-engine-blueprint",\
 environmentVariables.CLOUD_PROVIDER="aws",\
+environmentVariables.ENGINE_TAG_VERSION="$tag",\
 environmentVariables.LIB_ROOT_DIR="/home/qovery/lib",\
 environmentVariables.DOCKER_HOST="tcp://0.0.0.0:2375",\
 environmentVariables.WORKSPACE_ROOT_DIR="/home/qovery",\
