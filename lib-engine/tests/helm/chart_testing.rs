@@ -251,12 +251,13 @@ fn q_application_test() {
 #[ignore]
 fn q_container_psql_test() {
     let test_info = container_database_context();
-    let chart_name = "postgresql";
+    let chart_name = "postgresql"; // Helm chart identity — keeps rendered output stable
+    let chart_folder = "postgresql-bitnami"; // on-disk folder name (renamed from `postgresql`)
     let uuid = test_info.service_id;
     let chart = CommonChart {
         chart_info: ChartInfo {
             name: chart_name.to_string(),
-            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_name),
+            path: chart_path(&test_info.temp_dir, &test_info.service_folder_type, &uuid, chart_folder),
             namespace: HelmChartNamespaces::KubeSystem,
             action: HelmAction::Deploy,
             atomic: false,
@@ -287,7 +288,7 @@ fn q_container_psql_test() {
         pre_execute_action: None,
     };
     let resources = get_kube_resources(
-        format!("{}/common/services/{}", lib_dir(), chart_name).as_str(),
+        format!("{}/common/services/{}", lib_dir(), chart_folder).as_str(),
         chart.chart_info,
         None,
         &test_info,

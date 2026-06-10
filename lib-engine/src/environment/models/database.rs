@@ -385,8 +385,18 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         format!("{}-{}", T::lib_directory_name(), self.id)
     }
 
+    /// On-disk folder name for the chart and its value overlays. The Bitnami PostgreSQL
+    /// chart lives under `postgresql-bitnami` (renamed in prep for the non-Bitnami PG18
+    /// chart); the Helm release name and chart identity stay `postgresql`.
+    fn chart_folder_name() -> &'static str {
+        match T::db_type() {
+            service::DatabaseType::PostgreSQL => "postgresql-bitnami",
+            _ => T::lib_directory_name(),
+        }
+    }
+
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/services/{}", self.lib_root_directory, T::lib_directory_name())
+        format!("{}/common/services/{}", self.lib_root_directory, Self::chart_folder_name())
     }
 
     pub fn helm_chart_values_dir(&self) -> String {
@@ -394,7 +404,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             "{}/{}/chart_values/{}",
             self.lib_root_directory,
             C::lib_directory_name(),
-            T::lib_directory_name()
+            Self::chart_folder_name()
         )
     }
 
