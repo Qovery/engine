@@ -1,6 +1,6 @@
 image:
   repository: public.ecr.aws/r3m4q3r9/k8s-event-logger-rs
-  tag: 9accdcd6
+  tag: 483ac1b3
 
 resources:
   limits:
@@ -46,6 +46,9 @@ rbac:
     - apiGroups: ["metrics.k8s.io"]
       resources: ["nodes", "pods"]
       verbs: ["get", "list"]
+    - apiGroups: ["events.k8s.io"]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]
     - apiGroups: [ "elbv2.k8s.aws" ]
       resources: ["targetgroupbindings"]
       verbs: [ "get","list","watch" ]
