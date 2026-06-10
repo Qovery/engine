@@ -27,6 +27,14 @@ rules:
       - watch
       - delete
   - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts/token
+    resourceNames:
+      - qovery-readonly
+    verbs:
+      - create
+  - apiGroups:
       - metrics.k8s.io
     resources:
       - pods
