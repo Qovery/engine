@@ -1,4 +1,4 @@
-use crate::blueprint::action::render_and_apply;
+use crate::blueprint::action::{render_and_apply, render_and_diff};
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::spec::ResolvedHelmSpec;
@@ -76,6 +76,44 @@ pub fn execute(
         &request.qovery_api_token,
         spec.timeout_sec,
         is_dry_run,
+        "qovery_helm",
+        event_details,
+        logger,
+    )
+}
+
+/// DIFF action for a Helm blueprint: render values + qovery_helm template, run `terraform plan`,
+/// return the human-readable plan output. Never applies.
+pub fn execute_diff(
+    working_dir: &Path,
+    lib_root_dir: &str,
+    spec: &ResolvedHelmSpec,
+    request: &BlueprintRequest,
+    blueprint_info: &BlueprintInfo,
+    event_details: &EventDetails,
+    logger: &dyn Logger,
+) -> Result<String, Box<EngineError>> {
+    let rendered_values = render_values_yaml(working_dir, &request.variables).map_err(|e| {
+        Box::new(EngineError::new_blueprint_error(
+            event_details.clone(),
+            BlueprintError::TerraformGenerationError(format!("Failed to render values.yaml: {}", e)),
+        ))
+    })?;
+
+    let template_dir = PathBuf::from(lib_root_dir).join("blueprint").join("helm");
+    let ctx =
+        tera::Context::from_serialize(BlueprintHelmTeraContext::new(spec, request, blueprint_info, rendered_values))
+            .map_err(|e| {
+                Box::new(EngineError::new_blueprint_error(
+                    event_details.clone(),
+                    BlueprintError::TerraformGenerationError(format!("Failed to build Tera context: {}", e)),
+                ))
+            })?;
+
+    render_and_diff(
+        &template_dir,
+        &ctx,
+        &request.qovery_api_token,
         "qovery_helm",
         event_details,
         logger,
@@ -176,6 +214,8 @@ mod tests {
             environment_id: "env-uuid".into(),
             import_id: None,
             icon: String::new(),
+            env_kube_name: "env-test-ns".into(),
+            backend_type: None,
         }
     }
 

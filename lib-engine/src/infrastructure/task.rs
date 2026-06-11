@@ -97,6 +97,9 @@ impl InfrastructureTask {
                 Action::Pause => InfrastructureStep::PauseError,
                 Action::Delete => InfrastructureStep::DeleteError,
                 Action::Restart => InfrastructureStep::RestartedError,
+                // Diff is blueprint-only; falls back to GlobalError if it ever reaches the
+                // infrastructure task (would indicate a routing bug upstream, not a runtime crash).
+                Action::Diff => InfrastructureStep::GlobalError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
@@ -113,6 +116,9 @@ impl InfrastructureTask {
                 Action::Pause => InfrastructureStep::Paused,
                 Action::Delete => InfrastructureStep::Deleted,
                 Action::Restart => InfrastructureStep::RestartedError,
+                // Diff is blueprint-only; see comment in the error branch above. Map to
+                // GlobalError so the event still emits with a recognisable shape.
+                Action::Diff => InfrastructureStep::GlobalError,
             };
             let event_message =
                 EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", &infrastructure_step));

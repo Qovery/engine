@@ -53,6 +53,20 @@ pub struct BlueprintRequest {
     /// URL of the icon representing this blueprint service in the Qovery console.
     #[serde(default)]
     pub icon: String,
+
+    /// Kubernetes namespace of the environment the blueprint targets. Needed by the DIFF action
+    /// to point `helm diff upgrade` and `terraform plan` (kubernetes state backend) at the right
+    /// namespace. q-core resolves it via `KubernetesNameDomain.toNamespaceKubeName(...)` because
+    /// the engine has no access to env.slug / env.createdAt to compute it.
+    #[serde(default)]
+    pub env_kube_name: String,
+
+    /// Resolved backend type of the deployed terraform service (Kubernetes vs user-defined).
+    /// Determines whether DIFF emits a backend-override file pointing at the Qovery-managed
+    /// tfstate Secret, or honors the catalog's own `backend { … }` declaration. None for
+    /// helm-typed blueprints or non-DIFF actions. Reuses the env-engine's existing enum.
+    #[serde(default)]
+    pub backend_type: Option<crate::io_models::terraform::TerraformBackendType>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]

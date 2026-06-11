@@ -639,6 +639,13 @@ impl Task for EnvironmentTask {
                     ),
                 ));
             }
+            // Diff is blueprint-only; the environment task never receives it from q-core in
+            // normal routing. If it ever arrives here (malformed request), log a warning and
+            // skip event emission rather than crash the task.
+            (Action::Diff, _) => warn!(
+                "Environment task received Diff action — ignoring (Diff is blueprint-only). Request id: {}",
+                self.request.id
+            ),
         };
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout

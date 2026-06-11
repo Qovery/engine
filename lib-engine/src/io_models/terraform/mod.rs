@@ -105,7 +105,7 @@ pub struct TerraformBackend {
     pub backend_type: TerraformBackendType,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformBackendType {
     DefinedInTerraformFile,
@@ -113,7 +113,7 @@ pub enum TerraformBackendType {
 }
 
 impl TerraformBackendType {
-    fn to_backend_block_name(&self) -> &'static str {
+    fn to_backend_block_name(self) -> &'static str {
         match self {
             TerraformBackendType::DefinedInTerraformFile => "invalid",
             TerraformBackendType::Kubernetes => "kubernetes",

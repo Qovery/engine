@@ -1,4 +1,4 @@
-use crate::blueprint::action::{deploy_helm, deploy_terraform};
+use crate::blueprint::action::{deploy_helm, deploy_terraform, diff};
 use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintKind, QoveryBlueprintManifest};
@@ -12,6 +12,7 @@ use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::io_models::Action;
 use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::{BlueprintEngineRequest, CloudProviderOptions};
@@ -235,14 +236,22 @@ impl BlueprintTask {
         Ok(manifest)
     }
 
-    fn stop_total_steps_records(deployment_ret: &Result<(), Box<EngineError>>, record: StepRecordHandle) {
+    fn stop_total_steps_records<T>(deployment_ret: &Result<T, Box<EngineError>>, record: StepRecordHandle) {
         let step_status = match deployment_ret {
-            Ok(()) => StepStatus::Success,
+            Ok(_) => StepStatus::Success,
             Err(err) if err.tag().is_cancel() => StepStatus::Cancel,
             Err(_) => StepStatus::Error,
         };
         record.stop(step_status);
     }
+}
+
+/// Outcome of a [`BlueprintTask::run`] dispatch. Drives which terminal step is emitted.
+enum BlueprintTaskOutcome {
+    /// Action::Create — service was created via the qovery terraform provider.
+    Deployed,
+    /// Action::Diff — render+plan produced this human-readable diff text. No mutations.
+    Diffed(String),
 }
 
 impl Task for BlueprintTask {
@@ -290,7 +299,7 @@ impl Task for BlueprintTask {
 
         let mut target_env = self.request.target_environment.clone();
 
-        let deployment_ret = (|| -> Result<(), Box<EngineError>> {
+        let deployment_ret = (|| -> Result<BlueprintTaskOutcome, Box<EngineError>> {
             // 2. Clone blueprint repo
             let (blueprint_dir, blueprint_info) = self.clone_blueprint_repo(&infra_context)?;
 
@@ -308,12 +317,17 @@ impl Task for BlueprintTask {
                 EventMessage::new(format!("Resolved blueprint spec: {:?}", resolved_spec), None),
             ));
 
-            // 5. Execute
-            let event_details = self.get_event_details(BlueprintStep::Deploy);
+            // 6. Dispatch on action — DIFF runs terraform plan only, anything else (Create) deploys.
+            let is_diff = matches!(self.request.action, Action::Diff);
+            let event_details = self.get_event_details(if is_diff {
+                BlueprintStep::Diff
+            } else {
+                BlueprintStep::Deploy
+            });
             let is_dry_run = infra_context.context().is_dry_run_deploy();
 
-            match resolved_spec {
-                ResolvedBlueprintSpec::Terraform(tf_spec) => {
+            match (is_diff, resolved_spec) {
+                (false, ResolvedBlueprintSpec::Terraform(tf_spec)) => {
                     self.logger.log(EngineEvent::Info(
                         event_details.clone(),
                         EventMessage::new(
@@ -342,8 +356,9 @@ impl Task for BlueprintTask {
                             None,
                         ),
                     ));
+                    Ok(BlueprintTaskOutcome::Deployed)
                 }
-                ResolvedBlueprintSpec::Helm(helm_spec) => {
+                (false, ResolvedBlueprintSpec::Helm(helm_spec)) => {
                     self.logger.log(EngineEvent::Info(
                         event_details.clone(),
                         EventMessage::new(
@@ -373,19 +388,72 @@ impl Task for BlueprintTask {
                             None,
                         ),
                     ));
+                    Ok(BlueprintTaskOutcome::Deployed)
+                }
+                (true, ResolvedBlueprintSpec::Terraform(tf_spec)) => {
+                    self.logger.log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Diffing Terraform blueprint (provider={}, flavor={:?}) against deployed state",
+                                tf_spec.provider, tf_spec.flavor
+                            ),
+                            None,
+                        ),
+                    ));
+                    let diff = diff::diff_underlying_terraform(
+                        &blueprint_dir,
+                        &tf_spec,
+                        &target_env,
+                        &infra_context,
+                        &event_details,
+                        self.logger.as_ref(),
+                    )?;
+                    Ok(BlueprintTaskOutcome::Diffed(diff))
+                }
+                (true, ResolvedBlueprintSpec::Helm(helm_spec)) => {
+                    // Helm-typed blueprints diff at the qovery_helm wrapper level (chart version
+                    // pin + rendered values). That's the right granularity: catalog only ships
+                    // values.yaml + qbm.yml, so a catalog tag bump's changes are fully captured by
+                    // the wrapper resource fields.
+                    self.logger.log(EngineEvent::Info(
+                        event_details.clone(),
+                        EventMessage::new(
+                            format!(
+                                "Diffing Helm blueprint (chart={}/{}) at the qovery_helm wrapper level",
+                                helm_spec.chart.name, helm_spec.chart.version
+                            ),
+                            None,
+                        ),
+                    ));
+                    let diff = deploy_helm::execute_diff(
+                        &blueprint_dir,
+                        &self.lib_root_dir,
+                        &helm_spec,
+                        &target_env,
+                        &blueprint_info,
+                        &event_details,
+                        self.logger.as_ref(),
+                    )?;
+                    Ok(BlueprintTaskOutcome::Diffed(diff))
                 }
             }
-
-            Ok(())
         })();
 
         Self::stop_total_steps_records(&deployment_ret, record);
 
         match &deployment_ret {
-            Ok(()) => {
+            Ok(BlueprintTaskOutcome::Deployed) => {
                 self.logger.log(EngineEvent::Info(
                     self.get_event_details(BlueprintStep::Deployed),
                     EventMessage::new("Blueprint deployment succeeded".to_string(), None),
+                ));
+            }
+            Ok(BlueprintTaskOutcome::Diffed(diff)) => {
+                // The plan output goes in full_details — q-core's diff consumer reads it from there.
+                self.logger.log(EngineEvent::Info(
+                    self.get_event_details(BlueprintStep::Diff),
+                    EventMessage::new("Blueprint diff produced".to_string(), Some(diff.clone())),
                 ));
             }
             Err(err) if err.tag().is_cancel() => {
@@ -522,6 +590,8 @@ mod tests {
             environment_id: "env-1".to_string(),
             import_id: None,
             icon: String::new(),
+            env_kube_name: "env-test-ns".into(),
+            backend_type: None,
         };
 
         inject_context_variables(&mut request, "eu-west-3", "my-cluster");
@@ -565,6 +635,8 @@ mod tests {
             environment_id: "env-1".to_string(),
             import_id: None,
             icon: String::new(),
+            env_kube_name: "env-test-ns".into(),
+            backend_type: None,
         };
 
         inject_context_variables(&mut request, "eu-west-3", "my-cluster");
