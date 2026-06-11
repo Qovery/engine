@@ -2,6 +2,9 @@ config:
   envoyGateway:
     gateway:
       controllerName: qovery.com/gateway-controller
+    logging:
+      level:
+        default: warn
 
 service:
   annotations: {} # set-by-engine
