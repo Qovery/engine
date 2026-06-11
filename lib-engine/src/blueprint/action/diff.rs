@@ -125,7 +125,7 @@ pub fn diff_underlying_terraform(
                 ),
             ));
         }
-        TerraformBackendType::UserProvided => {
+        TerraformBackendType::DefinedInTerraformFile => {
             logger.log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new(
