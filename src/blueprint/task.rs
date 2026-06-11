@@ -401,11 +401,13 @@ impl Task for BlueprintTask {
                             None,
                         ),
                     ));
+                    let cloud_envs = infra_context.cloud_provider().credentials_environment_variables();
+                    let kubeconfig_path = infra_context.kubernetes().kubeconfig_local_file_path();
                     let diff = diff::diff_underlying_terraform(
                         &blueprint_dir,
-                        &tf_spec,
                         &target_env,
-                        &infra_context,
+                        &cloud_envs,
+                        &kubeconfig_path,
                         &event_details,
                         self.logger.as_ref(),
                     )?;

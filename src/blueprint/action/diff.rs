@@ -15,12 +15,10 @@
 //! is a pinned reference, so a catalog tag bump's changes are fully expressed by the wrapper.
 
 use crate::blueprint::models::error::BlueprintError;
-use crate::blueprint::models::spec::ResolvedTerraformSpec;
 use crate::cmd::terraform::{TerraformOutput, terraform_init_validate, terraform_plan_internal};
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
-use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::blueprint::BlueprintRequest;
 use crate::io_models::terraform::TerraformBackendType;
 use crate::logger::Logger;
@@ -33,12 +31,11 @@ pub const DIFF_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
 /// variables, wire the kubernetes state backend at the deployed service's tfstate secret, run
 /// `terraform init + plan`, return the human-readable plan output.
 ///
-/// Never applies. Never calls the qovery API.
 pub fn diff_underlying_terraform(
     blueprint_dir: &Path,
-    _spec: &ResolvedTerraformSpec,
     request: &BlueprintRequest,
-    infra_context: &InfrastructureContext,
+    cloud_envs: &[(&str, &str)],
+    kubeconfig_path: &Path,
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
@@ -128,7 +125,7 @@ pub fn diff_underlying_terraform(
                 ),
             ));
         }
-        TerraformBackendType::DefinedInTerraformFile => {
+        TerraformBackendType::UserProvided => {
             logger.log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new(
@@ -140,12 +137,9 @@ pub fn diff_underlying_terraform(
         }
     }
 
-    // 4. Cloud-provider env vars (AWS_*/GCP_*/etc.) are the same shape the env engine uses for
-    //    terraform commands — KUBECONFIG comes from the engine's kubeconfig path.
-    let cloud_envs = infra_context.cloud_provider().credentials_environment_variables();
-    let kubeconfig = infra_context.kubernetes().kubeconfig_local_file_path();
-    let kubeconfig_str = kubeconfig.to_string_lossy().into_owned();
-    let mut envs: Vec<(&str, &str)> = cloud_envs.iter().map(|(k, v)| (*k, *v)).collect();
+    // 4. Compose terraform's env: cloud-provider creds + KUBECONFIG so the kubernetes backend (when used) can read the deployed tfstate Secret.
+    let kubeconfig_str = kubeconfig_path.to_string_lossy().into_owned();
+    let mut envs: Vec<(&str, &str)> = cloud_envs.to_vec();
     envs.push(("KUBECONFIG", &kubeconfig_str));
 
     let dir = workspace.path().to_string_lossy();
