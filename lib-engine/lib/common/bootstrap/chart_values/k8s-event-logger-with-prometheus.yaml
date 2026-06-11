@@ -28,6 +28,9 @@ rbac:
         "namespaces", "configmaps"
       ]
       verbs: ["get", "list", "watch"]
+    - apiGroups: ["events.k8s.io"]
+      resources: ["events"]
+      verbs: ["get", "list", "watch"]
     - apiGroups: ["apps"]
       resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
       verbs: ["get", "list", "watch"]
