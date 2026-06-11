@@ -108,14 +108,14 @@ pub struct TerraformBackend {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum TerraformBackendType {
-    UserProvided,
+    DefinedInTerraformFile,
     Kubernetes,
 }
 
 impl TerraformBackendType {
     fn to_backend_block_name(self) -> &'static str {
         match self {
-            TerraformBackendType::UserProvided => "invalid",
+            TerraformBackendType::DefinedInTerraformFile => "invalid",
             TerraformBackendType::Kubernetes => "kubernetes",
         }
     }
@@ -502,7 +502,7 @@ impl TerraformService {
         environment_long_id: Uuid,
     ) -> Result<models::terraform_service::TerraformBackend, TerraformServiceError> {
         let configs = match self.backend.backend_type {
-            TerraformBackendType::UserProvided => vec![],
+            TerraformBackendType::DefinedInTerraformFile => vec![],
             TerraformBackendType::Kubernetes => vec![
                 models::terraform_service::TerraformBackendConfig::from_str(&format!(
                     r#"namespace="{environment_kube_name}""#
@@ -644,7 +644,7 @@ impl TerraformService {
 
     fn get_backend_block(&self) -> Option<String> {
         match self.backend.backend_type {
-            TerraformBackendType::UserProvided => None,
+            TerraformBackendType::DefinedInTerraformFile => None,
             TerraformBackendType::Kubernetes => Some(format!(
                 r#"
 terraform {{
@@ -815,19 +815,19 @@ mod tests {
     }
 
     #[test]
-    fn test_backend_config_for_user_provided_type() {
+    fn test_backend_config_for_defined_in_terraform_file_type() {
         let mut service = create_test_terraform_service("terraform-service");
-        service.backend.backend_type = TerraformBackendType::UserProvided;
+        service.backend.backend_type = TerraformBackendType::DefinedInTerraformFile;
         let env_kube_name = "test-env";
         let env_long_id = Uuid::new_v4();
 
         let backend = service.get_terraform_backend(env_kube_name, env_long_id).unwrap();
 
-        // Even for UserProvided type, the secret name should use the service UUID
+        // Even for DefinedInTerraformFile type, the secret name should use the service UUID
         assert_eq!(
             backend.kube_secret_name,
             format!("{}-backend-config", service.long_id),
-            "Secret name should use service UUID even when backend type is UserProvided"
+            "Secret name should use service UUID even when backend type is DefinedInTerraformFile"
         );
         // And configs should be empty for this backend type
         assert!(backend.configs.is_empty());
