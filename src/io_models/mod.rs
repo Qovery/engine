@@ -130,6 +130,10 @@ pub enum Action {
     Pause,
     Delete,
     Restart,
+    /// Diff: blueprint-only. Render the qovery_terraform_service / qovery_helm template
+    /// with the new request values, run `terraform plan`, and stream the human-readable
+    /// plan output back. Never invokes apply, never mutates the qovery API.
+    Diff,
 }
 
 impl Display for Action {
@@ -139,6 +143,7 @@ impl Display for Action {
             Action::Pause => write!(f, "pause"),
             Action::Delete => write!(f, "delete"),
             Action::Restart => write!(f, "restart"),
+            Action::Diff => write!(f, "diff"),
         }
     }
 }

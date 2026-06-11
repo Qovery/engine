@@ -159,6 +159,8 @@ mod tests {
             environment_id: "env-uuid".into(),
             import_id: None,
             icon: String::new(),
+            env_kube_name: "env-test-ns".to_string(),
+            backend_type: None,
         }
     }
 

@@ -563,6 +563,9 @@ pub enum BlueprintStep {
     Deploy,
     Deployed,
     DeployedError,
+    /// Diff: terminal step for a Blueprint DIFF action — payload carries the human-readable
+    /// `terraform plan` output of the qovery_terraform_service / qovery_helm template.
+    Diff,
     LoadConfiguration,
     Start,
     Terminated,
@@ -573,11 +576,25 @@ impl From<service::Action> for BlueprintStep {
         match value {
             service::Action::Create => BlueprintStep::Deploy,
             service::Action::Delete => BlueprintStep::Delete,
-            // Blueprints render terraform/helm; Pause/Restart are container-lifecycle ops
-            // handled by the env engine on the materialized service, never by the blueprint engine.
-            service::Action::Pause | service::Action::Restart => {
-                panic!("Blueprint engine does not handle action {value:?}")
-            }
+            // Pause/Restart are container-lifecycle ops on a materialized service — the blueprint
+            // engine never sees them. Map to Deploy as a safe fallback (will be surfaced as a
+            // generic blueprint-deploy event); the env engine handles these via its own task.
+            service::Action::Pause | service::Action::Restart => BlueprintStep::Deploy,
+        }
+    }
+}
+
+/// Direct mapping from the wire `io_models::Action` to a `BlueprintStep` for the blueprint task's
+/// event emission. Goes alongside the `service::Action → BlueprintStep` impl above so the
+/// blueprint flow can skip the env-side `service::Action` enum (which has no `Diff` variant).
+impl From<crate::io_models::Action> for BlueprintStep {
+    fn from(value: crate::io_models::Action) -> Self {
+        match value {
+            crate::io_models::Action::Create => BlueprintStep::Deploy,
+            crate::io_models::Action::Delete => BlueprintStep::Delete,
+            crate::io_models::Action::Diff => BlueprintStep::Diff,
+            // Pause/Restart: see comment on the `service::Action` impl above.
+            crate::io_models::Action::Pause | crate::io_models::Action::Restart => BlueprintStep::Deploy,
         }
     }
 }
@@ -594,6 +611,7 @@ impl Display for BlueprintStep {
                 BlueprintStep::Deploy => "deploy",
                 BlueprintStep::Deployed => "deployed",
                 BlueprintStep::DeployedError => "deployed-error",
+                BlueprintStep::Diff => "diff",
                 BlueprintStep::LoadConfiguration => "load-configuration",
                 BlueprintStep::Start => "start",
                 BlueprintStep::Terminated => "terminated",
@@ -803,6 +821,7 @@ impl EventDetails {
                 | BlueprintStep::Terminated
                 | BlueprintStep::Cancel
                 | BlueprintStep::Cancelled
+                | BlueprintStep::Diff
                 | BlueprintStep::DeployedError => return,
             },
         };

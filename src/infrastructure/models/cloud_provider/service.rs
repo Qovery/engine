@@ -61,6 +61,10 @@ impl From<io_models::Action> for Action {
             io_models::Action::Pause => Action::Pause,
             io_models::Action::Delete => Action::Delete,
             io_models::Action::Restart => Action::Restart,
+            // Diff is blueprint-only and never reaches service-level lifecycle code in normal
+            // routing. Fall back to Create as a safe default; if it ever arrives here it's a
+            // routing bug upstream, but we don't want to crash the task.
+            io_models::Action::Diff => Action::Create,
         }
     }
 }

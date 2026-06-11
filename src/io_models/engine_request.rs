@@ -217,6 +217,10 @@ impl InfrastructureEngineRequest {
             Action::Pause => Stage::Infrastructure(InfrastructureStep::Pause),
             Action::Delete => Stage::Infrastructure(InfrastructureStep::Delete),
             Action::Restart => Stage::Infrastructure(InfrastructureStep::Restart),
+            // Diff is blueprint-only; infrastructure requests never carry it in normal routing.
+            // Fall back to GlobalError so callers building EventDetails still get a usable Stage
+            // (rather than crashing) if a malformed request ever lands here.
+            Action::Diff => Stage::Infrastructure(InfrastructureStep::GlobalError),
         };
 
         EventDetails::new(
@@ -237,7 +241,9 @@ impl BlueprintEngineRequest {
             QoveryIdentifier::new(self.organization_long_id),
             QoveryIdentifier::new(self.kubernetes.long_id),
             self.id.to_string(),
-            Stage::Blueprint(BlueprintStep::from(cloud_provider::service::Action::from(self.action))),
+            // Direct io_models::Action → BlueprintStep mapping (handles Diff). The env-side
+            // service::Action enum has no Diff variant; routing through it would crash.
+            Stage::Blueprint(BlueprintStep::from(self.action)),
             Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
         )
     }
