@@ -723,7 +723,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "031b827fd642c44fd2fb7736e2bc348be03dc38b".to_string(),
+                app_commit: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
                 app_env_vars: btreemap! {
                      "PG_DBNAME".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(database_db_name), is_secret:false},
                      "PG_HOST".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

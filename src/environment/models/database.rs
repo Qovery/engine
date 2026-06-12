@@ -1,8 +1,8 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::database_utils::{
-    is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
-    is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
+    OFFICIAL_POSTGRES_IMAGE_REPOSITORY, is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
+    is_allowed_containered_postgres_version, is_allowed_containered_redis_version, is_bitnami_postgres_major,
 };
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
@@ -385,18 +385,26 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         format!("{}-{}", T::lib_directory_name(), self.id)
     }
 
-    /// On-disk folder name for the chart and its value overlays. The Bitnami PostgreSQL
-    /// chart lives under `postgresql-bitnami` (renamed in prep for the non-Bitnami PG18
-    /// chart); the Helm release name and chart identity stay `postgresql`.
-    fn chart_folder_name() -> &'static str {
+    /// Whether this PostgreSQL is served by the legacy Bitnami chart. Majors up to 17 stay on
+    /// Bitnami; 18 and every later major use the Qovery-authored chart on the official postgres
+    /// image. Backed by the version registry in `database_utils` (single source of truth).
+    pub(crate) fn is_bitnami_postgres(&self) -> bool {
+        matches!(T::db_type(), service::DatabaseType::PostgreSQL) && is_bitnami_postgres_major(&self.version.major)
+    }
+
+    /// On-disk folder name for the chart and its value overlays. PostgreSQL 10-17 use the Bitnami
+    /// chart under `postgresql-bitnami`; 18+ use the official-image `postgresql` chart. The Helm
+    /// release name and chart identity stay `postgresql` for both.
+    fn chart_folder_name(&self) -> &'static str {
         match T::db_type() {
-            service::DatabaseType::PostgreSQL => "postgresql-bitnami",
+            service::DatabaseType::PostgreSQL if self.is_bitnami_postgres() => "postgresql-bitnami",
+            service::DatabaseType::PostgreSQL => "postgresql",
             _ => T::lib_directory_name(),
         }
     }
 
     pub fn helm_chart_dir(&self) -> String {
-        format!("{}/common/services/{}", self.lib_root_directory, Self::chart_folder_name())
+        format!("{}/common/services/{}", self.lib_root_directory, self.chart_folder_name())
     }
 
     pub fn helm_chart_values_dir(&self) -> String {
@@ -404,7 +412,7 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             "{}/{}/chart_values/{}",
             self.lib_root_directory,
             C::lib_directory_name(),
-            Self::chart_folder_name()
+            self.chart_folder_name()
         )
     }
 
@@ -430,7 +438,16 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         // repository and image location
         let source_registry = QoverySourceRegistry::from(&target.cloud_provider.kind());
 
-        let db_image_name = format!("pub-mirror-{}", T::db_type().to_string().to_lowercase());
+        // PostgreSQL 18+ is pulled from the official postgres image (non-Bitnami) instead of the
+        // Bitnami-mirrored `pub-mirror-postgresql` used by 10-17. The engine only chooses the
+        // repository (by family); the exact tag comes from q-core via `version` (see below).
+        let is_official_postgres =
+            matches!(T::db_type(), service::DatabaseType::PostgreSQL) && !self.is_bitnami_postgres();
+        let db_image_name = if is_official_postgres {
+            OFFICIAL_POSTGRES_IMAGE_REPOSITORY.to_string()
+        } else {
+            format!("pub-mirror-{}", T::db_type().to_string().to_lowercase())
+        };
         let db_image_path = source_registry.image_path(&db_image_name);
 
         let minideb_image_path = source_registry.image_path("pub-mirror-minideb");
@@ -440,13 +457,11 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         context.insert("repository_name", db_image_path.as_str());
         context.insert("repository_name_minideb", minideb_image_path.as_str());
         context.insert("repository_name_bitnami_shell", bitnami_image_path.as_str());
-        context.insert(
-            "repository_with_registry",
-            source_registry.image_full_path(&db_image_path).as_str(),
-        );
-
         context.insert("namespace", environment.namespace());
 
+        // The image tag is the database `version` verbatim: q-core sends the official Debian-variant
+        // tag (e.g. `18.4-trixie`) for PG18+, and the major (e.g. `17`, a Bitnami moving tag) for
+        // 10-17. The engine never rewrites it.
         let version = self.get_version(event_details)?.matched_version();
         context.insert("version", &version.to_string());
 
@@ -681,4 +696,121 @@ pub fn get_database_with_invalid_storage_size<C: CloudProvider, M: DatabaseMode,
     }
 
     Ok(None)
+}
+
+#[cfg(test)]
+mod postgresql_18_values_tests {
+    //! Renders the non-Bitnami PostgreSQL (18+) value overlays through Tera, exactly as the engine
+    //! does at deploy time, and asserts the output is valid YAML carrying the expected contract:
+    //! official image repository/tag, the credentials, and the primary service name. Guards against
+    //! j2 syntax errors and schema drift between the overlays and the `postgresql` chart.
+
+    use serde_json::json;
+    use tera::{Context, Tera};
+
+    const OVERLAYS: &[&str] = &[
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/lib/aws/chart_values/postgresql/qovery-values.j2.yaml"
+        ),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/lib/scaleway/chart_values/postgresql/qovery-values.j2.yaml"
+        ),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/lib/gcp/chart_values/postgresql/qovery-values.j2.yaml"
+        ),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/lib/self-managed/chart_values/postgresql/qovery-values.j2.yaml"
+        ),
+    ];
+
+    fn context(publicly_accessible: bool) -> Context {
+        // Faithful to the engine: `registry_name` is the host only and `repository_name` is the
+        // registry-less path (see QoverySourceRegistry::host / image_path). The chart composes the
+        // two as `registry/repository:tag`, so these halves must not both carry the host.
+        Context::from_value(json!({
+            "registry_name": "public.ecr.aws",
+            "repository_name": "r3m4q3r9/pub-mirror-postgres",
+            "version": "18.4-trixie",
+            "sanitized_name": "postgresql-abcd123",
+            "service_name": "z1234567-postgresql",
+            "database_port": 5432,
+            "publicly_accessible": publicly_accessible,
+            "aws_load_balancer_type": "nlb",
+            "fqdn": "abcd.qovery.io",
+            "database_login": "qoveryadmin",
+            "database_password": "s3cr3t-p4ss",
+            "database_db_name": "my-db",
+            "environment_id": "env-1",
+            "environment_long_id": "00000000-0000-0000-0000-0000000000e1",
+            "project_long_id": "00000000-0000-0000-0000-0000000000p1",
+            "id": "db-1",
+            "long_id": "00000000-0000-0000-0000-0000000000d1",
+            "owner_id": "owner-1",
+            "database_disk_type": "gp2",
+            "database_disk_size_in_gib": 20,
+            "ram_request_in_mib": "256Mi",
+            "ram_limit_in_mib": "512Mi",
+            "cpu_request_in_milli": "100m",
+            "cpu_limit_in_milli": "500m",
+            "labels_group": { "common": { "team": "data" } },
+            "annotations_group": { "service": {}, "pods": {}, "stateful_set": {} },
+            "additional_annotations": [ { "key": "extra.io/annotation", "value": "yes" } ],
+            "node_affinity": { "kubernetes.io/arch": "amd64" },
+            "toleration": { "node.qovery.com/dedicated": "NoSchedule" },
+        }))
+        .expect("valid tera context")
+    }
+
+    fn render(path: &str, publicly_accessible: bool) -> serde_yaml::Value {
+        let template = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
+        let rendered = Tera::one_off(&template, &context(publicly_accessible), false)
+            .unwrap_or_else(|e| panic!("tera render {path}: {e}"));
+        serde_yaml::from_str(&rendered).unwrap_or_else(|e| panic!("invalid YAML from {path}: {e}\n---\n{rendered}"))
+    }
+
+    #[test]
+    fn overlays_render_valid_yaml_with_pg18_contract() {
+        for path in OVERLAYS {
+            for publicly_accessible in [false, true] {
+                let v = render(path, publicly_accessible);
+
+                assert_eq!(v["image"]["registry"].as_str(), Some("public.ecr.aws"), "{path}");
+                assert_eq!(
+                    v["image"]["repository"].as_str(),
+                    Some("r3m4q3r9/pub-mirror-postgres"),
+                    "{path}"
+                );
+                assert_eq!(v["image"]["tag"].as_str(), Some("18.4-trixie"), "{path}");
+
+                // The chart composes the image as `registry/repository:tag`; guard against a doubled
+                // registry host (the failure mode if `repository_name` ever carried the host too).
+                let composed = format!(
+                    "{}/{}:{}",
+                    v["image"]["registry"].as_str().unwrap_or_default(),
+                    v["image"]["repository"].as_str().unwrap_or_default(),
+                    v["image"]["tag"].as_str().unwrap_or_default(),
+                );
+                assert_eq!(composed, "public.ecr.aws/r3m4q3r9/pub-mirror-postgres:18.4-trixie", "{path}");
+                assert_eq!(v["fullnameOverride"].as_str(), Some("postgresql-abcd123"), "{path}");
+                assert_eq!(v["auth"]["username"].as_str(), Some("qoveryadmin"), "{path}");
+                assert_eq!(v["auth"]["database"].as_str(), Some("my-db"), "{path}");
+                assert_eq!(v["service"]["name"].as_str(), Some("z1234567-postgresql"), "{path}");
+
+                let expected_type = if publicly_accessible {
+                    "LoadBalancer"
+                } else {
+                    "ClusterIP"
+                };
+                assert_eq!(v["service"]["type"].as_str(), Some(expected_type), "{path}");
+
+                // Bitnami-only knobs must not leak into the official-image chart values.
+                assert!(v.get("volumePermissions").is_none(), "{path} leaks volumePermissions");
+                assert!(v.get("readReplicas").is_none(), "{path} leaks readReplicas");
+            }
+        }
+    }
 }

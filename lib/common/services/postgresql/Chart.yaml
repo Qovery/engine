@@ -1,0 +1,16 @@
+apiVersion: v2
+name: postgresql
+description: Qovery-authored PostgreSQL chart based on the official postgres image (non-Bitnami). Serves PostgreSQL 18 and later majors.
+type: application
+# Chart identity stays `postgresql` (matches the Helm release name `postgresql-<id>`).
+# This is a brand-new chart, versioned independently from the Bitnami chart it replaces from PG18 onward.
+version: 0.1.0
+# appVersion intentionally omitted: this chart serves PostgreSQL 18 and every later major; the
+# image tag is selected per database version by the engine, not pinned in the chart.
+keywords:
+  - postgresql
+  - postgres
+  - database
+  - sql
+sources:
+  - https://github.com/docker-library/postgres

@@ -621,6 +621,20 @@ fn public_postgresql_v17_deploy_a_working_dev_environment() {
     test_postgresql_configuration("17", function_name!(), CONTAINER, true);
 }
 
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v18_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("18.4-trixie", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v18_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("18.4-trixie", function_name!(), CONTAINER, true);
+}
+
 /**
  **
  ** MongoDB tests

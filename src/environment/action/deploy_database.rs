@@ -738,8 +738,13 @@ where
                 namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                 k8s_selector: Some(self.kube_label_selector()),
                 values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
-                // need to perform reinstall (but keep PVC) to update the statefulset
+                // need to perform reinstall (but keep PVC) to update the statefulset.
+                // The threshold compares the installed *Helm chart* version, not the PG version.
+                // PG18 ships the Qovery-authored `postgresql-18` chart (version 0.1.0); comparing it
+                // against the Bitnami 12.5.1 threshold would force a reinstall on every redeploy, so
+                // it opts out with None.
                 reinstall_chart_if_installed_version_is_below_than: match T::db_type() {
+                    service::DatabaseType::PostgreSQL if !self.is_bitnami_postgres() => None,
                     service::DatabaseType::PostgreSQL => Some(Version::new(12, 5, 1)),
                     service::DatabaseType::MongoDB => Some(Version::new(13, 13, 1)),
                     service::DatabaseType::MySQL => Some(Version::new(9, 10, 1)),

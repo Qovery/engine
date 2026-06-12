@@ -3,21 +3,57 @@ use crate::environment::models::types::VersionsNumber;
 use crate::infrastructure::models::cloud_provider::service::DatabaseType;
 use std::sync::Arc;
 
-pub fn is_allowed_containered_postgres_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
-    // https://hub.docker.com/r/bitnami/postgresql/tags?page=1&ordering=last_updated
+// ---------------------------------------------------------------------------
+// Container PostgreSQL families.
+//
+// Two families coexist:
+//   * majors <= 17 run on the legacy Bitnami chart/image (`pub-mirror-postgresql`, tag = major,
+//     e.g. `17`). https://hub.docker.com/r/bitnami/postgresql/tags
+//   * majors >= 18 run on the official postgres image (`pub-mirror-postgres`) via the
+//     Qovery-authored `postgresql` chart.
+//
+// The exact image *tag* for the official family is owned by q-core, which sends it as the database
+// `version` (e.g. `18.4-trixie`); the engine uses that string verbatim as the tag. The engine only
+// derives the family (and therefore the repository/chart) from the major, so onboarding a future
+// major needs no engine change — only q-core's version matrix + tag map.
+// ---------------------------------------------------------------------------
 
-    // Allow only major from 10 to 17
-    if !&["10", "11", "12", "13", "14", "15", "16", "17"].contains(&requested_version.major.as_str()) {
-        return Err(DatabaseError::UnsupportedDatabaseVersion {
-            database_type: DatabaseType::PostgreSQL,
-            database_version: Arc::from(requested_version.to_string()),
-        });
+/// Container PostgreSQL majors served by the legacy Bitnami chart/image.
+pub const BITNAMI_POSTGRES_MAJORS: &[&str] = &["10", "11", "12", "13", "14", "15", "16", "17"];
+
+/// First PostgreSQL major served by the official postgres image (non-Bitnami).
+pub const OFFICIAL_POSTGRES_MIN_MAJOR: u32 = 18;
+
+/// Repository for the official postgres image. It shares the `pub-mirror-postgresql` mirror with the
+/// legacy Bitnami family; the two are told apart only by the tag scheme (major for <= 17, the full
+/// Debian-variant tag sent by q-core as the database `version`, e.g. `18.4-trixie`, for >= 18).
+pub const OFFICIAL_POSTGRES_IMAGE_REPOSITORY: &str = "pub-mirror-postgres";
+
+/// Whether a PostgreSQL major is served by the legacy Bitnami chart/image.
+pub fn is_bitnami_postgres_major(major: &str) -> bool {
+    BITNAMI_POSTGRES_MAJORS.contains(&major)
+}
+
+/// Whether a PostgreSQL major is served by the official-image chart (q-core supplies the tag).
+pub fn is_official_postgres_major(major: &str) -> bool {
+    major
+        .parse::<u32>()
+        .map(|m| m >= OFFICIAL_POSTGRES_MIN_MAJOR)
+        .unwrap_or(false)
+}
+
+pub fn is_allowed_containered_postgres_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
+    let major = requested_version.major.as_str();
+    // Allowed iff the major is a known Bitnami major or belongs to the official family (>= 18).
+    // q-core is the authoritative gate (its version matrix); the engine only sanity-checks the family.
+    if is_bitnami_postgres_major(major) || is_official_postgres_major(major) {
+        return Ok(());
     }
 
-    // If we want to filter out some versions, we should filter those out here
-    // <-
-
-    Ok(())
+    Err(DatabaseError::UnsupportedDatabaseVersion {
+        database_type: DatabaseType::PostgreSQL,
+        database_version: Arc::from(requested_version.to_string()),
+    })
 }
 
 pub fn is_allowed_containered_mysql_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
@@ -76,7 +112,8 @@ mod tests {
     use crate::environment::models::database::DatabaseError;
     use crate::environment::models::database_utils::{
         is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
-        is_allowed_containered_postgres_version, is_allowed_containered_redis_version,
+        is_allowed_containered_postgres_version, is_allowed_containered_redis_version, is_bitnami_postgres_major,
+        is_official_postgres_major,
     };
     use crate::environment::models::types::VersionsNumberBuilder;
     use crate::infrastructure::models::cloud_provider::service::DatabaseType;
@@ -326,6 +363,16 @@ mod tests {
             is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(17).minor(12).patch(7).build())
                 .is_ok()
         );
+
+        // v18 (non-Bitnami, official postgres image)
+        assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(18).build()).is_ok());
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(18).minor(4).build()).is_ok()
+        );
+        assert!(
+            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(18).minor(4).patch(0).build())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -339,12 +386,23 @@ mod tests {
                 database_version: Arc::from("9"),
             }
         );
-        assert_eq!(
-            is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(18).build()).unwrap_err(),
-            DatabaseError::UnsupportedDatabaseVersion {
-                database_type: DatabaseType::PostgreSQL,
-                database_version: Arc::from("18"),
-            }
-        );
+    }
+
+    #[test]
+    fn test_postgres_version_families() {
+        // Bitnami family (10-17): served by the Bitnami chart/image.
+        assert!(is_bitnami_postgres_major("17"));
+        assert!(!is_official_postgres_major("17"));
+
+        // Official family (>= 18): q-core supplies the exact image tag; the engine just recognises
+        // the family. No per-major engine list, so future majors (19, 20, …) are already accepted.
+        assert!(!is_bitnami_postgres_major("18"));
+        assert!(is_official_postgres_major("18"));
+        assert!(is_official_postgres_major("19"));
+        assert!(is_allowed_containered_postgres_version(&VersionsNumberBuilder::new().major(19).build()).is_ok());
+
+        // Below the supported range stays rejected.
+        assert!(!is_bitnami_postgres_major("9"));
+        assert!(!is_official_postgres_major("9"));
     }
 }
