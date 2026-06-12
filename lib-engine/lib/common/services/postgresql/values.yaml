@@ -1,0 +1,61 @@
+# Default values for the Qovery PostgreSQL 18 chart (official postgres image, non-Bitnami).
+# The per-cloud `qovery-values.j2.yaml` overlays render the real values at deploy time.
+
+image:
+  registry: ""
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+## Partially/fully override the generated resource names.
+nameOverride: ""
+## fullnameOverride is set to the Qovery `sanitized_name` (== kube_name); the StatefulSet, headless
+## service and PVCs derive from it, and the engine sweeps PVCs by `app=<fullname>` on delete.
+fullnameOverride: ""
+
+## Labels applied to every resource. Qovery injects `qovery.com/service-id` here, which is the
+## label selector the engine uses to locate the workload (`qovery.com/service-id=<long_id>`).
+commonLabels: {}
+
+## Superuser credentials. The official postgres image exposes a single superuser; Qovery uses it
+## as both the admin and the application user (POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB).
+auth:
+  username: postgres
+  password: ""
+  database: postgres
+
+## Data directory. PGDATA MUST be a sub-directory of the mounted volume: initdb refuses a non-empty
+## directory and the volume root contains `lost+found` on many CSI drivers.
+persistence:
+  mountPath: /var/lib/postgresql/data
+  subPath: pgdata
+  storageClass: ""
+  size: 10Gi
+  labels: {}
+  annotations: {}
+
+service:
+  ## Primary service name == Qovery `service_name` (fqdn_id), matching the Bitnami chart topology.
+  name: ""
+  type: ClusterIP
+  port: 5432
+  annotations: {}
+  headless:
+    annotations: {}
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+## Scheduling
+affinity: {}
+tolerations: []
+
+podAnnotations: {}
+statefulsetAnnotations: {}
+
+terminationGracePeriodSeconds: 30

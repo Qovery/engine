@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "postgresql18.primary.svc.name" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "postgresql18.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if eq .Values.service.type "LoadBalancer" }}
+  externalTrafficPolicy: Cluster
+  {{- end }}
+  ports:
+    - name: tcp-postgresql
+      port: {{ .Values.service.port }}
+      targetPort: tcp-postgresql
+      protocol: TCP
+  selector:
+    {{- include "postgresql18.selectorLabels" . | nindent 4 }}

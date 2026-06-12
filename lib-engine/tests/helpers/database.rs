@@ -238,7 +238,7 @@ pub fn environment_3_apps_3_databases(
                 kube_name: app_name_1,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
-                commit_id: "031b827fd642c44fd2fb7736e2bc348be03dc38b".to_string(),
+                commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
@@ -313,7 +313,7 @@ pub fn environment_3_apps_3_databases(
                 kube_name: app_name_2,
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
-                commit_id: "031b827fd642c44fd2fb7736e2bc348be03dc38b".to_string(),
+                commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
                 dockerfile_path: Some("Dockerfile-11".to_string()),
                 command_args: vec![],
                 entrypoint: None,
@@ -855,6 +855,11 @@ pub fn test_db(
             app.dockerfile_path = match db_kind {
                 // to be able to support outdated container image versions, we jump to a higher version
                 DatabaseKind::Mongodb if version.contains("4.0") => Some("Dockerfile-4.4".to_string()),
+                // PostgreSQL 18+ carries the full image tag as `version` (e.g. `18.4-trixie`), but the
+                // test app only has a per-major Dockerfile (`Dockerfile-18`). Key the Dockerfile off the
+                // major while the DB itself still deploys with the full tag. For majors <= 17 the version
+                // already is the major, so this is a no-op there.
+                DatabaseKind::Postgresql => Some(format!("Dockerfile-{}", sem_ver.to_major_version_string())),
                 _ => Some(format!("Dockerfile-{version}")),
             };
             app.command_args = vec![];

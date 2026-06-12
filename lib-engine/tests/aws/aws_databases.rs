@@ -662,6 +662,20 @@ fn public_postgresql_v17_deploy_a_working_dev_environment() {
     test_postgresql_configuration("17", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_postgresql_v18_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("18.4-trixie", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_postgresql_v18_deploy_a_working_dev_environment() {
+    test_postgresql_configuration("18.4-trixie", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
 // Postgres production environment
 #[cfg(feature = "test-aws-managed-services")]
 #[named]
@@ -777,6 +791,20 @@ fn private_postgresql_v17_deploy_a_working_prod_environment() {
 #[test]
 fn public_postgresql_v17_deploy_a_working_prod_environment() {
     test_postgresql_configuration("17", function_name!(), MANAGED, KubernetesKind::Eks, true);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn private_postgresql_v18_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("18", function_name!(), MANAGED, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-managed-services")]
+#[named]
+#[test]
+fn public_postgresql_v18_deploy_a_working_prod_environment() {
+    test_postgresql_configuration("18", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
 /**
