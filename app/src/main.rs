@@ -162,13 +162,24 @@ pub fn main() -> io::Result<()> {
                 deployed_engine_version,
                 metrics_registry,
             ),
+            "blueprint" => using_json_path_parameter(
+                logger,
+                env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
+                workspace_root_dir,
+                lib_root_dir,
+                test_cluster,
+                TaskSelector::Blueprint,
+                docker,
+                deployed_engine_version,
+                metrics_registry,
+            ),
             _ => {
-                println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
+                println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env' or 'blueprint'");
                 process::exit(1);
             }
         },
         _ => {
-            println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra' or 'env'");
+            println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env' or 'blueprint'");
             process::exit(1);
         }
     }
@@ -213,9 +224,7 @@ pub fn using_json_path_parameter(
                 docker,
                 logger,
                 metrics_registry,
-                Box::new(StaticQoveryApi {
-                    versions: get_qovery_app_version("api.qovery.com").unwrap(),
-                }),
+                Box::new(FakeQoveryApi {}),
                 None,
             ))
         }

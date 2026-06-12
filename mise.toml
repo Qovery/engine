@@ -114,6 +114,21 @@ run = '''
   cargo test --package qovery-engine --test lib "$test_name" -- --ignored --exact
 '''
 
+[tasks."blueprint:run-local"]
+description = "Run engine locally against a captured BlueprintEngineRequest JSON (e.g. DIFF action). Useful to test the blueprint preview path without q-core/redis/frontend."
+usage = 'arg "<json>" help="Path to a BlueprintEngineRequest JSON"'
+run = '''
+  set -e
+  json="${usage_json:?Provide a BlueprintEngineRequest JSON path, e.g.: mise run blueprint:run-local /tmp/req.json}"
+  [ -f "$json" ] || { echo "ERROR: $json not found" >&2; exit 1; }
+
+  BIN_VERSION_FILE="{{config_root}}/docker/bin_versions" \
+  DEPLOY_FROM_FILE_KIND=blueprint \
+  DEPLOY_FROM_FILE="$json" \
+  TEST_CLUSTER=true \
+    cargo run --bin app
+'''
+
 [tasks.test-local-stack]
 description = "Run tests on a local k3d cluster"
 run = '''
