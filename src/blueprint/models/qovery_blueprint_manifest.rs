@@ -85,17 +85,23 @@ pub struct BlueprintResources {
     pub storage: Option<String>,
 }
 
-/// Intermediate helper for flat YAML deserialization.
-/// Needed because the QBM spec has engine/provider/chart/outputs at the same level,
-/// but we route them into the BlueprintEngine enum. Serde can auto-derive this flat
-/// struct, then the custom Deserialize impl on BlueprintSpec does the routing.
+/// Intermediate helper: serde deserializes this, then the BlueprintSpec impl routes it into
+/// the BlueprintEngine enum.
 #[derive(Deserialize)]
 struct BlueprintSpecRaw {
-    engine: String,
-    provider: Option<String>,
-    chart: Option<BlueprintChart>,
+    engine: BlueprintEngineConfigRaw,
     #[serde(default)]
     outputs: Vec<BlueprintOutput>,
+}
+
+#[derive(Deserialize)]
+struct BlueprintEngineConfigRaw {
+    #[serde(rename = "type")]
+    engine_type: String,
+    provider: Option<String>,
+    chart: Option<BlueprintChart>,
+    #[serde(default, rename = "engineVersion")]
+    engine_version: Option<String>,
     #[serde(default)]
     credentials: Option<BlueprintCredentials>,
     #[serde(default)]
@@ -118,6 +124,7 @@ pub struct BlueprintSpec {
     pub arguments: Vec<String>,
     pub allow_cluster_wide_resources: bool,
     pub resources: Option<BlueprintResources>,
+    pub engine_version: Option<String>,
 }
 
 impl<'de> Deserialize<'de> for BlueprintSpec {
@@ -126,46 +133,64 @@ impl<'de> Deserialize<'de> for BlueprintSpec {
         D: Deserializer<'de>,
     {
         let raw = BlueprintSpecRaw::deserialize(deserializer)?;
-        let engine = match raw.engine.as_str() {
-            "terraform" => {
-                let provider = raw
-                    .provider
-                    .ok_or_else(|| D::Error::custom("'provider' is required when engine is 'terraform'"))?;
-                BlueprintEngine::Terraform {
-                    provider,
-                    outputs: raw.outputs,
+        let engine_cfg = raw.engine;
+        let (engine, engine_version) =
+            match engine_cfg.engine_type.as_str() {
+                "terraform" => {
+                    let provider = engine_cfg
+                        .provider
+                        .ok_or_else(|| D::Error::custom("'provider' is required when engine.type is 'terraform'"))?;
+                    let version = engine_cfg.engine_version.filter(|v| !v.is_empty()).ok_or_else(|| {
+                        D::Error::custom("'engineVersion' is required when engine.type is 'terraform'")
+                    })?;
+                    (
+                        BlueprintEngine::Terraform {
+                            provider,
+                            outputs: raw.outputs,
+                        },
+                        Some(version),
+                    )
                 }
-            }
-            "opentofu" => {
-                let provider = raw
-                    .provider
-                    .ok_or_else(|| D::Error::custom("'provider' is required when engine is 'opentofu'"))?;
-                BlueprintEngine::Opentofu {
-                    provider,
-                    outputs: raw.outputs,
+                "opentofu" => {
+                    let provider = engine_cfg
+                        .provider
+                        .ok_or_else(|| D::Error::custom("'provider' is required when engine.type is 'opentofu'"))?;
+                    let version = engine_cfg.engine_version.filter(|v| !v.is_empty()).ok_or_else(|| {
+                        D::Error::custom("'engineVersion' is required when engine.type is 'opentofu'")
+                    })?;
+                    (
+                        BlueprintEngine::Opentofu {
+                            provider,
+                            outputs: raw.outputs,
+                        },
+                        Some(version),
+                    )
                 }
-            }
-            "helm" => {
-                let chart = raw
-                    .chart
-                    .ok_or_else(|| D::Error::custom("'chart' is required when engine is 'helm'"))?;
-                BlueprintEngine::Helm {
-                    chart,
-                    outputs: raw.outputs,
+                "helm" => {
+                    let chart = engine_cfg
+                        .chart
+                        .ok_or_else(|| D::Error::custom("'chart' is required when engine.type is 'helm'"))?;
+                    (
+                        BlueprintEngine::Helm {
+                            chart,
+                            outputs: raw.outputs,
+                        },
+                        None,
+                    )
                 }
-            }
-            other => {
-                return Err(D::Error::custom(format!("unknown engine type: '{}'", other)));
-            }
-        };
+                other => {
+                    return Err(D::Error::custom(format!("unknown engine.type: '{}'", other)));
+                }
+            };
         Ok(BlueprintSpec {
             engine,
-            credentials: raw.credentials.unwrap_or_default(),
-            backend: raw.backend.unwrap_or_default(),
-            timeout: raw.timeout,
-            arguments: raw.arguments,
-            allow_cluster_wide_resources: raw.allow_cluster_wide_resources,
-            resources: raw.resources,
+            credentials: engine_cfg.credentials.unwrap_or_default(),
+            backend: engine_cfg.backend.unwrap_or_default(),
+            timeout: engine_cfg.timeout,
+            arguments: engine_cfg.arguments,
+            allow_cluster_wide_resources: engine_cfg.allow_cluster_wide_resources,
+            resources: engine_cfg.resources,
+            engine_version,
         })
     }
 }
@@ -224,11 +249,13 @@ metadata:
   version: "1.0.0"
   serviceFamily: "s3"
 spec:
-  engine: terraform
-  provider: aws
-  credentials:
-    default: cluster
-  timeout: 1800
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
+    credentials:
+      default: cluster
+    timeout: 1800
   contextVariables:
     - name: "region"
       source: "cluster.region"
@@ -241,12 +268,52 @@ spec:
         assert_eq!(manifest.kind, BlueprintKind::ServiceBlueprint);
         assert_eq!(manifest.spec.credentials.default, CredentialMode::Cluster);
         assert_eq!(manifest.spec.timeout, Some(1800));
+        assert_eq!(manifest.spec.engine_version.as_deref(), Some("1.9.7"));
         let BlueprintEngine::Terraform { provider, outputs } = &manifest.spec.engine else {
             panic!("expected Terraform engine");
         };
         assert_eq!(provider, "aws");
         assert_eq!(outputs.len(), 1);
         assert_eq!(outputs[0].name, "bucket_arn");
+    }
+
+    #[test]
+    fn terraform_without_engine_version_fails() {
+        let yaml = r#"
+apiVersion: "qovery.com/v2"
+kind: ServiceBlueprint
+metadata:
+  name: "bad"
+  version: "1.0.0"
+spec:
+  engine:
+    type: terraform
+    provider: aws
+"#;
+        let err = serde_yaml::from_str::<QoveryBlueprintManifest>(yaml)
+            .expect_err("expected error when engineVersion is missing");
+        assert!(err.to_string().contains("engineVersion"));
+    }
+
+    #[test]
+    fn engine_version_on_helm_is_ignored() {
+        let yaml = r#"
+apiVersion: "qovery.com/v2"
+kind: ServiceBlueprint
+metadata:
+  name: "helm-redis"
+  version: "1.0.0"
+spec:
+  engine:
+    type: helm
+    chart:
+      repository: "https://charts.bitnami.com/bitnami"
+      name: "redis"
+      version: "20.11.3"
+    engineVersion: "1.9.7"
+"#;
+        let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
+        assert!(manifest.spec.engine_version.is_none());
     }
 
     #[test]
@@ -258,13 +325,14 @@ metadata:
   name: "helm-redis"
   version: "1.0.0"
 spec:
-  engine: helm
-  chart:
-    repository: "https://charts.bitnami.com/bitnami"
-    name: "redis"
-    version: "20.11.3"
-  arguments: ["--atomic", "--wait"]
-  allowClusterWideResources: true
+  engine:
+    type: helm
+    chart:
+      repository: "https://charts.bitnami.com/bitnami"
+      name: "redis"
+      version: "20.11.3"
+    arguments: ["--atomic", "--wait"]
+    allowClusterWideResources: true
   outputs:
     - name: redis_host
       description: "Redis hostname"
@@ -290,10 +358,12 @@ metadata:
   name: "cross-account"
   version: "1.0.0"
 spec:
-  engine: terraform
-  provider: aws
-  credentials:
-    default: env
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
+    credentials:
+      default: env
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(manifest.spec.credentials.default, CredentialMode::Env);
@@ -308,8 +378,10 @@ metadata:
   name: "aws-s3"
   version: "1.0.0"
 spec:
-  engine: terraform
-  provider: aws
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(manifest.spec.credentials.default, CredentialMode::Cluster);
@@ -324,8 +396,10 @@ metadata:
   name: "my-stack"
   version: "1.0.0"
 spec:
-  engine: terraform
-  provider: aws
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(manifest.kind, BlueprintKind::StackBlueprint);
@@ -340,7 +414,8 @@ metadata:
   name: "bad"
   version: "1.0.0"
 spec:
-  engine: terraform
+  engine:
+    type: terraform
 "#;
         let result: Result<QoveryBlueprintManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err());
@@ -356,7 +431,8 @@ metadata:
   name: "bad"
   version: "1.0.0"
 spec:
-  engine: helm
+  engine:
+    type: helm
 "#;
         let result: Result<QoveryBlueprintManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err());
@@ -372,7 +448,8 @@ metadata:
   name: "bad"
   version: "1.0.0"
 spec:
-  engine: pulumi
+  engine:
+    type: pulumi
 "#;
         let result: Result<QoveryBlueprintManifest, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err());
@@ -389,8 +466,10 @@ metadata:
   serviceFamily: "postgres"
   some_future_field: "value"
 spec:
-  engine: terraform
-  provider: gcp
+  engine:
+    type: terraform
+    provider: gcp
+    engineVersion: "1.9.7"
   contextVariables:
     - name: "region"
       source: "cluster.region"
@@ -415,14 +494,17 @@ metadata:
   name: "minimal"
   version: "1.0.0"
 spec:
-  engine: terraform
-  provider: aws
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(manifest.spec.credentials.default, CredentialMode::Cluster);
         assert!(manifest.spec.timeout.is_none());
         assert!(manifest.spec.arguments.is_empty());
         assert!(!manifest.spec.allow_cluster_wide_resources);
+        assert_eq!(manifest.spec.engine_version.as_deref(), Some("1.9.7"));
         assert!(manifest.metadata.description.is_none());
     }
 
@@ -436,8 +518,10 @@ metadata:
   version: "1.0.1"
   description: "S3 bucket with encryption, versioning, and lifecycle rules"
 spec:
-  engine: terraform
-  provider: aws
+  engine:
+    type: terraform
+    provider: aws
+    engineVersion: "1.9.7"
 "#;
         let manifest: QoveryBlueprintManifest = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(

@@ -31,4 +31,7 @@ pub enum BlueprintError {
 
     #[error("Failed to create working directory: {0}")]
     WorkspaceError(String),
+
+    #[error("engine_version is required for terraform/opentofu blueprints")]
+    MissingEngineVersion,
 }

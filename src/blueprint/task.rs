@@ -310,7 +310,12 @@ impl Task for BlueprintTask {
             inject_context_variables(&mut target_env, &self.request.kubernetes.region, &self.request.kubernetes.name);
 
             // 5. Resolve spec
-            let resolved_spec = ResolvedBlueprintSpec::resolve(&manifest, &target_env.spec_overrides);
+            let resolved_spec = ResolvedBlueprintSpec::resolve(&manifest, &target_env.spec_overrides).map_err(|e| {
+                Box::new(EngineError::new_blueprint_error(
+                    self.get_event_details(BlueprintStep::LoadConfiguration),
+                    e,
+                ))
+            })?;
 
             self.logger.log(EngineEvent::Info(
                 self.get_event_details(BlueprintStep::LoadConfiguration),
