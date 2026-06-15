@@ -11,9 +11,6 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-// TODO: Should come from the QBM spec (blueprint author pins terraform version).
-const DEFAULT_ENGINE_VERSION: &str = "1.9.7";
-
 /// Tera context for the blueprint terraform template.
 #[derive(Serialize)]
 struct BlueprintTerraformTeraContext {
@@ -93,7 +90,7 @@ impl BlueprintTerraformTeraContext {
                 TerraformFlavor::Terraform => "TERRAFORM".to_string(),
                 TerraformFlavor::OpenTofu => "OPEN_TOFU".to_string(),
             },
-            engine_version: DEFAULT_ENGINE_VERSION.to_string(),
+            engine_version: spec.engine_version.clone(),
             timeout_seconds: spec.timeout_sec,
             use_cluster_credentials: matches!(spec.credential_mode, CredentialMode::Cluster),
             backend_kubernetes: matches!(spec.backend, ResolvedBackend::Qovery),
@@ -178,6 +175,7 @@ mod tests {
                 ram_mib: 512,
                 storage_gib: 20,
             },
+            engine_version: "1.9.7".into(),
         }
     }
 
@@ -226,6 +224,14 @@ mod tests {
     fn generate_main_tf_falls_back_to_placeholder_description_when_qbm_omits_it() {
         let result = render_template(&test_spec(), &test_request(), &test_info());
         assert!(result.contains(r#"description           = "Deployed from blueprint""#));
+    }
+
+    #[test]
+    fn generate_main_tf_uses_qbm_engine_version() {
+        let mut spec = test_spec();
+        spec.engine_version = "1.5.7".into();
+        let result = render_template(&spec, &test_request(), &test_info());
+        assert!(result.contains(r#"explicit_version          = "1.5.7""#));
     }
 
     #[test]

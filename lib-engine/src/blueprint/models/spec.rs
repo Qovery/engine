@@ -5,6 +5,7 @@
 //   2. QBM spec        (blueprint author default)
 //   3. Platform defaults (hardcoded here)
 
+use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::qovery_blueprint_manifest::{
     BackendMode, BlueprintChart, BlueprintEngine, BlueprintOutput, BlueprintResources, BlueprintSpec, CredentialMode,
     QoveryBlueprintManifest,
@@ -78,6 +79,7 @@ pub struct ResolvedTerraformSpec {
     pub timeout_sec: u64,
     pub outputs: Vec<BlueprintOutput>,
     pub job_resources: JobResources,
+    pub engine_version: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -93,7 +95,10 @@ pub struct ResolvedHelmSpec {
 
 impl ResolvedBlueprintSpec {
     /// Resolve the effective spec from the QBM defaults + optional overrides.
-    pub fn resolve(manifest: &QoveryBlueprintManifest, overrides: &Option<BlueprintSpecOverrides>) -> Self {
+    pub fn resolve(
+        manifest: &QoveryBlueprintManifest,
+        overrides: &Option<BlueprintSpecOverrides>,
+    ) -> Result<Self, BlueprintError> {
         let spec = &manifest.spec;
         let description = manifest
             .metadata
@@ -104,7 +109,7 @@ impl ResolvedBlueprintSpec {
             .to_string();
         let credential_mode = resolve_credential_mode(spec, overrides);
 
-        match &spec.engine {
+        let resolved = match &spec.engine {
             BlueprintEngine::Terraform { provider, outputs } => {
                 let timeout_sec = resolve_timeout(spec, overrides, DEFAULT_TF_TIMEOUT_SEC);
                 let backend = resolve_backend(spec, overrides);
@@ -118,6 +123,10 @@ impl ResolvedBlueprintSpec {
                     timeout_sec,
                     outputs: outputs.clone(),
                     job_resources,
+                    engine_version: spec
+                        .engine_version
+                        .clone()
+                        .ok_or(BlueprintError::MissingEngineVersion)?,
                 })
             }
             BlueprintEngine::Opentofu { provider, outputs } => {
@@ -133,6 +142,10 @@ impl ResolvedBlueprintSpec {
                     timeout_sec,
                     outputs: outputs.clone(),
                     job_resources,
+                    engine_version: spec
+                        .engine_version
+                        .clone()
+                        .ok_or(BlueprintError::MissingEngineVersion)?,
                 })
             }
             BlueprintEngine::Helm { chart, outputs } => {
@@ -147,7 +160,8 @@ impl ResolvedBlueprintSpec {
                     outputs: outputs.clone(),
                 })
             }
-        }
+        };
+        Ok(resolved)
     }
 }
 
@@ -281,6 +295,7 @@ fn resolve_job_resources(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blueprint::models::error::BlueprintError;
     use crate::blueprint::models::qovery_blueprint_manifest::{
         BlueprintBackend, BlueprintChart, BlueprintCredentials, BlueprintEngine, BlueprintKind, BlueprintMetadata,
         BlueprintSpec,
@@ -307,6 +322,7 @@ mod tests {
             arguments: vec![],
             allow_cluster_wide_resources: false,
             resources: None,
+            engine_version: Some("1.9.7".into()),
         }
     }
 
@@ -322,6 +338,7 @@ mod tests {
             arguments: vec![],
             allow_cluster_wide_resources: false,
             resources: None,
+            engine_version: Some("1.9.7".into()),
         }
     }
 
@@ -341,6 +358,7 @@ mod tests {
             arguments: vec!["--atomic".into()],
             allow_cluster_wide_resources: true,
             resources: None,
+            engine_version: None,
         }
     }
 
@@ -356,18 +374,19 @@ mod tests {
             arguments: vec![],
             allow_cluster_wide_resources: false,
             resources: None,
+            engine_version: Some("1.9.7".into()),
         }
     }
 
-    fn expect_terraform(resolved: ResolvedBlueprintSpec) -> ResolvedTerraformSpec {
-        match resolved {
+    fn expect_terraform(resolved: Result<ResolvedBlueprintSpec, BlueprintError>) -> ResolvedTerraformSpec {
+        match resolved.unwrap() {
             ResolvedBlueprintSpec::Terraform(tf) => tf,
             _ => panic!("expected Terraform variant"),
         }
     }
 
-    fn expect_helm(resolved: ResolvedBlueprintSpec) -> ResolvedHelmSpec {
-        match resolved {
+    fn expect_helm(resolved: Result<ResolvedBlueprintSpec, BlueprintError>) -> ResolvedHelmSpec {
+        match resolved.unwrap() {
             ResolvedBlueprintSpec::Helm(helm) => helm,
             _ => panic!("expected Helm variant"),
         }
@@ -643,5 +662,43 @@ mod tests {
         // ram and storage fall back to defaults
         assert_eq!(tf.job_resources.ram_mib, 512);
         assert_eq!(tf.job_resources.storage_gib, 20);
+    }
+
+    // -- Engine version --
+
+    #[test]
+    fn engine_version_propagates_from_qbm() {
+        let mut spec = tf_spec();
+        spec.engine_version = Some("1.5.7".into());
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &None));
+        assert_eq!(tf.engine_version, "1.5.7");
+    }
+
+    #[test]
+    fn engine_version_propagates_for_opentofu() {
+        let mut spec = opentofu_spec();
+        spec.engine_version = Some("1.10.3".into());
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &None));
+        assert_eq!(tf.engine_version, "1.10.3");
+    }
+
+    #[test]
+    fn missing_engine_version_on_terraform_returns_error() {
+        let mut spec = tf_spec();
+        spec.engine_version = None;
+        assert_eq!(
+            ResolvedBlueprintSpec::resolve(&manifest(spec), &None),
+            Err(BlueprintError::MissingEngineVersion)
+        );
+    }
+
+    #[test]
+    fn missing_engine_version_on_opentofu_returns_error() {
+        let mut spec = opentofu_spec();
+        spec.engine_version = None;
+        assert_eq!(
+            ResolvedBlueprintSpec::resolve(&manifest(spec), &None),
+            Err(BlueprintError::MissingEngineVersion)
+        );
     }
 }
