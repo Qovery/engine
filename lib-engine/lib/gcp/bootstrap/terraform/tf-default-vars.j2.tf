@@ -138,12 +138,6 @@ variable "kubernetes_version" {
   type        = string
 }
 
-variable "cluster_is_private" {
-  type        = bool
-  description = "Whether the cluster will be private or not"
-  default     = {{ cluster_is_private }}
-}
-
 variable "master_authorized_networks" {
   type        = list(object({ cidr_block = string, display_name = string }))
   description = "List of master authorized networks. If none are provided, authorized networks are disabled and the public endpoint remains reachable from any source IP."
@@ -247,6 +241,12 @@ variable "additional_ip_range_pods" {
   {% else %}
   default = []
   {% endif %}
+}
+
+variable "private_nodes" {
+  type        = bool
+  description = "Whether nodes have internal IP addresses only"
+  default     = {{ private_nodes }}
 }
 
 variable "ip_range_services" {

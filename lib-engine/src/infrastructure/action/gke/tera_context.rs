@@ -174,17 +174,9 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     // VPC
     match &cluster.options.vpc_qovery_network_mode {
         Some(mode) => {
-            context.insert(
-                "cluster_is_private",
-                &match mode {
-                    VpcQoveryNetworkMode::WithNatGateways => true,
-                    VpcQoveryNetworkMode::WithoutNatGateways => false,
-                },
-            ); // cluster is made private when requires static IP
             context.insert("vpc_network_mode", &mode.to_string());
         }
         None => {
-            context.insert("cluster_is_private", &false); // cluster is public unless requires static IP
             context.insert(
                 "vpc_network_mode",
                 VpcQoveryNetworkMode::WithoutNatGateways.to_string().as_str(),
@@ -215,6 +207,11 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             custom_cluster_ipv4_cidr_block,
             custom_services_ipv4_cidr_block,
         } => {
+            let private_nodes = matches!(
+                &cluster.options.vpc_qovery_network_mode,
+                Some(VpcQoveryNetworkMode::WithNatGateways)
+            );
+
             // if automatic, Qovery to create a new VPC for the cluster
             context.insert("vpc_use_existing", &false);
             context.insert("vpc_name", cluster.cluster_name().as_str());
@@ -235,6 +232,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             context.insert("ip_range_pods", "");
             context.insert("ip_range_services", "");
             context.insert("additional_ip_range_pods", "");
+            context.insert("private_nodes", &private_nodes);
 
             // VPC log flow (won't be set for user provided VPC)
             context.insert("vpc_enable_flow_logs", &cluster.advanced_settings.gcp_vpc_enable_flow_logs);
@@ -255,7 +253,13 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
             ip_range_pods_name,
             additional_ip_range_pods_names,
             ip_range_services_name,
+            private_nodes,
         } => {
+            let private_nodes = private_nodes.unwrap_or(matches!(
+                &cluster.options.vpc_qovery_network_mode,
+                Some(VpcQoveryNetworkMode::WithNatGateways)
+            ));
+
             // If VPC is provided by client, then reuse it without creating a new VPC for the cluster
             context.insert("vpc_use_existing", &true);
             context.insert(
@@ -284,6 +288,7 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
                 "additional_ip_range_pods",
                 &additional_ip_range_pods_names.clone().unwrap_or_default(),
             );
+            context.insert("private_nodes", &private_nodes);
 
             // VPC log flow (won't be set for user provided VPC)
             context.insert("vpc_enable_flow_logs", &false);
