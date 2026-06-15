@@ -24,6 +24,8 @@ pub struct UserProvidedVPCNetwork {
     additional_ip_range_pods_names: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     ip_range_services_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    private_nodes: Option<bool>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -94,6 +96,7 @@ impl GkeOptions {
                 user_provided_network.ip_range_pods_name.clone(),
                 user_provided_network.additional_ip_range_pods_names.clone(),
                 user_provided_network.ip_range_services_name.clone(),
+                user_provided_network.private_nodes,
             ),
         };
 
@@ -156,6 +159,8 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use crate::io_models::engine_location::EngineLocation;
     use ipnet::IpNet;
@@ -228,6 +233,7 @@ mod tests {
                 "additional_ip_range_pods_name_2".to_string(),
             ]),
             ip_range_services_name: Some("ip_range_services_name".to_string()),
+            private_nodes: Some(true),
         });
         assert_eq!(
             GkeVpcMode::UserNetworkConfig {
@@ -240,10 +246,80 @@ mod tests {
                     "additional_ip_range_pods_name_2".to_string(),
                 ]),
                 ip_range_services_name: Some("ip_range_services_name".to_string()),
+                private_nodes: Some(true),
             },
             gke_options_to_test
                 .to_gke_vpc_mode()
                 .expect("Cannot convert GkeOptions to GkeVpcMode")
+        );
+
+        // case 4: User VPC mode with private_nodes omitted to preserve
+        // backward-compatible fallback logic later in the rendering path.
+        let mut gke_options_to_test = basic_gke_options.clone();
+        gke_options_to_test.user_provided_network = Some(UserProvidedVPCNetwork {
+            vpc_project_id: Some("project_id".to_string()),
+            vpc_name: "vpc_name".to_string(),
+            subnetwork_name: Some("subnetwork_name".to_string()),
+            ip_range_pods_name: Some("ip_range_pods_name".to_string()),
+            additional_ip_range_pods_names: Some(vec![
+                "additional_ip_range_pods_name_1".to_string(),
+                "additional_ip_range_pods_name_2".to_string(),
+            ]),
+            ip_range_services_name: Some("ip_range_services_name".to_string()),
+            private_nodes: None,
+        });
+        assert_eq!(
+            GkeVpcMode::UserNetworkConfig {
+                vpc_project_id: Some("project_id".to_string()),
+                vpc_name: "vpc_name".to_string(),
+                subnetwork_name: Some("subnetwork_name".to_string()),
+                ip_range_pods_name: Some("ip_range_pods_name".to_string()),
+                additional_ip_range_pods_names: Some(vec![
+                    "additional_ip_range_pods_name_1".to_string(),
+                    "additional_ip_range_pods_name_2".to_string(),
+                ]),
+                ip_range_services_name: Some("ip_range_services_name".to_string()),
+                private_nodes: None,
+            },
+            gke_options_to_test
+                .to_gke_vpc_mode()
+                .expect("Cannot convert GkeOptions to GkeVpcMode")
+        );
+    }
+
+    #[test]
+    fn test_gke_user_provided_vpc_network_without_private_nodes_deserializes_to_none() {
+        let payload = json!({
+            "qovery_api_url": "https://api.qovery.com",
+            "qovery_grpc_url": "grpc.qovery.com:443",
+            "jwt_token": "token",
+            "qovery_ssh_key": "ssh-key",
+            "grafana_admin_user": "admin",
+            "grafana_admin_password": "password",
+            "qovery_engine_location": "QoverySide",
+            "cluster_maintenance_start_time": "02:00Z",
+            "tls_email_report": "dns@qovery.com",
+            "user_provided_network": {
+                "vpc_project_id": "project_id",
+                "vpc_name": "vpc_name",
+                "subnetwork_name": "subnetwork_name",
+                "ip_range_pods_name": "ip_range_pods_name",
+                "additional_ip_range_pods_names": [
+                    "additional_ip_range_pods_name_1",
+                    "additional_ip_range_pods_name_2"
+                ],
+                "ip_range_services_name": "ip_range_services_name"
+            }
+        });
+
+        let options: GkeOptions = serde_json::from_value(payload).expect("Cannot deserialize GkeOptions");
+
+        assert_eq!(
+            options
+                .user_provided_network
+                .as_ref()
+                .map(|network| network.private_nodes),
+            Some(None)
         );
     }
 }

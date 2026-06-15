@@ -71,6 +71,7 @@ pub enum VpcMode {
         ip_range_pods_name: Option<String>,
         additional_ip_range_pods_names: Option<Vec<String>>,
         ip_range_services_name: Option<String>,
+        private_nodes: Option<bool>,
     },
 }
 
@@ -92,6 +93,7 @@ impl VpcMode {
         ip_range_pods_name: Option<String>,
         additional_ip_range_pods_names: Option<Vec<String>>,
         ip_range_services_name: Option<String>,
+        private_nodes: Option<bool>,
     ) -> Self {
         VpcMode::UserNetworkConfig {
             vpc_project_id,
@@ -100,6 +102,7 @@ impl VpcMode {
             ip_range_pods_name,
             additional_ip_range_pods_names,
             ip_range_services_name,
+            private_nodes,
         }
     }
 }

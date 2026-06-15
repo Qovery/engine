@@ -107,13 +107,10 @@ resource "google_container_cluster" "primary" {
   # as long as you authenticate.
   # https://cloud.google.com/kubernetes-engine/docs/concepts/private-cluster-concept
   private_cluster_config {
-    {% if cluster_is_private == true %}
+    # Keep the control plane endpoint public while letting the injected
+    # private_nodes input control whether nodes receive private IPs only.
     enable_private_endpoint = false
-    enable_private_nodes    = true
-    {% else %}
-    enable_private_endpoint = false
-    enable_private_nodes    = false
-    {% endif %}
+    enable_private_nodes    = var.private_nodes
   }
 
   dynamic "node_pool_auto_config" {
