@@ -1186,7 +1186,7 @@ pub fn terraform_plan_internal(
     let terraform_args = if is_destroy {
         vec!["plan", "-destroy", "-no-color", "-out", "tf_plan"]
     } else {
-        vec!["plan", "-out", "-no-color", "tf_plan"]
+        vec!["plan", "-no-color", "-out", "tf_plan"]
     };
     terraform_exec(root_dir, terraform_args, envs, validators)
 }
