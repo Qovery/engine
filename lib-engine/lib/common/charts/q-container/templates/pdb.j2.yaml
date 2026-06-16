@@ -1,4 +1,4 @@
-{%- if service.storages | length == 0  %}
+{%- if service.storages | length == 0 and service.max_instances > 1 %}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
