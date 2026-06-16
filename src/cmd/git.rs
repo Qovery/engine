@@ -249,7 +249,13 @@ where
 {
     #[cfg(not(feature = "test-git-container"))]
     {
+        // Allow file:// in unit tests so tests can use a local repo without a network round-trip.
+        #[cfg(not(test))]
         if repository_url.scheme() != "https" {
+            return Err(Error::from_str("Repository URL have to start with https://"));
+        }
+        #[cfg(test)]
+        if repository_url.scheme() != "https" && repository_url.scheme() != "file" {
             return Err(Error::from_str("Repository URL have to start with https://"));
         }
     }
@@ -269,7 +275,10 @@ where
     // Prepare fetch options.
     let mut fo = FetchOptions::new();
     fo.remote_callbacks(callbacks);
-    fo.depth(1);
+    // Local transport doesn't support shallow fetches; skip depth for file:// (test-only path).
+    if repository_url.scheme() != "file" {
+        fo.depth(1);
+    }
     fo.update_fetchhead(false);
     fo.download_tags(AutotagOption::None);
 
@@ -430,19 +439,34 @@ mod tests {
 
     #[test]
     fn test_clone_at_tag_resolves_hierarchical_tag() {
-        // Regression: blueprint catalog tags use the hierarchical form
-        // "provider/service/major/version" (e.g. "aws/postgres/17/1.0.1"). clone_at_commit fails
-        // on these because git can't resolve the bare refspec to a local ref. clone_at_tag must
-        // write refs/tags/<tag> locally and successfully check it out.
-        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone_at_tag".to_string());
+        // Uses a local file:// repo so the test never breaks when a remote tag is deleted.
+        let remote_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_tag_remote".to_string());
         let tag = "aws/postgres/17/1.0.1";
 
-        let result = clone_at_tag(
-            &Url::parse("https://github.com/Qovery/service-catalog.git").unwrap(),
-            tag,
-            clone_dir.path(),
-            &|_| vec![],
-        );
+        // Build a local repo with the hierarchical tag.
+        {
+            let remote_repo = Repository::init(remote_dir.path()).expect("init remote");
+            fs::create_dir_all(format!("{}/aws/postgres/17", remote_dir.path())).expect("mkdir");
+            fs::write(format!("{}/aws/postgres/17/qbm.yml", remote_dir.path()), "version: 1\n").expect("write qbm.yml");
+            let mut index = remote_repo.index().expect("index");
+            index
+                .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+                .expect("add all");
+            index.write().expect("write index");
+            let tree_id = index.write_tree().expect("write tree");
+            let tree = remote_repo.find_tree(tree_id).expect("find tree");
+            let sig = Signature::now("Test", "test@test.com").expect("sig");
+            let commit_id = remote_repo
+                .commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+                .expect("commit");
+            let commit_obj = remote_repo.find_object(commit_id, None).expect("find object");
+            remote_repo.tag_lightweight(tag, &commit_obj, false).expect("tag");
+        }
+
+        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_clone_at_tag".to_string());
+        let remote_url = Url::parse(&format!("file://{}", remote_dir.path())).unwrap();
+
+        let result = clone_at_tag(&remote_url, tag, clone_dir.path(), &|_| vec![]);
         assert!(result.is_ok(), "clone_at_tag failed: {:?}", result.err());
 
         // Working tree should contain the catalog path for this tag.
