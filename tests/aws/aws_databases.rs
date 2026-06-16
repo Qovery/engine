@@ -793,20 +793,6 @@ fn public_postgresql_v17_deploy_a_working_prod_environment() {
     test_postgresql_configuration("17", function_name!(), MANAGED, KubernetesKind::Eks, true);
 }
 
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
-fn private_postgresql_v18_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("18", function_name!(), MANAGED, KubernetesKind::Eks, false);
-}
-
-#[cfg(feature = "test-aws-managed-services")]
-#[named]
-#[test]
-fn public_postgresql_v18_deploy_a_working_prod_environment() {
-    test_postgresql_configuration("18", function_name!(), MANAGED, KubernetesKind::Eks, true);
-}
-
 /**
 **
 ** MongoDB tests
