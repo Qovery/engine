@@ -21,6 +21,8 @@ locals {
       Region = var.region
       creationDate = time_static.on_cluster_create.rfc3339
       QoveryProduct = "EKS"
+      # AWS Partner Network (APN) identifier, required by AWS to measure Qovery-managed resources for the AWS Marketplace listing
+      "aws-apn-id" = "{{ aws_apn_id }}"
       {% if resource_expiration_in_seconds > -1 %}ttl = var.resource_expiration_in_seconds{% endif %}
     }
   )

@@ -478,6 +478,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -515,6 +516,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -556,6 +558,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -633,6 +636,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
             false,
@@ -671,6 +675,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
                 hpa_config: Some(HpaConfig {
@@ -708,6 +713,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
                 access_log_format: Some(r#"{"correlation_id":"%REQ(X-REQUEST-ID)%"}"#.to_string()),
@@ -740,6 +746,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
                 dns_cloudflare_proxied: true,

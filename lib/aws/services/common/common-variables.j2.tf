@@ -70,6 +70,8 @@ variable "database_tags" {
     "q_environment_long_id"                                                          = "{{ environment_long_id }}"
     "q_project_id"                                                                   = "{{ project_id }}"
     "q_project_long_id"                                                              = "{{ project_long_id }}"
+    # AWS Partner Network (APN) identifier, required by AWS to measure Qovery-managed resources for the AWS Marketplace listing
+    "aws-apn-id"                                                                     = "{{ aws_apn_id }}"
     {% if resource_expiration_in_seconds > -1 %}
     "ttl"                                                                            = "{{ resource_expiration_in_seconds }}"
     {% endif %}

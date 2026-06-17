@@ -45,6 +45,7 @@ pub struct DeploymentOption {
 pub struct EnvironmentTask {
     workspace_root_dir: String,
     lib_root_dir: String,
+    aws_apn_id: String,
     engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: EnvironmentEngineRequest,
@@ -63,6 +64,7 @@ impl EnvironmentTask {
         workspace_root_dir: String,
         engine_version: DeployedEngineVersion,
         lib_root_dir: String,
+        aws_apn_id: String,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
@@ -80,6 +82,7 @@ impl EnvironmentTask {
         EnvironmentTask {
             workspace_root_dir,
             lib_root_dir,
+            aws_apn_id,
             engine_version,
             docker,
             request,
@@ -721,6 +724,7 @@ impl Task for EnvironmentTask {
             self.request.test_cluster,
             self.request.features.clone(),
             self.request.metadata.clone(),
+            self.aws_apn_id.clone(),
             self.docker.clone(),
             self.qovery_api.clone(),
             self.request.event_details(),

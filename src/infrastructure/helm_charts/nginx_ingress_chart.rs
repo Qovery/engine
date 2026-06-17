@@ -6,6 +6,7 @@ use std::sync::Arc;
 use strum_macros::EnumIter;
 
 use super::{HelmChartResources, HelmChartResourcesConstraintType};
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -117,6 +118,7 @@ pub struct NginxIngressChart {
     organization_short_id: String,
     cluster_long_id: String,
     cluster_short_id: String,
+    aws_apn_id: String,
     kubernetes_kind: KubernetesKind,
     customer_helm_chart_override: Option<CustomerHelmChartsOverride>,
     nginx_controller_default_replicas: u32,
@@ -186,6 +188,7 @@ impl NginxIngressChart {
         organization_short_id: String,
         cluster_long_id: String,
         cluster_short_id: String,
+        aws_apn_id: String,
         kubernetes_kind: KubernetesKind,
         created_cluster_date: DateTime<Utc>,
         options: NginxOptions,
@@ -227,6 +230,7 @@ impl NginxIngressChart {
             organization_short_id,
             cluster_long_id,
             cluster_short_id,
+            aws_apn_id,
             customer_helm_chart_override: customer_helm_chart_fn(Self::chart_name()),
             nginx_controller_default_replicas: options.nginx_controller_default_replicas,
             nginx_hpa_enabled: options.nginx_hpa_enabled,
@@ -475,6 +479,7 @@ defaultBackend:
             Kind::Aws => {
                 // there is no LB deployed for EC2
                 if self.kubernetes_kind == KubernetesKind::Eks {
+                    let apn_id = self.aws_apn_id.as_str();
                     // common config
                     chart_set_values.push(ChartSetValue {
                         key: "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-healthcheck-interval"
@@ -527,7 +532,7 @@ defaultBackend:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags"
                                     .to_string(),
                                 value: format!(
-                                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
+                                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}\\,{AWS_APN_ID_TAG_KEY}={apn_id}",
                                     self.organization_long_id,
                                     self.organization_short_id,
                                     self.cluster_long_id,
@@ -541,6 +546,13 @@ defaultBackend:
                                 "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-type"
                                     .to_string(),
                                 value: "nlb".to_string(),
+                            });
+                            // aws-apn-id: AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the AWS Marketplace listing
+                            chart_set_values.push(ChartSetValue {
+                                key:
+                                "controller.service.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags"
+                                    .to_string(),
+                                value: format!("{AWS_APN_ID_TAG_KEY}={apn_id}"),
                             });
                         }
                     };
@@ -711,6 +723,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
+            "not-set".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
@@ -775,6 +788,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
+            "not-set".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {
@@ -841,6 +855,7 @@ mod tests {
                 "z00000000".to_string(),
                 "10000000-0000-4000-8000-000000000000".to_string(),
                 "z10000000".to_string(),
+                "not-set".to_string(),
                 KubernetesKind::Eks,
                 Utc::now(),
                 NginxOptions {
@@ -913,6 +928,7 @@ mod tests {
             "z00000000".to_string(),
             "10000000-0000-4000-8000-000000000000".to_string(),
             "z10000000".to_string(),
+            "not-set".to_string(),
             KubernetesKind::Eks,
             Utc::now(),
             NginxOptions {

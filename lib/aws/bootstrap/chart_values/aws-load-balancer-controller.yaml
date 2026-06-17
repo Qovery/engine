@@ -36,3 +36,9 @@ resources:
   requests:
     cpu: set-by-engine-code
     memory: set-by-engine-code
+
+# AWS Partner Network (APN) identifier, required by AWS to measure Qovery-managed resources for the AWS Marketplace listing.
+# Applied to every AWS resource provisioned by this controller (NLBs, target groups, security groups).
+# Value injected by the engine from the QOVERY_AWS_APN_ID env var.
+defaultTags:
+  aws-apn-id: set-by-engine-code

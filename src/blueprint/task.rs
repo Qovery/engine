@@ -30,6 +30,7 @@ use tokio::sync::broadcast;
 pub struct BlueprintTask {
     workspace_root_dir: String,
     lib_root_dir: String,
+    aws_apn_id: String,
     engine_version: DeployedEngineVersion,
 
     docker: Arc<Docker>,
@@ -48,6 +49,7 @@ impl BlueprintTask {
         request: BlueprintEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
+        aws_apn_id: String,
         engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
@@ -61,6 +63,7 @@ impl BlueprintTask {
         BlueprintTask {
             workspace_root_dir,
             lib_root_dir,
+            aws_apn_id,
             engine_version,
             docker,
             request,
@@ -547,6 +550,7 @@ impl Task for BlueprintTask {
             self.request.test_cluster,
             self.request.features.clone(),
             self.request.metadata.clone(),
+            self.aws_apn_id.clone(),
             self.docker.clone(),
             self.qovery_api.clone(),
             self.request.event_details(),

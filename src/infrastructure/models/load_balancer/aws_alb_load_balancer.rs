@@ -1,4 +1,5 @@
 use crate::{
+    constants::AWS_APN_ID_TAG_KEY,
     infrastructure::models::{cloud_provider::io::AwsAlbLoadBalancerScheme, load_balancer::InteractWithLoadBalancer},
     io_models::QoveryIdentifier,
 };
@@ -68,10 +69,13 @@ pub struct AwsAlbLoadBalancer {
     pub load_balancer_source_ranges: Vec<IpNet>,
     pub load_balancer_eip_allocation_ids: Option<Vec<AwsEipAllocationId>>,
     pub load_balancer_scheme: AwsAlbLoadBalancerScheme,
+    // AWS Partner Network identifier tagged on the gateway NLB for the AWS Marketplace listing (engine-global, from Context)
+    pub aws_apn_id: String,
 }
 
 impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
     fn annotations(&self) -> Option<HashMap<String, String>> {
+        let apn_id = self.aws_apn_id.as_str();
         let mut annotations = HashMap::from([
             (
                 "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
@@ -96,7 +100,7 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
             (
                 "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
                 format!(
-                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}",
+                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}\\,{AWS_APN_ID_TAG_KEY}={apn_id}",
                     self.organization_id,
                     self.organization_id.short(),
                     self.cluster_id,
@@ -210,6 +214,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations();
@@ -227,6 +232,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -272,6 +278,7 @@ mod tests {
         assert!(tags.contains(&format!("OrganizationId={}", organization_id.short())));
         assert!(tags.contains(&format!("ClusterLongId={}", cluster_id)));
         assert!(tags.contains(&format!("ClusterId={}", cluster_id.short())));
+        assert!(tags.contains(&format!("{AWS_APN_ID_TAG_KEY}=pc:test-apn")));
         assert!(tags.contains("\\,"));
 
         let lb = AwsAlbLoadBalancer {
@@ -280,6 +287,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::Internal,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -300,6 +308,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -325,6 +334,7 @@ mod tests {
             ],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -345,6 +355,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();
@@ -366,6 +377,7 @@ mod tests {
             ])
             .unwrap(),
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            aws_apn_id: "pc:test-apn".to_string(),
         };
 
         let annotations = lb.annotations().unwrap();

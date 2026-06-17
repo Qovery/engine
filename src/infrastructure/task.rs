@@ -19,6 +19,7 @@ use tokio::sync::broadcast;
 pub struct InfrastructureTask {
     workspace_root_dir: String,
     lib_root_dir: String,
+    aws_apn_id: String,
     engine_version: DeployedEngineVersion,
     docker: Arc<Docker>,
     request: InfrastructureEngineRequest,
@@ -35,6 +36,7 @@ impl InfrastructureTask {
         request: InfrastructureEngineRequest,
         workspace_root_dir: String,
         lib_root_dir: String,
+        aws_apn_id: String,
         engine_version: DeployedEngineVersion,
         docker: Arc<Docker>,
         logger: Box<dyn Logger>,
@@ -63,6 +65,7 @@ impl InfrastructureTask {
         InfrastructureTask {
             workspace_root_dir,
             lib_root_dir,
+            aws_apn_id,
             engine_version,
             docker,
             request,
@@ -243,6 +246,7 @@ impl Task for InfrastructureTask {
             self.request.test_cluster,
             self.request.features.clone(),
             self.request.metadata.clone(),
+            self.aws_apn_id.clone(),
             self.docker.clone(),
             self.qovery_api.clone(),
             self.request.event_details(),
