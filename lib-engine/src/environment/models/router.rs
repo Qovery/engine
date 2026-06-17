@@ -474,7 +474,6 @@ impl<T: CloudProvider> Router<T> {
         let cluster_long_id = kubernetes.context().cluster_long_id();
         let gateway_http_routes_per_namespace = to_gateway_http_routes_data_template(
             &http_hosts_per_namespace_gateway,
-            &service_id,
             &gateway_http_route_headers_signature,
         );
         debug!(
@@ -639,7 +638,6 @@ fn deduplicate_custom_domains(custom_domains: &[CustomDomain]) -> Vec<CustomDoma
 
 fn to_gateway_http_routes_data_template(
     http_hosts_per_namespace: &BTreeMap<String, Vec<HostDataTemplate>>,
-    associated_service_long_id: &Uuid,
     headers_signature: &GatewayHttpRouteHeadersSignature,
 ) -> BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> {
     let mut routes_per_namespace: BTreeMap<String, Vec<GatewayHttpRouteDataTemplate>> = BTreeMap::new();
@@ -648,8 +646,7 @@ fn to_gateway_http_routes_data_template(
         let mut hostnames_by_rules: BTreeMap<Vec<GatewayHttpRouteRuleSignature>, BTreeSet<String>> = BTreeMap::new();
 
         for host in hosts {
-            let rule_signatures =
-                to_gateway_http_route_rule_signatures(host, associated_service_long_id, headers_signature);
+            let rule_signatures = to_gateway_http_route_rule_signatures(host, headers_signature);
             let hostnames_entry = hostnames_by_rules.entry(rule_signatures).or_default();
             for hostname in to_gateway_http_route_hostnames(&host.domain_name) {
                 hostnames_entry.insert(hostname);
@@ -705,7 +702,6 @@ fn to_gateway_http_routes_data_template(
 
 fn to_gateway_http_route_rule_signatures(
     host: &HostDataTemplate,
-    associated_service_long_id: &Uuid,
     headers_signature: &GatewayHttpRouteHeadersSignature,
 ) -> Vec<GatewayHttpRouteRuleSignature> {
     let mut signatures: BTreeSet<GatewayHttpRouteRuleSignature> = BTreeSet::new();
@@ -725,16 +721,6 @@ fn to_gateway_http_route_rule_signatures(
         path: host.path.clone(),
         path_rewrite: normalized_path_rewrite,
         path_type: host.path_type.clone(),
-        response_headers: headers_signature.response_headers.clone(),
-        request_headers: headers_signature.request_headers.clone(),
-        weight: host.weight,
-    });
-    signatures.insert(GatewayHttpRouteRuleSignature {
-        service_name: host.service_name.clone(),
-        service_port: host.service_port,
-        path: format!("/{associated_service_long_id}/"),
-        path_rewrite: Some("/".to_string()),
-        path_type: HostPathType::PathPrefix,
         response_headers: headers_signature.response_headers.clone(),
         request_headers: headers_signature.request_headers.clone(),
         weight: host.weight,
@@ -1127,7 +1113,6 @@ mod tests {
     use crate::io_models::models::{CustomDomain, CustomDomainDataTemplate, HostDataTemplate, HostPathType};
     use maplit::hashset;
     use std::collections::{BTreeMap, BTreeSet, HashSet};
-    use uuid::Uuid;
 
     #[test]
     pub fn test_certificate_alternative_names() {
@@ -1372,7 +1357,6 @@ mod tests {
 
     #[test]
     pub fn test_gateway_http_routes_do_not_emit_duplicate_hostnames_or_rules() {
-        let service_id = Uuid::new_v4();
         let port_http = Port {
             long_id: Default::default(),
             name: "http".to_string(),
@@ -1412,7 +1396,6 @@ mod tests {
         );
         let routes_per_namespace = to_gateway_http_routes_data_template(
             &hosts_per_namespace,
-            &service_id,
             &to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new()),
         );
 
@@ -1443,19 +1426,12 @@ mod tests {
             })
             .collect::<BTreeSet<_>>();
         assert_eq!(route.rules.len(), unique_rules.len(), "rules should be deduplicated");
-        assert_eq!(route.rules.len(), 2, "standard router should emit at most 2 rules");
+        assert_eq!(route.rules.len(), 1, "standard router should emit a single rule per host");
         assert!(route.rules.iter().any(|rule| rule.path == "/"));
-        assert!(
-            route
-                .rules
-                .iter()
-                .any(|rule| rule.path == format!("/{service_id}/") && rule.path_rewrite.as_deref() == Some("/"))
-        );
     }
 
     #[test]
     pub fn test_gateway_http_routes_are_deduplicated_model() {
-        let service_id = Uuid::new_v4();
         let host = HostDataTemplate {
             domain_name: "app.example.com".to_string(),
             service_name: "demo".to_string(),
@@ -1468,7 +1444,7 @@ mod tests {
         let hosts_per_namespace = BTreeMap::from([("env-ns".to_string(), vec![host.clone(), host])]);
         let headers = to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new());
 
-        let routes = to_gateway_http_routes_data_template(&hosts_per_namespace, &service_id, &headers);
+        let routes = to_gateway_http_routes_data_template(&hosts_per_namespace, &headers);
         let dedup = routes
             .get("env-ns")
             .expect("dedup namespace route list should be generated");
@@ -1481,7 +1457,6 @@ mod tests {
 
     #[test]
     pub fn test_gateway_http_route_rewrite_is_only_emitted_for_path_prefix() {
-        let service_id = Uuid::new_v4();
         let port_http_with_regex_path = Port {
             long_id: Default::default(),
             name: "http".to_string(),
@@ -1507,7 +1482,6 @@ mod tests {
         );
         let routes_per_namespace = to_gateway_http_routes_data_template(
             &hosts_per_namespace,
-            &service_id,
             &to_gateway_http_route_headers_signature(&BTreeMap::new(), &BTreeMap::new()),
         );
         let routes = routes_per_namespace
@@ -1525,14 +1499,6 @@ mod tests {
             regex_rule.path_rewrite.is_none(),
             "regex/exact path rules must not render ReplacePrefixMatch rewrites"
         );
-
-        let compatibility_rule = route
-            .rules
-            .iter()
-            .find(|rule| rule.path == format!("/{service_id}/"))
-            .expect("compatibility rule should exist");
-        assert_eq!(compatibility_rule.path_type, HostPathType::PathPrefix);
-        assert_eq!(compatibility_rule.path_rewrite.as_deref(), Some("/"));
     }
 
     #[test]
