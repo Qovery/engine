@@ -630,6 +630,7 @@ mod tests {
             organization_long_id: Default::default(),
             cluster_id: String::new(),
             cluster_long_id: Default::default(),
+            aws_apn_id: "not-set".to_string(),
             cluster_creation_date: Default::default(),
             region: AwsRegion::UsEast1,
             kubernetes_version: KUBERNETES_VERSION,

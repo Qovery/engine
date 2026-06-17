@@ -24,6 +24,8 @@ pub struct Context {
     test_cluster: bool,
     features: Vec<Features>,
     metadata: Option<Metadata>,
+    // AWS Partner Network identifier tagged on AWS resources for the AWS Marketplace listing (engine-global, read at startup).
+    aws_apn_id: String,
     pub docker: Arc<Docker>,
     pub qovery_api: Arc<dyn QoveryApi>,
     event_details: EventDetails,
@@ -40,6 +42,7 @@ impl Context {
         test_cluster: bool,
         features: Vec<Features>,
         metadata: Option<Metadata>,
+        aws_apn_id: String,
         docker: Arc<Docker>,
         qovery_api: Arc<dyn QoveryApi>,
         event_details: EventDetails,
@@ -57,10 +60,17 @@ impl Context {
             test_cluster,
             features,
             metadata,
+            aws_apn_id,
             docker,
             qovery_api,
             event_details,
         }
+    }
+
+    /// AWS Partner Network identifier tagged on every AWS resource for the AWS Marketplace listing.
+    /// Read once from the `QOVERY_AWS_APN_ID` env var at startup; "not-set" when the variable is absent.
+    pub fn aws_apn_id(&self) -> &str {
+        self.aws_apn_id.as_str()
     }
 
     pub fn organization_short_id(&self) -> &str {

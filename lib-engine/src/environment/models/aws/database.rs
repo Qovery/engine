@@ -270,6 +270,9 @@ where
         let environment = target.environment;
         let mut context = default_tera_context(self, kubernetes, environment);
 
+        // AWS APN id tagged on the managed database resources for the AWS Marketplace listing (engine-global, carried via Context)
+        context.insert("aws_apn_id", kubernetes.context().aws_apn_id());
+
         // we need the kubernetes config file to store tfstates file in kube secrets
         context.insert("kubeconfig_path", &target.kubernetes.kubeconfig_local_file_path());
         context.insert("namespace", environment.namespace());

@@ -386,6 +386,7 @@ pub fn kapsule_helm_charts(
             chart_config_prerequisites.organization_id.clone(),
             chart_config_prerequisites.cluster_long_id.to_string(),
             chart_config_prerequisites.cluster_id.clone(),
+            "not-set".to_string(),
             KubernetesKind::ScwKapsule,
             chart_config_prerequisites.cluster_creation_date,
             NginxOptions {

@@ -83,6 +83,7 @@ pub fn main() -> io::Result<()> {
     let version_file = env::var("BIN_VERSION_FILE").expect("BIN_VERSION_FILE is mandatory");
     let test_cluster_env_var = env::var("TEST_CLUSTER");
     let lib_root_dir = env::var("LIB_ROOT_DIR").unwrap_or_else(|_| "lib".to_string());
+    let aws_apn_id = env::var("QOVERY_AWS_APN_ID").unwrap_or_else(|_| "not-set".to_string());
     let docker_host = env::var("DOCKER_HOST").map(|val| Url::parse(&val).unwrap()).ok();
     let workspace_root_dir =
         env::var("WORKSPACE_ROOT_DIR").unwrap_or_else(|_| home_dir().unwrap().to_string_lossy().into_owned());
@@ -145,6 +146,7 @@ pub fn main() -> io::Result<()> {
                 env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
                 workspace_root_dir,
                 lib_root_dir,
+                aws_apn_id,
                 test_cluster,
                 TaskSelector::Infrastructure,
                 docker,
@@ -156,6 +158,7 @@ pub fn main() -> io::Result<()> {
                 env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
                 workspace_root_dir,
                 lib_root_dir,
+                aws_apn_id,
                 test_cluster,
                 TaskSelector::Environment,
                 docker,
@@ -191,6 +194,7 @@ pub fn using_json_path_parameter(
     deploy_from_file: String,
     workspace_root_dir: String,
     lib_root_dir: String,
+    aws_apn_id: String,
     test_cluster: bool,
     deployment_type: TaskSelector,
     docker: Arc<Docker>,
@@ -220,6 +224,7 @@ pub fn using_json_path_parameter(
                 request,
                 workspace_root_dir,
                 lib_root_dir,
+                aws_apn_id,
                 deployed_engine_version.clone(),
                 docker,
                 logger,
@@ -243,6 +248,7 @@ pub fn using_json_path_parameter(
                 workspace_root_dir,
                 deployed_engine_version.clone(),
                 lib_root_dir,
+                aws_apn_id,
                 docker,
                 logger,
                 metrics_registry,
@@ -264,6 +270,7 @@ pub fn using_json_path_parameter(
                 request,
                 workspace_root_dir,
                 lib_root_dir,
+                aws_apn_id,
                 deployed_engine_version.clone(),
                 docker,
                 logger,

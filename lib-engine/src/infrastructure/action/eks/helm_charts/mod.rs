@@ -47,6 +47,8 @@ pub struct EksChartsConfigPrerequisites {
     pub organization_long_id: uuid::Uuid,
     pub cluster_id: String,
     pub cluster_long_id: uuid::Uuid,
+    // AWS Partner Network identifier tagged on AWS resources for the AWS Marketplace listing (engine-global, from Context)
+    pub aws_apn_id: String,
     pub cluster_creation_date: DateTime<Utc>,
     pub region: AwsRegion,
     pub cluster_name: String,
@@ -137,6 +139,7 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
             infra_options: cluster.options.clone(),
             cluster_id: cluster.short_id().to_string(),
             cluster_long_id: cluster.long_id,
+            aws_apn_id: infra_ctx.context().aws_apn_id().to_string(),
             region: cluster.region.clone(),
             kubernetes_version: cluster.version.clone(),
             cluster_name: cluster.cluster_name(),

@@ -149,6 +149,7 @@ fn context(organization_id: Uuid, cluster_id: Uuid, ttl: u32, kind: Option<KKind
         true,
         enabled_features,
         Option::from(metadata),
+        "not-set".to_string(),
         Arc::new(docker),
         Arc::new(StaticQoveryApi { versions }),
         EventDetails::new(

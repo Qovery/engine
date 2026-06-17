@@ -366,6 +366,7 @@ pub(super) fn eks_helm_charts(
                     .cluster_advanced_settings
                     .k8s_use_api_gateway
                     .unwrap_or(false)),
+        chart_config_prerequisites.aws_apn_id.clone(),
     )
     .to_common_helm_chart()?;
 
@@ -600,6 +601,7 @@ pub(super) fn eks_helm_charts(
             chart_config_prerequisites.organization_id.clone(),
             chart_config_prerequisites.cluster_long_id.to_string(),
             chart_config_prerequisites.cluster_id.clone(),
+            chart_config_prerequisites.aws_apn_id.clone(),
             KubernetesKind::Eks,
             chart_config_prerequisites.cluster_creation_date,
             NginxOptions {
@@ -770,6 +772,7 @@ pub(super) fn eks_helm_charts(
                     load_balancer_scheme: chart_config_prerequisites
                         .cluster_advanced_settings
                         .aws_eks_alb_controller_load_balancer_scheme,
+                    aws_apn_id: chart_config_prerequisites.aws_apn_id.clone(),
                 }),
                 QoveryClusterGatewayChartOptions {
                     dns_cloudflare_proxied: chart_config_prerequisites.dns_provider_config.cloudflare_proxied(),

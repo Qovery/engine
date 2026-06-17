@@ -19,6 +19,7 @@ pub struct AwsLoadBalancerControllerChart {
     aws_alb_controller_role_arn: String,
     cluster_name: String,
     enable_mutator_webhook: bool,
+    aws_apn_id: String,
 }
 
 impl AwsLoadBalancerControllerChart {
@@ -31,6 +32,7 @@ impl AwsLoadBalancerControllerChart {
         chart_vpa: HelmChartVpaType,
         // https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.5/deploy/installation/
         enable_mutator_webhook: bool,
+        aws_apn_id: String,
     ) -> Self {
         Self {
             chart_path: HelmChartPath::new(
@@ -57,6 +59,7 @@ impl AwsLoadBalancerControllerChart {
             aws_alb_controller_role_arn,
             cluster_name,
             enable_mutator_webhook,
+            aws_apn_id,
             replicas,
         }
     }
@@ -110,6 +113,11 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                             HelmChartReplicaType::ChartDefault => "2".to_string(),
                             HelmChartReplicaType::Fixed(count) => count.to_string(),
                         },
+                    },
+                    // AWS APN id tagged on every AWS resource provisioned by the controller (NLBs, target groups, security groups)
+                    ChartSetValue {
+                        key: "defaultTags.aws-apn-id".to_string(),
+                        value: self.aws_apn_id.clone(),
                     },
                 ],
                 ..Default::default()
@@ -195,6 +203,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
+            "not-set".to_string(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -229,6 +238,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
+            "not-set".to_string(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -264,6 +274,7 @@ mod tests {
             HelmChartReplicaType::Fixed(1u32),
             HelmChartVpaType::EnabledWithChartDefault,
             true,
+            "not-set".to_string(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
 

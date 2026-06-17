@@ -12,3 +12,8 @@ pub const GCP_REGION: &str = "GOOGLE_REGION";
 pub const GCP_CREDENTIALS: &str = "GOOGLE_CREDENTIALS";
 pub const GCP_OAUTH_ACCESS_TOKEN: &str = "GOOGLE_OAUTH_ACCESS_TOKEN";
 pub const GCP_CLOUDSDK_CONFIG: &str = "CLOUDSDK_CONFIG";
+
+// AWS Partner Network (APN) identifier tag key, required by AWS to measure Qovery-managed resources for the
+// AWS Marketplace listing. The value is read once at startup from the QOVERY_AWS_APN_ID env var (see the engine
+// CLI) and carried through `Context::aws_apn_id()`; it defaults to "not-set" when the variable is absent.
+pub const AWS_APN_ID_TAG_KEY: &str = "aws-apn-id";

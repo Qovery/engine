@@ -1,4 +1,5 @@
 use super::annotations_group::Annotation;
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::environment::models;
 use crate::environment::models::database::{
     Container, DatabaseError, DatabaseInstanceType, DatabaseService, Managed, MongoDB, MySQL, PostgresSQL, Redis,
@@ -108,10 +109,11 @@ impl Database {
         let mut additional_annotations = Vec::new();
         if let (CPKind::Aws, DatabaseMode::CONTAINER) = (cloud_provider.kind(), &self.mode) {
             // alb annotations
+            let apn_id = context.aws_apn_id();
             additional_annotations.push(Annotation {
                 key: "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
                 value: format!(
-                    "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={},QoveryName={}",
+                    "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={},QoveryName={},{AWS_APN_ID_TAG_KEY}={apn_id}",
                     context.organization_long_id(),
                     context.organization_short_id(),
                     context.cluster_long_id(),

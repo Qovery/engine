@@ -1,3 +1,4 @@
+use crate::constants::AWS_APN_ID_TAG_KEY;
 use crate::environment::models::ToCloudProviderFormat;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
@@ -206,6 +207,7 @@ impl Kubernetes for EKS {
             Some(x) => format!(",QoveryName={x}"),
             None => "".to_string(),
         };
+        let apn_id = self.context.aws_apn_id();
         match self.advanced_settings().aws_eks_enable_alb_controller {
             // !!! IMPORTANT !!!
             // Changing this may require destroy/recreate a load balancer (and so downtime)
@@ -230,7 +232,7 @@ impl Kubernetes for EKS {
                     (
                         "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
                         format!(
-                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{}",
+                            "OrganizationLongId={},OrganizationId={},ClusterLongId={},ClusterId={}{},{AWS_APN_ID_TAG_KEY}={apn_id}",
                             self.context.organization_long_id(),
                             self.context.organization_short_id(),
                             self.long_id,
@@ -240,10 +242,17 @@ impl Kubernetes for EKS {
                     ),
                 ]
             }
-            false => vec![(
-                "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
-                "nlb".to_string(),
-            )],
+            false => vec![
+                (
+                    "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
+                    "nlb".to_string(),
+                ),
+                (
+                    // aws-apn-id: AWS Partner Network identifier, required by AWS to measure Qovery-managed resources for the AWS Marketplace listing
+                    "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
+                    format!("{AWS_APN_ID_TAG_KEY}={apn_id}"),
+                ),
+            ],
         }
     }
 
