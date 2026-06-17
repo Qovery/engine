@@ -170,6 +170,7 @@ pub fn main() -> io::Result<()> {
                 env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
                 workspace_root_dir,
                 lib_root_dir,
+                aws_apn_id,
                 test_cluster,
                 TaskSelector::Blueprint,
                 docker,
