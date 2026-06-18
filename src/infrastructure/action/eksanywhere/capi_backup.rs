@@ -9,17 +9,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tar::Builder as TarBuilder;
 use tracing::{debug, info};
 use url::Url;
 use uuid::Uuid;
 
 const EKSA_SYSTEM_NAMESPACE: &str = "eksa-system";
-const CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS: u64 = 300;
+const CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS: u64 = 900;
 const CAPI_BACKUP_MIN_UPLOAD_WINDOW_SECONDS: i64 = 900;
 const CAPI_BACKUP_KUBECTL_TIMEOUT_SECONDS: u64 = 120;
 const CAPI_BACKUP_METADATA_FILE_NAME: &str = ".qovery-capi-backup-metadata.json";
+const CAPI_BACKUP_UPLOAD_ERROR_BODY_MAX_CHARS: usize = 2_000;
 const CAPI_BACKUP_FALLBACK_EXPORT_RESOURCES: &[&str] = &[
     "clusters.cluster.x-k8s.io",
     "clusterresourcesets.addons.cluster.x-k8s.io",
@@ -92,9 +93,19 @@ pub(super) fn upload_eks_anywhere_capi_backup(
     let archive_path = cluster.temp_dir().join(archive_file_name);
 
     create_tar_gz_archive_from_directory(backup_directory, &archive_path)?;
-    debug!("Created CAPI backup archive `{}`.", archive_path.display());
+    let archive_size_bytes = archive_size_bytes(archive_path.as_path())?;
+    logger.info(format!(
+        "CAPI backup archive ready: `{}` ({}).",
+        archive_path.display(),
+        human_readable_bytes(archive_size_bytes)
+    ));
 
-    let upload_result = upload_file_to_presigned_put_url(presigned_put_url.as_str(), &archive_path);
+    let upload_result = upload_file_to_presigned_put_url(
+        presigned_put_url.as_str(),
+        archive_path.as_path(),
+        archive_size_bytes,
+        logger,
+    );
     if let Err(cleanup_error) = fs::remove_file(&archive_path) {
         logger.warn(format!(
             "Cannot remove temporary CAPI backup archive `{}`: {}",
@@ -416,6 +427,24 @@ fn validate_presigned_put_url_upload_window(
     presigned_put_url: &str,
     min_window_seconds: i64,
 ) -> Result<(), CommandError> {
+    let Some(remaining) = presigned_put_url_remaining_seconds(presigned_put_url)? else {
+        return Ok(());
+    };
+    if remaining <= 0 {
+        return Err(CommandError::new_from_safe_message(
+            "Pre-signed PUT URL for CAPI backup is already expired.".to_string(),
+        ));
+    }
+    if remaining < min_window_seconds {
+        return Err(CommandError::new_from_safe_message(format!(
+            "Pre-signed PUT URL for CAPI backup expires too soon ({}s remaining, minimum required {}s).",
+            remaining, min_window_seconds
+        )));
+    }
+    Ok(())
+}
+
+fn presigned_put_url_remaining_seconds(presigned_put_url: &str) -> Result<Option<i64>, CommandError> {
     let parsed = Url::parse(presigned_put_url).map_err(|e| {
         CommandError::new_from_safe_message(format!("Cannot parse pre-signed PUT URL for upload window checks: {e}"))
     })?;
@@ -430,7 +459,7 @@ fn validate_presigned_put_url_upload_window(
     }
 
     let (Some(amz_date), Some(amz_expires)) = (x_amz_date, x_amz_expires) else {
-        return Ok(());
+        return Ok(None);
     };
     let signed_at = chrono::NaiveDateTime::parse_from_str(amz_date.as_str(), "%Y%m%dT%H%M%SZ")
         .map_err(|e| CommandError::new_from_safe_message(format!("Invalid `X-Amz-Date` in pre-signed URL: {e}")))?;
@@ -440,18 +469,7 @@ fn validate_presigned_put_url_upload_window(
     let expires_at = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(signed_at, chrono::Utc)
         + chrono::Duration::seconds(expires_seconds);
     let remaining = expires_at.signed_duration_since(chrono::Utc::now()).num_seconds();
-    if remaining <= 0 {
-        return Err(CommandError::new_from_safe_message(
-            "Pre-signed PUT URL for CAPI backup is already expired.".to_string(),
-        ));
-    }
-    if remaining < min_window_seconds {
-        return Err(CommandError::new_from_safe_message(format!(
-            "Pre-signed PUT URL for CAPI backup expires too soon ({}s remaining, minimum required {}s).",
-            remaining, min_window_seconds
-        )));
-    }
-    Ok(())
+    Ok(Some(remaining))
 }
 
 fn capi_backup_directory_name(capi_backup_directory: &Path) -> Result<String, CommandError> {
@@ -507,7 +525,18 @@ fn create_tar_gz_archive_from_directory(
     Ok(())
 }
 
-fn upload_file_to_presigned_put_url(presigned_put_url: &str, file_path: &Path) -> Result<(), CommandError> {
+fn archive_size_bytes(file_path: &Path) -> Result<u64, CommandError> {
+    file_path.metadata().map(|metadata| metadata.len()).map_err(|e| {
+        CommandError::new_from_safe_message(format!("Cannot inspect backup archive `{}`: {e}", file_path.display()))
+    })
+}
+
+fn upload_file_to_presigned_put_url(
+    presigned_put_url: &str,
+    file_path: &Path,
+    archive_size_bytes: u64,
+    logger: &impl InfraLogger,
+) -> Result<(), CommandError> {
     let file = File::open(file_path).map_err(|e| {
         CommandError::new_from_safe_message(format!(
             "Cannot open backup archive `{}` for upload: {e}",
@@ -515,7 +544,23 @@ fn upload_file_to_presigned_put_url(presigned_put_url: &str, file_path: &Path) -
         ))
     })?;
 
-    reqwest::blocking::Client::builder()
+    let destination = redact_url_for_logs(presigned_put_url);
+    match presigned_put_url_remaining_seconds(presigned_put_url)? {
+        Some(remaining) => logger.info(format!(
+            "Uploading CAPI backup archive to `{destination}` (size {}, pre-signed URL remaining window {}s, timeout {}s).",
+            human_readable_bytes(archive_size_bytes),
+            remaining,
+            CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS
+        )),
+        None => logger.info(format!(
+            "Uploading CAPI backup archive to `{destination}` (size {}, timeout {}s). URL expiration query parameters were not present.",
+            human_readable_bytes(archive_size_bytes),
+            CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS
+        )),
+    }
+
+    let started_at = Instant::now();
+    let response = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| CommandError::new_from_safe_message(format!("Cannot create upload HTTP client: {e}")))?
@@ -523,13 +568,54 @@ fn upload_file_to_presigned_put_url(presigned_put_url: &str, file_path: &Path) -
         .body(file)
         .timeout(Duration::from_secs(CAPI_BACKUP_ARCHIVE_UPLOAD_TIMEOUT_SECONDS))
         .send()
-        .map_err(|e| CommandError::new_from_safe_message(format!("CAPI backup upload request failed: {e}")))?
-        .error_for_status()
         .map_err(|e| {
-            CommandError::new_from_safe_message(format!("CAPI backup upload returned an error status: {e}"))
+            CommandError::new_from_safe_message(format!(
+                "CAPI backup upload request failed after {}s: {e}",
+                started_at.elapsed().as_secs()
+            ))
         })?;
 
-    Ok(())
+    let status = response.status();
+    let elapsed_seconds = started_at.elapsed().as_secs();
+    if status.is_success() {
+        logger.info(format!(
+            "CAPI backup archive upload completed with HTTP status `{status}` in {elapsed_seconds}s."
+        ));
+        return Ok(());
+    }
+
+    let response_body = response
+        .text()
+        .unwrap_or_else(|e| format!("<cannot read response body: {e}>"));
+    Err(CommandError::new_from_safe_message(format!(
+        "CAPI backup upload returned HTTP status `{status}` after {elapsed_seconds}s. Response body: {}",
+        truncate_for_error(response_body.as_str(), CAPI_BACKUP_UPLOAD_ERROR_BODY_MAX_CHARS)
+    )))
+}
+
+fn human_readable_bytes(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = KIB * 1024.0;
+    const GIB: f64 = MIB * 1024.0;
+
+    let bytes_as_f64 = bytes as f64;
+    if bytes_as_f64 >= GIB {
+        format!("{:.2} GiB", bytes_as_f64 / GIB)
+    } else if bytes_as_f64 >= MIB {
+        format!("{:.2} MiB", bytes_as_f64 / MIB)
+    } else if bytes_as_f64 >= KIB {
+        format!("{:.2} KiB", bytes_as_f64 / KIB)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+fn truncate_for_error(value: &str, max_chars: usize) -> String {
+    let mut truncated = value.chars().take(max_chars).collect::<String>();
+    if value.chars().count() > max_chars {
+        truncated.push_str("...");
+    }
+    truncated
 }
 
 fn validate_presigned_put_url(presigned_put_url: &str, backup_kind: &str) -> Result<String, CommandError> {
@@ -636,5 +722,26 @@ mod tests {
 
         assert_eq!(metadata.format, CapiBackupFormat::ClusterctlMove);
         assert!(metadata.completed);
+    }
+
+    #[test]
+    fn should_format_archive_size_for_logs() {
+        assert_eq!(human_readable_bytes(512), "512 B");
+        assert_eq!(human_readable_bytes(2048), "2.00 KiB");
+        assert_eq!(human_readable_bytes(5 * 1024 * 1024), "5.00 MiB");
+    }
+
+    #[test]
+    fn should_truncate_long_upload_error_body() {
+        assert_eq!(truncate_for_error("abcdef", 3), "abc...");
+        assert_eq!(truncate_for_error("abc", 3), "abc");
+    }
+
+    #[test]
+    fn should_return_none_when_presigned_url_has_no_aws_expiration_parameters() {
+        let remaining =
+            presigned_put_url_remaining_seconds("https://example.com/path?signature=abc").expect("URL should parse");
+
+        assert_eq!(remaining, None);
     }
 }
