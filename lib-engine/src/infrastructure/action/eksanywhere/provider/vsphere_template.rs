@@ -1,6 +1,7 @@
 use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 use crate::infrastructure::action::InfraLogger;
+use serde_json::Value as JsonValue;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -73,10 +74,10 @@ pub(super) fn check_templates_with_govc(
 
     for (template, (_machine_configs, os_families, refs)) in templates_index {
         let mut planned_retag_tag: Option<String> = None;
-        let template_exists = is_template_present_for_inventory_path(template.as_str(), govc_env)?;
+        let template_exists = is_template_present_for_inventory_path(template.as_str(), govc_env, logger)?;
         if !template_exists {
-            let install_config = build_template_install_config(template.as_str(), &refs)?;
             if !install_missing {
+                let install_config = build_template_install_config(template.as_str(), &refs)?;
                 let ova_url = resolve_ova_url_for_template_with_logging(
                     cluster_config_path,
                     install_config.template_name.as_str(),
@@ -97,20 +98,15 @@ pub(super) fn check_templates_with_govc(
                 "⚠️ Template `{}` not found. Non dry-run mode: automatic OVA import will be attempted.",
                 super::template_label(template.as_str())
             ));
-            install_missing_template(
+            install_missing_template_and_verify(
                 cluster_config_path,
-                &install_config,
+                template.as_str(),
+                &refs,
                 expected_eksd_tag.as_deref(),
                 metadata,
                 govc_env,
                 logger,
             )?;
-
-            if !is_template_present_for_inventory_path(template.as_str(), govc_env)? {
-                return Err(CommandError::new_from_safe_message(format!(
-                    "Template `{template}` is still not available in vSphere after import attempt"
-                )));
-            }
         }
 
         let attached_tags = match run_govc_command(&["tags.attached.ls", "-r", template.as_str()], govc_env) {
@@ -131,6 +127,75 @@ pub(super) fn check_templates_with_govc(
                     super::template_label(template.as_str())
                 ));
                 continue;
+            }
+            Err(err) if install_missing && is_inventory_object_not_found_error(&err) => {
+                // `govc vm.info` resolved the template but `tags.attached.ls` reports it as not found.
+                // This can happen while vSphere tagging inventory is still catching up after an import,
+                // so retry the tag listing before deciding whether the template is actually missing.
+                logger.warn(format!(
+                    "⚠️ Template `{}` was reported by `govc vm.info` but cannot be resolved for tag inspection yet. \
+This is usually vSphere inventory lag; retrying tag inspection before taking action. Tag inspection error: {}",
+                    super::template_label(template.as_str()),
+                    err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                ));
+
+                match list_attached_tags_after_transient_not_found(template.as_str(), govc_env, logger) {
+                    Ok(tags) => tags,
+                    Err(retry_err) if is_inventory_object_not_found_error(&retry_err) => {
+                        let template_exists_after_retries =
+                            is_template_present_for_inventory_path(template.as_str(), govc_env, logger).map_err(
+                                |presence_error| {
+                                    CommandError::new(
+                                        format!(
+                                            "Unable to list tags attached to template `{template}` and failed to re-check template presence"
+                                        ),
+                                        Some(format!(
+                                            "Tag inspection error after retries: {}\nTemplate presence re-check error: {}",
+                                            retry_err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars),
+                                            presence_error.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                                        )),
+                                        None,
+                                    )
+                                },
+                            )?;
+
+                        if template_exists_after_retries {
+                            return Err(CommandError::new(
+                                format!(
+                                    "Template `{template}` is present in vSphere but cannot be resolved by vSphere tagging inventory after retries"
+                                ),
+                                Some(format!(
+                                    "Last tag inspection error: {}",
+                                    retry_err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                                )),
+                                None,
+                            ));
+                        }
+
+                        logger.warn(format!(
+                            "⚠️ Template `{}` no longer resolves with `govc vm.info` after tag inspection retries. Automatic OVA import will be attempted.",
+                            super::template_label(template.as_str())
+                        ));
+                        install_missing_template_and_verify(
+                            cluster_config_path,
+                            template.as_str(),
+                            &refs,
+                            expected_eksd_tag.as_deref(),
+                            metadata,
+                            govc_env,
+                            logger,
+                        )?;
+
+                        list_attached_tags_after_import_attempt(template.as_str(), govc_env)?
+                    }
+                    Err(retry_err) => {
+                        return Err(CommandError::new(
+                            format!("Unable to list tags attached to template `{template}`"),
+                            Some(retry_err.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+                            None,
+                        ));
+                    }
+                }
             }
             Err(e) => {
                 return Err(CommandError::new(
@@ -274,12 +339,57 @@ Each osFamily must use a dedicated template.",
     Ok(())
 }
 
+fn install_missing_template_and_verify(
+    cluster_config_path: &Path,
+    template: &str,
+    refs: &[VSphereTemplateRef],
+    expected_eksd_tag: Option<&str>,
+    metadata: &VSphereClusterMetadata,
+    govc_env: &[(String, String)],
+    logger: &impl InfraLogger,
+) -> Result<(), CommandError> {
+    let install_config = build_template_install_config(template, refs)?;
+    install_missing_template(
+        cluster_config_path,
+        &install_config,
+        expected_eksd_tag,
+        metadata,
+        govc_env,
+        logger,
+    )?;
+
+    if !is_template_present_for_inventory_path(template, govc_env, logger)? {
+        return Err(CommandError::new_from_safe_message(format!(
+            "Template `{template}` is still not available in vSphere after import attempt"
+        )));
+    }
+
+    Ok(())
+}
+
 fn is_template_present_for_inventory_path(
     template_path: &str,
     govc_env: &[(String, String)],
+    logger: &impl InfraLogger,
 ) -> Result<bool, CommandError> {
     match run_govc_command(&["vm.info", "-json", "-vm.ipath", template_path], govc_env) {
-        Ok(_) => Ok(true),
+        Ok(lines) => match template_presence_from_vm_info_output(template_path, &lines)? {
+            TemplatePresence::Present { count } => {
+                if count > 1 {
+                    logger.warn(format!(
+                        "⚠️ `govc vm.info -vm.ipath` returned {count} objects for template `{template_path}`. \
+Continuing because the inventory path resolved, but vSphere inventory may be ambiguous."
+                    ));
+                }
+                Ok(true)
+            }
+            TemplatePresence::Missing => {
+                logger.warn(format!(
+                    "⚠️ `govc vm.info -vm.ipath` returned no VirtualMachines entry for template `{template_path}`."
+                ));
+                Ok(false)
+            }
+        },
         Err(err) if is_inventory_object_not_found_error(&err) => Ok(false),
         Err(err) => Err(CommandError::new(
             format!("Unable to verify template presence for `{template_path}` with `govc vm.info -vm.ipath`"),
@@ -287,6 +397,123 @@ fn is_template_present_for_inventory_path(
             None,
         )),
     }
+}
+
+/// Number of times to retry `govc tags.attached.ls` when the template resolves via `govc vm.info`
+/// but tag inspection transiently reports it as not found (vSphere inventory eventual consistency
+/// right after an import). Kept small so a genuinely-missing template still reaches the OVA re-import
+/// fallback quickly.
+const TAGS_ATTACHED_LS_RETRY_ATTEMPTS: usize = 3;
+const TAGS_ATTACHED_LS_RETRY_DELAY: Duration = Duration::from_secs(5);
+
+/// Retry `govc tags.attached.ls` after the caller already observed a transient "not found" error,
+/// waiting `TAGS_ATTACHED_LS_RETRY_DELAY` before each attempt to give vSphere inventory time to settle.
+///
+/// Returns the attached tags on success. On a persistent not-found, returns the last not-found error
+/// so the caller can decide to fall back to an OVA re-import; any other error is returned immediately.
+fn list_attached_tags_after_transient_not_found(
+    template_path: &str,
+    govc_env: &[(String, String)],
+    logger: &impl InfraLogger,
+) -> Result<Vec<String>, CommandError> {
+    let mut last_error = None;
+    for attempt in 1..=TAGS_ATTACHED_LS_RETRY_ATTEMPTS {
+        logger.info(format!(
+            "⏳ Waiting {}s for vSphere inventory to settle, then retrying tag inspection for template `{}` (attempt {attempt}/{TAGS_ATTACHED_LS_RETRY_ATTEMPTS}).",
+            TAGS_ATTACHED_LS_RETRY_DELAY.as_secs(),
+            super::template_label(template_path),
+        ));
+        std::thread::sleep(TAGS_ATTACHED_LS_RETRY_DELAY);
+        match run_govc_command(&["tags.attached.ls", "-r", template_path], govc_env) {
+            Ok(tags) => return Ok(tags),
+            Err(err) if is_inventory_object_not_found_error(&err) => last_error = Some(err),
+            Err(err) => return Err(err),
+        }
+    }
+
+    Err(last_error.expect("retry loop records an error before exhausting attempts"))
+}
+
+fn list_attached_tags_after_import_attempt(
+    template_path: &str,
+    govc_env: &[(String, String)],
+) -> Result<Vec<String>, CommandError> {
+    run_govc_command(&["tags.attached.ls", "-r", template_path], govc_env).map_err(|retry_error| {
+        CommandError::new(
+            format!("Unable to list tags attached to template `{template_path}` after import attempt"),
+            Some(retry_error.message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)),
+            None,
+        )
+    })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TemplatePresence {
+    Present { count: usize },
+    Missing,
+}
+
+fn template_presence_from_vm_info_output(
+    template_path: &str,
+    output_lines: &[String],
+) -> Result<TemplatePresence, CommandError> {
+    let vm_info_json = output_lines.join("\n");
+    let vm_info: JsonValue = serde_json::from_str(vm_info_json.as_str()).map_err(|e| {
+        CommandError::new(
+            format!("Cannot parse `govc vm.info -json -vm.ipath` output for `{template_path}`"),
+            Some(format!("{e}. Output excerpt: {}", output_excerpt(vm_info_json.as_str()))),
+            None,
+        )
+    })?;
+
+    let Some(virtual_machines) = vm_info
+        .get("VirtualMachines")
+        .or_else(|| vm_info.get("virtualMachines"))
+    else {
+        return Err(CommandError::new(
+            format!("Cannot determine whether vSphere template `{template_path}` exists"),
+            Some(format!(
+                "`govc vm.info -json -vm.ipath` output does not contain `VirtualMachines` or `virtualMachines`. Output excerpt: {}",
+                output_excerpt(vm_info_json.as_str())
+            )),
+            None,
+        ));
+    };
+
+    match virtual_machines {
+        JsonValue::Null => Ok(TemplatePresence::Missing),
+        JsonValue::Array(vms) if vms.is_empty() => Ok(TemplatePresence::Missing),
+        JsonValue::Array(vms) => Ok(TemplatePresence::Present { count: vms.len() }),
+        other => Err(CommandError::new(
+            format!("Cannot determine whether vSphere template `{template_path}` exists"),
+            Some(format!(
+                "`VirtualMachines` field has unexpected JSON type `{}`. Output excerpt: {}",
+                json_type_name(other),
+                output_excerpt(vm_info_json.as_str())
+            )),
+            None,
+        )),
+    }
+}
+
+fn json_type_name(value: &JsonValue) -> &'static str {
+    match value {
+        JsonValue::Null => "null",
+        JsonValue::Bool(_) => "bool",
+        JsonValue::Number(_) => "number",
+        JsonValue::String(_) => "string",
+        JsonValue::Array(_) => "array",
+        JsonValue::Object(_) => "object",
+    }
+}
+
+fn output_excerpt(output: &str) -> String {
+    const MAX_EXCERPT_CHARS: usize = 500;
+    let mut excerpt = output.chars().take(MAX_EXCERPT_CHARS).collect::<String>();
+    if output.chars().count() > MAX_EXCERPT_CHARS {
+        excerpt.push_str("...");
+    }
+    excerpt
 }
 
 fn assess_template_retag_eligibility(
@@ -780,4 +1007,90 @@ fn template_folder_from_path(template_path: &str) -> Option<String> {
         .parent()
         .map(|parent| parent.to_string_lossy().to_string())
         .filter(|s| !s.is_empty())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{TemplatePresence, template_presence_from_vm_info_output};
+
+    fn vm_info_output(json: &str) -> Vec<String> {
+        json.lines().map(str::to_string).collect()
+    }
+
+    #[test]
+    fn should_treat_lowercase_null_virtual_machines_as_missing_template() {
+        let presence = template_presence_from_vm_info_output(
+            "/dc/vm/Templates/missing-template",
+            &vm_info_output(r#"{"virtualMachines": null}"#),
+        )
+        .expect("vm.info output should parse");
+
+        assert_eq!(presence, TemplatePresence::Missing);
+    }
+
+    #[test]
+    fn should_treat_empty_virtual_machines_array_as_missing_template() {
+        let presence = template_presence_from_vm_info_output(
+            "/dc/vm/Templates/missing-template",
+            &vm_info_output(r#"{"VirtualMachines": []}"#),
+        )
+        .expect("vm.info output should parse");
+
+        assert_eq!(presence, TemplatePresence::Missing);
+    }
+
+    #[test]
+    fn should_treat_non_empty_pascalcase_virtual_machines_array_as_present_template() {
+        let presence = template_presence_from_vm_info_output(
+            "/dc/vm/Templates/template-a",
+            &vm_info_output(
+                r#"{
+  "VirtualMachines": [
+    {
+      "Self": {
+        "Type": "VirtualMachine",
+        "Value": "vm-42"
+      }
+    }
+  ]
+}"#,
+            ),
+        )
+        .expect("vm.info output should parse");
+
+        assert_eq!(presence, TemplatePresence::Present { count: 1 });
+    }
+
+    #[test]
+    fn should_treat_non_empty_lowercase_virtual_machines_array_as_present_template() {
+        let presence = template_presence_from_vm_info_output(
+            "/dc/vm/Templates/template-a",
+            &vm_info_output(
+                r#"{
+  "virtualMachines": [
+    {
+      "Self": {
+        "Type": "VirtualMachine",
+        "Value": "vm-42"
+      }
+    }
+  ]
+}"#,
+            ),
+        )
+        .expect("vm.info output should parse");
+
+        assert_eq!(presence, TemplatePresence::Present { count: 1 });
+    }
+
+    #[test]
+    fn should_reject_vm_info_without_virtual_machines_field() {
+        let error = template_presence_from_vm_info_output(
+            "/dc/vm/Templates/template-a",
+            &vm_info_output(r#"{"kind": "unexpected"}"#),
+        )
+        .expect_err("vm.info output should be rejected");
+
+        assert!(error.to_string().contains("Cannot determine whether vSphere template"));
+    }
 }
