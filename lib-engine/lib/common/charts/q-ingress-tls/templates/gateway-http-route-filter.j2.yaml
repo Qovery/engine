@@ -1,0 +1,39 @@
+{%- if k8s_deploy_api_gateway == true %}
+{% for namespace_key, gateway_http_routes in gateway_http_routes_per_namespace %}
+{%- if gateway_http_routes|length >= 1 %}
+{%- set num_routes = gateway_http_routes|length %}
+{%- for route in gateway_http_routes %}
+{%- set route_index = loop.index0 %}
+{%- for rule in route.rules %}
+{%- if rule.path_rewrite %}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: {{ sanitized_name }}-rewrite-{{ route_index }}-{{ loop.index0 }}
+  namespace: {{ namespace_key }}
+  labels:
+    qovery.com/service-id: {{ long_id }}
+    qovery.com/service-type: "router"
+    qovery.com/router-name: {{ sanitized_name }}
+    qovery.com/associated-service-id: {{ associated_service_long_id }}
+    qovery.com/associated-service-type: {{ associated_service_type }}
+    qovery.com/environment-id: {{ environment_long_id }}
+    qovery.com/project-id: {{ project_long_id }}
+    {%- for key, value in labels_group.common %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+spec:
+  urlRewrite:
+    path:
+      type: ReplaceRegexMatch
+      replaceRegexMatch:
+        pattern: '{{ rule.path }}'
+        substitution: '{{ rule.path_rewrite }}'
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
