@@ -87,12 +87,12 @@ spec:
             type: {{ rule.path_type }}
             value: "{{ rule.path }}"
       filters:
-       {%- if rule.path_type == "PathPrefix" and rule.path_rewrite is defined and rule.path_rewrite | trim %}
-        - type: URLRewrite
-          urlRewrite:
-            path:
-              type: ReplacePrefixMatch
-              replacePrefixMatch: "{{ rule.path_rewrite | trim }}"
+       {%- if rule.path_rewrite %}
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: {{ sanitized_name }}-rewrite-{{ route_index }}-{{ loop.index0 }}
        {%- endif %}
        {%- if advanced_settings.network_gateway_api_add_headers %}
         # Add custom response headers

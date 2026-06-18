@@ -705,15 +705,11 @@ fn to_gateway_http_route_rule_signatures(
     headers_signature: &GatewayHttpRouteHeadersSignature,
 ) -> Vec<GatewayHttpRouteRuleSignature> {
     let mut signatures: BTreeSet<GatewayHttpRouteRuleSignature> = BTreeSet::new();
-    let normalized_path_rewrite = if host.path_type == HostPathType::PathPrefix {
-        host.path_rewrite
-            .as_deref()
-            .map(str::trim)
-            .filter(|path_rewrite| !path_rewrite.is_empty())
-            .map(str::to_string)
-    } else {
-        None
-    };
+    let normalized_path_rewrite = host
+        .path_rewrite
+        .as_deref()
+        .filter(|path_rewrite| !path_rewrite.is_empty())
+        .map(str::to_string);
 
     signatures.insert(GatewayHttpRouteRuleSignature {
         service_name: host.service_name.clone(),
@@ -751,7 +747,6 @@ fn to_host_data_template(
         custom_domains,
         cluster_domain,
         environment_namespace,
-        false,
     )
 }
 
@@ -770,7 +765,6 @@ fn to_gateway_host_data_template(
         custom_domains,
         cluster_domain,
         environment_namespace,
-        true,
     )
 }
 
@@ -781,7 +775,6 @@ fn to_host_data_template_with_rewrite_policy(
     custom_domains: &[CustomDomain],
     cluster_domain: &str,
     environment_namespace: &str,
-    gateway_api_rewrite_restrictions: bool,
 ) -> BTreeMap<String, Vec<HostDataTemplate>> {
     if ports.is_empty() {
         return BTreeMap::new();
@@ -791,13 +784,7 @@ fn to_host_data_template_with_rewrite_policy(
     let to_path_type = |port: &Port| -> HostPathType {
         HostPathType::from_path(port.public_path().unwrap_or_default(), HostPathType::PathPrefix)
     };
-    let to_path_rewrite = |port: &Port| -> Option<String> {
-        if gateway_api_rewrite_restrictions && to_path_type(port) != HostPathType::PathPrefix {
-            // Gateway API only allows ReplacePrefixMatch rewrites with PathPrefix matches.
-            return None;
-        }
-        port.public_path_rewrite().map(|p| p.to_string())
-    };
+    let to_path_rewrite = |port: &Port| -> Option<String> { port.public_path_rewrite().map(|p| p.to_string()) };
     let to_path_weight = |_port: &Port| -> u32 { 1 };
     let deduplicated_custom_domains = deduplicate_custom_domains(custom_domains);
     let ports_by_namespace = get_ports_by_namespace(ports);
@@ -1495,10 +1482,7 @@ mod tests {
             .find(|rule| rule.path == "/api/.*")
             .expect("regex rule should exist");
         assert_eq!(regex_rule.path_type, HostPathType::RegularExpression);
-        assert!(
-            regex_rule.path_rewrite.is_none(),
-            "regex/exact path rules must not render ReplacePrefixMatch rewrites"
-        );
+        assert!(matches!(&regex_rule.path_rewrite, Some(path_rewrite) if path_rewrite == "/rewritten"),);
     }
 
     #[test]
@@ -1883,7 +1867,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_gateway_host_template_drops_path_rewrite_for_regex_paths() {
+    pub fn test_gateway_host_template_path_rewrite() {
         let regex_port_with_path_rewrite = Port {
             long_id: Default::default(),
             name: "http-regex".to_string(),
@@ -1894,7 +1878,7 @@ mod tests {
             protocol: PortProtocol::HTTP {
                 public: Some(HttpPublicPortConfig {
                     path: "/(.*)".to_string(),
-                    path_rewrite: Some("/public/$1".to_string()),
+                    path_rewrite: Some("/public/\\1".to_string()),
                 }),
             },
         };
@@ -1916,7 +1900,7 @@ mod tests {
             service_name: "srv".to_string(),
             service_port: 8080,
             path: "/(.*)".to_string(),
-            path_rewrite: None,
+            path_rewrite: Some("/public/\\1".to_string()),
             path_type: HostPathType::RegularExpression,
             weight: 1,
         }));

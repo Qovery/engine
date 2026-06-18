@@ -36,7 +36,7 @@ metadata:
     nginx.ingress.kubernetes.io/use-regex: "{{ http_hosts_has_regex_path }}"
     {%- endif %}
     {%- if path_rewrite != "" %}
-    nginx.ingress.kubernetes.io/rewrite-target: "{{ path_rewrite }}"
+    nginx.ingress.kubernetes.io/rewrite-target: '{{ path_rewrite }}'
     {%- endif %}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "{{ advanced_settings.network_ingress_force_ssl_redirect }}"
