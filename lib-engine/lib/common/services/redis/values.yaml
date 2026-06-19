@@ -1,0 +1,58 @@
+# Default values for the Qovery Redis 8 chart (official redis image, non-Bitnami).
+# The per-cloud `qovery-values.j2.yaml` overlays render the real values at deploy time.
+
+image:
+  registry: ""
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+## Partially/fully override the generated resource names.
+nameOverride: ""
+## fullnameOverride is set to the Qovery `sanitized_name` (== kube_name); the StatefulSet, headless
+## service and PVCs derive from it, and the engine sweeps PVCs by `app=<fullname>` on delete.
+fullnameOverride: ""
+
+## Labels applied to every resource. Qovery injects `qovery.com/service-id` here, which is the
+## label selector the engine uses to locate the workload (`qovery.com/service-id=<long_id>`).
+commonLabels: {}
+
+## Access control. The official redis image has no user concept; access is gated by `requirepass`
+## only (no username/database, unlike PostgreSQL).
+auth:
+  password: ""
+
+## Data directory. The official redis image stores RDB/AOF files under /data; AOF is enabled for
+## durable persistence across restarts.
+persistence:
+  mountPath: /data
+  storageClass: ""
+  size: 10Gi
+  labels: {}
+  annotations: {}
+
+service:
+  ## Primary service name == Qovery `service_name` (fqdn_id), matching the Bitnami chart topology.
+  name: ""
+  type: ClusterIP
+  port: 6379
+  annotations: {}
+  headless:
+    annotations: {}
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+## Scheduling
+affinity: {}
+tolerations: []
+
+podAnnotations: {}
+statefulsetAnnotations: {}
+
+terminationGracePeriodSeconds: 30

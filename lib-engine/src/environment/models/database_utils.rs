@@ -90,21 +90,52 @@ pub fn is_allowed_containered_mongodb_version(requested_version: &VersionsNumber
     Ok(())
 }
 
-pub fn is_allowed_containered_redis_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
-    // https://hub.docker.com/r/bitnami/redis/tags?page=1&ordering=last_updated
+// ---------------------------------------------------------------------------
+// Container Redis families.
+//
+// Two families coexist:
+//   * majors <= 7 run on the legacy Bitnami chart/image (`pub-mirror-redis`, tag = major,
+//     e.g. `7`). https://hub.docker.com/r/bitnami/redis/tags
+//   * majors >= 8 run on the official redis image (`pub-mirror-redis`) via the
+//     Qovery-authored `redis` chart.
+//
+// As with PostgreSQL, the exact image *tag* for the official family is owned by q-core, which sends
+// it as the database `version` (e.g. `8.8-trixie`); the engine uses that string verbatim as the tag.
+// The engine only derives the family (and therefore the repository/chart) from the major, so
+// onboarding a future major needs no engine change — only q-core's version matrix + tag map.
+// ---------------------------------------------------------------------------
 
-    // Allow only major 5, 6 and 7
-    if !&["5", "6", "7"].contains(&requested_version.major.as_str()) {
-        return Err(DatabaseError::UnsupportedDatabaseVersion {
-            database_type: DatabaseType::Redis,
-            database_version: Arc::from(requested_version.to_string()),
-        });
+/// Container Redis majors served by the legacy Bitnami chart/image.
+pub const BITNAMI_REDIS_MAJORS: &[&str] = &["5", "6", "7"];
+
+/// First Redis major served by the official redis image (non-Bitnami).
+pub const OFFICIAL_REDIS_MIN_MAJOR: u32 = 8;
+
+/// Whether a Redis major is served by the legacy Bitnami chart/image.
+pub fn is_bitnami_redis_major(major: &str) -> bool {
+    BITNAMI_REDIS_MAJORS.contains(&major)
+}
+
+/// Whether a Redis major is served by the official-image chart (q-core supplies the tag).
+pub fn is_official_redis_major(major: &str) -> bool {
+    major
+        .parse::<u32>()
+        .map(|m| m >= OFFICIAL_REDIS_MIN_MAJOR)
+        .unwrap_or(false)
+}
+
+pub fn is_allowed_containered_redis_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
+    let major = requested_version.major.as_str();
+    // Allowed iff the major is a known Bitnami major or belongs to the official family (>= 8).
+    // q-core is the authoritative gate (its version matrix); the engine only sanity-checks the family.
+    if is_bitnami_redis_major(major) || is_official_redis_major(major) {
+        return Ok(());
     }
 
-    // If we want to filter out some versions, we should filter those out here
-    // <-
-
-    Ok(())
+    Err(DatabaseError::UnsupportedDatabaseVersion {
+        database_type: DatabaseType::Redis,
+        database_version: Arc::from(requested_version.to_string()),
+    })
 }
 
 #[cfg(test)]
@@ -113,7 +144,7 @@ mod tests {
     use crate::environment::models::database_utils::{
         is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
         is_allowed_containered_postgres_version, is_allowed_containered_redis_version, is_bitnami_postgres_major,
-        is_official_postgres_major,
+        is_bitnami_redis_major, is_official_postgres_major, is_official_redis_major,
     };
     use crate::environment::models::types::VersionsNumberBuilder;
     use crate::infrastructure::models::cloud_provider::service::DatabaseType;
@@ -197,6 +228,14 @@ mod tests {
             is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(7).minor(5).patch(7).build())
                 .is_ok()
         );
+
+        // v8 (non-Bitnami, official redis image)
+        assert!(is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(8).build()).is_ok());
+        assert!(is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(8).minor(8).build()).is_ok());
+        assert!(
+            is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(8).minor(8).patch(0).build())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -210,13 +249,24 @@ mod tests {
                 database_version: Arc::from("4"),
             }
         );
-        assert_eq!(
-            is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(8).build()).unwrap_err(),
-            DatabaseError::UnsupportedDatabaseVersion {
-                database_type: DatabaseType::Redis,
-                database_version: Arc::from("8"),
-            }
-        );
+    }
+
+    #[test]
+    fn test_redis_version_families() {
+        // Bitnami family (5-7): served by the Bitnami chart/image.
+        assert!(is_bitnami_redis_major("7"));
+        assert!(!is_official_redis_major("7"));
+
+        // Official family (>= 8): q-core supplies the exact image tag; the engine just recognises
+        // the family. No per-major engine list, so future majors (9, 10, …) are already accepted.
+        assert!(!is_bitnami_redis_major("8"));
+        assert!(is_official_redis_major("8"));
+        assert!(is_official_redis_major("9"));
+        assert!(is_allowed_containered_redis_version(&VersionsNumberBuilder::new().major(9).build()).is_ok());
+
+        // Below the supported range stays rejected.
+        assert!(!is_bitnami_redis_major("4"));
+        assert!(!is_official_redis_major("4"));
     }
 
     #[test]

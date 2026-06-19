@@ -740,7 +740,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name,
-                app_commit: "a94b0ac6760f2b8b24579757bc115cc5a30ea66e".to_string(),
+                app_commit: "34afe5dcc4a5d2c84bafba6c40e5c887ed1e5d7f".to_string(),
                 app_env_vars: btreemap! {
                 "IS_ELASTICCACHE".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED && database_username == "default").to_string()), is_secret:false},
                 "REDIS_HOST".to_string()      => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

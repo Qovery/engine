@@ -1,0 +1,108 @@
+image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
+  tag: "{{ version }}"
+
+# fullnameOverride == Qovery sanitized_name (kube_name): StatefulSet, headless service and PVCs
+# derive from it, and the engine sweeps PVCs by `app=<sanitized_name>` on delete.
+fullnameOverride: "{{ sanitized_name }}"
+
+commonLabels:
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+# The official redis image has no user concept; access is gated by requirepass only.
+auth:
+  password: "{{ database_password }}"
+
+service:
+  # Primary service name == Qovery service_name (fqdn_id), matching the previous chart topology.
+  name: "{{ service_name }}"
+  port: {{ database_port }}
+  type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+  {% if publicly_accessible -%}
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "{{ aws_load_balancer_type }}"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    {%- if aws_load_balancer_type == "external" %}
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    {%- endif %}
+    {%- for annotations in additional_annotations %}
+    {{ annotations.key }}: |-
+       {{ annotations.value }}
+    {%- endfor %}
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  {% endif %}
+  headless:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+
+persistence:
+  storageClass: "{{ database_disk_type }}"
+  size: "{{ database_disk_size_in_gib }}Gi"
+  annotations:
+    ownerId: "{{ owner_id }}"
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseName: "{{ sanitized_name }}"
+
+resources:
+  requests:
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
+  limits:
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+statefulsetAnnotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+{%- if node_affinity %}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{%- endif %}
+
+tolerations:
+{%- for key, value in toleration %}
+  - key: "{{ key }}"
+    operator: Exists
+    effect: "{{ value }}"
+{%- endfor %}

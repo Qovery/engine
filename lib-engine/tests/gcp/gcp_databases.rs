@@ -933,3 +933,17 @@ fn private_redis_v7_deploy_a_working_dev_environment() {
 fn public_redis_v7_deploy_a_working_dev_environment() {
     test_redis_configuration("7.0", function_name!(), CONTAINER, true);
 }
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn private_redis_v8_deploy_a_working_dev_environment() {
+    test_redis_configuration("8.8-trixie", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-gcp-self-hosted")]
+#[named]
+#[test]
+fn public_redis_v8_deploy_a_working_dev_environment() {
+    test_redis_configuration("8.8-trixie", function_name!(), CONTAINER, true);
+}
