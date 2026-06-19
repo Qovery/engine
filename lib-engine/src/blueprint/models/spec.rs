@@ -123,9 +123,7 @@ impl ResolvedBlueprintSpec {
                     timeout_sec,
                     outputs: outputs.clone(),
                     job_resources,
-                    engine_version: spec
-                        .engine_version
-                        .clone()
+                    engine_version: resolve_engine_version(spec, overrides)
                         .ok_or(BlueprintError::MissingEngineVersion)?,
                 })
             }
@@ -142,9 +140,7 @@ impl ResolvedBlueprintSpec {
                     timeout_sec,
                     outputs: outputs.clone(),
                     job_resources,
-                    engine_version: spec
-                        .engine_version
-                        .clone()
+                    engine_version: resolve_engine_version(spec, overrides)
                         .ok_or(BlueprintError::MissingEngineVersion)?,
                 })
             }
@@ -163,6 +159,17 @@ impl ResolvedBlueprintSpec {
         };
         Ok(resolved)
     }
+}
+
+/// Resolve engine_version: spec_overrides.engine_version > qbm.spec.engine_version.
+fn resolve_engine_version(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrides>) -> Option<String> {
+    overrides
+        .as_ref()
+        .and_then(|o| o.get("engine_version"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .or_else(|| spec.engine_version.clone())
 }
 
 /// Resolve credential mode: spec_overrides.credentials > qbm.spec.credentials.default > Cluster
@@ -201,7 +208,7 @@ fn resolve_backend(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrid
         .and_then(|v| v.as_str())
     {
         match mode_str {
-            "blueprint" => BackendMode::Blueprint,
+            "user_provided" => BackendMode::Blueprint,
             _ => BackendMode::Qovery,
         }
     } else {
@@ -213,7 +220,7 @@ fn resolve_backend(spec: &BlueprintSpec, overrides: &Option<BlueprintSpecOverrid
         BackendMode::Blueprint => {
             let (backend_type, config) = spec
                 .backend
-                .blueprint
+                .user_provided
                 .as_ref()
                 .map(|c| (c.backend_type.clone(), c.config.clone()))
                 .unwrap_or_else(|| ("local".to_string(), HashMap::new()));
@@ -395,6 +402,22 @@ mod tests {
     // -- Terraform --
 
     #[test]
+    fn engine_version_override_wins_over_qbm() {
+        let mut overrides = HashMap::new();
+        overrides.insert("engine_version".into(), serde_json::json!("1.5.7"));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
+        assert_eq!(tf.engine_version, "1.5.7");
+    }
+
+    #[test]
+    fn engine_version_falls_back_to_qbm_when_override_empty_or_absent() {
+        let mut overrides = HashMap::new();
+        overrides.insert("engine_version".into(), serde_json::json!(""));
+        let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
+        assert_eq!(tf.engine_version, "1.9.7");
+    }
+
+    #[test]
     fn tf_uses_qbm_values_when_no_overrides() {
         let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &None));
         assert_eq!(tf.flavor, TerraformFlavor::Terraform);
@@ -515,7 +538,7 @@ mod tests {
     fn backend_override_to_blueprint_uses_qbm_config() {
         // QBM has no blueprint backend config (default spec) → falls back to local backend
         let mut overrides = HashMap::new();
-        overrides.insert("backend".into(), serde_json::json!("blueprint"));
+        overrides.insert("backend".into(), serde_json::json!("user_provided"));
         let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(tf_spec()), &Some(overrides)));
         assert_eq!(
             tf.backend,
@@ -531,7 +554,7 @@ mod tests {
         use crate::blueprint::models::qovery_blueprint_manifest::BlueprintBackendConfig;
 
         let mut spec = tf_spec();
-        spec.backend.blueprint = Some(BlueprintBackendConfig {
+        spec.backend.user_provided = Some(BlueprintBackendConfig {
             backend_type: "s3".to_string(),
             config: HashMap::from([
                 ("bucket".to_string(), "my-state-bucket".to_string()),
@@ -540,7 +563,7 @@ mod tests {
         });
 
         let mut overrides = HashMap::new();
-        overrides.insert("backend".into(), serde_json::json!("blueprint"));
+        overrides.insert("backend".into(), serde_json::json!("user_provided"));
         let tf = expect_terraform(ResolvedBlueprintSpec::resolve(&manifest(spec), &Some(overrides)));
         match &tf.backend {
             ResolvedBackend::Blueprint { backend_type, config } => {
