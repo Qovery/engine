@@ -1,0 +1,15 @@
+apiVersion: v2
+name: redis
+description: Qovery-authored Redis chart based on the official redis image (non-Bitnami). Serves Redis 8 and later majors.
+type: application
+# Chart identity stays `redis` (matches the Helm release name `redis-<id>`).
+# This is a brand-new chart, versioned independently from the Bitnami chart it replaces from Redis 8 onward.
+version: 0.1.0
+# appVersion intentionally omitted: this chart serves Redis 8 and every later major; the image tag
+# is selected per database version by the engine, not pinned in the chart.
+keywords:
+  - redis
+  - keyvalue
+  - database
+sources:
+  - https://github.com/docker-library/redis

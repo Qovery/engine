@@ -3,6 +3,7 @@ use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::database_utils::{
     OFFICIAL_POSTGRES_IMAGE_REPOSITORY, is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
     is_allowed_containered_postgres_version, is_allowed_containered_redis_version, is_bitnami_postgres_major,
+    is_bitnami_redis_major,
 };
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
 use crate::environment::models::types::{CloudProvider, ToTeraContext, VersionsNumber};
@@ -392,15 +393,23 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         matches!(T::db_type(), service::DatabaseType::PostgreSQL) && is_bitnami_postgres_major(&self.version.major)
     }
 
+    /// Whether this Redis is served by the legacy Bitnami chart. Majors up to 7 stay on Bitnami;
+    /// 8 and every later major use the Qovery-authored chart on the official redis image. Backed by
+    /// the version registry in `database_utils` (single source of truth).
+    pub(crate) fn is_bitnami_redis(&self) -> bool {
+        matches!(T::db_type(), service::DatabaseType::Redis) && is_bitnami_redis_major(&self.version.major)
+    }
+
     /// On-disk folder name for the chart and its value overlays. PostgreSQL 10-17 use the Bitnami
-    /// chart under `postgresql-bitnami`; 18+ use the official-image `postgresql` chart. Redis lives
-    /// under `redis-bitnami` (renamed in prep for the non-Bitnami Redis 8 chart). The Helm release
-    /// name and chart identity stay unchanged (`postgresql`, `redis`) for all of them.
+    /// chart under `postgresql-bitnami`; 18+ use the official-image `postgresql` chart. Likewise Redis
+    /// 5-7 use `redis-bitnami` and 8+ use the official-image `redis` chart. The Helm release name and
+    /// chart identity stay unchanged (`postgresql`, `redis`) for all of them.
     fn chart_folder_name(&self) -> &'static str {
         match T::db_type() {
             service::DatabaseType::PostgreSQL if self.is_bitnami_postgres() => "postgresql-bitnami",
             service::DatabaseType::PostgreSQL => "postgresql",
-            service::DatabaseType::Redis => "redis-bitnami",
+            service::DatabaseType::Redis if self.is_bitnami_redis() => "redis-bitnami",
+            service::DatabaseType::Redis => "redis",
             _ => T::lib_directory_name(),
         }
     }
@@ -440,9 +449,11 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         // repository and image location
         let source_registry = QoverySourceRegistry::from(&target.cloud_provider.kind());
 
-        // PostgreSQL 18+ is pulled from the official postgres image (non-Bitnami) instead of the
-        // Bitnami-mirrored `pub-mirror-postgresql` used by 10-17. The engine only chooses the
-        // repository (by family); the exact tag comes from q-core via `version` (see below).
+        // PostgreSQL 18+ is pulled from the official postgres image (`pub-mirror-postgres`, non-Bitnami)
+        // instead of the Bitnami-mirrored `pub-mirror-postgresql` used by 10-17. Redis 8+ stays on the
+        // same `pub-mirror-redis` mirror as the Bitnami family — only its chart and image tag differ —
+        // so it needs no repository override here. The engine only chooses the repository (by family);
+        // the exact tag comes from q-core via `version`.
         let is_official_postgres =
             matches!(T::db_type(), service::DatabaseType::PostgreSQL) && !self.is_bitnami_postgres();
         let db_image_name = if is_official_postgres {

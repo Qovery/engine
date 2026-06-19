@@ -739,15 +739,16 @@ where
                 k8s_selector: Some(self.kube_label_selector()),
                 values_files: vec![format!("{}/qovery-values.yaml", self.workspace_directory())],
                 // need to perform reinstall (but keep PVC) to update the statefulset.
-                // The threshold compares the installed *Helm chart* version, not the PG version.
-                // PG18 ships the Qovery-authored `postgresql-18` chart (version 0.1.0); comparing it
-                // against the Bitnami 12.5.1 threshold would force a reinstall on every redeploy, so
-                // it opts out with None.
+                // The threshold compares the installed *Helm chart* version, not the DB version.
+                // The Qovery-authored official-image charts (PostgreSQL 18+, Redis 8+) ship as version
+                // 0.1.0; comparing that against the Bitnami thresholds would force a reinstall on every
+                // redeploy, so the official families opt out with None.
                 reinstall_chart_if_installed_version_is_below_than: match T::db_type() {
                     service::DatabaseType::PostgreSQL if !self.is_bitnami_postgres() => None,
                     service::DatabaseType::PostgreSQL => Some(Version::new(12, 5, 1)),
                     service::DatabaseType::MongoDB => Some(Version::new(13, 13, 1)),
                     service::DatabaseType::MySQL => Some(Version::new(9, 10, 1)),
+                    service::DatabaseType::Redis if !self.is_bitnami_redis() => None,
                     service::DatabaseType::Redis => Some(Version::new(17, 11, 4)),
                 },
                 ..Default::default()

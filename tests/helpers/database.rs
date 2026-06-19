@@ -860,6 +860,13 @@ pub fn test_db(
                 // major while the DB itself still deploys with the full tag. For majors <= 17 the version
                 // already is the major, so this is a no-op there.
                 DatabaseKind::Postgresql => Some(format!("Dockerfile-{}", sem_ver.to_major_version_string())),
+                // Redis 8+ carries the full official image tag as `version` (e.g. `8.8-trixie`), which
+                // doesn't match a Dockerfile name. The test app ships `Dockerfile-8.8` (official Redis 8
+                // client) for this family; the DB itself still deploys with the full tag. Majors <= 7
+                // keep `Dockerfile-<version>`.
+                DatabaseKind::Redis if sem_ver.to_major_version_string().parse::<u32>().is_ok_and(|m| m >= 8) => {
+                    Some("Dockerfile-8.8".to_string())
+                }
                 _ => Some(format!("Dockerfile-{version}")),
             };
             app.command_args = vec![];
