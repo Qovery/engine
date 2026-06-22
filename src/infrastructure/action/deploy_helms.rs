@@ -1,7 +1,7 @@
 use super::InfraLogger;
 use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::{Helm, HelmListCache};
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::{EventDetails, InfrastructureDiffType};
 use crate::helm::{HelmAction, HelmChart, HelmChartError};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
@@ -186,9 +186,16 @@ pub(super) trait HelmInfraResources {
         infra_ctx: &InfrastructureContext,
         logger: &impl InfraLogger,
     ) -> Result<(), Box<EngineError>> {
+        let event_details = &self.charts_context().event_details;
         let chart_configs = self.new_chart_prerequisite(infra_ctx);
         logger.info("✔️ Ensuring helm charts configurations are valid");
-        self.validate_helm_charts_info(infra_ctx, &chart_configs)?;
+
+        if let Err(err) = self.validate_helm_charts_info(infra_ctx, &chart_configs) {
+            let engine_error = *err.clone();
+            let safe_message = &engine_error.message(ErrorMessageVerbosity::SafeOnly);
+            logger.error(engine_error, Some(safe_message));
+            return Err(err);
+        }
 
         logger.info("⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓⚓");
         logger.info("⚓ Preparing Helm files on disk");
@@ -198,7 +205,6 @@ pub(super) trait HelmInfraResources {
 
         self.charts_context().prepare_helm_files_on_disk()?;
 
-        let ev_details = &self.charts_context().event_details;
         let mut charts_to_deploy = self.gen_charts_to_deploy(infra_ctx, chart_configs)?;
         let chart_count = enable_engine_post_renderer_for_all_charts(&mut charts_to_deploy);
         logger.info(format!(
@@ -218,7 +224,7 @@ pub(super) trait HelmInfraResources {
             .map(|(l, r)| (l.as_str(), r.as_str()))
             .collect_vec();
         let helm = Helm::new(Some(infra_ctx.kubernetes().kubeconfig_local_file_path()), &envs)
-            .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e.into())))?;
+            .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e.into())))?;
 
         let list_cache = HelmListCache::new();
 
@@ -271,14 +277,14 @@ pub(super) trait HelmInfraResources {
                 &retry_config,
                 &CommandKiller::never(),
             )
-            .map_err(|e| Box::new(EngineError::new_helm_chart_error(ev_details.clone(), e)))?;
+            .map_err(|e| Box::new(EngineError::new_helm_chart_error(event_details.clone(), e)))?;
 
             // Check if any charts failed
             if !result.is_success()
                 && let Some(first_err) = result.first_error()
             {
                 return Err(Box::new(EngineError::new_helm_chart_error(
-                    ev_details.clone(),
+                    event_details.clone(),
                     first_err.clone(),
                 )));
             }

@@ -1700,7 +1700,7 @@ mod tests {
 
         fn warn(&self, _message: impl Into<EventMessage>) {}
 
-        fn error(self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
+        fn error(&self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
 
         fn diff(&self, _from: InfrastructureDiffType, _message: String) {}
     }
