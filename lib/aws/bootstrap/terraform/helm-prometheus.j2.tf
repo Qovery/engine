@@ -109,7 +109,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "prometheus_bucket
       kms_master_key_id = aws_kms_key.s3_metrics_kms_encryption.arn
       sse_algorithm = "aws:kms"
     }
-    bucket_key_enabled = false
+    bucket_key_enabled = true
   }
 }
 
@@ -212,4 +212,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "prometheus_lifecycle" {
       days_after_initiation = 1
     }
   }
+}
+
+resource "aws_s3_bucket_policy" "prometheus_bucket_policy" {
+  bucket = aws_s3_bucket.prometheus_bucket.id
+  policy = <<POLICY
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyInsecureTransport",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "${aws_s3_bucket.prometheus_bucket.arn}",
+                "${aws_s3_bucket.prometheus_bucket.arn}/*"
+            ],
+            "Condition": {
+                "Bool": {
+                    "aws:SecureTransport": "false"
+                }
+            }
+        }
+    ]
+}
+POLICY
 }

@@ -84,7 +84,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "lok_bucket_enrypt
       kms_master_key_id = aws_kms_key.s3_logs_kms_encryption.arn
       sse_algorithm = "aws:kms"
     }
-    bucket_key_enabled = false
+    bucket_key_enabled = true
   }
 }
 
@@ -187,4 +187,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "loki_lifecycle" {
       days_after_initiation = 1
     }
   }
+}
+
+resource "aws_s3_bucket_policy" "loki_bucket_policy" {
+  bucket = aws_s3_bucket.loki_bucket.id
+  policy = <<POLICY
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "DenyInsecureTransport",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "${aws_s3_bucket.loki_bucket.arn}",
+                "${aws_s3_bucket.loki_bucket.arn}/*"
+            ],
+            "Condition": {
+                "Bool": {
+                    "aws:SecureTransport": "false"
+                }
+            }
+        }
+    ]
+}
+POLICY
 }
