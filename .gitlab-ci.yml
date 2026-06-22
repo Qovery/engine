@@ -9,6 +9,12 @@ variables:
   # Make Cargo cache paths predictable inside the project workspace
   CARGO_HOME: "$CI_PROJECT_DIR/.cargo"
 
+workflow:
+  rules:
+    - if: '$CI_MERGE_REQUEST_DRAFT == "true"'
+      when: never
+    - when: always
+
 default:
   interruptible: true
   retry:
@@ -402,13 +408,10 @@ azure-infra:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 azure-infra-upgrade:
   stage: tests-azure
@@ -416,20 +419,16 @@ azure-infra-upgrade:
     [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node]
   retry: 0
   timeout: 4 hours
-  when: manual
   script:
     - ./helper.sh azure_infra_upgrade
   tags:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: manual
+    - when: never
 
 azure-managed-services:
   stage: tests-azure
@@ -443,13 +442,10 @@ azure-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 azure-self-hosted:
   stage: tests-azure
@@ -463,13 +459,10 @@ azure-self-hosted:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 azure-whole-enchilada:
   stage: tests-azure
@@ -483,15 +476,10 @@ azure-whole-enchilada:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  when: manual
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/ && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: manual
+    - when: never
 
 aws-infra:
   stage: tests-aws
@@ -505,13 +493,10 @@ aws-infra:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 aws-infra-arm:
   stage: tests-aws
@@ -525,13 +510,10 @@ aws-infra-arm:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 aws-infra-karpenter:
   stage: tests-aws
@@ -545,13 +527,10 @@ aws-infra-karpenter:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 aws-infra-nat-gateway:
   stage: tests-aws
@@ -565,13 +544,10 @@ aws-infra-nat-gateway:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 aws-infra-upgrade:
   stage: tests-aws
@@ -579,20 +555,16 @@ aws-infra-upgrade:
     [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node]
   retry: 0
   timeout: 4 hours
-  when: manual
   script:
     - ./helper.sh aws_infra_upgrade
   tags:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: manual
+    - when: never
 
 aws-managed-services:
   stage: tests-aws
@@ -606,13 +578,10 @@ aws-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 aws-self-hosted:
   stage: tests-aws
@@ -626,13 +595,10 @@ aws-self-hosted:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 aws-whole-enchilada:
   stage: tests-aws
@@ -646,15 +612,10 @@ aws-whole-enchilada:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  when: manual
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/ && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: manual
+    - when: never
 
 aws-whole-enchilada-gpu:
   stage: tests-aws
@@ -668,15 +629,10 @@ aws-whole-enchilada-gpu:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  when: manual
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/ && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: manual
+    - when: never
 
 scw-infra:
   stage: tests-scw
@@ -690,13 +646,10 @@ scw-infra:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 scw-infra-nat-gateway:
   stage: tests-scw
@@ -710,13 +663,10 @@ scw-infra-nat-gateway:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 scw-infra-upgrade:
   stage: tests-scw
@@ -724,20 +674,16 @@ scw-infra-upgrade:
     [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node]
   retry: 1
   timeout: 4 hours
-  when: manual
   script:
     - ./helper.sh scw_infra_upgrade
   dependencies:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: manual
+    - when: never
 
 scw-managed-services:
   stage: tests-scw
@@ -751,13 +697,10 @@ scw-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
   allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
 
 scw-self-hosted:
@@ -772,13 +715,10 @@ scw-self-hosted:
     - ./helper.sh scw_self_hosted
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
   allow_failure: true # SCW issues with registry
 
 scw-whole-enchilada:
@@ -793,16 +733,11 @@ scw-whole-enchilada:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/ && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: manual
+    - when: never
   allow_failure: true
-  when: manual
 
 gcp-infra:
   stage: tests-gcp
@@ -816,13 +751,10 @@ gcp-infra:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: on_success
+    - when: never
 
 gcp-infra-upgrade:
   stage: tests-gcp
@@ -830,20 +762,16 @@ gcp-infra-upgrade:
     [.needs-docker, .with-artifacts, .resources-test, .needs-minimal-tests, .test-setup, .on-demand-node, .nvme-node]
   retry: 1
   timeout: 4 hours
-  when: manual
   script:
     - ./helper.sh gcp_infra_upgrade
   dependencies:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/'
+      when: manual
+    - when: never
 
 gcp-managed-services:
   stage: tests-gcp
@@ -857,13 +785,10 @@ gcp-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 gcp-self-hosted:
   stage: tests-gcp
@@ -877,13 +802,10 @@ gcp-self-hosted:
     - ./helper.sh gcp_self_hosted
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: on_success
+    - when: never
 
 gcp-whole-enchilada:
   stage: tests-gcp
@@ -897,15 +819,10 @@ gcp-whole-enchilada:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Infra/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Env/
-  when: manual
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Infra/ && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Env/'
+      when: manual
+    - when: never
 
 ####################
 # QUARANTINE TESTS #
@@ -923,13 +840,10 @@ quarantine:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
-    variables:
-      - $CI_MERGE_REQUEST_TITLE !~ /^WIP:/
-      - $CI_MERGE_REQUEST_TITLE !~ /^Draft:/
-      - $CI_MERGE_REQUEST_LABELS =~ /^Tests:.*Quarantine/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_LABELS =~ /Tests:[^,]*Quarantine/'
+      when: on_success
+    - when: never
   allow_failure: true
 
 ###########
