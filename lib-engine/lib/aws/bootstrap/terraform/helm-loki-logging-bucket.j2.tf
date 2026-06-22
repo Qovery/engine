@@ -97,6 +97,18 @@ resource "aws_s3_bucket_public_access_block" "loki_access_logs" {
   block_public_acls = true
 }
 
+# SSE-S3 (AES256) and not SSE-KMS: S3 server access log delivery only
+# supports SSE-S3 on the destination bucket.
+resource "aws_s3_bucket_server_side_encryption_configuration" "loki_bucket_logs_encryption" {
+  bucket = aws_s3_bucket.loki_bucket_logs.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_s3_bucket" "loki_bucket_logs" {
   bucket = aws_iam_role.iam_eks_loki_logs.name
   force_destroy = true
@@ -181,6 +193,21 @@ resource "aws_s3_bucket_policy" "loki_bucket_logs_bucket_policy" {
             "Condition": {
                 "StringEquals": {
                     "aws:SourceAccount": "${data.aws_caller_identity.current.account_id}"
+                }
+            }
+        },
+        {
+            "Sid": "DenyInsecureTransport",
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "s3:*",
+            "Resource": [
+                "${aws_s3_bucket.loki_bucket_logs.arn}",
+                "${aws_s3_bucket.loki_bucket_logs.arn}/*"
+            ],
+            "Condition": {
+                "Bool": {
+                    "aws:SecureTransport": "false"
                 }
             }
         }
