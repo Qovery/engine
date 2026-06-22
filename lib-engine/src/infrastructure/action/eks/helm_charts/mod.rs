@@ -229,7 +229,11 @@ impl HelmInfraResources for EksHelmsDeployment<'_> {
                 ))
             })?;
         let kube_client = infra_ctx.mk_kube_client()?;
-        check_stores_not_in_use(&kube_client, &secrets_manager_accesses)
-            .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
+        check_stores_not_in_use(&kube_client, &secrets_manager_accesses).map_err(|err| {
+            Box::new(EngineError::new_external_secret_operator_validation_error(
+                self.context.event_details.clone(),
+                err,
+            ))
+        })
     }
 }

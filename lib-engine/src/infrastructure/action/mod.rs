@@ -247,7 +247,7 @@ pub trait ToInfraTeraContext {
 pub trait InfraLogger {
     fn info(&self, message: impl Into<EventMessage>);
     fn warn(&self, message: impl Into<EventMessage>);
-    fn error(self, error: EngineError, message: Option<impl Into<EventMessage>>);
+    fn error(&self, error: EngineError, message: Option<impl Into<EventMessage>>);
 
     fn diff(&self, from: InfrastructureDiffType, message: String);
 }
@@ -268,7 +268,7 @@ impl InfraLogger for InfraLoggerImpl {
             .log(EngineEvent::Warning(self.event_details.clone(), message.into()));
     }
 
-    fn error(self, error: EngineError, message: Option<impl Into<EventMessage>>) {
+    fn error(&self, error: EngineError, message: Option<impl Into<EventMessage>>) {
         self.logger.log(EngineEvent::Error(error, message.map(|ev| ev.into())));
     }
 

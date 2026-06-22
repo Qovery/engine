@@ -3269,6 +3269,26 @@ impl EngineError {
         )
     }
 
+    /// Creates new error while ensuring consistency for Secret Manager Access configuration
+    ///
+    /// Arguments:
+    ///
+    /// * `event_details`: Error linked event details.
+    /// * `raw_error`: Raw error message (it's a safe message)
+    pub fn new_external_secret_operator_validation_error(
+        event_details: EventDetails,
+        raw_error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::HelmChartsSetupError,
+            raw_error.message_safe.clone(),
+            Some(raw_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error while deploying Helm charts.
     ///
     /// Arguments:
