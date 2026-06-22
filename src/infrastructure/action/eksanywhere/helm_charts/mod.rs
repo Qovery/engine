@@ -19,10 +19,13 @@ use std::collections::HashMap;
 
 mod gen_charts;
 pub mod gen_keda_charts;
+#[allow(dead_code)]
 pub mod metal_lb_chart;
+#[allow(dead_code)]
 pub mod metal_lb_config_chart;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct EksAnywhereChartsConfigPrerequisites {
     pub organization_id: String,
     pub organization_long_id: uuid::Uuid,
