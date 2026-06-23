@@ -41,19 +41,21 @@ use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
 use crate::models::TaskSelector;
 use crate::utils::{check_libs_directory, load_deployed_engine_version};
+use qovery_engine::cluster_analysis::task::ClusterAnalysisTask;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::Task;
 use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::errors::{CommandError, EngineError};
 use qovery_engine::events::{
-    EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter,
+    ClusterAnalysisStep, EngineEvent, EnvironmentStep, EventDetails, EventMessage, InfrastructureStep, Stage,
+    Transmitter,
 };
 use qovery_engine::git_initialize_opts;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::QoveryIdentifier;
 use qovery_engine::io_models::engine_request::{
-    BlueprintEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
+    BlueprintEngineRequest, ClusterAnalysisEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
 };
 use qovery_engine::log_file_writer::LogFileWriter;
 use qovery_engine::logger::Logger;
@@ -152,6 +154,25 @@ fn to_engine_task(
                     lib_root_dir.to_string(),
                     aws_apn_id.to_string(),
                     // We need to clone docker to generate a new docker config for each task
+                    mk_docker(),
+                    logger,
+                    metrics_registry,
+                    qovery_api,
+                    Some(log_file_writer),
+                )))
+            }
+            TaskSelector::ClusterAnalysis => {
+                let request = serde_json::from_slice::<ClusterAnalysisEngineRequest>(msg.as_bytes())?;
+                let qovery_api = Box::new(GrpcCoreServiceApi::new(
+                    request.deployment_jwt_token.clone(),
+                    grpc_client.clone(),
+                ));
+                Ok(Arc::new(ClusterAnalysisTask::new(
+                    request,
+                    workspace_root_dir.to_string(),
+                    lib_root_dir.to_string(),
+                    aws_apn_id.to_string(),
+                    deployed_engine_version.clone(),
                     mk_docker(),
                     logger,
                     metrics_registry,
@@ -389,6 +410,7 @@ pub fn main() -> io::Result<()> {
     let task_selector = match cli.deployment_type.as_str() {
         "ENVIRONMENT" => TaskSelector::Environment,
         "BLUEPRINT" => TaskSelector::Blueprint,
+        "CLUSTER_ANALYSIS" => TaskSelector::ClusterAnalysis,
         _ => TaskSelector::Infrastructure,
     };
 
@@ -441,10 +463,10 @@ pub fn main() -> io::Result<()> {
                         QoveryIdentifier::new(Uuid::parse_str(&deployment_info.organization_id).unwrap_or_default()),
                         QoveryIdentifier::new(Uuid::parse_str(&deployment_info.cluster_id).unwrap_or_default()),
                         execution_id.to_string(),
-                        if deployment_info.r#type == DeploymentType::Environment as i32 {
-                            Stage::Environment(EnvironmentStep::Cancelled)
-                        } else {
-                            Stage::Infrastructure(InfrastructureStep::CannotProcessRequest)
+                        match DeploymentType::try_from(deployment_info.r#type) {
+                            Ok(DeploymentType::Environment) => Stage::Environment(EnvironmentStep::Cancelled),
+                            Ok(DeploymentType::ClusterAnalysis) => Stage::ClusterAnalysis(ClusterAnalysisStep::Error),
+                            _ => Stage::Infrastructure(InfrastructureStep::CannotProcessRequest),
                         },
                         Transmitter::TaskManager(Uuid::default(), String::from("task-manager")),
                     );

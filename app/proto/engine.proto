@@ -27,6 +27,7 @@ enum DeploymentType {
   Environment = 1;
   Infrastructure = 2;
   Blueprint = 3;
+  ClusterAnalysis = 4;
 }
 
 message DeploymentRequest {

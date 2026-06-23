@@ -12,6 +12,7 @@ ARG BUILDX_VERSION="0.34.0-1~debian.13~trixie"
 ARG CONTAINERD_VERSION="2.2.3-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG PLUTO_VERSION=5.24.0
+ARG KRR_VERSION=1.27.0
 ARG EKSCTL_VERSION=0.220.0
 ARG EKS_ANYWHERE_VERSION=0.25.0
 ARG GOVC_VERSION=0.52.0
@@ -40,6 +41,7 @@ ARG DOCKER_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG PLUTO_VERSION
+ARG KRR_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
@@ -51,6 +53,10 @@ RUN apt-get update && \
   containerd.io=$CONTAINERD_VERSION \
   helm=$HELM_VERSION && \
   curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  chmod +x /usr/local/bin/krr && \
+  rm -f /tmp/krr.zip && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
   mkdir /build ${BIN_DEST_FOLDER} && \
   mkdir -p $TF_PLUGIN_CACHE_DIR
@@ -217,6 +223,7 @@ ARG BUILDX_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG PLUTO_VERSION
+ARG KRR_VERSION
 
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
@@ -241,6 +248,10 @@ RUN apt-get update && apt-get install -y \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
   curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  chmod +x /usr/local/bin/krr && \
+  rm -f /tmp/krr.zip && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
 RUN curl -s "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture | sed 's/amd64/x86_64/' | sed 's/arm64/aarch64/').zip" -o "awscliv2.zip" && \
@@ -309,6 +320,7 @@ ARG BUILDX_VERSION
 ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG PLUTO_VERSION
+ARG KRR_VERSION
 
 RUN apt-get update && apt-get install -y \
   apt-transport-https ca-certificates curl gnupg lsb-release && \
@@ -325,8 +337,12 @@ RUN apt-get update && apt-get install -y \
   docker-ce-cli=$DOCKER_VERSION \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
-  dumb-init git-lfs && \
+  dumb-init git-lfs unzip && \
   curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  chmod +x /usr/local/bin/krr && \
+  rm -f /tmp/krr.zip && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
 RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl

@@ -130,6 +130,9 @@ impl DeploymentManager {
             TaskSelector::Blueprint => DeploymentRequest {
                 deployment_type: DeploymentType::Blueprint as i32,
             },
+            TaskSelector::ClusterAnalysis => DeploymentRequest {
+                deployment_type: DeploymentType::ClusterAnalysis as i32,
+            },
         };
 
         Self {

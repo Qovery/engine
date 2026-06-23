@@ -21,6 +21,7 @@ use tracing_subscriber::{EnvFilter, fmt::time::UtcTime, prelude::*};
 use url::Url;
 use uuid::Uuid;
 
+use qovery_engine::cluster_analysis::task::ClusterAnalysisTask;
 use qovery_engine::cmd::docker::Docker;
 use qovery_engine::engine_task::Task;
 use qovery_engine::engine_task::qovery_api::{EngineServiceType, FakeQoveryApi, StaticQoveryApi};
@@ -28,7 +29,7 @@ use qovery_engine::environment::models::types::DeployedEngineVersion;
 use qovery_engine::environment::task::EnvironmentTask;
 use qovery_engine::infrastructure::task::InfrastructureTask;
 use qovery_engine::io_models::engine_request::{
-    BlueprintEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
+    BlueprintEngineRequest, ClusterAnalysisEngineRequest, EnvironmentEngineRequest, InfrastructureEngineRequest,
 };
 use qovery_engine::logger::{Logger, StdIoLogger};
 use qovery_engine::metrics_registry::MetricsRegistry;
@@ -177,13 +178,29 @@ pub fn main() -> io::Result<()> {
                 deployed_engine_version,
                 metrics_registry,
             ),
+            "cluster_analysis" => using_json_path_parameter(
+                logger,
+                env::var("DEPLOY_FROM_FILE").expect("missing DEPLOY_FROM_FILE variable"),
+                workspace_root_dir,
+                lib_root_dir,
+                aws_apn_id,
+                test_cluster,
+                TaskSelector::ClusterAnalysis,
+                docker,
+                deployed_engine_version,
+                metrics_registry,
+            ),
             _ => {
-                println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env' or 'blueprint'");
+                println!(
+                    "Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env', 'blueprint' or 'cluster_analysis'"
+                );
                 process::exit(1);
             }
         },
         _ => {
-            println!("Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env' or 'blueprint'");
+            println!(
+                "Please set DEPLOY_FROM_FILE_KIND environment file to 'infra', 'env', 'blueprint' or 'cluster_analysis'"
+            );
             process::exit(1);
         }
     }
@@ -279,6 +296,29 @@ pub fn using_json_path_parameter(
                 Box::new(StaticQoveryApi {
                     versions: get_qovery_app_version("api.qovery.com").unwrap(),
                 }),
+                None,
+            ))
+        }
+        TaskSelector::ClusterAnalysis => {
+            let mut deserialized_request = serde_json::Deserializer::from_reader(file);
+            let mut request: ClusterAnalysisEngineRequest = serde_path_to_error::deserialize(&mut deserialized_request)
+                .map_err(|err| {
+                    error!("Impossible to parse json file: {}", err);
+                    process::exit(1);
+                })
+                .unwrap();
+
+            request.test_cluster = test_cluster;
+            Box::new(ClusterAnalysisTask::new(
+                request,
+                workspace_root_dir,
+                lib_root_dir,
+                aws_apn_id,
+                deployed_engine_version,
+                docker,
+                logger,
+                metrics_registry,
+                Box::new(FakeQoveryApi {}),
                 None,
             ))
         }

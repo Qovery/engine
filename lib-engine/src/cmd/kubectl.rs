@@ -14,10 +14,14 @@ use serde_json::{Value, json};
 use serde_yaml::Deserializer;
 use std::fmt::Debug;
 use std::fs::{File, read_dir, read_to_string};
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
+use std::net::TcpListener;
 use std::path::Path;
-use std::thread;
-use std::time::Duration;
+use std::process::{Child, Command, Stdio};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+use url::Url;
 use uuid::Uuid;
 
 use crate::runtime::block_on;
@@ -31,9 +35,233 @@ use crate::cmd::structs::{
 use crate::constants::KUBECONFIG;
 use crate::errors::{CommandError, ErrorMessageVerbosity};
 
+const LOCALHOST: &str = "127.0.0.1";
+const PORT_FORWARD_START_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub enum ScalingKind {
     Deployment,
     Statefulset,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct KubernetesServicePortForwardTarget {
+    pub namespace: String,
+    pub service_name: String,
+    pub remote_port: u16,
+}
+
+impl KubernetesServicePortForwardTarget {
+    pub fn from_service_url(url: &Url) -> Option<Self> {
+        let host = url.host_str()?;
+        let mut parts = host.split('.');
+        let service_name = parts.next()?;
+        let namespace = parts.next()?;
+
+        if parts.next() != Some("svc") {
+            return None;
+        }
+
+        Some(Self {
+            namespace: namespace.to_string(),
+            service_name: service_name.to_string(),
+            remote_port: url.port_or_known_default()?,
+        })
+    }
+}
+
+pub struct KubectlPortForward {
+    child: Child,
+    stdout_thread: Option<JoinHandle<()>>,
+    stderr_thread: Option<JoinHandle<()>>,
+    target: KubernetesServicePortForwardTarget,
+    local_port: u16,
+}
+
+impl KubectlPortForward {
+    pub fn start(
+        kubeconfig: &Path,
+        target: KubernetesServicePortForwardTarget,
+        envs: &[(&str, &str)],
+    ) -> Result<Self, CommandError> {
+        let local_port = reserve_local_port()?;
+        let mut command = Command::new("kubectl");
+        command
+            .arg("-n")
+            .arg(target.namespace.as_str())
+            .arg("port-forward")
+            .arg(format!("service/{}", target.service_name))
+            .arg(format!("{local_port}:{}", target.remote_port))
+            .arg("--address")
+            .arg(LOCALHOST)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .env(KUBECONFIG, kubeconfig)
+            .envs(envs.iter().copied());
+
+        let mut child = command.spawn().map_err(|error| {
+            CommandError::new(
+                "Cannot start kubectl port-forward".to_string(),
+                Some(format!("Cannot start kubectl port-forward for {target:?}: {error}")),
+                None,
+            )
+        })?;
+
+        let stdout = child.stdout.take().ok_or_else(|| {
+            CommandError::new(
+                "Cannot read kubectl port-forward stdout".to_string(),
+                Some(format!("Cannot read kubectl port-forward stdout for {target:?}")),
+                None,
+            )
+        })?;
+        let stderr = child.stderr.take().ok_or_else(|| {
+            CommandError::new(
+                "Cannot read kubectl port-forward stderr".to_string(),
+                Some(format!("Cannot read kubectl port-forward stderr for {target:?}")),
+                None,
+            )
+        })?;
+
+        let (sender, receiver) = channel();
+        let stdout_thread = spawn_output_reader(stdout, sender.clone());
+        let stderr_thread = spawn_output_reader(stderr, sender);
+
+        let mut port_forward = Self {
+            child,
+            stdout_thread: Some(stdout_thread),
+            stderr_thread: Some(stderr_thread),
+            target,
+            local_port,
+        };
+
+        if let Err(error) = port_forward.wait_until_ready(&receiver) {
+            port_forward.stop();
+            return Err(error);
+        }
+
+        Ok(port_forward)
+    }
+
+    pub fn local_url(&self) -> Result<Url, CommandError> {
+        Url::parse(&format!("http://{LOCALHOST}:{}", self.local_port)).map_err(|error| {
+            CommandError::new(
+                "Cannot build kubectl port-forward local URL".to_string(),
+                Some(format!(
+                    "Cannot build kubectl port-forward local URL for {:?}: {error}",
+                    self.target
+                )),
+                None,
+            )
+        })
+    }
+
+    fn wait_until_ready(&mut self, receiver: &Receiver<String>) -> Result<(), CommandError> {
+        let started_at = Instant::now();
+        let mut output = Vec::new();
+
+        while started_at.elapsed() < PORT_FORWARD_START_TIMEOUT {
+            match self.child.try_wait() {
+                Ok(Some(status)) => {
+                    return Err(CommandError::new(
+                        "kubectl port-forward stopped before being ready".to_string(),
+                        Some(format!(
+                            "kubectl port-forward for {:?} exited with {status} before being ready.\n{}",
+                            self.target,
+                            output.join("\n")
+                        )),
+                        None,
+                    ));
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    return Err(CommandError::new(
+                        "Cannot read kubectl port-forward status".to_string(),
+                        Some(format!(
+                            "Cannot read kubectl port-forward status for {:?}: {error}",
+                            self.target
+                        )),
+                        None,
+                    ));
+                }
+            }
+
+            match receiver.recv_timeout(Duration::from_millis(100)) {
+                Ok(line) => {
+                    info!("kubectl port-forward: {}", line);
+                    if line.contains(&format!("Forwarding from {LOCALHOST}:{}", self.local_port)) {
+                        return Ok(());
+                    }
+                    output.push(line);
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => {
+                    return Err(CommandError::new(
+                        "kubectl port-forward output stream closed".to_string(),
+                        Some(format!(
+                            "kubectl port-forward output stream closed before being ready for {:?}.\n{}",
+                            self.target,
+                            output.join("\n")
+                        )),
+                        None,
+                    ));
+                }
+            }
+        }
+
+        Err(CommandError::new(
+            "kubectl port-forward did not become ready in time".to_string(),
+            Some(format!(
+                "kubectl port-forward did not become ready in {:?} for {:?}.\n{}",
+                PORT_FORWARD_START_TIMEOUT,
+                self.target,
+                output.join("\n")
+            )),
+            None,
+        ))
+    }
+
+    fn stop(&mut self) {
+        if let Ok(None) = self.child.try_wait() {
+            let _ = self.child.kill();
+        }
+        let _ = self.child.wait();
+
+        if let Some(thread) = self.stdout_thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.stderr_thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+impl Drop for KubectlPortForward {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+fn reserve_local_port() -> Result<u16, CommandError> {
+    TcpListener::bind((LOCALHOST, 0))
+        .and_then(|listener| listener.local_addr())
+        .map(|address| address.port())
+        .map_err(|error| {
+            CommandError::new(
+                "Cannot reserve local port for kubectl port-forward".to_string(),
+                Some(format!("Cannot reserve local port for kubectl port-forward: {error}")),
+                None,
+            )
+        })
+}
+
+fn spawn_output_reader<R>(reader: R, sender: std::sync::mpsc::Sender<String>) -> JoinHandle<()>
+where
+    R: std::io::Read + Send + 'static,
+{
+    thread::spawn(move || {
+        for line in BufReader::new(reader).lines().map_while(Result::ok) {
+            let _ = sender.send(line);
+        }
+    })
 }
 
 #[derive(Debug)]
@@ -1705,5 +1933,32 @@ pub fn kubectl_exec_delete_job(
             Some(e.to_string()),
             None,
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::KubernetesServicePortForwardTarget;
+    use url::Url;
+
+    #[test]
+    fn parses_kubernetes_service_url() {
+        let url = Url::parse("http://prometheus-operated.prometheus.svc.cluster.local:9090").unwrap();
+
+        assert_eq!(
+            KubernetesServicePortForwardTarget::from_service_url(&url),
+            Some(KubernetesServicePortForwardTarget {
+                namespace: "prometheus".to_string(),
+                service_name: "prometheus-operated".to_string(),
+                remote_port: 9090,
+            })
+        );
+    }
+
+    #[test]
+    fn ignores_external_url() {
+        let url = Url::parse("https://thanos.example.com").unwrap();
+
+        assert_eq!(KubernetesServicePortForwardTarget::from_service_url(&url), None);
     }
 }
