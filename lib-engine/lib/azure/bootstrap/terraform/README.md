@@ -77,7 +77,7 @@ kubernetes_version     = "1.31.5"
 # Network configuration
 vnet_cidr              = "10.128.0.0/16"      # 65,536 addresses
 node_cidr              = "10.128.0.0/20"      # 4,096 addresses for nodes
-pod_cidr               = "172.16.0.0/12"       # 1,048,574 addresses for pods
+pod_cidr               = "172.16.0.0/13"       # 524,286 addresses for pods
 service_cidr           = "10.129.0.0/16"      # 65,536 addresses for services
 dns_service_ip         = "10.129.0.10"        # Within service_cidr
 ```

@@ -153,7 +153,10 @@ variable "node_cidr_zone_3" {
 variable "pod_cidr" {
   description = "CIDR block for the pod subnet"
   type        = string
-  default     = "172.16.0.0/12"
+  # /13 (not /12): a /12 spans 172.16.0.0-172.31.255.255 and overlaps Azure's reserved
+  # ranges 172.30.0.0/16 and 172.31.0.0/16. AKS now rejects this at create/update for
+  # CNI Overlay + kubenet (AKS release 2026-05-29). /13 stops at 172.23.255.255, clearing them.
+  default     = "172.16.0.0/13"
 }
 
 variable "service_cidr" {
