@@ -58,8 +58,12 @@ resource "azurerm_kubernetes_cluster" "primary" {
 
   # api_server_access_profile is managed via azapi_update_resource below because the azurerm
   # provider cannot disable authorized_ip_ranges once set (https://github.com/hashicorp/terraform-provider-azurerm/issues/20085).
+  #
+  # pod_cidr is ForceNew (immutable) and can only be expanded post-create. Existing clusters were
+  # created with the legacy /12 default; ignoring drift here prevents a destroy/recreate when the
+  # default changes (e.g. /12 -> /13). New clusters still take the current default at create time.
   lifecycle {
-    ignore_changes = [api_server_access_profile]
+    ignore_changes = [api_server_access_profile, network_profile[0].pod_cidr]
   }
 
   # TODO(benjaminch): Azure integration, to be variabilized

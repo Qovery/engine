@@ -19,7 +19,7 @@ Our AKS implementation leverages Azure CNI Powered by Cilium, Microsoft's recomm
 - **Azure NAT Gateway:** Handles outbound traffic with a static public IP, ensuring controlled egress.
 - **Dedicated CIDR Ranges:** Separate address spaces for nodes, pods, and services:
   - Nodes: `10.128.0.0/22`
-  - Pods: `172.16.0.0/12`
+  - Pods: `172.16.0.0/13`
   - Services: `10.129.0.0/16`
 - **Virtual Network (VNet) Foundation:** Crafted with service endpoints and private link support to secure access to Azure resources.
 - **Network Observability:** Built-in with Cilium to provide deep network insights and troubleshooting capabilities.
@@ -40,8 +40,8 @@ Our AKS implementation leverages Azure CNI Powered by Cilium, Microsoft's recomm
 
 ### Cilium-Powered Network Benefits
 
-- **IP Conservation:** By using a non-VNet CIDR (172.16.0.0/12) for pods, the design preserves Azure's native IP space for other resources.
-- **Enhanced Scalability:** Supports up to 1,048,574 pods compared to only 4,096 pods in a traditional Azure CNI setup.
+- **IP Conservation:** By using a non-VNet CIDR (172.16.0.0/13) for pods, the design preserves Azure's native IP space for other resources.
+- **Enhanced Scalability:** Supports up to 524,286 pods compared to only 4,096 pods in a traditional Azure CNI setup.
 - **Advanced Network Policies:** Cilium provides L3-L7 policy enforcement with enhanced visibility.
 - **eBPF Technology:** Improves overall performance with efficient packet processing and routing.
 - **Transparent Encryption:** Optional Wireguard-based encryption for pod-to-pod traffic.
@@ -52,7 +52,7 @@ Our AKS implementation leverages Azure CNI Powered by Cilium, Microsoft's recomm
 |---------------|--------------------|---------------|-------------------------------------------|
 | VNet          | `10.128.0.0/16`    | 65,536        | Primary network space for all resources   |
 | Nodes         | `10.128.0.0/22`    | 1,024         | Dedicated address space for AKS nodes     |
-| Pods          | `172.16.0.0/12`    | 1,048,574     | Assigned for Kubernetes pod network       |
+| Pods          | `172.16.0.0/13`    | 524,286       | Assigned for Kubernetes pod network       |
 | Services      | `10.129.0.0/16`      | 65,536        | Cluster-internal communication for services |
 
 **DNS Service IP:** `10.129.0.10` *(Static within service CIDR)*
