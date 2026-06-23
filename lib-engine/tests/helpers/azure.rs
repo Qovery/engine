@@ -103,6 +103,7 @@ pub fn azure_container_registry(context: &Context) -> AzureContainerRegistry {
             )
             .expect("Cannot create Azure Artifact registry service"),
         ),
+        false,
     )
     .expect("Cannot create Azure Artifact Registry")
 }

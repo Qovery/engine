@@ -132,9 +132,18 @@ impl<T> EngineRequest<T> {
             tags.insert("ttl".to_string(), ttl.as_secs().to_string());
         };
 
+        // On cluster delete, skip the eager Docker login against the cluster ACR — the registry
+        // may already be gone from a prior failed attempt, and teardown never needs to push/pull.
+        let skip_cluster_registry_login = self.action == Action::Delete && is_infra_deployment;
         let container_registry = self
             .container_registry
-            .to_engine_container_registry(context.clone(), logger.clone(), event_details.clone(), tags)
+            .to_engine_container_registry(
+                context.clone(),
+                logger.clone(),
+                event_details.clone(),
+                tags,
+                skip_cluster_registry_login,
+            )
             .map_err(|err| {
                 IoEngineError::new_error_on_container_registry_information(
                     event_details.clone(),
@@ -930,6 +939,7 @@ impl ContainerRegistry {
         logger: Box<dyn Logger>,
         event_details: EventDetails,
         tags: HashMap<String, String>,
+        skip_cluster_registry_login: bool,
     ) -> Result<container_registry::ContainerRegistry, anyhow::Error> {
         match self.clone() {
             ContainerRegistry::Ecr { long_id, name, options } => {
@@ -1020,6 +1030,7 @@ impl ContainerRegistry {
                             )
                             .with_context(|| "cannot instantiate AzureContainerRegistryService")?,
                         ),
+                        skip_cluster_registry_login,
                     )?,
                 ))
             }
