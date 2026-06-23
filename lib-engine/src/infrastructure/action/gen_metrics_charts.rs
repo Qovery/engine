@@ -607,6 +607,7 @@ mod tests {
                 cluster_maintenance_start_time: Time::MIDNIGHT,
                 cluster_maintenance_end_time: None,
                 tls_email_report: String::new(),
+                gcp_kms_key_name: None,
                 metrics_parameters: None,
                 keda_parameters: None,
                 secrets_manager_accesses: Default::default(),

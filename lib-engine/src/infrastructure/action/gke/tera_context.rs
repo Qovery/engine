@@ -411,6 +411,12 @@ fn gke_tera_context(cluster: &Gke, infra_ctx: &InfrastructureContext) -> Result<
     let eso_config = compute_secrets_manager_config(&cluster.options.secrets_manager_accesses);
     context.insert("enable_automatic_external_secrets_access", &eso_config.enable_automatic_eso);
 
+    // CMEK: drives database_encryption (GKE etcd secrets) and boot_disk_kms_key (node boot disks) in Terraform.
+    // GCS bucket encryption is wired separately through GoogleOS.kms_key_name.
+    if let Some(kms_key_name) = &cluster.options.gcp_kms_key_name {
+        context.insert("gcp_kms_key_name", kms_key_name);
+    }
+
     Ok(context)
 }
 

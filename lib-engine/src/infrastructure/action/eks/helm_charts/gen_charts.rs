@@ -11,7 +11,9 @@ use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
 use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
-use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::infrastructure::helm_charts::qovery_storage_class_chart::{
+    QoveryStorageClassChart, QoveryStorageClassChartCloudProviderConfig, QoveryStorageType,
+};
 use crate::infrastructure::helm_charts::vertical_pod_autoscaler::VpaChart;
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartReplicaType, HelmChartResources, HelmChartResourcesConstraintType,
@@ -203,7 +205,9 @@ pub(super) fn eks_helm_charts(
                 .k8s_storage_class_fast_ssd
                 .to_model(),
         ),
-        chart_config_prerequisites.efs_file_system_id.clone(),
+        Some(QoveryStorageClassChartCloudProviderConfig::Aws {
+            efs_file_system_id: chart_config_prerequisites.efs_file_system_id.clone(),
+        }),
     )
     .to_common_helm_chart()?;
 

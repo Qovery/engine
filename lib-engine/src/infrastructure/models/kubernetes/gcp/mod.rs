@@ -34,6 +34,7 @@ use governor::{Quota, RateLimiter};
 use ipnet::IpNet;
 use nonzero_ext::nonzero;
 use once_cell::sync::Lazy;
+use regex::Regex;
 use retry::OperationResult;
 use retry::delay::Fixed;
 use serde_yaml::Value;
@@ -107,6 +108,16 @@ impl VpcMode {
     }
 }
 
+pub(crate) fn is_valid_kms_key_name(key: &str) -> bool {
+    static REGEX: Lazy<Regex> = Lazy::new(|| {
+        Regex::new(
+            r"^projects/[a-z][a-z0-9-]{4,28}[a-z0-9]/locations/[a-z][a-z0-9-]*[a-z0-9]/keyRings/[a-zA-Z0-9_-]{1,63}/cryptoKeys/[a-zA-Z0-9_-]{1,63}$",
+        )
+        .unwrap()
+    });
+    REGEX.is_match(key)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GkeOptions {
     // Qovery
@@ -129,6 +140,9 @@ pub struct GkeOptions {
     // GCP to be checked during integration if needed:
     pub cluster_maintenance_start_time: Time,
     pub cluster_maintenance_end_time: Option<Time>,
+
+    // GCP
+    pub gcp_kms_key_name: Option<String>,
 
     // Other
     pub tls_email_report: String,
@@ -157,6 +171,7 @@ impl GkeOptions {
         metrics_parameters: Option<MetricsParameters>,
         keda_parameters: Option<KedaParameters>,
         secrets_manager_accesses: Vec<SecretsManagerAccess>,
+        gcp_kms_key_name: Option<String>,
     ) -> Self {
         GkeOptions {
             qovery_api_url,
@@ -177,6 +192,7 @@ impl GkeOptions {
             metrics_parameters,
             keda_parameters,
             secrets_manager_accesses,
+            gcp_kms_key_name,
         }
     }
 }
@@ -272,6 +288,7 @@ impl Gke {
             creds.project_id(),
             GcpStorageRegion::from(region.clone()),
             Arc::new(object_storage_service_client),
+            options.gcp_kms_key_name.clone(),
         );
 
         let cluster = Self {

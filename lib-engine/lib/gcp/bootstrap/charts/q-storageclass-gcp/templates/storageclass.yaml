@@ -13,6 +13,9 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: pd-extreme # https://cloud.google.com/compute/docs/disks#disk-types
+{{- if .Values.gcpKmsKeyName }}
+  disk-encryption-kms-key: {{ .Values.gcpKmsKeyName }}
+{{- end }}
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -29,6 +32,9 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: pd-ssd # https://cloud.google.com/compute/docs/disks#disk-types
+{{- if .Values.gcpKmsKeyName }}
+  disk-encryption-kms-key: {{ .Values.gcpKmsKeyName }}
+{{- end }}
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -45,6 +51,9 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: pd-balanced # https://cloud.google.com/compute/docs/disks#disk-types
+{{- if .Values.gcpKmsKeyName }}
+  disk-encryption-kms-key: {{ .Values.gcpKmsKeyName }}
+{{- end }}
 ---
 kind: StorageClass
 apiVersion: storage.k8s.io/v1
@@ -61,3 +70,6 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: pd-standard # https://cloud.google.com/compute/docs/disks#disk-types
+{{- if .Values.gcpKmsKeyName }}
+  disk-encryption-kms-key: {{ .Values.gcpKmsKeyName }}
+{{- end }}

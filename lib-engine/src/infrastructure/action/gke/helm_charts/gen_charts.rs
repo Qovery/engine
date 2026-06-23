@@ -33,7 +33,9 @@ use crate::infrastructure::helm_charts::qovery_gateway_class_chart::QoveryGatewa
 use crate::infrastructure::helm_charts::qovery_priority_class_chart::QoveryPriorityClassChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_source_registry::QoverySourceRegistry;
-use crate::infrastructure::helm_charts::qovery_storage_class_chart::{QoveryStorageClassChart, QoveryStorageType};
+use crate::infrastructure::helm_charts::qovery_storage_class_chart::{
+    QoveryStorageClassChart, QoveryStorageClassChartCloudProviderConfig, QoveryStorageType,
+};
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartResources, HelmChartResourcesConstraintType, HelmChartTimeout,
     ToCommonHelmChart,
@@ -127,7 +129,9 @@ pub(super) fn gke_helm_charts(
                 .k8s_storage_class_fast_ssd
                 .to_model(),
         ),
-        None,
+        Some(QoveryStorageClassChartCloudProviderConfig::Gcp {
+            kms_key_name: chart_config_prerequisites.infra_options.gcp_kms_key_name.clone(),
+        }),
     )
     .to_common_helm_chart()?;
 
