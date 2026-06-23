@@ -93,6 +93,7 @@ fn test_bucket_exists() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -143,6 +144,7 @@ fn test_get_bucket() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -278,6 +280,7 @@ fn test_create_bucket_success() {
                 tc.input.bucket_versioning,
                 tc.input.bucket_logging,
                 tc.input.bucket_labels.clone(),
+                None,
             )
             .unwrap_or_else(|_| panic!("Cannot create bucket for test `{}`", tc.description));
         // stick a guard on the bucket to delete bucket after test
@@ -352,6 +355,7 @@ fn test_update_bucket() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket");
     // stick a guard on the bucket to delete bucket after test
@@ -373,6 +377,7 @@ fn test_update_bucket() {
             *versioning,
             *logging,
             None,
+            None,
         ) {
             // verify:
             Ok(updated_bucket_result) => assert_eq!(versioning, &updated_bucket_result.versioning_activated),
@@ -390,6 +395,7 @@ fn test_update_bucket() {
             Some(*GCP_RESOURCE_TTL),
             *versioning,
             *logging,
+            None,
             None,
         ) {
             // verify:
@@ -439,6 +445,7 @@ fn test_delete_bucket_using_run_job() {
                 false,
                 *logging,
                 Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+                None,
             )
             .expect("Cannot create bucket")
             .name;
@@ -516,6 +523,7 @@ fn test_delete_bucket_with_objects() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -571,6 +579,7 @@ fn test_empty_bucket_with_objects() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -639,6 +648,7 @@ fn test_list_bucket() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -693,6 +703,7 @@ fn test_list_bucket_from_prefix() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -746,6 +757,7 @@ fn test_put_object() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -807,6 +819,7 @@ fn test_get_object() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -871,6 +884,7 @@ fn test_list_objects_keys_only() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -949,6 +963,7 @@ fn test_list_objects_keys_only_with_prefix() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -1046,6 +1061,7 @@ fn test_list_objects() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -1124,6 +1140,7 @@ fn test_list_objects_with_prefix() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;
@@ -1221,6 +1238,7 @@ fn test_delete_object() {
             false,
             false,
             Some(HashMap::from([("test_name".to_string(), function_name!().to_string())])),
+            None,
         )
         .expect("Cannot create bucket")
         .name;

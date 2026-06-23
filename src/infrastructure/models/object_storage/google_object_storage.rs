@@ -19,6 +19,7 @@ pub struct GoogleOS {
     project_id: String,
     region: GcpStorageRegion,
     service: Arc<ObjectStorageService>,
+    kms_key_name: Option<String>,
 }
 
 impl GoogleOS {
@@ -29,6 +30,7 @@ impl GoogleOS {
         project_id: &str,
         region: GcpStorageRegion,
         service: Arc<ObjectStorageService>,
+        kms_key_name: Option<String>,
     ) -> GoogleOS {
         Self {
             id: id.to_string(),
@@ -37,6 +39,7 @@ impl GoogleOS {
             project_id: project_id.to_string(),
             region,
             service,
+            kms_key_name,
         }
     }
 }
@@ -99,6 +102,7 @@ impl ObjectStorage for GoogleOS {
                     format!("{}", bucket_ttl.map(|ttl| ttl.as_secs()).unwrap_or(0)),
                 ),
             ])),
+            self.kms_key_name.as_deref(),
         );
 
         match result {
@@ -137,6 +141,7 @@ impl ObjectStorage for GoogleOS {
             bucket_versioning_activated,
             bucket_logging_activated,
             bucket_labels,
+            self.kms_key_name.as_deref(),
         ) {
             Ok(o) => Ok(o),
             Err(e) => Err(ObjectStorageError::CannotUpdateBucket {
@@ -274,6 +279,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute and verify:
@@ -326,6 +332,7 @@ mod tests {
                 bucket_versioning,
                 bucket_logging,
                 _, // labels
+                _, // kms_key_name
             ))
             .then_return(Ok(expected_bucket.clone()));
             faux::when!(service_mock.get_bucket(bucket_name,)).then_return(Err(
@@ -342,6 +349,7 @@ mod tests {
                 "project_123",
                 GcpStorageRegion::EuropeWest9,
                 Arc::from(service_mock),
+                None,
             );
 
             // execute:
@@ -400,6 +408,7 @@ mod tests {
                 bucket_versioning,
                 bucket_logging,
                 _, // labels
+                _, // kms_key_name
             ))
             .then_return(Err(ObjectStorageServiceError::CannotCreateBucket {
                 bucket_name: bucket_name.to_string(),
@@ -414,6 +423,7 @@ mod tests {
                 "project_123",
                 GcpStorageRegion::EuropeWest9,
                 Arc::from(service_mock),
+                None,
             );
 
             // execute:
@@ -456,6 +466,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -486,6 +497,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -537,6 +549,7 @@ mod tests {
                 bucket_versioning,
                 bucket_logging,
                 bucket_labels.clone(),
+                _, // kms_key_name
             ))
             .then_return(Ok(expected_updated_bucket.clone()));
             faux::when!(service_mock.get_bucket(bucket_name)).then_return(Ok(expected_updated_bucket.clone()));
@@ -548,6 +561,7 @@ mod tests {
                 "project_123",
                 GcpStorageRegion::EuropeWest9,
                 Arc::from(service_mock),
+                None,
             );
 
             // execute:
@@ -593,6 +607,7 @@ mod tests {
                 bucket_versioning,
                 bucket_logging,
                 bucket_labels.clone(),
+                _, // kms_key_name
             ))
             .then_return(Err(ObjectStorageServiceError::CannotUpdateBucket {
                 bucket_name: bucket_name.to_string(),
@@ -616,6 +631,7 @@ mod tests {
                 "project_123",
                 bucket_region.clone(),
                 Arc::from(service_mock),
+                None,
             );
 
             // execute:
@@ -661,6 +677,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -691,6 +708,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -721,6 +739,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -751,6 +770,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -796,6 +816,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -837,6 +858,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -879,6 +901,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -919,6 +942,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -960,6 +984,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:
@@ -969,6 +994,104 @@ mod tests {
 
         // verify:
         assert_eq!(expected_bucket_object, retrieved_object);
+    }
+
+    #[test]
+    fn create_bucket_forwards_kms_key_name() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let kms_key = "projects/my-project/locations/europe-west9/keyRings/my-ring/cryptoKeys/my-key";
+
+        let expected_bucket = Bucket {
+            name: bucket_name.to_string(),
+            ttl: None,
+            versioning_activated: false,
+            logging_activated: false,
+            location: BucketRegion::GcpRegion(GcpStorageRegion::EuropeWest9),
+            labels: None,
+        };
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.create_bucket(
+            _, // project_id
+            bucket_name,
+            _,             // location
+            _,             // ttl
+            false,         // versioning
+            false,         // logging
+            _,             // labels
+            Some(kms_key), // kms_key_name must be forwarded exactly
+        ))
+        .then_return(Ok(expected_bucket.clone()));
+        faux::when!(service_mock.get_bucket(bucket_name)).then_return(Err(
+            ObjectStorageServiceError::CannotGetBucket {
+                bucket_name: bucket_name.to_string(),
+                raw_error_message: "Bucket doesn't exist".to_string(),
+            },
+        ));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+            Some(kms_key.to_string()),
+        );
+
+        // execute:
+        let result = object_storage.create_bucket(bucket_name, None, false, false);
+
+        // verify:
+        assert_eq!(expected_bucket, result.expect("create_bucket must succeed"));
+    }
+
+    #[test]
+    fn update_bucket_forwards_kms_key_name() {
+        // setup:
+        let bucket_name = "test-bucket";
+        let bucket_region = GcpStorageRegion::EuropeWest9;
+        let kms_key = "projects/my-project/locations/europe-west9/keyRings/my-ring/cryptoKeys/my-key";
+
+        let expected_bucket = Bucket {
+            name: bucket_name.to_string(),
+            ttl: None,
+            versioning_activated: false,
+            logging_activated: false,
+            location: BucketRegion::GcpRegion(bucket_region.clone()),
+            labels: None,
+        };
+
+        let mut service_mock = ObjectStorageService::faux();
+        faux::when!(service_mock.get_bucket(bucket_name)).then_return(Ok(expected_bucket.clone()));
+        faux::when!(service_mock.update_bucket(
+            _, // project_id
+            bucket_name,
+            bucket_region.clone(),
+            _,             // ttl
+            false,         // versioning
+            false,         // logging
+            _,             // labels
+            Some(kms_key), // kms_key_name must be forwarded exactly
+        ))
+        .then_return(Ok(expected_bucket.clone()));
+
+        let object_storage = GoogleOS::new(
+            "123",
+            Uuid::new_v4(),
+            "test_123",
+            "project_123",
+            GcpStorageRegion::EuropeWest9,
+            Arc::from(service_mock),
+            Some(kms_key.to_string()),
+        );
+
+        // execute:
+        let result = object_storage.update_bucket(bucket_name, None, false, false, None);
+
+        // verify:
+        assert_eq!(expected_bucket, result.expect("update_bucket must succeed"));
     }
 
     #[test]
@@ -994,6 +1117,7 @@ mod tests {
             "project_123",
             GcpStorageRegion::EuropeWest9,
             Arc::from(service_mock),
+            None,
         );
 
         // execute:

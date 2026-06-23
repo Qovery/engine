@@ -490,12 +490,21 @@ variable "database_encryption" {
   description = "Application-layer Secrets Encryption settings. The object format is {state = string, key_name = string}. Valid values of state are: \"ENCRYPTED\"; \"DECRYPTED\". key_name is the name of a CloudKMS key."
   type        = list(object({ state = string, key_name = string }))
 
-  default = [{
+  default = {% if gcp_kms_key_name %}[{
+    state    = "ENCRYPTED"
+    key_name = "{{ gcp_kms_key_name }}"
+  }]{% else %}[{
     state    = "DECRYPTED"
     key_name = ""
-  }]
+  }]{% endif %}
 }
 
+
+variable "boot_disk_kms_key" {
+  description = "The Customer Managed Encryption Key used to encrypt the boot disk attached to each node (required for gcp.restrictNonCmekServices enforcement)."
+  type        = string
+  default     = {% if gcp_kms_key_name %}"{{ gcp_kms_key_name }}"{% else %}null{% endif %}
+}
 
 variable "timeouts" {
   type        = map(string)

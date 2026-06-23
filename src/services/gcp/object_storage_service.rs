@@ -19,7 +19,7 @@ use google_cloud_storage::http::buckets::lifecycle::rule::{Action, ActionType, C
 use google_cloud_storage::http::buckets::list::ListBucketsRequest;
 use google_cloud_storage::http::buckets::patch::{BucketPatchConfig, PatchBucketRequest};
 use google_cloud_storage::http::buckets::set_iam_policy::SetIamPolicyRequest;
-use google_cloud_storage::http::buckets::{Binding, Bucket as GcpBucket, Logging, Versioning};
+use google_cloud_storage::http::buckets::{Binding, Bucket as GcpBucket, Encryption, Logging, Versioning};
 use google_cloud_storage::http::objects::Object as GcpObject;
 use google_cloud_storage::http::objects::delete::DeleteObjectRequest;
 use google_cloud_storage::http::objects::download::Range;
@@ -291,6 +291,12 @@ impl ObjectStorageService {
         })
     }
 
+    fn kms_encryption(key: Option<&str>) -> Option<Encryption> {
+        key.map(|k| Encryption {
+            default_kms_key_name: k.to_string(),
+        })
+    }
+
     /// Create a logging bucket for a given bucket.
     fn create_logging_bucket_for_bucket(
         &self,
@@ -300,6 +306,7 @@ impl ObjectStorageService {
         bucket_ttl: Option<Duration>,
         bucket_versioning_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
+        kms_key_name: Option<&str>,
     ) -> Result<(), ObjectStorageServiceError> {
         let log_bucket_name = Bucket::generate_logging_bucket_name_for_bucket(bucket_name);
 
@@ -312,6 +319,7 @@ impl ObjectStorageService {
                 bucket_versioning_activated,
                 false,
                 bucket_labels,
+                kms_key_name,
             ) {
                 Ok(_) => {}
                 Err(e) => {
@@ -365,6 +373,7 @@ impl ObjectStorageService {
         bucket_versioning_activated: bool,
         bucket_logging_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
+        kms_key_name: Option<&str>,
     ) -> Result<Bucket, ObjectStorageServiceError> {
         debug!(
             target_project_id = project_id,
@@ -405,6 +414,7 @@ impl ObjectStorageService {
                 bucket_ttl,
                 bucket_versioning_activated,
                 Some(bucket_labels.clone()),
+                kms_key_name,
             )?;
         }
 
@@ -428,6 +438,7 @@ impl ObjectStorageService {
                         log_object_prefix: "log".to_string(),
                     }),
                 },
+                encryption: Self::kms_encryption(kms_key_name),
                 ..Default::default()
             },
         };
@@ -491,6 +502,7 @@ impl ObjectStorageService {
         bucket_versioning_activated: bool,
         bucket_logging_activated: bool,
         bucket_labels: Option<HashMap<String, String>>,
+        kms_key_name: Option<&str>,
     ) -> Result<Bucket, ObjectStorageServiceError> {
         if bucket_logging_activated {
             // create the destination logs bucket
@@ -501,6 +513,7 @@ impl ObjectStorageService {
                 bucket_ttl,
                 bucket_versioning_activated,
                 bucket_labels.clone(),
+                kms_key_name,
             )?;
         }
 
@@ -518,6 +531,7 @@ impl ObjectStorageService {
                     }),
                 },
                 labels: bucket_labels,
+                encryption: Self::kms_encryption(kms_key_name),
                 ..Default::default()
             }),
             ..Default::default()

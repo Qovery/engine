@@ -33,6 +33,12 @@ impl Display for QoveryStorageType {
     }
 }
 
+#[derive(Clone)]
+pub enum QoveryStorageClassChartCloudProviderConfig {
+    Aws { efs_file_system_id: Option<String> },
+    Gcp { kms_key_name: Option<String> },
+}
+
 // TODO(benjaminch): properly refactor this chart, should be common and handled per cloud providers via values files.
 pub struct QoveryStorageClassChart {
     chart_path: HelmChartPath,
@@ -40,7 +46,7 @@ pub struct QoveryStorageClassChart {
     namespace: HelmChartNamespaces,
     default_storage_class: Option<StorageClassModel>,
     storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
-    efs_file_system_id: Option<String>,
+    cloud_provider_config: Option<QoveryStorageClassChartCloudProviderConfig>,
 }
 
 impl QoveryStorageClassChart {
@@ -50,7 +56,7 @@ impl QoveryStorageClassChart {
         storage_types_to_be_checked_after_install: HashSet<QoveryStorageType>,
         namespace: HelmChartNamespaces,
         default_storage_class: Option<StorageClassModel>,
-        efs_file_system_id: Option<String>,
+        cloud_provider_config: Option<QoveryStorageClassChartCloudProviderConfig>,
     ) -> Self {
         QoveryStorageClassChart {
             chart_path: HelmChartPath::new(
@@ -66,7 +72,7 @@ impl QoveryStorageClassChart {
             namespace,
             default_storage_class,
             storage_types_to_be_checked_after_install,
-            efs_file_system_id,
+            cloud_provider_config,
         }
     }
 
@@ -88,11 +94,24 @@ impl ToCommonHelmChart for QoveryStorageClassChart {
                 value: default_storage_class.to_string(),
             });
         }
-        if let Some(efs_id) = &self.efs_file_system_id {
-            chart_set_values.push(ChartSetValue {
-                key: "efsFileSystemId".to_string(),
-                value: efs_id.clone(),
-            });
+        match &self.cloud_provider_config {
+            Some(QoveryStorageClassChartCloudProviderConfig::Aws {
+                efs_file_system_id: Some(id),
+            }) => {
+                chart_set_values.push(ChartSetValue {
+                    key: "efsFileSystemId".to_string(),
+                    value: id.clone(),
+                });
+            }
+            Some(QoveryStorageClassChartCloudProviderConfig::Gcp {
+                kms_key_name: Some(key),
+            }) => {
+                chart_set_values.push(ChartSetValue {
+                    key: "gcpKmsKeyName".to_string(),
+                    value: key.clone(),
+                });
+            }
+            _ => {}
         }
 
         Ok(CommonChart {

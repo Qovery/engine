@@ -1,5 +1,7 @@
 use crate::infrastructure::models::external_secrets::SecretsManagerAccess;
-use crate::infrastructure::models::kubernetes::gcp::{GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode};
+use crate::infrastructure::models::kubernetes::gcp::{
+    GkeOptions as GkeOptionsModel, VpcMode as GkeVpcMode, is_valid_kms_key_name,
+};
 use crate::infrastructure::models::kubernetes::keda::KedaParameters;
 use crate::io_models::engine_location::EngineLocation;
 use crate::io_models::eso::SecretsManagerAccessDto;
@@ -60,6 +62,10 @@ pub struct GkeOptions {
     pub cluster_maintenance_start_time: String,
     #[serde(default)]
     pub cluster_maintenance_end_time: Option<String>,
+
+    // GCP
+    #[serde(default)]
+    pub gcp_kms_key_name: Option<String>,
 
     // Other
     pub tls_email_report: String,
@@ -124,6 +130,15 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             .map_err(|e| format!("Failed to convert to secret manager access: {e}"))?
             .unwrap_or_default();
 
+        if let Some(ref key_name) = value.gcp_kms_key_name
+            && !is_valid_kms_key_name(key_name)
+        {
+            return Err(format!(
+                "invalid gcp_kms_key_name `{key_name}`: must match \
+                    projects/<project>/locations/<location>/keyRings/<ring>/cryptoKeys/<key>"
+            ));
+        }
+
         Ok(GkeOptionsModel::new(
             value.qovery_api_url,
             value.qovery_grpc_url,
@@ -153,6 +168,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             value.metrics_parameters,
             value.keda_parameters,
             secrets_manager_accesses,
+            value.gcp_kms_key_name,
         ))
     }
 }
@@ -188,6 +204,7 @@ mod tests {
             user_provided_network: None,
             vpc_qovery_network_mode: None,
             nat_gateway_parameters: None,
+            gcp_kms_key_name: None,
             metrics_parameters: None,
             keda_parameters: None,
             secrets_manager_accesses: None,
@@ -321,5 +338,53 @@ mod tests {
                 .map(|network| network.private_nodes),
             Some(None)
         );
+    }
+
+    #[test]
+    fn test_gke_options_kms_key_name_validation() {
+        let base = GkeOptions {
+            qovery_api_url: "https://api.qovery.com".to_string(),
+            qovery_grpc_url: "https://grpc.qovery.com".to_string(),
+            qovery_engine_url: "https://engine.qovery.com".to_string(),
+            jwt_token: "jwt_token".to_string(),
+            qovery_ssh_key: "qovery_ssh_key".to_string(),
+            user_ssh_keys: vec![],
+            grafana_admin_user: "admin".to_string(),
+            grafana_admin_password: "password".to_string(),
+            qovery_engine_location: EngineLocation::QoverySide,
+            cluster_maintenance_start_time: "06:00Z".to_string(),
+            cluster_maintenance_end_time: None,
+            tls_email_report: "".to_string(),
+            cluster_ipv4_cidr_block: None,
+            services_ipv4_cidr_block: None,
+            user_provided_network: None,
+            vpc_qovery_network_mode: None,
+            nat_gateway_parameters: None,
+            gcp_kms_key_name: None,
+            metrics_parameters: None,
+            keda_parameters: None,
+            secrets_manager_accesses: None,
+        };
+
+        // valid full resource name
+        let mut opts = base.clone();
+        opts.gcp_kms_key_name =
+            Some("projects/my-project/locations/europe-west9/keyRings/my-ring/cryptoKeys/my-key".to_string());
+        assert!(GkeOptionsModel::try_from(opts).is_ok());
+
+        // short name — should be rejected
+        let mut opts = base.clone();
+        opts.gcp_kms_key_name = Some("my-key".to_string());
+        let err = GkeOptionsModel::try_from(opts).unwrap_err();
+        assert!(err.contains("invalid gcp_kms_key_name"), "unexpected error: {err}");
+
+        // missing cryptoKeys segment — should be rejected
+        let mut opts = base.clone();
+        opts.gcp_kms_key_name = Some("projects/my-project/locations/europe-west9/keyRings/my-ring".to_string());
+        let err = GkeOptionsModel::try_from(opts).unwrap_err();
+        assert!(err.contains("invalid gcp_kms_key_name"), "unexpected error: {err}");
+
+        // None — should pass (KMS is optional)
+        assert!(GkeOptionsModel::try_from(base).is_ok());
     }
 }
