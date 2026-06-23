@@ -36,6 +36,7 @@ impl AzureContainerRegistry {
         client_secret: &str,
         location: AzureLocation,
         service: Arc<AzureContainerRegistryService>,
+        skip_cluster_registry_login: bool,
     ) -> Result<Self, ContainerRegistryError> {
         let registry_raw_url = "https://azurecr.io";
         let mut registry = Url::parse(registry_raw_url).map_err(|_e| ContainerRegistryError::InvalidRegistryUrl {
@@ -118,8 +119,9 @@ impl AzureContainerRegistry {
             service,
         };
 
-        // Login to the registry if cluster has already been deployed
-        if !cr.context.is_first_cluster_deployment() {
+        // Login to the registry if cluster has already been deployed.
+        // Skipped on cluster delete — the ACR may already be gone and teardown never pushes/pulls.
+        if !cr.context.is_first_cluster_deployment() && !skip_cluster_registry_login {
             // login to cluster registry
             cr.context
                 .docker
