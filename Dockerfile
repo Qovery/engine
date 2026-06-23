@@ -52,9 +52,12 @@ RUN apt-get update && \
   docker-buildx-plugin=$BUILDX_VERSION \
   containerd.io=$CONTAINERD_VERSION \
   helm=$HELM_VERSION && \
-  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
-  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
-  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  curl -fsSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -fsSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  rm -rf /opt/krr && \
+  unzip -q /tmp/krr.zip -d /opt && \
+  chmod +x /opt/krr/krr && \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/krr/krr "$@"' > /usr/local/bin/krr && \
   chmod +x /usr/local/bin/krr && \
   rm -f /tmp/krr.zip && \
   helm plugin install --version ${HELM_DIFF_VERSION} https://github.com/databus23/helm-diff && \
@@ -247,9 +250,12 @@ RUN apt-get update && apt-get install -y \
   google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin \
   procps netcat-openbsd iproute2 dumb-init git-lfs unzip python3 && \
   curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
-  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
-  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
-  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  curl -fsSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -fsSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  rm -rf /opt/krr && \
+  unzip -q /tmp/krr.zip -d /opt && \
+  chmod +x /opt/krr/krr && \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/krr/krr "$@"' > /usr/local/bin/krr && \
   chmod +x /usr/local/bin/krr && \
   rm -f /tmp/krr.zip && \
   apt-get clean && rm -rf /var/lib/apt/lists
@@ -338,9 +344,12 @@ RUN apt-get update && apt-get install -y \
   docker-buildx-plugin=$BUILDX_VERSION \
   helm=$HELM_VERSION \
   dumb-init git-lfs unzip && \
-  curl -sSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
-  curl -sSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
-  unzip -j /tmp/krr.zip -d /usr/local/bin && \
+  curl -fsSL "https://github.com/FairwindsOps/pluto/releases/download/v${PLUTO_VERSION}/pluto_${PLUTO_VERSION}_linux_$(dpkg --print-architecture).tar.gz" | tar -C /usr/local/bin/ --no-same-owner -xzv pluto && \
+  curl -fsSL -o /tmp/krr.zip "https://github.com/robusta-dev/krr/releases/download/v${KRR_VERSION}/krr-ubuntu-latest-v${KRR_VERSION}.zip" && \
+  rm -rf /opt/krr && \
+  unzip -q /tmp/krr.zip -d /opt && \
+  chmod +x /opt/krr/krr && \
+  printf '%s\n' '#!/bin/sh' 'exec /opt/krr/krr "$@"' > /usr/local/bin/krr && \
   chmod +x /usr/local/bin/krr && \
   rm -f /tmp/krr.zip && \
   apt-get clean && rm -rf /var/lib/apt/lists
