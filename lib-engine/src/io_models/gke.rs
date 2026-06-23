@@ -65,7 +65,7 @@ pub struct GkeOptions {
 
     // GCP
     #[serde(default)]
-    pub gcp_kms_key_name: Option<String>,
+    pub gke_kms_key: Option<String>,
 
     // Other
     pub tls_email_report: String,
@@ -130,7 +130,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             .map_err(|e| format!("Failed to convert to secret manager access: {e}"))?
             .unwrap_or_default();
 
-        if let Some(ref key_name) = value.gcp_kms_key_name
+        if let Some(ref key_name) = value.gke_kms_key
             && !is_valid_kms_key_name(key_name)
         {
             return Err(format!(
@@ -168,7 +168,7 @@ impl TryFrom<GkeOptions> for GkeOptionsModel {
             value.metrics_parameters,
             value.keda_parameters,
             secrets_manager_accesses,
-            value.gcp_kms_key_name,
+            value.gke_kms_key,
         ))
     }
 }
@@ -204,7 +204,7 @@ mod tests {
             user_provided_network: None,
             vpc_qovery_network_mode: None,
             nat_gateway_parameters: None,
-            gcp_kms_key_name: None,
+            gke_kms_key: None,
             metrics_parameters: None,
             keda_parameters: None,
             secrets_manager_accesses: None,
@@ -360,7 +360,7 @@ mod tests {
             user_provided_network: None,
             vpc_qovery_network_mode: None,
             nat_gateway_parameters: None,
-            gcp_kms_key_name: None,
+            gke_kms_key: None,
             metrics_parameters: None,
             keda_parameters: None,
             secrets_manager_accesses: None,
@@ -368,19 +368,19 @@ mod tests {
 
         // valid full resource name
         let mut opts = base.clone();
-        opts.gcp_kms_key_name =
+        opts.gke_kms_key =
             Some("projects/my-project/locations/europe-west9/keyRings/my-ring/cryptoKeys/my-key".to_string());
         assert!(GkeOptionsModel::try_from(opts).is_ok());
 
         // short name — should be rejected
         let mut opts = base.clone();
-        opts.gcp_kms_key_name = Some("my-key".to_string());
+        opts.gke_kms_key = Some("my-key".to_string());
         let err = GkeOptionsModel::try_from(opts).unwrap_err();
         assert!(err.contains("invalid gcp_kms_key_name"), "unexpected error: {err}");
 
         // missing cryptoKeys segment — should be rejected
         let mut opts = base.clone();
-        opts.gcp_kms_key_name = Some("projects/my-project/locations/europe-west9/keyRings/my-ring".to_string());
+        opts.gke_kms_key = Some("projects/my-project/locations/europe-west9/keyRings/my-ring".to_string());
         let err = GkeOptionsModel::try_from(opts).unwrap_err();
         assert!(err.contains("invalid gcp_kms_key_name"), "unexpected error: {err}");
 
