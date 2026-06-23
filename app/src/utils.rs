@@ -69,24 +69,45 @@ pub fn check_versions_from(path: &str) -> Result<(), EngineInitError> {
     Ok(())
 }
 
+fn parse_candidate_deployed_engine_version(candidate: &str) -> Option<DeployedEngineVersion> {
+    let candidate = candidate.trim();
+
+    if candidate.is_empty() {
+        return None;
+    }
+
+    candidate.parse::<DeployedEngineVersion>().ok()
+}
+
 fn parse_deployed_engine_version(
     runtime_engine_version: Option<&str>,
     build_version_fallback: &str,
+    shadow_commit_fallback: &str,
 ) -> DeployedEngineVersion {
-    let raw_engine_version = runtime_engine_version
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or(build_version_fallback);
+    if let Some(runtime_engine_version) = runtime_engine_version.map(str::trim).filter(|value| !value.is_empty()) {
+        return runtime_engine_version
+            .parse::<DeployedEngineVersion>()
+            .expect("ENGINE_TAG_VERSION must be a valid version or commit id");
+    }
 
-    raw_engine_version
-        .parse::<DeployedEngineVersion>()
+    parse_candidate_deployed_engine_version(build_version_fallback)
+        .or_else(|| parse_candidate_deployed_engine_version(shadow_commit_fallback))
         .expect("engine version must be a valid version or commit id")
 }
 
 /// Returns the deployed engine version from `ENGINE_TAG_VERSION` when it is set to a non-empty
-/// value, otherwise falls back to the build-time version embedded in the binary.
-pub fn load_deployed_engine_version(build_version_fallback: &str) -> DeployedEngineVersion {
+/// value, otherwise falls back to the build-time version embedded in the binary, then to the
+/// shadow-rs commit ID when the embedded version is absent or invalid.
+pub fn load_deployed_engine_version(
+    build_version_fallback: &str,
+    shadow_commit_fallback: &str,
+) -> DeployedEngineVersion {
     let runtime_engine_version = env::var("ENGINE_TAG_VERSION").ok();
-    parse_deployed_engine_version(runtime_engine_version.as_deref(), build_version_fallback)
+    parse_deployed_engine_version(
+        runtime_engine_version.as_deref(),
+        build_version_fallback,
+        shadow_commit_fallback,
+    )
 }
 
 #[cfg(test)]
@@ -96,22 +117,41 @@ mod tests {
 
     #[test]
     fn load_deployed_engine_version_prefers_runtime_env_var() {
-        let deployed_engine_version = parse_deployed_engine_version(Some("v1.2.3"), "6b444021");
+        let deployed_engine_version = parse_deployed_engine_version(Some("v1.2.3"), "6b444021", "7fce2ab");
 
         assert_eq!(deployed_engine_version, "v1.2.3".parse::<DeployedEngineVersion>().unwrap());
     }
 
     #[test]
     fn load_deployed_engine_version_falls_back_to_build_version() {
-        let deployed_engine_version = parse_deployed_engine_version(None, "6b444021");
+        let deployed_engine_version = parse_deployed_engine_version(None, "6b444021", "7fce2ab");
 
         assert_eq!(deployed_engine_version, "6b444021".parse::<DeployedEngineVersion>().unwrap());
     }
 
     #[test]
     fn load_deployed_engine_version_falls_back_when_runtime_env_var_is_empty() {
-        let deployed_engine_version = parse_deployed_engine_version(Some("   "), "6b444021");
+        let deployed_engine_version = parse_deployed_engine_version(Some("   "), "6b444021", "7fce2ab");
 
         assert_eq!(deployed_engine_version, "6b444021".parse::<DeployedEngineVersion>().unwrap());
+    }
+
+    #[test]
+    fn load_deployed_engine_version_falls_back_to_shadow_commit_when_build_version_is_invalid() {
+        let deployed_engine_version = parse_deployed_engine_version(None, "unknown", "7fce2ab");
+
+        assert_eq!(deployed_engine_version, "7fce2ab".parse::<DeployedEngineVersion>().unwrap());
+    }
+
+    #[test]
+    #[should_panic(expected = "engine version must be a valid version or commit id")]
+    fn load_deployed_engine_version_rejects_invalid_build_and_shadow_fallbacks() {
+        let _ = parse_deployed_engine_version(None, "unknown", "invalid");
+    }
+
+    #[test]
+    #[should_panic(expected = "ENGINE_TAG_VERSION must be a valid version or commit id")]
+    fn load_deployed_engine_version_rejects_invalid_runtime_env_var() {
+        let _ = parse_deployed_engine_version(Some("invalid-but-non-empty"), "6b444021", "7fce2ab");
     }
 }

@@ -303,7 +303,7 @@ pub fn main() -> io::Result<()> {
         .init();
 
     let grpc_server = Uri::try_from(&cli.grpc_server).expect("Invalid URI for GRPC_SERVER");
-    let deployed_engine_version = load_deployed_engine_version(build_info::ENGINE_VERSION);
+    let deployed_engine_version = load_deployed_engine_version(build_info::ENGINE_VERSION, build_info::SHORT_COMMIT);
 
     let should_shutdown = Arc::new(AtomicBool::new(false));
     let is_connected_to_gtw = Arc::new(AtomicBool::new(false));
@@ -418,9 +418,10 @@ pub fn main() -> io::Result<()> {
         // Connect and check we are allowed to do request
         // If we are not allowed, we let the task die in order to be restarted
         info!("Connecting to GRPC server: {:?}", grpc_server);
-        let mut engine_client = grpc::new_engine_client(grpc_server, &cli.cluster_id, &cli.cluster_jwt_token)
-            .await
-            .expect("Can't connect to engine gateway");
+        let mut engine_client =
+            grpc::new_engine_client(grpc_server, &cli.cluster_id, &cli.cluster_jwt_token, &deployed_engine_version)
+                .await
+                .expect("Can't connect to engine gateway");
         engine_client
             .is_authorized(())
             .await

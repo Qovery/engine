@@ -1,5 +1,5 @@
-use crate::build_info;
 use crate::grpc::engine::engine_client::EngineClient;
+use qovery_engine::environment::models::types::DeployedEngineVersion;
 use std::convert::TryFrom;
 use std::time::Duration;
 use tonic::codec::CompressionEncoding;
@@ -37,6 +37,7 @@ pub async fn new_engine_client(
     grpc_server: Uri,
     cluster_id: &Uuid,
     cluster_token: &str,
+    deployed_engine_version: &DeployedEngineVersion,
 ) -> Result<GrpcEngineClient, tonic::transport::Error> {
     let enable_tls = grpc_server.scheme_str().unwrap_or("https") == "https";
     let channel = if enable_tls {
@@ -47,7 +48,7 @@ pub async fn new_engine_client(
 
     let user_agent = format!(
         "engine/{} pod/{}",
-        build_info::ENGINE_VERSION,
+        deployed_engine_version,
         std::env::var("ENGINE_NAME").unwrap_or_default()
     );
     let channel = channel
