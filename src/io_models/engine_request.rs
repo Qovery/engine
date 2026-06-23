@@ -8,7 +8,7 @@ use crate::environment::models::gcp::io::JsonCredentials as JsonCredentialsIo;
 use crate::environment::models::gcp::{GcpAccessTokenCredentials, GcpCredentials, JsonCredentials};
 use crate::environment::models::scaleway::{ScwRegion, ScwZone};
 use crate::errors::{CommandError, EngineError as IoEngineError, EngineError};
-use crate::events::{BlueprintStep, EventDetails, InfrastructureStep, Stage, Transmitter};
+use crate::events::{BlueprintStep, ClusterAnalysisStep, EventDetails, InfrastructureStep, Stage, Transmitter};
 use crate::fs::workspace_directory;
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::infrastructure::models::build_platform::local_docker::LocalDocker;
@@ -68,6 +68,80 @@ use uuid::Uuid;
 pub type EnvironmentEngineRequest = EngineRequest<EnvironmentRequest>;
 pub type BlueprintEngineRequest = EngineRequest<BlueprintRequest>;
 pub type InfrastructureEngineRequest = EngineRequest<Option<()>>;
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ClusterAnalysisEngineRequest {
+    pub id: String,
+    pub organization_id: String,
+    pub organization_long_id: Uuid,
+    pub deployment_jwt_token: String,
+    pub created_at: DateTime<Utc>,
+    pub features: Vec<Features>,
+    pub test_cluster: bool,
+    pub cloud_provider: CloudProvider,
+    pub kubernetes: KubernetesDto,
+    pub target_analysis: ClusterAnalysisRequest,
+    pub metadata: Option<Metadata>,
+    pub archive: Option<Archive>,
+}
+
+pub type ClusterAnalysisKubernetesContext<'a> = (Box<dyn cloud_provider::CloudProvider>, Box<dyn Kubernetes + 'a>);
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum AnalysisOutputFormat {
+    Table,
+    Json,
+    Csv,
+}
+
+impl AnalysisOutputFormat {
+    pub fn as_krr_formatter(self) -> &'static str {
+        match self {
+            AnalysisOutputFormat::Table => "table",
+            AnalysisOutputFormat::Json => "json",
+            AnalysisOutputFormat::Csv => "csv",
+        }
+    }
+}
+
+fn default_analysis_output_format() -> AnalysisOutputFormat {
+    AnalysisOutputFormat::Table
+}
+
+fn default_krr_history_hours() -> u32 {
+    14 * 24
+}
+
+fn default_pluto_history_output_format() -> AnalysisOutputFormat {
+    AnalysisOutputFormat::Json
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CostRecommendationRequest {
+    #[serde(default = "default_krr_history_hours")]
+    pub history_hours: u32,
+    #[serde(default = "default_analysis_output_format")]
+    pub output_format: AnalysisOutputFormat,
+    #[serde(default)]
+    pub namespaces: Vec<String>,
+    pub selector: Option<String>,
+    pub prometheus_url: Option<Url>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DeprecatedApiCheckRequest {
+    pub target_kubernetes_version: Option<String>,
+    #[serde(default = "default_pluto_history_output_format")]
+    pub output_format: AnalysisOutputFormat,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(tag = "kind", content = "payload", rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ClusterAnalysisRequest {
+    CostRecommendation(CostRecommendationRequest),
+    DeprecatedApiCheck(DeprecatedApiCheckRequest),
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct EngineRequest<T> {
@@ -231,6 +305,50 @@ impl InfrastructureEngineRequest {
             stage,
             Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
         )
+    }
+}
+
+impl ClusterAnalysisEngineRequest {
+    pub fn event_details(&self) -> EventDetails {
+        let kubernetes = &self.kubernetes;
+        EventDetails::new(
+            Some(self.cloud_provider.kind.clone()),
+            QoveryIdentifier::new(self.organization_long_id),
+            QoveryIdentifier::new(kubernetes.long_id),
+            self.id.to_string(),
+            Stage::ClusterAnalysis(ClusterAnalysisStep::Start),
+            Transmitter::Kubernetes(kubernetes.long_id, kubernetes.name.to_string()),
+        )
+    }
+
+    pub fn to_cluster_analysis_kubernetes<'a>(
+        &self,
+        context: &Context,
+        event_details: EventDetails,
+        logger: Box<dyn Logger>,
+    ) -> Result<ClusterAnalysisKubernetesContext<'a>, Box<EngineError>> {
+        let cloud_provider = self
+            .cloud_provider
+            .to_engine_cloud_provider(&self.kubernetes.region, self.kubernetes.kind)
+            .ok_or_else(|| {
+                Box::new(IoEngineError::new_error_on_cloud_provider_information(
+                    event_details.clone(),
+                    CommandError::new(
+                        "Invalid cloud provider information".to_string(),
+                        Some(format!("Invalid cloud provider information: {:?}", self.cloud_provider)),
+                        None,
+                    ),
+                ))
+            })?;
+
+        let kubernetes = self.kubernetes.to_engine_kubernetes(
+            context,
+            cloud_provider.as_ref(),
+            &self.cloud_provider.zones,
+            logger,
+        )?;
+
+        Ok((cloud_provider, kubernetes))
     }
 }
 
@@ -1656,6 +1774,61 @@ impl From<GithubCrRepoType> for RegistryType {
         match value {
             GithubCrRepoType::User(user) => RegistryType::User(user),
             GithubCrRepoType::Organization(orga) => RegistryType::Organization(orga),
+        }
+    }
+}
+
+#[cfg(test)]
+mod cluster_analysis_request_tests {
+    use super::{AnalysisOutputFormat, ClusterAnalysisRequest};
+
+    #[test]
+    fn test_deserialize_cost_recommendation_request() {
+        let request: ClusterAnalysisRequest = serde_json::from_str(
+            r#"{
+                "kind": "COST_RECOMMENDATION",
+                "payload": {
+                    "history_hours": 120,
+                    "output_format": "CSV",
+                    "namespaces": ["default"],
+                    "selector": "qovery.com/environment-id=env",
+                    "prometheus_url": "http://prometheus:9090"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        match request {
+            ClusterAnalysisRequest::CostRecommendation(payload) => {
+                assert_eq!(payload.history_hours, 120);
+                assert_eq!(payload.output_format, AnalysisOutputFormat::Csv);
+                assert_eq!(payload.namespaces, vec!["default"]);
+                assert_eq!(payload.selector.as_deref(), Some("qovery.com/environment-id=env"));
+                assert_eq!(payload.prometheus_url.unwrap().as_str(), "http://prometheus:9090/");
+            }
+            ClusterAnalysisRequest::DeprecatedApiCheck(_) => panic!("expected cost recommendation request"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_deprecated_api_check_request() {
+        let request: ClusterAnalysisRequest = serde_json::from_str(
+            r#"{
+                "kind": "DEPRECATED_API_CHECK",
+                "payload": {
+                    "target_kubernetes_version": "1.35",
+                    "output_format": "JSON"
+                }
+            }"#,
+        )
+        .unwrap();
+
+        match request {
+            ClusterAnalysisRequest::DeprecatedApiCheck(payload) => {
+                assert_eq!(payload.target_kubernetes_version.as_deref(), Some("1.35"));
+                assert_eq!(payload.output_format, AnalysisOutputFormat::Json);
+            }
+            ClusterAnalysisRequest::CostRecommendation(_) => panic!("expected deprecated API check request"),
         }
     }
 }

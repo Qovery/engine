@@ -257,9 +257,10 @@ pub enum Stage {
     Infrastructure(InfrastructureStep),
     /// Environment: environment stage in the engine (applications operations).
     Environment(EnvironmentStep),
-
     /// Blueprint: Blueprint stage in the engine (applications operations).
     Blueprint(BlueprintStep),
+    /// ClusterAnalysis: read-only cluster analysis stage in the engine.
+    ClusterAnalysis(ClusterAnalysisStep),
 }
 
 impl Stage {
@@ -269,6 +270,7 @@ impl Stage {
             Stage::Infrastructure(step) => step.to_string(),
             Stage::Environment(step) => step.to_string(),
             Stage::Blueprint(step) => step.to_string(),
+            Stage::ClusterAnalysis(step) => step.to_string(),
         }
     }
 
@@ -276,6 +278,7 @@ impl Stage {
         match self {
             Stage::Infrastructure(_) => false,
             Stage::Blueprint(_) => false,
+            Stage::ClusterAnalysis(_) => false,
             Stage::Environment(step) => step.is_core_output(),
         }
     }
@@ -290,8 +293,32 @@ impl Display for Stage {
                 Stage::Infrastructure(_) => "infrastructure",
                 Stage::Environment(_) => "environment",
                 Stage::Blueprint(_) => "blueprint",
+                Stage::ClusterAnalysis(_) => "cluster-analysis",
             },
         )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClusterAnalysisStep {
+    Start,
+    CostRecommendation,
+    DeprecatedApiCheck,
+    Succeeded,
+    Error,
+    Terminated,
+}
+
+impl Display for ClusterAnalysisStep {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        f.write_str(match self {
+            ClusterAnalysisStep::Start => "start",
+            ClusterAnalysisStep::CostRecommendation => "cost-recommendation",
+            ClusterAnalysisStep::DeprecatedApiCheck => "deprecated-api-check",
+            ClusterAnalysisStep::Succeeded => "succeeded",
+            ClusterAnalysisStep::Error => "error",
+            ClusterAnalysisStep::Terminated => "terminated",
+        })
     }
 }
 
@@ -823,6 +850,13 @@ impl EventDetails {
                 | BlueprintStep::Cancelled
                 | BlueprintStep::Diff
                 | BlueprintStep::DeployedError => return,
+            },
+            Stage::ClusterAnalysis(step) => match step {
+                ClusterAnalysisStep::Start
+                | ClusterAnalysisStep::CostRecommendation
+                | ClusterAnalysisStep::DeprecatedApiCheck
+                | ClusterAnalysisStep::Succeeded => Stage::ClusterAnalysis(ClusterAnalysisStep::Error),
+                ClusterAnalysisStep::Error | ClusterAnalysisStep::Terminated => return,
             },
         };
     }

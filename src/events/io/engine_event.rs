@@ -108,6 +108,8 @@ pub enum Stage {
     Infrastructure(io::InfrastructureStep),
     Environment(io::EnvironmentStep),
     Blueprint(io::BlueprintStep),
+    #[serde(rename = "cluster-analysis")]
+    ClusterAnalysis(io::ClusterAnalysisStep),
 }
 
 impl From<events::Stage> for Stage {
@@ -116,6 +118,7 @@ impl From<events::Stage> for Stage {
             events::Stage::Infrastructure(step) => Stage::Infrastructure(step.into()),
             events::Stage::Environment(step) => Stage::Environment(step.into()),
             events::Stage::Blueprint(step) => Stage::Blueprint(step.into()),
+            events::Stage::ClusterAnalysis(step) => Stage::ClusterAnalysis(step.into()),
         }
     }
 }
