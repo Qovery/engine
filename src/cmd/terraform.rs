@@ -1181,12 +1181,14 @@ pub fn terraform_plan_internal(
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
     is_destroy: bool,
+    lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     // plan
+    let lock_arg = format!("-lock={lock}");
     let terraform_args = if is_destroy {
-        vec!["plan", "-destroy", "-no-color", "-out", "tf_plan"]
+        vec!["plan", "-destroy", lock_arg.as_str(), "-no-color", "-out", "tf_plan"]
     } else {
-        vec!["plan", "-no-color", "-out", "tf_plan"]
+        vec!["plan", lock_arg.as_str(), "-no-color", "-out", "tf_plan"]
     };
     terraform_exec(root_dir, terraform_args, envs, validators)
 }
@@ -1214,7 +1216,7 @@ fn terraform_apply_internal_with_options(
                 let _ = manage_common_issues(root_dir, "", &err, validators);
 
                 // We have to re-do a plan to update the tf_plan file state
-                let _ = match terraform_plan_internal(root_dir, envs, validators, false) {
+                let _ = match terraform_plan_internal(root_dir, envs, validators, false, true) {
                     Ok(plan) => plan,
                     Err(err) => return OperationResult::Retry(err),
                 };
@@ -1249,7 +1251,7 @@ pub fn terraform_apply_with_specific_resources(
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         // terraform plan first
         if is_dry_run {
-            let plan = match terraform_plan_internal(root_dir, envs, validators, false) {
+            let plan = match terraform_plan_internal(root_dir, envs, validators, false, true) {
                 Ok(plan) => plan,
                 Err(err) => return OperationResult::Retry(err),
             };
@@ -1297,7 +1299,7 @@ pub fn terraform_destroy_with_specific_resources(
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
         if is_dry_run {
             // For dry run, just show the plan
-            let plan = match terraform_plan_internal(root_dir, envs, validators, true) {
+            let plan = match terraform_plan_internal(root_dir, envs, validators, true, true) {
                 Ok(plan) => plan,
                 Err(err) => return OperationResult::Retry(err),
             };
@@ -1462,6 +1464,7 @@ fn terraform_run(
             envs,
             validators,
             actions.contains(TerraformAction::DESTROY),
+            true,
         )?);
     }
 
@@ -1531,7 +1534,7 @@ pub fn terraform_plan(
         TerraformValidators::Default
     };
 
-    terraform_plan_internal(root_dir, envs, &validators, is_destroy)
+    terraform_plan_internal(root_dir, envs, &validators, is_destroy, true)
 }
 
 pub fn terraform_output<T: DeserializeOwned>(root_dir: &str, envs: &[(&str, &str)]) -> Result<T, TerraformError> {

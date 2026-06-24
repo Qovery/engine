@@ -155,7 +155,8 @@ pub fn diff_underlying_terraform(
         event_details.clone(),
         EventMessage::new("Running terraform plan on underlying module".to_string(), None),
     ));
-    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false)
+    // Preview is read-only — disable state locking so it never blocks a real deploy
+    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false, false)
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(truncate_diff_payload(&plan_output))

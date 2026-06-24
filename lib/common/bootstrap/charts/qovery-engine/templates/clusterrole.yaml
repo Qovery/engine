@@ -17,6 +17,16 @@ rules:
       - '*'
     verbs:
       - '*'
+{{- else if eq .Values.rbac.clusterPermission "blueprint" }}
+  # Blueprint engine only reads deployed services' terraform state secrets to compute previews.
+  # Preview plans run with -lock=false, so no lease or secret-write access is needed.
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
 {{- else if eq .Values.rbac.clusterPermission "deployer" }}
   - apiGroups:
       - ""
