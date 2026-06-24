@@ -300,6 +300,7 @@ function deploy_engines_cluster_analysis_static_ip() { ## Release cluster analys
   $ENGINE_DIR/lib/common/bootstrap/charts/qovery-engine \
   --set-string \
 image.tag="$tag",\
+nameOverride="qovery-engine-cluster-analysis",\
 fullnameOverride="$name",\
 environmentVariables.CLOUD_PROVIDER="aws",\
 environmentVariables.ENGINE_TAG_VERSION="$tag",\
@@ -314,6 +315,8 @@ environmentVariables.CLUSTER_JWT_TOKEN="$jwt_token",\
 environmentVariables.QOVERY_AWS_APN_ID="$QOVERY_AWS_APN_ID",\
 rbac.clusterPermission="none",\
 buildContainer.enabled="false",\
+buildContainer.environmentVariables.BUILDER_KUBE_ENABLED="false",\
+nodeSelector."kubernetes\.io/arch"="amd64",\
 metrics.enabled="true",\
 terminationGracePeriodSeconds="14400",\
 autoscaler.enabled="true",\
