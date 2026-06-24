@@ -100,6 +100,7 @@ impl KrrCmd {
             .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
             .collect::<Vec<_>>();
         envs_owned.push(("KUBECONFIG".to_string(), kubeconfig.to_string_lossy().to_string()));
+        envs_owned.push(("COLUMNS".to_string(), "200".to_string()));
         let envs_ref = envs_owned
             .iter()
             .map(|(key, value)| (key.as_str(), value.as_str()))
