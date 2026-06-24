@@ -5,7 +5,10 @@ use crate::infrastructure::helm_charts::nginx_ingress_chart::{
     NginxHttpSnippet as NginxHttpSnippetModel, NginxLimitRequestStatusCode as NginxLimitRequestStatusCodeModel,
     NginxServerSnippet as NginxServerSnippetModel,
 };
-use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::EnvoyGatewayApiPathEscapedSlashesAction as EnvoyGatewayApiPathEscapedSlashesActionModel;
+use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
+    EnvoyClientValidationCaCertificate as EnvoyClientValidationCaCertificateModel,
+    EnvoyGatewayApiPathEscapedSlashesAction as EnvoyGatewayApiPathEscapedSlashesActionModel,
+};
 use crate::infrastructure::models::cloud_provider::Kind as KindModel;
 use crate::infrastructure::models::cloud_provider::aws::ec2_ami::Ec2Ami as Ec2AmiModel;
 use crate::infrastructure::models::cluster_profile::ClusterProfile as ClusterProfileModel;
@@ -19,7 +22,7 @@ use ipnet::IpNet;
 use reqwest::StatusCode;
 use serde::Deserialize as SerdeDeserialize;
 use serde_derive::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::str;
 use std::time::Duration;
@@ -28,6 +31,8 @@ use thiserror::Error;
 pub const CLOUDWATCH_RETENTION_DAYS: &[u32] = &[
     0, 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 2192, 2557, 2922, 3288, 3653,
 ];
+const ENVOY_CLIENT_VALIDATION_SECRET_NAME_PREFIX: &str = "envoy-client-validation-";
+const ENVOY_CLIENT_VALIDATION_MAX_CA_CERTIFICATES: usize = 8;
 
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum InputError {
@@ -436,6 +441,79 @@ impl From<&str> for LoadBalancerIpAllocationId {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnvoyClientValidationCaCertificate {
+    pub name: String,
+    pub ca_crt: String,
+}
+
+impl EnvoyClientValidationCaCertificate {
+    pub fn to_model(&self) -> Result<EnvoyClientValidationCaCertificateModel, InputError> {
+        let field_name = "envoy.client_validation.ca_certificates".to_string();
+        let name = self.name.trim();
+        let ca_crt = self.ca_crt.trim();
+
+        if name.is_empty() {
+            return Err(InputError::InvalidInputFieldValue {
+                field_name,
+                message: "certificate `name` must not be empty".to_string(),
+            });
+        }
+
+        if !is_valid_kubernetes_secret_name(name) {
+            return Err(InputError::InvalidInputFieldValue {
+                field_name,
+                message: format!(
+                    "certificate `{name}` has an invalid `name`: expected a valid Kubernetes DNS-1123 subdomain"
+                ),
+            });
+        }
+
+        let secret_name = envoy_client_validation_secret_name(name);
+        if !is_valid_kubernetes_secret_name(&secret_name) {
+            return Err(InputError::InvalidInputFieldValue {
+                field_name,
+                message: format!(
+                    "certificate `{name}` has an invalid `name`: final secret name `{secret_name}` must be a valid Kubernetes DNS-1123 subdomain"
+                ),
+            });
+        }
+
+        if ca_crt.is_empty() {
+            return Err(InputError::InvalidInputFieldValue {
+                field_name,
+                message: format!("certificate `{name}` has an empty `ca_crt`"),
+            });
+        }
+
+        Ok(EnvoyClientValidationCaCertificateModel {
+            name: secret_name,
+            namespace: crate::helm::HelmChartNamespaces::Qovery,
+            ca_crt: ca_crt.to_string(),
+        })
+    }
+}
+
+fn envoy_client_validation_secret_name(name: &str) -> String {
+    format!("{ENVOY_CLIENT_VALIDATION_SECRET_NAME_PREFIX}{name}")
+}
+
+fn is_valid_kubernetes_secret_name(name: &str) -> bool {
+    if name.is_empty() || name.len() > 253 {
+        return false;
+    }
+
+    let bytes = name.as_bytes();
+    let is_lowercase_alphanumeric = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
+    let is_dns_subdomain_char = |byte: u8| is_lowercase_alphanumeric(byte) || byte == b'-' || byte == b'.';
+
+    if !is_lowercase_alphanumeric(bytes[0]) || !is_lowercase_alphanumeric(bytes[bytes.len() - 1]) {
+        return false;
+    }
+
+    bytes.iter().all(|byte| is_dns_subdomain_char(*byte))
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct ClusterAdvancedSettings {
@@ -689,6 +767,8 @@ pub struct ClusterAdvancedSettings {
     pub envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: Option<u8>,
     #[serde(alias = "envoy.client_ip_detection.x_forwarded_for.trusted_cidrs", default)]
     pub envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: Vec<IpNet>,
+    #[serde(alias = "envoy.client_validation.ca_certificates", default)]
+    pub envoy_client_validation_ca_certificates: Vec<EnvoyClientValidationCaCertificate>,
     #[serde(alias = "envoy.access_log.format", alias = "envoy.log_format")]
     pub envoy_access_log_format: Option<String>,
     #[serde(
@@ -825,6 +905,7 @@ impl Default for ClusterAdvancedSettings {
             envoy_gateway_api_path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect,
             envoy_client_ip_detection_x_forwarded_for_number_trusted_hops: None,
             envoy_client_ip_detection_x_forwarded_for_trusted_cidrs: vec![],
+            envoy_client_validation_ca_certificates: vec![],
             envoy_access_log_format: None,
             envoy_custom_http_errors_default: None,
             envoy_enable_compression: true,
@@ -847,6 +928,13 @@ impl ClusterAdvancedSettings {
             )));
         }
 
+        if let Err(err) = self.to_envoy_client_validation_ca_certificates() {
+            return Err(Box::new(EngineError::new_invalid_engine_payload_invalid_field_value(
+                event_details,
+                err,
+            )));
+        }
+
         if self.envoy_gateway_controller_replicas == 0 {
             return Err(Box::new(EngineError::new_invalid_engine_payload_invalid_field_value(
                 event_details,
@@ -866,6 +954,38 @@ impl ClusterAdvancedSettings {
         } else {
             None
         }
+    }
+
+    pub fn to_envoy_client_validation_ca_certificates(
+        &self,
+    ) -> Result<Vec<EnvoyClientValidationCaCertificateModel>, InputError> {
+        if self.envoy_client_validation_ca_certificates.len() > ENVOY_CLIENT_VALIDATION_MAX_CA_CERTIFICATES {
+            return Err(InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: format!(
+                    "at most {ENVOY_CLIENT_VALIDATION_MAX_CA_CERTIFICATES} client validation CA certificates are supported"
+                ),
+            });
+        }
+
+        let mut unique_input_names = HashSet::new();
+        for certificate in &self.envoy_client_validation_ca_certificates {
+            let trimmed_name = certificate.name.trim();
+            if !trimmed_name.is_empty() && !unique_input_names.insert(trimmed_name.to_string()) {
+                return Err(InputError::InvalidInputFieldValue {
+                    field_name: "envoy.client_validation.ca_certificates".to_string(),
+                    message: format!("duplicate certificate name `{trimmed_name}`"),
+                });
+            }
+        }
+
+        let certificates: Vec<_> = self
+            .envoy_client_validation_ca_certificates
+            .iter()
+            .map(EnvoyClientValidationCaCertificate::to_model)
+            .collect::<Result<_, _>>()?;
+
+        Ok(certificates)
     }
 }
 
@@ -897,9 +1017,11 @@ mod tests {
     use ipnet::IpNet;
     use uuid::Uuid;
 
+    use crate::helm::HelmChartNamespaces;
+    use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::EnvoyClientValidationCaCertificate as EnvoyClientValidationCaCertificateModel;
     use crate::infrastructure::models::cloud_provider::io::{
-        ClusterAdvancedSettings, EnvoyGatewayApiPathEscapedSlashesAction, InputError, LogFormatEscaping,
-        RegistryMirroringMode, validate_aws_cloudwatch_eks_logs_retention_days,
+        ClusterAdvancedSettings, EnvoyClientValidationCaCertificate, EnvoyGatewayApiPathEscapedSlashesAction,
+        InputError, LogFormatEscaping, RegistryMirroringMode, validate_aws_cloudwatch_eks_logs_retention_days,
     };
     use crate::io_models::types::gateway_api_retry_triggers::GatewayApiRetryTrigger;
     use crate::{
@@ -1225,6 +1347,7 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_retry_http_status_codes, None);
         assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, None);
         assert!(!settings.envoy_gateway_api_path_disable_merge_slashes);
+        assert!(settings.envoy_client_validation_ca_certificates.is_empty());
         assert_eq!(
             settings.envoy_gateway_api_path_escaped_slashes_action,
             EnvoyGatewayApiPathEscapedSlashesAction::UnescapeAndRedirect
@@ -1245,7 +1368,13 @@ mod tests {
             "envoy.gateway_api.retry.http_status_codes": "503",
             "envoy.gateway_api.retry.per_try_timeout_seconds": 2,
             "envoy.gateway_api.path.disable_merge_slashes": true,
-            "envoy.gateway_api.path.escaped_slashes_action": "KeepUnchanged"
+            "envoy.gateway_api.path.escaped_slashes_action": "KeepUnchanged",
+            "envoy.client_validation.ca_certificates": [
+                {
+                    "name": "cloudflare-origin-pull-ca",
+                    "ca_crt": "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----"
+                }
+            ]
         }
         "#;
         let settings: ClusterAdvancedSettings = serde_json::from_str(data).unwrap();
@@ -1263,8 +1392,202 @@ mod tests {
         assert_eq!(settings.envoy_gateway_api_retry_per_try_timeout_seconds, Some(2));
         assert!(settings.envoy_gateway_api_path_disable_merge_slashes);
         assert_eq!(
+            settings.envoy_client_validation_ca_certificates,
+            vec![EnvoyClientValidationCaCertificate {
+                name: "cloudflare-origin-pull-ca".to_string(),
+                ca_crt: "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----".to_string(),
+            }]
+        );
+        assert_eq!(
             settings.envoy_gateway_api_path_escaped_slashes_action,
             EnvoyGatewayApiPathEscapedSlashesAction::KeepUnchanged
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_to_model_sets_qovery_namespace() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![
+                EnvoyClientValidationCaCertificate {
+                    name: "cloudflare.origin-pull-ca".to_string(),
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nPRIMARY\n-----END CERTIFICATE-----".to_string(),
+                },
+                EnvoyClientValidationCaCertificate {
+                    name: "shared-origin-pull-ca".to_string(),
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nBACKUP\n-----END CERTIFICATE-----".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let certificates = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect("certificates should parse");
+
+        assert_eq!(
+            certificates,
+            vec![
+                EnvoyClientValidationCaCertificateModel {
+                    name: "envoy-client-validation-cloudflare.origin-pull-ca".to_string(),
+                    namespace: HelmChartNamespaces::Qovery,
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nPRIMARY\n-----END CERTIFICATE-----".to_string(),
+                },
+                EnvoyClientValidationCaCertificateModel {
+                    name: "envoy-client-validation-shared-origin-pull-ca".to_string(),
+                    namespace: HelmChartNamespaces::Qovery,
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nBACKUP\n-----END CERTIFICATE-----".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_empty_name() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![EnvoyClientValidationCaCertificate {
+                name: "   ".to_string(),
+                ca_crt: "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("empty certificate name should be rejected");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: "certificate `name` must not be empty".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_empty_content() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![EnvoyClientValidationCaCertificate {
+                name: "cloudflare-origin-pull-ca".to_string(),
+                ca_crt: " \n\t ".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("empty certificate content should be rejected");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: "certificate `cloudflare-origin-pull-ca` has an empty `ca_crt`".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_invalid_kubernetes_secret_name() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![EnvoyClientValidationCaCertificate {
+                name: "Cloudflare_Origin_Pull_CA".to_string(),
+                ca_crt: "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("invalid kubernetes secret name should be rejected");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: "certificate `Cloudflare_Origin_Pull_CA` has an invalid `name`: expected a valid Kubernetes DNS-1123 subdomain".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_name_when_prefixed_secret_name_exceeds_limit() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![EnvoyClientValidationCaCertificate {
+                name: "a".repeat(230),
+                ca_crt: "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----".to_string(),
+            }],
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("final prefixed secret name should respect kubernetes length limit");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: format!(
+                    "certificate `{}` has an invalid `name`: final secret name `envoy-client-validation-{}` must be a valid Kubernetes DNS-1123 subdomain",
+                    "a".repeat(230),
+                    "a".repeat(230)
+                ),
+            }
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_duplicate_names() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: vec![
+                EnvoyClientValidationCaCertificate {
+                    name: "cloudflare-origin-pull-ca".to_string(),
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nONE\n-----END CERTIFICATE-----".to_string(),
+                },
+                EnvoyClientValidationCaCertificate {
+                    name: "cloudflare-origin-pull-ca".to_string(),
+                    ca_crt: "-----BEGIN CERTIFICATE-----\nTWO\n-----END CERTIFICATE-----".to_string(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("duplicate secret names should be rejected");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: "duplicate certificate name `cloudflare-origin-pull-ca`".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_envoy_client_validation_ca_certificates_reject_more_than_crd_limit() {
+        let settings = ClusterAdvancedSettings {
+            envoy_client_validation_ca_certificates: (0..=super::ENVOY_CLIENT_VALIDATION_MAX_CA_CERTIFICATES)
+                .map(|index| EnvoyClientValidationCaCertificate {
+                    name: format!("cloudflare-origin-pull-ca-{index}"),
+                    ca_crt: format!("-----BEGIN CERTIFICATE-----\nTEST-{index}\n-----END CERTIFICATE-----"),
+                })
+                .collect(),
+            ..Default::default()
+        };
+
+        let err = settings
+            .to_envoy_client_validation_ca_certificates()
+            .expect_err("certificate count above the CRD limit should be rejected");
+
+        assert_eq!(
+            err,
+            InputError::InvalidInputFieldValue {
+                field_name: "envoy.client_validation.ca_certificates".to_string(),
+                message: "at most 8 client validation CA certificates are supported".to_string(),
+            }
         );
     }
 

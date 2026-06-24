@@ -60,6 +60,20 @@ spec:
     http:
       streamIdleTimeout: "{{ $streamIdleTimeoutSeconds }}s"
   {{- end }}
+  {{- with .Values.gateway.qoveryPublic.clientValidation }}
+    {{- with .caCertificates }}
+      {{- if gt (len .) 0 }}
+  tls:
+    clientValidation:
+      caCertificateRefs:
+      {{- range . }}
+        - kind: Secret
+          name: {{ .name | quote }}
+          namespace: {{ .namespace | quote }}
+      {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
   path:
     disableMergeSlashes: {{ .Values.gateway.qoveryPublic.path.disableMergeSlashes }}
     escapedSlashesAction: {{ .Values.gateway.qoveryPublic.path.escapedSlashesAction }}

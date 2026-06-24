@@ -43,6 +43,13 @@ impl XForwardedForClientIpDetection {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EnvoyClientValidationCaCertificate {
+    pub name: String,
+    pub namespace: HelmChartNamespaces,
+    pub ca_crt: String,
+}
+
 #[derive(Default)]
 pub enum EnvoyGatewayApiPathEscapedSlashesAction {
     KeepUnchanged,      // Preserve %2F as-is in the upstream path.
@@ -68,6 +75,7 @@ impl std::fmt::Display for EnvoyGatewayApiPathEscapedSlashesAction {
 pub struct QoveryClusterGatewayChartOptions {
     pub dns_cloudflare_proxied: bool, // render provider-specific Cloudflare proxy annotation on bootstrap Gateway routes
     pub x_forwarded_for_client_ip_detection: XForwardedForClientIpDetection, // https://gateway.envoyproxy.io/v1.4/tasks/traffic/client-traffic-policy/#configure-client-ip-detection
+    pub client_validation_ca_certificates: Vec<EnvoyClientValidationCaCertificate>, // client TLS trust anchors rendered as managed Secrets and referenced by the listener policy
     pub http_stream_idle_timeout_seconds: Option<u32>, // stream idle timeout for downstream HTTP streams
     pub path_disable_merge_slashes: bool, // preserve duplicate slashes behavior at gateway-level path handling
     pub path_escaped_slashes_action: EnvoyGatewayApiPathEscapedSlashesAction, // escaped slash handling action for gateway-level path handling
@@ -167,6 +175,21 @@ impl ToCommonHelmChart for QoveryClusterGatewayChart {
                 }
             }
             XForwardedForClientIpDetection::None => {}
+        }
+
+        for (index, certificate) in self.chart_options.client_validation_ca_certificates.iter().enumerate() {
+            chart_set_values.push(ChartSetValue {
+                key: format!("gateway.qoveryPublic.clientValidation.caCertificates[{index}].name"),
+                value: certificate.name.clone(),
+            });
+            chart_set_values.push(ChartSetValue {
+                key: format!("gateway.qoveryPublic.clientValidation.caCertificates[{index}].namespace"),
+                value: certificate.namespace.to_string(),
+            });
+            values_string.push(ChartSetValue {
+                key: format!("gateway.qoveryPublic.clientValidation.caCertificates[{index}].caCrt"),
+                value: certificate.ca_crt.clone(),
+            });
         }
 
         if let Some(stream_idle_timeout_seconds) = self.chart_options.http_stream_idle_timeout_seconds {
@@ -446,7 +469,8 @@ mod tests {
     use crate::environment::models::domain::Domain;
     use crate::helm::{HelmChartNamespaces, HpaConfig};
     use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
-        QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
+        EnvoyClientValidationCaCertificate, QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions,
+        XForwardedForClientIpDetection,
     };
     use crate::infrastructure::helm_charts::{
         HelmChartType, ToCommonHelmChart, get_helm_path_kubernetes_provider_sub_folder_name,
@@ -457,7 +481,7 @@ mod tests {
     use crate::infrastructure::models::load_balancer::LoadBalancer;
     use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::AwsAlbLoadBalancer;
     use crate::io_models::QoveryIdentifier;
-    use std::collections::HashSet;
+    use std::collections::{HashMap, HashSet};
     use std::env;
 
     fn get_domain() -> Domain {
@@ -765,5 +789,80 @@ mod tests {
             .collect();
 
         assert!(values.contains(&("dns.cloudflareProxied", "true")));
+    }
+
+    #[test]
+    fn client_validation_ca_certificates_are_rendered_for_cluster_client_traffic_policy() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_eip_allocation_ids: None,
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                aws_apn_id: "pc:test-apn".to_string(),
+            }),
+            QoveryClusterGatewayChartOptions {
+                client_validation_ca_certificates: vec![
+                    EnvoyClientValidationCaCertificate {
+                        name: "envoy-client-validation-cloudflare-origin-pull-ca".to_string(),
+                        namespace: HelmChartNamespaces::Qovery,
+                        ca_crt: "-----BEGIN CERTIFICATE-----\nPRIMARY\n-----END CERTIFICATE-----".to_string(),
+                    },
+                    EnvoyClientValidationCaCertificate {
+                        name: "envoy-client-validation-cloudflare-origin-pull-backup-ca".to_string(),
+                        namespace: HelmChartNamespaces::Qovery,
+                        ca_crt: "-----BEGIN CERTIFICATE-----\nBACKUP\n-----END CERTIFICATE-----".to_string(),
+                    },
+                ],
+                ..Default::default()
+            },
+            false,
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let values: HashMap<&str, &str> = common_chart
+            .chart_info
+            .values
+            .iter()
+            .map(|entry| (entry.key.as_str(), entry.value.as_str()))
+            .collect();
+
+        assert_eq!(
+            values.get("gateway.qoveryPublic.clientValidation.caCertificates[0].name"),
+            Some(&"envoy-client-validation-cloudflare-origin-pull-ca")
+        );
+        assert_eq!(
+            values.get("gateway.qoveryPublic.clientValidation.caCertificates[0].namespace"),
+            Some(&"qovery")
+        );
+        assert_eq!(
+            values.get("gateway.qoveryPublic.clientValidation.caCertificates[1].name"),
+            Some(&"envoy-client-validation-cloudflare-origin-pull-backup-ca")
+        );
+        assert_eq!(
+            values.get("gateway.qoveryPublic.clientValidation.caCertificates[1].namespace"),
+            Some(&"qovery")
+        );
+
+        let values_string: HashMap<&str, &str> = common_chart
+            .chart_info
+            .values_string
+            .iter()
+            .map(|entry| (entry.key.as_str(), entry.value.as_str()))
+            .collect();
+
+        assert_eq!(
+            values_string.get("gateway.qoveryPublic.clientValidation.caCertificates[0].caCrt"),
+            Some(&"-----BEGIN CERTIFICATE-----\nPRIMARY\n-----END CERTIFICATE-----")
+        );
+        assert_eq!(
+            values_string.get("gateway.qoveryPublic.clientValidation.caCertificates[1].caCrt"),
+            Some(&"-----BEGIN CERTIFICATE-----\nBACKUP\n-----END CERTIFICATE-----")
+        );
     }
 }

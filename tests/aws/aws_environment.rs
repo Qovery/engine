@@ -573,14 +573,39 @@ fn deploy_a_working_environment_with_domain() {
                 .expect("AWS_DEFAULT_TEST_DOMAIN is not set in secrets")
                 .as_str(),
         );
+
+        let mut modified_environment = environment.clone();
+        modified_environment.applications.clear();
+        modified_environment.routers.clear();
+
+        for (idx, router) in environment.routers.into_iter().enumerate() {
+            // Keep the AWS setup aligned with the other providers so this test stays focused on
+            // ingress rendering instead of external DNS propagation.
+            let mut router = router.clone();
+            let cd = CustomDomain {
+                domain: format!("fake-custom-domain-{idx}.qovery.io"),
+                target_domain: format!("validation-domain-{idx}"),
+                generate_certificate: true,
+                use_cdn: true,
+            };
+
+            router.custom_domains = vec![cd];
+            modified_environment.routers.push(router);
+        }
+
+        for mut application in environment.applications.into_iter() {
+            let default_http_port = application
+                .ports
+                .iter_mut()
+                .find(|port| port.is_default && port.protocol == Protocol::HTTP)
+                .expect("default HTTP port should exist");
+            default_http_port.path = Some("/(.*)".to_string());
+            default_http_port.path_rewrite = Some("/public/$1".to_string());
+            modified_environment.applications.push(application);
+        }
+
+        environment = modified_environment;
         let router_id = environment.routers[0].long_id;
-        let default_http_port = environment.applications[0]
-            .ports
-            .iter_mut()
-            .find(|port| port.is_default && port.protocol == Protocol::HTTP)
-            .expect("default HTTP port should exist");
-        default_http_port.path = Some("/(.*)".to_string());
-        default_http_port.path_rewrite = Some("/public/\\1".to_string());
 
         let mut environment_delete = environment.clone();
         environment_delete.action = Action::Delete;
@@ -593,12 +618,18 @@ fn deploy_a_working_environment_with_domain() {
 
         let kube_client = infra_ctx.mk_kube_client().expect("kube client is not set").client();
         let ingress_api: Api<Ingress> = Api::namespaced(kube_client, environment.kube_name.as_str());
-        let ingresses = block_on(async {
-            ingress_api
-                .list(&ListParams::default().labels(&format!("qovery.com/service-id={router_id}")))
-                .await
+        let ingresses = retry::retry(Fibonacci::from_millis(5000).take(8), || {
+            match block_on(async {
+                ingress_api
+                    .list(&ListParams::default().labels(&format!("qovery.com/service-id={router_id}")))
+                    .await
+            }) {
+                Ok(ingresses) if !ingresses.items.is_empty() => retry::OperationResult::Ok(ingresses),
+                Ok(_) => retry::OperationResult::Retry("router ingress not created yet"),
+                Err(_) => retry::OperationResult::Retry("failed to list ingress resources"),
+            }
         })
-        .expect("Failed to list ingress resources");
+        .expect("Failed to list ingress resources after retries");
         assert!(!ingresses.items.is_empty(), "Router ingress should exist");
 
         let ingress = ingresses
