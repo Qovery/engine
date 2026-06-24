@@ -49,7 +49,17 @@ pub(super) fn delete_gke_cluster(
         let _remove_access_token_file = guard(gcp_access_token_file_path, |path| {
             let _ = std::fs::remove_file(path);
         });
-        tf_resources.create(&logger)?
+        match tf_resources.create(&logger) {
+            Ok(tf_output) => tf_output,
+            Err(e) => {
+                logger.warn(EventMessage::new(
+                    "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                    Some(e.to_string()),
+                ));
+                // Fall back to existing state outputs so teardown can still proceed.
+                tf_resources.output()?
+            }
+        }
     };
     update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
