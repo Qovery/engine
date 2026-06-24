@@ -402,14 +402,16 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
 
     /// On-disk folder name for the chart and its value overlays. PostgreSQL 10-17 use the Bitnami
     /// chart under `postgresql-bitnami`; 18+ use the official-image `postgresql` chart. Likewise Redis
-    /// 5-7 use `redis-bitnami` and 8+ use the official-image `redis` chart. The Helm release name and
-    /// chart identity stay unchanged (`postgresql`, `redis`) for all of them.
+    /// 5-7 use `redis-bitnami` and 8+ use the official-image `redis` chart. MongoDB lives under
+    /// `mongodb-bitnami` for all versions (renamed in prep for a future non-Bitnami MongoDB chart).
+    /// The Helm release name and chart identity stay unchanged (`postgresql`, `redis`, `mongodb`).
     fn chart_folder_name(&self) -> &'static str {
         match T::db_type() {
             service::DatabaseType::PostgreSQL if self.is_bitnami_postgres() => "postgresql-bitnami",
             service::DatabaseType::PostgreSQL => "postgresql",
             service::DatabaseType::Redis if self.is_bitnami_redis() => "redis-bitnami",
             service::DatabaseType::Redis => "redis",
+            service::DatabaseType::MongoDB => "mongodb-bitnami",
             _ => T::lib_directory_name(),
         }
     }
