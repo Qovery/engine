@@ -1,6 +1,6 @@
 use crate::errors::EngineError;
-use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
+use crate::events::{EventMessage, InfrastructureStep};
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
 use crate::infrastructure::action::deploy_terraform::TerraformInfraResources;
@@ -41,7 +41,17 @@ pub fn delete_kapsule_cluster(
         cluster.short_id()
     ));
     logger.info("Running Terraform apply before running a delete.");
-    let qovery_terraform_output: ScalewayQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let qovery_terraform_output: ScalewayQoveryTerraformOutput = match tf_resources.create(&logger) {
+        Ok(tf_output) => tf_output,
+        Err(e) => {
+            logger.warn(EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
+            ));
+            // Fall back to existing state outputs so teardown can still proceed.
+            tf_resources.output()?
+        }
+    };
     update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     // delete all PDBs first, because those will prevent node deletion
