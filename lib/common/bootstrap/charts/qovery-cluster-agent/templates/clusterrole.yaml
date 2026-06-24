@@ -92,4 +92,12 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - ""
+    resources:
+      - "serviceaccounts"
+    verbs:
+      - "impersonate"
+    resourceNames:
+      - "qovery-readonly"
 {{- end }}
