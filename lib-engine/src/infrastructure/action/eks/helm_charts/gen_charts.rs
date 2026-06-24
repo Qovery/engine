@@ -788,6 +788,10 @@ pub(super) fn eks_helm_charts(
                             .cluster_advanced_settings
                             .envoy_client_ip_detection_x_forwarded_for_number_trusted_hops,
                     ),
+                    client_validation_ca_certificates: chart_config_prerequisites
+                        .cluster_advanced_settings
+                        .to_envoy_client_validation_ca_certificates()
+                        .map_err(CommandError::from)?,
                     http_stream_idle_timeout_seconds: chart_config_prerequisites
                         .cluster_advanced_settings
                         .envoy_gateway_api_http_stream_idle_timeout_seconds,
