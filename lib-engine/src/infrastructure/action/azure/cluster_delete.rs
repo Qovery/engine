@@ -42,7 +42,17 @@ pub(super) fn delete_aks_cluster(
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: AksQoveryTerraformOutput = tf_resources.create(&logger)?;
+    let qovery_terraform_output: AksQoveryTerraformOutput = match tf_resources.create(&logger) {
+        Ok(tf_output) => tf_output,
+        Err(e) => {
+            logger.warn(EventMessage::new(
+                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                Some(e.to_string()),
+            ));
+            // Fall back to existing state outputs so teardown (object storage, etc.) can still proceed.
+            tf_resources.output()?
+        }
+    };
     update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
     // delete all PDBs first, because those will prevent node deletion
