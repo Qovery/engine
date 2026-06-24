@@ -121,7 +121,7 @@ impl ClusterAnalysisTask {
                     self.get_event_details(ClusterAnalysisStep::DeprecatedApiCheck),
                     EventMessage::new_from_safe("Running Kubernetes deprecated API analysis".to_string()),
                 ));
-                self.run_pluto(
+                self.run_deprecated_api_check(
                     payload,
                     &kubeconfig_path,
                     credentials_envs.as_slice(),
@@ -188,7 +188,7 @@ impl ClusterAnalysisTask {
             })
     }
 
-    fn run_pluto(
+    fn run_deprecated_api_check(
         &self,
         payload: &DeprecatedApiCheckRequest,
         kubeconfig_path: &std::path::Path,
