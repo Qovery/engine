@@ -414,7 +414,6 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
             service::DatabaseType::Redis => "redis",
             service::DatabaseType::MongoDB => "mongodb-bitnami",
             service::DatabaseType::MySQL => "mysql-bitnami",
-            _ => T::lib_directory_name(),
         }
     }
 
