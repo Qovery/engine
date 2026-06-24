@@ -131,7 +131,7 @@ Note: naming image tags is made of the first 7 chars Github commit id + a dash +
 
 ## Hot fix process
 
-1. Create a branch containing the prefix `hot-fix` in its name, i.e:
+1. Create a branch whose name **starts with** `hot-fix` (the build jobs gate on `$CI_COMMIT_BRANCH =~ /^hot-fix/`), i.e:
 
 - `hot-fix-staging` for staging: useful if we don't want some commits already merged in `main`
 - `hot-fix-prod` for prod: the branch should be based on last prod tag / commit
@@ -143,13 +143,15 @@ git commit
 git push origin HEAD:hot-fix-staging
 ```
 
-1. Once the target branch has been pushed, a new pipeline should be created with the follwing jobs:
+1. Once the target branch has been pushed, a **branch pipeline** should be created with the following jobs:
 
 - release-image
 - release-image-slim
 - create-multi-arch-image
 
-1. Push a tag on the HEAD of the target branch
+  > ⚠️ Do **not** open a merge request for this branch. An MR creates a `merge_request_event` pipeline where `$CI_COMMIT_BRANCH` is unset, so `create-multi-arch-image` is skipped — and without it the plain `engine:<sha>` image is never built, which makes the later `docker-tag` job fail with `engine:<sha>: not found`.
+
+1. Wait for `create-multi-arch-image` to finish (it pushes `engine:<sha>`), then push a tag on the HEAD of the target branch
 
    ```sh
    git tag vX.Y.X
@@ -189,17 +191,22 @@ TODO
 ### How to deploy new test cluster
 
 _Note_: Make sure `LIB_ROOT_DIR` and `WORKSPACE_ROOT_DIR` are set.
+
 #### GKE
+
 1. `gcloud auth login`
 2. `gcloud components install gke-gcloud-auth-plugin`
 3. `cargo nextest run --features test-gcp-infra -E 'test(create_and_destroy_gke_cluster_in_europe_west_10)' --no-capture`
-create_and_destroy_eks_cluster
+   create_and_destroy_eks_cluster
+
 #### EKS
+
 `cargo nextest run --features test-aws-infra -E 'test(create_and_destroy_eks_cluster)' --no-capture`
 
 ##### Rendered configuration
-1. You can find the cluster's rendered configuration at `$WORKSPACE_ROOT_DIR/<Excution date>/bootstrap/<Cluster-name>/terraform` 
-  e.g: `~/.qovery-workspace/2026-04-02T09-52-18-819264-00-00/bootstrap/zf03426ac/terraform`
+
+1. You can find the cluster's rendered configuration at `$WORKSPACE_ROOT_DIR/<Excution date>/bootstrap/<Cluster-name>/terraform`
+   e.g: `~/.qovery-workspace/2026-04-02T09-52-18-819264-00-00/bootstrap/zf03426ac/terraform`
 2. To get the connection info to the cluster run `./helper.sh get_connection_details`
 
 ## How to deploy an application
@@ -221,17 +228,15 @@ DEPLOY_FROM_FILE=<path_tojson_file>
 DEPLOY_FROM_FILE_KIND=<env|infra> # choose between infra (infrastructure deployment) and env (environment deployment)
 ```
 
-
 ## FAQ
 
 - How to activate the debugger: add the `RUST_LOG=qovery_engine=debug` env variable
 - How to update the rust-toolchain:
-
-    1. Update the `rust-toolchain` file with the new version. Example of content:
+  1. Update the `rust-toolchain` file with the new version. Example of content:
 
       ```
       1.92.0
       ```
 
-    1. Then create a PR and, build the CI image with the new toolchain version with the `build-engine-ci-image` pipeline job.
-      Once the pipeline is done, you can update the `gitlab-ci.yml` with the new image version, them
+  1. Then create a PR and, build the CI image with the new toolchain version with the `build-engine-ci-image` pipeline job.
+     Once the pipeline is done, you can update the `gitlab-ci.yml` with the new image version, them
