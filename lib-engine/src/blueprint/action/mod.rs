@@ -67,7 +67,7 @@ pub(crate) fn render_and_apply(
         event_details.clone(),
         EventMessage::new("Running terraform plan".to_string(), None),
     ));
-    terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false)
+    terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false, true)
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     // 4. Terraform apply (skip if dry-run)
@@ -151,7 +151,7 @@ pub(crate) fn render_and_diff(
         event_details.clone(),
         EventMessage::new("Running terraform plan".to_string(), None),
     ));
-    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false)
+    let plan_output = terraform_plan_internal(&dir, &envs, &TerraformValidators::Default, false, false)
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(diff::truncate_diff_payload(&plan_output))
