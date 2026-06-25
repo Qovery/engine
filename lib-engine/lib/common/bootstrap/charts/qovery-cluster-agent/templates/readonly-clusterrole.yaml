@@ -1,0 +1,56 @@
+{{- if and .Values.rbac.create .Values.rbac.clusterRole }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: qovery-extra-view
+rules:
+  - apiGroups: [""]
+    resources:
+     - nodes
+     - persistentvolumes
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources:
+      - storageclasses
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [ "gateway.envoyproxy.io" ]
+    resources:
+      - backends
+      - backendtrafficpolicies
+      - clienttrafficpolicies
+      - envoyextensionpolicies
+      - envoypatchpolicies
+      - envoyproxies
+      - httproutefilters
+      - securitypolicies
+    verbs: [ "get", "list", "watch" ]
+  # Upstream Gateway API
+  - apiGroups: [ "gateway.networking.k8s.io" ]
+    resources:
+      - gatewayclasses
+      - gateways
+      - httproutes
+      - grpcroutes
+      - tcproutes
+      - tlsroutes
+      - udproutes
+      - referencegrants
+      - backendtlspolicies
+    verbs: [ "get", "list", "watch" ]
+  # Karpenter core
+  - apiGroups: ["karpenter.sh"]
+    resources:
+      - nodepools
+      - nodeclaims
+    verbs: ["get", "list", "watch"]
+  # Karpenter AWS provider
+  - apiGroups: ["karpenter.k8s.aws"]
+    resources:
+      - ec2nodeclasses
+    verbs: ["get", "list", "watch"]
+  # Cert Manager
+  - apiGroups: [ "cert-manager.io" ]
+    resources:
+      - clusterissuers
+    verbs: [ "get", "list", "watch" ]
+{{- end }}
