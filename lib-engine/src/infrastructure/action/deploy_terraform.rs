@@ -5,7 +5,7 @@ use crate::cmd::terraform::{
 };
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
-use crate::events::{EventDetails, InfrastructureDiffType};
+use crate::events::{EventDetails, EventMessage, InfrastructureDiffType};
 use crate::infrastructure::action::InfraLogger;
 use crate::template::generate_and_copy_all_files_into_dir;
 use crate::utilities::envs_to_slice;
@@ -131,6 +131,30 @@ impl TerraformInfraResources {
         let envs = envs_to_slice(self.envs.as_slice());
         terraform_output::<T>(self.destination_folder.to_string_lossy().as_ref(), &envs)
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
+    }
+
+    /// Best-effort apply-before-destroy: run `apply`, and on failure fall back to reading the
+    /// existing state outputs. Returns `None` when neither yields deserializable outputs (e.g. the
+    /// cluster was already partially deleted), so callers can skip steps that need a live cluster
+    /// and still proceed to destroy.
+    pub fn create_or_read_output<T: DeserializeOwned>(&self, logger: &impl InfraLogger) -> Option<T> {
+        match self.create::<T>(logger) {
+            Ok(output) => Some(output),
+            Err(e) => {
+                logger.warn(EventMessage::new(
+                    "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
+                    Some(e.to_string()),
+                ));
+                self.output::<T>()
+                    .map_err(|err| {
+                        logger.warn(EventMessage::new(
+                            "Cannot read Terraform outputs; skipping cluster cleanup steps that need them.".to_string(),
+                            Some(err.to_string()),
+                        ));
+                    })
+                    .ok()
+            }
+        }
     }
 
     pub fn delete(

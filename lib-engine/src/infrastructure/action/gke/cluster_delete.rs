@@ -45,34 +45,32 @@ pub(super) fn delete_gke_cluster(
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: GkeQoveryTerraformOutput = {
+    // Best-effort reconcile: apply may fail and the state may no longer hold deserializable outputs
+    // once the cluster is gone. None => skip the cleanup steps that need a reachable cluster.
+    let qovery_terraform_output: Option<GkeQoveryTerraformOutput> = {
         let _remove_access_token_file = guard(gcp_access_token_file_path, |path| {
             let _ = std::fs::remove_file(path);
         });
-        match tf_resources.create(&logger) {
-            Ok(tf_output) => tf_output,
-            Err(e) => {
-                logger.warn(EventMessage::new(
-                    "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                    Some(e.to_string()),
-                ));
-                // Fall back to existing state outputs so teardown can still proceed.
-                tf_resources.output()?
-            }
-        }
+        tf_resources.create_or_read_output(&logger)
     };
-    update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
-    // Configure kubectl to be able to connect to cluster
-    let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
-    cluster.write_runtime_kubeconfig_with_access_token_if_needed()?;
+    // kubeconfig + in-cluster cleanup only make sense when we have outputs (cluster still reachable).
+    if let Some(output) = &qovery_terraform_output {
+        update_cluster_outputs(cluster, output)?;
 
-    // delete all PDBs first, because those will prevent node deletion
-    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
-        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+        // Configure kubectl to be able to connect to cluster
+        let _ = cluster.configure_gcloud_for_cluster(infra_ctx); // TODO(ENG-1802): properly handle this error
+        cluster.write_runtime_kubeconfig_with_access_token_if_needed()?;
+
+        // delete all PDBs first, because those will prevent node deletion
+        if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+            logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+        }
+
+        delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
+    } else {
+        logger.warn("Skipping in-cluster cleanup (PDBs, apps): no Terraform outputs, cluster likely already deleted.");
     }
-
-    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     // GKE's in-cluster cloud-controller creates `k8s-*-node-http-hc` firewall rules (LoadBalancer /
     // node health-check) that Terraform does not track. They can linger after Service deletion and

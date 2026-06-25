@@ -2,7 +2,7 @@ use super::helm_charts::karpenter::KarpenterChart;
 use super::helm_charts::karpenter_configuration::KarpenterConfigurationChart;
 use super::helm_charts::karpenter_crd::KarpenterCrdChart;
 use crate::errors::EngineError;
-use crate::events::{EventMessage, InfrastructureStep, Stage};
+use crate::events::{InfrastructureStep, Stage};
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::action::cluster_outputs_helper::update_cluster_outputs;
 use crate::infrastructure::action::delete_kube_apps::{delete_all_pdbs, delete_kube_apps};
@@ -112,42 +112,41 @@ pub fn delete_eks_cluster(
 
     logger.info(message);
     logger.info("Running Terraform apply before running a delete.");
-    let tf_output: AwsEksQoveryTerraformOutput = match tf_resources.create(&logger) {
-        Ok(tf_output) => tf_output,
-        Err(e) => {
-            logger.warn(EventMessage::new(
-                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                Some(e.to_string()),
-            ));
-            // We want to refresh the kubeconfig if possible even in case of failure.
-            // To be able to delete namespaces on the cluster
-            tf_resources.output()?
+    // Best-effort reconcile: apply may fail and the state may no longer hold deserializable outputs
+    // once the cluster is gone. None => skip the cleanup steps that need a reachable cluster.
+    let tf_output: Option<AwsEksQoveryTerraformOutput> = tf_resources.create_or_read_output(&logger);
+
+    // kubeconfig + in-cluster cleanup only make sense when we have outputs (cluster still reachable).
+    if let Some(output) = &tf_output {
+        update_cluster_outputs(kubernetes, output)?;
+
+        // delete all PDBs first, because those will prevent node deletion
+        if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+            logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
         }
-    };
-    update_cluster_outputs(kubernetes, &tf_output)?;
 
-    // delete all PDBs first, because those will prevent node deletion
-    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
-        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
-    }
+        // Delete all helm charts (except karpenter-* for Karpenter clusters) before draining nodes.
+        // This ensures workload controllers are cleanly removed while nodes are still alive,
+        // preventing finalizer hangs and making the subsequent node drain trivially fast.
+        let skip_helm_release = if kubernetes.is_karpenter_enabled() {
+            HashSet::from([
+                KarpenterChart::chart_name(),
+                KarpenterConfigurationChart::chart_name(),
+                KarpenterCrdChart::chart_name(),
+            ])
+        } else {
+            HashSet::with_capacity(0)
+        };
+        delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger, skip_helm_release)?;
 
-    // Delete all helm charts (except karpenter-* for Karpenter clusters) before draining nodes.
-    // This ensures workload controllers are cleanly removed while nodes are still alive,
-    // preventing finalizer hangs and making the subsequent node drain trivially fast.
-    let skip_helm_release = if kubernetes.is_karpenter_enabled() {
-        HashSet::from([
-            KarpenterChart::chart_name(),
-            KarpenterConfigurationChart::chart_name(),
-            KarpenterCrdChart::chart_name(),
-        ])
+        if kubernetes.is_karpenter_enabled() {
+            let kube_client = infra_ctx.mk_kube_client()?;
+            block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+        }
     } else {
-        HashSet::with_capacity(0)
-    };
-    delete_kube_apps(kubernetes, infra_ctx, event_details.clone(), &logger, skip_helm_release)?;
-
-    if kubernetes.is_karpenter_enabled() {
-        let kube_client = infra_ctx.mk_kube_client()?;
-        block_on(Karpenter::delete(kubernetes, cloud_provider, &kube_client))?;
+        logger.warn(
+            "Skipping in-cluster cleanup (PDBs, apps, Karpenter): no Terraform outputs, cluster likely already deleted.",
+        );
     }
 
     logger.info(format!(
