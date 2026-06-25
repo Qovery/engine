@@ -111,6 +111,7 @@ fn should_increase_app_storage_size() {
             None,
             true,
             None,
+            None,
         )
         .expect("Unable to create application");
 

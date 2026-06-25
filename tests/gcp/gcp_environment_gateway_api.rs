@@ -3353,6 +3353,7 @@ fn deploy_container_with_cors_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -3553,6 +3554,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -3753,6 +3755,7 @@ fn deploy_container_with_header_sticky_session_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -3946,6 +3949,7 @@ fn deploy_container_with_source_ip_sticky_session_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -4132,6 +4136,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -4334,6 +4339,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -4536,6 +4542,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -4759,6 +4766,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -4945,6 +4953,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -5210,6 +5219,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -5459,6 +5469,7 @@ fn deploy_container_with_sticky_session_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -5658,6 +5669,7 @@ fn deploy_container_with_ip_whitelist_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -5862,6 +5874,7 @@ fn deploy_container_with_ip_denylist_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -6066,6 +6079,7 @@ fn deploy_container_with_both_whitelist_and_denylist_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -6291,6 +6305,7 @@ fn deploy_container_with_basic_auth_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -6479,6 +6494,7 @@ fn deploy_container_with_rate_limit_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -6746,6 +6762,7 @@ fn deploy_container_with_custom_headers_enabled_on_gcp_gke_grpc() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -7289,6 +7306,7 @@ fn deploy_container_with_force_ssl_redirect_on_gcp_gke_http() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -11032,6 +11050,7 @@ fn deploy_container_with_custom_http_errors_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();
@@ -11598,6 +11617,7 @@ fn deploy_container_with_circuit_breaker_on_gcp_gke() {
             labels_group_ids: BTreeSet::new(),
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let router_id = Uuid::new_v4();

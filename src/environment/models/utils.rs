@@ -3,6 +3,18 @@ use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
 use crate::io_models::models::CpuArchitecture;
 use std::collections::BTreeMap;
 
+/// Resolve the CPU architectures a service should be scheduled on.
+/// A service-level `cpu_architecture` (QOV-1527) overrides the cluster default; `None` inherits it.
+pub fn effective_cpu_architectures(
+    service_cpu_architecture: Option<CpuArchitecture>,
+    cluster_default_architectures: Vec<CpuArchitecture>,
+) -> Vec<CpuArchitecture> {
+    match service_cpu_architecture {
+        Some(arch) => vec![arch],
+        None => cluster_default_architectures,
+    }
+}
+
 pub fn add_arch_to_deployment_affinity_node(
     deployment_affinity_node_required: &BTreeMap<String, String>,
     cpu_architectures: &[CpuArchitecture],
@@ -57,7 +69,9 @@ pub fn target_karpenter_node_pool(
 
 #[cfg(test)]
 mod tests {
-    use crate::environment::models::utils::{add_arch_to_deployment_affinity_node, need_target_stable_node_pool};
+    use crate::environment::models::utils::{
+        add_arch_to_deployment_affinity_node, effective_cpu_architectures, need_target_stable_node_pool,
+    };
     use crate::infrastructure::models::kubernetes::{Kind, Kubernetes};
     use crate::io_models::models::CpuArchitecture;
     use std::collections::BTreeMap;
@@ -113,6 +127,39 @@ mod tests {
         let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"value".to_string()));
+    }
+
+    #[test]
+    fn test_effective_cpu_architectures_uses_service_override_over_cluster_default() {
+        // QOV-1527: a service-level ARM64 must override an AMD64 cluster default.
+        let result = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
+        assert_eq!(result, vec![CpuArchitecture::ARM64]);
+    }
+
+    #[test]
+    fn test_effective_cpu_architectures_falls_back_to_cluster_default_when_unset() {
+        // QOV-1527 regression: an unset service arch inherits the cluster default.
+        let result = effective_cpu_architectures(None, vec![CpuArchitecture::AMD64]);
+        assert_eq!(result, vec![CpuArchitecture::AMD64]);
+    }
+
+    #[test]
+    fn test_service_cpu_architecture_renders_arm64_node_affinity_over_amd64_cluster_default() {
+        // Composes the actual render path: effective arch (service ARM64 over AMD64 default) -> node affinity.
+        let effective_archs = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
+        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &effective_archs);
+        assert_eq!(result.get("kubernetes.io/arch"), Some(&"arm64".to_string()));
+    }
+
+    #[test]
+    fn test_raw_arch_advanced_setting_wins_over_service_cpu_architecture() {
+        // QOV-1527 precedence: a raw kubernetes.io/arch advanced setting wins over the service cpu_architecture.
+        let mut deployment_affinity_node_required = BTreeMap::<String, String>::new();
+        deployment_affinity_node_required.insert("kubernetes.io/arch".to_string(), "amd64".to_string());
+        let effective_archs = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
+
+        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &effective_archs);
+        assert_eq!(result.get("kubernetes.io/arch"), Some(&"amd64".to_string()));
     }
 
     struct MockKubernetes {

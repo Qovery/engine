@@ -414,6 +414,7 @@ pub fn test_application(test_kube: &dyn Kubernetes, domain: &str) -> Application
         None,
         true,
         None,
+        None,
     )
     .unwrap()
 }
@@ -556,6 +557,7 @@ pub fn test_container(test_kube: &dyn Kubernetes) -> Container<AWSType> {
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
         get_labels_group(),
+        None,
         None,
     )
     .unwrap()
@@ -786,6 +788,7 @@ fn test_job(test_kube: &dyn Kubernetes) -> Job<AWSType> {
         get_labels_group(),
         true,
         "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+        None,
     )
     .unwrap()
 }
@@ -1022,6 +1025,7 @@ fn test_application_with_ndots(test_kube: &dyn Kubernetes, domain: &str, ndots: 
         None,
         true,
         None,
+        None,
     )
     .unwrap()
 }
@@ -1231,6 +1235,7 @@ fn test_container_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Container
         |transmitter| test_kube.context().get_event_details(transmitter),
         get_annotations_group_for_app(),
         get_labels_group(),
+        None,
         None,
     )
     .unwrap()
@@ -1451,6 +1456,7 @@ fn test_job_with_ndots(test_kube: &dyn Kubernetes, ndots: u8) -> Job<AWSType> {
         get_labels_group(),
         true,
         "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+        None,
     )
     .unwrap()
 }

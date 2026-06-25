@@ -18,7 +18,7 @@ use crate::io_models::context::Context;
 use crate::io_models::job::{JobAdvancedSettings, JobSchedule, LifecycleType};
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
+    CpuArchitecture, EnvironmentVariable, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit,
     KubernetesMemoryResourceUnit, MountedFile,
 };
 use crate::utilities::{sanitize_k8s_label_value, to_short_id};
@@ -74,10 +74,12 @@ pub struct Job<T: CloudProvider> {
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) should_delete_shared_registry: bool,
     pub(crate) output_variable_validation_pattern: String,
+    pub(crate) cpu_architecture: Option<CpuArchitecture>,
 }
 
 // Here we define the common behavior among all providers
 impl<T: CloudProvider> Job<T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         context: &Context,
         long_id: Uuid,
@@ -111,6 +113,7 @@ impl<T: CloudProvider> Job<T> {
         labels_groups: Vec<LabelsGroup>,
         should_delete_shared_registry: bool,
         output_variable_validation_pattern: String,
+        cpu_architecture: Option<CpuArchitecture>,
     ) -> Result<Self, JobError> {
         let workspace_directory = crate::fs::workspace_directory(
             context.workspace_root_dir(),
@@ -163,6 +166,7 @@ impl<T: CloudProvider> Job<T> {
             labels_group: LabelsGroupTeraContext::new(labels_groups),
             should_delete_shared_registry,
             output_variable_validation_pattern,
+            cpu_architecture,
         })
     }
 
@@ -193,9 +197,11 @@ impl<T: CloudProvider> Job<T> {
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> JobTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
+        let effective_archs =
+            utils::effective_cpu_architectures(self.cpu_architecture, target.kubernetes.cpu_architectures());
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
-            &target.kubernetes.cpu_architectures(),
+            &effective_archs,
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();

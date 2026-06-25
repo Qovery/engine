@@ -30,8 +30,9 @@ use crate::io_models::application::ApplicationAdvancedSettings;
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
-    KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
+    CpuArchitecture, EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage,
+    KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage,
+    StorageDataTemplate,
 };
 use crate::io_models::services_common::Protocol::{TCP, UDP};
 use crate::kubers_utils::kube_get_resources_by_selector;
@@ -82,10 +83,12 @@ pub struct Application<T: CloudProvider> {
     pub(crate) should_delete_shared_registry: bool,
     pub(crate) deployment_id: String,
     pub(crate) autoscaling: Option<AutoscalingConfig>,
+    pub(crate) cpu_architecture: Option<CpuArchitecture>,
 }
 
 // Here we define the common behavior among all providers
 impl<T: CloudProvider> Application<T> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         context: &Context,
         long_id: Uuid,
@@ -119,6 +122,7 @@ impl<T: CloudProvider> Application<T> {
         ephemeral_storage_in_gib: Option<u32>,
         should_delete_shared_registry: bool,
         autoscaling: Option<AutoscalingConfig>,
+        cpu_architecture: Option<CpuArchitecture>,
     ) -> Result<Self, ApplicationError> {
         // TODO: Check that the information provided are coherent
 
@@ -174,6 +178,7 @@ impl<T: CloudProvider> Application<T> {
                 .map(|s| s.0.to_string())
                 .unwrap_or_default(),
             autoscaling,
+            cpu_architecture,
         })
     }
 
@@ -192,9 +197,11 @@ impl<T: CloudProvider> Application<T> {
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
+        let effective_archs =
+            utils::effective_cpu_architectures(self.cpu_architecture, target.kubernetes.cpu_architectures());
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
-            &target.kubernetes.cpu_architectures(),
+            &effective_archs,
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();

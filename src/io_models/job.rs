@@ -219,6 +219,9 @@ pub struct Job {
     /// Key is the environment variable name / k8s Secret key.
     #[serde(default)]
     pub external_secrets: BTreeMap<String, ExternalSecret>,
+    /// CPU architecture this service must run on. `None` means inherit the cluster default.
+    #[serde(default)]
+    pub cpu_architecture: Option<CpuArchitecture>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
@@ -477,6 +480,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
                 self.output_variable_validation_pattern,
+                self.cpu_architecture,
             )?),
             Kind::Scw => Box::new(models::job::Job::<SCW>::new(
                 context,
@@ -514,6 +518,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
                 self.output_variable_validation_pattern,
+                self.cpu_architecture,
             )?),
             Kind::Gcp => Box::new(models::job::Job::<GCP>::new(
                 context,
@@ -551,6 +556,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
                 self.output_variable_validation_pattern,
+                self.cpu_architecture,
             )?),
             Kind::Azure => Box::new(models::job::Job::<Azure>::new(
                 context,
@@ -588,6 +594,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
                 self.output_variable_validation_pattern,
+                self.cpu_architecture,
             )?),
             Kind::OnPremise => Box::new(models::job::Job::<OnPremise>::new(
                 context,
@@ -625,6 +632,7 @@ impl Job {
                 labels_groups,
                 self.should_delete_shared_registry,
                 self.output_variable_validation_pattern,
+                self.cpu_architecture,
             )?),
         };
 

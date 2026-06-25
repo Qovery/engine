@@ -1781,6 +1781,7 @@ fn deploy_container_with_no_router_and_affinitiy_on_aws_eks() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let ret = environment.deploy_environment(&environment, &infra_ctx);
@@ -2017,6 +2018,7 @@ fn deploy_container_with_no_router_on_aws_eks() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2168,6 +2170,7 @@ fn deploy_container_with_storages_on_aws_eks() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2317,6 +2320,7 @@ fn deploy_container_on_aws_eks_with_mounted_files_as_volume() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -2479,6 +2483,7 @@ fn deploy_container_with_router_on_aws_eks() {
             labels_group_ids: btreeset! { labels_group_id },
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -2650,6 +2655,7 @@ fn a_working_job() -> Job {
         should_delete_shared_registry: false,
         shared_image_feature_enabled: false,
         output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+        cpu_architecture: None,
     }
 }
 
@@ -2937,6 +2943,7 @@ CMD ["/bin/sh", "-c", "echo hello"]
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3053,6 +3060,7 @@ fn deploy_cronjob_on_aws_eks() {
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+            cpu_architecture: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3187,6 +3195,7 @@ fn deploy_cronjob_force_trigger_on_aws_eks() {
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3332,6 +3341,7 @@ fn build_and_deploy_job_on_aws_eks() {
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+            cpu_architecture: None,
         }];
         environment.annotations_groups = btreemap! { annotations_group_id => AnnotationsGroup {
             annotations: vec![Annotation {
@@ -3493,6 +3503,7 @@ fn test_restart_deployment() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3645,6 +3656,7 @@ fn test_restart_statefulset() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -3778,6 +3790,7 @@ fn build_and_deploy_job_on_aws_eks_with_mounted_files_as_volume() {
             should_delete_shared_registry: false,
             shared_image_feature_enabled: false,
             output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -4111,6 +4124,7 @@ fn deploy_container_with_udp_tcp_public_ports() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -4268,6 +4282,7 @@ fn deploy_container_with_ndots_on_aws_eks() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();
@@ -4409,6 +4424,7 @@ fn deploy_container_with_none_ndots_on_aws_eks() {
             labels_group_ids: btreeset! {},
             autoscaling: None,
             external_secrets: BTreeMap::new(),
+            cpu_architecture: None,
         }];
 
         let mut environment_for_delete = environment.clone();

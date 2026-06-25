@@ -111,6 +111,7 @@ fn should_increase_container_storage_size() {
             vec![],
             vec![],
             None,
+            None,
         )
         .expect("Unable to create container");
 
