@@ -167,11 +167,9 @@ impl ClusterAnalysisTask {
         };
         let output_file = self.report_file_path(payload.output_format.as_krr_formatter())?;
         let options = KrrOptions {
-            history_hours: payload.history_hours,
             output_format: krr_output_format(payload.output_format),
             prometheus_url,
-            namespaces: payload.namespaces.clone(),
-            selector: payload.selector.clone(),
+            extra_args: payload.cmd_args.clone(),
             file_output: Some(output_file),
         };
 
