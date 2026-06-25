@@ -109,24 +109,17 @@ fn default_analysis_output_format() -> AnalysisOutputFormat {
     AnalysisOutputFormat::Table
 }
 
-fn default_krr_history_hours() -> u32 {
-    14 * 24
-}
-
 fn default_pluto_history_output_format() -> AnalysisOutputFormat {
     AnalysisOutputFormat::Json
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct CostRecommendationRequest {
-    #[serde(default = "default_krr_history_hours")]
-    pub history_hours: u32,
     #[serde(default = "default_analysis_output_format")]
     pub output_format: AnalysisOutputFormat,
-    #[serde(default)]
-    pub namespaces: Vec<String>,
-    pub selector: Option<String>,
     pub prometheus_url: Option<Url>,
+    #[serde(default)]
+    pub cmd_args: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -136,7 +129,7 @@ pub struct DeprecatedApiCheckRequest {
     pub output_format: AnalysisOutputFormat,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(tag = "kind", content = "payload", rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ClusterAnalysisRequest {
     CostRecommendation(CostRecommendationRequest),
@@ -1799,11 +1792,22 @@ mod cluster_analysis_request_tests {
             r#"{
                 "kind": "COST_RECOMMENDATION",
                 "payload": {
-                    "history_hours": 120,
                     "output_format": "CSV",
-                    "namespaces": ["default"],
-                    "selector": "qovery.com/environment-id=env",
-                    "prometheus_url": "http://prometheus:9090"
+                    "prometheus_url": "http://prometheus:9090",
+                    "cmd_args": [
+                        "--history_duration", "120",
+                        "-n", "default",
+                        "--resource", "Deployment",
+                        "--selector", "qovery.com/environment-id=env",
+                        "--timeframe_duration", "2.5",
+                        "--cpu-request", "99",
+                        "--cpu-limit", "99",
+                        "--memory-buffer-percentage", "15",
+                        "--points_required", "100",
+                        "--allow-hpa",
+                        "--use-oomkill-data",
+                        "--oom-memory-buffer-percentage", "25"
+                    ]
                 }
             }"#,
         )
@@ -1811,11 +1815,35 @@ mod cluster_analysis_request_tests {
 
         match request {
             ClusterAnalysisRequest::CostRecommendation(payload) => {
-                assert_eq!(payload.history_hours, 120);
                 assert_eq!(payload.output_format, AnalysisOutputFormat::Csv);
-                assert_eq!(payload.namespaces, vec!["default"]);
-                assert_eq!(payload.selector.as_deref(), Some("qovery.com/environment-id=env"));
                 assert_eq!(payload.prometheus_url.unwrap().as_str(), "http://prometheus:9090/");
+                assert_eq!(
+                    payload.cmd_args,
+                    vec![
+                        "--history_duration",
+                        "120",
+                        "-n",
+                        "default",
+                        "--resource",
+                        "Deployment",
+                        "--selector",
+                        "qovery.com/environment-id=env",
+                        "--timeframe_duration",
+                        "2.5",
+                        "--cpu-request",
+                        "99",
+                        "--cpu-limit",
+                        "99",
+                        "--memory-buffer-percentage",
+                        "15",
+                        "--points_required",
+                        "100",
+                        "--allow-hpa",
+                        "--use-oomkill-data",
+                        "--oom-memory-buffer-percentage",
+                        "25",
+                    ]
+                );
             }
             ClusterAnalysisRequest::DeprecatedApiCheck(_) => panic!("expected cost recommendation request"),
         }
