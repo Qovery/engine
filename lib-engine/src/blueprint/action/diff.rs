@@ -15,7 +15,7 @@
 //! is a pinned reference, so a catalog tag bump's changes are fully expressed by the wrapper.
 
 use crate::blueprint::models::error::BlueprintError;
-use crate::cmd::terraform::{TerraformOutput, terraform_init_validate, terraform_plan_internal};
+use crate::cmd::terraform::{TerraformOutput, terraform_init_validate_lock_free, terraform_plan_internal};
 use crate::cmd::terraform_validators::TerraformValidators;
 use crate::errors::EngineError;
 use crate::events::{EngineEvent, EventDetails, EventMessage};
@@ -148,7 +148,7 @@ pub fn diff_underlying_terraform(
         event_details.clone(),
         EventMessage::new("Running terraform init + validate on underlying module".to_string(), None),
     ));
-    terraform_init_validate(&dir, &envs, &TerraformValidators::Default)
+    terraform_init_validate_lock_free(&dir, &envs, &TerraformValidators::Default)
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     logger.log(EngineEvent::Info(

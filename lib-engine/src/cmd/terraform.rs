@@ -986,8 +986,9 @@ fn manage_common_issues(
     terraform_provider_lock: &str,
     err: &TerraformError,
     validators: &TerraformValidators,
+    lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
-    terraform_plugins_failed_load(root_dir, err, terraform_provider_lock, validators)?;
+    terraform_plugins_failed_load(root_dir, err, terraform_provider_lock, validators, lock)?;
 
     Ok(TerraformOutput::default())
 }
@@ -997,6 +998,7 @@ fn terraform_plugins_failed_load(
     error: &TerraformError,
     terraform_provider_lock: &str,
     validators: &TerraformValidators,
+    lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     let output = TerraformOutput::default();
 
@@ -1018,11 +1020,11 @@ fn terraform_plugins_failed_load(
             });
         };
         thread::sleep(sleep_time);
-        return terraform_init(root_dir, &[], validators);
+        return terraform_init(root_dir, &[], validators, lock);
     }
 
     if error_string.contains("Plugin reinitialization required") {
-        return terraform_init(root_dir, &[], validators);
+        return terraform_init(root_dir, &[], validators, lock);
     }
 
     Ok(output)
@@ -1064,6 +1066,7 @@ fn terraform_init(
     root_dir: &str,
     envs: &[(&str, &str)],
     validators: &TerraformValidators,
+    lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     // issue with provider lock since 0.14 and CI, need to manage terraform lock
     let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
@@ -1090,13 +1093,16 @@ fn terraform_init(
         Err(retry::Error { error, .. }) => return Err(error),
     };
 
-    let terraform_args = vec!["init", "-no-color"];
+    let mut terraform_args = vec!["init", "-no-color"];
+    if !lock {
+        terraform_args.push("-lock=false");
+    }
     let result = retry::retry(Fixed::from_millis(3000).take(5), || {
         // terraform init
         match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators);
+                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, lock);
                 // Error while trying to run terraform init, retrying...
                 OperationResult::Retry(err)
             }
@@ -1123,7 +1129,7 @@ fn terraform_validate(
         match terraform_exec(root_dir, terraform_args.clone(), envs, validators) {
             Ok(output) => OperationResult::Ok(output),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators);
+                let _ = manage_common_issues(root_dir, &terraform_provider_lock, &err, validators, true);
                 // error while trying to Terraform validate on the rendered templates
                 OperationResult::Retry(err)
             }
@@ -1213,7 +1219,7 @@ fn terraform_apply_internal_with_options(
         match terraform_exec_with_timeout(root_dir, terraform_args.clone(), envs, validators, options.command_timeout) {
             Ok(out) => OperationResult::Ok(out),
             Err(err) => {
-                let _ = manage_common_issues(root_dir, "", &err, validators);
+                let _ = manage_common_issues(root_dir, "", &err, validators, true);
 
                 // We have to re-do a plan to update the tf_plan file state
                 let _ = match terraform_plan_internal(root_dir, envs, validators, false, true) {
@@ -1447,7 +1453,7 @@ fn terraform_run(
     let mut output = TerraformOutput::default();
 
     if actions.contains(TerraformAction::INIT) {
-        output.extend(terraform_init(root_dir, envs, validators)?);
+        output.extend(terraform_init(root_dir, envs, validators, true)?);
     }
 
     if actions.contains(TerraformAction::VALIDATE) {
@@ -1559,6 +1565,19 @@ pub fn terraform_init_validate(
         envs,
         validators,
     )
+}
+
+/// Lock-free `init` + `validate` for read-only flows (e.g. blueprint preview diff). The k8s
+/// backend's `init` would otherwise grab the state-lock Lease, which secret-scoped engine RBAC
+/// can't touch; `validate` never reads state.
+pub fn terraform_init_validate_lock_free(
+    root_dir: &str,
+    envs: &[(&str, &str)],
+    validators: &TerraformValidators,
+) -> Result<TerraformOutput, TerraformError> {
+    let mut output = terraform_init(root_dir, envs, validators, false)?;
+    output.extend(terraform_validate(root_dir, envs, validators)?);
+    Ok(output)
 }
 
 pub fn terraform_init_validate_destroy(
@@ -1778,8 +1797,9 @@ in the dependency lock file
             "/tmp/do_not_exists",
             &could_not_load_plugin_error,
             &TerraformValidators::None,
+            true,
         );
-        assert_eq!(result, terraform_init("", &[], &TerraformValidators::Default));
+        assert_eq!(result, terraform_init("", &[], &TerraformValidators::Default, true));
     }
 
     #[test]
