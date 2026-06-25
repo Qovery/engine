@@ -33,8 +33,9 @@ use crate::io_models::container::{ContainerAdvancedSettings, Registry};
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage, KubernetesCpuResourceUnit,
-    KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage, StorageDataTemplate,
+    CpuArchitecture, EnvironmentVariable, ExternalSecret, InvalidPVCStorage, InvalidStatefulsetStorage,
+    KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit, MountedFile, Storage,
+    StorageDataTemplate,
 };
 use crate::io_models::services_common::Protocol;
 use crate::io_models::services_common::Protocol::{TCP, UDP};
@@ -85,6 +86,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) labels_group: LabelsGroupTeraContext,
     pub(crate) deployment_id: String,
     pub(crate) autoscaling: Option<AutoscalingConfig>,
+    pub(crate) cpu_architecture: Option<CpuArchitecture>,
 }
 
 pub fn get_mirror_repository_name(
@@ -152,6 +154,7 @@ impl<T: CloudProvider> Container<T> {
         annotations_groups: Vec<AnnotationsGroup>,
         labels_groups: Vec<LabelsGroup>,
         autoscaling: Option<AutoscalingConfig>,
+        cpu_architecture: Option<CpuArchitecture>,
     ) -> Result<Self, ContainerError> {
         let external_secrets = build_external_secret_groups(&kube_name, external_secrets);
 
@@ -216,6 +219,7 @@ impl<T: CloudProvider> Container<T> {
                 .map(|s| s.0.to_string())
                 .unwrap_or_default(),
             autoscaling,
+            cpu_architecture,
         })
     }
 
@@ -242,9 +246,11 @@ impl<T: CloudProvider> Container<T> {
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> ContainerTeraContext {
         let environment = target.environment;
         let kubernetes = target.kubernetes;
+        let effective_archs =
+            utils::effective_cpu_architectures(self.cpu_architecture, target.kubernetes.cpu_architectures());
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
-            &target.kubernetes.cpu_architectures(),
+            &effective_archs,
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();

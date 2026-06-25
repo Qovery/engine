@@ -504,6 +504,9 @@ pub struct Application {
     pub shared_image_feature_enabled: bool,
     #[serde(default)]
     pub docker_target_build_stage: Option<String>,
+    /// CPU architecture this service must run on. `None` means inherit the cluster default.
+    #[serde(default)]
+    pub cpu_architecture: Option<CpuArchitecture>,
     #[serde(default)]
     pub autoscaling: Option<AutoscalingConfig>,
     /// External secrets to sync from a remote secret manager via ESO.
@@ -584,6 +587,7 @@ impl Application {
                     self.ephemeral_storage_in_gib,
                     self.should_delete_shared_registry,
                     autoscaling_domain.clone(),
+                    self.cpu_architecture,
                 )?))
             }
             CPKind::Azure => Ok(Box::new(models::application::Application::<Azure>::new(
@@ -622,6 +626,7 @@ impl Application {
                 self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
+                self.cpu_architecture,
             )?)),
             CPKind::Scw => Ok(Box::new(models::application::Application::<SCW>::new(
                 context,
@@ -659,6 +664,7 @@ impl Application {
                 self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
+                self.cpu_architecture,
             )?)),
             CPKind::Gcp => Ok(Box::new(models::application::Application::<GCP>::new(
                 context,
@@ -696,6 +702,7 @@ impl Application {
                 self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
+                self.cpu_architecture,
             )?)),
             CPKind::OnPremise => Ok(Box::new(models::application::Application::<OnPremise>::new(
                 context,
@@ -733,6 +740,7 @@ impl Application {
                 self.ephemeral_storage_in_gib,
                 self.should_delete_shared_registry,
                 autoscaling_domain.clone(),
+                self.cpu_architecture,
             )?)),
         }
     }

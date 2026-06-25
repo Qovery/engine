@@ -211,6 +211,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 labels_group_ids: btreeset! {},
                 autoscaling: None,
                 external_secrets: BTreeMap::new(),
+                cpu_architecture: None,
             };
             environment.containers = vec![container];
         }
@@ -305,6 +306,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
                 docker_target_build_stage: None,
+                cpu_architecture: None,
                 autoscaling: None,
             };
             environment.applications = vec![app];
@@ -359,6 +361,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 should_delete_shared_registry: false,
                 shared_image_feature_enabled: false,
                 output_variable_validation_pattern: "^[a-zA-Z_][a-zA-Z0-9_]*$".to_string(),
+                cpu_architecture: None,
             };
             environment.jobs = vec![job];
         }

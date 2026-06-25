@@ -21,7 +21,7 @@ use crate::io_models::container::keda_transform::{KEY, NAME, SECRET_TARGET_REF, 
 use crate::io_models::context::Context;
 use crate::io_models::labels_group::LabelsGroup;
 use crate::io_models::models::{
-    ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
+    CpuArchitecture, ExternalSecret, KubernetesCpuResourceUnit, KubernetesGpuResourceUnit, KubernetesMemoryResourceUnit,
 };
 use crate::io_models::probe::Probe;
 use crate::io_models::services_common::{
@@ -815,6 +815,9 @@ pub struct Container {
     /// Key is the environment variable name / k8s Secret key.
     #[serde(default)]
     pub external_secrets: BTreeMap<String, ExternalSecret>,
+    /// CPU architecture this service must run on. `None` means inherit the cluster default.
+    #[serde(default)]
+    pub cpu_architecture: Option<CpuArchitecture>,
 }
 
 impl Container {
@@ -895,6 +898,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
                 transformed_autoscaling.clone(),
+                self.cpu_architecture,
             )?),
             CPKind::Azure => Box::new(models::container::Container::<Azure>::new(
                 context,
@@ -931,6 +935,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
                 transformed_autoscaling.clone(),
+                self.cpu_architecture,
             )?),
             CPKind::Scw => Box::new(models::container::Container::<SCW>::new(
                 context,
@@ -967,6 +972,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
                 transformed_autoscaling.clone(),
+                self.cpu_architecture,
             )?),
             CPKind::Gcp => Box::new(models::container::Container::<GCP>::new(
                 context,
@@ -1003,6 +1009,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
                 transformed_autoscaling.clone(),
+                self.cpu_architecture,
             )?),
             CPKind::OnPremise => Box::new(models::container::Container::<OnPremise>::new(
                 context,
@@ -1039,6 +1046,7 @@ impl Container {
                 annotations_groups,
                 labels_groups,
                 transformed_autoscaling.clone(),
+                self.cpu_architecture,
             )?),
         };
 
