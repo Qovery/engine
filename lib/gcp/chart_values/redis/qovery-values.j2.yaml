@@ -69,9 +69,17 @@ resources:
     cpu: "{{ cpu_limit_in_milli }}"
 
 podAnnotations:
+  # GKE Autopilot bin-packs aggressively; pin this single-replica StatefulSet so scale-down doesn't evict it every cycle.
+  # Caps at 7 days; repairs/manual upgrades bypass. Reserved key: the loop skips it so a user annotation group
+  # can't emit a duplicate (invalid YAML) — overriding this specific key is unsupported, the static value wins.
+  # Assumes Autopilot (cluster.j2.tf hardcodes enable_autopilot=true). If GKE Standard is ever added, GUARD this
+  # behind an is_autopilot flag — on Standard there's no 7-day cap, so it blocks scale-down indefinitely.
+  cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
   {%- for key, value in annotations_group.pods %}
+  {%- if key != "cluster-autoscaler.kubernetes.io/safe-to-evict" %}
   {{ key }}: |-
      {{ value }}
+  {%- endif %}
   {%- endfor %}
 
 statefulsetAnnotations:
