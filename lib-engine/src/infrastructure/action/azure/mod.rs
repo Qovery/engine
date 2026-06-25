@@ -84,3 +84,53 @@ pub struct AksQoveryTerraformOutput {
     #[serde(default)]
     pub qovery_deployed_with_engine_version: Option<DeployedEngineVersion>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AksQoveryTerraformOutput;
+
+    // `terraform output -json` wraps each output as `{ "value": ... }`.
+    fn tf_value(v: &str) -> String {
+        format!(r#"{{"value":"{v}"}}"#)
+    }
+
+    #[test]
+    fn full_terraform_output_deserializes() {
+        let json = format!(
+            r#"{{
+                "aks_cluster_public_hostname": {host},
+                "main_storage_account_name": {sa},
+                "main_storage_account_primary_access_key": {key},
+                "loki_logging_service_msi_client_id": {loki},
+                "kubeconfig": {kubeconfig},
+                "cluster_name": {name},
+                "cluster_id": {id},
+                "cluster_oidc_issuer": {oidc}
+            }}"#,
+            host = tf_value("host.example.com"),
+            sa = tf_value("qoverystorage"),
+            key = tf_value("secret-key"),
+            loki = tf_value("loki-msi"),
+            kubeconfig = tf_value("apiVersion: v1"),
+            name = tf_value("qovery-zabcd1234"),
+            id = tf_value("abcd1234"),
+            oidc = tf_value("https://oidc.example.com"),
+        );
+
+        let output: AksQoveryTerraformOutput =
+            serde_json::from_str(&json).expect("full terraform output should deserialize");
+        assert_eq!(output.main_storage_account_name, "qoverystorage");
+        assert_eq!(output.main_storage_account_primary_access_key, "secret-key");
+    }
+
+    // Regression (QOV-2045): once the cluster is deleted, `terraform output` no longer carries the
+    // required outputs, so deserialization fails. The delete path must treat this as "no outputs"
+    // (skip in-cluster cleanup) and still run destroy — see `TerraformInfraResources::create_or_read_output`.
+    // If every field were `#[serde(default)]`, this would silently succeed and object-storage cleanup
+    // would run with empty credentials.
+    #[test]
+    fn empty_terraform_output_is_not_deserializable() {
+        let result: Result<AksQoveryTerraformOutput, _> = serde_json::from_str("{}");
+        assert!(result.is_err(), "empty terraform output must not deserialize");
+    }
+}

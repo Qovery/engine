@@ -42,25 +42,24 @@ pub(super) fn delete_aks_cluster(
         envs_to_string(infra_ctx.cloud_provider().credentials_environment_variables()),
         cluster.context().is_dry_run_deploy(),
     );
-    let qovery_terraform_output: AksQoveryTerraformOutput = match tf_resources.create(&logger) {
-        Ok(tf_output) => tf_output,
-        Err(e) => {
-            logger.warn(EventMessage::new(
-                "Terraform apply before delete failed. It may occur but may not be blocking.".to_string(),
-                Some(e.to_string()),
-            ));
-            // Fall back to existing state outputs so teardown (object storage, etc.) can still proceed.
-            tf_resources.output()?
+    // Best-effort reconcile: the apply may fail (e.g. resources removed by hand) and the state
+    // may no longer hold deserializable outputs once the cluster is gone. None => skip the
+    // cleanup steps that need a reachable cluster, but still run destroy below.
+    let qovery_terraform_output: Option<AksQoveryTerraformOutput> = tf_resources.create_or_read_output(&logger);
+
+    // kubeconfig + in-cluster cleanup only make sense when we have outputs (cluster still reachable).
+    if let Some(output) = &qovery_terraform_output {
+        update_cluster_outputs(cluster, output)?;
+
+        // delete all PDBs first, because those will prevent node deletion
+        if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
+            logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
         }
-    };
-    update_cluster_outputs(cluster, &qovery_terraform_output)?;
 
-    // delete all PDBs first, because those will prevent node deletion
-    if let Err(_errors) = delete_all_pdbs(infra_ctx, event_details.clone(), &logger) {
-        logger.warn("Cannot delete all PDBs, this is not blocking cluster deletion.");
+        delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
+    } else {
+        logger.warn("Skipping in-cluster cleanup (PDBs, apps): no Terraform outputs, cluster likely already deleted.");
     }
-
-    delete_kube_apps(cluster, infra_ctx, event_details.clone(), &logger, HashSet::with_capacity(0))?;
 
     // Delete cluster CR before terraform destroy because resource group should be deleted
     delete_container_registry(infra_ctx, event_details.clone())?;
@@ -68,16 +67,16 @@ pub(super) fn delete_aks_cluster(
     logger.info(format!("Deleting Kubernetes cluster {}/{}", cluster.name(), cluster.short_id()));
     tf_resources.delete(&[], &logger)?;
 
-    delete_object_storage(
-        cluster,
-        &StorageAccount {
-            access_key: qovery_terraform_output
-                .main_storage_account_primary_access_key
-                .to_string(),
-            account_name: qovery_terraform_output.main_storage_account_name.to_string(),
-        },
-        &logger,
-    )?;
+    if let Some(output) = &qovery_terraform_output {
+        delete_object_storage(
+            cluster,
+            &StorageAccount {
+                access_key: output.main_storage_account_primary_access_key.to_string(),
+                account_name: output.main_storage_account_name.to_string(),
+            },
+            &logger,
+        )?;
+    }
 
     logger.info("Kubernetes cluster deleted successfully.");
     Ok(())
