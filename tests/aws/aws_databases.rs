@@ -1074,6 +1074,20 @@ fn public_mysql_v8_deploy_a_working_dev_environment() {
     test_mysql_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mysql_v9_deploy_a_working_dev_environment() {
+    test_mysql_configuration("9.7-oracle", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mysql_v9_deploy_a_working_dev_environment() {
+    test_mysql_configuration("9.7-oracle", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
 // MySQL production environment (RDS)
 #[cfg(feature = "test-aws-managed-services")]
 #[named]

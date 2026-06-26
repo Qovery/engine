@@ -747,6 +747,7 @@ where
                     service::DatabaseType::PostgreSQL if !self.is_bitnami_postgres() => None,
                     service::DatabaseType::PostgreSQL => Some(Version::new(12, 5, 1)),
                     service::DatabaseType::MongoDB => Some(Version::new(13, 13, 1)),
+                    service::DatabaseType::MySQL if !self.is_bitnami_mysql() => None,
                     service::DatabaseType::MySQL => Some(Version::new(9, 10, 1)),
                     service::DatabaseType::Redis if !self.is_bitnami_redis() => None,
                     service::DatabaseType::Redis => Some(Version::new(17, 11, 4)),

@@ -1,0 +1,14 @@
+apiVersion: v2
+name: mysql
+description: Qovery-authored MySQL chart based on the official mysql image (non-Bitnami). Serves MySQL 9 and later majors.
+type: application
+# Chart identity stays `mysql` (matches the Helm release name `mysql-<id>`).
+# This is a brand-new chart, versioned independently from the Bitnami chart it replaces from MySQL 9 onward.
+version: 0.1.0
+# appVersion intentionally omitted: this chart serves MySQL 9 and every later major; the image tag
+# is selected per database version by the engine, not pinned in the chart.
+keywords:
+  - mysql
+  - database
+sources:
+  - https://github.com/docker-library/mysql

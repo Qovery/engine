@@ -704,7 +704,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "df279084ae40c746f152d19f8976d3a49c013ba2".to_string(),
+                app_commit: "cdfb94b78a4c67715596525fb6dddf1ecf02f8bd".to_string(),
                 app_env_vars: btreemap! {
                     "MYSQL_HOST".to_string() =>VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},
                     "MYSQL_PORT".to_string() => VariableInfo { value:general_purpose::STANDARD.encode(database_port.to_string()), is_secret:false},
