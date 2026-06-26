@@ -70,10 +70,13 @@ charts:
     repo_name: grafana
     version: 6.55.0
     comment: https://github.com/grafana/loki/tree/main/production/helm/loki
-  - name: promtail
+  - name: alloy
     repo_name: grafana
-    version: 6.17.0
-    comment: https://github.com/grafana/helm-charts/blob/main/charts/promtail/Chart.yaml#L6
+    version: 1.10.0
+    comment: |
+      Replaces deprecated promtail (QOV-1949).
+      appVersion v1.17.0 — use as the ECR mirror image tag (pub-mirror-alloy:v1.17.0).
+      https://github.com/grafana/alloy/blob/main/operations/helm/charts/alloy/Chart.yaml
   - name: beyla
     repo_name: grafana
     version: 1.9.2

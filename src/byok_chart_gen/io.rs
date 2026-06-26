@@ -135,7 +135,7 @@ impl ValuesFile {
                 },
                 logging: LoggingServices {
                     loki: ServiceEnabled { enabled: false },
-                    promtail: ServiceEnabled { enabled: false },
+                    alloy: ServiceEnabled { enabled: false },
                 },
                 certificates: CertificateServices {
                     cert_manager: ServiceEnabled { enabled: false },
@@ -229,7 +229,7 @@ impl ValuesFile {
             ingress_nginx: ChartConfig { override_chart: None },
             aws_load_balancer_controller: None,
             external_dns: ChartConfig { override_chart: None },
-            promtail: ChartConfig { override_chart: None },
+            alloy: ChartConfig { override_chart: None },
             loki: ChartConfig { override_chart: None },
             cert_manager: ChartConfig { override_chart: None },
             cert_manager_qovery_webhook: ChartConfig { override_chart: None },
@@ -251,8 +251,8 @@ impl ValuesFile {
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
 
-        value.services.logging.promtail.enabled = true;
-        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.alloy.enabled = true;
+        value.alloy.override_chart = Some(SupportedCharts::Alloy.to_string());
         value.services.logging.loki.enabled = true;
         value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
 
@@ -301,8 +301,8 @@ impl ValuesFile {
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
 
-        value.services.logging.promtail.enabled = true;
-        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.alloy.enabled = true;
+        value.alloy.override_chart = Some(SupportedCharts::Alloy.to_string());
         value.services.logging.loki.enabled = true;
         value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
 
@@ -347,8 +347,8 @@ impl ValuesFile {
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
 
-        value.services.logging.promtail.enabled = true;
-        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.alloy.enabled = true;
+        value.alloy.override_chart = Some(SupportedCharts::Alloy.to_string());
         value.services.logging.loki.enabled = true;
         value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
 
@@ -393,8 +393,8 @@ impl ValuesFile {
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
 
-        value.services.logging.promtail.enabled = true;
-        value.promtail.override_chart = Some(SupportedCharts::Promtail.to_string());
+        value.services.logging.alloy.enabled = true;
+        value.alloy.override_chart = Some(SupportedCharts::Alloy.to_string());
         value.services.logging.loki.enabled = true;
         value.loki.override_chart = Some(SupportedCharts::Loki.to_string());
 
@@ -438,8 +438,8 @@ impl ValuesFile {
         value.services.dns.external_dns.enabled = true;
         value.external_dns.override_chart = Some(SupportedCharts::ExternalDNS.to_string());
 
-        value.services.logging.promtail.enabled = false;
-        value.promtail.override_chart = None;
+        value.services.logging.alloy.enabled = false;
+        value.alloy.override_chart = None;
         value.services.logging.loki.enabled = false;
         value.loki.override_chart = None;
 

@@ -1,0 +1,19 @@
+controller:
+  # all the nodes
+  tolerations:
+    - operator: Exists
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: eks.amazonaws.com/compute-type
+                operator: NotIn
+                values:
+                  - fargate
+  # for daemonsets, rolling update with maxUnavailable 35%
+  # prevents alloy from timing out when updating large clusters (many nodes)
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 35%

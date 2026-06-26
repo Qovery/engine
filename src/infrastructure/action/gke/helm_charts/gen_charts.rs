@@ -11,6 +11,7 @@ use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::action::gateway_api::GatewayApiRolloutStatus;
 use crate::infrastructure::action::gen_metrics_charts::{CloudProviderMetricsConfig, generate_metrics_config};
 use crate::infrastructure::action::gke::helm_charts::gen_eso_charts::generate_eso_charts;
+use crate::infrastructure::helm_charts::alloy_chart::{AlloyChart, promtail_uninstall_chart};
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
 use crate::infrastructure::helm_charts::cert_manager_config_chart::{CertManagerConfigsChart, UserProvidedCertificate};
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
@@ -23,7 +24,6 @@ use crate::infrastructure::helm_charts::loki_chart::{
     GCSLokiChartConfiguration, LokiChart, LokiObjectBucketConfiguration,
 };
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
-use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cert_manager_webhook_chart::QoveryCertManagerWebhookChart;
 use crate::infrastructure::helm_charts::qovery_cluster_agent_chart::QoveryClusterAgentChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
@@ -222,10 +222,10 @@ pub(super) fn gke_helm_charts(
         )),
     };
 
-    let promtail: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
+    let alloy: Option<Box<dyn HelmChart>> = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(Box::new(
-            PromtailChart::new(
+            AlloyChart::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder, // use GCP override
                 loki_kube_dns_name,
@@ -727,7 +727,8 @@ pub(super) fn gke_helm_charts(
         Some(Box::new(q_storage_class_chart)),
         Some(Box::new(q_priority_class_chart)),
         kube_prometheus_stack_chart,
-        promtail,
+        alloy,
+        Some(Box::new(promtail_uninstall_chart(HelmChartNamespaces::Qovery))),
     ];
     // Add Qovery gateway class
     let mut level_2: Vec<Option<Box<dyn HelmChart>>> = vec![];

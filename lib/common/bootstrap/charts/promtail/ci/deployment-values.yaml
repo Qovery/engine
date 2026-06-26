@@ -1,4 +1,0 @@
-daemonset:
-  enabled: false
-deployment:
-  enabled: true

@@ -85,17 +85,17 @@ pub(super) fn eks_anywhere_helm_charts(
     // )
     // .to_common_helm_chart()?;
 
-    // Promtail & Loki
+    // Alloy & Loki
     // let loki_namespace = HelmChartNamespaces::Qovery;
     // let loki_kube_dns_name = chart_config_prerequisites
     //     .loki_parameters
     //     .deployment_mode
     //     .kube_dns_name(&loki_namespace);
 
-    // let promtail = match chart_config_prerequisites.ff_log_history_enabled {
+    // let alloy = match chart_config_prerequisites.ff_log_history_enabled {
     //     false => None,
     //     true => Some(
-    //         PromtailChart::new(
+    //         AlloyChart::new(
     //             chart_prefix_path,
     //             HelmChartDirectoryLocation::CloudProviderFolder,
     //             loki_kube_dns_name,
@@ -449,8 +449,8 @@ pub(super) fn eks_anywhere_helm_charts(
     if let Some(chart) = alert_config_chart {
         level_3.push(Some(chart));
     }
-    // if let Some(promtail_chart) = promtail {
-    // level_3.push(Some(Box::new(promtail_chart)));
+    // if let Some(alloy_chart) = alloy {
+    // level_3.push(Some(Box::new(alloy_chart)));
     // }
     // if let Some(loki_chart) = loki {
     // level_3.push(Some(Box::new(loki_chart)));
