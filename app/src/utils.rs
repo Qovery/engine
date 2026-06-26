@@ -9,6 +9,8 @@ use std::io::{BufRead, BufReader};
 use std::path::Path;
 use std::{env, fs, io};
 
+const LOCAL_DEPLOYED_ENGINE_VERSION: &str = "v0.0.0-local";
+
 pub fn check_libs_directory(path: String) -> Result<(), EngineInitError> {
     match fs::read_dir(path) {
         Ok(out) => {
@@ -92,7 +94,11 @@ fn parse_deployed_engine_version(
 
     parse_candidate_deployed_engine_version(build_version_fallback)
         .or_else(|| parse_candidate_deployed_engine_version(shadow_commit_fallback))
-        .expect("engine version must be a valid version or commit id")
+        .unwrap_or_else(|| {
+            LOCAL_DEPLOYED_ENGINE_VERSION
+                .parse::<DeployedEngineVersion>()
+                .expect("local deployed engine version fallback must stay valid")
+        })
 }
 
 /// Returns the deployed engine version from `ENGINE_TAG_VERSION` when it is set to a non-empty
@@ -144,9 +150,13 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "engine version must be a valid version or commit id")]
-    fn load_deployed_engine_version_rejects_invalid_build_and_shadow_fallbacks() {
-        let _ = parse_deployed_engine_version(None, "unknown", "invalid");
+    fn load_deployed_engine_version_falls_back_to_local_version_when_build_metadata_is_missing() {
+        let deployed_engine_version = parse_deployed_engine_version(None, "unknown", "invalid");
+
+        assert_eq!(
+            deployed_engine_version,
+            "v0.0.0-local".parse::<DeployedEngineVersion>().unwrap()
+        );
     }
 
     #[test]
