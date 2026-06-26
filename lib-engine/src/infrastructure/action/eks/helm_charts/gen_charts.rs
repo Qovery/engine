@@ -4,12 +4,12 @@ use crate::helm::{
     get_engine_helm_action_from_location,
 };
 use crate::infrastructure::action::eks::helm_charts::nvidia_gpu_k8s_device_plugin_chart::NvidiaGpuK8sDevicePluginChart;
+use crate::infrastructure::helm_charts::alloy_chart::{AlloyChart, promtail_uninstall_chart};
 use crate::infrastructure::helm_charts::coredns_config_chart::CoreDNSConfigChart;
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
 use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::EnvoyGatewayCrdChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
-use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_shell_agent_chart::QoveryShellAgentChart;
 use crate::infrastructure::helm_charts::qovery_storage_class_chart::{
     QoveryStorageClassChart, QoveryStorageClassChartCloudProviderConfig, QoveryStorageType,
@@ -412,11 +412,11 @@ pub(super) fn eks_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    // Promtail
-    let promtail = match chart_config_prerequisites.ff_log_history_enabled {
+    // Alloy
+    let alloy = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
-            PromtailChart::new(
+            AlloyChart::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 loki_kube_dns_name,
@@ -1164,9 +1164,10 @@ pub(super) fn eks_helm_charts(
     if let Some(prometheus_adapter_chart) = metrics_config.prometheus_adapter_chart {
         level_5.push(Box::new(prometheus_adapter_chart));
     }
-    if let Some(promtail_chart) = promtail {
-        level_4.push(Box::new(promtail_chart));
+    if let Some(alloy_chart) = alloy {
+        level_4.push(Box::new(alloy_chart));
     }
+    level_4.push(Box::new(promtail_uninstall_chart(HelmChartNamespaces::KubeSystem)));
     if let Some(loki_chart) = loki {
         level_5.push(Box::new(loki_chart));
     }

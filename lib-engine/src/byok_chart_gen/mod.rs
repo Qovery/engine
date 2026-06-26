@@ -122,8 +122,8 @@ pub enum SupportedCharts {
     IngressNginx,
     #[display("external-dns")]
     ExternalDNS,
-    #[display("promtail")]
-    Promtail,
+    #[display("alloy")]
+    Alloy,
     #[display("loki")]
     Loki,
     #[display("cert-manager")]
@@ -206,9 +206,9 @@ mod tests {
 
                     let override_values = fs::read_to_string(file).unwrap();
                     let override_values = match chart.name {
-                        SupportedCharts::Promtail => {
+                        SupportedCharts::Alloy => {
                             let mut tera = Tera::default();
-                            match tera.add_raw_template("self-managed-template-promtail", &override_values) {
+                            match tera.add_raw_template("self-managed-template-alloy", &override_values) {
                                 Ok(_) => {}
                                 Err(_) => return override_values,
                             }
@@ -216,7 +216,7 @@ mod tests {
                             let mut context = Context::new();
                             context.insert("prometheus_enabled", &false);
 
-                            tera.render("self-managed-template-promtail", &context)
+                            tera.render("self-managed-template-alloy", &context)
                                 .unwrap_or(override_values)
                         }
                         SupportedCharts::IngressNginx => {
@@ -381,7 +381,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::AwsBootstrapChartValues),
@@ -477,7 +477,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
@@ -566,7 +566,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::GcpBootstrapChartValues),
@@ -649,7 +649,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
@@ -732,7 +732,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::ScalewayBootstrapChartValues),
@@ -815,7 +815,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
@@ -898,7 +898,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::CommonBoostrapChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::AzureBootstrapChartValues),
@@ -981,7 +981,7 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
-                name: SupportedCharts::Promtail,
+                name: SupportedCharts::Alloy,
                 category: ChartCategory::Logging,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),

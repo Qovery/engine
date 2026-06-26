@@ -1,0 +1,330 @@
+# remove if you don't want to use a custom image
+image:
+  registry: set-by-engine-code
+  repository: set-by-engine-code
+  tag: set-by-engine-code
+
+controller:
+  type: daemonset
+  # for daemonsets, rolling update with maxUnavailable 35%
+  # prevents alloy from timing out when updating large clusters (many nodes)
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 35%
+  # backs alloy.storagePath (loki.source.file positions). MUST be emptyDir, not hostPath:
+  # GKE Autopilot's autogke-no-write-mode-hostpath constraint denies any writable hostPath
+  # (the read-only /var/log mount from alloy.mounts.varlog is fine). emptyDir survives
+  # container restarts but is lost on pod reschedule -> re-tail = possible duplicate logs,
+  # the same tradeoff the previous promtail GKE values accepted with their emptyDir positions dir.
+  volumes:
+    extra:
+      - name: alloy-data
+        emptyDir: {}
+
+# disable the prometheus-config-reloader sidecar to match the previous promtail footprint
+# (promtail ran with sidecar.configReloader.enabled=false): saves 10m cpu + 50Mi mem requested
+# per node. alloy.configMap.content is rendered into a chart-created ConfigMap, so with the
+# reloader off the chart stamps a checksum/config pod annotation and rolls the DaemonSet
+# automatically on config change instead of hot-reloading.
+configReloader:
+  enabled: false
+
+alloy:
+  clustering:
+    enabled: false
+  # writable positions dir, backed by the emptyDir in controller.volumes.extra (hostPath is
+  # rejected on GKE Autopilot). Positions persist across container restarts but not pod reschedule.
+  storagePath: /var/lib/alloy/data
+  # disable anonymous usage reporting to grafana.com (privacy + airgapped clusters block the egress)
+  enableReporting: false
+  # mount /var/log (read-only hostPath, allowed on Autopilot) so the DaemonSet can tail /var/log/pods
+  mounts:
+    varlog: true
+    # back storagePath with the emptyDir volume declared in controller.volumes.extra
+    extra:
+      - name: alloy-data
+        mountPath: /var/lib/alloy/data
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  extraEnv:
+    # [0] node scoping for discovery.kubernetes
+    - name: NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    # [1] loki push URL — value set by engine code (AlloyChart sets alloy.extraEnv[1].value)
+    - name: LOKI_WRITE_URL
+      value: set-by-engine-code
+    # [2] cap Go heap below the 512Mi cgroup limit so GC reclaims before the kernel OOM-kills alloy
+    - name: GOMEMLIMIT
+      value: 450MiB
+  configMap:
+    content: |-
+      // ===== file-tailing scaffolding =====
+      discovery.kubernetes "pods" {
+        role = "pod"
+        // DaemonSet: only this node's pods (NODE_NAME injected via extraEnv fieldRef spec.nodeName)
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("NODE_NAME")
+        }
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        // strip the replicaset/deployment hash to get a stable controller name (used by `app` below)
+        rule {
+          source_labels = ["__meta_kubernetes_pod_controller_name"]
+          regex         = "([0-9a-z-.]+?)(-[0-9a-f]{8,10})?"
+          target_label  = "__tmp_controller_name"
+          action        = "replace"
+        }
+        // app: first non-empty of app.kubernetes.io/name, app, controller, pod name
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name", "__meta_kubernetes_pod_label_app", "__tmp_controller_name", "__meta_kubernetes_pod_name"]
+          regex         = "^;*([^;]+)(;.*)?$"
+          target_label  = "app"
+          action        = "replace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node_name"
+          action        = "replace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+          action        = "replace"
+        }
+        // job = <namespace>/<app>
+        rule {
+          source_labels = ["namespace", "app"]
+          separator     = "/"
+          replacement   = "$1"
+          target_label  = "job"
+          action        = "replace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+          action        = "replace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+          action        = "replace"
+        }
+        // build the on-node log file path
+        rule {
+          source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+          separator     = "/"
+          replacement   = "/var/log/pods/*$1/*.log"
+          target_label  = "__path__"
+          action        = "replace"
+        }
+        // static pods: derive __path__ from the kubernetes.io/config.hash annotation
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotationpresent_kubernetes_io_config_hash", "__meta_kubernetes_pod_annotation_kubernetes_io_config_hash", "__meta_kubernetes_pod_container_name"]
+          regex         = "true/(.*)"
+          separator     = "/"
+          replacement   = "/var/log/pods/*$1/*.log"
+          target_label  = "__path__"
+          action        = "replace"
+        }
+        // REQUIRED by cluster-agent: keep qovery_com_* pod labels on the log stream
+        rule {
+          action      = "labelmap"
+          regex       = "__meta_kubernetes_pod_label_(qovery_com_service_id|qovery_com_service_type|qovery_com_environment_id|qovery_com_deployment_id)"
+          replacement = "$1"
+        }
+      }
+
+      local.file_match "pods" {
+        path_targets = discovery.relabel.pods.output
+      }
+
+      loki.source.file "pods" {
+        targets    = local.file_match.pods.targets
+        forward_to = [loki.process.qovery.receiver]
+      }
+
+      // ===== the pipeline (1:1 from promtail pipelineStages) =====
+      loki.process "qovery" {
+        stage.cri {}
+
+        // drop the Alloy-added filename label (redundant w/ namespace/pod/container, high-cardinality)
+        stage.label_drop {
+          values = ["filename"]
+        }
+
+        // SPECIAL: nginx-ingress enrichment
+        stage.match {
+          selector = "{namespace=\"nginx-ingress\", container=\"controller\"}"
+          stage.json {
+            expressions = {
+              qovery_com_associated_service_id = "qovery_com_associated_service_id",
+              qovery_com_environment_id        = "qovery_com_environment_id",
+            }
+          }
+          stage.labels {
+            values = { qovery_com_associated_service_id = "", qovery_com_environment_id = "" }
+          }
+        }
+
+        // SPECIAL: gateway-api / envoy enrichment
+        stage.match {
+          selector = "{namespace=\"qovery\", container=\"envoy\"}"
+          stage.json {
+            expressions = {
+              qovery_com_associated_service_id = "qovery_com_associated_service_id",
+              qovery_com_environment_id        = "qovery_com_environment_id",
+            }
+          }
+          stage.labels {
+            values = { qovery_com_associated_service_id = "", qovery_com_environment_id = "" }
+          }
+        }
+
+        // k8s-event-logger enrichment
+        stage.match {
+          selector = "{app=\"k8s-event-logger\"}"
+          stage.json {
+            expressions = {
+              reason                = "reason",
+              type                  = "type",
+              kind                  = "kind",
+              event_namespace       = "namespace",
+              qovery_project_id     = "qovery_project_id",
+              qovery_environment_id = "qovery_environment_id",
+              qovery_service_id     = "qovery_service_id",
+              timestamp             = "timestamp",
+            }
+          }
+          stage.labels {
+            values = {
+              reason = "", type = "", kind = "",
+              qovery_project_id = "", qovery_environment_id = "", qovery_service_id = "",
+            }
+          }
+          stage.timestamp {
+            source = "timestamp"
+            format = "Unix"
+          }
+        }
+
+        // STAGE 1: level from JSON `level`
+        stage.json {
+          expressions = { level = "level" }
+        }
+        stage.labels { values = { level = "" } }
+
+        // fallback: JSON `severity`
+        stage.match {
+          selector = "{level=\"\"}"
+          stage.json {
+            expressions = { level = "severity" }
+          }
+          stage.labels { values = { level = "" } }
+        }
+
+        // STAGE 2: structured text "TIMESTAMP LEVEL"
+        stage.match {
+          selector = "{level=\"\"}"
+          stage.decolorize {}
+          stage.regex {
+            expression = "^\\s*(?:\\d{9,}\\s+)?\\d{4}-\\d{2}-\\d{2}T[\\d:.\\-]+(?:Z|[+-]\\d{2}:\\d{2})?(?:\\s+\\d{4}-\\d{2}-\\d{2}T[\\d:.\\-]+(?:Z|[+-]\\d{2}:\\d{2})?)?\\s+(?P<level>TRACE|VERBOSE|DEBUG|LOG|INFO|NOTICE|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL|PANIC)\\b"
+          }
+          stage.labels { values = { level = "" } }
+        }
+
+        // STAGE 3: generic structured text
+        stage.match {
+          selector = "{level=\"\"}"
+          stage.decolorize {}
+          stage.regex {
+            expression = "^\\s*(?:\\[[^\\]]+\\]\\s+\\d+\\s+-\\s+)?(?:\\d{1,4}[/-]\\d{1,2}[/-]\\d{1,4}(?:,\\s+|\\s+)\\d{1,2}:\\d{2}:\\d{2}(?:[.,]\\d+)?(?:\\s+(?:AM|PM))?\\s+)?\\[?(?P<level>TRACE|VERBOSE|DEBUG|LOG|INFO|NOTICE|WARN(?:ING)?|ERROR|ERR|CRIT(?:ICAL)?|FATAL|PANIC)\\]?\\b"
+          }
+          stage.labels { values = { level = "" } }
+        }
+
+        // STAGE 4: key=value / key:value
+        stage.match {
+          selector = "{level=\"\"}"
+          stage.regex {
+            expression = "(?i)\\b(?:level|severity)[:=]\\s*\"?(?P<level>trace|verbose|debug|log|info|notice|warn(?:ing)?|error|err|crit(?:ical)?|fatal|panic)\"?"
+          }
+          stage.labels { values = { level = "" } }
+        }
+
+        // STAGE 5: normalize lowercase + canonicalize
+        stage.template {
+          source   = "level"
+          {% raw %}template = "{{ `{{ if .Value }}{{ ToLower .Value }}{{ end }}` }}"{% endraw %}
+        }
+        stage.replace {
+          source     = "level"
+          expression = "^(warning)$"
+          replace    = "warn"
+        }
+        stage.replace {
+          source     = "level"
+          expression = "^(verbose)$"
+          replace    = "debug"
+        }
+        stage.replace {
+          source     = "level"
+          expression = "^(err)$"
+          replace    = "error"
+        }
+
+        // STAGE 6: publish level label
+        stage.labels { values = { level = "" } }
+
+        // STAGE 7: last resort error-keyword detection
+        stage.match {
+          selector = "{level=\"\"} |~ \"(?i)\\\\b(emerg|fatal|alert|crit(?:ical)?|err|eror|error|panic|exception)\\\\b\""
+          stage.static_labels { values = { level = "error" } }
+        }
+
+        {%- if prometheus_enabled == true %}
+        // error counter metric
+        stage.match {
+          selector = "{level=\"error\"}"
+          stage.metrics {
+            metric.counter {
+              name        = "q_log_errors_total"
+              description = "Lines classified as error"
+              action      = "inc"
+              match_all   = true
+            }
+          }
+        }
+        {%- endif %}
+
+        forward_to = [loki.write.qovery.receiver]
+      }
+
+      loki.write "qovery" {
+        endpoint {
+          url = sys.env("LOKI_WRITE_URL")
+        }
+      }
+
+{%- if prometheus_enabled == true %}
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  labels:
+    release: prometheus
+{%- endif %}
+
+# GKE Autopilot notes:
+# - autogke-no-write-mode-hostpath denies any writable hostPath, so the storagePath/positions
+#   volume (alloy-data) is an emptyDir, not a hostPath (see controller.volumes.extra above).
+# - alloy.mounts.varlog: true mounts /var/log read-only (covers /var/log/pods), which Autopilot allows.

@@ -43,7 +43,7 @@ pub struct ValuesFile {
     pub ingress_nginx: ChartConfig,
     #[serde(rename = "external-dns")]
     pub external_dns: ChartConfig,
-    pub promtail: ChartConfig,
+    pub alloy: ChartConfig,
     pub loki: ChartConfig,
     #[serde(rename = "cert-manager")]
     pub cert_manager: ChartConfig,
@@ -103,6 +103,7 @@ pub struct QoveryGlobalConfig {
     pub engine_gateway_url: String,
     #[serde(rename = "lokiUrl")]
     pub loki_url: String,
+    // TODO(QOV-1949): rename promtailLokiUrl -> lokiWriteUrl once the qovery-chart repo anchor is migrated
     #[serde(rename = "promtailLokiUrl")]
     pub promtail_loki_url: String,
     #[serde(rename = "acmeEmailAddr")]
@@ -203,7 +204,7 @@ pub struct DnsServices {
 #[derive(Serialize, Deserialize)]
 pub struct LoggingServices {
     pub loki: ServiceEnabled,
-    pub promtail: ServiceEnabled,
+    pub alloy: ServiceEnabled,
 }
 
 #[derive(Serialize, Deserialize)]

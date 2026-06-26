@@ -2,11 +2,11 @@ use crate::helm::{
     ChartInfo, ChartSetValue, CommonChart, HelmAction, HelmChart, HelmChartNamespaces, HpaConfig, HpaMode,
     PriorityClass, QoveryGatewayClass, QoveryPriorityClass, UpdateStrategy, get_engine_helm_action_from_location,
 };
+use crate::infrastructure::helm_charts::alloy_chart::{AlloyChart, promtail_uninstall_chart};
 use crate::infrastructure::helm_charts::envoy_gateway_chart::{EnvoyGatewayChart, EnvoyGatewayOptions};
 use crate::infrastructure::helm_charts::envoy_gateway_crd_chart::EnvoyGatewayCrdChart;
 use crate::infrastructure::helm_charts::k8s_event_logger::K8sEventLoggerChart;
 use crate::infrastructure::helm_charts::nginx_ingress_chart::{NginxIngressChart, NginxOptions};
-use crate::infrastructure::helm_charts::promtail_chart::PromtailChart;
 use crate::infrastructure::helm_charts::qovery_cluster_gateway_chart::{
     QoveryClusterGatewayChart, QoveryClusterGatewayChartOptions, XForwardedForClientIpDetection,
 };
@@ -221,11 +221,11 @@ pub fn kapsule_helm_charts(
     )
     .to_common_helm_chart()?;
 
-    // Promtail
-    let promtail = match chart_config_prerequisites.ff_log_history_enabled {
+    // Alloy
+    let alloy = match chart_config_prerequisites.ff_log_history_enabled {
         false => None,
         true => Some(
-            PromtailChart::new(
+            AlloyChart::new(
                 chart_prefix_path,
                 HelmChartDirectoryLocation::CloudProviderFolder,
                 loki_kube_dns_name,
@@ -899,9 +899,10 @@ pub fn kapsule_helm_charts(
     if let Some(kube_prometheus_stack_chart) = kube_prometheus_stack_chart {
         level_1.push(kube_prometheus_stack_chart)
     }
-    if let Some(promtail_chart) = promtail {
-        level_1.push(Box::new(promtail_chart));
+    if let Some(alloy_chart) = alloy {
+        level_1.push(Box::new(alloy_chart));
     }
+    level_1.push(Box::new(promtail_uninstall_chart(HelmChartNamespaces::KubeSystem)));
     if let Some(thanos_chart) = thanos_chart {
         level_2.push(thanos_chart)
     }
