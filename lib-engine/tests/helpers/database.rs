@@ -872,6 +872,13 @@ pub fn test_db(
                 DatabaseKind::Redis if sem_ver.to_major_version_string().parse::<u32>().is_ok_and(|m| m >= 8) => {
                     Some("Dockerfile-8.8".to_string())
                 }
+                // MySQL 9+ carries the full official image tag as `version` (e.g. `9.7-oracle`), which
+                // doesn't match a Dockerfile name. The test app ships `Dockerfile-9.7` (official MySQL 9
+                // client) for this family; the DB itself still deploys with the full tag. Majors 5/8
+                // keep `Dockerfile-<version>`.
+                DatabaseKind::Mysql if sem_ver.to_major_version_string().parse::<u32>().is_ok_and(|m| m >= 9) => {
+                    Some("Dockerfile-9.7".to_string())
+                }
                 _ => Some(format!("Dockerfile-{version}")),
             };
             app.command_args = vec![];

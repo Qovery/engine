@@ -1,0 +1,72 @@
+# Default values for the Qovery MySQL 9 chart (official mysql image, non-Bitnami).
+# The per-cloud `qovery-values.j2.yaml` overlays render the real values at deploy time.
+
+image:
+  registry: ""
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+## Partially/fully override the generated resource names.
+nameOverride: ""
+## fullnameOverride is set to the Qovery `sanitized_name` (== kube_name); the StatefulSet, headless
+## service and PVCs derive from it, and the engine sweeps PVCs by `app=<fullname>` on delete.
+fullnameOverride: ""
+
+## Labels applied to every resource. Qovery injects `qovery.com/service-id` here, which is the
+## label selector the engine uses to locate the workload (`qovery.com/service-id=<long_id>`).
+commonLabels: {}
+
+## Access control. Reproduces the credential surface of the Bitnami chart it replaces: a root user,
+## a named application user (`qovery`) with the same password, and a pre-created database. The
+## official mysql image maps these to MYSQL_ROOT_PASSWORD / MYSQL_USER / MYSQL_PASSWORD /
+## MYSQL_DATABASE on first init (empty data dir only). MYSQL_USER must not be `root`.
+auth:
+  rootPassword: ""
+  username: ""
+  password: ""
+  database: ""
+
+## Data directory. The official mysql image stores data under /var/lib/mysql.
+persistence:
+  mountPath: /var/lib/mysql
+  storageClass: ""
+  size: 10Gi
+  labels: {}
+  annotations: {}
+
+service:
+  ## Primary service name == Qovery `service_name` (fqdn_id), matching the Bitnami chart topology.
+  name: ""
+  type: ClusterIP
+  port: 3306
+  annotations: {}
+  headless:
+    annotations: {}
+
+## Security context. The official mysql image (incl. the `*-oracle` variant) creates and runs mysqld as
+## the `mysql` user uid/gid 999 (see docker-library/mysql Dockerfile.oracle: groupadd/useradd 999);
+## fsGroup makes a fresh PVC group-writable so that user can initialise the data dir.
+podSecurityContext:
+  fsGroup: 999
+containerSecurityContext:
+  runAsUser: 999
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 100m
+  limits:
+    memory: 1Gi
+    cpu: 500m
+
+## Scheduling
+affinity: {}
+tolerations: []
+
+podAnnotations: {}
+statefulsetAnnotations: {}
+
+terminationGracePeriodSeconds: 30

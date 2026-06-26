@@ -56,21 +56,52 @@ pub fn is_allowed_containered_postgres_version(requested_version: &VersionsNumbe
     })
 }
 
-pub fn is_allowed_containered_mysql_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
-    // https://hub.docker.com/r/bitnami/mysql/tags?page=1&ordering=last_updated
+// ---------------------------------------------------------------------------
+// Container MySQL families.
+//
+// Two families coexist:
+//   * majors 5 and 8 run on the legacy Bitnami chart/image (`pub-mirror-mysql`, tag = major,
+//     e.g. `8`). https://hub.docker.com/r/bitnami/mysql/tags
+//   * majors >= 9 run on the official mysql image (`pub-mirror-mysql`) via the Qovery-authored
+//     `mysql` chart.
+//
+// As with PostgreSQL/Redis, the exact image *tag* for the official family is owned by q-core, which
+// sends it as the database `version` (e.g. `9.7-oracle`); the engine uses that string verbatim as the
+// tag. The engine only derives the family (and therefore the chart) from the major, so onboarding a
+// future major needs no engine change — only q-core's version matrix + tag map.
+// ---------------------------------------------------------------------------
 
-    // Allow only major 5 and 8
-    if !&["5", "8"].contains(&requested_version.major.as_str()) {
-        return Err(DatabaseError::UnsupportedDatabaseVersion {
-            database_type: DatabaseType::MySQL,
-            database_version: Arc::from(requested_version.to_string()),
-        });
+/// Container MySQL majors served by the legacy Bitnami chart/image.
+pub const BITNAMI_MYSQL_MAJORS: &[&str] = &["5", "8"];
+
+/// First MySQL major served by the official mysql image (non-Bitnami).
+pub const OFFICIAL_MYSQL_MIN_MAJOR: u32 = 9;
+
+/// Whether a MySQL major is served by the legacy Bitnami chart/image.
+pub fn is_bitnami_mysql_major(major: &str) -> bool {
+    BITNAMI_MYSQL_MAJORS.contains(&major)
+}
+
+/// Whether a MySQL major is served by the official-image chart (q-core supplies the tag).
+pub fn is_official_mysql_major(major: &str) -> bool {
+    major
+        .parse::<u32>()
+        .map(|m| m >= OFFICIAL_MYSQL_MIN_MAJOR)
+        .unwrap_or(false)
+}
+
+pub fn is_allowed_containered_mysql_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
+    let major = requested_version.major.as_str();
+    // Allowed iff the major is a known Bitnami major (5, 8) or belongs to the official family (>= 9).
+    // q-core is the authoritative gate (its version matrix); the engine only sanity-checks the family.
+    if is_bitnami_mysql_major(major) || is_official_mysql_major(major) {
+        return Ok(());
     }
 
-    // If we want to filter out some versions, we should filter those out here
-    // <-
-
-    Ok(())
+    Err(DatabaseError::UnsupportedDatabaseVersion {
+        database_type: DatabaseType::MySQL,
+        database_version: Arc::from(requested_version.to_string()),
+    })
 }
 
 pub fn is_allowed_containered_mongodb_version(requested_version: &VersionsNumber) -> Result<(), DatabaseError> {
@@ -167,6 +198,14 @@ mod tests {
             is_allowed_containered_mysql_version(&VersionsNumberBuilder::new().major(8).minor(2).patch(3).build())
                 .is_ok()
         );
+
+        // v9 (non-Bitnami, official mysql image)
+        assert!(is_allowed_containered_mysql_version(&VersionsNumberBuilder::new().major(9).build()).is_ok());
+        assert!(is_allowed_containered_mysql_version(&VersionsNumberBuilder::new().major(9).minor(7).build()).is_ok());
+        assert!(
+            is_allowed_containered_mysql_version(&VersionsNumberBuilder::new().major(9).minor(7).patch(0).build())
+                .is_ok()
+        );
     }
 
     #[test]
@@ -192,13 +231,6 @@ mod tests {
             DatabaseError::UnsupportedDatabaseVersion {
                 database_type: DatabaseType::MySQL,
                 database_version: Arc::from("7"),
-            }
-        );
-        assert_eq!(
-            is_allowed_containered_mysql_version(&VersionsNumberBuilder::new().major(9).build()).unwrap_err(),
-            DatabaseError::UnsupportedDatabaseVersion {
-                database_type: DatabaseType::MySQL,
-                database_version: Arc::from("9"),
             }
         );
     }
