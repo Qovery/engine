@@ -1,0 +1,63 @@
+# Default values for the Qovery MongoDB 8.3+ chart (official mongo image, non-Bitnami).
+# The per-cloud `qovery-values.j2.yaml` overlays render the real values at deploy time.
+
+image:
+  registry: ""
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+## Partially/fully override the generated resource names.
+nameOverride: ""
+## fullnameOverride is set to the Qovery `sanitized_name` (== kube_name); the StatefulSet, headless
+## service and PVCs derive from it, and the engine sweeps PVCs by `app=<fullname>` on delete.
+fullnameOverride: ""
+
+## Labels applied to every resource. Qovery injects `qovery.com/service-id` here, which is the
+## label selector the engine uses to locate the workload (`qovery.com/service-id=<long_id>`).
+commonLabels: {}
+
+## Access control. The official mongo image creates a root user (in `admin`) from
+## `MONGO_INITDB_ROOT_USERNAME/PASSWORD`. To preserve the Bitnami connection contract
+## (`mongodb://<username>:<password>@host:27017/<database>` with the default authSource), an init
+## script also creates the application user inside `database` (see templates/configmap-init.yaml).
+auth:
+  rootUsername: "root"
+  rootPassword: ""
+  username: ""
+  password: ""
+  database: ""
+
+## Data directory. The official mongo image stores data under /data/db.
+persistence:
+  mountPath: /data/db
+  storageClass: ""
+  size: 10Gi
+  labels: {}
+  annotations: {}
+
+service:
+  ## Primary service name == Qovery `service_name` (fqdn_id), matching the Bitnami chart topology.
+  name: ""
+  type: ClusterIP
+  port: 27017
+  annotations: {}
+  headless:
+    annotations: {}
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 512Mi
+    cpu: 500m
+
+## Scheduling
+affinity: {}
+tolerations: []
+
+podAnnotations: {}
+statefulsetAnnotations: {}
+
+terminationGracePeriodSeconds: 30

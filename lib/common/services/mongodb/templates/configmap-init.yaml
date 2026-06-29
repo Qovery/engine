@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mongodb.fullname" . }}-init
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "mongodb.labels" . | nindent 4 }}
+data:
+  # Runs once, on first container start with an empty data dir (official mongo image convention:
+  # /docker-entrypoint-initdb.d). The image creates the root user (admin) from MONGO_INITDB_ROOT_*;
+  # this script additionally creates the application user inside its own database so that the existing
+  # Qovery connection string `mongodb://<user>:<pwd>@host:27017/<db>` authenticates with the default
+  # authSource — reproducing the Bitnami chart's behaviour. Credentials come from env (backed by the
+  # Secret); no secret value is stored in this ConfigMap.
+  00-create-app-user.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    if [ -z "${MONGO_APP_USERNAME:-}" ]; then
+      echo "MONGO_APP_USERNAME not set, skipping application user creation"
+      exit 0
+    fi
+    mongosh --host 127.0.0.1 --port 27017 \
+      -u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}" --authenticationDatabase admin <<EOF
+    db.getSiblingDB('${MONGO_APP_DATABASE}').createUser({
+      user: '${MONGO_APP_USERNAME}',
+      pwd: '${MONGO_APP_PASSWORD}',
+      roles: [
+        { role: 'readWrite', db: '${MONGO_APP_DATABASE}' },
+        { role: 'dbAdmin', db: '${MONGO_APP_DATABASE}' }
+      ]
+    });
+    EOF

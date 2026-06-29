@@ -1,0 +1,107 @@
+image:
+  registry: {{ registry_name }}
+  repository: {{ repository_name }}
+  tag: "{{ version }}"
+
+# fullnameOverride == Qovery sanitized_name (kube_name): StatefulSet, headless service and PVCs
+# derive from it, and the engine sweeps PVCs by `app=<sanitized_name>` on delete.
+fullnameOverride: "{{ sanitized_name }}"
+
+commonLabels:
+  envId: "{{ environment_id }}"
+  databaseId: "{{ id }}"
+  databaseLongId: "{{ long_id }}"
+  envLongId: "{{ environment_long_id }}"
+  projectLongId: "{{ project_long_id }}"
+  qovery.com/service-id: "{{ long_id }}"
+  qovery.com/service-type: "database"
+  qovery.com/environment-id: "{{ environment_long_id }}"
+  qovery.com/project-id: "{{ project_long_id }}"
+  {%- for key, value in labels_group.common %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+# The official mongo image creates the root user (admin) from MONGO_INITDB_ROOT_*; an init script also
+# creates the application user inside its database so the existing connection string keeps working.
+auth:
+  rootUsername: "root"
+  rootPassword: "{{ database_password }}"
+  username: "{{ database_login }}"
+  password: "{{ database_password }}"
+  database: "{{ database_db_name }}"
+
+service:
+  # Primary service name == Qovery service_name (fqdn_id), matching the previous chart topology.
+  name: "{{ service_name }}"
+  port: {{ database_port }}
+  type: {% if publicly_accessible -%}LoadBalancer{% else -%}ClusterIP{% endif %}
+  {% if publicly_accessible -%}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for annotations in additional_annotations %}
+    {{ annotations.key }}: |-
+       {{ annotations.value }}
+    {%- endfor %}
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
+  {% endif %}
+  headless:
+    annotations:
+      {%- for key, value in annotations_group.service %}
+      {{ key }}: |-
+         {{ value }}
+      {%- endfor %}
+
+persistence:
+  storageClass: "{{ database_disk_type }}"
+  size: "{{ database_disk_size_in_gib }}Gi"
+  annotations:
+    ownerId: "{{ owner_id }}"
+    envId: "{{ environment_id }}"
+    databaseId: "{{ id }}"
+    databaseName: "{{ sanitized_name }}"
+
+resources:
+  requests:
+    memory: "{{ ram_request_in_mib }}"
+    cpu: "{{ cpu_request_in_milli }}"
+  limits:
+    memory: "{{ ram_limit_in_mib }}"
+    cpu: "{{ cpu_limit_in_milli }}"
+
+podAnnotations:
+  {%- for key, value in annotations_group.pods %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+statefulsetAnnotations:
+  {%- for key, value in annotations_group.stateful_set %}
+  {{ key }}: |-
+     {{ value }}
+  {%- endfor %}
+
+{%- if node_affinity %}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+{%- for key, value in node_affinity %}
+            - key: "{{ key }}"
+              operator: In
+              values:
+                - "{{ value }}"
+{%- endfor %}
+{%- endif %}
+
+tolerations:
+{%- for key, value in toleration %}
+  - key: "{{ key }}"
+    operator: Exists
+    effect: "{{ value }}"
+{%- endfor %}

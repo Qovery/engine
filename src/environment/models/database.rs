@@ -1,8 +1,9 @@
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::database_utils::{
-    OFFICIAL_POSTGRES_IMAGE_REPOSITORY, is_allowed_containered_mongodb_version, is_allowed_containered_mysql_version,
-    is_allowed_containered_postgres_version, is_allowed_containered_redis_version, is_bitnami_mysql_major,
+    OFFICIAL_MONGODB_IMAGE_REPOSITORY, OFFICIAL_POSTGRES_IMAGE_REPOSITORY, is_allowed_containered_mongodb_version,
+    is_allowed_containered_mysql_version, is_allowed_containered_postgres_version,
+    is_allowed_containered_redis_version, is_bitnami_mongodb_version, is_bitnami_mysql_major,
     is_bitnami_postgres_major, is_bitnami_redis_major,
 };
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
@@ -386,41 +387,34 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         format!("{}-{}", T::lib_directory_name(), self.id)
     }
 
-    /// Whether this PostgreSQL is served by the legacy Bitnami chart. Majors up to 17 stay on
-    /// Bitnami; 18 and every later major use the Qovery-authored chart on the official postgres
-    /// image. Backed by the version registry in `database_utils` (single source of truth).
-    pub(crate) fn is_bitnami_postgres(&self) -> bool {
-        matches!(T::db_type(), service::DatabaseType::PostgreSQL) && is_bitnami_postgres_major(&self.version.major)
+    /// Whether this database version is served by the legacy Bitnami chart/image.
+    /// Backed by the version registry in `database_utils` (single source of truth).
+    pub(crate) fn is_bitnami(&self) -> bool {
+        match T::db_type() {
+            service::DatabaseType::PostgreSQL => is_bitnami_postgres_major(&self.version.major),
+            service::DatabaseType::Redis => is_bitnami_redis_major(&self.version.major),
+            service::DatabaseType::MongoDB => is_bitnami_mongodb_version(&self.version),
+            service::DatabaseType::MySQL => is_bitnami_mysql_major(&self.version.major),
+        }
     }
 
-    /// Whether this Redis is served by the legacy Bitnami chart. Majors up to 7 stay on Bitnami;
-    /// 8 and every later major use the Qovery-authored chart on the official redis image. Backed by
-    /// the version registry in `database_utils` (single source of truth).
-    pub(crate) fn is_bitnami_redis(&self) -> bool {
-        matches!(T::db_type(), service::DatabaseType::Redis) && is_bitnami_redis_major(&self.version.major)
-    }
-
-    /// Whether this MySQL is served by the legacy Bitnami chart. Majors 5 and 8 stay on Bitnami;
-    /// 9 and every later major use the Qovery-authored chart on the official mysql image. Backed by
-    /// the version registry in `database_utils` (single source of truth).
-    pub(crate) fn is_bitnami_mysql(&self) -> bool {
-        matches!(T::db_type(), service::DatabaseType::MySQL) && is_bitnami_mysql_major(&self.version.major)
-    }
-
-    /// On-disk folder name for the chart and its value overlays. PostgreSQL 10-17 use the Bitnami
-    /// chart under `postgresql-bitnami`; 18+ use the official-image `postgresql` chart. Likewise Redis
-    /// 5-7 use `redis-bitnami` and 8+ use the official-image `redis` chart. MongoDB lives under
-    /// `mongodb-bitnami` for all versions (renamed in prep for a future non-Bitnami MongoDB chart).
-    /// MySQL 5/8 use `mysql-bitnami` and 9+ use the official-image `mysql` chart.
+    /// On-disk folder name for the chart and its value overlays. Older versions use Bitnami
+    /// charts; newer versions use official-image charts:
+    /// - PostgreSQL: `postgresql-bitnami` (10–17), `postgresql` (18+)
+    /// - Redis: `redis-bitnami` (5–7), `redis` (8+)
+    /// - MongoDB: `mongodb-bitnami` (≤8.0), `mongodb` (8.3+)
+    /// - MySQL: `mysql-bitnami` (5–8), `mysql` (9+)
+    ///
     /// The Helm release name and chart identity stay unchanged for all of them.
     fn chart_folder_name(&self) -> &'static str {
         match T::db_type() {
-            service::DatabaseType::PostgreSQL if self.is_bitnami_postgres() => "postgresql-bitnami",
+            service::DatabaseType::PostgreSQL if self.is_bitnami() => "postgresql-bitnami",
             service::DatabaseType::PostgreSQL => "postgresql",
-            service::DatabaseType::Redis if self.is_bitnami_redis() => "redis-bitnami",
+            service::DatabaseType::Redis if self.is_bitnami() => "redis-bitnami",
             service::DatabaseType::Redis => "redis",
-            service::DatabaseType::MongoDB => "mongodb-bitnami",
-            service::DatabaseType::MySQL if self.is_bitnami_mysql() => "mysql-bitnami",
+            service::DatabaseType::MongoDB if self.is_bitnami() => "mongodb-bitnami",
+            service::DatabaseType::MongoDB => "mongodb",
+            service::DatabaseType::MySQL if self.is_bitnami() => "mysql-bitnami",
             service::DatabaseType::MySQL => "mysql",
         }
     }
@@ -460,17 +454,16 @@ impl<C: CloudProvider, T: DatabaseType<C, Container>> Database<C, Container, T> 
         // repository and image location
         let source_registry = QoverySourceRegistry::from(&target.cloud_provider.kind());
 
-        // PostgreSQL 18+ is pulled from the official postgres image (`pub-mirror-postgres`, non-Bitnami)
-        // instead of the Bitnami-mirrored `pub-mirror-postgresql` used by 10-17. Redis 8+ and MySQL 9+
-        // stay on the same `pub-mirror-redis` / `pub-mirror-mysql` mirror as their Bitnami family — only
-        // their chart and image tag differ — so they need no repository override here. The engine only
-        // chooses the repository (by family); the exact tag comes from q-core via `version`.
-        let is_official_postgres =
-            matches!(T::db_type(), service::DatabaseType::PostgreSQL) && !self.is_bitnami_postgres();
-        let db_image_name = if is_official_postgres {
-            OFFICIAL_POSTGRES_IMAGE_REPOSITORY.to_string()
-        } else {
-            format!("pub-mirror-{}", T::db_type().to_string().to_lowercase())
+        // Two engines switch to a non-Bitnami official image at a certain version:
+        //   - PostgreSQL 18+: `pub-mirror-postgres`  (vs `pub-mirror-postgresql` for 10–17)
+        //   - MongoDB 8.3+:   `pub-mirror-mongo`     (vs `pub-mirror-mongodb` for ≤8.0)
+        // Redis 8+ and MySQL 9+ stay on the same `pub-mirror-{type}` mirror as their Bitnami
+        // family — only chart and tag change — so they need no repository override here.
+        // The engine picks the repository; the exact tag comes from q-core via `version`.
+        let db_image_name = match T::db_type() {
+            service::DatabaseType::PostgreSQL if !self.is_bitnami() => OFFICIAL_POSTGRES_IMAGE_REPOSITORY.to_string(),
+            service::DatabaseType::MongoDB if !self.is_bitnami() => OFFICIAL_MONGODB_IMAGE_REPOSITORY.to_string(),
+            db_type => format!("pub-mirror-{}", db_type.to_string().to_lowercase()),
         };
         let db_image_path = source_registry.image_path(&db_image_name);
 

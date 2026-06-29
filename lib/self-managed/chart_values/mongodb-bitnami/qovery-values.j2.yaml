@@ -39,7 +39,7 @@ customLivenessProbe:
     command:
       - mongosh
       - --eval
-      - "db.adminCommand('ping')"
+      - "assert.eq(db.adminCommand('ping').ok, 1)"
   initialDelaySeconds: 30
   periodSeconds: 20
   timeoutSeconds: 10
@@ -50,7 +50,7 @@ customReadinessProbe:
     command:
       - mongosh
       - --eval
-      - "db.adminCommand('ping')"
+      - "assert.eq(db.adminCommand('ping').ok, 1)"
   initialDelaySeconds: 30
   periodSeconds: 20
   timeoutSeconds: 10
@@ -82,6 +82,14 @@ service:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: "{{ fqdn }}"
     external-dns.alpha.kubernetes.io/ttl: "300"
+    {%- for annotations in additional_annotations %}
+    {{ annotations.key }}: |-
+       {{ annotations.value }}
+    {%- endfor %}
+    {%- for key, value in annotations_group.service %}
+    {{ key }}: |-
+       {{ value }}
+    {%- endfor %}
   {% endif %}
 
 persistence:
