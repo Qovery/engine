@@ -957,6 +957,22 @@ fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("8.0", function_name!(), CONTAINER, KubernetesKind::Eks, true);
 }
 
+// MongoDB 8.3 runs on the official mongo image (non-Bitnami): the version carries the full image tag
+// `8.3-noble`, which the engine uses verbatim and routes to the Qovery-authored `mongodb` chart.
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_3_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.3-noble", function_name!(), CONTAINER, KubernetesKind::Eks, false);
+}
+
+#[cfg(feature = "test-aws-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_3_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.3-noble", function_name!(), CONTAINER, KubernetesKind::Eks, true);
+}
+
 //
 // MongoDB production environment (DocumentDB)
 //

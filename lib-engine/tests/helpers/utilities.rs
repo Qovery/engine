@@ -686,7 +686,7 @@ pub fn db_infos(
             DBInfos {
                 db_port: database_port,
                 db_name: database_db_name.to_string(),
-                app_commit: "5884401a4151f29e29718f1dc6635ff25c5f2e18".to_string(),
+                app_commit: "f6fd365bdcb4b69add0ad108120e58ac9afafdf9".to_string(),
                 app_env_vars: btreemap! {
                     "IS_DOCUMENTDB".to_string() => VariableInfo { value: general_purpose::STANDARD.encode((database_mode == DatabaseMode::MANAGED).to_string()), is_secret:false},
                     "QOVERY_DATABASE_TESTING_DATABASE_FQDN".to_string() => VariableInfo { value: general_purpose::STANDARD.encode(db_fqdn), is_secret:false},

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: mongodb
+description: Qovery-authored MongoDB chart based on the official mongo image (non-Bitnami). Serves MongoDB 8.3 and later.
+type: application
+# Chart identity stays `mongodb` (matches the Helm release name `mongodb-<id>`).
+# This is a brand-new chart, versioned independently from the Bitnami chart it replaces from MongoDB 8.3 onward.
+version: 0.1.0
+# appVersion intentionally omitted: this chart serves MongoDB 8.3 and every later version; the image tag
+# is selected per database version by the engine, not pinned in the chart.
+keywords:
+  - mongodb
+  - document
+  - database
+sources:
+  - https://github.com/docker-library/mongo

@@ -941,6 +941,21 @@ fn public_mongodb_v8_0_deploy_a_working_dev_environment() {
     test_mongodb_configuration("8.0", function_name!(), CONTAINER, true);
 }
 
+// MongoDB 8.3 runs on the official mongo image (non-Bitnami); the version carries the full image tag.
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn private_mongodb_v8_3_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.3-noble", function_name!(), CONTAINER, false);
+}
+
+#[cfg(feature = "test-scw-self-hosted")]
+#[named]
+#[test]
+fn public_mongodb_v8_3_deploy_a_working_dev_environment() {
+    test_mongodb_configuration("8.3-noble", function_name!(), CONTAINER, true);
+}
+
 /**
  **
  ** MySQL tests
