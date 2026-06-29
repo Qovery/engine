@@ -18,6 +18,7 @@ pub fn effective_cpu_architectures(
 pub fn add_arch_to_deployment_affinity_node(
     deployment_affinity_node_required: &BTreeMap<String, String>,
     cpu_architectures: &[CpuArchitecture],
+    kubernetes_kind: Kind,
 ) -> BTreeMap<String, String> {
     let mut deployment_affinity_node_required = deployment_affinity_node_required.clone();
 
@@ -30,6 +31,17 @@ pub fn add_arch_to_deployment_affinity_node(
         deployment_affinity_node_required
             .entry("kubernetes.io/arch".to_string())
             .or_insert_with(|| arch.to_string());
+    }
+
+    if kubernetes_kind == Kind::Gke
+        && deployment_affinity_node_required
+            .get("kubernetes.io/arch")
+            .map(String::as_str)
+            == Some("arm64")
+    {
+        deployment_affinity_node_required
+            .entry("cloud.google.com/compute-class".to_string())
+            .or_insert_with(|| "autopilot-arm".to_string());
     }
 
     deployment_affinity_node_required
@@ -81,7 +93,8 @@ mod tests {
         let deployment_affinity_node_required = BTreeMap::<String, String>::new();
         let cpu_architectures = vec![];
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures, Kind::Eks);
         assert_eq!(result.len(), 0);
     }
 
@@ -91,7 +104,8 @@ mod tests {
         deployment_affinity_node_required.insert("key".to_string(), "value".to_string());
         let cpu_architectures = vec![];
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures, Kind::Eks);
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("key"), Some(&"value".to_string()));
     }
@@ -101,7 +115,8 @@ mod tests {
         let deployment_affinity_node_required = BTreeMap::<String, String>::new();
         let cpu_architectures = vec![CpuArchitecture::AMD64];
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures, Kind::Eks);
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"amd64".to_string()));
     }
@@ -112,7 +127,8 @@ mod tests {
         deployment_affinity_node_required.insert("key".to_string(), "value".to_string());
         let cpu_architectures = vec![CpuArchitecture::ARM64];
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures, Kind::Eks);
         assert_eq!(result.len(), 2);
         assert_eq!(result.get("key"), Some(&"value".to_string()));
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"arm64".to_string()));
@@ -124,7 +140,8 @@ mod tests {
         deployment_affinity_node_required.insert("kubernetes.io/arch".to_string(), "value".to_string());
         let cpu_architectures = vec![CpuArchitecture::ARM64];
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &cpu_architectures, Kind::Eks);
         assert_eq!(result.len(), 1);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"value".to_string()));
     }
@@ -147,7 +164,7 @@ mod tests {
     fn test_service_cpu_architecture_renders_arm64_node_affinity_over_amd64_cluster_default() {
         // Composes the actual render path: effective arch (service ARM64 over AMD64 default) -> node affinity.
         let effective_archs = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
-        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &effective_archs);
+        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &effective_archs, Kind::Eks);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"arm64".to_string()));
     }
 
@@ -158,8 +175,52 @@ mod tests {
         deployment_affinity_node_required.insert("kubernetes.io/arch".to_string(), "amd64".to_string());
         let effective_archs = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
 
-        let result = add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &effective_archs);
+        let result =
+            add_arch_to_deployment_affinity_node(&deployment_affinity_node_required, &effective_archs, Kind::Eks);
         assert_eq!(result.get("kubernetes.io/arch"), Some(&"amd64".to_string()));
+    }
+
+    #[test]
+    fn test_gke_arm64_service_override_injects_compute_class() {
+        // GKE Autopilot requires compute-class when arm64 is set (ENG-1643).
+        let effective_archs = effective_cpu_architectures(Some(CpuArchitecture::ARM64), vec![CpuArchitecture::AMD64]);
+        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &effective_archs, Kind::Gke);
+        assert_eq!(result.get("kubernetes.io/arch"), Some(&"arm64".to_string()));
+        assert_eq!(result.get("cloud.google.com/compute-class"), Some(&"autopilot-arm".to_string()));
+    }
+
+    #[test]
+    fn test_gke_arm64_raw_advanced_setting_injects_compute_class() {
+        // compute-class is also injected when arm64 comes from raw advanced settings (not just service override).
+        let mut affinity = BTreeMap::<String, String>::new();
+        affinity.insert("kubernetes.io/arch".to_string(), "arm64".to_string());
+        let result = add_arch_to_deployment_affinity_node(&affinity, &[], Kind::Gke);
+        assert_eq!(result.get("cloud.google.com/compute-class"), Some(&"autopilot-arm".to_string()));
+    }
+
+    #[test]
+    fn test_gke_arm64_user_compute_class_wins() {
+        // A user-set compute-class in advanced settings is not overwritten.
+        let mut affinity = BTreeMap::<String, String>::new();
+        affinity.insert("kubernetes.io/arch".to_string(), "arm64".to_string());
+        affinity.insert("cloud.google.com/compute-class".to_string(), "Performance".to_string());
+        let result = add_arch_to_deployment_affinity_node(&affinity, &[], Kind::Gke);
+        assert_eq!(result.get("cloud.google.com/compute-class"), Some(&"Performance".to_string()));
+    }
+
+    #[test]
+    fn test_gke_amd64_does_not_inject_compute_class() {
+        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &[CpuArchitecture::AMD64], Kind::Gke);
+        assert_eq!(result.get("kubernetes.io/arch"), Some(&"amd64".to_string()));
+        assert!(!result.contains_key("cloud.google.com/compute-class"));
+    }
+
+    #[test]
+    fn test_eks_arm64_does_not_inject_compute_class() {
+        // EKS+Karpenter supports ARM64 on demand; compute-class is a GKE concept.
+        let result = add_arch_to_deployment_affinity_node(&BTreeMap::new(), &[CpuArchitecture::ARM64], Kind::Eks);
+        assert_eq!(result.get("kubernetes.io/arch"), Some(&"arm64".to_string()));
+        assert!(!result.contains_key("cloud.google.com/compute-class"));
     }
 
     struct MockKubernetes {

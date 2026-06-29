@@ -202,6 +202,7 @@ impl<T: CloudProvider> Application<T> {
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &effective_archs,
+            target.kubernetes.kind(),
         );
 
         let mut tolerations = BTreeMap::<String, String>::new();
