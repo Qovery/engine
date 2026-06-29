@@ -6,7 +6,84 @@ from io import StringIO
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ci_release_ai_check_output import (
     SEVERITY_EMOJI, SEVERITY_COLOR, color, strip_ansi, should_use_color,
+    _normalize_title, DefaultRenderer,
 )
+
+
+def _finding(severity="review", title="t", source="terraform", clusters=None, category="other", impact="i", action="a"):
+    return {
+        "severity": severity, "title": title, "source": source, "category": category,
+        "impact": impact, "action": action, "affected_clusters": clusters or ["c1"],
+    }
+
+
+class TestNormalizeTitle(unittest.TestCase):
+    def test_strips_bucket_names(self):
+        a = _normalize_title("HTTPS-only policy on qovery-logs-za0829ee2")
+        b = _normalize_title("HTTPS-only policy on qovery-logs-zeb1bc33b")
+        self.assertEqual(a, b)
+
+    def test_strips_uuids_and_short_cluster_ids(self):
+        a = _normalize_title("OIDC thumbprint changing on e3b8921c-889b-462e-b19e-023a1c4b1f40")
+        b = _normalize_title("OIDC thumbprint changing on ze331ea83")
+        self.assertEqual(a, b)
+
+    def test_strips_version_numbers(self):
+        a = _normalize_title("Engine version v1.301.0 -> v1.312.0")
+        b = _normalize_title("Engine version v2.0.1 -> v2.5.9")
+        self.assertEqual(a, b)
+
+    def test_different_issues_stay_distinct(self):
+        https = _normalize_title("New S3 bucket policies enforcing HTTPS-only access")
+        iam = _normalize_title("IAM policy losing S3 and KMS Allow actions")
+        kms = _normalize_title("KMS key being replaced on the Loki bucket")
+        self.assertNotEqual(https, iam)
+        self.assertNotEqual(https, kms)
+        self.assertNotEqual(iam, kms)
+
+
+class TestGroupKey(unittest.TestCase):
+    def test_same_issue_different_cluster_tokens_same_key(self):
+        a = DefaultRenderer._group_key(_finding(title="HTTPS policy on qovery-logs-za0829ee2"))
+        b = DefaultRenderer._group_key(_finding(title="HTTPS policy on qovery-logs-zeb1bc33b"))
+        self.assertEqual(a, b)
+
+    def test_distinct_issues_distinct_keys(self):
+        # The regression: these previously both collapsed to ("terraform", "s3_encryption").
+        https = DefaultRenderer._group_key(_finding(title="New S3 bucket policies enforcing HTTPS-only access"))
+        iam = DefaultRenderer._group_key(_finding(title="IAM policy losing S3 and KMS Allow actions"))
+        self.assertNotEqual(https, iam)
+
+    def test_source_is_part_of_key(self):
+        tf = DefaultRenderer._group_key(_finding(title="same words", source="terraform"))
+        helm = DefaultRenderer._group_key(_finding(title="same words", source="helm"))
+        self.assertNotEqual(tf, helm)
+
+
+class TestGroupByCategory(unittest.TestCase):
+    def setUp(self):
+        self.r = DefaultRenderer(use_color=False)
+
+    def test_different_findings_not_merged(self):
+        # Regression test for the silent merge-drop bug.
+        findings = [
+            _finding(title="New S3 bucket policies enforcing HTTPS-only access", clusters=["c1", "c2"]),
+            _finding(title="IAM policy losing S3 and KMS Allow actions", clusters=["c3"]),
+        ]
+        grouped = self.r._group_by_category(findings)
+        self.assertEqual(len(grouped), 2)
+        titles = {g["title"] for g in grouped}
+        self.assertIn("New S3 bucket policies enforcing HTTPS-only access", titles)
+        self.assertIn("IAM policy losing S3 and KMS Allow actions", titles)
+
+    def test_same_issue_across_groups_merges_and_unions_clusters(self):
+        findings = [
+            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1", "c2"]),
+            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c3"]),
+        ]
+        grouped = self.r._group_by_category(findings)
+        self.assertEqual(len(grouped), 1)
+        self.assertEqual(sorted(grouped[0]["affected_clusters"]), ["c1", "c2", "c3"])
 
 
 class TestColorUtilities(unittest.TestCase):
@@ -334,7 +411,7 @@ class TestJsonRenderer(unittest.TestCase):
             "clusters_total", "clusters_with_logs", "clusters_no_logs",
             "clusters_errored", "clusters_skipped", "patterns_total",
             "severity_counts", "actions", "findings", "usage", "timing",
-            "grafana_url",
+            "grafana_url", "qovery_cluster_names",
         }
         self.assertEqual(set(data.keys()), expected_keys)
 
@@ -403,6 +480,26 @@ class TestCreateRenderer(unittest.TestCase):
         r, p, _ = create_renderer(verbose=True, json_output=True)
         self.assertIsInstance(r, JsonRenderer)
         self.assertTrue(p._verbose)
+
+
+class TestClusterLabeling(unittest.TestCase):
+    def test_internal_cluster_labeled_customer_bare(self):
+        out = StringIO()
+        r = DefaultRenderer(stream=out, use_color=False)
+        r._qovery_cluster_names = {"int-cluster": "Qovery test AWS"}
+        r._render_cluster_list(["int-cluster", "cust-cluster"])
+        s = out.getvalue()
+        self.assertIn("int-cluster — Qovery test AWS", s)
+        self.assertIn("cust-cluster", s)
+        self.assertNotIn("cust-cluster —", s)  # customer never labeled
+
+    def test_no_map_leaves_all_bare(self):
+        out = StringIO()
+        r = DefaultRenderer(stream=out, use_color=False)  # render() not called → no map
+        r._render_cluster_list(["c1"])
+        s = out.getvalue()
+        self.assertIn("Clusters: c1", s)
+        self.assertNotIn("—", s)
 
 
 if __name__ == "__main__":

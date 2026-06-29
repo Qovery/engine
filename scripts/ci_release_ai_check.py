@@ -28,7 +28,29 @@ MAX_BATCH_LIMIT = 4
 GRAFANA_BASE_URL = "https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff"
 GRAFANA_TF_FILTER = "(%5C%2B%20%7C-%20%7C~%20%7C-%2F%5C%2B%20)"
 CLAUDE_MODEL = "claude-sonnet-4-6"
-CLAUDE_VERDICT_MODEL = "claude-sonnet-4-6"
+CLAUDE_VERDICT_MODEL = "claude-opus-4-8"
+
+# USD per 1M tokens, keyed by model id: (input_rate, output_rate).
+# Keep in sync with CLAUDE_MODEL / CLAUDE_VERDICT_MODEL above.
+PRICING_PER_MTK = {
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-8": (5.00, 25.00),
+}
+
+# Qovery-owned organizations. Clusters belonging to these orgs are labeled in the
+# report so operators can tell internal clusters from customer clusters at a glance.
+# This is an allowlist by design: any org NOT listed here stays unlabeled, so no
+# customer organization id or name is ever surfaced.
+QOVERY_ORGS = {
+    "3d542888-3d2c-474a-b1ad-712556db66da": "Q Sandbox",
+    "2da2d955-1ef8-4660-8aba-6ec469a0f910": "Qovery - Gitlab runners",
+    "460616f0-94da-4d35-b631-6fa4ed08eb9a": "Qovery test AWS",
+    "9e1ad0f5-8092-4232-9430-b55c48c87716": "Qovery test Azure",
+    "21bd04fb-7b93-45c5-9957-4325d833a05a": "Qovery test GCP",
+    "cf8e78e6-159b-45b6-bfb5-2430c9505080": "Qovery test Scaleway",
+    "51937012-8377-4e0f-84cf-7f5f38a0154b": "Qovery Prod",
+    "141c07c8-0dd9-4623-983b-3fdd61867255": "Qovery Realm",
+}
 
 ANALYSIS_RESPONSE_SCHEMA = (
     '{"severity": "<critical|review|info>", '
@@ -194,39 +216,56 @@ def retry(fn, max_attempts=RETRY_MAX_ATTEMPTS, delay=RETRY_DELAY_SECONDS):
     raise last_error
 
 
+def _iter_table_rows(text: str):
+    """Yield each data row of the qovery admin deploy table as a {column: value} dict.
+
+    The table is pipe-separated; the header is the first line carrying a 'ClusterId'
+    column. Lines without a pipe, and everything up to the header, are skipped. Both
+    column readers below derive from this single walk instead of re-detecting columns.
+    """
+    text = strip_ansi(text)
+    header = None
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or "|" not in stripped:
+            continue
+        parts = [p.strip() for p in stripped.split("|")]
+        if header is None:
+            if "ClusterId" in parts:
+                header = parts
+            continue
+        yield dict(zip(header, parts))
+
+
 def parse_cluster_ids(text: str) -> list:
     """Extract unique ClusterIds from the qovery admin cluster deploy table output.
 
     The output is a pipe-separated table with a header row containing 'ClusterId'.
     Returns an empty list if no table is found.
     """
-    text = strip_ansi(text)
     cluster_ids = []
-    cluster_col_idx = None
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-
-        if "|" not in stripped:
-            continue
-
-        parts = [p.strip() for p in stripped.split("|")]
-
-        # Find the header row to determine ClusterId column index
-        if cluster_col_idx is None:
-            if "ClusterId" in parts:
-                cluster_col_idx = parts.index("ClusterId")
-            continue
-
-        # Data rows: extract value at ClusterId column
-        if len(parts) > cluster_col_idx:
-            value = parts[cluster_col_idx].strip()
-            if UUID_PATTERN.fullmatch(value) and value not in cluster_ids:
-                cluster_ids.append(value)
-
+    for row in _iter_table_rows(text):
+        cid = row.get("ClusterId", "")
+        if UUID_PATTERN.fullmatch(cid) and cid not in cluster_ids:
+            cluster_ids.append(cid)
     return cluster_ids
+
+
+def parse_qovery_cluster_names(text: str) -> dict:
+    """Map cluster_id -> Qovery org name for clusters owned by a known Qovery org.
+
+    Reads the OrganizationId and ClusterId columns of the deploy table. Only clusters
+    whose org is in QOVERY_ORGS are returned, so customer clusters are never surfaced.
+    Returns an empty dict if either column is absent.
+    """
+    names = {}
+    for row in _iter_table_rows(text):
+        cid = row.get("ClusterId", "")
+        org = row.get("OrganizationId", "")
+        if UUID_PATTERN.fullmatch(cid) and org in QOVERY_ORGS:
+            names[cid] = QOVERY_ORGS[org]
+
+    return names
 
 
 def parse_timestamps(timestamps_path: str) -> tuple:
@@ -315,10 +354,44 @@ def query_loki(
     return "\n".join(lines), truncated
 
 
+def _merge_usage(dst: dict, src: dict) -> None:
+    """Merge a per-model usage dict into dst (both keyed by model id)."""
+    for model, u in src.items():
+        acc = dst.setdefault(model, {"input_tokens": 0, "output_tokens": 0})
+        acc["input_tokens"] += u["input_tokens"]
+        acc["output_tokens"] += u["output_tokens"]
+
+
+SEVERITY_ORDER = {"info": 1, "review": 2, "critical": 3}
+
+
+def _apply_severity_overrides(findings: list, overrides: dict) -> None:
+    """Apply the verdict pass's authoritative severities onto findings, in place.
+
+    overrides maps finding id to a severity. The verdict returns ids as JSON object
+    keys (strings) while findings carry int ids, so match on the string form. Unknown
+    severities and ids without a matching finding are ignored.
+    """
+    for f in findings:
+        sev = overrides.get(str(f["id"]))
+        if sev in SEVERITY_ORDER:
+            f["severity"] = sev
+
+
+def _reconcile_verdict_severity(verdict_severity: str, findings: list) -> str:
+    """Never report a verdict less severe than the worst finding (escalate only)."""
+    candidates = [verdict_severity, *(f["severity"] for f in findings)]
+    return max(candidates, key=lambda s: SEVERITY_ORDER.get(s, 0))
+
+
 def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str = None) -> dict:
-    """Send a prompt to Claude and return the parsed JSON response."""
+    """Send a prompt to Claude and return the parsed JSON response.
+
+    usage_acc, if provided, is a per-model dict: {model_id: {input_tokens, output_tokens}}.
+    """
+    model = model or CLAUDE_MODEL
     payload = json.dumps({
-        "model": model or CLAUDE_MODEL,
+        "model": model,
         "max_tokens": 8192,
         "messages": [{"role": "user", "content": prompt}],
     }).encode()
@@ -335,8 +408,10 @@ def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str =
         data = json.loads(resp.read())
     if usage_acc is not None:
         usage = data.get("usage", {})
-        usage_acc["input_tokens"] += usage.get("input_tokens", 0)
-        usage_acc["output_tokens"] += usage.get("output_tokens", 0)
+        _merge_usage(usage_acc, {model: {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+        }})
     return _extract_json(data["content"][0]["text"])
 
 
@@ -430,50 +505,62 @@ def analyze_with_claude(logs: str, api_key: str, usage_acc: dict = None, cluster
     return retry(lambda: _call_claude(synthesis_prompt, api_key, usage_acc))
 
 
-def generate_summary(group_results: list, non_analyzed: dict, api_key: str, usage_acc: dict = None) -> dict:
-    """Call Claude to produce an executive summary from per-group analysis results.
+def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc: dict = None) -> dict:
+    """Call Claude to produce the authoritative verdict, severity overrides, and actions.
 
-    group_results: list of dicts with keys:
-        group (dict with cluster_ids, is_common), analysis (dict or None), error (str or None)
+    This is the final, holistic pass. It re-judges the severity of every finding based
+    on real-world impact — independent of the per-batch analysis severity — so the
+    rendered counts, sections, verdict, and actions all derive from one opinion.
+
+    findings: flattened list of finding dicts, each with a stable "id", plus
+        severity/title/source/category/impact/affected_clusters.
     non_analyzed: dict with keys:
         no_logs (list of cluster_ids), errors (list of {cluster_id, error}),
         skipped (list of {cluster_id, grafana_url})
+
+    Returns the parsed JSON: {verdict, verdict_severity, severity_overrides, actions}.
     """
-    input_data = []
-    for r in group_results:
-        entry = {
-            "cluster_count": len(r["group"]["cluster_ids"]),
-            "is_common_pattern": r["group"]["is_common"],
+    input_findings = [
+        {
+            "id": f["id"],
+            "assigned_severity": f["severity"],
+            "title": f["title"],
+            "source": f["source"],
+            "category": f["category"],
+            "impact": f["impact"],
+            "cluster_count": len(f["affected_clusters"]),
         }
-        if r.get("error"):
-            entry["status"] = "error"
-            entry["error"] = r["error"]
-        elif r.get("analysis"):
-            entry["status"] = "analyzed"
-            entry["severity"] = r["analysis"]["severity"]
-            entry["findings"] = r["analysis"].get("findings", [])
-        input_data.append(entry)
+        for f in findings
+    ]
 
     n_errors = len(non_analyzed.get("errors", []))
     n_no_logs = len(non_analyzed.get("no_logs", []))
     n_skipped = len(non_analyzed.get("skipped", []))
 
     prompt = (
-        "You are summarizing the safety analysis of a dry-run deployment across multiple "
-        "Kubernetes clusters. Clusters with identical diffs were grouped and analyzed once. "
-        "Below is the JSON array of per-group results.\n\n"
-        f"Additionally: {n_no_logs} cluster(s) had no logs, {n_errors} had errors, "
+        "You are the final safety reviewer for a dry-run deployment across many "
+        "Kubernetes clusters. Below is a JSON array of findings already extracted from "
+        "terraform/helm diffs; each has an id and an assigned_severity from a first-pass "
+        "reviewer that follows a noise-suppressing rubric and may UNDER-rate real risk.\n\n"
+        "Your job: assign the AUTHORITATIVE severity to EVERY finding by id, based on "
+        "real-world impact and INDEPENDENT of assigned_severity.\n"
+        "- 'critical': risks data loss, an outage, or broken access if applied.\n"
+        "- 'review': needs human validation but is not clearly destructive.\n"
+        "- 'info': routine, reversible churn that needs no operator action.\n\n"
+        f"Context: {n_no_logs} cluster(s) had no logs, {n_errors} had errors, "
         f"{n_skipped} were skipped (too large).\n\n"
         "Return ONLY valid JSON (no markdown fences) with this structure:\n"
         '{"verdict": "<one-line overall safety verdict>", '
         '"verdict_severity": "<critical|review|info>", '
+        '"severity_overrides": {"<finding id>": "<critical|review|info>"}, '
         '"actions": ["[SEVERITY] [TOOL] action text"]}\n\n'
+        "severity_overrides MUST contain an entry for every finding id shown below.\n"
         "Format each action as: [CRITICAL] or [REVIEW] (severity), then [TERRAFORM] or [HELM] (tool), then the action text.\n"
         "Example: \"[REVIEW] [TERRAFORM] Verify route table changes on 2 clusters\"\n"
-        "Only include actions for critical and review severity findings. "
-        "Do NOT generate actions for info severity items — those are routine and need no operator input.\n"
+        "Only include actions for critical and review findings; none for info. "
+        "actions MUST be consistent with severity_overrides.\n"
         "Be concise. Focus on whether the deployment is safe to proceed.\n\n"
-        f"Per-group results:\n{json.dumps(input_data)}"
+        f"Findings:\n{json.dumps(input_findings)}"
     )
 
     return _call_claude(prompt, api_key, usage_acc, model=CLAUDE_VERDICT_MODEL)
@@ -495,7 +582,7 @@ def main(
     loki_password = os.environ["LOKI_PASSWORD"]
     api_key = os.environ["ANTHROPIC_API_KEY"]
 
-    usage_acc = {"input_tokens": 0, "output_tokens": 0}
+    usage_acc = {}  # per-model: {model_id: {input_tokens, output_tokens}}
     timings = {}
 
     start_ns, end_ns = parse_timestamps(timestamps_path)
@@ -511,6 +598,7 @@ def main(
         return
 
     total_clusters = len(cluster_ids)
+    qovery_cluster_names = parse_qovery_cluster_names(content)
 
     # Phase 1: Download
     t0 = time.monotonic()
@@ -581,7 +669,7 @@ def main(
     if n_groups > 0:
         def _analyze_one(idx_group):
             idx, group = idx_group
-            local_usage = {"input_tokens": 0, "output_tokens": 0}
+            local_usage = {}  # per-model, merged into usage_acc on the main thread
             analysis = retry(
                 lambda g=group: analyze_with_claude(
                     g["representative_logs"], api_key, local_usage,
@@ -600,8 +688,7 @@ def main(
                 label = "Common pattern" if group["is_common"] else f"Pattern {idx}"
                 try:
                     _, _, analysis, local_usage = future.result()
-                    usage_acc["input_tokens"] += local_usage["input_tokens"]
-                    usage_acc["output_tokens"] += local_usage["output_tokens"]
+                    _merge_usage(usage_acc, local_usage)
                     sev = analysis.get("severity", "?")
                     progress.verbose_detail(f"  [{label}] {n} cluster{'s' if n != 1 else ''} — {sev}")
                     group_results.append({"group": group, "analysis": analysis, "error": None})
@@ -619,28 +706,8 @@ def main(
 
     timings["analysis_s"] = time.monotonic() - t0
 
-    # Phase 4: Verdict
-    t0 = time.monotonic()
-    verdict = "N/A"
-    verdict_severity = "unknown"
-    actions = []
-    try:
-        summary = retry(lambda: generate_summary(group_results, non_analyzed, api_key, usage_acc))
-        verdict = summary.get("verdict", "N/A")
-        verdict_severity = summary.get("verdict_severity", "unknown")
-        actions = summary.get("actions", [])
-    except Exception as e:
-        verdict = f"ERROR generating verdict: {e}"
-    timings["verdict_s"] = time.monotonic() - t0
-    timings["total_s"] = sum(timings.values())
-
-    # Build Report
-    INPUT_COST_PER_MTK = 3.00
-    OUTPUT_COST_PER_MTK = 15.00
-    input_cost = usage_acc["input_tokens"] / 1_000_000 * INPUT_COST_PER_MTK
-    output_cost = usage_acc["output_tokens"] / 1_000_000 * OUTPUT_COST_PER_MTK
-
-    # Flatten findings from group results
+    # Flatten findings from group analysis. Each gets a stable id so the verdict pass
+    # can return authoritative per-finding severity overrides keyed to it.
     findings = []
     for r in group_results:
         if r.get("error") or not r.get("analysis"):
@@ -649,6 +716,7 @@ def main(
         cluster_ids_for_group = r["group"]["cluster_ids"]
         for f in analysis.get("findings", []):
             findings.append({
+                "id": len(findings),
                 "severity": f.get("severity", "info"),
                 "title": f.get("title", f.get("description", "Unknown")),
                 "impact": f.get("impact", f.get("description", "")),
@@ -660,7 +728,44 @@ def main(
                 "sample_diff": r["group"]["representative_logs"][:2000] if r["group"].get("representative_logs") else "",
             })
 
-    # Severity counts
+    # Phase 4: Verdict — authoritative pass. Re-judges severity for every finding so the
+    # rendered counts, sections, verdict, and actions all derive from one opinion.
+    t0 = time.monotonic()
+    verdict = "N/A"
+    verdict_severity = "unknown"
+    actions = []
+    try:
+        summary = retry(lambda: generate_summary(findings, non_analyzed, api_key, usage_acc))
+        verdict = summary.get("verdict", "N/A")
+        verdict_severity = summary.get("verdict_severity", "unknown")
+        actions = summary.get("actions", [])
+        _apply_severity_overrides(findings, summary.get("severity_overrides", {}) or {})
+        verdict_severity = _reconcile_verdict_severity(verdict_severity, findings)
+    except Exception as e:
+        verdict = f"ERROR generating verdict: {e}"
+    timings["verdict_s"] = time.monotonic() - t0
+    timings["total_s"] = sum(timings.values())
+
+    # Build Report — totals and cost are computed per model in one pass, so a mixed
+    # Sonnet/Opus run prices correctly.
+    total_input_tokens = total_output_tokens = 0
+    estimated_cost = 0.0
+    usage_by_model = {}
+    for model, u in usage_acc.items():
+        if model not in PRICING_PER_MTK:
+            print(f"WARNING: no pricing for model {model!r}, its cost is reported as $0.", file=sys.stderr)
+        in_rate, out_rate = PRICING_PER_MTK.get(model, (0.0, 0.0))
+        model_cost = u["input_tokens"] / 1_000_000 * in_rate + u["output_tokens"] / 1_000_000 * out_rate
+        total_input_tokens += u["input_tokens"]
+        total_output_tokens += u["output_tokens"]
+        estimated_cost += model_cost
+        usage_by_model[model] = {
+            "input_tokens": u["input_tokens"],
+            "output_tokens": u["output_tokens"],
+            "estimated_cost_usd": round(model_cost, 4),
+        }
+
+    # Severity counts (cluster-weighted), from the authoritative override-applied findings.
     sev_cluster_counts = {"critical": 0, "review": 0, "info": 0, "unknown": 0}
     counted_clusters = set()
     for f in findings:
@@ -670,16 +775,14 @@ def main(
                 counted_clusters.add(key)
                 if f["severity"] in sev_cluster_counts:
                     sev_cluster_counts[f["severity"]] += 1
-    # Clusters with no findings → info
+    # Analyzed clusters with no finding of their own → count as info.
+    flagged = {cid for _, cid in counted_clusters}
     for r in group_results:
         if not r.get("error") and r.get("analysis"):
-            analysis_findings = r["analysis"].get("findings", [])
-            if not analysis_findings or all(f.get("severity") == "info" for f in analysis_findings):
-                for cid in r["group"]["cluster_ids"]:
-                    if not any((s, cid) in counted_clusters for s in ("critical", "review")):
-                        if ("info", cid) not in counted_clusters:
-                            counted_clusters.add(("info", cid))
-                            sev_cluster_counts["info"] += 1
+            for cid in r["group"]["cluster_ids"]:
+                if cid not in flagged:
+                    flagged.add(cid)
+                    sev_cluster_counts["info"] += 1
     sev_cluster_counts["unknown"] = len(non_analyzed["no_logs"]) + len(non_analyzed["errors"]) + len(non_analyzed["skipped"])
 
     report = {
@@ -703,12 +806,14 @@ def main(
         "usage": {
             "model_analysis": CLAUDE_MODEL,
             "model_verdict": CLAUDE_VERDICT_MODEL,
-            "input_tokens": usage_acc["input_tokens"],
-            "output_tokens": usage_acc["output_tokens"],
-            "estimated_cost_usd": round(input_cost + output_cost, 4),
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens,
+            "estimated_cost_usd": round(estimated_cost, 4),
+            "by_model": usage_by_model,
         },
         "timing": {k: round(v, 1) for k, v in timings.items()},
         "grafana_url": _grafana_base_url(start_ns, end_ns),
+        "qovery_cluster_names": qovery_cluster_names,
     }
 
     renderer.render(report)

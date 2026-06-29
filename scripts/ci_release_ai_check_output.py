@@ -40,6 +40,28 @@ def strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
 
 
+# Strip cluster-specific tokens from a finding title so the SAME issue on different
+# clusters normalizes identically, while DIFFERENT issues stay distinct.
+_TITLE_NORMALIZE = [
+    (re.compile(r'qovery-[a-z]+-\S+'), 'qovery-bucket'),                                   # bucket names: qovery-logs-zXXXX
+    (re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.I), ''),  # uuids
+    (re.compile(r'\bz[0-9a-f]{8,9}\b'), ''),                                               # qovery cluster short ids
+    (re.compile(r'\bv?\d+(?:\.\d+)+\b'), ''),                                              # version numbers v1.301.0
+    (re.compile(r'\b[0-9a-f]{8,}\b'), ''),                                                 # long hex / kms key ids
+    (re.compile(r'\d+'), ''),                                                              # remaining digits/counts
+    (re.compile(r'[^a-z ]+'), ' '),                                                        # punctuation
+    (re.compile(r'\s+'), ' '),                                                             # collapse whitespace
+]
+
+
+def _normalize_title(title: str) -> str:
+    """Cluster-agnostic, issue-specific signature of a finding title for grouping."""
+    t = title.lower()
+    for pattern, replacement in _TITLE_NORMALIZE:
+        t = pattern.sub(replacement, t)
+    return t.strip()
+
+
 def should_use_color(stream=None) -> bool:
     stream = stream or sys.stderr
     return hasattr(stream, "isatty") and stream.isatty()
@@ -145,7 +167,13 @@ class Renderer:
 
 
 class DefaultRenderer(Renderer):
+    # cluster_id -> Qovery org name, for labeling internal clusters in cluster lists.
+    # Populated by render(); the class-level default lets _render_cluster_list run
+    # standalone (e.g. in tests) without a render() pass.
+    _qovery_cluster_names = {}
+
     def render(self, report: dict) -> None:
+        self._qovery_cluster_names = report.get("qovery_cluster_names", {})
         self._render_header(report)
         self._render_verdict(report)
         self._render_summary_table(report)
@@ -218,30 +246,17 @@ class DefaultRenderer(Renderer):
 
     @staticmethod
     def _group_key(finding: dict) -> tuple:
-        """Return a stable grouping key, normalizing Claude's inconsistent categories.
+        """Return a stable grouping key: (source, normalized title).
 
-        Claude analyzes each diff pattern independently and may assign different
-        categories to the same type of change (e.g., 'helm_values' vs 'other' for
-        an image update that also had tag changes). Keyword normalization ensures
-        functionally identical findings land in the same group.
+        Keying on the normalized title means the SAME issue recurring across cluster
+        groups merges (cluster-specific tokens are stripped), while DIFFERENT issues
+        stay distinct. The previous category-based key folded unrelated findings
+        together (e.g. an HTTPS bucket policy and an IAM permission removal both became
+        's3_encryption'), and the merge then silently dropped all but the largest —
+        hiding real findings. Over-separating (the same issue shown twice) is a far
+        safer failure mode for a safety tool than silently dropping a finding.
         """
-        source = finding.get("source", "")
-        title = finding.get("title", "").lower()
-        description = finding.get("description", "").lower()
-        text = title + " " + description
-
-        if source == "helm" and any(k in text for k in ("image", "tag", "container")):
-            return (source, "image_update")
-        if source == "terraform" and any(k in text for k in ("route", "routing", "cidr", "gateway", "peering")):
-            return (source, "network")
-        if source == "terraform" and any(k in text for k in ("s3", "encryption", "kms", "bucket", "sse")):
-            return (source, "s3_encryption")
-        if source == "terraform" and any(k in text for k in ("null_resource", "set_subnetwork")):
-            return (source, "null_resource")
-        if source == "terraform" and any(k in text for k in ("tag", "metadata", "label")):
-            return (source, "tags")
-
-        return (source, finding.get("category", "other"))
+        return (finding.get("source", ""), _normalize_title(finding.get("title", "")))
 
     def _group_by_category(self, findings: list) -> list:
         """Merge findings with the same semantic group, combining their cluster IDs.
@@ -310,13 +325,18 @@ class DefaultRenderer(Renderer):
     def _render_finding_info(self, finding: dict) -> None:
         self._render_finding_detail(finding, include_impact_action=False)
 
+    def _cluster_label(self, cid: str) -> str:
+        """Append the Qovery org name for internal clusters; customer clusters stay bare."""
+        name = self._qovery_cluster_names.get(cid)
+        return f"{cid} — {name}" if name else cid
+
     def _render_cluster_list(self, cluster_ids: list, indent: str = "     ") -> None:
         if not cluster_ids:
             return
-        self._write(f"{indent}Clusters: {cluster_ids[0]}")
+        self._write(f"{indent}Clusters: {self._cluster_label(cluster_ids[0])}")
         padding = " " * len("Clusters: ")
         for cid in cluster_ids[1:]:
-            self._write(f"{indent}{padding}{cid}")
+            self._write(f"{indent}{padding}{self._cluster_label(cid)}")
 
     def _render_unknown(self, report: dict) -> None:
         no_logs = report.get("clusters_no_logs", [])
@@ -445,6 +465,7 @@ class JsonRenderer(Renderer):
                 {k: v for k, v in f.items() if k in JSON_FINDING_KEYS}
                 for f in report.get("findings", [])
             ],
+            "qovery_cluster_names": report.get("qovery_cluster_names", {}),
             "usage": report.get("usage", {}),
             "timing": report.get("timing", {}),
             "grafana_url": report.get("grafana_url", ""),

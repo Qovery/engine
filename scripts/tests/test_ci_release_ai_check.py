@@ -12,6 +12,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ci_release_ai_check import (
     parse_cluster_ids, query_loki, analyze_with_claude, retry,
     LOKI_LIMIT, MAX_BATCH_CHARS, MAX_BATCH_LIMIT, CLAUDE_MODEL,
+    CLAUDE_VERDICT_MODEL, PRICING_PER_MTK, _merge_usage, _call_claude,
+    _apply_severity_overrides, _reconcile_verdict_severity,
+    parse_qovery_cluster_names, QOVERY_ORGS,
     _grafana_url, normalize_diff, fingerprint_and_group,
 )
 
@@ -759,6 +762,244 @@ class TestRetry(unittest.TestCase):
 
         with self.assertRaises(ConnectionError):
             retry(always_fail, max_attempts=3, delay=0)
+
+
+def _claude_resp(text, usage=None):
+    """Build a mocked Anthropic Messages API response."""
+    body = {"content": [{"text": text}]}
+    if usage is not None:
+        body["usage"] = usage
+    m = MagicMock()
+    m.read.return_value = json.dumps(body).encode()
+    m.__enter__ = lambda s: s
+    m.__exit__ = MagicMock(return_value=False)
+    return m
+
+
+@contextlib.contextmanager
+def _run_main(dry_run_text):
+    """Run main() over a dry-run table, yielding the parsed JSON report.
+
+    Handles tempfile setup, env patching, stdout suppression, and cleanup so the
+    end-to-end tests only state their mocks and assertions.
+    """
+    paths = []
+    try:
+        dry_run = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+        dry_run.write(dry_run_text)
+        dry_run.close()
+        timestamps = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
+        timestamps.write("start_ns=1000\nend_ns=2000\n")
+        timestamps.close()
+        out = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+        out.close()
+        paths = [dry_run.name, timestamps.name, out.name]
+        env = {"LOKI_USERNAME": "u", "LOKI_PASSWORD": "p", "ANTHROPIC_API_KEY": "k"}
+        with patch.dict(os.environ, env), contextlib.redirect_stdout(StringIO()):
+            main(dry_run.name, timestamps.name, json_output=out.name)
+        with open(out.name) as f:
+            yield json.load(f)
+    finally:
+        for p in paths:
+            os.unlink(p)
+
+
+_ONE_CLUSTER_TABLE = "| ClusterId |\n| 00000000-0000-0000-0000-000000000001 |\n"
+
+
+class TestMergeUsage(unittest.TestCase):
+    def test_merge_into_empty(self):
+        dst = {}
+        _merge_usage(dst, {"m1": {"input_tokens": 10, "output_tokens": 2}})
+        self.assertEqual(dst, {"m1": {"input_tokens": 10, "output_tokens": 2}})
+
+    def test_merge_same_model_accumulates(self):
+        dst = {"m1": {"input_tokens": 10, "output_tokens": 2}}
+        _merge_usage(dst, {"m1": {"input_tokens": 5, "output_tokens": 3}})
+        self.assertEqual(dst["m1"], {"input_tokens": 15, "output_tokens": 5})
+
+    def test_merge_distinct_models_kept_separate(self):
+        dst = {}
+        _merge_usage(dst, {"m1": {"input_tokens": 1, "output_tokens": 1}})
+        _merge_usage(dst, {"m2": {"input_tokens": 2, "output_tokens": 2}})
+        self.assertEqual(set(dst), {"m1", "m2"})
+        self.assertEqual(dst["m1"], {"input_tokens": 1, "output_tokens": 1})
+        self.assertEqual(dst["m2"], {"input_tokens": 2, "output_tokens": 2})
+
+
+class TestCallClaudeUsage(unittest.TestCase):
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_records_usage_under_default_model(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{"ok":1}', {"input_tokens": 10, "output_tokens": 5})
+        usage = {}
+        _call_claude("p", "key", usage)
+        self.assertEqual(usage, {CLAUDE_MODEL: {"input_tokens": 10, "output_tokens": 5}})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_records_usage_under_explicit_model(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{"ok":1}', {"input_tokens": 3, "output_tokens": 7})
+        usage = {}
+        _call_claude("p", "key", usage, model=CLAUDE_VERDICT_MODEL)
+        self.assertEqual(usage, {CLAUDE_VERDICT_MODEL: {"input_tokens": 3, "output_tokens": 7}})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_accumulates_same_model_across_calls(self, mock_urlopen):
+        mock_urlopen.side_effect = [
+            _claude_resp('{}', {"input_tokens": 10, "output_tokens": 2}),
+            _claude_resp('{}', {"input_tokens": 5, "output_tokens": 3}),
+        ]
+        usage = {}
+        _call_claude("p", "k", usage)
+        _call_claude("p", "k", usage)
+        self.assertEqual(usage[CLAUDE_MODEL], {"input_tokens": 15, "output_tokens": 5})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_none_usage_acc_is_noop(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp('{"x":1}', {"input_tokens": 1, "output_tokens": 1})
+        self.assertEqual(_call_claude("p", "k", None), {"x": 1})
+
+
+class TestPricingTable(unittest.TestCase):
+    def test_active_models_have_pricing(self):
+        # Guard against bumping a model id without adding its rate.
+        self.assertIn(CLAUDE_MODEL, PRICING_PER_MTK)
+        self.assertIn(CLAUDE_VERDICT_MODEL, PRICING_PER_MTK)
+
+    def test_rates_are_positive_pairs(self):
+        for model, rate in PRICING_PER_MTK.items():
+            self.assertEqual(len(rate), 2, f"{model} must have (input, output) rates")
+            self.assertGreater(rate[0], 0)
+            self.assertGreater(rate[1], 0)
+
+
+class TestCostReporting(unittest.TestCase):
+    @patch("ci_release_ai_check.generate_summary")
+    @patch("ci_release_ai_check.analyze_with_claude")
+    @patch("ci_release_ai_check.query_loki")
+    def test_per_model_cost_in_json_output(self, mock_loki, mock_claude, mock_summary):
+        mock_loki.return_value = ("some diff", False)
+
+        # Analysis runs on CLAUDE_MODEL (Sonnet); populate the per-call usage dict.
+        def fake_analyze(logs, api_key, usage=None, cluster_count=1):
+            if usage is not None:
+                _merge_usage(usage, {CLAUDE_MODEL: {"input_tokens": 1_000_000, "output_tokens": 200_000}})
+            return {"severity": "info", "findings": []}
+        mock_claude.side_effect = fake_analyze
+
+        # Verdict runs on CLAUDE_VERDICT_MODEL (Opus); populate the shared usage_acc.
+        def fake_summary(findings, non_analyzed, api_key, usage=None):
+            if usage is not None:
+                _merge_usage(usage, {CLAUDE_VERDICT_MODEL: {"input_tokens": 10_000, "output_tokens": 2_000}})
+            return {"verdict": "ok", "verdict_severity": "info", "actions": []}
+        mock_summary.side_effect = fake_summary
+
+        with _run_main(_ONE_CLUSTER_TABLE) as report:
+            usage = report["usage"]
+
+        # Sonnet: 1M in * $3 + 0.2M out * $15 = $6.00 ; Opus: 0.01M * $5 + 0.002M * $25 = $0.10
+        self.assertEqual(usage["by_model"][CLAUDE_MODEL]["estimated_cost_usd"], 6.0)
+        self.assertEqual(usage["by_model"][CLAUDE_VERDICT_MODEL]["estimated_cost_usd"], 0.1)
+        self.assertEqual(usage["estimated_cost_usd"], 6.1)
+        self.assertEqual(usage["input_tokens"], 1_010_000)
+        self.assertEqual(usage["output_tokens"], 202_000)
+        self.assertEqual(usage["model_analysis"], CLAUDE_MODEL)
+        self.assertEqual(usage["model_verdict"], CLAUDE_VERDICT_MODEL)
+
+
+class TestApplySeverityOverrides(unittest.TestCase):
+    def test_applies_override_by_string_id(self):
+        findings = [{"id": 0, "severity": "review"}, {"id": 1, "severity": "info"}]
+        _apply_severity_overrides(findings, {"0": "critical", "1": "review"})
+        self.assertEqual(findings[0]["severity"], "critical")
+        self.assertEqual(findings[1]["severity"], "review")
+
+    def test_ignores_unknown_id(self):
+        findings = [{"id": 0, "severity": "review"}]
+        _apply_severity_overrides(findings, {"99": "critical"})
+        self.assertEqual(findings[0]["severity"], "review")
+
+    def test_ignores_invalid_severity(self):
+        findings = [{"id": 0, "severity": "review"}]
+        _apply_severity_overrides(findings, {"0": "bogus"})
+        self.assertEqual(findings[0]["severity"], "review")
+
+    def test_finding_without_override_unchanged(self):
+        findings = [{"id": 0, "severity": "review"}, {"id": 1, "severity": "info"}]
+        _apply_severity_overrides(findings, {"0": "critical"})
+        self.assertEqual(findings[1]["severity"], "info")
+
+
+class TestReconcileVerdictSeverity(unittest.TestCase):
+    def test_escalates_to_worst_finding(self):
+        findings = [{"severity": "info"}, {"severity": "critical"}]
+        self.assertEqual(_reconcile_verdict_severity("review", findings), "critical")
+
+    def test_does_not_downgrade(self):
+        findings = [{"severity": "info"}]
+        self.assertEqual(_reconcile_verdict_severity("critical", findings), "critical")
+
+    def test_empty_findings_keeps_input(self):
+        self.assertEqual(_reconcile_verdict_severity("unknown", []), "unknown")
+
+
+class TestVerdictAuthoritative(unittest.TestCase):
+    @patch("ci_release_ai_check.generate_summary")
+    @patch("ci_release_ai_check.analyze_with_claude")
+    @patch("ci_release_ai_check.query_loki")
+    def test_verdict_escalation_surfaces_in_counts_and_findings(self, mock_loki, mock_claude, mock_summary):
+        mock_loki.return_value = ("iam policy losing allow actions", False)
+        # Analysis under-rates it as review (the rubric blind spot we diagnosed).
+        mock_claude.return_value = {
+            "severity": "review",
+            "findings": [{
+                "severity": "review", "title": "IAM policy losing Allow actions",
+                "source": "terraform", "category": "iam_change",
+                "impact": "Prometheus loses S3/KMS perms", "action": "review policy",
+            }],
+        }
+        # Verdict escalates finding id 0 to critical; verdict_severity left lower to test reconcile.
+        mock_summary.return_value = {
+            "verdict": "Critical IAM risk on 1 cluster",
+            "verdict_severity": "review",
+            "severity_overrides": {"0": "critical"},
+            "actions": ["[CRITICAL] [TERRAFORM] Review IAM policy on 1 cluster"],
+        }
+
+        with _run_main(_ONE_CLUSTER_TABLE) as report:
+            # The escalation must flow into counts, the finding, and the verdict severity.
+            self.assertEqual(report["severity_counts"]["critical"], 1)
+            self.assertEqual(report["severity_counts"]["review"], 0)
+            self.assertEqual(report["verdict_severity"], "critical")
+            self.assertEqual(report["findings"][0]["severity"], "critical")
+
+
+class TestParseQoveryClusterNames(unittest.TestCase):
+    HEADER = "OrganizationId | OrganizationName | OrganizationPlan | ClusterId | ClusterName"
+
+    def test_labels_qovery_cluster(self):
+        text = (self.HEADER + "\n"
+                "460616f0-94da-4d35-b631-6fa4ed08eb9a | x | y | eb1bc33b-68fb-441e-9854-b4fd369762a4 | c\n")
+        self.assertEqual(parse_qovery_cluster_names(text),
+                         {"eb1bc33b-68fb-441e-9854-b4fd369762a4": "Qovery test AWS"})
+
+    def test_excludes_customer_org(self):
+        # A customer org (not in QOVERY_ORGS) must never be surfaced.
+        text = (self.HEADER + "\n"
+                "11111111-1111-1111-1111-111111111111 | Cust | y | 22222222-2222-2222-2222-222222222222 | c\n")
+        self.assertEqual(parse_qovery_cluster_names(text), {})
+
+    def test_no_org_column_returns_empty(self):
+        text = ("ClusterId | ClusterName\n"
+                "eb1bc33b-68fb-441e-9854-b4fd369762a4 | c\n")
+        self.assertEqual(parse_qovery_cluster_names(text), {})
+
+    def test_empty_input(self):
+        self.assertEqual(parse_qovery_cluster_names(""), {})
+
+    def test_all_qovery_orgs_named(self):
+        for oid, name in QOVERY_ORGS.items():
+            self.assertRegex(oid, r"^[0-9a-f-]{36}$")
+            self.assertTrue(name and isinstance(name, str))
 
 
 if __name__ == "__main__":
