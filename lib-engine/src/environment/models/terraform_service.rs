@@ -210,6 +210,7 @@ impl<T: CloudProvider> TerraformService<T> {
         let mut deployment_affinity_node_required = utils::add_arch_to_deployment_affinity_node(
             &self.advanced_settings.deployment_affinity_node_required,
             &target.kubernetes.cpu_architectures(),
+            target.kubernetes.kind(),
         );
         let mut tolerations = BTreeMap::<String, String>::new();
         let is_gpu = (self.gpu_request.is_some_and(|v| v.to_gpu_count() > 0))
