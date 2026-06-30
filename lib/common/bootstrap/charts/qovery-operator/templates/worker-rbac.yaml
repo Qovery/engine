@@ -1,0 +1,16 @@
+{{- if and .Values.workerRbac.create .Values.workerRbac.clusterAdmin -}}
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ include "qovery-operator.workerServiceAccountName" . }}
+  labels:
+    {{- include "qovery-operator.labels" . | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "qovery-operator.workerServiceAccountName" . }}
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Values.workerRbac.clusterRoleName }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

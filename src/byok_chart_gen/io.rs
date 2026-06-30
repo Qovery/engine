@@ -8,7 +8,7 @@ use super::{
     QoverySelfManagedChart, SupportedCharts, chart_dot_yaml,
     values_dot_yaml::{
         AwsServices, CertificateServices, ChartConfig, DnsServices, GcpServices, ImageTag, IngressServices,
-        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryServices,
+        LoggingServices, ObservabilityServices, QoveryClusterAgent, QoveryGlobalConfig, QoveryOperator, QoveryServices,
         QoveryShellAgent, ScalewayServices, ServiceEnabled, ServicesEnabler, ValuesFile,
     },
 };
@@ -124,6 +124,7 @@ impl ValuesFile {
                 qovery: QoveryServices {
                     qovery_cluster_agent: ServiceEnabled { enabled: true },
                     qovery_shell_agent: ServiceEnabled { enabled: true },
+                    qovery_operator: ServiceEnabled { enabled: true },
                     qovery_engine: ServiceEnabled { enabled: false },
                     priority_class: ServiceEnabled { enabled: true },
                 },
@@ -178,6 +179,7 @@ impl ValuesFile {
                 architectures: "&architectures set-by-customer".to_string(),
                 shell_agent_version: "&shellAgentVersion set-by-customer".to_string(),
                 cluster_agent_version: "&clusterAgentVersion set-by-customer".to_string(),
+                operator_version: "&operatorVersion set-by-customer".to_string(),
                 engine_version: "&engineVersion set-by-customer".to_string(),
             },
             qovery_cluster_agent: QoveryClusterAgent {
@@ -204,6 +206,18 @@ impl ValuesFile {
                     ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
                     ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
                     ("GRPC_SERVER".to_string(), "*agentGatewayUrl".to_string()),
+                ]),
+            },
+            qovery_operator: QoveryOperator {
+                fullname_override: "qovery-operator".to_string(),
+                image: ImageTag {
+                    tag: "*operatorVersion".to_string(),
+                },
+                environment_variables: BTreeMap::from([
+                    ("CLUSTER_ID".to_string(), "*clusterId".to_string()),
+                    ("CLUSTER_JWT_TOKEN".to_string(), "*jwtToken".to_string()),
+                    ("ORGANIZATION_ID".to_string(), "*organizationId".to_string()),
+                    ("GRPC_SERVER".to_string(), "*engineGatewayUrl".to_string()),
                 ]),
             },
             qovery_engine: Some(QoveryEngine {

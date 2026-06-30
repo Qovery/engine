@@ -1,0 +1,41 @@
+{{- if .Values.rbac.create -}}
+kind: Role
+apiVersion: rbac.authorization.k8s.io/{{ .Values.rbac.apiVersion }}
+metadata:
+  name: {{ include "qovery-operator.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "qovery-operator.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - delete
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - create
+      - get
+      - list
+      - watch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods/log
+    verbs:
+      - get
+{{- end }}

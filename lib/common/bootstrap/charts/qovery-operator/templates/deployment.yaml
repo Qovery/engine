@@ -1,0 +1,66 @@
+{{- $kubefullname := include "qovery-operator.fullname" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "qovery-operator.fullname" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "qovery-operator.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "qovery-operator.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: {{ .Values.rolloutStrategy }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "qovery-operator.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "qovery-operator.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          env:
+            - name: "QOVERY_OPERATOR_NAMESPACE"
+              value: {{ .Values.namespace | quote }}
+            - name: "QOVERY_ENGINE_WORKER_SERVICE_ACCOUNT"
+              value: {{ include "qovery-operator.workerServiceAccountName" . | quote }}
+            {{- range $key, $value := .Values.environmentVariables }}
+            {{- if $value }}
+            - name: "{{ $key }}"
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $kubefullname }}
+                  key: {{ $key }}
+            {{- end }}
+            {{- end }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

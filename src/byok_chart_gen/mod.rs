@@ -138,6 +138,8 @@ pub enum SupportedCharts {
     QoveryClusterAgent,
     #[display("qovery-shell-agent")]
     QoveryShellAgent,
+    #[display("qovery-operator")]
+    QoveryOperator,
     #[display("qovery-engine")]
     QoveryEngine,
     #[display("qovery-priority-class")]
@@ -429,6 +431,12 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
+                name: SupportedCharts::QoveryOperator,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -525,6 +533,12 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
+                name: SupportedCharts::QoveryOperator,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -603,6 +617,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -691,6 +711,12 @@ mod tests {
                 values_source_path: Some(ValuesSourcePath::DemoChartValues),
             },
             ChartMeta {
+                name: SupportedCharts::QoveryOperator,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -769,6 +795,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -857,6 +889,12 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
+                name: SupportedCharts::QoveryOperator,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -935,6 +973,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
@@ -1023,6 +1067,12 @@ mod tests {
                 values_source_path: None,
             },
             ChartMeta {
+                name: SupportedCharts::QoveryOperator,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
                 name: SupportedCharts::PriorityClass,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
@@ -1083,6 +1133,12 @@ mod tests {
             },
             ChartMeta {
                 name: SupportedCharts::QoveryShellAgent,
+                category: ChartCategory::Qovery,
+                source_path: ChartSourcePath::CommonBoostrapCharts,
+                values_source_path: None,
+            },
+            ChartMeta {
+                name: SupportedCharts::QoveryOperator,
                 category: ChartCategory::Qovery,
                 source_path: ChartSourcePath::CommonBoostrapCharts,
                 values_source_path: None,
