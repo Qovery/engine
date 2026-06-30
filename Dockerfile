@@ -93,7 +93,7 @@ ENV CI_SCCACHE_REDIS_URL=$CI_SCCACHE_REDIS_ENDPOINT
 ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
-ENV CARGO_FLAGS="--release --bin engine_grpc --bin engine_post_renderer"
+ENV CARGO_FLAGS="--release --bin engine --bin engine_grpc --bin engine_post_renderer"
 
 
 WORKDIR /build
@@ -149,6 +149,7 @@ RUN <<EOF
   set -e
 
   # Use stub mains and lib.rs to build and cache dependencies
+  echo "pub fn main() {}" > app/src/main.rs
   echo "pub fn main() {}" > app/src/main_grpc.rs
   echo "pub fn main() {}" > app/src/main_post_renderer.rs
   echo "// dummy" > lib-engine/src/lib.rs
@@ -156,6 +157,7 @@ RUN <<EOF
   if [ ! -z "${CI_SCCACHE_REDIS_ENDPOINT}" ]; then
     sccache --show-stats
   fi
+  rm app/src/main.rs
   rm app/src/main_grpc.rs
   rm app/src/main_post_renderer.rs
   rm lib-engine/src/lib.rs
@@ -184,6 +186,7 @@ RUN <<EOF
 
   set -e
   
+  touch app/src/main.rs
   touch app/src/main_grpc.rs
   touch app/src/main_post_renderer.rs
   touch lib-engine/src/lib.rs
@@ -192,6 +195,8 @@ RUN <<EOF
     sccache --show-stats
   fi
 
+  cp /build/target/release/engine /build/target/release/engine_stripped
+  strip -s /build/target/release/engine_stripped
   cp /build/target/release/engine_grpc /build/target/release/engine_grpc_stripped
   strip -s /build/target/release/engine_grpc_stripped
   cp /build/target/release/engine_post_renderer /build/target/release/engine_post_renderer_stripped
@@ -280,6 +285,7 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
@@ -362,6 +368,7 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
+COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_stripped engine
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc_stripped engine_grpc 
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer_stripped engine_post_renderer
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR

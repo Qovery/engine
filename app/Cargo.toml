@@ -7,6 +7,10 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
+name = "engine"
+path = "src/main.rs"
+
+[[bin]]
 name = "engine_grpc"
 path = "src/main_grpc.rs"
 

@@ -8,4 +8,8 @@ rm -rf ${WORKSPACE_ROOT_DIR}/.qovery-workspace/*
 git lfs install
 git config --global credential.helper '!f() { sleep 1; echo "username=${GIT_USER}"; echo "password=${GIT_PASSWORD}"; }; f'
 
+if [ -n "${DEPLOY_FROM_FILE_KIND:-}" ]; then
+  exec ./engine
+fi
+
 exec ./engine_grpc

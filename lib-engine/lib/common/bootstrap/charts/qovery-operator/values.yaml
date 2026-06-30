@@ -1,0 +1,58 @@
+replicaCount: 1
+rolloutStrategy: RollingUpdate
+
+image:
+  repository: public.ecr.aws/r3m4q3r9/qovery-operator
+  pullPolicy: IfNotPresent
+  tag: ""
+
+namespace: "qovery"
+
+labels:
+  app: qovery-operator
+
+environmentVariables:
+  RUST_LOG: "info"
+  GRPC_SERVER: ""
+  ORGANIZATION_ID: ""
+  CLUSTER_ID: ""
+  CLUSTER_JWT_TOKEN: ""
+  MIN_REQUEST_SCHEMA_VERSION: "1"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+workerServiceAccount:
+  create: true
+  annotations: {}
+  name: "qovery-engine-worker"
+  automountServiceAccountToken: true
+
+podAnnotations: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+rbac:
+  create: true
+  apiVersion: v1
+
+workerRbac:
+  create: true
+  clusterAdmin: true
+  clusterRoleName: cluster-admin

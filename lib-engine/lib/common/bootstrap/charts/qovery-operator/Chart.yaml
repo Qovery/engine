@@ -1,0 +1,6 @@
+apiVersion: v2
+name: qovery-operator
+description: Qovery operator for Engine worker orchestration
+type: application
+version: 0.1.0
+appVersion: 0.1.0

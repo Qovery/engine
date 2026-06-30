@@ -37,6 +37,8 @@ pub struct ValuesFile {
     pub qovery_cluster_agent: QoveryClusterAgent,
     #[serde(rename = "qovery-shell-agent")]
     pub qovery_shell_agent: QoveryShellAgent,
+    #[serde(rename = "qovery-operator")]
+    pub qovery_operator: QoveryOperator,
     #[serde(rename = "qovery-engine", default, skip_serializing_if = "Option::is_none")]
     pub qovery_engine: Option<QoveryEngine>,
     #[serde(rename = "ingress-nginx")]
@@ -117,6 +119,8 @@ pub struct QoveryGlobalConfig {
     pub shell_agent_version: String,
     #[serde(rename = "clusterAgentVersion")]
     pub cluster_agent_version: String,
+    #[serde(rename = "operatorVersion")]
+    pub operator_version: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,6 +138,14 @@ pub struct QoveryClusterAgent {
     pub image: ImageTag,
     pub environment_variables: BTreeMap<String, String>,
     pub use_self_sign_certificate: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QoveryOperator {
+    pub fullname_override: String,
+    pub image: ImageTag,
+    pub environment_variables: BTreeMap<String, String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -183,6 +195,8 @@ pub struct QoveryServices {
     pub qovery_cluster_agent: ServiceEnabled,
     #[serde(rename = "qovery-shell-agent")]
     pub qovery_shell_agent: ServiceEnabled,
+    #[serde(rename = "qovery-operator")]
+    pub qovery_operator: ServiceEnabled,
     #[serde(rename = "qovery-engine")]
     pub qovery_engine: ServiceEnabled,
     #[serde(rename = "qovery-priority-class")]
