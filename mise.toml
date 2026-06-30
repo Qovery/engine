@@ -126,7 +126,7 @@ run = '''
   DEPLOY_FROM_FILE_KIND=blueprint \
   DEPLOY_FROM_FILE="$json" \
   TEST_CLUSTER=true \
-    cargo run --bin app
+    cargo run --bin engine
 '''
 
 [tasks.test-local-stack]

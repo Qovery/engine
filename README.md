@@ -72,8 +72,8 @@ export WORKSPACE_ROOT_DIR="<up-to-your-preferences>"
 
 3. Run cargo
 
-```
-cargo run
+```shell
+cargo run --package app --bin engine
 ```
 
 - You can find the terraform version in [bin_versions](docker/bin_versions) under `TERRAFORM_VERSION`.
