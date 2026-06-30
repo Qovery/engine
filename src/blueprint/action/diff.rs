@@ -137,10 +137,12 @@ pub fn diff_underlying_terraform(
         }
     }
 
-    // 4. Compose terraform's env: cloud-provider creds + KUBECONFIG so the kubernetes backend (when used) can read the deployed tfstate Secret.
+    // 4. Compose terraform's env: cloud-provider creds + kubeconfig so the kubernetes backend (when
+    //    used) can read the deployed tfstate Secret. The terraform kubernetes backend reads
+    //    KUBE_CONFIG_PATH (not KUBECONFIG), so that's the one that matters here.
     let kubeconfig_str = kubeconfig_path.to_string_lossy().into_owned();
     let mut envs: Vec<(&str, &str)> = cloud_envs.to_vec();
-    envs.push(("KUBECONFIG", &kubeconfig_str));
+    envs.push(("KUBE_CONFIG_PATH", &kubeconfig_str));
 
     let dir = workspace.path().to_string_lossy();
 
