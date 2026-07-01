@@ -533,7 +533,9 @@ function update_qovery_chart() {
   set -x
   rm -Rf qovery-chart/charts
   mkdir -p qovery-chart/charts/qovery
-  cp -Rf lib-engine/.qovery-workspace/qovery_chart/* qovery-chart/charts/qovery
+  mkdir -p qovery-chart/charts/qovery-operator
+  cp -Rf lib-engine/.qovery-workspace/qovery_chart/. qovery-chart/charts/qovery
+  cp -Rf lib-engine/.qovery-workspace/qovery_chart/charts/qovery-operator/. qovery-chart/charts/qovery-operator
   cd qovery-chart
   #test $(git diff --shortstat | wc -l) -eq 0 && exit 0
   git config --global user.email "noreply@qovery.com"
