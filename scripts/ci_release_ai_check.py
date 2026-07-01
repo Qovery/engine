@@ -13,7 +13,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 
-from ci_release_ai_check_output import create_renderer, strip_ansi
+from ci_release_ai_check_output import create_renderer, merge_findings, strip_ansi
 
 UUID_PATTERN = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
@@ -58,6 +58,7 @@ ANALYSIS_RESPONSE_SCHEMA = (
     '"findings": [{"severity": "<critical|review|info>", '
     '"title": "<short title>", '
     '"source": "<terraform|helm>", '
+    '"resource": "<primary affected resource address, e.g. aws_eks_cluster.eks or module.eks.aws_eks_node_group.workers for terraform, or chart/release name for helm; empty string if not attributable to one resource>", '
     '"category": "<resource_deletion|iam_change|node_pool|version_downgrade|network|helm_values|other>", '
     '"impact": "<why it matters>", '
     '"action": "<what operator should do>", '
@@ -527,6 +528,7 @@ def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc
             "assigned_severity": f["severity"],
             "title": f["title"],
             "source": f["source"],
+            "resource": f.get("resource", ""),
             "category": f["category"],
             "impact": f["impact"],
             "cluster_count": len(f["affected_clusters"]),
@@ -554,10 +556,12 @@ def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc
         '{"verdict": "<one-line overall safety verdict>", '
         '"verdict_severity": "<critical|review|info>", '
         '"severity_overrides": {"<finding id>": "<critical|review|info>"}, '
-        '"actions": ["[SEVERITY] [TOOL] action text"]}\n\n'
+        '"actions": [{"finding_id": <id of the finding this action addresses>, "text": "[SEVERITY] [TOOL] action text"}]}\n\n'
         "severity_overrides MUST contain an entry for every finding id shown below.\n"
-        "Format each action as: [CRITICAL] or [REVIEW] (severity), then [TERRAFORM] or [HELM] (tool), then the action text.\n"
-        "Example: \"[REVIEW] [TERRAFORM] Verify route table changes on 2 clusters\"\n"
+        "Each action MUST set finding_id to the id of the finding it addresses (from the findings list below).\n"
+        "Format each action's text as: [CRITICAL] or [REVIEW] (severity), then [TERRAFORM] or [HELM] (tool), "
+        "then the affected resource in parentheses (copy the finding's \"resource\" value; omit the parentheses if it is empty), then the action text.\n"
+        "Example: {\"finding_id\": 3, \"text\": \"[REVIEW] [TERRAFORM] (aws_route_table.rt) Verify route table changes on 2 clusters\"}\n"
         "Only include actions for critical and review findings; none for info. "
         "actions MUST be consistent with severity_overrides.\n"
         "Be concise. Focus on whether the deployment is safe to proceed.\n\n"
@@ -707,8 +711,12 @@ def main(
 
     timings["analysis_s"] = time.monotonic() - t0
 
-    # Flatten findings from group analysis. Each gets a stable id so the verdict pass
-    # can return authoritative per-finding severity overrides keyed to it.
+    # Flatten findings from group analysis, then merge those describing the same issue
+    # (same source + cluster-agnostic title). Merging BEFORE the verdict pass means the
+    # model judges severity and emits actions at the granularity the operator sees —
+    # one finding, one set of actions per real issue — instead of one per fingerprint
+    # group. Ids are (re)assigned after the merge so verdict severity_overrides and
+    # per-action finding_id key cleanly onto the merged findings.
     findings = []
     for r in group_results:
         if r.get("error") or not r.get("analysis"):
@@ -717,17 +725,21 @@ def main(
         cluster_ids_for_group = r["group"]["cluster_ids"]
         for f in analysis.get("findings", []):
             findings.append({
-                "id": len(findings),
                 "severity": f.get("severity", "info"),
                 "title": f.get("title", f.get("description", "Unknown")),
                 "impact": f.get("impact", f.get("description", "")),
                 "source": f.get("source", "terraform"),
+                "resource": f.get("resource", ""),
                 "category": f.get("category", "other"),
                 "action": f.get("action", "review"),
                 "affected_clusters": cluster_ids_for_group,
                 "grafana_url": _grafana_url(cluster_ids_for_group[0], start_ns, end_ns) if cluster_ids_for_group else "",
                 "sample_diff": r["group"]["representative_logs"][:2000] if r["group"].get("representative_logs") else "",
             })
+
+    findings = merge_findings(findings)
+    for new_id, f in enumerate(findings):
+        f["id"] = new_id
 
     # Phase 4: Verdict — authoritative pass. Re-judges severity for every finding so the
     # rendered counts, sections, verdict, and actions all derive from one opinion.

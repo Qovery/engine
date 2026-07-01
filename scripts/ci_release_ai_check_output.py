@@ -19,6 +19,11 @@ SEVERITY_COLOR = {
     "unknown": "dim",
 }
 
+# Severity ordering for merge tie-breaking: higher wins. Used to pick a merged group's
+# representative member so a benign finding can never mask a more severe one sharing its
+# normalized title.
+_SEVERITY_RANK = {"critical": 3, "review": 2, "info": 1, "unknown": 0}
+
 ANSI_CODES = {
     "red": "\033[31m",
     "yellow": "\033[33m",
@@ -60,6 +65,64 @@ def _normalize_title(title: str) -> str:
     for pattern, replacement in _TITLE_NORMALIZE:
         t = pattern.sub(replacement, t)
     return t.strip()
+
+
+def finding_group_key(finding: dict) -> tuple:
+    """Grouping key: (source, normalized title).
+
+    Keying on the normalized title means the SAME issue recurring across clusters
+    merges (cluster-specific tokens are stripped), while DIFFERENT issues stay
+    distinct. A category-based key would fold unrelated findings together (e.g. an
+    HTTPS bucket policy and an IAM permission removal), and the merge would then
+    silently drop all but the largest — hiding real findings. Over-separating is a
+    far safer failure mode for a safety tool than silently dropping a finding.
+    """
+    return (finding.get("source", ""), _normalize_title(finding.get("title", "")))
+
+
+def merge_findings(findings: list) -> list:
+    """Merge findings that describe the same issue, unioning their affected clusters.
+
+    Each group's surviving fields (severity/title/impact/action/resource/grafana_url/…)
+    all come from ONE representative member: the MOST SEVERE, tie-broken by
+    affected-cluster count. Choosing the representative by severity — not blast radius —
+    means a benign member can never mask a more severe one that normalizes to the same
+    title: the verdict pass then re-judges the scariest wording, so it cannot under-rate
+    what it cannot see. Copying every field from the same member (rather than patching a
+    subset) also keeps metadata consistent with the shown text — e.g. grafana_url points
+    at the representative's cluster, not an unrelated first-seen member's.
+
+    Returns groups sorted by affected-cluster count, descending. Applied ONCE upstream
+    (before the verdict pass) so the model judges severity and emits actions at the same
+    granularity the operator sees. Idempotent, so re-running it in the renderer is a no-op.
+    """
+    groups: dict = {}
+    order: list = []
+    for f in findings:
+        key = finding_group_key(f)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(f)
+
+    merged = []
+    for key in order:
+        members = groups[key]
+        clusters = list(dict.fromkeys(
+            cid for m in members for cid in m["affected_clusters"]
+        ))
+        rep = max(members, key=lambda m: (
+            _SEVERITY_RANK.get(m.get("severity"), 0), len(m["affected_clusters"]),
+        ))
+        # Aggregate every distinct affected resource (representative's first), rather than
+        # keeping only one: the group key strips resource-identifying tokens, so members
+        # can name DIFFERENT real resources. Dropping all but one would silently hide
+        # co-affected resources — the exact thing the new resource field exists to surface.
+        resources = list(dict.fromkeys(
+            m.get("resource", "") for m in [rep, *members] if m.get("resource", "")
+        ))
+        merged.append({**rep, "affected_clusters": clusters, "resource": ", ".join(resources)})
+    return sorted(merged, key=lambda g: len(g["affected_clusters"]), reverse=True)
 
 
 def should_use_color(stream=None) -> bool:
@@ -171,9 +234,14 @@ class DefaultRenderer(Renderer):
     # Populated by render(); the class-level default lets _render_cluster_list run
     # standalone (e.g. in tests) without a render() pass.
     _qovery_cluster_names = {}
+    # raw finding id -> group label (C1/R1/...) and label -> [action index]. Populated by
+    # _prepare_labels(); class-level defaults let render helpers run standalone in tests.
+    _id_to_label: dict = {}
+    _label_actions: dict = {}
 
     def render(self, report: dict) -> None:
         self._qovery_cluster_names = report.get("qovery_cluster_names", {})
+        self._prepare_labels(report)
         self._render_header(report)
         self._render_verdict(report)
         self._render_summary_table(report)
@@ -229,59 +297,86 @@ class DefaultRenderer(Renderer):
         self._write()
         self._write("Top actions")
         for i, action in enumerate(actions, 1):
+            # Actions are {finding_id, text} dicts from the verdict pass; tolerate bare
+            # strings (older payloads / tests) with no finding link.
+            if isinstance(action, dict):
+                text = action.get("text", "")
+                label = self._label_for_finding_id(action.get("finding_id"))
+            else:
+                text = action
+                label = None
+            label_part = f"[{label}] " if label else ""
             # Parse optional [SEVERITY] prefix added by Claude, apply emoji + color
             sev = None
-            display = action
+            display = text
             for level in ("CRITICAL", "REVIEW"):
-                if action.startswith(f"[{level}]"):
+                if text.startswith(f"[{level}]"):
                     sev = level.lower()
-                    display = action[len(f"[{level}]"):].lstrip()
+                    display = text[len(f"[{level}]"):].lstrip()
                     break
             if sev:
                 emoji = SEVERITY_EMOJI.get(sev, "")
                 styled = self._styled(display, SEVERITY_COLOR.get(sev, ""))
-                self._write(f"{i}. {emoji} {styled}")
+                self._write(f"{i}. {label_part}{emoji} {styled}")
             else:
-                self._write(f"{i}. {display}")
+                self._write(f"{i}. {label_part}{display}")
+
+    def _prepare_labels(self, report: dict) -> None:
+        """Assign a stable label (C1/C2… critical, R1/R2… review) to each rendered
+        finding group, and map action indices to those labels via each action's
+        finding_id. Must mirror the grouping/ordering used by _render_findings so the
+        labels shown on findings and on actions agree.
+        """
+        self._id_to_label = {}
+        self._label_actions = {}
+        findings = report.get("findings", [])
+
+        crit = sorted(
+            [f for f in findings if f.get("severity") == "critical"],
+            key=lambda f: len(f["affected_clusters"]), reverse=True,
+        )
+        for i, f in enumerate(crit, 1):
+            if f.get("id") is not None:
+                self._id_to_label[f["id"]] = f"C{i}"
+
+        review = [f for f in findings if f.get("severity") == "review"]
+        label_for_key = {finding_group_key(g): f"R{i}" for i, g in enumerate(merge_findings(review), 1)}
+        for f in review:
+            label = label_for_key.get(finding_group_key(f))
+            if label and f.get("id") is not None:
+                self._id_to_label[f["id"]] = label
+
+        for idx, action in enumerate(report.get("actions", []), 1):
+            if not isinstance(action, dict):
+                continue
+            label = self._label_for_finding_id(action.get("finding_id"))
+            if label:
+                self._label_actions.setdefault(label, []).append(idx)
+
+    def _label_for_finding_id(self, fid) -> str:
+        if fid is None:
+            return None
+        try:
+            return self._id_to_label.get(int(fid))
+        except (ValueError, TypeError):
+            return self._id_to_label.get(fid)
 
     @staticmethod
-    def _group_key(finding: dict) -> tuple:
-        """Return a stable grouping key: (source, normalized title).
-
-        Keying on the normalized title means the SAME issue recurring across cluster
-        groups merges (cluster-specific tokens are stripped), while DIFFERENT issues
-        stay distinct. The previous category-based key folded unrelated findings
-        together (e.g. an HTTPS bucket policy and an IAM permission removal both became
-        's3_encryption'), and the merge then silently dropped all but the largest —
-        hiding real findings. Over-separating (the same issue shown twice) is a far
-        safer failure mode for a safety tool than silently dropping a finding.
-        """
-        return (finding.get("source", ""), _normalize_title(finding.get("title", "")))
-
-    def _group_by_category(self, findings: list) -> list:
-        """Merge findings with the same semantic group, combining their cluster IDs.
-
-        Keeps the title/impact/action from the finding with the most affected clusters.
-        """
-        groups: dict = {}
-        group_max: dict = {}
-        for f in findings:
-            key = self._group_key(f)
-            if key not in groups:
-                groups[key] = {**f, "affected_clusters": list(f["affected_clusters"])}
-                group_max[key] = len(f["affected_clusters"])
-            else:
-                existing = set(groups[key]["affected_clusters"])
-                for cid in f["affected_clusters"]:
-                    if cid not in existing:
-                        groups[key]["affected_clusters"].append(cid)
-                        existing.add(cid)
-                if len(f["affected_clusters"]) > group_max[key]:
-                    group_max[key] = len(f["affected_clusters"])
-                    groups[key]["title"] = f["title"]
-                    groups[key]["impact"] = f["impact"]
-                    groups[key]["action"] = f["action"]
-        return sorted(groups.values(), key=lambda g: len(g["affected_clusters"]), reverse=True)
+    def _format_index_ranges(nums: list) -> str:
+        """Compress a list of ints into a compact range string: [1,2,3,5,7,8] -> '1-3, 5, 7-8'."""
+        nums = sorted(set(nums))
+        if not nums:
+            return ""
+        parts = []
+        start = prev = nums[0]
+        for n in nums[1:]:
+            if n == prev + 1:
+                prev = n
+                continue
+            parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+            start = prev = n
+        parts.append(f"{start}-{prev}" if start != prev else f"{start}")
+        return ", ".join(parts)
 
     def _render_findings(self, report: dict) -> None:
         findings = report.get("findings", [])
@@ -290,18 +385,19 @@ class DefaultRenderer(Renderer):
             raw = [f for f in findings if f["severity"] == severity]
             if not raw:
                 continue
-            # Critical findings are never merged — each one is distinct and actionable.
-            # Review findings are grouped by semantic category to reduce noise.
+            # Findings arrive already merged upstream (merge_findings before the verdict
+            # pass), so grouping here is idempotent. Critical stay one-per-line ordered by
+            # blast radius; review re-runs the (no-op) merge to keep the ordering contract.
             if severity == "critical":
                 sev_findings = sorted(raw, key=lambda f: len(f["affected_clusters"]), reverse=True)
             else:
-                sev_findings = self._group_by_category(raw)
+                sev_findings = merge_findings(raw)
             self._write()
             self._write(section_title)
             for f in sev_findings:
                 self._render_finding_detail(f)
 
-        info_findings = self._group_by_category([f for f in findings if f["severity"] == "info"])
+        info_findings = merge_findings([f for f in findings if f["severity"] == "info"])
         if info_findings:
             self._write()
             self._write("Info findings")
@@ -316,7 +412,16 @@ class DefaultRenderer(Renderer):
         sev = finding["severity"]
         prefix = self._severity_prefix(sev)
         n = len(finding["affected_clusters"])
-        self._write(f"  {prefix}{self._source_tag(finding)}{finding['title']} ({n} cluster{'s' if n != 1 else ''})")
+        label = self._id_to_label.get(finding.get("id"))
+        label_part = f"[{label}] " if label else ""
+        self._write(f"  {label_part}{prefix}{self._source_tag(finding)}{finding['title']} ({n} cluster{'s' if n != 1 else ''})")
+        resource = finding.get("resource", "")
+        if resource:
+            self._write_labeled("     Resource: ", resource)
+        if label:
+            action_idxs = self._label_actions.get(label)
+            if action_idxs:
+                self._write_labeled("     Top actions: ", self._format_index_ranges(action_idxs))
         if include_impact_action:
             self._write_labeled("     Impact: ", finding['impact'])
             self._write_labeled("     Action: ", finding['action'])
@@ -439,7 +544,7 @@ class VerboseRenderer(DefaultRenderer):
         self._render_disclaimer_box((report or {}).get("grafana_url"))
 
 
-JSON_FINDING_KEYS = {"severity", "title", "impact", "source", "category", "action", "affected_clusters", "grafana_url"}
+JSON_FINDING_KEYS = {"severity", "title", "impact", "source", "resource", "category", "action", "affected_clusters", "grafana_url"}
 
 
 class JsonRenderer(Renderer):

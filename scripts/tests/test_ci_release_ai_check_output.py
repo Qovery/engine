@@ -6,14 +6,15 @@ from io import StringIO
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ci_release_ai_check_output import (
     SEVERITY_EMOJI, SEVERITY_COLOR, color, strip_ansi, should_use_color,
-    _normalize_title, DefaultRenderer,
+    _normalize_title, merge_findings, finding_group_key, DefaultRenderer,
 )
 
 
-def _finding(severity="review", title="t", source="terraform", clusters=None, category="other", impact="i", action="a"):
+def _finding(severity="review", title="t", source="terraform", clusters=None, category="other", impact="i", action="a", resource=""):
     return {
         "severity": severity, "title": title, "source": source, "category": category,
         "impact": impact, "action": action, "affected_clusters": clusters or ["c1"],
+        "resource": resource,
     }
 
 
@@ -44,46 +45,94 @@ class TestNormalizeTitle(unittest.TestCase):
 
 class TestGroupKey(unittest.TestCase):
     def test_same_issue_different_cluster_tokens_same_key(self):
-        a = DefaultRenderer._group_key(_finding(title="HTTPS policy on qovery-logs-za0829ee2"))
-        b = DefaultRenderer._group_key(_finding(title="HTTPS policy on qovery-logs-zeb1bc33b"))
+        a = finding_group_key(_finding(title="HTTPS policy on qovery-logs-za0829ee2"))
+        b = finding_group_key(_finding(title="HTTPS policy on qovery-logs-zeb1bc33b"))
         self.assertEqual(a, b)
 
     def test_distinct_issues_distinct_keys(self):
         # The regression: these previously both collapsed to ("terraform", "s3_encryption").
-        https = DefaultRenderer._group_key(_finding(title="New S3 bucket policies enforcing HTTPS-only access"))
-        iam = DefaultRenderer._group_key(_finding(title="IAM policy losing S3 and KMS Allow actions"))
+        https = finding_group_key(_finding(title="New S3 bucket policies enforcing HTTPS-only access"))
+        iam = finding_group_key(_finding(title="IAM policy losing S3 and KMS Allow actions"))
         self.assertNotEqual(https, iam)
 
     def test_source_is_part_of_key(self):
-        tf = DefaultRenderer._group_key(_finding(title="same words", source="terraform"))
-        helm = DefaultRenderer._group_key(_finding(title="same words", source="helm"))
+        tf = finding_group_key(_finding(title="same words", source="terraform"))
+        helm = finding_group_key(_finding(title="same words", source="helm"))
         self.assertNotEqual(tf, helm)
 
 
-class TestGroupByCategory(unittest.TestCase):
-    def setUp(self):
-        self.r = DefaultRenderer(use_color=False)
+class TestMergeFindings(unittest.TestCase):
+    def test_unions_clusters_and_aggregates_resources(self):
+        merged = merge_findings([
+            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"], resource="aws_s3.small"),
+            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2", "c3"], resource="aws_s3.big"),
+        ])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(sorted(merged[0]["affected_clusters"]), ["c1", "c2", "c3"])
+        # both distinct resources reported (representative/larger first), not just one
+        self.assertEqual(merged[0]["resource"], "aws_s3.big, aws_s3.small")
 
-    def test_different_findings_not_merged(self):
-        # Regression test for the silent merge-drop bug.
-        findings = [
-            _finding(title="New S3 bucket policies enforcing HTTPS-only access", clusters=["c1", "c2"]),
-            _finding(title="IAM policy losing S3 and KMS Allow actions", clusters=["c3"]),
-        ]
-        grouped = self.r._group_by_category(findings)
-        self.assertEqual(len(grouped), 2)
-        titles = {g["title"] for g in grouped}
-        self.assertIn("New S3 bucket policies enforcing HTTPS-only access", titles)
-        self.assertIn("IAM policy losing S3 and KMS Allow actions", titles)
+    def test_resources_deduped_and_empty_dropped(self):
+        # Different resources under one normalized title are all surfaced; the rep's
+        # resource comes first, duplicates collapse, empty strings are dropped.
+        merged = merge_findings([
+            _finding(severity="critical", title="kms key deletion", clusters=["c1"], resource="aws_kms.a"),
+            _finding(severity="review", title="kms key deletion", clusters=["c2", "c3"], resource="aws_kms.b"),
+            _finding(severity="review", title="kms key deletion", clusters=["c4"], resource=""),
+            _finding(severity="review", title="kms key deletion", clusters=["c5"], resource="aws_kms.a"),
+        ])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["severity"], "critical")
+        # rep is the critical member -> aws_kms.a first; aws_kms.b included; "" dropped; dup collapsed
+        self.assertEqual(merged[0]["resource"], "aws_kms.a, aws_kms.b")
 
-    def test_same_issue_across_groups_merges_and_unions_clusters(self):
-        findings = [
-            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1", "c2"]),
-            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c3"]),
-        ]
-        grouped = self.r._group_by_category(findings)
-        self.assertEqual(len(grouped), 1)
-        self.assertEqual(sorted(grouped[0]["affected_clusters"]), ["c1", "c2", "c3"])
+    def test_distinct_issues_stay_separate_sorted_by_size(self):
+        merged = merge_findings([
+            _finding(title="IAM policy losing Allow actions", clusters=["c1"]),
+            _finding(title="New S3 bucket policies enforcing HTTPS-only access", clusters=["c2", "c3"]),
+        ])
+        self.assertEqual(len(merged), 2)
+        # largest group first
+        self.assertEqual(len(merged[0]["affected_clusters"]), 2)
+
+    def test_idempotent(self):
+        once = merge_findings([
+            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"]),
+            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2"]),
+        ])
+        twice = merge_findings(once)
+        self.assertEqual(len(twice), 1)
+        self.assertEqual(sorted(twice[0]["affected_clusters"]), ["c1", "c2"])
+
+    def test_representative_is_most_severe_not_largest(self):
+        # A benign finding on many clusters must NOT mask a critical one that normalizes
+        # to the same title (e.g. "max_size 6 -> 0" vs "6 -> 4", digits stripped). The
+        # critical member's severity AND wording must survive to the verdict pass.
+        merged = merge_findings([
+            _finding(severity="critical", title="node group max_size 6 to 0",
+                     clusters=["c1"], impact="scales pool to zero", action="STOP"),
+            _finding(severity="review", title="node group max_size 6 to 4",
+                     clusters=["c2", "c3"], impact="routine downscale", action="verify"),
+        ])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["severity"], "critical")
+        self.assertEqual(merged[0]["impact"], "scales pool to zero")
+        self.assertEqual(merged[0]["action"], "STOP")
+        self.assertEqual(sorted(merged[0]["affected_clusters"]), ["c1", "c2", "c3"])
+
+    def test_metadata_comes_from_representative(self):
+        # No Frankenstein merge: single-valued metadata (grafana_url, severity, category)
+        # all come from the same representative member, so they never contradict the shown
+        # text. (Resources are the exception — aggregated across members by design.)
+        first = _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"],
+                         resource="aws_s3.small")
+        first["grafana_url"] = "https://grafana/small"
+        larger = _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2", "c3"],
+                          resource="aws_s3.big")
+        larger["grafana_url"] = "https://grafana/big"
+        merged = merge_findings([first, larger])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]["grafana_url"], "https://grafana/big")
 
 
 class TestColorUtilities(unittest.TestCase):
@@ -188,6 +237,7 @@ SAMPLE_REPORT = {
             "title": "Network route path changed",
             "impact": "traffic may shift from VPC peering to NAT",
             "source": "terraform",
+            "resource": "aws_route_table.rt",
             "category": "network",
             "action": "verify connectivity expectations",
             "affected_clusters": ["cluster-a", "cluster-b"],
@@ -268,6 +318,18 @@ class TestDefaultRenderer(unittest.TestCase):
         self.assertIn("Action:", output)
         self.assertIn("verify connectivity", output)
 
+    def test_review_findings_show_resource(self):
+        output = self._render()
+        self.assertIn("Resource:", output)
+        self.assertIn("aws_route_table.rt", output)
+
+    def test_finding_without_resource_omits_line(self):
+        report = dict(SAMPLE_REPORT)
+        report["findings"] = [_finding(title="No resource here", resource="")]
+        output = self._render(report)
+        self.assertIn("No resource here", output)
+        self.assertNotIn("Resource:", output)
+
     def test_review_findings_show_all_cluster_ids(self):
         output = self._render()
         self.assertIn("cluster-a", output)
@@ -303,6 +365,80 @@ class TestDefaultRenderer(unittest.TestCase):
         self.assertNotIn("Review findings", output)
         self.assertNotIn("Info findings", output)
         self.assertNotIn("Unknown", output)
+
+
+LABELED_REPORT = {
+    "window": {"from_utc": "2026-07-01 12:13 UTC", "to_utc": "12:45 UTC", "start_ns": 1, "end_ns": 2},
+    "clusters_total": 3, "clusters_with_logs": 3,
+    "clusters_no_logs": [], "clusters_errored": [], "clusters_skipped": [],
+    "patterns_total": 3,
+    "verdict": "Review required", "verdict_severity": "review",
+    "severity_counts": {"critical": 0, "review": 3, "info": 0, "unknown": 0},
+    # Findings 0 and 1 normalize to the same title (cluster tokens stripped) -> merge to R1.
+    # Finding 2 is a distinct issue -> R2.
+    "actions": [
+        {"finding_id": 0, "text": "[REVIEW] [TERRAFORM] (aws_s3_bucket.logs) Verify HTTPS on qovery-logs-za0829ee2 on 1 cluster"},
+        {"finding_id": 1, "text": "[REVIEW] [TERRAFORM] (aws_s3_bucket.logs) Verify HTTPS on qovery-logs-zeb1bc33b on 1 cluster"},
+        {"finding_id": 2, "text": "[REVIEW] [TERRAFORM] (aws_eks_node_group.workers) Confirm max_size 6->4 on 1 cluster"},
+    ],
+    "findings": [
+        {"id": 0, "severity": "review", "title": "HTTPS policy on qovery-logs-za0829ee2",
+         "impact": "i", "source": "terraform", "resource": "aws_s3_bucket.logs",
+         "category": "other", "action": "a", "affected_clusters": ["c1"], "grafana_url": ""},
+        {"id": 1, "severity": "review", "title": "HTTPS policy on qovery-logs-zeb1bc33b",
+         "impact": "i", "source": "terraform", "resource": "aws_s3_bucket.logs",
+         "category": "other", "action": "a", "affected_clusters": ["c2"], "grafana_url": ""},
+        {"id": 2, "severity": "review", "title": "EKS node group max_size reduced",
+         "impact": "i", "source": "terraform", "resource": "aws_eks_node_group.workers",
+         "category": "node_pool", "action": "a", "affected_clusters": ["c3"], "grafana_url": ""},
+    ],
+    "usage": {}, "timing": {}, "grafana_url": "https://grafana/x", "qovery_cluster_names": {},
+}
+
+
+class TestActionFindingLabels(unittest.TestCase):
+    def _render(self, report):
+        out = StringIO()
+        DefaultRenderer(stream=out, use_color=False).render(report)
+        return out.getvalue()
+
+    def test_findings_get_r_labels(self):
+        out = self._render(LABELED_REPORT)
+        self.assertIn("[R1]", out)
+        self.assertIn("[R2]", out)
+
+    def test_actions_tagged_with_finding_label(self):
+        out = self._render(LABELED_REPORT)
+        lines = [l for l in out.splitlines() if l.strip().startswith(("1.", "2.", "3."))]
+        # actions 1 and 2 address the merged R1 finding, action 3 addresses R2
+        self.assertTrue(any("1." in l and "[R1]" in l for l in lines))
+        self.assertTrue(any("2." in l and "[R1]" in l for l in lines))
+        self.assertTrue(any("3." in l and "[R2]" in l for l in lines))
+
+    def test_finding_lists_its_action_indices_as_range(self):
+        out = self._render(LABELED_REPORT)
+        self.assertIn("Top actions: 1-2", out)  # R1 merges actions 1 and 2
+        self.assertIn("Top actions: 3", out)    # R2
+
+    def test_string_actions_render_without_labels(self):
+        # Back-compat: bare-string actions (no finding_id) still render, unlabeled.
+        report = dict(LABELED_REPORT)
+        report["actions"] = ["Do a thing", "Do another thing"]
+        out = self._render(report)
+        self.assertIn("Do a thing", out)
+        self.assertNotIn("[R1] 🟡", out.split("Review findings")[0])  # no label injected into actions
+
+
+class TestFormatIndexRanges(unittest.TestCase):
+    def test_compresses_consecutive(self):
+        self.assertEqual(DefaultRenderer._format_index_ranges([1, 2, 3, 5, 7, 8]), "1-3, 5, 7-8")
+
+    def test_single_and_empty(self):
+        self.assertEqual(DefaultRenderer._format_index_ranges([4]), "4")
+        self.assertEqual(DefaultRenderer._format_index_ranges([]), "")
+
+    def test_dedups_and_sorts(self):
+        self.assertEqual(DefaultRenderer._format_index_ranges([3, 1, 2, 2]), "1-3")
 
 
 from ci_release_ai_check_output import VerboseRenderer
@@ -428,6 +564,13 @@ class TestJsonRenderer(unittest.TestCase):
             self.assertEqual(data["clusters_total"], 10)
         finally:
             os.unlink(path)
+
+    def test_findings_include_resource(self):
+        out = StringIO()
+        r = JsonRenderer(stream=out)
+        r.render(SAMPLE_REPORT)
+        data = json.loads(out.getvalue())
+        self.assertEqual(data["findings"][0]["resource"], "aws_route_table.rt")
 
     def test_findings_exclude_sample_diff(self):
         report = dict(SAMPLE_REPORT)

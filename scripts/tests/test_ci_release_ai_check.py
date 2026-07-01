@@ -805,6 +805,46 @@ def _run_main(dry_run_text):
 
 
 _ONE_CLUSTER_TABLE = "| ClusterId |\n| 00000000-0000-0000-0000-000000000001 |\n"
+_TWO_CLUSTER_TABLE = (
+    "| ClusterId |\n"
+    "| 00000000-0000-0000-0000-000000000001 |\n"
+    "| 00000000-0000-0000-0000-000000000002 |\n"
+)
+
+
+class TestUpstreamMerge(unittest.TestCase):
+    @patch("ci_release_ai_check.generate_summary")
+    @patch("ci_release_ai_check.analyze_with_claude")
+    @patch("ci_release_ai_check.query_loki")
+    def test_same_issue_across_fingerprints_merged_before_verdict(self, mock_loki, mock_claude, mock_summary):
+        c1 = "00000000-0000-0000-0000-000000000001"
+        c2 = "00000000-0000-0000-0000-000000000002"
+        # Distinct diffs -> two fingerprint groups -> analyze runs twice.
+        logs_by_cluster = {c1: "route change alpha", c2: "route change beta"}
+        mock_loki.side_effect = lambda cluster_id, *a, **k: (logs_by_cluster[cluster_id], False)
+
+        # Both groups produce the SAME normalized-title finding -> must merge to one.
+        def fake_analyze(logs, api_key, usage=None, cluster_count=1):
+            return {"severity": "review", "findings": [{
+                "severity": "review", "title": "New S3 bucket policies enforcing HTTPS-only access",
+                "source": "terraform", "resource": "aws_s3_bucket.logs",
+                "category": "iam_change", "impact": "i", "action": "a",
+            }]}
+        mock_claude.side_effect = fake_analyze
+
+        captured = {}
+        def fake_summary(findings, non_analyzed, api_key, usage=None):
+            captured["n_findings"] = len(findings)
+            return {"verdict": "ok", "verdict_severity": "review",
+                    "severity_overrides": {"0": "review"},
+                    "actions": [{"finding_id": 0, "text": "[REVIEW] [TERRAFORM] verify"}]}
+        mock_summary.side_effect = fake_summary
+
+        with _run_main(_TWO_CLUSTER_TABLE) as report:
+            # Verdict pass saw ONE merged finding, not two per-fingerprint findings.
+            self.assertEqual(captured["n_findings"], 1)
+            self.assertEqual(len(report["findings"]), 1)
+            self.assertEqual(sorted(report["findings"][0]["affected_clusters"]), sorted([c1, c2]))
 
 
 class TestMergeUsage(unittest.TestCase):
