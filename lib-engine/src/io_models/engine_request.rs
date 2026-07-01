@@ -164,6 +164,9 @@ impl<T> EngineRequest<T> {
         logger: Box<dyn Logger>,
         metrics_registry: Box<dyn MetricsRegistry>,
         is_infra_deployment: bool,
+        // Blueprints (terraform/helm via the Qovery provider) never build or push images, so they
+        // pass `false` to skip the (often credential-gated) container registry entirely.
+        require_container_registry: bool,
     ) -> Result<InfrastructureContext, Box<EngineError>> {
         let build_platform = self
             .build_platform
@@ -202,25 +205,52 @@ impl<T> EngineRequest<T> {
         // On cluster delete, skip the eager Docker login against the cluster ACR — the registry
         // may already be gone from a prior failed attempt, and teardown never needs to push/pull.
         let skip_cluster_registry_login = self.action == Action::Delete && is_infra_deployment;
-        let container_registry = self
-            .container_registry
-            .to_engine_container_registry(
-                context.clone(),
-                logger.clone(),
-                event_details.clone(),
-                tags,
-                skip_cluster_registry_login,
-            )
-            .map_err(|err| {
-                IoEngineError::new_error_on_container_registry_information(
+        let container_registry = if require_container_registry {
+            self.container_registry
+                .to_engine_container_registry(
+                    context.clone(),
+                    logger.clone(),
                     event_details.clone(),
-                    CommandError::new(
-                        "Invalid container registry information".to_string(),
-                        Some(format!("Invalid container registry information: {err}")),
-                        None,
-                    ),
+                    tags,
+                    skip_cluster_registry_login,
                 )
-            })?;
+                .map_err(|err| {
+                    IoEngineError::new_error_on_container_registry_information(
+                        event_details.clone(),
+                        CommandError::new(
+                            "Invalid container registry information".to_string(),
+                            Some(format!("Invalid container registry information: {err}")),
+                            None,
+                        ),
+                    )
+                })?
+        } else {
+            // No-op placeholder: blueprints never touch a registry, and their payloads often carry
+            // no registry credentials (e.g. local replay of a captured request). GenericCr with no
+            // credentials constructs without any docker login or network call.
+            container_registry::ContainerRegistry::GenericCr(
+                GenericCr::new(
+                    context.clone(),
+                    Uuid::new_v4(),
+                    "blueprint-noop-registry",
+                    Url::parse("http://localhost").expect("static url is valid"),
+                    true,
+                    "noop".to_string(),
+                    None,
+                    false,
+                )
+                .map_err(|err| {
+                    IoEngineError::new_error_on_container_registry_information(
+                        event_details.clone(),
+                        CommandError::new(
+                            "Failed to build placeholder container registry for blueprint".to_string(),
+                            Some(format!("Failed to build placeholder container registry: {err}")),
+                            None,
+                        ),
+                    )
+                })?,
+            )
+        };
 
         let cluster_jwt_token: String = self
             .kubernetes

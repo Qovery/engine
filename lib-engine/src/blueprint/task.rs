@@ -90,6 +90,9 @@ impl BlueprintTask {
             self.logger.clone(),
             self.metrics_registry.clone(),
             false,
+            // Blueprints never build/push images — skip the container registry (its creds are
+            // often absent, e.g. local replay of a captured payload).
+            false,
         )
     }
 

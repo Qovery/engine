@@ -106,6 +106,7 @@ impl EnvironmentTask {
             self.logger.clone(),
             self.metrics_registry.clone(),
             false,
+            true,
         )
     }
 
