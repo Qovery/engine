@@ -27,13 +27,14 @@ MAX_BATCH_CHARS = 400_000
 MAX_BATCH_LIMIT = 4
 GRAFANA_BASE_URL = "https://qortal.qovery.com/grafana/d/ae51ecxhq2tj4a/infra-cluster-diff"
 GRAFANA_TF_FILTER = "(%5C%2B%20%7C-%20%7C~%20%7C-%2F%5C%2B%20)"
-CLAUDE_MODEL = "claude-sonnet-4-6"
+CLAUDE_MODEL = "claude-sonnet-5"
 CLAUDE_VERDICT_MODEL = "claude-opus-4-8"
 
 # USD per 1M tokens, keyed by model id: (input_rate, output_rate).
 # Keep in sync with CLAUDE_MODEL / CLAUDE_VERDICT_MODEL above.
+# Sonnet 5 standard rates ($3/$15); introductory rates ($2/$10) apply through 2026-08-31.
 PRICING_PER_MTK = {
-    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-sonnet-5": (3.00, 15.00),
     "claude-opus-4-8": (5.00, 25.00),
 }
 
