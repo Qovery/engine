@@ -28,9 +28,13 @@ use std::path::Path;
 pub const DIFF_PAYLOAD_MAX_BYTES: usize = 1_048_576; // 1 MiB
 
 /// Underlying-infra diff for a Terraform blueprint: pull the catalog's `*.tf` module, render
-/// variables, wire the kubernetes state backend at the deployed service's tfstate secret, run
-/// `terraform init + plan`, return the human-readable plan output.
+/// variables, wire the state backend, run `terraform init + plan`, return the human-readable plan.
 ///
+/// Two modes, keyed on `request.import_id`:
+/// - **update-preview** (`Some`): diff against the deployed service's tfstate (kubernetes backend
+///   override at `tfstate-default-{import_id}`, or the catalog's own backend for user-defined).
+/// - **adopt-preview** (`None`): no deployed service yet — run on fresh local state so the catalog's
+///   `import {}` block plans the adoption of an existing cloud resource. No backend override.
 pub fn diff_underlying_terraform(
     blueprint_dir: &Path,
     request: &BlueprintRequest,
@@ -39,33 +43,8 @@ pub fn diff_underlying_terraform(
     event_details: &EventDetails,
     logger: &dyn Logger,
 ) -> Result<String, Box<EngineError>> {
-    let backend_type = request.backend_type.ok_or_else(|| {
-        Box::new(EngineError::new_blueprint_error(
-            event_details.clone(),
-            BlueprintError::TerraformGenerationError(
-                "DIFF action requires `backend_type` (resolved terraform backend mode of the deployed service) — missing from BlueprintRequest".to_string(),
-            ),
-        ))
-    })?;
-    let import_id = request.import_id.as_deref().ok_or_else(|| {
-        Box::new(EngineError::new_blueprint_error(
-            event_details.clone(),
-            BlueprintError::TerraformGenerationError(
-                "DIFF action requires `import_id` (id of the deployed terraform service) — missing from BlueprintRequest".to_string(),
-            ),
-        ))
-    })?;
-    // env_kube_name is only consumed by the Kubernetes-backend override path; user-defined
-    // backends carry their own location in the catalog's HCL.
-    if matches!(backend_type, TerraformBackendType::Kubernetes) && request.env_kube_name.is_empty() {
-        return Err(Box::new(EngineError::new_blueprint_error(
-            event_details.clone(),
-            BlueprintError::TerraformGenerationError(
-                "DIFF action with Kubernetes backend requires `env_kube_name` — missing from BlueprintRequest"
-                    .to_string(),
-            ),
-        )));
-    }
+    let backend = resolve_backend_decision(request)
+        .map_err(|e| Box::new(EngineError::new_blueprint_error(event_details.clone(), e)))?;
 
     // 1. Copy the catalog module into a writable workspace; tfvars + backend config land alongside.
     //    blueprint_dir is already the per-blueprint subdir (clone_blueprint_repo returns
@@ -96,19 +75,15 @@ pub fn diff_underlying_terraform(
         ))
     })?;
 
-    // 3. If the deployed service uses Qovery's k8s backend, override the catalog's declaration
-    //    with one pointed at the right tfstate Secret. For user-defined backends, the catalog's
-    //    own `backend { … }` block is already correct — emit no override.
-    match backend_type {
-        TerraformBackendType::Kubernetes => {
-            // see get_tfstate_name
-            let tfstate_secret_name = format!("tfstate-default-{}", import_id);
+    // 3. Wire the backend per the resolved decision (override file only for the kubernetes case).
+    match &backend {
+        BackendDecision::KubernetesOverride {
+            content,
+            tfstate_secret_name,
+            namespace,
+        } => {
             let backend_path = workspace.path().join("zz_qovery_backend_override.tf");
-            fs::write(
-                &backend_path,
-                render_kubernetes_backend(&tfstate_secret_name, &request.env_kube_name),
-            )
-            .map_err(|e| {
+            fs::write(&backend_path, content).map_err(|e| {
                 Box::new(EngineError::new_blueprint_error(
                     event_details.clone(),
                     BlueprintError::TerraformGenerationError(format!("Failed to write backend override: {}", e)),
@@ -119,17 +94,27 @@ pub fn diff_underlying_terraform(
                 EventMessage::new(
                     format!(
                         "Diffing terraform blueprint against Qovery-managed tfstate secret {} in namespace {}",
-                        tfstate_secret_name, request.env_kube_name
+                        tfstate_secret_name, namespace
                     ),
                     None,
                 ),
             ));
         }
-        TerraformBackendType::DefinedInTerraformFile => {
+        BackendDecision::UserDefined => {
             logger.log(EngineEvent::Info(
                 event_details.clone(),
                 EventMessage::new(
                     "Diffing terraform blueprint against the catalog's user-defined backend (no override emitted)"
+                        .to_string(),
+                    None,
+                ),
+            ));
+        }
+        BackendDecision::FreshState => {
+            logger.log(EngineEvent::Info(
+                event_details.clone(),
+                EventMessage::new(
+                    "Adopt-preview: planning catalog module against fresh state (no deployed service) — the catalog's import{} block drives the plan"
                         .to_string(),
                     None,
                 ),
@@ -162,6 +147,51 @@ pub fn diff_underlying_terraform(
         .map_err(|e| Box::new(EngineError::new_terraform_error(event_details.clone(), e)))?;
 
     Ok(truncate_diff_payload(&plan_output))
+}
+
+/// How the diff run wires terraform state, derived from the request.
+enum BackendDecision {
+    /// Adopt-preview: no deployed service — fresh local state, catalog `import {}` drives the plan.
+    FreshState,
+    /// Update-preview against a user-defined backend declared in the catalog's own HCL.
+    UserDefined,
+    /// Update-preview against Qovery's kubernetes-backed tfstate secret.
+    KubernetesOverride {
+        content: String,
+        tfstate_secret_name: String,
+        namespace: String,
+    },
+}
+
+/// Decide backend wiring for a diff. `import_id == None` ⇒ adopt-preview (fresh state); otherwise
+/// the deployed service's backend must be known so the plan diffs against its live tfstate.
+fn resolve_backend_decision(request: &BlueprintRequest) -> Result<BackendDecision, BlueprintError> {
+    let Some(import_id) = request.import_id.as_deref() else {
+        return Ok(BackendDecision::FreshState);
+    };
+    let backend_type = request.backend_type.ok_or_else(|| {
+        BlueprintError::TerraformGenerationError(
+            "DIFF action against a deployed service requires `backend_type` (its resolved terraform backend mode) — missing from BlueprintRequest".to_string(),
+        )
+    })?;
+    match backend_type {
+        // env_kube_name is only consumed here; user-defined backends carry their own location.
+        TerraformBackendType::Kubernetes if request.env_kube_name.is_empty() => {
+            Err(BlueprintError::TerraformGenerationError(
+                "DIFF action with Kubernetes backend requires `env_kube_name` — missing from BlueprintRequest"
+                    .to_string(),
+            ))
+        }
+        TerraformBackendType::Kubernetes => {
+            let tfstate_secret_name = format!("tfstate-default-{}", import_id);
+            Ok(BackendDecision::KubernetesOverride {
+                content: render_kubernetes_backend(&tfstate_secret_name, &request.env_kube_name),
+                tfstate_secret_name,
+                namespace: request.env_kube_name.clone(),
+            })
+        }
+        TerraformBackendType::DefinedInTerraformFile => Ok(BackendDecision::UserDefined),
+    }
 }
 
 /// Joins captured `terraform plan` stdout into a single string. Truncates with an elision
@@ -299,6 +329,60 @@ mod tests {
         let hcl = render_kubernetes_backend("tfstate-default-abc-123", "env-ns");
         assert!(hcl.contains(r#"secret_suffix = "abc-123""#));
         assert!(hcl.contains(r#"namespace     = "env-ns""#));
+    }
+
+    #[test]
+    fn resolve_backend_decision_fresh_state_when_no_import_id() {
+        // Adopt-preview: no deployed service yet.
+        let mut req = blueprint_request(vec![]);
+        req.import_id = None;
+        assert!(matches!(resolve_backend_decision(&req).unwrap(), BackendDecision::FreshState));
+    }
+
+    #[test]
+    fn resolve_backend_decision_errors_without_backend_type_for_deployed_service() {
+        let mut req = blueprint_request(vec![]);
+        req.import_id = Some("svc-1".into());
+        req.backend_type = None;
+        assert!(resolve_backend_decision(&req).is_err());
+    }
+
+    #[test]
+    fn resolve_backend_decision_kubernetes_requires_env_kube_name() {
+        let mut req = blueprint_request(vec![]);
+        req.import_id = Some("svc-1".into());
+        req.backend_type = Some(TerraformBackendType::Kubernetes);
+        req.env_kube_name = String::new();
+        assert!(resolve_backend_decision(&req).is_err());
+    }
+
+    #[test]
+    fn resolve_backend_decision_kubernetes_override() {
+        let mut req = blueprint_request(vec![]);
+        req.import_id = Some("svc-1".into());
+        req.backend_type = Some(TerraformBackendType::Kubernetes);
+        req.env_kube_name = "env-ns".into();
+        match resolve_backend_decision(&req).unwrap() {
+            BackendDecision::KubernetesOverride {
+                content,
+                tfstate_secret_name,
+                namespace,
+            } => {
+                assert_eq!(tfstate_secret_name, "tfstate-default-svc-1");
+                assert_eq!(namespace, "env-ns");
+                assert!(content.contains(r#"secret_suffix = "svc-1""#));
+                assert!(content.contains(r#"namespace     = "env-ns""#));
+            }
+            _ => panic!("expected KubernetesOverride"),
+        }
+    }
+
+    #[test]
+    fn resolve_backend_decision_user_defined() {
+        let mut req = blueprint_request(vec![]);
+        req.import_id = Some("svc-1".into());
+        req.backend_type = Some(TerraformBackendType::DefinedInTerraformFile);
+        assert!(matches!(resolve_backend_decision(&req).unwrap(), BackendDecision::UserDefined));
     }
 
     fn blueprint_request(vars: Vec<(&str, &str)>) -> BlueprintRequest {
