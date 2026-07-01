@@ -8,10 +8,12 @@ use crate::cmd::git;
 use crate::engine_task::Task;
 use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::abort::{Abort, AbortStatus, AtomicAbortStatus};
+use crate::environment::models::scaleway::ScwZone;
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::{EngineError, ErrorMessageVerbosity};
 use crate::events::{BlueprintStep, EngineEvent, EventDetails, EventMessage, Stage};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
+use crate::infrastructure::models::cloud_provider::Kind as CloudProviderKind;
 use crate::io_models::Action;
 use crate::io_models::blueprint::{BlueprintRequest, BlueprintVariable};
 use crate::io_models::context::Context;
@@ -22,6 +24,7 @@ use crate::metrics_registry::{MetricsRegistry, StepLabel, StepName, StepRecordHa
 use crate::{engine_task, hack};
 use git2::{Cred, CredentialType};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, RwLock};
 use std::{env, fs};
@@ -310,7 +313,12 @@ impl Task for BlueprintTask {
             let manifest = self.parse_manifest(&blueprint_dir)?;
 
             // 4. Inject context variables
-            inject_context_variables(&mut target_env, &self.request.kubernetes.region, &self.request.kubernetes.name);
+            inject_context_variables(
+                &mut target_env,
+                &self.request.cloud_provider.kind,
+                &self.request.kubernetes.region,
+                &self.request.kubernetes.name,
+            );
 
             // 5. Resolve spec
             let resolved_spec = ResolvedBlueprintSpec::resolve(&manifest, &target_env.spec_overrides).map_err(|e| {
@@ -558,11 +566,16 @@ impl Task for BlueprintTask {
     }
 }
 
-fn inject_context_variables(target_env: &mut BlueprintRequest, cluster_region: &str, cluster_name: &str) {
+fn inject_context_variables(
+    target_env: &mut BlueprintRequest,
+    cloud_provider_kind: &CloudProviderKind,
+    cluster_region: &str,
+    cluster_name: &str,
+) {
     if !target_env.variables.iter().any(|v| v.name == "region") {
         target_env.variables.push(BlueprintVariable {
             name: "region".to_string(),
-            value: cluster_region.to_string(),
+            value: resolve_cluster_region(cloud_provider_kind, cluster_region),
             is_secret: false,
         });
     }
@@ -572,6 +585,18 @@ fn inject_context_variables(target_env: &mut BlueprintRequest, cluster_region: &
             value: cluster_name.to_string(),
             is_secret: false,
         });
+    }
+}
+
+// Scaleway stores a zone (e.g. `pl-waw-1`) in `kubernetes.region`; terraform providers expect the region (`pl-waw`).
+fn resolve_cluster_region(kind: &CloudProviderKind, cluster_region: &str) -> String {
+    match kind {
+        CloudProviderKind::Scw => ScwZone::from_str(cluster_region)
+            .map(|zone| zone.region().as_str().to_string())
+            .unwrap_or_else(|_| cluster_region.to_string()),
+        CloudProviderKind::Aws | CloudProviderKind::Azure | CloudProviderKind::Gcp | CloudProviderKind::OnPremise => {
+            cluster_region.to_string()
+        }
     }
 }
 
@@ -605,7 +630,7 @@ mod tests {
             backend_type: None,
         };
 
-        inject_context_variables(&mut request, "eu-west-3", "my-cluster");
+        inject_context_variables(&mut request, &CloudProviderKind::Aws, "eu-west-3", "my-cluster");
 
         assert!(
             request
@@ -650,12 +675,24 @@ mod tests {
             backend_type: None,
         };
 
-        inject_context_variables(&mut request, "eu-west-3", "my-cluster");
+        inject_context_variables(&mut request, &CloudProviderKind::Aws, "eu-west-3", "my-cluster");
 
         assert_eq!(request.variables.len(), 2);
         assert_eq!(request.variables[0].name, "region");
         assert_eq!(request.variables[0].value, "us-east-1"); // Not overwritten
         assert_eq!(request.variables[1].name, "qovery_cluster_name");
         assert_eq!(request.variables[1].value, "my-cluster");
+    }
+
+    #[test]
+    fn test_resolve_cluster_region() {
+        // Scaleway stores a zone in `kubernetes.region` — strip it down to the region.
+        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "pl-waw-1"), "pl-waw");
+        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "fr-par-2"), "fr-par");
+        // Unknown Scaleway value falls back to the raw value.
+        assert_eq!(resolve_cluster_region(&CloudProviderKind::Scw, "pl-waw"), "pl-waw");
+        // Other providers already pass a region — left untouched.
+        assert_eq!(resolve_cluster_region(&CloudProviderKind::Aws, "eu-west-3"), "eu-west-3");
+        assert_eq!(resolve_cluster_region(&CloudProviderKind::Gcp, "europe-west9"), "europe-west9");
     }
 }
