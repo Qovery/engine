@@ -124,7 +124,7 @@ impl ValuesFile {
                 qovery: QoveryServices {
                     qovery_cluster_agent: ServiceEnabled { enabled: true },
                     qovery_shell_agent: ServiceEnabled { enabled: true },
-                    qovery_operator: ServiceEnabled { enabled: true },
+                    qovery_operator: ServiceEnabled { enabled: false },
                     qovery_engine: ServiceEnabled { enabled: false },
                     priority_class: ServiceEnabled { enabled: true },
                 },
@@ -519,6 +519,18 @@ impl ValuesFile {
         let f = std::fs::File::create(Path::new(&file_destination)).map_err(ChartDotYamlError::WriteFile)?;
         serde_yaml::to_writer(f, &self).map_err(ChartDotYamlError::SerdeYaml)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::byok_chart_gen::values_dot_yaml::ValuesFile;
+
+    #[test]
+    fn minimal_values_disable_qovery_operator_by_default() {
+        let values = ValuesFile::new_minimal();
+
+        assert!(!values.services.qovery.qovery_operator.enabled);
     }
 }
 
