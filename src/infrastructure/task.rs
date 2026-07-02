@@ -6,8 +6,10 @@ use crate::environment::models::types::DeployedEngineVersion;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
 use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Transmitter};
+use crate::infrastructure::action::platform_components::{deploy_platform_components, fail_unknown_execution_mode};
 use crate::io_models::context::Context;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
+use crate::io_models::platform_components::ExecutionMode;
 use crate::io_models::{Action, QoveryIdentifier};
 use crate::log_file_writer::LogFileWriter;
 use crate::logger::Logger;
@@ -29,6 +31,7 @@ pub struct InfrastructureTask {
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
     log_file_writer: Option<LogFileWriter>,
+    is_success: RwLock<Option<bool>>,
 }
 
 impl InfrastructureTask {
@@ -78,6 +81,7 @@ impl InfrastructureTask {
                 (RwLock::new(Some(tx)), rx)
             },
             log_file_writer,
+            is_success: RwLock::new(None),
         }
     }
 
@@ -175,25 +179,44 @@ impl Task for InfrastructureTask {
             let _ = is_terminated_tx.send(());
         });
 
+        let execution_mode = self
+            .request
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.engine_v2_options.as_ref())
+            .map(|engine_v2_options| &engine_v2_options.execution_mode);
+        // Platform-components-only requests install Helm charts in-cluster and never build or
+        // push images: skip the (often credential-gated) container registry, like blueprints do.
+        let require_container_registry = !matches!(execution_mode, Some(ExecutionMode::PlatformComponentsOnly));
         let infra_ctx = match self.request.to_infrastructure_context(
             &self.info_context(),
             self.request.event_details(),
             self.logger.clone(),
             self.metrics_registry.clone(),
             true,
-            true,
+            require_container_registry,
         ) {
             Ok(engine) => engine,
             Err(err) => {
+                *self.is_success.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(false);
                 self.send_infrastructure_progress(self.logger.clone(), Some(err));
                 return;
             }
         };
 
-        let ret = infra_ctx
-            .kubernetes()
-            .as_infra_actions()
-            .run(&infra_ctx, self.request.action.into());
+        // Engine v2: when q-core marks the request as
+        // platform-components-only, never enter the cluster infrastructure lifecycle
+        // (SelfManaged forbids create/pause/delete/restart); apply only the compiled
+        // platform Helm units carried by the request metadata.
+        let ret = match execution_mode {
+            Some(ExecutionMode::PlatformComponentsOnly) => deploy_platform_components(&infra_ctx, &self.request),
+            Some(ExecutionMode::Unknown) => Err(fail_unknown_execution_mode(&infra_ctx, &self.request)),
+            None => infra_ctx
+                .kubernetes()
+                .as_infra_actions()
+                .run(&infra_ctx, self.request.action.into()),
+        };
+        *self.is_success.write().unwrap_or_else(|err| err.into_inner()) = Some(ret.is_ok());
         self.handle_transaction_result(self.logger.clone(), ret);
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
@@ -230,6 +253,10 @@ impl Task for InfrastructureTask {
 
     fn is_terminated(&self) -> bool {
         self.is_terminated.0.read().map(|tx| tx.is_none()).unwrap_or(true)
+    }
+
+    fn is_success(&self) -> Option<bool> {
+        *self.is_success.read().unwrap_or_else(|err| err.into_inner())
     }
 
     fn await_terminated(&self) -> broadcast::Receiver<()> {
