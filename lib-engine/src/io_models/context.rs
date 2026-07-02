@@ -3,6 +3,7 @@ use crate::engine_task::qovery_api::QoveryApi;
 use crate::environment::models::types::DeployedEngineVersion;
 use crate::events::{EventDetails, Transmitter};
 use crate::io_models::QoveryIdentifier;
+use crate::io_models::platform_components::{ExecutionMode, PlatformHelmUnit};
 use crate::utilities::to_short_id;
 use rand::Rng;
 use rand::distr::Alphanumeric;
@@ -185,6 +186,20 @@ pub struct Metadata {
     pub forced_upgrade: Option<bool>,
     pub resource_expiration_in_seconds: Option<u32>,
     pub is_first_cluster_deployment: Option<bool>,
+
+    /// Options carried only by Engine v2 requests.
+    pub engine_v2_options: Option<EngineV2Options>,
+}
+
+/// Engine v2 request options grouped under one optional metadata field.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct EngineV2Options {
+    /// Selects the Engine v2 execution path.
+    pub execution_mode: ExecutionMode,
+    /// Compiled platform Helm units to apply for platform-components-only executions.
+    pub platform_helm_units: Vec<PlatformHelmUnit>,
+    /// Request schema version understood by the Engine v2 execution path.
+    pub schema_version: String,
 }
 
 impl Metadata {
@@ -199,6 +214,7 @@ impl Metadata {
             resource_expiration_in_seconds,
             forced_upgrade,
             is_first_cluster_deployment,
+            engine_v2_options: None,
         }
     }
     pub fn update_is_first_cluster_deployment(&mut self, is_first_cluster_deployment: bool) {
@@ -249,6 +265,7 @@ mod tests {
         assert_eq!(None, result.resource_expiration_in_seconds);
         assert_eq!(None, result.forced_upgrade);
         assert_eq!(None, result.dry_run_deploy);
+        assert_eq!(None, result.engine_v2_options);
     }
 
     #[test]

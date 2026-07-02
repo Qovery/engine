@@ -31,6 +31,7 @@ pub mod labels_group;
 pub mod loki;
 pub mod metrics;
 pub mod models;
+pub mod platform_components;
 pub mod probe;
 pub mod router;
 pub mod services_common;

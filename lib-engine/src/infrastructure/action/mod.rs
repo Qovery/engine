@@ -11,6 +11,7 @@ mod gke;
 pub(super) mod kubeconfig_helper;
 mod kubectl_utils;
 pub mod metrics_resource_profile;
+pub mod platform_components;
 mod scaleway;
 mod self_managed;
 mod utils;
