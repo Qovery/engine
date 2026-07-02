@@ -134,6 +134,121 @@ default:
     - gcp-minimal-tests
     - infra-without-cloud-providers
 
+# ---- Path-scoped test selection --------------------------------------------
+# On MR pipelines `changes` is evaluated against the MR target branch.
+# A provider job AUTO-runs when that provider's code/templates change, or when
+# shared engine code changes (→ all providers). Otherwise the job is still
+# offered as an OPTIONAL MANUAL job (see .rules-manual-fallback) so it can be
+# triggered on demand. No infra change → nothing runs automatically.
+
+# Shared engine code — a change here fans out to every provider.
+.paths-shared:
+  paths:
+    - "*.toml"       # root Cargo manifests / workspace config
+    - "*.lock"
+    - rust-toolchain
+    - helper.sh
+    - .gitlab-ci.yml
+    - app/**/*
+    - lib-engine/*   # lib-engine/Cargo.toml, nextest.config.toml, …
+    - lib-engine/src/*.rs
+    - lib-engine/src/{blueprint,byok_chart_gen,cluster_analysis,cmd,engine_task,errors,events,hack,io_models,types}/**/*
+    - lib-engine/src/environment/*.rs
+    - lib-engine/src/environment/{action,report,resource_extraction}/**/*
+    - lib-engine/src/environment/models/*.rs
+    - lib-engine/src/environment/models/selfmanaged/**/*
+    - lib-engine/src/services/*.rs
+    - lib-engine/src/infrastructure/*.rs
+    - lib-engine/src/infrastructure/helm_charts/**/*
+    - lib-engine/src/infrastructure/action/*.rs
+    - lib-engine/src/infrastructure/action/{self_managed,eksanywhere}/**/*
+    - lib-engine/src/infrastructure/models/*.rs
+    - lib-engine/src/infrastructure/models/{build_platform,container_registry,dns_provider,external_secrets,load_balancer,object_storage}/**/*
+    - lib-engine/src/infrastructure/models/cloud_provider/*.rs
+    - lib-engine/src/infrastructure/models/cloud_provider/self_managed/**/*
+    - lib-engine/src/infrastructure/models/kubernetes/*.rs
+    - lib-engine/src/infrastructure/models/kubernetes/{self_managed,eksanywhere}/**/*
+    - lib-engine/tests/*.rs
+    - lib-engine/tests/{helpers,kube,services,helm,docker,alloy,container_registries}/**/*
+    - lib-engine/lib/*
+    - lib-engine/lib/{common,blueprint,eksanywhere,self-managed}/**/*
+
+# Per-provider: match any dir named after the provider, at any depth under
+# lib-engine — covers src/, tests/ and lib/ templates in one glob. eks=AWS, gke=GCP.
+.paths-aws:
+  paths: ["lib-engine/**/aws/**/*", "lib-engine/**/eks/**/*"]
+.paths-azure:
+  paths: ["lib-engine/**/azure/**/*"]
+.paths-gcp:
+  paths: ["lib-engine/**/gcp/**/*", "lib-engine/**/gke/**/*"]
+.paths-scw:
+  paths: ["lib-engine/**/scaleway/**/*"]
+
+# Escape hatch: offer the job as an optional (non-blocking) manual job on any MR.
+.rules-manual-fallback:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+
+# changes:paths must be a flat array of strings, so each rule references exactly
+# one path list. Multiple rules OR together (first match wins → job runs).
+.rules-shared:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-shared, paths]
+
+.rules-aws:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-aws, paths]
+    - !reference [.rules-shared, rules]
+    - !reference [.rules-manual-fallback, rules]
+
+.rules-azure:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-azure, paths]
+    - !reference [.rules-shared, rules]
+    - !reference [.rules-manual-fallback, rules]
+
+.rules-gcp:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-gcp, paths]
+    - !reference [.rules-shared, rules]
+    - !reference [.rules-manual-fallback, rules]
+
+.rules-scw:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-scw, paths]
+    - !reference [.rules-shared, rules]
+    - !reference [.rules-manual-fallback, rules]
+
+# Multi-cloud jobs (e.g. quarantine): auto-run on any infra change.
+.rules-any-infra:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-aws, paths]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-azure, paths]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-gcp, paths]
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: !reference [.paths-scw, paths]
+    - !reference [.rules-shared, rules]
+    - !reference [.rules-manual-fallback, rules]
+
 # ----------------------------------------- #
 
 stages:
@@ -390,9 +505,7 @@ azure-infra:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-azure, rules]
 
 azure-infra-upgrade:
   stage: tests-azure
@@ -423,9 +536,7 @@ azure-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-azure, rules]
 
 azure-self-hosted:
   stage: tests-azure
@@ -439,9 +550,7 @@ azure-self-hosted:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-azure, rules]
 
 azure-whole-enchilada:
   stage: tests-azure
@@ -472,9 +581,7 @@ aws-infra:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-infra-arm:
   stage: tests-aws
@@ -488,9 +595,7 @@ aws-infra-arm:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-infra-karpenter:
   stage: tests-aws
@@ -504,9 +609,7 @@ aws-infra-karpenter:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-infra-nat-gateway:
   stage: tests-aws
@@ -520,9 +623,7 @@ aws-infra-nat-gateway:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-infra-upgrade:
   stage: tests-aws
@@ -553,9 +654,7 @@ aws-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-self-hosted:
   stage: tests-aws
@@ -569,9 +668,7 @@ aws-self-hosted:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-aws, rules]
 
 aws-whole-enchilada:
   stage: tests-aws
@@ -619,9 +716,7 @@ scw-infra:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-scw, rules]
 
 scw-infra-nat-gateway:
   stage: tests-scw
@@ -635,9 +730,7 @@ scw-infra-nat-gateway:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-scw, rules]
 
 scw-infra-upgrade:
   stage: tests-scw
@@ -668,9 +761,7 @@ scw-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-scw, rules]
   allow_failure: true # SCW issues with registry https://github.com/docker/buildx/issues/2364
 
 scw-self-hosted:
@@ -685,9 +776,7 @@ scw-self-hosted:
     - ./helper.sh scw_self_hosted
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-scw, rules]
   allow_failure: true # SCW issues with registry
 
 scw-whole-enchilada:
@@ -720,9 +809,7 @@ gcp-infra:
     - build-and-lint-code
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-gcp, rules]
 
 gcp-infra-upgrade:
   stage: tests-gcp
@@ -753,9 +840,7 @@ gcp-managed-services:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-gcp, rules]
 
 gcp-self-hosted:
   stage: tests-gcp
@@ -769,9 +854,7 @@ gcp-self-hosted:
     - ./helper.sh gcp_self_hosted
   tags:
     - k8s-runner
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-gcp, rules]
 
 gcp-whole-enchilada:
   stage: tests-gcp
@@ -806,9 +889,7 @@ quarantine:
     - k8s-runner
   dependencies:
     - build-and-lint-code
-  only:
-    refs:
-      - merge_requests
+  rules: !reference [.rules-any-infra, rules]
   allow_failure: true
 
 ###########
