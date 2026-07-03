@@ -213,7 +213,7 @@ def retry(fn, max_attempts=RETRY_MAX_ATTEMPTS, delay=RETRY_DELAY_SECONDS):
         except Exception as e:
             last_error = e
             if attempt < max_attempts - 1:
-                print(f"  Attempt {attempt + 1}/{max_attempts} failed: {e}, retrying in {delay}s...", file=sys.stderr)
+                print(f"  Attempt {attempt + 1}/{max_attempts} failed: {type(e).__name__}: {e}, retrying in {delay}s...", file=sys.stderr)
                 time.sleep(delay)
     raise last_error
 
@@ -414,7 +414,13 @@ def _call_claude(prompt: str, api_key: str, usage_acc: dict = None, model: str =
             "input_tokens": usage.get("input_tokens", 0),
             "output_tokens": usage.get("output_tokens", 0),
         }})
-    return _extract_json(data["content"][0]["text"])
+    # Models may prepend non-text blocks (e.g. adaptive thinking) — select text blocks by type.
+    text = "".join(b.get("text", "") for b in data["content"] if b.get("type") == "text")
+    if not text:
+        raise ValueError(
+            f"No text block in response: {[b.get('type') for b in data['content']]}"
+        )
+    return _extract_json(text)
 
 
 def _split_at_line_boundaries(text: str, max_chars: int) -> list:
@@ -508,11 +514,11 @@ def analyze_with_claude(logs: str, api_key: str, usage_acc: dict = None, cluster
 
 
 def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc: dict = None) -> dict:
-    """Call Claude to produce the authoritative verdict, severity overrides, and actions.
+    """Call Claude to produce the authoritative verdict and severity overrides.
 
     This is the final, holistic pass. It re-judges the severity of every finding based
     on real-world impact — independent of the per-batch analysis severity — so the
-    rendered counts, sections, verdict, and actions all derive from one opinion.
+    rendered counts, sections, and verdict all derive from one opinion.
 
     findings: flattened list of finding dicts, each with a stable "id", plus
         severity/title/source/category/impact/affected_clusters.
@@ -520,7 +526,7 @@ def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc
         no_logs (list of cluster_ids), errors (list of {cluster_id, error}),
         skipped (list of {cluster_id, grafana_url})
 
-    Returns the parsed JSON: {verdict, verdict_severity, severity_overrides, actions}.
+    Returns the parsed JSON: {verdict, verdict_severity, severity_overrides}.
     """
     input_findings = [
         {
@@ -555,15 +561,8 @@ def generate_summary(findings: list, non_analyzed: dict, api_key: str, usage_acc
         "Return ONLY valid JSON (no markdown fences) with this structure:\n"
         '{"verdict": "<one-line overall safety verdict>", '
         '"verdict_severity": "<critical|review|info>", '
-        '"severity_overrides": {"<finding id>": "<critical|review|info>"}, '
-        '"actions": [{"finding_id": <id of the finding this action addresses>, "text": "[SEVERITY] [TOOL] action text"}]}\n\n'
+        '"severity_overrides": {"<finding id>": "<critical|review|info>"}}\n\n'
         "severity_overrides MUST contain an entry for every finding id shown below.\n"
-        "Each action MUST set finding_id to the id of the finding it addresses (from the findings list below).\n"
-        "Format each action's text as: [CRITICAL] or [REVIEW] (severity), then [TERRAFORM] or [HELM] (tool), "
-        "then the affected resource in parentheses (copy the finding's \"resource\" value; omit the parentheses if it is empty), then the action text.\n"
-        "Example: {\"finding_id\": 3, \"text\": \"[REVIEW] [TERRAFORM] (aws_route_table.rt) Verify route table changes on 2 clusters\"}\n"
-        "Only include actions for critical and review findings; none for info. "
-        "actions MUST be consistent with severity_overrides.\n"
         "Be concise. Focus on whether the deployment is safe to proceed.\n\n"
         f"Findings:\n{json.dumps(input_findings)}"
     )
@@ -713,10 +712,9 @@ def main(
 
     # Flatten findings from group analysis, then merge those describing the same issue
     # (same source + cluster-agnostic title). Merging BEFORE the verdict pass means the
-    # model judges severity and emits actions at the granularity the operator sees —
-    # one finding, one set of actions per real issue — instead of one per fingerprint
-    # group. Ids are (re)assigned after the merge so verdict severity_overrides and
-    # per-action finding_id key cleanly onto the merged findings.
+    # model judges severity at the granularity the operator sees — one finding per real
+    # issue — instead of one per fingerprint group. Ids are (re)assigned after the merge
+    # so verdict severity_overrides key cleanly onto the merged findings.
     findings = []
     for r in group_results:
         if r.get("error") or not r.get("analysis"):
@@ -742,16 +740,14 @@ def main(
         f["id"] = new_id
 
     # Phase 4: Verdict — authoritative pass. Re-judges severity for every finding so the
-    # rendered counts, sections, verdict, and actions all derive from one opinion.
+    # rendered counts, sections, and verdict all derive from one opinion.
     t0 = time.monotonic()
     verdict = "N/A"
     verdict_severity = "unknown"
-    actions = []
     try:
         summary = retry(lambda: generate_summary(findings, non_analyzed, api_key, usage_acc))
         verdict = summary.get("verdict", "N/A")
         verdict_severity = summary.get("verdict_severity", "unknown")
-        actions = summary.get("actions", [])
         _apply_severity_overrides(findings, summary.get("severity_overrides", {}) or {})
         verdict_severity = _reconcile_verdict_severity(verdict_severity, findings)
     except Exception as e:
@@ -814,7 +810,6 @@ def main(
         "verdict": verdict,
         "verdict_severity": verdict_severity,
         "severity_counts": sev_cluster_counts,
-        "actions": actions,
         "findings": findings,
         "usage": {
             "model_analysis": CLAUDE_MODEL,

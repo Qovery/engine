@@ -93,8 +93,8 @@ def merge_findings(findings: list) -> list:
     at the representative's cluster, not an unrelated first-seen member's.
 
     Returns groups sorted by affected-cluster count, descending. Applied ONCE upstream
-    (before the verdict pass) so the model judges severity and emits actions at the same
-    granularity the operator sees. Idempotent, so re-running it in the renderer is a no-op.
+    (before the verdict pass) so the model judges severity at the same granularity the
+    operator sees. Idempotent, so re-running it in the renderer is a no-op.
     """
     groups: dict = {}
     order: list = []
@@ -234,10 +234,9 @@ class DefaultRenderer(Renderer):
     # Populated by render(); the class-level default lets _render_cluster_list run
     # standalone (e.g. in tests) without a render() pass.
     _qovery_cluster_names = {}
-    # raw finding id -> group label (C1/R1/...) and label -> [action index]. Populated by
-    # _prepare_labels(); class-level defaults let render helpers run standalone in tests.
+    # raw finding id -> group label (C1/R1/...). Populated by _prepare_labels();
+    # class-level default lets render helpers run standalone in tests.
     _id_to_label: dict = {}
-    _label_actions: dict = {}
 
     def render(self, report: dict) -> None:
         self._qovery_cluster_names = report.get("qovery_cluster_names", {})
@@ -245,7 +244,6 @@ class DefaultRenderer(Renderer):
         self._render_header(report)
         self._render_verdict(report)
         self._render_summary_table(report)
-        self._render_actions(report)
         self._render_findings(report)
         self._render_unknown(report)
         self._render_footer(report)
@@ -290,45 +288,11 @@ class DefaultRenderer(Renderer):
             return count
         return sum(1 for f in report.get("findings", []) if f["severity"] == severity)
 
-    def _render_actions(self, report: dict) -> None:
-        actions = report.get("actions", [])
-        if not actions:
-            return
-        self._write()
-        self._write("Top actions")
-        for i, action in enumerate(actions, 1):
-            # Actions are {finding_id, text} dicts from the verdict pass; tolerate bare
-            # strings (older payloads / tests) with no finding link.
-            if isinstance(action, dict):
-                text = action.get("text", "")
-                label = self._label_for_finding_id(action.get("finding_id"))
-            else:
-                text = action
-                label = None
-            label_part = f"[{label}] " if label else ""
-            # Parse optional [SEVERITY] prefix added by Claude, apply emoji + color
-            sev = None
-            display = text
-            for level in ("CRITICAL", "REVIEW"):
-                if text.startswith(f"[{level}]"):
-                    sev = level.lower()
-                    display = text[len(f"[{level}]"):].lstrip()
-                    break
-            if sev:
-                emoji = SEVERITY_EMOJI.get(sev, "")
-                styled = self._styled(display, SEVERITY_COLOR.get(sev, ""))
-                self._write(f"{i}. {label_part}{emoji} {styled}")
-            else:
-                self._write(f"{i}. {label_part}{display}")
-
     def _prepare_labels(self, report: dict) -> None:
         """Assign a stable label (C1/C2… critical, R1/R2… review) to each rendered
-        finding group, and map action indices to those labels via each action's
-        finding_id. Must mirror the grouping/ordering used by _render_findings so the
-        labels shown on findings and on actions agree.
+        finding group. Must mirror the grouping/ordering used by _render_findings.
         """
         self._id_to_label = {}
-        self._label_actions = {}
         findings = report.get("findings", [])
 
         crit = sorted(
@@ -345,38 +309,6 @@ class DefaultRenderer(Renderer):
             label = label_for_key.get(finding_group_key(f))
             if label and f.get("id") is not None:
                 self._id_to_label[f["id"]] = label
-
-        for idx, action in enumerate(report.get("actions", []), 1):
-            if not isinstance(action, dict):
-                continue
-            label = self._label_for_finding_id(action.get("finding_id"))
-            if label:
-                self._label_actions.setdefault(label, []).append(idx)
-
-    def _label_for_finding_id(self, fid) -> str:
-        if fid is None:
-            return None
-        try:
-            return self._id_to_label.get(int(fid))
-        except (ValueError, TypeError):
-            return self._id_to_label.get(fid)
-
-    @staticmethod
-    def _format_index_ranges(nums: list) -> str:
-        """Compress a list of ints into a compact range string: [1,2,3,5,7,8] -> '1-3, 5, 7-8'."""
-        nums = sorted(set(nums))
-        if not nums:
-            return ""
-        parts = []
-        start = prev = nums[0]
-        for n in nums[1:]:
-            if n == prev + 1:
-                prev = n
-                continue
-            parts.append(f"{start}-{prev}" if start != prev else f"{start}")
-            start = prev = n
-        parts.append(f"{start}-{prev}" if start != prev else f"{start}")
-        return ", ".join(parts)
 
     def _render_findings(self, report: dict) -> None:
         findings = report.get("findings", [])
@@ -418,10 +350,6 @@ class DefaultRenderer(Renderer):
         resource = finding.get("resource", "")
         if resource:
             self._write_labeled("     Resource: ", resource)
-        if label:
-            action_idxs = self._label_actions.get(label)
-            if action_idxs:
-                self._write_labeled("     Top actions: ", self._format_index_ranges(action_idxs))
         if include_impact_action:
             self._write_labeled("     Impact: ", finding['impact'])
             self._write_labeled("     Action: ", finding['action'])
@@ -565,7 +493,6 @@ class JsonRenderer(Renderer):
             "clusters_skipped": report["clusters_skipped"],
             "patterns_total": report["patterns_total"],
             "severity_counts": report["severity_counts"],
-            "actions": report.get("actions", []),
             "findings": [
                 {k: v for k, v in f.items() if k in JSON_FINDING_KEYS}
                 for f in report.get("findings", [])

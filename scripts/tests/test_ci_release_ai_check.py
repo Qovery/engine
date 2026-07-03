@@ -394,7 +394,7 @@ class TestAnalyzeWithClaude(unittest.TestCase):
     def test_prompt_requests_json_and_sends_full_logs(self, mock_urlopen):
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps({
-            "content": [{"text": '{"severity":"info","findings":[]}'}]
+            "content": [{"type": "text", "text": '{"severity":"info","findings":[]}'}]
         }).encode()
         fake_response.__enter__ = lambda s: s
         fake_response.__exit__ = MagicMock(return_value=False)
@@ -420,7 +420,7 @@ class TestAnalyzeWithClaude(unittest.TestCase):
     def test_uses_haiku_model(self, mock_urlopen):
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps({
-            "content": [{"text": '{"severity":"info","findings":[]}'}]
+            "content": [{"type": "text", "text": '{"severity":"info","findings":[]}'}]
         }).encode()
         fake_response.__enter__ = lambda s: s
         fake_response.__exit__ = MagicMock(return_value=False)
@@ -434,7 +434,7 @@ class TestAnalyzeWithClaude(unittest.TestCase):
     def test_sets_anthropic_headers(self, mock_urlopen):
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps({
-            "content": [{"text": '{"severity":"info","findings":[]}'}]
+            "content": [{"type": "text", "text": '{"severity":"info","findings":[]}'}]
         }).encode()
         fake_response.__enter__ = lambda s: s
         fake_response.__exit__ = MagicMock(return_value=False)
@@ -448,7 +448,7 @@ class TestAnalyzeWithClaude(unittest.TestCase):
     def test_strips_markdown_fences(self, mock_urlopen):
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps({
-            "content": [{"text": '```json\n{"severity":"review","findings":[]}\n```'}]
+            "content": [{"type": "text", "text": '```json\n{"severity":"review","findings":[]}\n```'}]
         }).encode()
         fake_response.__enter__ = lambda s: s
         fake_response.__exit__ = MagicMock(return_value=False)
@@ -460,7 +460,7 @@ class TestAnalyzeWithClaude(unittest.TestCase):
     def test_includes_cluster_count_in_prompt(self, mock_urlopen):
         fake_response = MagicMock()
         fake_response.read.return_value = json.dumps({
-            "content": [{"text": '{"severity":"info","findings":[]}'}]
+            "content": [{"type": "text", "text": '{"severity":"info","findings":[]}'}]
         }).encode()
         fake_response.__enter__ = lambda s: s
         fake_response.__exit__ = MagicMock(return_value=False)
@@ -481,10 +481,10 @@ class TestAnalyzeWithClaude(unittest.TestCase):
             return m
 
         batch_body = json.dumps({
-            "content": [{"text": '{"severity":"review","findings":[{"severity":"review","category":"helm_values","description":"x"}]}'}]
+            "content": [{"type": "text", "text": '{"severity":"review","findings":[{"severity":"review","category":"helm_values","description":"x"}]}'}]
         }).encode()
         synthesis_body = json.dumps({
-            "content": [{"text": '{"severity":"review","findings":[{"severity":"review","category":"helm_values","description":"consolidated"}]}'}]
+            "content": [{"type": "text", "text": '{"severity":"review","findings":[{"severity":"review","category":"helm_values","description":"consolidated"}]}'}]
         }).encode()
 
         mock_urlopen.side_effect = [
@@ -510,11 +510,11 @@ class TestAnalyzeWithClaude(unittest.TestCase):
 
         def batch_body(desc):
             return json.dumps({
-                "content": [{"text": f'{{"severity":"review","findings":[{{"severity":"review","category":"other","description":"{desc}"}}]}}'}]
+                "content": [{"type": "text", "text": f'{{"severity":"review","findings":[{{"severity":"review","category":"other","description":"{desc}"}}]}}'}]
             }).encode()
 
         synthesis_body = json.dumps({
-            "content": [{"text": '{"severity":"review","findings":[]}'}]
+            "content": [{"type": "text", "text": '{"severity":"review","findings":[]}'}]
         }).encode()
 
         mock_urlopen.side_effect = [
@@ -562,7 +562,7 @@ class TestMain(unittest.TestCase):
     ):
         mock_loki.return_value = ("same diff logs for all", False)
         mock_claude.return_value = {"severity": "info", "findings": []}
-        mock_summary.return_value = {"verdict": "All clear", "verdict_severity": "info", "actions": []}
+        mock_summary.return_value = {"verdict": "All clear", "verdict_severity": "info"}
 
         dry_run = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         dry_run.write(
@@ -603,7 +603,7 @@ class TestMain(unittest.TestCase):
             ("different diff with extra route deletion", False),
         ]
         mock_claude.return_value = {"severity": "info", "findings": []}
-        mock_summary.return_value = {"verdict": "All clear", "verdict_severity": "info", "actions": []}
+        mock_summary.return_value = {"verdict": "All clear", "verdict_severity": "info"}
 
         dry_run = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         dry_run.write(
@@ -636,7 +636,7 @@ class TestMain(unittest.TestCase):
     @patch("ci_release_ai_check.query_loki")
     def test_all_clusters_errored_prints_summary(self, mock_loki, mock_summary):
         mock_loki.side_effect = ConnectionError("Loki down")
-        mock_summary.return_value = {"verdict": "error", "verdict_severity": "unknown", "actions": []}
+        mock_summary.return_value = {"verdict": "error", "verdict_severity": "unknown"}
 
         dry_run = tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False)
         dry_run.write("| ClusterId |\n| 00000000-0000-0000-0000-000000000001 |\n")
@@ -669,7 +669,7 @@ class TestMain(unittest.TestCase):
     @patch("ci_release_ai_check.analyze_with_claude")
     @patch("ci_release_ai_check.query_loki")
     def test_skips_cluster_when_too_many_batches(self, mock_loki, mock_claude, mock_summary):
-        mock_summary.return_value = {"verdict": "N/A", "verdict_severity": "unknown", "actions": []}
+        mock_summary.return_value = {"verdict": "N/A", "verdict_severity": "unknown"}
         large_logs = "x" * (MAX_BATCH_CHARS * (MAX_BATCH_LIMIT + 1) + 1)
         mock_loki.return_value = (large_logs, False)
 
@@ -764,9 +764,13 @@ class TestRetry(unittest.TestCase):
             retry(always_fail, max_attempts=3, delay=0)
 
 
-def _claude_resp(text, usage=None):
-    """Build a mocked Anthropic Messages API response."""
-    body = {"content": [{"text": text}]}
+def _claude_resp(text, usage=None, content=None):
+    """Build a mocked Anthropic Messages API response.
+
+    content, if given, overrides the default single-text-block content list —
+    used to simulate responses with thinking or other non-text blocks.
+    """
+    body = {"content": content if content is not None else [{"type": "text", "text": text}]}
     if usage is not None:
         body["usage"] = usage
     m = MagicMock()
@@ -836,8 +840,7 @@ class TestUpstreamMerge(unittest.TestCase):
         def fake_summary(findings, non_analyzed, api_key, usage=None):
             captured["n_findings"] = len(findings)
             return {"verdict": "ok", "verdict_severity": "review",
-                    "severity_overrides": {"0": "review"},
-                    "actions": [{"finding_id": 0, "text": "[REVIEW] [TERRAFORM] verify"}]}
+                    "severity_overrides": {"0": "review"}}
         mock_summary.side_effect = fake_summary
 
         with _run_main(_TWO_CLUSTER_TABLE) as report:
@@ -899,6 +902,38 @@ class TestCallClaudeUsage(unittest.TestCase):
         self.assertEqual(_call_claude("p", "k", None), {"x": 1})
 
 
+class TestCallClaudeContentBlocks(unittest.TestCase):
+    """Text blocks must be selected by type, not position: models with adaptive
+    thinking (claude-sonnet-5) prepend a thinking block on complex prompts, which
+    made content[0]["text"] raise KeyError('text') on most analysis calls."""
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_thinking_block_before_text_is_skipped(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(None, content=[
+            {"type": "thinking", "thinking": "Let me look at this diff...", "signature": "sig"},
+            {"type": "text", "text": '{"severity": "info"}'},
+        ])
+        self.assertEqual(_call_claude("p", "k"), {"severity": "info"})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_multiple_text_blocks_are_concatenated(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(None, content=[
+            {"type": "thinking", "thinking": "...", "signature": "sig"},
+            {"type": "text", "text": '{"severity":'},
+            {"type": "text", "text": ' "review"}'},
+        ])
+        self.assertEqual(_call_claude("p", "k"), {"severity": "review"})
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_no_text_block_raises_valueerror_naming_block_types(self, mock_urlopen):
+        mock_urlopen.return_value = _claude_resp(None, content=[
+            {"type": "thinking", "thinking": "...", "signature": "sig"},
+        ])
+        with self.assertRaises(ValueError) as ctx:
+            _call_claude("p", "k")
+        self.assertIn("thinking", str(ctx.exception))
+
+
 class TestPricingTable(unittest.TestCase):
     def test_active_models_have_pricing(self):
         # Guard against bumping a model id without adding its rate.
@@ -930,7 +965,7 @@ class TestCostReporting(unittest.TestCase):
         def fake_summary(findings, non_analyzed, api_key, usage=None):
             if usage is not None:
                 _merge_usage(usage, {CLAUDE_VERDICT_MODEL: {"input_tokens": 10_000, "output_tokens": 2_000}})
-            return {"verdict": "ok", "verdict_severity": "info", "actions": []}
+            return {"verdict": "ok", "verdict_severity": "info"}
         mock_summary.side_effect = fake_summary
 
         with _run_main(_ONE_CLUSTER_TABLE) as report:
@@ -1002,7 +1037,6 @@ class TestVerdictAuthoritative(unittest.TestCase):
             "verdict": "Critical IAM risk on 1 cluster",
             "verdict_severity": "review",
             "severity_overrides": {"0": "critical"},
-            "actions": ["[CRITICAL] [TERRAFORM] Review IAM policy on 1 cluster"],
         }
 
         with _run_main(_ONE_CLUSTER_TABLE) as report:

@@ -227,10 +227,6 @@ SAMPLE_REPORT = {
     "verdict": "Proceed with review",
     "verdict_severity": "review",
     "severity_counts": {"critical": 0, "review": 1, "info": 2, "unknown": 2},
-    "actions": [
-        "Review 2 clusters with network route changes",
-        "Investigate missing logs on 2 clusters",
-    ],
     "findings": [
         {
             "severity": "review",
@@ -305,11 +301,6 @@ class TestDefaultRenderer(unittest.TestCase):
         self.assertIn("INFO", output)
         self.assertIn("UNKNOWN", output)
 
-    def test_actions_listed(self):
-        output = self._render()
-        self.assertIn("Review 2 clusters with network route changes", output)
-        self.assertIn("Investigate missing logs on 2 clusters", output)
-
     def test_review_findings_show_impact_and_action(self):
         output = self._render()
         self.assertIn("Network route path changed", output)
@@ -360,7 +351,6 @@ class TestDefaultRenderer(unittest.TestCase):
         report["findings"] = []
         report["severity_counts"] = {"critical": 0, "review": 0, "info": 0, "unknown": 0}
         report["clusters_no_logs"] = []
-        report["actions"] = []
         output = self._render(report)
         self.assertNotIn("Review findings", output)
         self.assertNotIn("Info findings", output)
@@ -376,11 +366,6 @@ LABELED_REPORT = {
     "severity_counts": {"critical": 0, "review": 3, "info": 0, "unknown": 0},
     # Findings 0 and 1 normalize to the same title (cluster tokens stripped) -> merge to R1.
     # Finding 2 is a distinct issue -> R2.
-    "actions": [
-        {"finding_id": 0, "text": "[REVIEW] [TERRAFORM] (aws_s3_bucket.logs) Verify HTTPS on qovery-logs-za0829ee2 on 1 cluster"},
-        {"finding_id": 1, "text": "[REVIEW] [TERRAFORM] (aws_s3_bucket.logs) Verify HTTPS on qovery-logs-zeb1bc33b on 1 cluster"},
-        {"finding_id": 2, "text": "[REVIEW] [TERRAFORM] (aws_eks_node_group.workers) Confirm max_size 6->4 on 1 cluster"},
-    ],
     "findings": [
         {"id": 0, "severity": "review", "title": "HTTPS policy on qovery-logs-za0829ee2",
          "impact": "i", "source": "terraform", "resource": "aws_s3_bucket.logs",
@@ -396,7 +381,7 @@ LABELED_REPORT = {
 }
 
 
-class TestActionFindingLabels(unittest.TestCase):
+class TestFindingLabels(unittest.TestCase):
     def _render(self, report):
         out = StringIO()
         DefaultRenderer(stream=out, use_color=False).render(report)
@@ -406,39 +391,6 @@ class TestActionFindingLabels(unittest.TestCase):
         out = self._render(LABELED_REPORT)
         self.assertIn("[R1]", out)
         self.assertIn("[R2]", out)
-
-    def test_actions_tagged_with_finding_label(self):
-        out = self._render(LABELED_REPORT)
-        lines = [l for l in out.splitlines() if l.strip().startswith(("1.", "2.", "3."))]
-        # actions 1 and 2 address the merged R1 finding, action 3 addresses R2
-        self.assertTrue(any("1." in l and "[R1]" in l for l in lines))
-        self.assertTrue(any("2." in l and "[R1]" in l for l in lines))
-        self.assertTrue(any("3." in l and "[R2]" in l for l in lines))
-
-    def test_finding_lists_its_action_indices_as_range(self):
-        out = self._render(LABELED_REPORT)
-        self.assertIn("Top actions: 1-2", out)  # R1 merges actions 1 and 2
-        self.assertIn("Top actions: 3", out)    # R2
-
-    def test_string_actions_render_without_labels(self):
-        # Back-compat: bare-string actions (no finding_id) still render, unlabeled.
-        report = dict(LABELED_REPORT)
-        report["actions"] = ["Do a thing", "Do another thing"]
-        out = self._render(report)
-        self.assertIn("Do a thing", out)
-        self.assertNotIn("[R1] 🟡", out.split("Review findings")[0])  # no label injected into actions
-
-
-class TestFormatIndexRanges(unittest.TestCase):
-    def test_compresses_consecutive(self):
-        self.assertEqual(DefaultRenderer._format_index_ranges([1, 2, 3, 5, 7, 8]), "1-3, 5, 7-8")
-
-    def test_single_and_empty(self):
-        self.assertEqual(DefaultRenderer._format_index_ranges([4]), "4")
-        self.assertEqual(DefaultRenderer._format_index_ranges([]), "")
-
-    def test_dedups_and_sorts(self):
-        self.assertEqual(DefaultRenderer._format_index_ranges([3, 1, 2, 2]), "1-3")
 
 
 from ci_release_ai_check_output import VerboseRenderer
@@ -546,7 +498,7 @@ class TestJsonRenderer(unittest.TestCase):
             "version", "window", "verdict", "verdict_severity",
             "clusters_total", "clusters_with_logs", "clusters_no_logs",
             "clusters_errored", "clusters_skipped", "patterns_total",
-            "severity_counts", "actions", "findings", "usage", "timing",
+            "severity_counts", "findings", "usage", "timing",
             "grafana_url", "qovery_cluster_names",
         }
         self.assertEqual(set(data.keys()), expected_keys)
