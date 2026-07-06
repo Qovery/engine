@@ -111,6 +111,8 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
                 apply_immediately: false,
+                provisioning_mode: Default::default(),
+                blueprint_db_hostname: None,
             };
             environment.databases = vec![db];
         }

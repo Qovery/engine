@@ -29,6 +29,16 @@ pub enum DatabaseMode {
     CONTAINER,
 }
 
+/// Who provisions a MANAGED database's cloud infra: the engine's own terraform (INTERNAL) or a
+/// service-catalog blueprint that owns the managed database (BLUEPRINT). Orthogonal to [DatabaseMode] (stays
+/// MANAGED). For BLUEPRINT the engine skips its native terraform and only wires connectivity.
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash, Default, Debug)]
+pub enum DatabaseProvisioningMode {
+    #[default]
+    INTERNAL,
+    BLUEPRINT,
+}
+
 #[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Database {
     pub kind: DatabaseKind,
@@ -59,6 +69,11 @@ pub struct Database {
     pub activate_backups: bool,
     pub publicly_accessible: bool,
     pub mode: DatabaseMode,
+    #[serde(default)] // => INTERNAL if not present (pre-migration payloads)
+    pub provisioning_mode: DatabaseProvisioningMode,
+    // Managed database endpoint for a BLUEPRINT db — q-core sources it from the blueprint's terraform output.
+    #[serde(default)]
+    pub blueprint_db_hostname: Option<String>,
     #[serde(default)] // => false if not present in input
     pub apply_immediately: bool,
     #[serde(default)]
@@ -92,6 +107,8 @@ impl Database {
             activate_backups: self.activate_backups,
             publicly_accessible: self.publicly_accessible,
             apply_immediately: self.apply_immediately,
+            provisioning_mode: self.provisioning_mode.clone(),
+            blueprint_db_hostname: self.blueprint_db_hostname.clone(),
         };
 
         let annotations_groups = self
@@ -963,4 +980,6 @@ pub struct DatabaseOptions {
     pub activate_backups: bool,
     pub publicly_accessible: bool,
     pub apply_immediately: bool,
+    pub provisioning_mode: DatabaseProvisioningMode,
+    pub blueprint_db_hostname: Option<String>,
 }

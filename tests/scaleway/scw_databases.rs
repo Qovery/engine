@@ -383,6 +383,8 @@ fn postgresql_deploy_a_working_environment_and_redeploy() {
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             apply_immediately: false,
+            provisioning_mode: Default::default(),
+            blueprint_db_hostname: None,
         }];
         environment.applications = environment
             .applications
