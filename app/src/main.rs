@@ -325,13 +325,6 @@ pub fn using_json_path_parameter(
     };
 
     task.run();
-
-    // Worker mode: the Job exit code is the only failure signal the operator observes,
-    // so a failed deployment must not exit 0.
-    if task.is_success() == Some(false) {
-        error!("task {} failed", task.id());
-        process::exit(1);
-    }
     Ok(())
 }
 

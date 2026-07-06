@@ -35,7 +35,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::constants::ASCII_BANNER;
-use crate::deployment_manager::DeploymentManager;
+use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode};
 use crate::grpc::GrpcEngineClient;
 use crate::grpc::engine::{DeploymentInfo, DeploymentType};
 use crate::grpc::qovery_api::GrpcCoreServiceApi;
@@ -224,6 +224,10 @@ struct Cli {
     /// Deployment type engine is going to execute. Can be "ENVIRONMENT", "INFRASTRUCTURE" or "BLUEPRINT"
     #[arg(long, default_value = "ENVIRONMENT", env = "DEPLOYMENT_TYPE")]
     deployment_type: String,
+
+    /// Execute at most one deployment request, then stop the engine process.
+    #[arg(long, default_value_t = false, env = "RUN_ONCE")]
+    run_once: bool,
 
     /// Location of the binaries version file
     #[arg(long, env = "BIN_VERSION_FILE")]
@@ -499,6 +503,11 @@ For demo, re-do a `qovery demo up`, for self-managed re-do a `qovery cluster ins
             is_connected_to_gtw,
             Box::new(payload_to_engine_task),
             log_file_writer,
+            if cli.run_once {
+                DeploymentManagerRunMode::RunOnce
+            } else {
+                DeploymentManagerRunMode::Daemon
+            },
         );
         mngr.run().await
     };

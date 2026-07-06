@@ -18,12 +18,6 @@ pub trait Task: Send + Sync {
     fn is_terminated(&self) -> bool;
     fn await_terminated(&self) -> broadcast::Receiver<()>;
     fn info_context(&self) -> Context;
-
-    /// File-mode (worker) uses it to exit non-zero so the operator-observed Job status reflects
-    /// the real deployment result.
-    fn is_success(&self) -> Option<bool> {
-        None
-    }
 }
 
 pub fn upload_s3_file(archive: Option<&Archive>, file_path: &Path) -> Result<(), anyhow::Error> {

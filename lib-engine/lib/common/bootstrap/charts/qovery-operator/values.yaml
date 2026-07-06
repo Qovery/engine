@@ -17,7 +17,7 @@ environmentVariables:
   ORGANIZATION_ID: ""
   CLUSTER_ID: ""
   CLUSTER_JWT_TOKEN: ""
-  MIN_REQUEST_SCHEMA_VERSION: "1"
+  QOVERY_ENGINE_WORKER_IMAGE_REPOSITORY: "public.ecr.aws/r3m4q3r9/engine"
 
 imagePullSecrets: []
 nameOverride: ""

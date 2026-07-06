@@ -79,6 +79,18 @@ enum DeploymentManagerState {
     },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeploymentManagerRunMode {
+    Daemon,
+    RunOnce,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DeploymentManagerRunOutcome {
+    Continue,
+    NoDeploymentAvailable,
+}
+
 impl DeploymentManagerState {
     pub fn does_execute_deployment(&self) -> bool {
         !matches!(self, DeploymentManagerState::SeekingNewDeployment {})
@@ -108,6 +120,7 @@ pub struct DeploymentManager {
     is_connected_to_gtw: Arc<AtomicBool>,
     mk_engine_task: MkEngineTask,
     log_file_writer: LogFileWriter,
+    run_mode: DeploymentManagerRunMode,
 }
 
 impl DeploymentManager {
@@ -118,6 +131,7 @@ impl DeploymentManager {
         is_connected_to_gtw: Arc<AtomicBool>,
         mk_engine_task: MkEngineTask,
         log_file_writer: LogFileWriter,
+        run_mode: DeploymentManagerRunMode,
     ) -> Self {
         METRICS_NB_RUNNING_TASKS.set(0);
         let deployment_request = match task_type {
@@ -144,6 +158,7 @@ impl DeploymentManager {
             is_connected_to_gtw,
             mk_engine_task,
             log_file_writer,
+            run_mode,
         }
     }
 
@@ -152,13 +167,24 @@ impl DeploymentManager {
         let mut state = DeploymentManagerState::SeekingNewDeployment {};
         let mut delay = None;
         let mut span = span!(Level::INFO, SPAN_NAME, execution_id = field::Empty);
+        let mut run_once_started_deployment = false;
 
         while state.does_execute_deployment() || !self.should_shutdown.load(Ordering::Relaxed) {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
 
-            let (new_state, new_delay) = self.run_exec_state(state).instrument(span.clone()).await;
+            let (new_state, new_delay, run_outcome) = self.run_exec_state(state).instrument(span.clone()).await;
+            let should_stop_run_once = self.run_mode == DeploymentManagerRunMode::RunOnce
+                && (run_outcome == DeploymentManagerRunOutcome::NoDeploymentAvailable
+                    || (run_once_started_deployment
+                        && matches!(new_state, DeploymentManagerState::SeekingNewDeployment {})));
+            run_once_started_deployment |= matches!(
+                new_state,
+                DeploymentManagerState::ExecutingDeployment { .. }
+                    | DeploymentManagerState::ExecutingDeploymentTask { .. }
+                    | DeploymentManagerState::ResumingDeploymentTask { .. }
+            );
 
             state = new_state;
             delay = new_delay;
@@ -176,40 +202,61 @@ impl DeploymentManager {
                 DeploymentManagerState::ExecutingDeploymentTask { .. } => {}
                 DeploymentManagerState::ResumingDeploymentTask { .. } => {}
             }
+
+            if should_stop_run_once {
+                info!("RUN_ONCE mode completed, stopping deployment manager");
+                break;
+            }
         }
     }
 
     async fn run_exec_state(
         &mut self,
         current_st: DeploymentManagerState,
-    ) -> (DeploymentManagerState, Option<Duration>) {
+    ) -> (DeploymentManagerState, Option<Duration>, DeploymentManagerRunOutcome) {
         match current_st {
             DeploymentManagerState::SeekingNewDeployment {} => self.seek_new_deployment().await,
-            DeploymentManagerState::ExecutingDeployment { deployment } => self.execute_deployment(deployment).await,
+            DeploymentManagerState::ExecutingDeployment { deployment } => {
+                let (state, delay) = self.execute_deployment(deployment).await;
+                (state, delay, DeploymentManagerRunOutcome::Continue)
+            }
             DeploymentManagerState::ExecutingDeploymentTask {
                 deployment,
                 task,
                 upstream_gtw: upstream,
-            } => self.execute_deployment_task(deployment, task, upstream).await,
+            } => {
+                let (state, delay) = self.execute_deployment_task(deployment, task, upstream).await;
+                (state, delay, DeploymentManagerRunOutcome::Continue)
+            }
             DeploymentManagerState::ResumingDeploymentTask { deployment, task } => {
-                self.resuming_deployment_task(deployment, task).await
+                let (state, delay) = self.resuming_deployment_task(deployment, task).await;
+                (state, delay, DeploymentManagerRunOutcome::Continue)
             }
         }
     }
 
     /// Engine has nothing to do, pool the gtw to get a new deployment to execute
-    async fn seek_new_deployment(&mut self) -> (DeploymentManagerState, Option<Duration>) {
+    async fn seek_new_deployment(&mut self) -> (DeploymentManagerState, Option<Duration>, DeploymentManagerRunOutcome) {
         let deployment_info = match self.engine_client.get_new_deployment(self.deployment_request).await {
             Ok(deployment_info) => deployment_info.into_inner(),
             Err(err) => {
                 if err.code() == Code::NotFound {
                     self.is_connected_to_gtw.store(true, Ordering::Relaxed);
                     info!("No deployment found, waiting for a new one");
+                    return (
+                        DeploymentManagerState::SeekingNewDeployment {},
+                        Some(self.default_wait_time),
+                        DeploymentManagerRunOutcome::NoDeploymentAvailable,
+                    );
                 } else {
                     self.is_connected_to_gtw.store(false, Ordering::Relaxed);
                     error!("Error while getting new deployment: {}", err);
                 }
-                return (DeploymentManagerState::SeekingNewDeployment {}, Some(self.default_wait_time));
+                return (
+                    DeploymentManagerState::SeekingNewDeployment {},
+                    Some(self.default_wait_time),
+                    DeploymentManagerRunOutcome::Continue,
+                );
             }
         };
 
@@ -219,7 +266,7 @@ impl DeploymentManager {
             deployment: DeploymentContext::new(deployment_info, Duration::from_secs(1), self.log_file_writer.clone()),
         };
 
-        (next_state, None)
+        (next_state, None, DeploymentManagerRunOutcome::Continue)
     }
 
     /// We have a new deployment to execute, but no task yet. Contact the gateway to claim the deployment and get a task to execute
@@ -484,7 +531,7 @@ impl DeploymentManager {
 
 #[cfg(test)]
 mod test {
-    use crate::deployment_manager::DeploymentManager;
+    use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode};
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
         ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx,
@@ -540,6 +587,68 @@ mod test {
             _request: Request<Streaming<EngineMessageTx>>,
         ) -> Result<Response<Self::ExecDeploymentStream>, Status> {
             let stream = Box::pin(stream::iter(self.msgs.clone()).chain(stream::pending()));
+            Ok(Response::new(stream))
+        }
+
+        async fn get_service_version(
+            &self,
+            _request: Request<ServiceVersionRequest>,
+        ) -> Result<Response<ServiceVersionResponse>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn get_git_token(
+            &self,
+            _request: Request<GitTokenRequest>,
+        ) -> Result<Response<GitTokenResponse>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn update_cluster_outputs(
+            &self,
+            _request: Request<ClusterOutputsUpdateRequest>,
+        ) -> Result<Response<()>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
+
+        async fn send_terraform_resources(
+            &self,
+            _request: Request<TerraformResourcesRequest>,
+        ) -> Result<Response<()>, Status> {
+            Ok(Response::new(()))
+        }
+    }
+
+    struct EngineGtwTestWithClaimErrors {
+        deployments: Mutex<Vec<Result<Response<DeploymentInfo>, Status>>>,
+        nb_get_new_deployment_called: Arc<AtomicUsize>,
+    }
+
+    #[tonic::async_trait]
+    impl Engine for EngineGtwTestWithClaimErrors {
+        async fn is_authorized(&self, _request: Request<()>) -> Result<Response<()>, Status> {
+            Ok(Response::new(()))
+        }
+
+        async fn get_new_deployment(
+            &self,
+            _request: Request<DeploymentRequest>,
+        ) -> Result<Response<DeploymentInfo>, Status> {
+            self.nb_get_new_deployment_called.fetch_add(1, Ordering::Relaxed);
+            #[allow(clippy::result_large_err)]
+            self.deployments
+                .lock()
+                .unwrap()
+                .pop()
+                .unwrap_or_else(|| Err(Status::not_found("")))
+        }
+
+        type ExecDeploymentStream = Pin<Box<dyn Stream<Item = Result<EngineMessageRx, Status>> + Send>>;
+        async fn exec_deployment(
+            &self,
+            _request: Request<Streaming<EngineMessageTx>>,
+        ) -> Result<Response<Self::ExecDeploymentStream>, Status> {
+            let stream = Box::pin(stream::pending());
             Ok(Response::new(stream))
         }
 
@@ -688,6 +797,7 @@ mod test {
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
             Default::default(),
+            DeploymentManagerRunMode::Daemon,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(500);
         let fut = deployment_mngr.run();
@@ -696,6 +806,140 @@ mod test {
 
         should_shutdown.store(true, Ordering::Relaxed);
         assert!(timeout(Duration::from_secs(1), &mut fut).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deployment_manager_run_once_stops_when_no_deployment() {
+        let (client, server) = tokio::io::duplex(1024);
+
+        let engine_gateway = MyEngineGtwTest {
+            deployments: Mutex::new(vec![]),
+            msgs: vec![],
+        };
+
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(EngineServer::new(engine_gateway))
+                .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server)]))
+                .await
+        });
+
+        let client = new_engine_client_test(Some(client)).await;
+        let mk_engine_task = |_, _: &_, _: &_, _, _, _| {
+            let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
+            Ok::<_, Box<EngineEvent>>(task)
+        };
+
+        let mut deployment_mngr = DeploymentManager::new(
+            &TaskSelector::Environment,
+            client,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
+            Box::new(mk_engine_task),
+            Default::default(),
+            DeploymentManagerRunMode::RunOnce,
+        );
+        deployment_mngr.default_wait_time = Duration::from_millis(500);
+
+        assert!(timeout(Duration::from_secs(1), deployment_mngr.run()).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_deployment_manager_run_once_retries_transient_claim_error() {
+        let (client, server) = tokio::io::duplex(1024);
+        let nb_get_new_deployment_called = Arc::new(AtomicUsize::new(0));
+
+        let engine_gateway = EngineGtwTestWithClaimErrors {
+            deployments: Mutex::new(vec![
+                Err(Status::not_found("")),
+                Err(Status::unavailable("temporary gateway error")),
+            ]),
+            nb_get_new_deployment_called: nb_get_new_deployment_called.clone(),
+        };
+
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(EngineServer::new(engine_gateway))
+                .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server)]))
+                .await
+        });
+
+        let client = new_engine_client_test(Some(client)).await;
+        let mk_engine_task = |_, _: &_, _: &_, _, _, _| {
+            let task: Arc<dyn Task> = Arc::new(EngineTaskTest::new());
+            Ok::<_, Box<EngineEvent>>(task)
+        };
+
+        let mut deployment_mngr = DeploymentManager::new(
+            &TaskSelector::Environment,
+            client,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
+            Box::new(mk_engine_task),
+            Default::default(),
+            DeploymentManagerRunMode::RunOnce,
+        );
+        deployment_mngr.default_wait_time = Duration::from_millis(10);
+
+        assert!(timeout(Duration::from_secs(1), deployment_mngr.run()).await.is_ok());
+        assert_eq!(nb_get_new_deployment_called.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn test_deployment_manager_run_once_stops_after_one_deployment() {
+        let (client, server) = tokio::io::duplex(1024);
+
+        let engine_gateway = MyEngineGtwTest {
+            deployments: Mutex::new(vec![Ok(Response::new(DeploymentInfo {
+                organization_id: "".to_string(),
+                cluster_id: "".to_string(),
+                execution_id: Uuid::new_v4().to_string(),
+                request_id: "".to_string(),
+                r#type: 0,
+                last_message_id: "".to_string(),
+                execution_start_deadline: None,
+            }))]),
+            msgs: vec![
+                Ok(EngineMessageRx {
+                    message_id: "1".to_string(),
+                    request: Some(engine_message_rx::Request::DeploymentRequest("".to_string())),
+                }),
+                Ok(EngineMessageRx {
+                    message_id: "2".to_string(),
+                    request: Some(engine_message_rx::Request::Terminated(true)),
+                }),
+            ],
+        };
+
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(EngineServer::new(engine_gateway))
+                .serve_with_incoming(tokio_stream::iter(vec![Ok::<_, std::io::Error>(server)]))
+                .await
+        });
+
+        let client = new_engine_client_test(Some(client)).await;
+        let task = EngineTaskTest::new();
+        let task_is_running = task.is_running.clone();
+        let mk_engine_task = move |_, _: &_, _: &_, _, _, _| {
+            let task: Arc<dyn Task> = Arc::new(task.clone());
+            Ok::<_, Box<EngineEvent>>(task)
+        };
+
+        let mut deployment_mngr = DeploymentManager::new(
+            &TaskSelector::Environment,
+            client,
+            Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicBool::new(false)),
+            Box::new(mk_engine_task),
+            Default::default(),
+            DeploymentManagerRunMode::RunOnce,
+        );
+        deployment_mngr.default_wait_time = Duration::from_millis(100);
+        deployment_mngr.deadline_for_new_task = Duration::from_millis(100);
+
+        assert!(timeout(Duration::from_secs(3), deployment_mngr.run()).await.is_ok());
+        assert!(!task_is_running.load(Ordering::Relaxed));
     }
 
     #[tokio::test]
@@ -756,6 +1000,7 @@ mod test {
             is_connected_to_gtw.clone(),
             Box::new(mk_engine_task),
             Default::default(),
+            DeploymentManagerRunMode::Daemon,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(200);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);
@@ -895,6 +1140,7 @@ mod test {
             Arc::new(AtomicBool::new(false)),
             Box::new(mk_engine_task),
             Default::default(),
+            DeploymentManagerRunMode::Daemon,
         );
         deployment_mngr.default_wait_time = Duration::from_millis(100);
         deployment_mngr.deadline_for_new_task = Duration::from_secs(1);

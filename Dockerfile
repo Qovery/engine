@@ -93,7 +93,7 @@ ENV CI_SCCACHE_REDIS_URL=$CI_SCCACHE_REDIS_ENDPOINT
 ENV CI_SCCACHE_REDIS_PASSWORD=$CI_SCCACHE_REDIS_PASSWORD
 ENV ENGINE_TAG_VERSION=$ENGINE_TAG_VERSION
 ENV RUSTFLAGS="-C link-arg=-Wl,--compress-debug-sections=zlib -C force-frame-pointers=yes"
-ENV CARGO_FLAGS="--release --bin engine --bin engine_grpc --bin engine_post_renderer"
+ENV CARGO_FLAGS="--release --bin engine_grpc --bin engine_post_renderer"
 
 
 WORKDIR /build
@@ -195,8 +195,6 @@ RUN <<EOF
     sccache --show-stats
   fi
 
-  cp /build/target/release/engine /build/target/release/engine_stripped
-  strip -s /build/target/release/engine_stripped
   cp /build/target/release/engine_grpc /build/target/release/engine_grpc_stripped
   strip -s /build/target/release/engine_grpc_stripped
   cp /build/target/release/engine_post_renderer /build/target/release/engine_post_renderer_stripped
@@ -285,7 +283,6 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
-COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer .
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR
@@ -368,7 +365,6 @@ RUN groupadd -g 1000 qovery && \
 
 WORKDIR $HOME_DIR
 ADD lib-engine/lib $HOME_DIR/lib
-COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_stripped engine
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_grpc_stripped engine_grpc 
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/target/release/engine_post_renderer_stripped engine_post_renderer
 COPY --from=build --chown=qovery:qovery --chmod=500 /build/docker/engine/run.sh $HOME_DIR

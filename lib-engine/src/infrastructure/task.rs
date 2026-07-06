@@ -31,7 +31,6 @@ pub struct InfrastructureTask {
     span: tracing::Span,
     is_terminated: (RwLock<Option<broadcast::Sender<()>>>, broadcast::Receiver<()>),
     log_file_writer: Option<LogFileWriter>,
-    is_success: RwLock<Option<bool>>,
 }
 
 impl InfrastructureTask {
@@ -81,7 +80,6 @@ impl InfrastructureTask {
                 (RwLock::new(Some(tx)), rx)
             },
             log_file_writer,
-            is_success: RwLock::new(None),
         }
     }
 
@@ -198,7 +196,6 @@ impl Task for InfrastructureTask {
         ) {
             Ok(engine) => engine,
             Err(err) => {
-                *self.is_success.write().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(false);
                 self.send_infrastructure_progress(self.logger.clone(), Some(err));
                 return;
             }
@@ -216,7 +213,6 @@ impl Task for InfrastructureTask {
                 .as_infra_actions()
                 .run(&infra_ctx, self.request.action.into()),
         };
-        *self.is_success.write().unwrap_or_else(|err| err.into_inner()) = Some(ret.is_ok());
         self.handle_transaction_result(self.logger.clone(), ret);
 
         // Uploading to S3 can take a lot of time, and might hit the core timeout
@@ -253,10 +249,6 @@ impl Task for InfrastructureTask {
 
     fn is_terminated(&self) -> bool {
         self.is_terminated.0.read().map(|tx| tx.is_none()).unwrap_or(true)
-    }
-
-    fn is_success(&self) -> Option<bool> {
-        *self.is_success.read().unwrap_or_else(|err| err.into_inner())
     }
 
     fn await_terminated(&self) -> broadcast::Receiver<()> {
