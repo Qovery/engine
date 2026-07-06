@@ -203,14 +203,12 @@ mod tests {
     fn metadata_deserializes_q_core_operator_payload_and_ignores_extra_keys() {
         use crate::io_models::context::Metadata;
 
-        // Shape produced by q-core `withClusterOperatorPlatformComponentsMetadata`; the
-        // operator-transport keys (cluster_operator_engine_v2, deploy_from_file_kind)
-        // are unknown to the engine and must be ignored.
+        // Shape produced by q-core `withClusterOperatorPlatformComponentsMetadata`;
+        // the operator-transport key is unknown to the engine and must be ignored.
         let json = format!(
             r#"{{
                 "dry_run_deploy": false,
                 "cluster_operator_engine_v2": true,
-                "deploy_from_file_kind": "infra",
                 "engine_v2_options": {{
                     "schema_version": "1",
                     "execution_mode": "platform_components_only",

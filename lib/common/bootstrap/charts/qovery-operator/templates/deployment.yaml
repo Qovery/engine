@@ -40,6 +40,10 @@ spec:
               value: {{ .Values.namespace | quote }}
             - name: "QOVERY_ENGINE_WORKER_SERVICE_ACCOUNT"
               value: {{ include "qovery-operator.workerServiceAccountName" . | quote }}
+            - name: "CLUSTER_JWT_SECRET_NAME"
+              value: {{ $kubefullname | quote }}
+            - name: "CLUSTER_JWT_SECRET_KEY"
+              value: "CLUSTER_JWT_TOKEN"
             {{- range $key, $value := .Values.environmentVariables }}
             {{- if $value }}
             - name: "{{ $key }}"
