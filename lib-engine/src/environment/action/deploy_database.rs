@@ -17,6 +17,7 @@ use crate::events::{EnvironmentStep, EventDetails, Stage};
 use crate::helm::{ChartInfo, ChartSetValue, HelmAction, HelmChartNamespaces};
 use crate::infrastructure::models::cloud_provider::service::{Action, Service, get_database_terraform_config};
 use crate::infrastructure::models::cloud_provider::{DeploymentTarget, service};
+use crate::io_models::database::{DatabaseOptions, DatabaseProvisioningMode};
 use crate::kubers_utils::{KubeDeleteMode, kube_delete_all_from_selector};
 use crate::runtime::block_on;
 use crate::services::aws::models::QoveryAwsSdkConfigManagedDatabase;
@@ -264,7 +265,7 @@ fn await_db_state(
     }
 }
 
-fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed>>(
+fn on_create_managed_impl<C: CloudProvider, T: DatabaseType<C, Managed, DatabaseOptions = DatabaseOptions>>(
     db: &Database<C, Managed, T>,
     logger: &EnvProgressLogger,
     event_details: EventDetails,
@@ -276,31 +277,54 @@ where
     let workspace_dir = db.workspace_directory();
     let tera_context = db.to_tera_context(target)?;
 
-    // Execute terraform to provision database on cloud provider side
-    let terraform_deploy = TerraformDeployment::new(
-        tera_context.clone(),
-        PathBuf::from(db.terraform_common_resource_dir_path()),
-        PathBuf::from(db.terraform_resource_dir_path()),
-        PathBuf::from(&workspace_dir),
-        event_details.clone(),
-        target.is_dry_run_deploy,
-    );
-    terraform_deploy.on_create(target)?;
+    // INTERNAL: provision the managed database with our own terraform. BLUEPRINT: the instance was
+    // imported into a service-catalog blueprint that now owns it — skip terraform (the reconcile-fight
+    // guard) and just (re)wire connectivity to the endpoint q-core sourced from the blueprint's output.
+    let (target_hostname, target_fqdn, target_fqdn_id) = match db.options.provisioning_mode {
+        DatabaseProvisioningMode::INTERNAL => {
+            let terraform_deploy = TerraformDeployment::new(
+                tera_context.clone(),
+                PathBuf::from(db.terraform_common_resource_dir_path()),
+                PathBuf::from(db.terraform_resource_dir_path()),
+                PathBuf::from(&workspace_dir),
+                event_details.clone(),
+                target.is_dry_run_deploy,
+            );
+            terraform_deploy.on_create(target)?;
 
-    // Our terraform give us back a file with all the info we need to deploy the remaining stuff
-    let database_config =
-        get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
-            .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
+            // Our terraform gives us back a file with all the info we need to deploy the remaining stuff
+            let database_config =
+                get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
+                    .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
 
-    // Sending hostname to the core to update env variable with real hostname
-    // useful when managed service requires TLS and using a CNAME is not possible due to certificate checks
+            (
+                database_config.target_hostname,
+                database_config.target_fqdn,
+                database_config.target_fqdn_id,
+            )
+        }
+        DatabaseProvisioningMode::BLUEPRINT => {
+            let target_hostname = db.options.blueprint_db_hostname.clone().ok_or_else(|| {
+                Box::new(EngineError::new_missing_required_env_variable(
+                    event_details.clone(),
+                    "blueprint_db_hostname (BLUEPRINT provisioning needs the database endpoint from the blueprint output)"
+                        .to_string(),
+                ))
+            })?;
+            (target_hostname, db.fqdn.clone(), db.fqdn_id.clone())
+        }
+    };
+
+    // Relay the resolved hostname to core so it stitches the DB HOST/URL env vars for dependent apps
+    // (the real endpoint — managed DBs need it because TLS cert checks reject the CNAME). Fires for both
+    // INTERNAL (terraform output) and BLUEPRINT (blueprint output), so conversion stays transparent to apps.
     {
         let mut json: BTreeMap<&str, &str> = BTreeMap::new();
-        json.insert("hostname", database_config.target_hostname.as_str());
+        json.insert("hostname", target_hostname.as_str());
         logger.core_configuration_for_database(
             format!(
                 "🪡 Retrieved database hostname {}, environment variables are going to be stitched with it",
-                database_config.target_hostname
+                target_hostname
             ),
             serde_json::to_string(&json).unwrap_or_default(),
         );
@@ -310,11 +334,11 @@ where
     let values = vec![
         ChartSetValue {
             key: "target_hostname".to_string(),
-            value: database_config.target_hostname,
+            value: target_hostname,
         },
         ChartSetValue {
             key: "source_fqdn".to_string(),
-            value: database_config.target_fqdn,
+            value: target_fqdn,
         },
         ChartSetValue {
             key: "database_id".to_string(), // here we use the id and not the fqdn_id ¯\_(ツ)_/¯
@@ -338,7 +362,7 @@ where
         },
         ChartSetValue {
             key: "service_name".to_string(),
-            value: database_config.target_fqdn_id,
+            value: target_fqdn_id,
         },
         ChartSetValue {
             key: "publicly_accessible".to_string(),
@@ -366,6 +390,11 @@ where
 
     // We don't manage START/PAUSE for managed database elsewhere than for AWS
     if target.cloud_provider.kind() != cloud_provider::Kind::Aws {
+        return Ok(());
+    }
+
+    // Blueprint owns the managed database lifecycle — don't touch its running state.
+    if matches!(db.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
         return Ok(());
     }
 
@@ -540,7 +569,8 @@ fn managed_database_exists(
 }
 
 // For Managed database
-impl<C: CloudProvider, T: DatabaseType<C, Managed>> DeploymentAction for Database<C, Managed, T>
+impl<C: CloudProvider, T: DatabaseType<C, Managed, DatabaseOptions = DatabaseOptions>> DeploymentAction
+    for Database<C, Managed, T>
 where
     Database<C, Managed, T>: ToTeraContext,
 {
@@ -580,6 +610,13 @@ where
             |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // We don't manage PAUSE for managed database elsewhere than for AWS
                 if target.cloud_provider.kind() != cloud_provider::Kind::Aws {
+                    return Ok(());
+                }
+
+                // Blueprint owns the managed database lifecycle — pausing the DB service must not stop
+                // the instance. TODO: pause/resume parity (stop/start the instance for blueprint-backed
+                // managed DBs) is a follow-up.
+                if matches!(self.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
                     return Ok(());
                 }
 
@@ -637,6 +674,28 @@ where
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Delete),
             |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+                // Blueprint owns the managed database — deleting this database service must NOT destroy
+                // the instance; only tear down the engine-owned connectivity (the ExternalName). The
+                // blueprint's own deletion drops the database.
+                if matches!(self.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
+                    let workspace_dir = self.workspace_directory();
+                    let chart = ChartInfo {
+                        name: format!("{}-externalname", self.fqdn_id),
+                        path: format!("{}/{}", &workspace_dir, "service-chart"),
+                        namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
+                        action: HelmAction::Destroy,
+                        ..Default::default()
+                    };
+                    let helm = HelmDeployment::new(
+                        event_details.clone(),
+                        tera::Context::default(),
+                        PathBuf::from(self.helm_chart_external_name_service_dir()),
+                        None,
+                        chart,
+                    );
+                    return helm.on_delete(target);
+                }
+
                 // First we must ensure the DB is created by looking for the k8s ExternalName service and AWS side
                 if !managed_database_exists(
                     self.db_type(),

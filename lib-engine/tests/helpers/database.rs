@@ -496,6 +496,8 @@ pub fn environment_3_apps_3_databases(
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
                 apply_immediately: false,
+                provisioning_mode: Default::default(),
+                blueprint_db_hostname: None,
             },
             Database {
                 kind: DatabaseKind::Postgresql,
@@ -526,6 +528,8 @@ pub fn environment_3_apps_3_databases(
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
                 apply_immediately: false,
+                provisioning_mode: Default::default(),
+                blueprint_db_hostname: None,
             },
             Database {
                 kind: DatabaseKind::Mongodb,
@@ -556,6 +560,8 @@ pub fn environment_3_apps_3_databases(
                 annotations_group_ids: btreeset! {},
                 labels_group_ids: btreeset! {},
                 apply_immediately: false,
+                provisioning_mode: Default::default(),
+                blueprint_db_hostname: None,
             },
         ],
         helms: vec![],
@@ -823,6 +829,8 @@ pub fn test_db(
         annotations_group_ids: btreeset! {},
         labels_group_ids: btreeset! {},
         apply_immediately: false,
+        provisioning_mode: Default::default(),
+        blueprint_db_hostname: None,
     };
 
     environment.databases = vec![db.clone()];
@@ -1250,6 +1258,8 @@ pub fn test_pause_managed_db(
         annotations_group_ids: btreeset! {},
         labels_group_ids: btreeset! {},
         apply_immediately: false,
+        provisioning_mode: Default::default(),
+        blueprint_db_hostname: None,
     };
 
     environment.databases = vec![db];
@@ -1587,6 +1597,8 @@ pub fn test_db_on_upgrade(
         annotations_group_ids: btreeset! {},
         labels_group_ids: btreeset! {},
         apply_immediately: false,
+        provisioning_mode: Default::default(),
+        blueprint_db_hostname: None,
     };
 
     environment.databases = vec![db];

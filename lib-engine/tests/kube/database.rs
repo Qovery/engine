@@ -87,6 +87,8 @@ fn should_increase_db_storage_size() {
                 activate_backups: resized_db.activate_backups,
                 publicly_accessible: resized_db.publicly_accessible,
                 apply_immediately: false,
+                provisioning_mode: Default::default(),
+                blueprint_db_hostname: None,
             },
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],

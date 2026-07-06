@@ -315,6 +315,8 @@ pub fn environment_2_app_2_routers_1_psql(
             annotations_group_ids: btreeset! {},
             labels_group_ids: btreeset! {},
             apply_immediately: false,
+            provisioning_mode: Default::default(),
+            blueprint_db_hostname: None,
         }],
         applications: vec![
             Application {
