@@ -122,6 +122,8 @@ run = '''
   json="${usage_json:?Provide a BlueprintEngineRequest JSON path, e.g.: mise run blueprint:run-local /tmp/req.json}"
   [ -f "$json" ] || { echo "ERROR: $json not found" >&2; exit 1; }
 
+  cargo build --manifest-path app/Cargo.toml --bin engine_post_renderer
+
   BIN_VERSION_FILE="{{config_root}}/docker/bin_versions" \
   DEPLOY_FROM_FILE_KIND=blueprint \
   DEPLOY_FROM_FILE="$json" \

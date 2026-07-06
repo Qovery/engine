@@ -41,7 +41,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
@@ -1456,12 +1456,10 @@ where
                     }
                 };
 
-                thread::sleep(Duration::from_secs(60 * 5));
-
-                // watch for thread termination
-                match rx.try_recv() {
-                    Ok(_) | Err(TryRecvError::Disconnected) => break,
-                    Err(TryRecvError::Empty) => {}
+                // Wait for task completion while keeping the periodic progress message cadence.
+                match rx.recv_timeout(Duration::from_secs(60 * 5)) {
+                    Ok(_) | Err(RecvTimeoutError::Disconnected) => break,
+                    Err(RecvTimeoutError::Timeout) => {}
                 }
             }
         });
