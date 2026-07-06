@@ -5,6 +5,7 @@ import tempfile
 import unittest
 import json
 import base64
+import urllib.parse
 from io import StringIO
 from unittest.mock import patch, MagicMock
 
@@ -16,6 +17,7 @@ from ci_release_ai_check import (
     _apply_severity_overrides, _reconcile_verdict_severity,
     parse_qovery_cluster_names, QOVERY_ORGS,
     _grafana_url, normalize_diff, fingerprint_and_group,
+    strip_engine_version_upgrade_lines, extract_sample_diff, is_silenced_finding,
 )
 
 
@@ -189,6 +191,31 @@ class TestNormalizeDiff(unittest.TestCase):
         result = normalize_diff(text)
         self.assertNotIn("\n\n\n", result)
         self.assertIn("line1\n\nline2\n\nline3", result)
+
+    def test_replaces_eks_oidc_provider_ids(self):
+        # IRSA trust-policy diffs embed the bare OIDC issuer URL in Condition keys
+        # (not an ARN, so the ARN pattern never sees it). The 32-char uppercase ID
+        # is per-cluster and must normalize, or the same trust-policy change on N
+        # clusters produces N distinct fingerprints.
+        text = '"oidc.eks.eu-west-1.amazonaws.com/id/0E2C7B4E8A1DC3F5B6A7D8E9F0A1B2C3:sub"'
+        result = normalize_diff(text)
+        self.assertNotIn("0E2C7B4E8A1DC3F5B6A7D8E9F0A1B2C3", result)
+        self.assertIn("/id/<OIDC_ID>", result)
+
+    def test_same_trust_policy_change_different_oidc_ids_normalize_identically(self):
+        def trust_diff(oidc_id, account):
+            return (
+                '~ resource "aws_iam_role" "iam_eks_prometheus" {\n'
+                '    ~ assume_role_policy = jsonencode({\n'
+                f'        "oidc.eks.eu-west-1.amazonaws.com/id/{oidc_id}:aud" = "sts.amazonaws.com"\n'
+                f'      ~ "oidc.eks.eu-west-1.amazonaws.com/id/{oidc_id}:sub" = "system:serviceaccount:prometheus:kube-prometheus-stack-prometheus"\n'
+                f'        Federated = "arn:aws:iam::{account}:oidc-provider/oidc.eks.eu-west-1.amazonaws.com/id/{oidc_id}"\n'
+                '    })\n'
+                '}'
+            )
+        a = trust_diff("0E2C7B4E8A1DC3F5B6A7D8E9F0A1B2C3", "111122223333")
+        b = trust_diff("9F8E7D6C5B4A39281706F5E4D3C2B1A0", "444455556666")
+        self.assertEqual(normalize_diff(a), normalize_diff(b))
 
     def test_clusters_with_same_structure_different_ids_group_together(self):
         diff_a = (
@@ -373,6 +400,64 @@ class TestQueryLoki(unittest.TestCase):
         self.assertTrue(truncated)
         self.assertEqual(len(logs.splitlines()), LOKI_LIMIT)
 
+    def _make_multistream_response(self, streams):
+        """Helper: build a Loki response with one stream per [(ts, line), ...] list."""
+        body = json.dumps({
+            "status": "success",
+            "data": {
+                "resultType": "streams",
+                "result": [
+                    {"stream": {"container": "qovery-engine"},
+                     "values": [[str(ts), line] for ts, line in entries]}
+                    for entries in streams
+                ],
+            },
+        }).encode()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        return mock_resp
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_lines_sorted_by_timestamp_across_streams(self, mock_urlopen):
+        # The ingestion pipeline labels each line with its message content, so Loki
+        # splits nearly every line into its own stream and returns streams sorted by
+        # label set (i.e. alphabetically by content), not by time. Concatenating
+        # streams as-is scrambles the terraform plan; output must follow timestamps.
+        mock_urlopen.return_value = self._make_multistream_response([
+            [(3000, "      ~ id = (known after apply)")],
+            [(2000, "-/+ resource \"null_resource\" \"x\" {")],
+            [(1000, "Terraform will perform the following actions:")],
+            [(4000, "    }")],
+        ])
+        logs, _ = query_loki("cluster-1", "user", "pass", 0, 1)
+        self.assertEqual(logs.splitlines(), [
+            "Terraform will perform the following actions:",
+            "-/+ resource \"null_resource\" \"x\" {",
+            "      ~ id = (known after apply)",
+            "    }",
+        ])
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_pagination_resumes_after_max_timestamp_of_page(self, mock_urlopen):
+        # With unsorted streams, the last entry of a full page is NOT the newest one;
+        # resuming from it would re-fetch (duplicate) or skip lines. The next page
+        # must start right after the page's maximum timestamp.
+        half = LOKI_LIMIT // 2
+        late_stream = [(10_000 + i, f"late {i}") for i in range(half)]
+        early_stream = [(1_000 + i, f"early {i}") for i in range(LOKI_LIMIT - half)]
+        empty_page = self._make_multistream_response([])
+        mock_urlopen.side_effect = [
+            self._make_multistream_response([late_stream, early_stream]),
+            empty_page,
+        ]
+        query_loki("cluster-1", "user", "pass", 0, 1)
+        second_url = mock_urlopen.call_args[0][0].full_url
+        params = urllib.parse.parse_qs(urllib.parse.urlparse(second_url).query)
+        max_ts = late_stream[-1][0]
+        self.assertEqual(params["start"], [str(max_ts + 1)])
+
     @patch("ci_release_ai_check.urllib.request.urlopen")
     def test_returns_not_truncated_when_under_limit(self, mock_urlopen):
         values = [[str(i), f"log line {i}"] for i in range(10)]
@@ -387,6 +472,154 @@ class TestQueryLoki(unittest.TestCase):
         logs, truncated = query_loki("cluster-1", "user", "pass", 0, 1)
         self.assertFalse(truncated)
         self.assertEqual(len(logs.splitlines()), 10)
+
+
+class TestExtractSampleDiff(unittest.TestCase):
+    PLAN_LOGS = "\n".join([
+        '[terraform] aws_iam_role.eks_workers: Refreshing state... [id=qovery-eks-workers-z123]',
+        '[terraform] data.aws_caller_identity.current: Read complete after 0s [id=1]',
+        '[terraform] data.aws_eks_cluster.cluster: Reading...',
+        '[terraform] Terraform will perform the following actions:',
+        '[terraform] ',
+        '[terraform]   # aws_iam_role.iam_eks_prometheus will be updated in-place',
+        '[terraform]   ~ resource "aws_iam_role" "iam_eks_prometheus" {',
+        '[terraform]       ~ assume_role_policy = jsonencode(',
+        '[terraform]                                 # (1 unchanged attribute hidden)',
+        '[terraform]     }',
+        '[terraform] ',
+        '[terraform]   # aws_s3_bucket_policy.loki_bucket_policy will be updated in-place',
+        '[terraform]   ~ resource "aws_s3_bucket_policy" "loki_bucket_policy" {',
+        '[terraform]     }',
+        '[terraform] Plan: 0 to add, 2 to change, 0 to destroy.',
+    ])
+
+    def test_returns_block_for_finding_resource(self):
+        sample = extract_sample_diff(self.PLAN_LOGS, "aws_iam_role.iam_eks_prometheus")
+        self.assertIn("# aws_iam_role.iam_eks_prometheus will be updated in-place", sample)
+        self.assertIn("assume_role_policy", sample)
+        # inner '# (...)' annotations stay inside the block
+        self.assertIn("(1 unchanged attribute hidden)", sample)
+        # other resources and refresh noise excluded
+        self.assertNotIn("loki_bucket_policy", sample)
+        self.assertNotIn("Refreshing state", sample)
+
+    def test_multiple_resources_capture_all_blocks(self):
+        sample = extract_sample_diff(
+            self.PLAN_LOGS,
+            "aws_iam_role.iam_eks_prometheus / aws_s3_bucket_policy.loki_bucket_policy",
+        )
+        self.assertIn("# aws_iam_role.iam_eks_prometheus", sample)
+        self.assertIn("# aws_s3_bucket_policy.loki_bucket_policy", sample)
+
+    def test_unknown_resource_falls_back_to_plan_section(self):
+        sample = extract_sample_diff(self.PLAN_LOGS, "aws_eks_cluster.does_not_exist")
+        self.assertTrue(sample.splitlines()[0].endswith("Terraform will perform the following actions:"))
+        self.assertNotIn("Refreshing state", sample)
+
+    def test_empty_resource_falls_back_to_plan_section(self):
+        sample = extract_sample_diff(self.PLAN_LOGS, "")
+        self.assertTrue(sample.splitlines()[0].endswith("Terraform will perform the following actions:"))
+
+    def test_no_plan_marker_falls_back_to_noise_stripped_head(self):
+        logs = "\n".join([
+            '[terraform] aws_iam_role.eks_workers: Refreshing state... [id=x]',
+            '[helm] some helm diff line',
+        ])
+        sample = extract_sample_diff(logs, "")
+        self.assertEqual(sample, "[helm] some helm diff line")
+
+    def test_output_capped_at_max_chars(self):
+        long_logs = self.PLAN_LOGS + "\n" + "\n".join(
+            f'[terraform] filler line {i} ' + "x" * 80 for i in range(50)
+        )
+        sample = extract_sample_diff(long_logs, "")
+        self.assertLessEqual(len(sample), 2000)
+
+
+class TestStripEngineVersionUpgradeLines(unittest.TestCase):
+    # Every release dry-run bumps the qovery_deployed_with_engine_version output on
+    # every cluster, so upgrade lines are pure noise for the analysis. Downgrades are
+    # kept: they are unexpected and must reach the model.
+    def test_removes_upgrade_line(self):
+        text = (
+            "[terraform] Changes to Outputs:\n"
+            '[terraform]   ~ qovery_deployed_with_engine_version = "v1.312.0" -> "v1.315.2"\n'
+            "[terraform] Plan: 0 to add, 1 to change, 0 to destroy."
+        )
+        result = strip_engine_version_upgrade_lines(text)
+        self.assertNotIn("qovery_deployed_with_engine_version", result)
+        self.assertIn("Changes to Outputs:", result)
+        self.assertIn("Plan: 0 to add", result)
+
+    def test_keeps_downgrade_line(self):
+        text = '[terraform]   ~ qovery_deployed_with_engine_version = "v1.315.2" -> "v1.312.0"'
+        self.assertEqual(strip_engine_version_upgrade_lines(text), text)
+
+    def test_handles_extra_alignment_spaces(self):
+        # Azure clusters render the output with alignment padding
+        text = '[terraform]   ~ qovery_deployed_with_engine_version     = "v1.312.0" -> "v1.315.2"'
+        self.assertEqual(strip_engine_version_upgrade_lines(text), "")
+
+    def test_multi_digit_version_components_compared_numerically(self):
+        # v1.9.0 -> v1.10.0 is an upgrade even though "10" < "9" as a string
+        text = '[terraform]   ~ qovery_deployed_with_engine_version = "v1.9.0" -> "v1.10.0"'
+        self.assertEqual(strip_engine_version_upgrade_lines(text), "")
+
+    def test_leaves_other_lines_untouched(self):
+        text = '[terraform]   ~ engine_version = "1.29" -> "1.30"'
+        self.assertEqual(strip_engine_version_upgrade_lines(text), text)
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_query_loki_strips_upgrade_lines(self, mock_urlopen):
+        values = [
+            ["1000", "[terraform] Changes to Outputs:"],
+            ["2000", '[terraform]   ~ qovery_deployed_with_engine_version = "v1.312.0" -> "v1.315.2"'],
+        ]
+        fake_response = MagicMock()
+        fake_response.read.return_value = json.dumps({
+            "data": {"result": [{"values": values}]}
+        }).encode()
+        fake_response.__enter__ = lambda s: s
+        fake_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = fake_response
+
+        logs, _ = query_loki("cluster-1", "user", "pass", 0, 1)
+        self.assertNotIn("qovery_deployed_with_engine_version", logs)
+
+
+class TestSilencedFindings(unittest.TestCase):
+    # set_subnetwork_vpc_log_flow replaces on EVERY apply (always_run = timestamp()),
+    # so a finding about it appears in every release report. Silence it entirely:
+    # the prompt tells the model not to report it, and this filter is the
+    # deterministic backstop for when the model reports it anyway.
+    def test_silences_finding_by_resource(self):
+        f = {"resource": "null_resource.set_subnetwork_vpc_log_flow",
+             "title": "Expected replacement of VPC flow log null_resource"}
+        self.assertTrue(is_silenced_finding(f))
+
+    def test_silences_finding_by_title_when_resource_missing(self):
+        f = {"resource": "",
+             "title": "Routine replacement of set_subnetwork_vpc_log_flow null_resource"}
+        self.assertTrue(is_silenced_finding(f))
+
+    def test_keeps_other_null_resource_findings(self):
+        f = {"resource": "null_resource.autoscaling_suspend_workers_nodes_1",
+             "title": "null_resource replacement with side effects"}
+        self.assertFalse(is_silenced_finding(f))
+
+    @patch("ci_release_ai_check.urllib.request.urlopen")
+    def test_prompt_tells_model_not_to_report_silenced_resource(self, mock_urlopen):
+        fake_response = MagicMock()
+        fake_response.read.return_value = json.dumps({
+            "content": [{"type": "text", "text": '{"severity":"info","findings":[]}'}]
+        }).encode()
+        fake_response.__enter__ = lambda s: s
+        fake_response.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = fake_response
+        analyze_with_claude("logs", "key")
+        prompt_text = json.loads(mock_urlopen.call_args[0][0].data)["messages"][0]["content"]
+        self.assertIn("set_subnetwork_vpc_log_flow", prompt_text)
+        self.assertIn("Do NOT emit a finding", prompt_text)
 
 
 class TestAnalyzeWithClaude(unittest.TestCase):

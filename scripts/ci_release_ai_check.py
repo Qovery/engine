@@ -78,6 +78,10 @@ NORMALIZE_PATTERNS = [
     (re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE), "<UUID>"),
     # 40-char hex hashes (git SHAs, container image tags)
     (re.compile(r'\b[0-9a-f]{40}\b'), "<HASH>"),
+    # EKS OIDC provider IDs (oidc.eks.<region>.amazonaws.com/id/<32 uppercase chars>);
+    # appears as a bare URL in IRSA trust-policy Condition keys, where the ARN pattern
+    # cannot catch it
+    (re.compile(r'/id/[A-Z0-9]{32}\b'), "/id/<OIDC_ID>"),
     # Qovery cluster short IDs (z + first 8 hex chars of UUID, e.g. za0829ee2)
     (re.compile(r'\bz[0-9a-f]{8,9}\b'), "<ZCLUSTER>"),
     # AWS resource IDs (igw-xxx, nat-xxx, pcx-xxx, sg-xxx, subnet-xxx, etc.)
@@ -113,6 +117,104 @@ STRIP_LINE_PATTERNS = [
 
 # Prefix added by the LogQL line_format — stripped for fingerprinting, kept for analysis
 SOURCE_TAG_PATTERN = re.compile(r'^\[(terraform|helm)\] ', re.MULTILINE)
+
+# Output-change line for the deployed engine version, e.g.
+#   ~ qovery_deployed_with_engine_version = "v1.312.0" -> "v1.315.2"
+ENGINE_VERSION_OUTPUT_PATTERN = re.compile(
+    r'~ qovery_deployed_with_engine_version\s*=\s*"v?(\d+)\.(\d+)\.(\d+)" -> "v?(\d+)\.(\d+)\.(\d+)"'
+)
+
+
+def strip_engine_version_upgrade_lines(text: str) -> str:
+    """Drop qovery_deployed_with_engine_version output changes that are upgrades.
+
+    Every release dry-run bumps this output on every cluster, so upgrade lines are
+    pure noise that pollutes findings and wastes analysis tokens. Downgrade lines are
+    kept: a rollback is unexpected and must reach the model.
+    """
+    lines = []
+    for line in text.splitlines():
+        m = ENGINE_VERSION_OUTPUT_PATTERN.search(line)
+        if m:
+            old = tuple(map(int, m.groups()[:3]))
+            new = tuple(map(int, m.groups()[3:]))
+            if new >= old:
+                continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+SAMPLE_DIFF_MAX_CHARS = 2000
+PLAN_ACTIONS_MARKER = "Terraform will perform the following actions:"
+# Top-level plan resource comments (`  # <address> will be ...`) — exactly two spaces
+# after the source tag, so deeper-indented annotations like `# (1 unchanged attribute
+# hidden)` don't match.
+PLAN_RESOURCE_COMMENT = re.compile(r'^\[\w+\]   # \S')
+PLAN_FOOTER = re.compile(r'^\[\w+\] (Plan:|Changes to Outputs:)')
+# State-refresh chatter stripped from samples (superset of the fingerprint patterns,
+# which don't need to catch `Reading...` because it carries no cluster-specific noise).
+SAMPLE_STRIP_PATTERNS = [re.compile(r': (Refreshing state|Reading)\.\.\.'), re.compile(r'Read complete after')]
+
+
+def _resource_block(lines: list, address: str) -> str:
+    """Return the plan block for a resource address, or '' when absent."""
+    start = None
+    for i, line in enumerate(lines):
+        if PLAN_RESOURCE_COMMENT.match(line) and f"# {address} " in line:
+            start = i
+            break
+    if start is None:
+        return ""
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if PLAN_RESOURCE_COMMENT.match(lines[j]) or PLAN_FOOTER.match(lines[j]):
+            end = j
+            break
+    block = lines[start:end]
+    while block and not block[-1].split("]", 1)[-1].strip():
+        block.pop()
+    return "\n".join(block)
+
+
+def extract_sample_diff(logs: str, resource: str = "") -> str:
+    """Return the plan section most relevant to a finding, for the verbose report.
+
+    Prefers the plan block(s) of the finding's resource address(es); falls back to
+    everything from the 'Terraform will perform...' marker, then to the head of the
+    logs. State-refresh chatter is always dropped, and the result is capped at
+    SAMPLE_DIFF_MAX_CHARS.
+    """
+    lines = [
+        l for l in logs.splitlines()
+        if not any(p.search(l) for p in SAMPLE_STRIP_PATTERNS)
+    ]
+
+    if resource:
+        blocks = [
+            block
+            for address in re.split(r'\s*/\s*|\s*,\s*', resource)
+            if address and (block := _resource_block(lines, address))
+        ]
+        if blocks:
+            return "\n".join(blocks)[:SAMPLE_DIFF_MAX_CHARS]
+
+    for i, line in enumerate(lines):
+        if PLAN_ACTIONS_MARKER in line:
+            return "\n".join(lines[i:])[:SAMPLE_DIFF_MAX_CHARS]
+    return "\n".join(lines)[:SAMPLE_DIFF_MAX_CHARS]
+
+
+# Resources whose plan changes are pure per-apply noise (always_run = timestamp()
+# forces a replacement on EVERY apply), so a finding about them would show up in every
+# release report. The analysis prompt tells the model not to report them; this list
+# drives the deterministic backstop filter for when it reports them anyway.
+SILENCED_RESOURCE_TOKENS = ("set_subnetwork_vpc_log_flow",)
+
+
+def is_silenced_finding(finding: dict) -> bool:
+    """True when the finding is about a resource that is silenced as per-apply noise."""
+    haystack = f'{finding.get("resource", "")} {finding.get("title", "")}'
+    return any(token in haystack for token in SILENCED_RESOURCE_TOKENS)
 
 
 def normalize_diff(text: str) -> str:
@@ -309,6 +411,12 @@ def _query_loki_page(logql: str, auth_header: str, start_ns: int, end_ns: int) -
     for stream in data.get("data", {}).get("result", []):
         for ts, line in stream.get("values", []):
             entries.append((int(ts), line))
+    # The ingestion pipeline labels each line with its message content, so Loki splits
+    # nearly every line into its own stream and orders streams by label set — i.e.
+    # alphabetically by content, not chronologically. Sort to restore the real log
+    # order; this also makes entries[-1] the page's max timestamp, which pagination
+    # relies on to resume without skipping or duplicating lines.
+    entries.sort(key=lambda e: e[0])
     return entries
 
 
@@ -353,7 +461,7 @@ def query_loki(
         current_start = entries[-1][0] + 1
 
     lines = [line for _, line in all_entries]
-    return "\n".join(lines), truncated
+    return strip_engine_version_upgrade_lines("\n".join(lines)), truncated
 
 
 def _merge_usage(dst: dict, src: dict) -> None:
@@ -488,7 +596,8 @@ def analyze_with_claude(logs: str, api_key: str, usage_acc: dict = None, cluster
             f"- Tag-only changes (metadata)\n"
             f"- null_resource.set_subnetwork_vpc_log_flow replacements: this resource uses "
             f"always_run = timestamp() intentionally — it always replaces on every apply and "
-            f"only reconfigures GCP VPC flow logs via gcloud commands. Classify as info.\n"
+            f"only reconfigures GCP VPC flow logs via gcloud commands. Do NOT emit a finding "
+            f"for it at all; pretend the resource is absent from the plan.\n"
             f"- null_resource.autoscaling_suspend_workers_nodes_* replacements: this resource uses "
             f"always_run = timestamp() intentionally — it always replaces on every apply and "
             f"only suspends AZRebalance on the EKS node group autoscaling group, which is harmless. Classify as info.\n\n"
@@ -732,9 +841,12 @@ def main(
                 "action": f.get("action", "review"),
                 "affected_clusters": cluster_ids_for_group,
                 "grafana_url": _grafana_url(cluster_ids_for_group[0], start_ns, end_ns) if cluster_ids_for_group else "",
-                "sample_diff": r["group"]["representative_logs"][:2000] if r["group"].get("representative_logs") else "",
+                "sample_diff": extract_sample_diff(
+                    r["group"].get("representative_logs", ""), f.get("resource", "")
+                ),
             })
 
+    findings = [f for f in findings if not is_silenced_finding(f)]
     findings = merge_findings(findings)
     for new_id, f in enumerate(findings):
         f["id"] = new_id

@@ -68,16 +68,26 @@ def _normalize_title(title: str) -> str:
 
 
 def finding_group_key(finding: dict) -> tuple:
-    """Grouping key: (source, normalized title).
+    """Grouping key: (source, category, resource) when the finding names a resource,
+    else (source, normalized title).
 
-    Keying on the normalized title means the SAME issue recurring across clusters
-    merges (cluster-specific tokens are stripped), while DIFFERENT issues stay
-    distinct. A category-based key would fold unrelated findings together (e.g. an
-    HTTPS bucket policy and an IAM permission removal), and the merge would then
-    silently drop all but the largest — hiding real findings. Over-separating is a
-    far safer failure mode for a safety tool than silently dropping a finding.
+    Titles are LLM prose: independent analysis calls paraphrase the SAME issue
+    ("modified"/"update"/"expanded"/"narrowed"...), so a title-only key left dozens
+    of near-duplicate findings for one change. The resource address + category pair
+    is model-stable across paraphrases and still issue-specific: two different
+    resources, or two different kinds of change to the same resource, keep distinct
+    keys. A category-only key would fold unrelated findings together (e.g. an HTTPS
+    bucket policy and an IAM permission removal) — over-separating is a far safer
+    failure mode for a safety tool than silently dropping a finding, which is also
+    why findings without a resource attribution fall back to the normalized title
+    rather than merging with each other. The leading discriminator keeps the two
+    key shapes from ever colliding.
     """
-    return (finding.get("source", ""), _normalize_title(finding.get("title", "")))
+    source = finding.get("source", "")
+    resource = finding.get("resource", "")
+    if resource:
+        return ("resource", source, finding.get("category", ""), resource)
+    return ("title", source, _normalize_title(finding.get("title", "")))
 
 
 def merge_findings(findings: list) -> list:
@@ -114,14 +124,10 @@ def merge_findings(findings: list) -> list:
         rep = max(members, key=lambda m: (
             _SEVERITY_RANK.get(m.get("severity"), 0), len(m["affected_clusters"]),
         ))
-        # Aggregate every distinct affected resource (representative's first), rather than
-        # keeping only one: the group key strips resource-identifying tokens, so members
-        # can name DIFFERENT real resources. Dropping all but one would silently hide
-        # co-affected resources — the exact thing the new resource field exists to surface.
-        resources = list(dict.fromkeys(
-            m.get("resource", "") for m in [rep, *members] if m.get("resource", "")
-        ))
-        merged.append({**rep, "affected_clusters": clusters, "resource": ", ".join(resources)})
+        # Group members share their resource by construction (it is part of the key,
+        # and title-keyed members all have an empty one), so the representative's
+        # resource is the group's resource — no aggregation needed.
+        merged.append({**rep, "affected_clusters": clusters})
     return sorted(merged, key=lambda g: len(g["affected_clusters"]), reverse=True)
 
 
@@ -326,14 +332,18 @@ class DefaultRenderer(Renderer):
                 sev_findings = merge_findings(raw)
             self._write()
             self._write(section_title)
-            for f in sev_findings:
+            for i, f in enumerate(sev_findings):
+                if i:
+                    self._write()
                 self._render_finding_detail(f)
 
         info_findings = merge_findings([f for f in findings if f["severity"] == "info"])
         if info_findings:
             self._write()
             self._write("Info findings")
-            for f in info_findings:
+            for i, f in enumerate(info_findings):
+                if i:
+                    self._write()
                 self._render_finding_info(f)
 
     def _source_tag(self, finding: dict) -> str:

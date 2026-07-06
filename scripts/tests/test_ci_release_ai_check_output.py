@@ -60,31 +60,81 @@ class TestGroupKey(unittest.TestCase):
         helm = finding_group_key(_finding(title="same words", source="helm"))
         self.assertNotEqual(tf, helm)
 
+    def test_same_resource_and_category_paraphrased_titles_same_key(self):
+        # The regression: independent Claude calls paraphrase the same issue
+        # ("modified"/"update"/"expanded"/"narrowed"...), so a title-based key left
+        # ~50 near-duplicate findings for ONE trust-policy change. When the model
+        # attributes a finding to a concrete resource, key on that instead of prose.
+        a = finding_group_key(_finding(title="IAM trust policy modified for Prometheus IRSA role",
+                                       resource="aws_iam_role.iam_eks_prometheus", category="iam_change"))
+        b = finding_group_key(_finding(title="IAM trust policy update for Prometheus/Thanos IRSA role",
+                                       resource="aws_iam_role.iam_eks_prometheus", category="iam_change"))
+        self.assertEqual(a, b)
+
+    def test_same_resource_different_category_distinct_keys(self):
+        a = finding_group_key(_finding(resource="aws_iam_role.x", category="iam_change"))
+        b = finding_group_key(_finding(resource="aws_iam_role.x", category="resource_deletion"))
+        self.assertNotEqual(a, b)
+
+    def test_resource_key_source_still_matters(self):
+        tf = finding_group_key(_finding(resource="cert-manager", category="helm_values", source="terraform"))
+        helm = finding_group_key(_finding(resource="cert-manager", category="helm_values", source="helm"))
+        self.assertNotEqual(tf, helm)
+
+    def test_resource_key_and_title_key_never_collide(self):
+        # A resource string that happens to equal another finding's normalized title
+        # must not fold the two findings together.
+        by_resource = finding_group_key(_finding(title="anything", resource="same words", category="other"))
+        by_title = finding_group_key(_finding(title="same words", resource=""))
+        self.assertNotEqual(by_resource, by_title)
+
 
 class TestMergeFindings(unittest.TestCase):
-    def test_unions_clusters_and_aggregates_resources(self):
+    def test_merges_paraphrased_findings_on_same_resource(self):
         merged = merge_findings([
-            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"], resource="aws_s3.small"),
-            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2", "c3"], resource="aws_s3.big"),
+            _finding(title="IAM trust policy modified for Prometheus IRSA role", clusters=["c1"],
+                     resource="aws_iam_role.iam_eks_prometheus", category="iam_change"),
+            _finding(title="IAM trust policy update for Prometheus IRSA role", clusters=["c2", "c3"],
+                     resource="aws_iam_role.iam_eks_prometheus", category="iam_change"),
+            _finding(title="IAM role trust policy expanded for Thanos service accounts", clusters=["c4"],
+                     resource="aws_iam_role.iam_eks_prometheus", category="iam_change"),
+        ])
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(sorted(merged[0]["affected_clusters"]), ["c1", "c2", "c3", "c4"])
+        self.assertEqual(merged[0]["resource"], "aws_iam_role.iam_eks_prometheus")
+
+    def test_different_resources_stay_separate_even_with_same_title(self):
+        # Over-separation is the safe failure mode: two resources sharing a title are
+        # two findings, each keeping its own resource attribution.
+        merged = merge_findings([
+            _finding(title="S3 bucket encryption updated", clusters=["c1"], resource="aws_s3.loki"),
+            _finding(title="S3 bucket encryption updated", clusters=["c2", "c3"], resource="aws_s3.prometheus"),
+        ])
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(merged[0]["resource"], "aws_s3.prometheus")  # largest group first
+        self.assertEqual(merged[1]["resource"], "aws_s3.loki")
+
+    def test_unions_clusters_across_paraphrased_titles_without_resource(self):
+        # Findings with no resource attribution still merge via the normalized title.
+        merged = merge_findings([
+            _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"]),
+            _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2", "c3"]),
         ])
         self.assertEqual(len(merged), 1)
         self.assertEqual(sorted(merged[0]["affected_clusters"]), ["c1", "c2", "c3"])
-        # both distinct resources reported (representative/larger first), not just one
-        self.assertEqual(merged[0]["resource"], "aws_s3.big, aws_s3.small")
 
-    def test_resources_deduped_and_empty_dropped(self):
-        # Different resources under one normalized title are all surfaced; the rep's
-        # resource comes first, duplicates collapse, empty strings are dropped.
+    def test_mixed_resource_and_no_resource_split_but_same_resource_merges(self):
+        # Same resource+category merges regardless of title wording; the member with
+        # no resource attribution keys by title and stays its own finding.
         merged = merge_findings([
             _finding(severity="critical", title="kms key deletion", clusters=["c1"], resource="aws_kms.a"),
-            _finding(severity="review", title="kms key deletion", clusters=["c2", "c3"], resource="aws_kms.b"),
+            _finding(severity="review", title="kms key being removed", clusters=["c2", "c3"], resource="aws_kms.a"),
             _finding(severity="review", title="kms key deletion", clusters=["c4"], resource=""),
-            _finding(severity="review", title="kms key deletion", clusters=["c5"], resource="aws_kms.a"),
         ])
-        self.assertEqual(len(merged), 1)
-        self.assertEqual(merged[0]["severity"], "critical")
-        # rep is the critical member -> aws_kms.a first; aws_kms.b included; "" dropped; dup collapsed
-        self.assertEqual(merged[0]["resource"], "aws_kms.a, aws_kms.b")
+        self.assertEqual(len(merged), 2)
+        by_resource = next(f for f in merged if f["resource"] == "aws_kms.a")
+        self.assertEqual(by_resource["severity"], "critical")
+        self.assertEqual(sorted(by_resource["affected_clusters"]), ["c1", "c2", "c3"])
 
     def test_distinct_issues_stay_separate_sorted_by_size(self):
         merged = merge_findings([
@@ -124,11 +174,11 @@ class TestMergeFindings(unittest.TestCase):
         # No Frankenstein merge: single-valued metadata (grafana_url, severity, category)
         # all come from the same representative member, so they never contradict the shown
         # text. (Resources are the exception — aggregated across members by design.)
-        first = _finding(title="HTTPS policy on qovery-logs-za0829ee2", clusters=["c1"],
-                         resource="aws_s3.small")
+        first = _finding(title="HTTPS policy tightened on logs bucket", clusters=["c1"],
+                         resource="aws_s3.logs")
         first["grafana_url"] = "https://grafana/small"
-        larger = _finding(title="HTTPS policy on qovery-logs-zeb1bc33b", clusters=["c2", "c3"],
-                          resource="aws_s3.big")
+        larger = _finding(title="HTTPS-only policy enforced on logs bucket", clusters=["c2", "c3"],
+                          resource="aws_s3.logs")
         larger["grafana_url"] = "https://grafana/big"
         merged = merge_findings([first, larger])
         self.assertEqual(len(merged), 1)
@@ -330,6 +380,17 @@ class TestDefaultRenderer(unittest.TestCase):
         output = self._render()
         self.assertIn("Cluster-agent image update", output)
         self.assertIn("cluster-c", output)
+
+    def test_blank_line_between_findings(self):
+        report = dict(SAMPLE_REPORT)
+        report["findings"] = [
+            _finding(title="First review issue", severity="review", clusters=["c1"]),
+            _finding(title="Second review issue", severity="review", clusters=["c2"]),
+        ]
+        output = self._render(report)
+        lines = output.splitlines()
+        idx = next(i for i, l in enumerate(lines) if "Second review issue" in l)
+        self.assertEqual(lines[idx - 1], "")
 
     def test_unknown_section_shows_no_log_clusters(self):
         output = self._render()
