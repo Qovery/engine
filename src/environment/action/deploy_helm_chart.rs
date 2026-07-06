@@ -2,6 +2,9 @@ use crate::infrastructure::models::build_platform::{Credentials, SshKey};
 
 use crate::cmd::command::CommandKiller;
 use crate::cmd::git;
+use crate::environment::action::deploy_external_secrets::{
+    clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
+};
 use crate::environment::action::pause_service::PauseServiceAction;
 use crate::environment::action::restart_service::RestartServiceAction;
 use crate::environment::action::{DeploymentAction, K8sResourceType};
@@ -16,24 +19,22 @@ use crate::helm::{ChartInfo, HelmChartError};
 use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::{Action, Service};
 use crate::io_models::variable_utils::VariableInfo;
+use crate::runtime::block_on;
 use anyhow::anyhow;
 use git2::{Cred, CredentialType};
 use itertools::Itertools;
+use k8s_openapi::api::core::v1::ConfigMap;
+use kube::Api;
 use kube::api::{DeleteParams, PartialObjectMeta, Patch, PatchParams};
+use regex::Regex;
 use serde::Deserialize;
+use serde_json::json;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Write};
-
-use crate::environment::action::deploy_external_secrets::{
-    clean_unused_secrets_generated_by_eso, uninstall_service_external_secret,
-};
-use crate::runtime::block_on;
-use k8s_openapi::api::core::v1::ConfigMap;
-use kube::Api;
-use serde_json::json;
+use std::sync::LazyLock;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -376,9 +377,18 @@ fn replace_qovery_env_variable<'a>(
         };
 
         let needle = &line[beg_pos..];
+        let variable_name =
+            if let Some(end_pos) = needle.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')) {
+                &needle[..end_pos]
+            } else {
+                needle
+            };
+
         // Built-in variable are not allowed because they contain ID in them
         // Which we will not be able to replace during a clone. So use must set an alias or use its own vars
-        if needle[PREFIX.len()..].starts_with("QOVERY_") {
+        static BUILT_IN_VARIABLES_REGEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"QOVERY_.*_Z[A-Z0-9]{8}_").unwrap());
+        if BUILT_IN_VARIABLES_REGEX.is_match(variable_name) {
             return Err(anyhow!(
                 r#"You cannot use Qovery built-in variable in your helm values file because it will break/not being replaced when cloning your helm.
 Please create and use an alias so it can be automatically replaced during clone of the service.
@@ -386,13 +396,6 @@ Faulty line: {}"#,
                 line
             ));
         }
-
-        let variable_name =
-            if let Some(end_pos) = needle.find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.')) {
-                &needle[..end_pos]
-            } else {
-                needle
-            };
 
         let Some(variable_infos) = envs.get(&variable_name[PREFIX.len()..]) else {
             return Err(anyhow!(
@@ -910,7 +913,9 @@ mod tests {
         let envs = hashmap! {
             "TOTO".to_string() => VariableInfo { value: "toto_var".to_string(), is_secret: false},
             "LABEL_NAME".to_string() => VariableInfo {value: "toto_label".to_string(), is_secret: false},
-            "NGNIX_TAG".to_string() => VariableInfo {value: "42".to_string(), is_secret: false}
+            "NGNIX_TAG".to_string() => VariableInfo {value: "42".to_string(), is_secret: false},
+            "QOVERY_KUBERNETES_CLUSTER_NAME".to_string() => VariableInfo {value: "42".to_string(), is_secret: false},
+            "QOVERY_HELM_Z56CA67D2_ENVIRONMENT_NAME".to_string() => VariableInfo {value: "42".to_string(), is_secret: false}
         };
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("    tag: \"qovery.env.NGNIX_TAG\""), &envs);
@@ -929,6 +934,13 @@ mod tests {
         assert!(ret.is_err());
 
         let ret = replace_qovery_env_variable(Cow::Borrowed("qovery.env.QOVERY_"), &envs);
+        assert!(ret.is_err());
+
+        let ret = replace_qovery_env_variable(Cow::Borrowed("qovery.env.QOVERY_KUBERNETES_CLUSTER_NAME"), &envs);
+        assert!(ret.is_ok());
+
+        let ret =
+            replace_qovery_env_variable(Cow::Borrowed("qovery.env.QOVERY_HELM_Z56CA67D2_ENVIRONMENT_NAME"), &envs);
         assert!(ret.is_err());
     }
 
