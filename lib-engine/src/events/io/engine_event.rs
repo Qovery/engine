@@ -195,7 +195,7 @@ impl From<events::EventDetails> for EventDetails {
 mod test {
     use crate::errors::EngineError;
     use crate::events::io;
-    use crate::events::{EngineEvent, EventDetails, InfrastructureStep, Stage, Transmitter};
+    use crate::events::{EngineEvent, EventDetails, EventMessage, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
     use uuid::Uuid;
@@ -230,5 +230,25 @@ mod test {
                 panic!("Panic ! Error: {e}")
             }
         }
+    }
+
+    #[test]
+    fn should_serialize_platform_execution_result_infrastructure_step() {
+        let event = EngineEvent::Info(
+            EventDetails::new(
+                Some(Kind::Scw),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random().to_string(),
+                Stage::Infrastructure(InfrastructureStep::PlatformExecutionResult),
+                Transmitter::Kubernetes(Uuid::new_v4(), "".to_string()),
+            ),
+            EventMessage::new_for_sending_core_data("{}".to_string(), "{}".to_string()),
+        );
+        let event_io = io::EngineEvent::from(event);
+
+        let json = serde_json::to_string(&event_io).expect("event should serialize");
+
+        assert!(json.contains(r#"{"type":"infrastructure","step":"PlatformExecutionResult"}"#));
     }
 }
