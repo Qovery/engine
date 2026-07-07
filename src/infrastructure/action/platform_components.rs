@@ -4,7 +4,7 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, InfrastructureStep};
+use crate::events::{EventDetails, EventMessage, InfrastructureStep};
 use crate::helm::{ChartInfo, ChartValuesGenerated, HelmChartNamespaces};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::container::Registry;
@@ -37,6 +37,7 @@ pub fn deploy_platform_components(
 ) -> Result<(), Box<EngineError>> {
     let kubernetes = infra_ctx.kubernetes();
     let logger = mk_logger(kubernetes, InfrastructureStep::Create);
+    let result_logger = mk_logger(kubernetes, InfrastructureStep::PlatformExecutionResult);
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
 
     let units = request
@@ -64,7 +65,7 @@ pub fn deploy_platform_components(
                 None => PlatformUnitResult::failed(&unit.key, violation.code, &violation.message),
             })
             .collect();
-        write_termination_message(&logger, &request.id, unit_results);
+        write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
         return Err(Box::new(EngineError::new_invalid_engine_payload(
             event_details,
             &violation.message,
@@ -99,7 +100,7 @@ pub fn deploy_platform_components(
                     )
                 })
                 .collect();
-            write_termination_message(&logger, &request.id, unit_results);
+            write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
             return Err(Box::new(EngineError::new_helm_chart_error(event_details, err.into())));
         }
     };
@@ -122,7 +123,7 @@ pub fn deploy_platform_components(
         }
     }
 
-    write_termination_message(&logger, &request.id, unit_results);
+    write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
 
     match first_failure {
         Some(err) => Err(err),
@@ -138,6 +139,7 @@ pub fn fail_unknown_execution_mode(
 
     let kubernetes = infra_ctx.kubernetes();
     let logger = mk_logger(kubernetes, InfrastructureStep::Create);
+    let result_logger = mk_logger(kubernetes, InfrastructureStep::PlatformExecutionResult);
     let event_details = kubernetes.get_event_details(Infrastructure(InfrastructureStep::Create));
 
     let unit_results = request
@@ -149,7 +151,7 @@ pub fn fail_unknown_execution_mode(
         .iter()
         .map(|unit| PlatformUnitResult::failed(&unit.key, PlatformUnitErrorCode::InvalidPayload, MESSAGE))
         .collect();
-    write_termination_message(&logger, &request.id, unit_results);
+    write_platform_execution_result(&logger, &result_logger, &request.id, unit_results);
 
     Box::new(EngineError::new_invalid_engine_payload(event_details, MESSAGE, None))
 }
@@ -270,15 +272,26 @@ fn validate_platform_request(
     Ok(())
 }
 
-fn write_termination_message(logger: &impl InfraLogger, execution_id: &str, units: Vec<PlatformUnitResult>) {
+fn write_platform_execution_result(
+    logger: &impl InfraLogger,
+    result_logger: &impl InfraLogger,
+    execution_id: &str,
+    units: Vec<PlatformUnitResult>,
+) {
     let path = std::env::var("QOVERY_TERMINATION_MESSAGE_PATH")
         .unwrap_or_else(|_| DEFAULT_TERMINATION_MESSAGE_PATH.to_string());
-    for warning in write_termination_message_to(Path::new(&path), execution_id, units) {
+    let (json, warnings) = write_termination_message_to(Path::new(&path), execution_id, units);
+    for warning in warnings {
         logger.warn(warning);
     }
+    result_logger.info(EventMessage::new_for_sending_core_data(json.clone(), json));
 }
 
-fn write_termination_message_to(path: &Path, execution_id: &str, units: Vec<PlatformUnitResult>) -> Vec<String> {
+fn write_termination_message_to(
+    path: &Path,
+    execution_id: &str,
+    units: Vec<PlatformUnitResult>,
+) -> (String, Vec<String>) {
     let mut warnings = Vec::new();
     let mut result = PlatformExecutionResult {
         schema_version: 1,
@@ -305,7 +318,7 @@ fn write_termination_message_to(path: &Path, execution_id: &str, units: Vec<Plat
     if let Err(err) = std::fs::write(path, &json) {
         warnings.push(format!("cannot write the platform execution result to {path:?}: {err}"));
     }
-    warnings
+    (json, warnings)
 }
 
 fn apply_platform_helm_unit(
@@ -580,7 +593,7 @@ mod tests {
     #[test]
     fn termination_message_is_written_as_parseable_json() {
         let path = std::env::temp_dir().join(format!("qovery-termination-test-{}-parseable", std::process::id()));
-        let warnings = write_termination_message_to(
+        let (json, warnings) = write_termination_message_to(
             &path,
             "exec-1",
             vec![
@@ -590,6 +603,7 @@ mod tests {
         );
         assert!(warnings.is_empty(), "unexpected warnings: {warnings:?}");
         let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json, written);
         let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
         assert_eq!(parsed.units.len(), 2);
         let _ = std::fs::remove_file(&path);
@@ -609,9 +623,10 @@ mod tests {
                 )
             })
             .collect();
-        let warnings = write_termination_message_to(&path, "exec-1", units);
+        let (json, warnings) = write_termination_message_to(&path, "exec-1", units);
         assert!(!warnings.is_empty(), "the sentinel fallback must be reported as a warning");
         let written = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(json, written);
         assert!(written.len() <= TERMINATION_MESSAGE_MAX_BYTES);
         let parsed: PlatformExecutionResult = serde_json::from_str(&written).unwrap();
         assert_eq!(parsed.execution_id, "exec-1");

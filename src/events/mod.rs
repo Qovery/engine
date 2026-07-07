@@ -276,6 +276,7 @@ impl Stage {
 
     pub fn is_core_output(&self) -> bool {
         match self {
+            Stage::Infrastructure(InfrastructureStep::PlatformExecutionResult) => true,
             Stage::Infrastructure(_) => false,
             Stage::Blueprint(_) => false,
             Stage::ClusterAnalysis(_) => false,
@@ -347,6 +348,8 @@ pub enum InfrastructureStep {
     GlobalError,
     /// Used during a diff of the infrastructure. ie: terraform, helm, etc.
     InfrastructureDiff(InfrastructureDiffType),
+    /// Structured result for platform-components-only executions.
+    PlatformExecutionResult,
     /// Deployment has started. It is the first message sent by the engine.
     Start,
     /// Deployment is terminated. It is the terminal message sent by the engine
@@ -416,6 +419,7 @@ impl Display for InfrastructureStep {
                 InfrastructureStep::RestartedError => "restart-error",
                 InfrastructureStep::CannotProcessRequest => "cannot-process-request",
                 InfrastructureStep::GlobalError => "global-error",
+                InfrastructureStep::PlatformExecutionResult => "platform-execution-result",
                 InfrastructureStep::InfrastructureDiff(name) => match name {
                     InfrastructureDiffType::Terraform => "infra-diff-terraform",
                     InfrastructureDiffType::Helm => "infra-diff-helm",
@@ -805,6 +809,7 @@ impl EventDetails {
                 | InfrastructureStep::DeleteError
                 | InfrastructureStep::RestartedError
                 | InfrastructureStep::InfrastructureDiff(_)
+                | InfrastructureStep::PlatformExecutionResult
                 | InfrastructureStep::CannotProcessRequest => return,
             },
             Stage::Environment(step) => match step {
@@ -1037,6 +1042,12 @@ mod tests {
             // validate:
             assert_eq!(expected_step_name, result);
         }
+    }
+
+    #[test]
+    fn platform_execution_result_is_core_output() {
+        assert!(Stage::Infrastructure(InfrastructureStep::PlatformExecutionResult).is_core_output());
+        assert!(!Stage::Infrastructure(InfrastructureStep::Create).is_core_output());
     }
 
     #[test]
