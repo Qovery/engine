@@ -305,10 +305,10 @@ where
         }
         DatabaseProvisioningMode::BLUEPRINT => {
             let target_hostname = db.options.blueprint_db_hostname.clone().ok_or_else(|| {
-                Box::new(EngineError::new_missing_required_env_variable(
+                Box::new(EngineError::new_invalid_engine_payload(
                     event_details.clone(),
-                    "blueprint_db_hostname (BLUEPRINT provisioning needs the database endpoint from the blueprint output)"
-                        .to_string(),
+                    "BLUEPRINT database is missing blueprint_db_hostname (the database endpoint sourced from the blueprint's terraform output)",
+                    None,
                 ))
             })?;
             (target_hostname, db.fqdn.clone(), db.fqdn_id.clone())
