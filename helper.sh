@@ -535,9 +535,11 @@ function update_qovery_chart() {
   mkdir -p qovery-chart/charts/qovery
   mkdir -p qovery-chart/charts/qovery-operator
   mkdir -p qovery-chart/charts/qovery-cluster-agent
+  mkdir -p qovery-chart/charts/qovery-shell-agent
   cp -Rf lib-engine/.qovery-workspace/qovery_chart/. qovery-chart/charts/qovery
   cp -Rf lib-engine/.qovery-workspace/qovery_chart/charts/qovery-operator/. qovery-chart/charts/qovery-operator
   cp -Rf lib-engine/.qovery-workspace/qovery_chart/charts/qovery-cluster-agent/. qovery-chart/charts/qovery-cluster-agent
+  cp -Rf lib-engine/.qovery-workspace/qovery_chart/charts/qovery-shell-agent/. qovery-chart/charts/qovery-shell-agent
   cd qovery-chart
   #test $(git diff --shortstat | wc -l) -eq 0 && exit 0
   git config --global user.email "noreply@qovery.com"
