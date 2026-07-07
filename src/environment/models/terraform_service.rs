@@ -71,6 +71,7 @@ pub struct TerraformService<T: CloudProvider> {
     pub(crate) lib_root_directory: String,
     pub(crate) terraform_credentials: TerraformCredentials,
     pub(crate) external_secrets: Vec<ExternalSecretGroup>,
+    pub(crate) aws_apn_id: String,
 }
 
 impl<T: CloudProvider> TerraformService<T> {
@@ -150,6 +151,7 @@ impl<T: CloudProvider> TerraformService<T> {
             lib_root_directory: context.lib_root_dir().to_string(),
             terraform_credentials,
             external_secrets,
+            aws_apn_id: context.aws_apn_id().to_string(),
         })
     }
 
@@ -192,13 +194,31 @@ impl<T: CloudProvider> TerraformService<T> {
     }
 
     pub(crate) fn default_tera_context(&self, target: &DeploymentTarget) -> TerraformServiceTeraContext {
-        let environment_variables = add_cloud_provider_credentials_if_necessary(
+        let mut environment_variables = add_cloud_provider_credentials_if_necessary(
             self.get_environment_variables(),
             &self.terraform_credentials,
             &target.cloud_provider.credentials_environment_variables(),
         );
 
         let environment = target.environment;
+
+        // Expose Qovery infra tags to every terraform service so blueprint-authored resources carry the same tags as the native path.
+        // needed for YACE CloudWatch exporter filters on for DB metrics for example.
+        // Undeclared TF_VAR_* are ignored by terraform, only catalogs that declare these vars use them.
+        environment_variables.extend(qovery_infra_default_tags(
+            target.kubernetes.short_id(),
+            target.kubernetes.long_id(),
+            &environment.organization_long_id,
+            &environment.long_id,
+            &environment.project_id,
+            &environment.project_long_id,
+        ));
+
+        // aws-apn-id is AWS-specific (Marketplace measurement) — only inject on AWS.
+        if target.cloud_provider.kind() == Kind::Aws {
+            environment_variables.push(qovery_tf_var("TF_VAR_qovery_aws_apn_id", &self.aws_apn_id));
+        }
+
         let (image_full, image_name, image_tag) = match &self.terraform_files_source {
             TerraformFilesSource::Git { .. } => (
                 self.build.image.full_image_name_with_tag(),
@@ -382,6 +402,34 @@ fn add_cloud_provider_credentials_if_necessary(
     }
 
     existing_vars
+}
+
+/// One base64-encoded `TF_VAR_*` env var (values land in a Secret `data:` block, hence base64; not secret).
+fn qovery_tf_var(key: &str, value: &str) -> EnvironmentVariable {
+    EnvironmentVariable {
+        key: key.to_string(),
+        value: general_purpose::STANDARD.encode(value),
+        is_secret: false,
+    }
+}
+
+fn qovery_infra_default_tags(
+    cluster_short_id: &str,
+    cluster_long_id: &Uuid,
+    organization_long_id: &Uuid,
+    environment_long_id: &Uuid,
+    project_short_id: &str,
+    project_long_id: &Uuid,
+) -> Vec<EnvironmentVariable> {
+    vec![
+        qovery_tf_var("TF_VAR_qovery_cluster_id", cluster_short_id),
+        qovery_tf_var("TF_VAR_qovery_cluster_long_id", &cluster_long_id.to_string()),
+        qovery_tf_var("TF_VAR_qovery_client_id", &to_short_id(organization_long_id)),
+        qovery_tf_var("TF_VAR_qovery_environment_id", &to_short_id(environment_long_id)),
+        qovery_tf_var("TF_VAR_qovery_environment_long_id", &environment_long_id.to_string()),
+        qovery_tf_var("TF_VAR_qovery_project_id", project_short_id),
+        qovery_tf_var("TF_VAR_qovery_project_long_id", &project_long_id.to_string()),
+    ]
 }
 
 impl<T: CloudProvider> Service for TerraformService<T> {
@@ -655,6 +703,52 @@ mod tests {
             value: base64::encode("secret123"),
             is_secret: true,
         }));
+    }
+
+    #[test]
+    fn test_qovery_infra_default_tags_cover_native_keys_and_are_base64() {
+        let cluster_long = Uuid::new_v4();
+        let org_long = Uuid::new_v4();
+        let env_long = Uuid::new_v4();
+        let project_long = Uuid::new_v4();
+
+        let vars =
+            qovery_infra_default_tags("zcluster1", &cluster_long, &org_long, &env_long, "zproject1", &project_long);
+
+        let by_key: std::collections::HashMap<&str, &EnvironmentVariable> =
+            vars.iter().map(|v| (v.key.as_str(), v)).collect();
+
+        for key in [
+            "TF_VAR_qovery_cluster_id",
+            "TF_VAR_qovery_cluster_long_id",
+            "TF_VAR_qovery_client_id",
+            "TF_VAR_qovery_environment_id",
+            "TF_VAR_qovery_environment_long_id",
+            "TF_VAR_qovery_project_id",
+            "TF_VAR_qovery_project_long_id",
+        ] {
+            assert!(by_key.contains_key(key), "missing {key}");
+        }
+        // aws-apn-id is injected separately (AWS-only), not part of the cloud-agnostic set.
+        assert!(!by_key.contains_key("TF_VAR_qovery_aws_apn_id"));
+        assert_eq!(vars.len(), 7);
+
+        // Values are base64-encoded (they land in a Secret `data:` block) and not marked secret.
+        let decode = |k: &str| String::from_utf8(general_purpose::STANDARD.decode(&by_key[k].value).unwrap()).unwrap();
+        assert_eq!(decode("TF_VAR_qovery_cluster_id"), "zcluster1");
+        assert_eq!(decode("TF_VAR_qovery_cluster_long_id"), cluster_long.to_string());
+        assert!(vars.iter().all(|v| !v.is_secret));
+    }
+
+    #[test]
+    fn test_qovery_tf_var_is_base64_and_not_secret() {
+        let v = qovery_tf_var("TF_VAR_qovery_aws_apn_id", "apn-42");
+        assert_eq!(v.key, "TF_VAR_qovery_aws_apn_id");
+        assert_eq!(
+            String::from_utf8(general_purpose::STANDARD.decode(&v.value).unwrap()).unwrap(),
+            "apn-42"
+        );
+        assert!(!v.is_secret);
     }
 
     #[test]
