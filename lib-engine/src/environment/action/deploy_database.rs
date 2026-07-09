@@ -192,6 +192,22 @@ fn find_redis_cache_cluster_id(
     Ok(cache_cluster_id_or_default)
 }
 
+/// AWS RDS instance identifier used to drive start/stop for a managed DB. BLUEPRINT uses the adopted
+/// instance id (from the blueprint's terraform output); INTERNAL uses fqdn_id (== the native RDS id).
+/// `None` for a BLUEPRINT db missing its identifier — the caller then skips start/stop (graceful).
+fn managed_db_instance_id<'a>(
+    provisioning_mode: &DatabaseProvisioningMode,
+    fqdn_id: &'a str,
+    blueprint_db_identifier: Option<&'a str>,
+) -> Option<&'a str> {
+    match provisioning_mode {
+        // Native: the RDS is named after fqdn_id — why not id or name like everything else ¯\_(ツ)_/¯
+        DatabaseProvisioningMode::INTERNAL => Some(fqdn_id),
+        // Blueprint (fresh or migrated): use the real instance id from the blueprint's db_identifier output.
+        DatabaseProvisioningMode::BLUEPRINT => blueprint_db_identifier,
+    }
+}
+
 fn start_stop_managed_database(
     db_type: service::DatabaseType,
     db_id: &str,
@@ -393,10 +409,20 @@ where
         return Ok(());
     }
 
-    // Blueprint owns the managed database lifecycle — don't touch its running state.
-    if matches!(db.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
-        return Ok(());
-    }
+    // BLUEPRINT uses the adopted instance identifier; INTERNAL uses fqdn_id. A BLUEPRINT db without a
+    // resolvable identifier can't be started here — skip.
+    let db_instance_id = match managed_db_instance_id(
+        &db.options.provisioning_mode,
+        &db.fqdn_id,
+        db.options.blueprint_db_identifier.as_deref(),
+    ) {
+        Some(id) => id,
+        None => {
+            logger
+                .warning("BLUEPRINT database has no blueprint_db_identifier; skipping the RDS start-check".to_string());
+            return Ok(());
+        }
+    };
 
     // Terraform does not ensure that the database is correctly started
     // So we must force it ourselves in case
@@ -407,17 +433,17 @@ where
     };
 
     // If the database is not in the available state, try to start it
-    match get_managed_database_status(db.db_type(), &db.fqdn_id, &credentials) {
+    match get_managed_database_status(db.db_type(), db_instance_id, &credentials) {
         Ok(status) if status == DB_READY_STATE => {}
         Ok(_) | Err(_) => {
-            let _ = start_stop_managed_database(db.db_type(), &db.fqdn_id, &credentials, false);
+            let _ = start_stop_managed_database(db.db_type(), db_instance_id, &credentials, false);
         }
     }
 
     let ret = await_db_state(
         Duration::from_secs(60 * 30),
         db.db_type(),
-        &db.fqdn_id,
+        db_instance_id,
         &credentials,
         DB_READY_STATE,
     );
@@ -607,16 +633,9 @@ where
         let event_details = self.get_event_details(Stage::Environment(EnvironmentStep::Pause));
         execute_long_deployment(
             DatabaseDeploymentReporter::new(self, target, Action::Pause),
-            |_logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
+            |logger: &EnvProgressLogger| -> Result<(), Box<EngineError>> {
                 // We don't manage PAUSE for managed database elsewhere than for AWS
                 if target.cloud_provider.kind() != cloud_provider::Kind::Aws {
-                    return Ok(());
-                }
-
-                // Blueprint owns the managed database lifecycle — pausing the DB service must not stop
-                // the instance. TODO: pause/resume parity (stop/start the instance for blueprint-backed
-                // managed DBs) is a follow-up.
-                if matches!(self.options.provisioning_mode, DatabaseProvisioningMode::BLUEPRINT) {
                     return Ok(());
                 }
 
@@ -625,6 +644,22 @@ where
                     return Ok(());
                 }
 
+                // BLUEPRINT uses the adopted instance identifier; INTERNAL uses fqdn_id. A BLUEPRINT db
+                // without a resolvable identifier can't be stopped — skip.
+                let db_instance_id = match managed_db_instance_id(
+                    &self.options.provisioning_mode,
+                    &self.fqdn_id,
+                    self.options.blueprint_db_identifier.as_deref(),
+                ) {
+                    Some(id) => id,
+                    None => {
+                        logger.warning(
+                            "BLUEPRINT database has no blueprint_db_identifier; skipping stop-db-instance".to_string(),
+                        );
+                        return Ok(());
+                    }
+                };
+
                 // Terraform does not ensure that the database is correctly started
                 // So we must force it ourselves in case
                 let credentials = {
@@ -632,8 +667,7 @@ where
                     credentials.push((AWS_DEFAULT_REGION, target.kubernetes.region()));
                     credentials
                 };
-                // We use the fqdn_id as db identifier, why not id or name like everything else ¯\_(ツ)_/¯
-                start_stop_managed_database(self.db_type(), &self.fqdn_id, &credentials, true).map_err(
+                start_stop_managed_database(self.db_type(), db_instance_id, &credentials, true).map_err(
                     |(cmd_error, msg)| {
                         EngineError::new_cannot_pause_managed_database(
                             event_details.clone(),
@@ -645,7 +679,7 @@ where
                 let ret = await_db_state(
                     Duration::from_secs(60 * 30),
                     self.db_type(),
-                    &self.fqdn_id,
+                    db_instance_id,
                     &credentials,
                     DB_STOPPED_STATE,
                 );
@@ -947,5 +981,29 @@ where
                 restart_service.on_restart(target)
             },
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_db_instance_id_resolves_by_provisioning_mode() {
+        // INTERNAL → fqdn_id (the blueprint identifier, if any, is ignored)
+        assert_eq!(
+            managed_db_instance_id(&DatabaseProvisioningMode::INTERNAL, "fqdn-abc", Some("bp-xyz")),
+            Some("fqdn-abc")
+        );
+        // BLUEPRINT → the adopted instance identifier
+        assert_eq!(
+            managed_db_instance_id(&DatabaseProvisioningMode::BLUEPRINT, "fqdn-abc", Some("bp-xyz")),
+            Some("bp-xyz")
+        );
+        // BLUEPRINT without an identifier → None (caller skips start/stop)
+        assert_eq!(
+            managed_db_instance_id(&DatabaseProvisioningMode::BLUEPRINT, "fqdn-abc", None),
+            None
+        );
     }
 }

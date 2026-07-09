@@ -317,6 +317,7 @@ pub fn environment_2_app_2_routers_1_psql(
             apply_immediately: false,
             provisioning_mode: Default::default(),
             blueprint_db_hostname: None,
+            blueprint_db_identifier: None,
         }],
         applications: vec![
             Application {
