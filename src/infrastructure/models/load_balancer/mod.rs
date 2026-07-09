@@ -47,6 +47,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
         let lb = LoadBalancer::AwsAlb(aws_lb);
@@ -109,6 +110,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -128,6 +130,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         });
         let _gcp = LoadBalancer::Gcp(gcp_load_balancer::GcpLoadBalancer {

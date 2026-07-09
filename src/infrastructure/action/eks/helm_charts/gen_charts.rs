@@ -776,6 +776,7 @@ pub(super) fn eks_helm_charts(
                     load_balancer_scheme: chart_config_prerequisites
                         .cluster_advanced_settings
                         .aws_eks_alb_controller_load_balancer_scheme,
+                    resource_ttl: chart_config_prerequisites.cluster_advanced_settings.resource_ttl(),
                     aws_apn_id: chart_config_prerequisites.aws_apn_id.clone(),
                 }),
                 QoveryClusterGatewayChartOptions {

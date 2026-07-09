@@ -5,7 +5,7 @@ use crate::{
 };
 use ipnet::IpNet;
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 mod models {
     use std::fmt::{Display, Formatter};
@@ -69,6 +69,8 @@ pub struct AwsAlbLoadBalancer {
     pub load_balancer_source_ranges: Vec<IpNet>,
     pub load_balancer_eip_allocation_ids: Option<Vec<AwsEipAllocationId>>,
     pub load_balancer_scheme: AwsAlbLoadBalancerScheme,
+    // Pleco TTL tag for the gateway NLB. None preserves the absence of ttl when pleco.resources_ttl is -1.
+    pub resource_ttl: Option<Duration>,
     // AWS Partner Network identifier tagged on the gateway NLB for the AWS Marketplace listing (engine-global, from Context)
     pub aws_apn_id: String,
 }
@@ -76,6 +78,18 @@ pub struct AwsAlbLoadBalancer {
 impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
     fn annotations(&self) -> Option<HashMap<String, String>> {
         let apn_id = self.aws_apn_id.as_str();
+        let mut additional_resource_tags = vec![
+            format!("OrganizationLongId={}", self.organization_id),
+            format!("OrganizationId={}", self.organization_id.short()),
+            format!("ClusterLongId={}", self.cluster_id),
+            format!("ClusterId={}", self.cluster_id.short()),
+            format!("{AWS_APN_ID_TAG_KEY}={apn_id}"),
+        ];
+
+        if let Some(resource_ttl) = self.resource_ttl {
+            additional_resource_tags.push(format!("ttl={}", resource_ttl.as_secs()));
+        }
+
         let mut annotations = HashMap::from([
             (
                 "service.beta.kubernetes.io/aws-load-balancer-type".to_string(),
@@ -99,13 +113,7 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
             ),
             (
                 "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags".to_string(),
-                format!(
-                    "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}\\,{AWS_APN_ID_TAG_KEY}={apn_id}",
-                    self.organization_id,
-                    self.organization_id.short(),
-                    self.cluster_id,
-                    self.cluster_id.short(),
-                ),
+                additional_resource_tags.join("\\,"),
             ),
             (
                 "service.beta.kubernetes.io/aws-load-balancer-proxy-protocol".to_string(),
@@ -147,6 +155,7 @@ impl InteractWithLoadBalancer for AwsAlbLoadBalancer {
 mod tests {
     use super::*;
     use crate::infrastructure::models::load_balancer::aws_alb_load_balancer::models::AwsEipAllocationId;
+    use std::time::Duration;
     use uuid::Uuid;
 
     fn parse_ids(ids: Vec<&str>) -> Result<Option<Vec<AwsEipAllocationId>>, AwsEipAllocationIdError> {
@@ -214,6 +223,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -232,6 +242,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -279,6 +290,7 @@ mod tests {
         assert!(tags.contains(&format!("ClusterLongId={}", cluster_id)));
         assert!(tags.contains(&format!("ClusterId={}", cluster_id.short())));
         assert!(tags.contains(&format!("{AWS_APN_ID_TAG_KEY}=pc:test-apn")));
+        assert!(!tags.contains("ttl="));
         assert!(tags.contains("\\,"));
 
         let lb = AwsAlbLoadBalancer {
@@ -287,6 +299,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::Internal,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -294,6 +307,38 @@ mod tests {
         assert_eq!(
             annotations.get("service.beta.kubernetes.io/aws-load-balancer-scheme"),
             Some(&"internal".to_string())
+        );
+    }
+
+    #[test]
+    fn test_aws_alb_load_balancer_additional_resource_tags_include_ttl_when_resource_ttl_is_set() {
+        let cluster_id = QoveryIdentifier::new(Uuid::parse_str("123e4567-e89b-12d3-a456-426614174000").unwrap());
+        let organization_id = QoveryIdentifier::new(Uuid::parse_str("987fcdeb-51a2-43f7-b123-456789abcdef").unwrap());
+
+        let lb = AwsAlbLoadBalancer {
+            cluster_id: cluster_id.clone(),
+            organization_id: organization_id.clone(),
+            load_balancer_source_ranges: vec![],
+            load_balancer_eip_allocation_ids: None,
+            load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: Some(Duration::from_secs(0)),
+            aws_apn_id: "pc:test-apn".to_string(),
+        };
+
+        let annotations = lb.annotations().unwrap();
+        let tags = annotations
+            .get("service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags")
+            .unwrap();
+
+        assert_eq!(
+            tags,
+            &format!(
+                "OrganizationLongId={}\\,OrganizationId={}\\,ClusterLongId={}\\,ClusterId={}\\,{AWS_APN_ID_TAG_KEY}=pc:test-apn\\,ttl=0",
+                organization_id,
+                organization_id.short(),
+                cluster_id,
+                cluster_id.short(),
+            )
         );
     }
 
@@ -308,6 +353,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -334,6 +380,7 @@ mod tests {
             ],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -355,6 +402,7 @@ mod tests {
             load_balancer_source_ranges: vec![],
             load_balancer_eip_allocation_ids: None,
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
@@ -377,6 +425,7 @@ mod tests {
             ])
             .unwrap(),
             load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+            resource_ttl: None,
             aws_apn_id: "pc:test-apn".to_string(),
         };
 
