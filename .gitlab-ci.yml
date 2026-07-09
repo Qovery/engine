@@ -970,6 +970,65 @@ gitlab-release:
     - if: $CI_COMMIT_TAG
       when: always
 
+###################
+# PLATFORM CONFIG #
+###################
+
+# Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
+# by q-core (Engine v2): per-component config bundles, then the frozen-chart
+# mirror. Manual only for now, and fully independent from the engine release
+# pipeline: a config change must never require an engine release.
+# See platform-catalog/README.md.
+publish-platform-catalog:
+  stage: release
+  extends: [.resources-minimal]
+  retry: 0
+  variables:
+    # Config bundles to publish: space/comma-separated component names,
+    # "all", or "none" to skip config bundles.
+    PLATFORM_CONFIG_COMPONENTS: "all"
+    # Charts to mirror (charts: list in catalog.yaml): names, "all", or
+    # "none" to skip the chart mirror.
+    PLATFORM_CHARTS: "all"
+    # Public registry (decided 2026-07-09): the engine/q-core running on
+    # customer clusters pulls bundles and charts anonymously, no creds needed.
+    PLATFORM_CONFIG_REGISTRY: "public.ecr.aws/r3m4q3r9"
+  before_script:
+    # Install oras with checksum verification (release assets are fetched from
+    # GitHub; verify integrity before running it with registry credentials).
+    - |
+      command -v oras >/dev/null 2>&1 || (
+        set -e
+        ORAS_VERSION="1.3.2"
+        ORAS_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+        ORAS_TARBALL="oras_${ORAS_VERSION}_linux_${ORAS_ARCH}.tar.gz"
+        cd "$(mktemp -d)"
+        curl -sSfLO "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/${ORAS_TARBALL}"
+        curl -sSfL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_checksums.txt" | grep " ${ORAS_TARBALL}\$" | sha256sum -c -
+        tar -xzf "${ORAS_TARBALL}" -C /usr/local/bin oras
+      )
+    - helm version --short
+    # oras and helm both reuse the docker credentials this sets up
+    - ci_helper docker_login_public_prod_ecr
+  script:
+    - ./scripts/publish-platform-config.sh
+    - ./scripts/publish-frozen-charts.sh
+  artifacts:
+    when: always
+    paths:
+      - platform-config-publish.json
+      - frozen-charts-publish.json
+    expire_in: 1 year
+  tags:
+    - k8s-runner
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+    - if: $CI_COMMIT_BRANCH == "main"
+      when: manual
+      allow_failure: true
+
 ##########
 # DEPLOY #
 ##########

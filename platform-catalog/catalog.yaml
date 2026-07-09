@@ -1,0 +1,35 @@
+# Platform config catalog — one entry per platform component whose Qovery-owned
+# configuration is published as an OCI bundle for q-core (Engine v2).
+#
+# This file plays the same role for config bundles that lib-engine/lib/helm-freeze.yaml
+# plays for vendored charts: a single reviewed manifest pinning what gets shipped.
+#
+# `version` is the bundle tag pushed by scripts/publish-platform-config.sh
+# (as <registry>/platform-config/<name>:<version>).
+#
+# Mutable-v0 mode: re-publishing an existing version is allowed (tags are movable),
+# q-core pins and caches by digest only. Bump `version` when q-core should re-pin.
+components:
+  - name: cluster-agent
+    chart: qovery-cluster-agent # generated chart, published via helper.sh update_qovery_chart
+    version: v1
+  - name: shell-agent
+    chart: qovery-shell-agent # generated chart, published via helper.sh update_qovery_chart
+    version: v1
+  - name: loki
+    chart: loki # frozen upstream chart, pinned in lib-engine/lib/helm-freeze.yaml
+    version: v1
+
+# Frozen charts mirrored by scripts/publish-frozen-charts.sh to
+# <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this
+# repo is the artifact actually executed (not an upstream pull at install time).
+# To mirror another chart, add an entry here — nothing else to change.
+# For Qovery-authored or no_sync (Qovery-modified) charts, bump the chart
+# version when content changes, or rely on digest pinning (mutable-v0).
+charts:
+  - name: loki
+    path: lib-engine/lib/common/bootstrap/charts/loki
+  - name: qovery-cluster-agent
+    path: lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent
+  - name: qovery-shell-agent
+    path: lib-engine/lib/common/bootstrap/charts/qovery-shell-agent

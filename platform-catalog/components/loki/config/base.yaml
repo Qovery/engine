@@ -1,0 +1,31 @@
+# Source 1 — Qovery-owned base values for the upstream grafana/loki chart, PVC/filesystem
+loki:
+  auth_enabled: false
+  storage:
+    type: filesystem
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  compactor:
+    retention_enabled: true
+    delete_request_store: filesystem
+singleBinary:
+  persistence:
+    enabled: true
+    size: 10Gi
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+gateway:
+  enabled: false
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
