@@ -74,6 +74,10 @@ pub struct Database {
     // Managed database endpoint for a BLUEPRINT db — q-core sources it from the blueprint's terraform output.
     #[serde(default)]
     pub blueprint_db_hostname: Option<String>,
+    // Managed database instance identifier (AWS RDS id) for a BLUEPRINT db — q-core sources it from the
+    // blueprint's terraform output; the engine stops/starts it on pause/resume.
+    #[serde(default)]
+    pub blueprint_db_identifier: Option<String>,
     #[serde(default)] // => false if not present in input
     pub apply_immediately: bool,
     #[serde(default)]
@@ -109,6 +113,7 @@ impl Database {
             apply_immediately: self.apply_immediately,
             provisioning_mode: self.provisioning_mode.clone(),
             blueprint_db_hostname: self.blueprint_db_hostname.clone(),
+            blueprint_db_identifier: self.blueprint_db_identifier.clone(),
         };
 
         let annotations_groups = self
@@ -982,4 +987,5 @@ pub struct DatabaseOptions {
     pub apply_immediately: bool,
     pub provisioning_mode: DatabaseProvisioningMode,
     pub blueprint_db_hostname: Option<String>,
+    pub blueprint_db_identifier: Option<String>,
 }

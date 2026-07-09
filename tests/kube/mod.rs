@@ -113,6 +113,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
                 apply_immediately: false,
                 provisioning_mode: Default::default(),
                 blueprint_db_hostname: None,
+                blueprint_db_identifier: None,
             };
             environment.databases = vec![db];
         }

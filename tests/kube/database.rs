@@ -89,6 +89,7 @@ fn should_increase_db_storage_size() {
                 apply_immediately: false,
                 provisioning_mode: Default::default(),
                 blueprint_db_hostname: None,
+                blueprint_db_identifier: None,
             },
             |transmitter| infra_ctx.context().get_event_details(transmitter),
             vec![],
