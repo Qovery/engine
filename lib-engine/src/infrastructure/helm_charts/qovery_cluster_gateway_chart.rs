@@ -483,6 +483,7 @@ mod tests {
     use crate::io_models::QoveryIdentifier;
     use std::collections::{HashMap, HashSet};
     use std::env;
+    use std::time::Duration;
 
     fn get_domain() -> Domain {
         Domain::new("qovery.com".to_string())
@@ -502,6 +503,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
@@ -540,6 +542,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
@@ -582,6 +585,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
@@ -660,6 +664,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions::default(),
@@ -688,6 +693,46 @@ mod tests {
     }
 
     #[test]
+    fn load_balancer_resource_ttl_tag_is_rendered_under_envoy_proxy_annotations() {
+        let chart = QoveryClusterGatewayChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            get_domain(),
+            LoadBalancer::AwsAlb(AwsAlbLoadBalancer {
+                cluster_id: QoveryIdentifier::new_random(),
+                organization_id: QoveryIdentifier::new_random(),
+                load_balancer_source_ranges: vec![],
+                load_balancer_eip_allocation_ids: None,
+                load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: Some(Duration::from_secs(0)),
+                aws_apn_id: "pc:test-apn".to_string(),
+            }),
+            QoveryClusterGatewayChartOptions::default(),
+            false,
+            false,
+        );
+
+        let common_chart = chart.to_common_helm_chart().expect("chart should render");
+        let values: HashMap<&str, &str> = common_chart
+            .chart_info
+            .values
+            .iter()
+            .map(|entry| (entry.key.as_str(), entry.value.as_str()))
+            .collect();
+
+        let tags = values
+            .get(
+                "envoyProxy.qoveryPublic.provider.kubernetes.envoyService.annotations.service\\.beta\\.kubernetes\\.io/aws-load-balancer-additional-resource-tags",
+            )
+            .expect("load balancer tags annotation should be rendered under envoy service annotations");
+
+        assert!(
+            tags.ends_with("\\,ttl=0"),
+            "expected ttl=0 to be appended to AWS load balancer tags, got `{tags}`"
+        );
+    }
+
+    #[test]
     fn hpa_config_is_rendered_under_gateway_level_envoy_proxy() {
         let chart = QoveryClusterGatewayChart::new(
             None,
@@ -699,6 +744,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
@@ -737,6 +783,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
@@ -770,6 +817,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
@@ -803,6 +851,7 @@ mod tests {
                 load_balancer_source_ranges: vec![],
                 load_balancer_eip_allocation_ids: None,
                 load_balancer_scheme: AwsAlbLoadBalancerScheme::InternetFacing,
+                resource_ttl: None,
                 aws_apn_id: "pc:test-apn".to_string(),
             }),
             QoveryClusterGatewayChartOptions {
