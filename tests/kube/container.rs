@@ -89,7 +89,9 @@ fn should_increase_container_storage_size() {
             resized_container.command_args.clone(),
             resized_container.entrypoint.clone(),
             KubernetesCpuResourceUnit::MilliCpu(resized_container.cpu_request_in_milli),
-            KubernetesCpuResourceUnit::MilliCpu(resized_container.cpu_limit_in_milli),
+            resized_container
+                .cpu_limit_in_milli
+                .map(KubernetesCpuResourceUnit::MilliCpu),
             KubernetesMemoryResourceUnit::MebiByte(resized_container.ram_request_in_mib),
             KubernetesMemoryResourceUnit::MebiByte(resized_container.ram_limit_in_mib),
             None,

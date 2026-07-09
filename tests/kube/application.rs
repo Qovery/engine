@@ -103,7 +103,7 @@ fn should_increase_app_storage_size() {
             vec![],
             vec![],
             KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_request_in_milli),
-            KubernetesCpuResourceUnit::MilliCpu(resized_app.cpu_limit_in_milli),
+            resized_app.cpu_limit_in_milli.map(KubernetesCpuResourceUnit::MilliCpu),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_request_in_mib),
             KubernetesMemoryResourceUnit::MebiByte(resized_app.ram_limit_in_mib),
             None,

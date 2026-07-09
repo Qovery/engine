@@ -62,7 +62,7 @@ pub struct Container<T: CloudProvider> {
     pub(crate) command_args: Vec<String>,
     pub(crate) entrypoint: Option<String>,
     pub(crate) cpu_request: KubernetesCpuResourceUnit,
-    pub(crate) cpu_limit: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit: Option<KubernetesCpuResourceUnit>,
     pub(crate) ram_request: KubernetesMemoryResourceUnit,
     pub(crate) ram_limit: KubernetesMemoryResourceUnit,
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
@@ -132,7 +132,7 @@ impl<T: CloudProvider> Container<T> {
         command_args: Vec<String>,
         entrypoint: Option<String>,
         cpu_request: KubernetesCpuResourceUnit,
-        cpu_limit: KubernetesCpuResourceUnit,
+        cpu_limit: Option<KubernetesCpuResourceUnit>,
         ram_request: KubernetesMemoryResourceUnit,
         ram_limit: KubernetesMemoryResourceUnit,
         gpu_request: Option<KubernetesGpuResourceUnit>,
@@ -330,7 +330,7 @@ impl<T: CloudProvider> Container<T> {
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_milli: self.cpu_request.to_string(),
-                cpu_limit_in_milli: self.cpu_limit.to_string(),
+                cpu_limit_in_milli: self.cpu_limit.as_ref().map(|c| c.to_string()),
                 ram_request_in_mib: self.ram_request.to_string(),
                 ram_limit_in_mib: self.ram_limit.to_string(),
                 gpu_request: self.gpu_request.map(u32::from),
@@ -632,7 +632,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) command_args: Vec<String>,
     pub(crate) entrypoint: Option<String>,
     pub(crate) cpu_request_in_milli: String,
-    pub(crate) cpu_limit_in_milli: String,
+    pub(crate) cpu_limit_in_milli: Option<String>,
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
     pub(crate) gpu_request: Option<u32>,
@@ -813,7 +813,7 @@ mod tests {
                 command_args: vec![],
                 entrypoint: None,
                 cpu_request_in_milli: "250m".to_string(),
-                cpu_limit_in_milli: "250m".to_string(),
+                cpu_limit_in_milli: Some("250m".to_string()),
                 ram_request_in_mib: "256Mi".to_string(),
                 ram_limit_in_mib: "256Mi".to_string(),
                 gpu_request: None,
@@ -895,6 +895,46 @@ mod tests {
         assert!(
             !rendered.contains("ephemeral-storage"),
             "ephemeral-storage should be absent when not set"
+        );
+    }
+
+    #[test]
+    fn renders_deployment_template_without_cpu_limit_when_unset() {
+        let mut ctx = build_container_tera_context(None);
+        ctx.service.cpu_limit_in_milli = None;
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/deployment.j2.yaml"),
+            ctx,
+        );
+        assert_eq!(
+            rendered.matches("cpu:").count(),
+            1,
+            "only the cpu request should be rendered when the cpu limit is unset"
+        );
+    }
+
+    #[test]
+    fn renders_statefulset_template_without_cpu_limit_when_unset() {
+        use crate::io_models::models::StorageDataTemplate;
+        let mut ctx = build_container_tera_context(None);
+        ctx.service.cpu_limit_in_milli = None;
+        ctx.service.storages = vec![StorageDataTemplate {
+            id: "stor1".to_string(),
+            long_id: Uuid::new_v4(),
+            name: "data".to_string(),
+            storage_type: "gp2".to_string(),
+            size_in_gib: 10,
+            mount_point: "/data".to_string(),
+            snapshot_retention_in_days: 0,
+        }];
+        let rendered = render_template(
+            include_str!("../../../lib/common/charts/q-container/templates/statefulset.j2.yaml"),
+            ctx,
+        );
+        assert_eq!(
+            rendered.matches("cpu:").count(),
+            1,
+            "only the cpu request should be rendered when the cpu limit is unset"
         );
     }
 }
