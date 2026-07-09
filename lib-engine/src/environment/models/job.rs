@@ -55,7 +55,7 @@ pub struct Job<T: CloudProvider> {
     pub(crate) entrypoint: Option<String>,
     pub(crate) force_trigger: bool,
     pub(crate) cpu_request_in_milli: KubernetesCpuResourceUnit,
-    pub(crate) cpu_limit_in_milli: KubernetesCpuResourceUnit,
+    pub(crate) cpu_limit_in_milli: Option<KubernetesCpuResourceUnit>,
     pub(crate) ram_request_in_mib: KubernetesMemoryResourceUnit,
     pub(crate) ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub(crate) gpu_request: Option<KubernetesGpuResourceUnit>,
@@ -95,7 +95,7 @@ impl<T: CloudProvider> Job<T> {
         entrypoint: Option<String>,
         force_trigger: bool,
         cpu_request_in_milli: KubernetesCpuResourceUnit,
-        cpu_limit_in_milli: KubernetesCpuResourceUnit,
+        cpu_limit_in_milli: Option<KubernetesCpuResourceUnit>,
         ram_request_in_mib: KubernetesMemoryResourceUnit,
         ram_limit_in_mib: KubernetesMemoryResourceUnit,
         gpu_request: Option<KubernetesGpuResourceUnit>,
@@ -281,7 +281,7 @@ impl<T: CloudProvider> Job<T> {
                 command_args: self.command_args.clone(),
                 entrypoint: self.entrypoint.clone(),
                 cpu_request_in_milli: self.cpu_request_in_milli.to_string(),
-                cpu_limit_in_milli: self.cpu_limit_in_milli.to_string(),
+                cpu_limit_in_milli: self.cpu_limit_in_milli.as_ref().map(|c| c.to_string()),
                 ram_request_in_mib: self.ram_request_in_mib.to_string(),
                 ram_limit_in_mib: self.ram_limit_in_mib.to_string(),
                 gpu_request: self.gpu_request.map(u32::from),
@@ -577,7 +577,7 @@ pub(crate) struct ServiceTeraContext {
     pub(crate) command_args: Vec<String>,
     pub(crate) entrypoint: Option<String>,
     pub(crate) cpu_request_in_milli: String,
-    pub(crate) cpu_limit_in_milli: String,
+    pub(crate) cpu_limit_in_milli: Option<String>,
     pub(crate) ram_request_in_mib: String,
     pub(crate) ram_limit_in_mib: String,
     pub(crate) gpu_request: Option<u32>,
@@ -688,6 +688,30 @@ mod tests {
         );
     }
 
+    #[test]
+    fn renders_job_template_without_cpu_limit_when_unset() {
+        let mut ctx = build_job_tera_context(false);
+        ctx.service.cpu_limit_in_milli = None;
+        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/job.j2.yaml"), ctx);
+        assert_eq!(
+            rendered.matches("cpu:").count(),
+            3,
+            "only the init container's hardcoded cpu and the main container's cpu request should be rendered when the cpu limit is unset"
+        );
+    }
+
+    #[test]
+    fn renders_cronjob_template_without_cpu_limit_when_unset() {
+        let mut ctx = build_job_tera_context(true);
+        ctx.service.cpu_limit_in_milli = None;
+        let rendered = render_template(include_str!("../../../lib/common/charts/q-job/templates/cronjob.j2.yaml"), ctx);
+        assert_eq!(
+            rendered.matches("cpu:").count(),
+            1,
+            "only the cpu request should be rendered when the cpu limit is unset"
+        );
+    }
+
     fn render_template(template: &str, context: JobTeraContext) -> String {
         let tera_context = Context::from_serialize(context).expect("job tera context should serialize");
         Tera::one_off(template, &tera_context, false).expect("template should render")
@@ -732,7 +756,7 @@ mod tests {
                 command_args: vec!["/bin/sh".to_string(), "-c".to_string(), "echo test".to_string()],
                 entrypoint: None,
                 cpu_request_in_milli: "250m".to_string(),
-                cpu_limit_in_milli: "250m".to_string(),
+                cpu_limit_in_milli: Some("250m".to_string()),
                 ram_request_in_mib: "256Mi".to_string(),
                 ram_limit_in_mib: "256Mi".to_string(),
                 gpu_request: None,

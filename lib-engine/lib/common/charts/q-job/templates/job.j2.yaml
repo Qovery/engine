@@ -282,7 +282,9 @@ spec:
             readOnlyRootFilesystem: {{ service.advanced_settings.security_read_only_root_filesystem }}
           resources:
             limits:
+              {%- if service.cpu_limit_in_milli %}
               cpu: {{ service.cpu_limit_in_milli }}
+              {%- endif %}
               memory: {{ service.ram_limit_in_mib }}
               {%- if service.gpu_limit and service.gpu_limit > 0 %}
               nvidia.com/gpu: {{ service.gpu_limit }}
