@@ -394,7 +394,7 @@ impl BlueprintEngineRequest {
             // Direct io_models::Action → BlueprintStep mapping (handles Diff). The env-side
             // service::Action enum has no Diff variant; routing through it would crash.
             Stage::Blueprint(BlueprintStep::from(self.action)),
-            Transmitter::Environment(self.target_environment.long_id, self.target_environment.name.clone()),
+            Transmitter::Blueprint(self.target_environment.long_id, self.target_environment.name.clone()),
         )
     }
 }
