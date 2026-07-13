@@ -38,7 +38,7 @@ spec:
             {{`
             {{ .CommonAnnotations.qovery_target_name }}{{ if gt (len .Alerts.Firing) 0 }} - {{ len .Alerts.Firing }} alert(s) firing{{ end }}
             `}}
-          titleLink: {{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}
+          titleLink: {{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerts/issues`}}
           text: >-
             {{`{{ range $i, $alert := .Alerts }}
             {{ if eq $alert.Status "firing" }}🔥{{ else }}✅{{ end }} {{ if $alert.Annotations.qovery_alert_display_name }}{{ $alert.Annotations.qovery_alert_display_name }}{{ else }}{{ $alert.Labels.alertname }}{{ end }} - {{ if $alert.Annotations.description }}{{ $alert.Annotations.description }}{{ end }} - {{ $alert.Annotations.severity }} Severity
@@ -51,13 +51,13 @@ spec:
           actions:
             - type: button
               text: "All issues"
-              url: "{{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues`}}"
+              url: "{{`https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerts/issues`}}"
             - type: button
               text: "Service Monitoring"
-              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/service/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
             - type: button
               text: "Service Logs"
-              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
+              url: "{{`{{ $alert := index .Alerts 0 }}{{.CommonAnnotations.qovery_target_base_url}}/service/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&endDate={{ $alert.StartsAt.Format \"2006-01-02T15:04:05.000Z\" }}&timeRange=custom`}}"
           sendResolved: {{ default true $rcv.slack.sendResolved }}
           groupInterval: 5m
           groupWait: 30s
@@ -152,12 +152,12 @@ spec:
               <div class="footer">
                 {{ if .CommonAnnotations.qovery_organization_long_id }}
                 <p>View all alerts in the Qovery console:</p>
-                <a href="https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerting/issues">View All Alerts</a>
+                <a href="https://console.qovery.com/organization/{{ .CommonAnnotations.qovery_organization_long_id }}/alerts/issues">View All Alerts</a>
                 {{ end }}
                 {{ if and .CommonAnnotations.qovery_target_base_url .CommonLabels.qovery_target_id }}
                 {{ $alert := index .Alerts 0 }}
-                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/application/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Monitoring</a>
-                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/logs/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Logs</a>
+                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/service/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Monitoring</a>
+                <a href="{{ .CommonAnnotations.qovery_target_base_url }}/service/{{ .CommonLabels.qovery_target_id }}/service-logs?isLiveUpdateEnabled=0&startDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&endDate={{ $alert.StartsAt.Format "2006-01-02T15:04:05.000Z" }}&timeRange=custom">Service Logs</a>
                 {{ end }}
               </div>
             </body>
