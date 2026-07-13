@@ -477,6 +477,36 @@ mod tests {
     use std::env;
     use uuid::Uuid;
 
+    #[test]
+    fn alert_notification_templates_use_console_v2_service_routes() {
+        let template = include_str!(
+            "../../../lib/common/bootstrap/charts/qovery-alert-config/templates/02-alert-manager-config.yaml"
+        );
+
+        assert_eq!(
+            template
+                .matches("/service/{{ .CommonLabels.qovery_target_id }}/monitoring/dashboard")
+                .count(),
+            2,
+            "Slack and email monitoring links should use the Console v2 service route"
+        );
+        assert_eq!(
+            template
+                .matches("/service/{{ .CommonLabels.qovery_target_id }}/service-logs")
+                .count(),
+            2,
+            "Slack and email log links should use the Console v2 service route"
+        );
+        assert_eq!(
+            template.matches("/alerts/issues").count(),
+            3,
+            "Slack title, Slack action, and email links should use the Console v2 alerts route"
+        );
+        assert!(!template.contains("/application/{{ .CommonLabels.qovery_target_id }}"));
+        assert!(!template.contains("/logs/{{ .CommonLabels.qovery_target_id }}/service-logs"));
+        assert!(!template.contains("/alerting/issues"));
+    }
+
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
     fn alert_config_chart_directory_exists_test() {
