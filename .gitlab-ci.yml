@@ -974,6 +974,33 @@ gitlab-release:
 # PLATFORM CONFIG #
 ###################
 
+test-platform-config:
+  stage: build-and-lint
+  extends: [.resources-minimal]
+  before_script:
+    - |
+      set -e
+      PKL_VERSION="0.32.0"
+      PKL_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+      case "$PKL_ARCH" in
+        amd64) PKL_SHA256="15e7e7375c28b8542b3d13fe35bccaeb7b9542114008998708385489885f41e7" ;;
+        arm64) PKL_SHA256="b1ba7ef5dec9287f8f843ce563911eba822fed5789a5baab8cc712615a9dbaf0" ;;
+        *) echo "Unsupported Pkl architecture: $PKL_ARCH" >&2; exit 1 ;;
+      esac
+      curl -sSfL -o /usr/local/bin/pkl "https://github.com/apple/pkl/releases/download/${PKL_VERSION}/pkl-linux-${PKL_ARCH}"
+      echo "$PKL_SHA256  /usr/local/bin/pkl" | sha256sum -c -
+      chmod +x /usr/local/bin/pkl
+  script:
+    - ./scripts/test-platform-config.sh
+  tags:
+    - k8s-runner
+  rules:
+    - changes:
+        paths:
+          - .gitlab-ci.yml
+          - platform-catalog/**/*
+          - scripts/test-platform-config.sh
+
 # Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
 # by q-core (Engine v2): per-component config bundles, then the frozen-chart
 # mirror. Manual only for now, and fully independent from the engine release
@@ -1258,4 +1285,3 @@ publish-platform-catalog:
     name: cluster-analysis-production
     url: https://console.qovery.com/organization/51937012-8377-4e0f-84cf-7f5f38a0154b/cluster/6d9f665a-c203-4b02-8d49-ee05ad3f1137/settings/general
     deployment_tier: production
-

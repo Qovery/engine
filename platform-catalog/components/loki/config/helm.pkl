@@ -1,0 +1,60 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.helm
+
+import "profile.pkl"
+
+// Produces Source 3 only: the Loki values derived from customer-facing product settings.
+// q-core merges this after chart defaults and context overlays.
+function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
+  let (isS3 = profile.storage(profileConfig) == "s3")
+    let (isHighAvailability = profile.highAvailability(profileConfig) == true)
+      let (replicas = if (isHighAvailability) 3 else 1)
+        new Mapping {
+          ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
+          ["loki"] = lokiValues(profileConfig, clusterInputs, isS3, replicas)
+          ["singleBinary"] = new Mapping { ["replicas"] = if (isHighAvailability) 0 else 1 }
+          ["write"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
+          ["read"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
+          ["backend"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
+          when (isS3) {
+            ["serviceAccount"] = new Mapping {
+              ["annotations"] = new Mapping {
+                ["eks.amazonaws.com/role-arn"] = clusterInputs["infra.lokiRoleArn"]
+              }
+            }
+          }
+        }
+
+local function lokiValues(
+  profileConfig: Mapping,
+  clusterInputs: Mapping,
+  isS3: Boolean,
+  replicas: Int
+): Mapping = new Mapping {
+  ["commonConfig"] = new Mapping { ["replication_factor"] = replicas }
+  ["limits_config"] = new Mapping {
+    // Loki expects a duration; the product model intentionally exposes easier-to-understand weeks.
+    ["retention_period"] = "\((profile.retentionWeeks(profileConfig) ?? 12) * 168)h"
+  }
+  when (isS3) {
+    ["storage"] = new Mapping {
+      ["type"] = "s3"
+      ["bucketNames"] = new Mapping {
+        ["chunks"] = clusterInputs["infra.s3BucketName"]
+        ["ruler"] = clusterInputs["infra.s3BucketName"]
+        ["admin"] = clusterInputs["infra.s3BucketName"]
+      }
+      ["s3"] = new Mapping { ["region"] = clusterInputs["infra.awsRegion"] }
+    }
+    ["schemaConfig"] = new Mapping {
+      ["configs"] = List(new Mapping {
+        ["from"] = "2024-04-01"
+        ["store"] = "tsdb"
+        ["object_store"] = "s3"
+        ["schema"] = "v13"
+        ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
+      })
+    }
+    ["compactor"] = new Mapping { ["delete_request_store"] = "s3" }
+  }
+}

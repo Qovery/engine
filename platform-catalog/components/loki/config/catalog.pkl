@@ -1,0 +1,58 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.catalog
+
+import "contract.pkl"
+
+// Static form metadata. Adding a field here does not require Loki-specific UI code.
+fields: List<contract.Field> = List(
+  new contract.Field {
+    key = "retentionWeeks"
+    type = "number"
+    required = false
+    defaultValue = "12"
+    label = "Retention period"
+    description = "Number of weeks to retain Loki logs."
+    constraints = new { min = 1; max = 52 }
+  },
+  new contract.Field {
+    key = "highAvailability"
+    type = "bool"
+    required = false
+    defaultValue = "false"
+    label = "High availability"
+    description = "Uses Loki simple-scalable mode and requires S3 storage."
+  },
+  new contract.Field {
+    key = "storage"
+    type = "string"
+    required = false
+    defaultValue = "pvc"
+    label = "Storage"
+    description = "Storage backend used by Loki."
+    constraints = new { allowedValues = List("pvc", "s3") }
+  }
+)
+
+// Logical requirements are separate from their concrete source. q-core decides whether a
+// value comes from the customer, Terraform output, or another trusted runtime source.
+s3Inputs: List<contract.LogicalInput> = List(
+  new contract.LogicalInput {
+    key = "infra.s3BucketName"
+    type = "s3BucketName"
+    scope = "CLUSTER"
+    label = "S3 bucket name"
+    description = "Bucket used by Loki for chunks, ruler and admin data."
+    constraints = new { pattern = "^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$" }
+  },
+  new contract.LogicalInput {
+    key = "infra.lokiRoleArn"
+    type = "awsIamRoleArn"
+    scope = "CLUSTER"
+    label = "Loki IAM role ARN"
+    description = "IAM role assumed by Loki through IRSA."
+    constraints = new { pattern = "^arn:aws:iam::[0-9]{12}:role/.+$" }
+  }
+)
+
+// Used to reject misspelled or obsolete fields instead of silently ignoring them.
+fieldKeys: Set<String> = Set("retentionWeeks", "highAvailability", "storage")

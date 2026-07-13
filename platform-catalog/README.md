@@ -23,6 +23,13 @@ platform-catalog/
         overlays/              # source 2 — context fragments, convention-named:
                                #   <mode>.yaml then <provider>.yaml, kebab-cased enum
                                #   names (e.g. customer-managed.yaml, aws.yaml)
+        model.pkl              # optional source 3 entrypoint — orchestration + JSON output
+        contract.pkl           # language-neutral q-core response types
+        catalog.pkl            # Console field and logical-input descriptions
+        profile.pkl            # defaults and safe profile type narrowing
+        validation.pkl         # conditional requirements and validation rules
+        helm.pkl               # final Source 3 Helm-value derivation
+        README.md              # reviewer guide and the small Pkl syntax subset in use
 ```
 
 File semantics (the contract q-core's loader implements):
@@ -30,6 +37,21 @@ File semantics (the contract q-core's loader implements):
 - an **absent** file is an empty fragment;
 - a **present-but-invalid** YAML file is a hard compilation error;
 - merge order: `base < mode overlay < provider overlay < managed config`.
+
+When a component declares a Pkl evaluator in the q-core release manifest,
+`model.pkl` is the stable entrypoint for the executable source of truth for source 3. Its focused
+relative imports stay inside the same digest-pinned bundle. q-core evaluates the module set
+with Pkl 0.32 through the language-neutral JSON contract (`DESCRIBE`,
+`RESOLVE_REQUIREMENTS`, `VALIDATE`, `COMPILE`). The model receives the request
+through the external property `request` and returns JSON through `output.text`.
+It can import only sibling `.pkl` modules through q-core's virtual `bundle:/` loader. It cannot
+import arbitrary filesystem, package, or network modules, and it cannot read environment variables,
+files, or network resources. Only the bundle modules, Pkl standard library, and `prop:request` are
+enabled by q-core.
+
+The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
+production fallback. Once the bundle is pinned, an unavailable or invalid Pkl
+model makes the affected catalog operation fail closed.
 
 cluster-agent and shell-agent have an intentionally empty (comments-only)
 `base.yaml`: no Qovery-owned config yet — their values are q-core manifest
@@ -125,6 +147,10 @@ pin by digest — but bump the chart version on content changes, or settle a
   q-core pins/caches by **digest** only. The immutable-tag guard is kept
   commented in `scripts/publish-platform-config.sh`, ready to enable.
 - **Version scheme**: monotonic per component (`v1`, `v2`, …) in `catalog.yaml`.
+- **Source 3 evaluator**: Pkl 0.32 is the first production implementation.
+  Alternative languages are reconsidered after the Console vertical (MR-C),
+  based on concrete authoring and operational feedback rather than a parallel
+  pre-production bake-off.
 - **Granularity**: one bundle per component (aligned with the q-core
   `configRef {chart, version}` seam), not one global bundle.
 - **Retention**: never delete a version a q-core release may still pin.

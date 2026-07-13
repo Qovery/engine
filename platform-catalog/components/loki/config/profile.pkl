@@ -1,0 +1,18 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.profile
+
+// Centralizes defaults and type narrowing for the customer profile.
+// A null result means "wrong type". Validation can then report every problem in one response
+// instead of throwing on the first bad field.
+
+function retentionWeeks(config: Mapping): Int? =
+  let (value = config.getOrNull("retentionWeeks") ?? 12)
+    if (value is Int) value else null
+
+function highAvailability(config: Mapping): Boolean? =
+  let (value = config.getOrNull("highAvailability") ?? false)
+    if (value is Boolean) value else null
+
+function storage(config: Mapping): String? =
+  let (value = config.getOrNull("storage") ?? "pvc")
+    if (value is String) value else null

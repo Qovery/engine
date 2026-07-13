@@ -1,0 +1,126 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.validation
+
+import "catalog.pkl"
+import "contract.pkl"
+import "profile.pkl"
+
+// Returns only the logical inputs active for the current draft. DESCRIBE intentionally has no
+// cluster context and therefore returns the static field catalogue only.
+function requiredInputs(operation: String, profileConfig: Mapping): List<contract.LogicalInput> =
+  if (operation == "DESCRIBE") List()
+  else if (profile.storage(profileConfig) == "s3") catalog.s3Inputs
+  else List()
+
+// VALIDATE and COMPILE share the exact same rules. COMPILE is called again immediately before
+// deployment so an old or corrupted stored profile still fails closed.
+function violations(
+  operation: String,
+  profileConfig: Mapping,
+  clusterContext: Mapping?,
+  clusterInputs: Mapping
+) =
+  if (operation == "DESCRIBE") List()
+  else
+    unknownFieldViolations(profileConfig)
+      + typeViolations(profileConfig)
+      + valueViolations(profileConfig, clusterContext)
+      + requiredInputViolations(operation, profileConfig, clusterContext, clusterInputs)
+
+local function unknownFieldViolations(profileConfig: Mapping) =
+  profileConfig.keys
+    .filter((key) -> !catalog.fieldKeys.contains(key))
+    .map((key) -> new contract.Violation {
+      code = "UNKNOWN_FIELD"
+      fieldPath = key
+      message = "Loki does not define configuration field \(key)"
+    })
+    .toList()
+
+local function typeViolations(profileConfig: Mapping) = List(
+  if (profile.retentionWeeks(profileConfig) == null) new contract.Violation {
+    code = "INVALID_TYPE"
+    fieldPath = "retentionWeeks"
+    message = "Loki configuration field retentionWeeks must be a number"
+  } else null,
+  if (profile.highAvailability(profileConfig) == null) new contract.Violation {
+    code = "INVALID_TYPE"
+    fieldPath = "highAvailability"
+    message = "Loki configuration field highAvailability must be a bool"
+  } else null,
+  if (profile.storage(profileConfig) == null) new contract.Violation {
+    code = "INVALID_TYPE"
+    fieldPath = "storage"
+    message = "Loki configuration field storage must be a string"
+  } else null
+).filter((violation) -> violation != null)
+
+local function valueViolations(
+  profileConfig: Mapping,
+  clusterContext: Mapping?
+) =
+  let (retentionWeeks = profile.retentionWeeks(profileConfig))
+    let (highAvailability = profile.highAvailability(profileConfig))
+      let (storage = profile.storage(profileConfig))
+        List(
+          if (retentionWeeks != null && (retentionWeeks < 1 || retentionWeeks > 52)) new contract.Violation {
+            code = "VALUE_OUT_OF_RANGE"
+            fieldPath = "retentionWeeks"
+            message = "Loki retentionWeeks must be between 1 and 52"
+          } else null,
+          if (storage != null && !Set("pvc", "s3").contains(storage)) new contract.Violation {
+            code = "VALUE_NOT_ALLOWED"
+            fieldPath = "storage"
+            message = "Loki storage must be one of pvc, s3"
+          } else null,
+          if (highAvailability == true && storage != "s3") new contract.Violation {
+            code = "HIGH_AVAILABILITY_REQUIRES_S3"
+            fieldPath = "highAvailability"
+            message = "Loki high availability requires S3 storage"
+          } else null,
+          if (storage == "s3" && clusterContext?.getOrNull("provider") != "AWS") new contract.Violation {
+            code = "S3_AWS_ONLY"
+            fieldPath = "storage"
+            message = "Loki S3 storage is supported only on AWS clusters"
+          } else null,
+          // Managed S3 stays blocked until Terraform outputs are available before Helm compile.
+          if (storage == "s3" && clusterContext?.getOrNull("mode") == "QOVERY_MANAGED") new contract.Violation {
+            code = "MANAGED_S3_EXECUTION_NOT_AVAILABLE"
+            fieldPath = "storage"
+            message = "Loki S3 storage on Qovery-managed clusters requires the Terraform output execution barrier"
+          } else null
+        ).filter((violation) -> violation != null)
+
+local function requiredInputViolations(
+  operation: String,
+  profileConfig: Mapping,
+  clusterContext: Mapping?,
+  clusterInputs: Mapping
+) =
+  // Managed mode reports the execution-barrier violation above. Reporting missing Terraform
+  // outputs as well would add noise without giving the user another action to take.
+  if (
+    (operation != "VALIDATE" && operation != "COMPILE")
+      || profile.storage(profileConfig) != "s3"
+      || clusterContext?.getOrNull("mode") == "QOVERY_MANAGED"
+  ) List()
+  else List(
+    if (inputIsBlank(clusterInputs, "infra.s3BucketName")) new contract.Violation {
+      code = "REQUIRED_INPUT_MISSING"
+      fieldPath = "clusterInputs.infra.s3BucketName"
+      message = "Required input infra.s3BucketName is missing"
+    } else null,
+    if (inputIsBlank(clusterInputs, "infra.lokiRoleArn")) new contract.Violation {
+      code = "REQUIRED_INPUT_MISSING"
+      fieldPath = "clusterInputs.infra.lokiRoleArn"
+      message = "Required input infra.lokiRoleArn is missing"
+    } else null,
+    if (operation == "COMPILE" && inputIsBlank(clusterInputs, "infra.awsRegion")) new contract.Violation {
+      code = "REQUIRED_INPUT_MISSING"
+      fieldPath = "clusterInputs.infra.awsRegion"
+      message = "Required input infra.awsRegion is missing"
+    } else null
+  ).filter((violation) -> violation != null)
+
+local function inputIsBlank(clusterInputs: Mapping, key: String): Boolean =
+  (clusterInputs.getOrNull(key) as String?)?.isBlank ?? true

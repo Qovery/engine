@@ -1,0 +1,46 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.contract
+
+// These classes are the language-neutral JSON contract consumed by q-core.
+// Keep their property names aligned with ComponentConfigurationEvaluationResult.
+// Pkl stays an implementation detail: the Console only sees the rendered JSON.
+
+class Constraints {
+  allowedValues: List<String>? = null
+  min: Int? = null
+  max: Int? = null
+  minLength: Int? = null
+  maxLength: Int? = null
+  pattern: String? = null
+}
+
+// Describes one product setting that the Console can render generically.
+class Field {
+  key: String
+  type: String
+  required: Boolean
+  defaultValue: String?
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+// Describes an input that becomes necessary only for the selected configuration.
+// Example: choosing S3 activates the bucket name and IAM role requirements.
+class LogicalInput {
+  key: String
+  type: String
+  scope: String
+  label: String
+  description: String?
+  sensitive: Boolean = false
+  constraints: Constraints = new {}
+}
+
+// Stable machine-readable validation error returned to q-core and the Console.
+class Violation {
+  code: String
+  fieldPath: String
+  message: String
+}
