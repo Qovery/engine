@@ -1,59 +1,94 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.helm
 
+import "catalog.pkl"
 import "profile.pkl"
 
 // Produces Source 3 only: the Loki values derived from customer-facing product settings.
 // q-core merges this after chart defaults and context overlays.
 function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
   let (isS3 = profile.storage(profileConfig) == "s3")
-    let (isHighAvailability = profile.highAvailability(profileConfig) == true)
-      let (replicas = if (isHighAvailability) 3 else 1)
-        new Mapping {
-          ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
-          ["loki"] = lokiValues(profileConfig, clusterInputs, isS3, replicas)
-          ["singleBinary"] = new Mapping { ["replicas"] = if (isHighAvailability) 0 else 1 }
-          ["write"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
-          ["read"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
-          ["backend"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
-          when (isS3) {
-            ["serviceAccount"] = new Mapping {
-              ["annotations"] = new Mapping {
-                ["eks.amazonaws.com/role-arn"] = clusterInputs["infra.lokiRoleArn"]
-              }
-            }
+  let (isHighAvailability = profile.highAvailability(profileConfig) == true)
+  let (writeReplicas = if (isHighAvailability) 3 else 0)
+  let (replicationFactor = if (isHighAvailability) writeReplicas else 1)
+    new Mapping {
+      ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
+      ["loki"] = lokiValues(profileConfig, clusterInputs, isS3, replicationFactor)
+      ["singleBinary"] = singleBinaryValues(isHighAvailability, isS3)
+      ["write"] = scalableStatefulTargetValues(writeReplicas, isS3)
+      ["read"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
+      ["backend"] = scalableStatefulTargetValues(if (isHighAvailability) 3 else 0, isS3)
+      when (isS3) {
+        ["serviceAccount"] = new Mapping {
+          ["annotations"] = new Mapping {
+            ["eks.amazonaws.com/role-arn"] = clusterInputs[catalog.s3RoleInput.key]
           }
         }
+      }
+    }
+
+// Object storage is durable; the local /var/loki data only contains ephemeral state. Disable the
+// PVC inherited from base.yaml and mount an explicit emptyDir because the container root filesystem
+// is read-only. This also avoids requiring a default StorageClass on customer-managed clusters.
+local function singleBinaryValues(isHighAvailability: Boolean, isS3: Boolean): Mapping = new Mapping {
+  ["replicas"] = if (isHighAvailability) 0 else 1
+  when (isS3) {
+    ["persistence"] = new Mapping { ["enabled"] = false }
+    ["extraVolumes"] =
+      List(new Mapping {
+        ["name"] = "storage"
+        ["emptyDir"] = new Mapping {}
+      })
+    ["extraVolumeMounts"] =
+      List(new Mapping {
+        ["name"] = "storage"
+        ["mountPath"] = "/var/loki"
+      })
+  }
+}
+
+// The chart enables write/backend volume claims by default. In SimpleScalable mode, durable data is
+// already in S3, so retain only ephemeral local state and preserve the behavior of Engine v1.
+local function scalableStatefulTargetValues(replicas: Int, isS3: Boolean): Mapping = new Mapping {
+  ["replicas"] = replicas
+  when (isS3) {
+    ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+  }
+}
 
 local function lokiValues(
   profileConfig: Mapping,
   clusterInputs: Mapping,
   isS3: Boolean,
-  replicas: Int
+  replicationFactor: Int,
 ): Mapping = new Mapping {
-  ["commonConfig"] = new Mapping { ["replication_factor"] = replicas }
+  ["commonConfig"] = new Mapping { ["replication_factor"] = replicationFactor }
   ["limits_config"] = new Mapping {
     // Loki expects a duration; the product model intentionally exposes easier-to-understand weeks.
-    ["retention_period"] = "\((profile.retentionWeeks(profileConfig) ?? 12) * 168)h"
+    // COMPILE is called only after validation, so a null here is an invariant failure, not a default.
+    ["retention_period"] = "\((profile.retentionWeeks(profileConfig) as Int) * 168)h"
   }
   when (isS3) {
     ["storage"] = new Mapping {
       ["type"] = "s3"
       ["bucketNames"] = new Mapping {
-        ["chunks"] = clusterInputs["infra.s3BucketName"]
-        ["ruler"] = clusterInputs["infra.s3BucketName"]
-        ["admin"] = clusterInputs["infra.s3BucketName"]
+        ["chunks"] = clusterInputs[catalog.s3BucketInput.key]
+        ["ruler"] = clusterInputs[catalog.s3BucketInput.key]
+        ["admin"] = clusterInputs[catalog.s3BucketInput.key]
       }
       ["s3"] = new Mapping { ["region"] = clusterInputs["infra.awsRegion"] }
     }
     ["schemaConfig"] = new Mapping {
-      ["configs"] = List(new Mapping {
-        ["from"] = "2024-04-01"
-        ["store"] = "tsdb"
-        ["object_store"] = "s3"
-        ["schema"] = "v13"
-        ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
-      })
+      // Initial schema for fresh Engine v2 installations. Changing storage on an existing Loki
+      // requires appending a future-dated period instead of rewriting this one.
+      ["configs"] =
+        List(new Mapping {
+          ["from"] = "2024-04-01"
+          ["store"] = "tsdb"
+          ["object_store"] = "s3"
+          ["schema"] = "v13"
+          ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
+        })
     }
     ["compactor"] = new Mapping { ["delete_request_store"] = "s3" }
   }

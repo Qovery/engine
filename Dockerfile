@@ -13,6 +13,7 @@ ARG CONTAINERD_VERSION="2.2.3-1~debian.13~trixie"
 ARG SKOPEO_VERSION=1.18.0+ds1-1+b5
 ARG PLUTO_VERSION=5.24.0
 ARG KRR_VERSION=1.27.0
+ARG PKL_VERSION=0.32.0
 ARG EKSCTL_VERSION=0.220.0
 ARG EKS_ANYWHERE_VERSION=0.25.0
 ARG GOVC_VERSION=0.52.0
@@ -42,6 +43,7 @@ ARG CONTAINERD_VERSION
 ARG SKOPEO_VERSION
 ARG PLUTO_VERSION
 ARG KRR_VERSION
+ARG PKL_VERSION
 
 RUN apt-get update && \
   apt-get -y --allow-downgrades install \
@@ -65,6 +67,11 @@ RUN apt-get update && \
   mkdir -p $TF_PLUGIN_CACHE_DIR
 
 RUN curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/$(dpkg --print-architecture)/kubectl && install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+
+# Keep the executable platform-model tests independent from a GitHub download once the CI image
+# has been rebuilt. The job still calls the same installer, which becomes a version-checked no-op.
+COPY scripts/install-pkl.sh /usr/local/bin/install-pkl
+RUN PKL_VERSION=${PKL_VERSION} bash /usr/local/bin/install-pkl
 
 # Hashicorp apt repository does not package terraform for arm64 ...
 RUN curl -sLo terraform.zip https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_$(dpkg --print-architecture).zip && \

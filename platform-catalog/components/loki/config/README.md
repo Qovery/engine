@@ -33,6 +33,26 @@ You do not need to know Pkl to review this model. Read the files in this order:
 q-core sends the request as JSON through `prop:request` and receives JSON from `model.pkl`'s
 `output`. Pkl syntax and errors never cross the backend API boundary.
 
+## S3 runtime values
+
+The model exposes only the values a user or another platform component must provide: the S3 bucket
+name and the Loki IAM role ARN. The AWS region is trusted cluster context: q-core declares
+`infra.awsRegion` as a `qcoreValue` sourced from `cluster.region`, resolves it immediately before
+`COMPILE`, and passes it in `clusterInputs`. `VALIDATE` therefore does not ask the Console for a
+region, while `COMPILE` still fails closed if q-core does not inject it.
+
+## Deployment lifecycle boundary
+
+This bundle compiles the desired Helm values for a fresh Engine v2 installation. Its request does
+not contain the last applied profile or the currently deployed Loki topology, so it cannot safely
+distinguish a first installation from a day-2 `pvc`/`s3` or `SingleBinary`/`SimpleScalable`
+transition.
+
+Until a migration workflow supplies that applied state, q-core must keep `storage` and
+`highAvailability` immutable after Loki has been installed. A storage migration must append a new,
+future-dated Loki schema period; a topology migration must follow the chart's staged migration
+mode. Existing Engine v1 Loki installations are therefore not migration inputs for this bundle.
+
 ## Security boundary
 
 In production, imports use q-core's virtual `bundle:/` loader. It exposes only `.pkl` modules from

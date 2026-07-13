@@ -17,10 +17,11 @@ local profileConfig = request["profileConfig"] as Mapping
 local clusterContext = request["clusterContext"] as Mapping?
 local clusterInputs = request["clusterInputs"] as Mapping
 
-local computedViolations = validation.violations(operation, profileConfig, clusterContext, clusterInputs)
+local computedViolations =
+  validation.violations(operation, profileConfig, clusterContext, clusterInputs)
 
 fields = catalog.fields
-requiredInputs = validation.requiredInputs(operation, profileConfig)
+requiredInputs = validation.requiredInputs(operation, profileConfig, clusterContext)
 violations = computedViolations
 
 // Invalid inputs never produce partial Helm values. q-core treats a missing helmValues on a valid
@@ -28,7 +29,8 @@ violations = computedViolations
 helmValues =
   if (operation == "COMPILE" && computedViolations.isEmpty)
     helm.compile(profileConfig, clusterInputs)
-  else null
+  else
+    null
 
 output {
   value = new Mapping {
