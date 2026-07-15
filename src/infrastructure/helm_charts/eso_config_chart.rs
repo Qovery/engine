@@ -8,7 +8,9 @@ use crate::infrastructure::helm_charts::eso_chart::{
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartValuesFilePath, ToCommonHelmChart,
 };
-use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::AwsAuthenticationMode;
+use crate::infrastructure::models::external_secrets::aws_secrets_manager_authentication::{
+    AwsAuthenticationMode, AwsSecretsManagerSource,
+};
 use crate::infrastructure::models::external_secrets::gcp_secrets_manager_authentication::GcpAuthenticationMode;
 use crate::infrastructure::models::external_secrets::{SecretsManagerAccess, SecretsManagerConnection};
 use crate::runtime::block_on;
@@ -71,6 +73,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                     SecretsManagerConnection::Aws(conn) => {
                         let region = &conn.region;
                         let authentication_mode = &conn.authentication_mode;
+                        let service = match conn.source {
+                            AwsSecretsManagerSource::AwsSecretsManager => "SecretsManager",
+                            AwsSecretsManagerSource::AwsParameterStore => "ParameterStore",
+                        };
                         // Set common fields
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].name", idx),
@@ -83,6 +89,10 @@ impl ToCommonHelmChart for EsoConfigChart {
                         values.push(ChartSetValue {
                             key: format!("authentications[{}].region", idx),
                             value: region.clone(),
+                        });
+                        values.push(ChartSetValue {
+                            key: format!("authentications[{}].service", idx),
+                            value: service.to_string(),
                         });
 
                         // Set authentication-specific fields
@@ -479,6 +489,46 @@ mod tests {
                 .iter()
                 .any(|v| v.key == "authentications[0].serviceAccount.namespace" && v.value == "qovery")
         );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].service" && v.value == "SecretsManager")
+        );
+    }
+
+    /// Test that AwsParameterStore source maps to the ParameterStore provider service
+    #[test]
+    fn test_aws_parameter_store_service_value() {
+        // setup:
+        let chart = EsoConfigChart::new(
+            None,
+            HelmChartNamespaces::Qovery,
+            HelmAction::Deploy,
+            Some(vec![SecretsManagerAccess {
+                id: "test-param-store".to_string(),
+                connection: SecretsManagerConnection::Aws(AwsConnection {
+                    source: AwsSecretsManagerSource::AwsParameterStore,
+                    region: "us-east-1".to_string(),
+                    authentication_mode: AwsAuthenticationMode::ArnRole {
+                        arn_role: "arn:aws:iam::123456789012:role/test-param-store-role".to_string(),
+                    },
+                }),
+            }]),
+            EsoClusterOutputs::Aws {
+                role_arn_automatically_generated: None,
+            },
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify:
+        let values = &common_chart.chart_info.values;
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].service" && v.value == "ParameterStore")
+        );
     }
 
     /// Test generating values for AWS static credentials authentication
@@ -549,6 +599,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].secretNamespace" && v.value == "qovery")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].service" && v.value == "SecretsManager")
         );
     }
 
@@ -694,6 +749,11 @@ mod tests {
                 .iter()
                 .any(|v| v.key == "authentications[0].type" && v.value == "aws-iam")
         );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].service" && v.value == "SecretsManager")
+        );
 
         // Check second authentication
         assert!(
@@ -715,6 +775,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[1].secretAccessKey" && v.value == "SECRET1")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[1].service" && v.value == "SecretsManager")
         );
     }
 
@@ -906,6 +971,11 @@ mod tests {
             values
                 .iter()
                 .any(|v| v.key == "authentications[0].type" && v.value == "aws-static")
+        );
+        assert!(
+            values
+                .iter()
+                .any(|v| v.key == "authentications[0].service" && v.value == "SecretsManager")
         );
 
         // Check GCP authentication
