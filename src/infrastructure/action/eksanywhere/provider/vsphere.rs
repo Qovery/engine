@@ -5,7 +5,8 @@ mod tags;
 #[path = "vsphere_template.rs"]
 mod template;
 
-use super::ParsedEksAnywhereClusterConfig;
+use super::{ParsedEksAnywhereClusterConfig, ProviderPreflightError};
+#[cfg(test)]
 use crate::errors::CommandError;
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
@@ -75,7 +76,7 @@ pub(super) fn run_vsphere_preflight(
     install_missing: bool,
     expected_eksd_release_tag: Option<&str>,
     logger: &impl InfraLogger,
-) -> Result<(), CommandError> {
+) -> Result<(), ProviderPreflightError> {
     let templates = extract_vsphere_templates_from_parsed_config(parsed_cluster_config);
     let metadata = extract_vsphere_cluster_metadata_from_parsed_config(parsed_cluster_config);
 
@@ -99,6 +100,14 @@ pub(super) fn run_vsphere_preflight(
     let govc_env = govc::build_govc_envs(cloud_provider, &metadata);
     govc::validate_govc_auth_envs(&govc_env)?;
     govc::log_govc_version(logger, &govc_env);
+    logger.info("🔐 Validating vSphere cloud credentials with vCenter.");
+    if let Err(error) = govc::validate_govc_connection(&govc_env) {
+        if govc::is_invalid_login_fault(&error) {
+            return Err(ProviderPreflightError::VSphereCloudCredentialsRejected(error));
+        }
+        return Err(error.into());
+    }
+    logger.info("✅ vSphere cloud credentials accepted by vCenter.");
     template::check_templates_with_govc(
         &templates,
         &metadata,

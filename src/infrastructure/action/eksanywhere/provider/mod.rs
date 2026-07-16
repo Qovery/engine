@@ -14,6 +14,30 @@ pub(super) enum EksAnywhereProviderMode {
     Unknown,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum ProviderPreflightError {
+    VSphereCloudCredentialsRejected(CommandError),
+    Other(CommandError),
+}
+
+impl ProviderPreflightError {
+    pub fn into_command_error(self) -> CommandError {
+        match self {
+            Self::VSphereCloudCredentialsRejected(error) | Self::Other(error) => error,
+        }
+    }
+}
+
+impl From<CommandError> for ProviderPreflightError {
+    fn from(error: CommandError) -> Self {
+        Self::Other(error)
+    }
+}
+
+const VSPHERE_AUTHENTICATION_ERROR_MESSAGE: &str = "vSphere authentication failed: vCenter rejected the vSphere cloud credentials configured for this cluster. Verify the associated cloud credentials and retry.";
+const VSPHERE_PREFLIGHT_ERROR_MESSAGE: &str = "vSphere preflight checks failed";
+const PROVIDER_PREFLIGHT_ERROR_MESSAGE: &str = "Provider preflight checks failed";
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct ParsedEksAnywhereClusterConfig {
     documents: Vec<EksAnywhereConfigDocument>,
@@ -203,7 +227,7 @@ pub(super) fn run_provider_preflight_for_mode(
     install_missing: bool,
     expected_eksd_release_tag: Option<&str>,
     logger: &impl InfraLogger,
-) -> Result<(), CommandError> {
+) -> Result<(), ProviderPreflightError> {
     match provider_mode {
         EksAnywhereProviderMode::VSphere => vsphere::run_vsphere_preflight(
             parsed_cluster_config,
@@ -217,9 +241,26 @@ pub(super) fn run_provider_preflight_for_mode(
     }
 }
 
+pub(super) fn provider_preflight_user_error_message(
+    provider_mode: EksAnywhereProviderMode,
+    error: &ProviderPreflightError,
+) -> &'static str {
+    match (provider_mode, error) {
+        (EksAnywhereProviderMode::VSphere, ProviderPreflightError::VSphereCloudCredentialsRejected(_)) => {
+            VSPHERE_AUTHENTICATION_ERROR_MESSAGE
+        }
+        (EksAnywhereProviderMode::VSphere, _) => VSPHERE_PREFLIGHT_ERROR_MESSAGE,
+        (EksAnywhereProviderMode::Unknown, _) => PROVIDER_PREFLIGHT_ERROR_MESSAGE,
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{EksAnywhereProviderMode, parse_eks_anywhere_cluster_config_from_yaml};
+    use super::{
+        EksAnywhereProviderMode, ProviderPreflightError, parse_eks_anywhere_cluster_config_from_yaml,
+        provider_preflight_user_error_message,
+    };
+    use crate::errors::CommandError;
 
     #[test]
     fn should_detect_vsphere_provider_mode() {
@@ -261,5 +302,38 @@ metadata:
             .expect("YAML should parse")
             .provider_mode();
         assert_eq!(mode, EksAnywhereProviderMode::Unknown);
+    }
+
+    #[test]
+    fn should_expose_rejected_vsphere_cloud_credentials_to_user() {
+        let error = ProviderPreflightError::VSphereCloudCredentialsRejected(CommandError::new(
+            "vSphere cloud credentials rejected".to_string(),
+            Some("Structured SOAP InvalidLogin fault".to_string()),
+            None,
+        ));
+
+        assert_eq!(
+            provider_preflight_user_error_message(EksAnywhereProviderMode::VSphere, &error),
+            "vSphere authentication failed: vCenter rejected the vSphere cloud credentials configured for this cluster. Verify the associated cloud credentials and retry."
+        );
+        assert_eq!(
+            provider_preflight_user_error_message(EksAnywhereProviderMode::Unknown, &error),
+            "Provider preflight checks failed"
+        );
+    }
+
+    #[test]
+    fn should_keep_generic_provider_preflight_messages_for_other_errors() {
+        let error =
+            ProviderPreflightError::Other(CommandError::new_from_safe_message("Template not found".to_string()));
+
+        assert_eq!(
+            provider_preflight_user_error_message(EksAnywhereProviderMode::VSphere, &error),
+            "vSphere preflight checks failed"
+        );
+        assert_eq!(
+            provider_preflight_user_error_message(EksAnywhereProviderMode::Unknown, &error),
+            "Provider preflight checks failed"
+        );
     }
 }

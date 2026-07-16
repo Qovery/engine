@@ -5,8 +5,8 @@ use super::cluster_install::install_eks_anywhere_charts;
 use super::eksctl::{run_eks_anywhere_upgrade_cluster, run_eks_anywhere_upgrade_plan};
 use super::etcd_backup::run_eks_anywhere_cluster_backup;
 use super::provider::{
-    EksAnywhereProviderMode, ParsedEksAnywhereClusterConfig, parse_eks_anywhere_cluster_config,
-    run_provider_preflight_for_mode,
+    EksAnywhereProviderMode, ParsedEksAnywhereClusterConfig, ProviderPreflightError, parse_eks_anywhere_cluster_config,
+    provider_preflight_user_error_message, run_provider_preflight_for_mode,
 };
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::environment::models::types::VersionsNumber;
@@ -269,17 +269,15 @@ fn log_provider_mode(logger: &impl InfraLogger, provider_mode: EksAnywhereProvid
 fn map_provider_preflight_error(
     cluster: &EksAnywhere,
     provider_mode: EksAnywhereProviderMode,
-    error: CommandError,
+    error: ProviderPreflightError,
 ) -> Box<EngineError> {
-    let message = match provider_mode {
-        EksAnywhereProviderMode::VSphere => "vSphere preflight checks failed",
-        EksAnywhereProviderMode::Unknown => "Provider preflight checks failed",
-    };
+    let message = provider_preflight_user_error_message(provider_mode, &error);
+    let command_error = error.into_command_error();
 
     Box::new(EngineError::new_unknown(
         cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
         message.to_string(),
-        Some(error),
+        Some(command_error),
         None,
         None,
     ))
