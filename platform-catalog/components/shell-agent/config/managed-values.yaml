@@ -1,0 +1,9 @@
+# Source 3 — declarative runtime-input mapping. Placeholders must occupy the whole value.
+image:
+  repository: "${image.repository}"
+  tag: "${image.tag}"
+environmentVariables:
+  GRPC_SERVER: "${qovery.agentGatewayUrl}"
+  ORGANIZATION_ID: "${cluster.organizationId}"
+  CLUSTER_ID: "${cluster.id}"
+  CLUSTER_JWT_TOKEN: "${cluster.jwtToken}"

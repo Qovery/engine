@@ -23,6 +23,7 @@ platform-catalog/
         overlays/              # source 2 — context fragments, convention-named:
                                #   <mode>.yaml then <provider>.yaml, kebab-cased enum
                                #   names (e.g. customer-managed.yaml, aws.yaml)
+        managed-values.yaml    # declarative source 3 — whole-value runtime-input mapping
         model.pkl              # optional source 3 entrypoint — orchestration + JSON output
         contract.pkl           # language-neutral q-core response types
         catalog.pkl            # Console field and logical-input descriptions
@@ -34,9 +35,23 @@ platform-catalog/
 
 File semantics (the contract q-core's loader implements):
 
-- an **absent** file is an empty fragment;
+- an absent `base.yaml` or context overlay is an empty fragment;
+- a component without an evaluator must publish `managed-values.yaml`; an evaluator makes it optional;
 - a **present-but-invalid** YAML file is a hard compilation error;
-- merge order: `base < mode overlay < provider overlay < managed config`.
+- merge order: `base < mode overlay < provider overlay < declarative mapping < evaluator-derived config`.
+
+`managed-values.yaml` is the deliberately small source-3 format for components that only map
+resolved runtime inputs to Helm paths. A placeholder must occupy the whole scalar value, for example
+`CLUSTER_JWT_TOKEN: "${cluster.jwtToken}"`. Defaults, conditions, partial interpolation,
+transformations, or any other logic require the component evaluator directly; there is no
+intermediate template language. q-core loads and validates the mapping against the release
+manifest's runtime-input declarations while warming the digest-pinned bundle, then renders it with
+the same generic compiler used by the previous in-manifest `managedValues` representation.
+
+An evaluator makes `managed-values.yaml` optional. When a component temporarily has both, q-core
+merges the declarative mapping before the evaluator-derived values, so derived values win. Mixing
+the two forms is discouraged: use the declarative mapping when there is nothing to calculate, and
+the evaluator as soon as logic is required.
 
 When a component declares a Pkl evaluator in the q-core release manifest,
 `model.pkl` is the stable entrypoint for the executable source of truth for source 3. Its focused
@@ -53,12 +68,20 @@ The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
 production fallback. Once the bundle is pinned, an unavailable or invalid Pkl
 model makes the affected catalog operation fail closed.
 
-cluster-agent and shell-agent have an intentionally empty (comments-only)
-`base.yaml`: no Qovery-owned config yet — their values are q-core manifest
-wiring. Keeping the file makes every component publishable as a bundle from
-day one (uniform seam for q-core, no "component without bundle" special case)
-and documents where config lands when it arrives. A comments-only file parses
-to YAML null, which the loader must treat as an empty fragment.
+cluster-agent and shell-agent keep an intentionally empty (comments-only) `base.yaml` until their
+static Engine-v1 parity values land. Their per-cluster wiring now lives in `managed-values.yaml`:
+the bundle records the Helm paths and abstract placeholders, while q-core's release manifest records
+the input providers (`qcoreValue`, customer value, Terraform output, and so on). The real JWT and
+cluster identifiers never enter the public bundle; q-core resolves them in memory when compiling
+`values.final.yaml`. A comments-only base file parses to YAML null, which the loader treats as an
+empty fragment.
+
+Loki keeps the provider-neutral `pvc` option and exposes an explicit self-managed object-storage
+matrix: AWS/S3, GCP/GCS, Azure/Blob Storage, and Scaleway/S3-compatible. These are evaluator rules,
+not provider overlays, because the selected fragment depends on both the product `storage` setting
+and cluster provider. S3-compatible credentials stay in a customer-created Kubernetes Secret; only
+its name is a runtime input. Qovery-managed object storage remains fail-closed until Terraform
+outputs are available before Helm compilation.
 
 ## Relation to helm-freeze
 

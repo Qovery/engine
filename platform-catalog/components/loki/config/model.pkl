@@ -20,7 +20,7 @@ local clusterInputs = request["clusterInputs"] as Mapping
 local computedViolations =
   validation.violations(operation, profileConfig, clusterContext, clusterInputs)
 
-fields = catalog.fields
+fields = catalog.fieldsForContext(operation, clusterContext)
 requiredInputs = validation.requiredInputs(operation, profileConfig, clusterContext)
 violations = computedViolations
 

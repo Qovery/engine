@@ -5,22 +5,19 @@ import "catalog.pkl"
 import "contract.pkl"
 import "profile.pkl"
 
-// Returns only the logical inputs active for the current draft. DESCRIBE intentionally has no
-// cluster context and therefore returns the static field catalogue only.
+// Returns only the logical inputs active for the selected backend. Their concrete source remains
+// a q-core release-manifest concern; this model only names what Loki needs.
 function requiredInputs(
   operation: String,
   profileConfig: Mapping,
   clusterContext: Mapping?,
 ): List<contract.LogicalInput> =
-  if (operation == "DESCRIBE")
-    List()
-  else if (
-    profile.storage(profileConfig) == "s3"
-      && clusterContext?.getOrNull("provider") == "AWS"
-  )
-    catalog.s3Inputs
-  else
-    List()
+  let (storage = profile.storage(profileConfig))
+  let (provider = clusterContext?.getOrNull("provider") as String?)
+    if (operation == "DESCRIBE" || !providerMatchesStorage(storage, provider))
+      List()
+    else
+      catalog.inputsForStorage(storage)
 
 // VALIDATE and COMPILE share the exact same rules. COMPILE is called again immediately before
 // deployment so an old or corrupted stored profile still fails closed.
@@ -80,6 +77,8 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
   let (retentionWeeks = profile.retentionWeeks(profileConfig))
   let (highAvailability = profile.highAvailability(profileConfig))
   let (storage = profile.storage(profileConfig))
+  let (provider = clusterContext?.getOrNull("provider") as String?)
+  let (mode = clusterContext?.getOrNull("mode") as String?)
     List(
       if (
         retentionWeeks != null
@@ -103,33 +102,55 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
         }
       else
         null,
-      if (highAvailability == true && storage != "s3")
+      if (highAvailability == true && storage == "pvc")
         new contract.Violation {
-          code = "HIGH_AVAILABILITY_REQUIRES_S3"
+          code = "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE"
           fieldPath = "highAvailability"
-          message = "Loki high availability requires S3 storage"
+          message = "Loki high availability requires object storage"
         }
       else
         null,
-      if (storage == "s3" && clusterContext?.getOrNull("provider") != "AWS")
+      storageProviderViolation(storage, provider),
+      // Managed object storage stays blocked until Terraform outputs are available before Helm
+      // compile. The POC implemented here is intentionally customer-managed first.
+      if (storage != null && storage != "pvc" && mode == "QOVERY_MANAGED")
         new contract.Violation {
-          code = "S3_AWS_ONLY"
-          fieldPath = "storage"
-          message = "Loki S3 storage is supported only on AWS clusters"
-        }
-      else
-        null,
-      // Managed S3 stays blocked until Terraform outputs are available before Helm compile.
-      if (storage == "s3" && clusterContext?.getOrNull("mode") == "QOVERY_MANAGED")
-        new contract.Violation {
-          code = "MANAGED_S3_EXECUTION_NOT_AVAILABLE"
+          code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
           fieldPath = "storage"
           message =
-            "Loki S3 storage on Qovery-managed clusters requires the Terraform output execution barrier"
+            "Loki object storage on Qovery-managed clusters requires the Terraform output execution barrier"
         }
       else
         null,
     ).filter((violation) -> violation != null)
+
+local function storageProviderViolation(storage: String?, provider: String?): contract.Violation? =
+  if (storage == "s3" && provider != "AWS")
+    unsupportedProvider("s3", "AWS", provider)
+  else if (storage == "gcs" && provider != "GCP")
+    unsupportedProvider("gcs", "GCP", provider)
+  else if (storage == "azureBlob" && provider != "AZURE")
+    unsupportedProvider("azureBlob", "AZURE", provider)
+  else if (storage == "s3Compatible" && provider != "SCW")
+    unsupportedProvider("s3Compatible", "SCW", provider)
+  else
+    null
+
+local function providerMatchesStorage(storage: String?, provider: String?): Boolean =
+  storage == null
+    || storage == "pvc"
+    || (storage == "s3" && provider == "AWS")
+    || (storage == "gcs" && provider == "GCP")
+    || (storage == "azureBlob" && provider == "AZURE")
+    || (storage == "s3Compatible" && provider == "SCW")
+
+local function unsupportedProvider(storage: String, expectedProvider: String, actualProvider: String?) =
+  new contract.Violation {
+    code = "STORAGE_PROVIDER_MISMATCH"
+    fieldPath = "storage"
+    message =
+      "Loki storage \(storage) requires provider \(expectedProvider); this cluster uses \(actualProvider)"
+  }
 
 local function requiredInputViolations(
   operation: String,
@@ -137,44 +158,42 @@ local function requiredInputViolations(
   clusterContext: Mapping?,
   clusterInputs: Mapping,
 ) =
-  // Managed mode reports the execution-barrier violation above. Reporting missing Terraform
-  // outputs as well would add noise without giving the user another action to take.
-  if (
-    (operation != "VALIDATE" && operation != "COMPILE")
-      || profile.storage(profileConfig) != "s3"
-      || clusterContext?.getOrNull("provider") != "AWS"
-      || clusterContext?.getOrNull("mode") == "QOVERY_MANAGED"
-  )
-    List()
-  else
-    List(
-      if (inputIsBlank(clusterInputs, catalog.s3BucketInput.key))
-        new contract.Violation {
-          code = "REQUIRED_INPUT_MISSING"
-          fieldPath = "clusterInputs.\(catalog.s3BucketInput.key)"
-          message = "Required input \(catalog.s3BucketInput.key) is missing"
-        }
-      else
-        null,
-      if (inputIsBlank(clusterInputs, catalog.s3RoleInput.key))
-        new contract.Violation {
-          code = "REQUIRED_INPUT_MISSING"
-          fieldPath = "clusterInputs.\(catalog.s3RoleInput.key)"
-          message = "Required input \(catalog.s3RoleInput.key) is missing"
-        }
-      else
-        null,
-      inputPatternViolation(clusterInputs, catalog.s3BucketInput),
-      inputPatternViolation(clusterInputs, catalog.s3RoleInput),
-      if (operation == "COMPILE" && inputIsBlank(clusterInputs, "infra.awsRegion"))
-        new contract.Violation {
-          code = "REQUIRED_INPUT_MISSING"
-          fieldPath = "clusterInputs.infra.awsRegion"
-          message = "Required input infra.awsRegion is missing"
-        }
-      else
-        null,
-    ).filter((violation) -> violation != null)
+  let (storage = profile.storage(profileConfig))
+  let (inputs = catalog.inputsForStorage(storage))
+    // Managed mode reports the execution-barrier violation above. Reporting unavailable outputs as
+    // missing customer values too would add noise without giving the user another action to take.
+    if (
+      (operation != "VALIDATE" && operation != "COMPILE")
+        || inputs.isEmpty
+        || clusterContext?.getOrNull("mode") == "QOVERY_MANAGED"
+        || !providerMatchesStorage(
+          storage,
+          clusterContext?.getOrNull("provider") as String?,
+        )
+    )
+      List()
+    else
+      inputs
+        .map((input) ->
+          if (inputIsBlank(clusterInputs, input.key))
+            new contract.Violation {
+              code = "REQUIRED_INPUT_MISSING"
+              fieldPath = "clusterInputs.\(input.key)"
+              message = "Required input \(input.key) is missing"
+            }
+          else
+            inputPatternViolation(clusterInputs, input)
+        )
+        .filter((violation) -> violation != null)
+        .toList()
+        + if (operation == "COMPILE" && storage == "s3" && inputIsBlank(clusterInputs, "infra.awsRegion"))
+          List(new contract.Violation {
+            code = "REQUIRED_INPUT_MISSING"
+            fieldPath = "clusterInputs.infra.awsRegion"
+            message = "Required input infra.awsRegion is missing"
+          })
+        else
+          List()
 
 local function inputIsBlank(clusterInputs: Mapping, key: String): Boolean =
   let (value = clusterInputs.getOrNull(key))

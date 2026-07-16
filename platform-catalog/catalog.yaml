@@ -12,13 +12,13 @@
 components:
   - name: cluster-agent
     chart: qovery-cluster-agent # generated chart, published via helper.sh update_qovery_chart
-    version: v1
+    version: v2
   - name: shell-agent
     chart: qovery-shell-agent # generated chart, published via helper.sh update_qovery_chart
-    version: v1
+    version: v2
   - name: loki
     chart: loki # frozen upstream chart, pinned in lib-engine/lib/helm-freeze.yaml
-    version: v3
+    version: v4
 
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this

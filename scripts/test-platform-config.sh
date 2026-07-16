@@ -64,14 +64,24 @@ describe="$(evaluate "$LOKI_MODEL" "$describe_request")"
 assert_result "Loki DESCRIBE" "$describe" '
   (.fields | map(.key)) == ["retentionWeeks", "highAvailability", "storage"] and
   (.fields[] | select(.key == "retentionWeeks") | .description | startswith("Whole number")) and
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "s3", "gcs", "azureBlob", "s3Compatible"] and
   .requiredInputs == [] and
   .violations == [] and
   (has("helmValues") | not)
 '
 
+gcp_describe_request='{"operation":"DESCRIBE","componentKey":"loki","profileConfig":{},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"GCP"},"clusterInputs":{},"componentOutputs":{}}'
+gcp_describe="$(evaluate "$LOKI_MODEL" "$gcp_describe_request")"
+assert_result "Loki contextual DESCRIBE on GCP" "$gcp_describe" '
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "gcs"] and
+  .requiredInputs == [] and
+  .violations == []
+'
+
 resolve_request='{"operation":"RESOLVE_REQUIREMENTS","componentKey":"loki","profileConfig":{"storage":"s3","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
 resolve="$(evaluate "$LOKI_MODEL" "$resolve_request")"
 assert_result "Loki RESOLVE_REQUIREMENTS on AWS" "$resolve" '
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "s3"] and
   (.requiredInputs | map(.key)) == ["infra.s3BucketName", "infra.lokiRoleArn"] and
   (.requiredInputs | map(.scope) | unique) == ["CLUSTER"] and
   .violations == []
@@ -80,20 +90,29 @@ assert_result "Loki RESOLVE_REQUIREMENTS on AWS" "$resolve" '
 gcp_resolve_request='{"operation":"RESOLVE_REQUIREMENTS","componentKey":"loki","profileConfig":{"storage":"s3","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"GCP"},"clusterInputs":{},"componentOutputs":{}}'
 gcp_resolve="$(evaluate "$LOKI_MODEL" "$gcp_resolve_request")"
 assert_result "Loki RESOLVE_REQUIREMENTS on GCP" "$gcp_resolve" '
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "gcs"] and
   .requiredInputs == [] and
-  (.violations | map(.code)) == ["S3_AWS_ONLY"]
+  (.violations | map(.code)) == ["STORAGE_PROVIDER_MISMATCH"]
+'
+
+managed_resolve_request='{"operation":"RESOLVE_REQUIREMENTS","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"QOVERY_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
+managed_resolve="$(evaluate "$LOKI_MODEL" "$managed_resolve_request")"
+assert_result "Loki RESOLVE_REQUIREMENTS on a Qovery-managed cluster" "$managed_resolve" '
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc"] and
+  .requiredInputs == [] and
+  .violations == []
 '
 
 gcp_validate_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"s3","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"GCP"},"clusterInputs":{},"componentOutputs":{}}'
 gcp_validate="$(evaluate "$LOKI_MODEL" "$gcp_validate_request")"
 assert_result "Loki VALIDATE on GCP" "$gcp_validate" '
-  (.violations | map(.code)) == ["S3_AWS_ONLY"]
+  (.violations | map(.code)) == ["STORAGE_PROVIDER_MISMATCH"]
 '
 
 validate_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":0,"highAvailability":true},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
 validate="$(evaluate "$LOKI_MODEL" "$validate_request")"
 assert_result "Loki VALIDATE product settings" "$validate" '
-  (.violations | map(.code)) == ["VALUE_OUT_OF_RANGE", "HIGH_AVAILABILITY_REQUIRES_S3"] and
+  (.violations | map(.code)) == ["VALUE_OUT_OF_RANGE", "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE"] and
   (has("helmValues") | not)
 '
 
@@ -109,6 +128,13 @@ non_string_input="$(evaluate "$LOKI_MODEL" "$non_string_input_request")"
 assert_result "Loki VALIDATE non-string runtime input" "$non_string_input" '
   (.violations | map(.code)) == ["REQUIRED_INPUT_MISSING"] and
   .violations[0].fieldPath == "clusterInputs.infra.s3BucketName"
+'
+
+credentialed_endpoint_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"s3Compatible","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"SCW"},"clusterInputs":{"infra.s3CompatibleBucketName":"qovery-loki-scw","infra.s3CompatibleEndpoint":"https://access:secret@s3.fr-par.scw.cloud","infra.s3CompatibleRegion":"fr-par","infra.s3CompatibleCredentialsSecretName":"loki-object-storage"},"componentOutputs":{}}'
+credentialed_endpoint="$(evaluate "$LOKI_MODEL" "$credentialed_endpoint_request")"
+assert_result "Loki VALIDATE S3-compatible endpoint without embedded credentials" "$credentialed_endpoint" '
+  (.violations | map(.code)) == ["INPUT_PATTERN_MISMATCH"] and
+  .violations[0].fieldPath == "clusterInputs.infra.s3CompatibleEndpoint"
 '
 
 decimal_retention_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":12.5,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
@@ -155,6 +181,59 @@ assert_result "Loki COMPILE high availability" "$ha_compile" '
   .helmValues.backend.replicas == 3 and
   .helmValues.write.persistence.volumeClaimsEnabled == false and
   .helmValues.backend.persistence.volumeClaimsEnabled == false
+'
+
+gcs_compile_request='{"operation":"COMPILE","componentKey":"loki","profileConfig":{"storage":"gcs","retentionWeeks":8,"highAvailability":true},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"GCP"},"clusterInputs":{"infra.gcsBucketName":"qovery-loki-gcp","infra.gcpServiceAccountEmail":"loki@qovery-project.iam.gserviceaccount.com"},"componentOutputs":{}}'
+gcs_compile="$(evaluate "$LOKI_MODEL" "$gcs_compile_request")"
+assert_result "Loki COMPILE GCS" "$gcs_compile" '
+  .violations == [] and
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "gcs"] and
+  (.requiredInputs | map(.key)) == ["infra.gcsBucketName", "infra.gcpServiceAccountEmail"] and
+  .helmValues.deploymentMode == "SimpleScalable" and
+  .helmValues.loki.storage.type == "gcs" and
+  .helmValues.loki.storage.bucketNames == {"chunks":"qovery-loki-gcp","ruler":"qovery-loki-gcp","admin":"qovery-loki-gcp"} and
+  .helmValues.loki.schemaConfig.configs[0].object_store == "gcs" and
+  .helmValues.loki.compactor.delete_request_store == "gcs" and
+  .helmValues.serviceAccount.annotations["iam.gke.io/gcp-service-account"] == "loki@qovery-project.iam.gserviceaccount.com" and
+  .helmValues.write.persistence.volumeClaimsEnabled == false and
+  .helmValues.backend.persistence.volumeClaimsEnabled == false
+'
+
+azure_compile_request='{"operation":"COMPILE","componentKey":"loki","profileConfig":{"storage":"azureBlob","retentionWeeks":6,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AZURE"},"clusterInputs":{"infra.azureStorageAccountName":"qoveryloki","infra.azureContainerName":"loki-data","infra.azureManagedIdentityClientId":"12345678-1234-1234-1234-123456789abc"},"componentOutputs":{}}'
+azure_compile="$(evaluate "$LOKI_MODEL" "$azure_compile_request")"
+assert_result "Loki COMPILE Azure Blob" "$azure_compile" '
+  .violations == [] and
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "azureBlob"] and
+  (.requiredInputs | map(.key)) == ["infra.azureStorageAccountName", "infra.azureContainerName", "infra.azureManagedIdentityClientId"] and
+  .helmValues.deploymentMode == "SingleBinary" and
+  .helmValues.loki.storage.type == "azure" and
+  .helmValues.loki.storage.bucketNames == {"chunks":"loki-data","ruler":"loki-data","admin":"loki-data"} and
+  .helmValues.loki.storage.azure.accountName == "qoveryloki" and
+  .helmValues.loki.storage.azure.useFederatedToken == true and
+  .helmValues.loki.podLabels["azure.workload.identity/use"] == "true" and
+  .helmValues.serviceAccount.name == "qovery-storage" and
+  .helmValues.serviceAccount.labels["azure.workload.identity/use"] == "true" and
+  .helmValues.serviceAccount.annotations["azure.workload.identity/client-id"] == "12345678-1234-1234-1234-123456789abc"
+'
+
+s3_compatible_compile_request='{"operation":"COMPILE","componentKey":"loki","profileConfig":{"storage":"s3Compatible","retentionWeeks":10,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"SCW"},"clusterInputs":{"infra.s3CompatibleBucketName":"qovery-loki-scw","infra.s3CompatibleEndpoint":"https://s3.fr-par.scw.cloud","infra.s3CompatibleRegion":"fr-par","infra.s3CompatibleCredentialsSecretName":"loki-object-storage"},"componentOutputs":{}}'
+s3_compatible_compile="$(evaluate "$LOKI_MODEL" "$s3_compatible_compile_request")"
+assert_result "Loki COMPILE S3-compatible" "$s3_compatible_compile" '
+  .violations == [] and
+  (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "s3Compatible"] and
+  (.requiredInputs | map(.key)) == ["infra.s3CompatibleBucketName", "infra.s3CompatibleEndpoint", "infra.s3CompatibleRegion", "infra.s3CompatibleCredentialsSecretName"] and
+  .helmValues.loki.storage.type == "s3" and
+  .helmValues.loki.storage.s3.endpoint == "https://s3.fr-par.scw.cloud" and
+  .helmValues.loki.storage.s3.region == "fr-par" and
+  .helmValues.loki.storage.s3.accessKeyId == "${S3_ACCESS_KEY_ID}" and
+  .helmValues.loki.storage.s3.secretAccessKey == "${S3_SECRET_ACCESS_KEY}" and
+  .helmValues.loki.storage.s3.s3ForcePathStyle == true and
+  .helmValues.singleBinary.extraArgs == ["-config.expand-env=true"] and
+  .helmValues.singleBinary.extraEnvFrom == [{"secretRef":{"name":"loki-object-storage"}}] and
+  .helmValues.write.extraEnvFrom == [{"secretRef":{"name":"loki-object-storage"}}] and
+  .helmValues.read.extraEnvFrom == [{"secretRef":{"name":"loki-object-storage"}}] and
+  .helmValues.backend.extraEnvFrom == [{"secretRef":{"name":"loki-object-storage"}}] and
+  (.helmValues | has("global") | not)
 '
 
 echo "Platform config Pkl contract tests passed"

@@ -7,21 +7,46 @@ import "profile.pkl"
 // Produces Source 3 only: the Loki values derived from customer-facing product settings.
 // q-core merges this after chart defaults and context overlays.
 function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
-  let (isS3 = profile.storage(profileConfig) == "s3")
+  let (storage = profile.storage(profileConfig) as String)
+  let (isObjectStorage = storage != "pvc")
   let (isHighAvailability = profile.highAvailability(profileConfig) == true)
   let (writeReplicas = if (isHighAvailability) 3 else 0)
   let (replicationFactor = if (isHighAvailability) writeReplicas else 1)
     new Mapping {
       ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
-      ["loki"] = lokiValues(profileConfig, clusterInputs, isS3, replicationFactor)
-      ["singleBinary"] = singleBinaryValues(isHighAvailability, isS3)
-      ["write"] = scalableStatefulTargetValues(writeReplicas, isS3)
-      ["read"] = new Mapping { ["replicas"] = if (isHighAvailability) 3 else 0 }
-      ["backend"] = scalableStatefulTargetValues(if (isHighAvailability) 3 else 0, isS3)
-      when (isS3) {
+      ["loki"] = lokiValues(profileConfig, clusterInputs, storage, replicationFactor)
+      ["singleBinary"] =
+        singleBinaryValues(isHighAvailability, isObjectStorage, storage, clusterInputs)
+      ["write"] =
+        scalableStatefulTargetValues(writeReplicas, isObjectStorage, storage, clusterInputs)
+      ["read"] = readTargetValues(if (isHighAvailability) 3 else 0, storage, clusterInputs)
+      ["backend"] =
+        scalableStatefulTargetValues(
+          if (isHighAvailability) 3 else 0,
+          isObjectStorage,
+          storage,
+          clusterInputs,
+        )
+      when (storage == "s3") {
         ["serviceAccount"] = new Mapping {
           ["annotations"] = new Mapping {
             ["eks.amazonaws.com/role-arn"] = clusterInputs[catalog.s3RoleInput.key]
+          }
+        }
+      }
+      when (storage == "gcs") {
+        ["serviceAccount"] = new Mapping {
+          ["annotations"] = new Mapping {
+            ["iam.gke.io/gcp-service-account"] = clusterInputs[catalog.gcpServiceAccountInput.key]
+          }
+        }
+      }
+      when (storage == "azureBlob") {
+        ["serviceAccount"] = new Mapping {
+          ["name"] = "qovery-storage"
+          ["labels"] = new Mapping { ["azure.workload.identity/use"] = "true" }
+          ["annotations"] = new Mapping {
+            ["azure.workload.identity/client-id"] = clusterInputs[catalog.azureManagedIdentityInput.key]
           }
         }
       }
@@ -29,67 +54,163 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
 
 // Object storage is durable; the local /var/loki data only contains ephemeral state. Disable the
 // PVC inherited from base.yaml and mount an explicit emptyDir because the container root filesystem
-// is read-only. This also avoids requiring a default StorageClass on customer-managed clusters.
-local function singleBinaryValues(isHighAvailability: Boolean, isS3: Boolean): Mapping = new Mapping {
-  ["replicas"] = if (isHighAvailability) 0 else 1
-  when (isS3) {
-    ["persistence"] = new Mapping { ["enabled"] = false }
-    ["extraVolumes"] =
-      List(new Mapping {
-        ["name"] = "storage"
-        ["emptyDir"] = new Mapping {}
-      })
-    ["extraVolumeMounts"] =
-      List(new Mapping {
-        ["name"] = "storage"
-        ["mountPath"] = "/var/loki"
-      })
+// is read-only. This also avoids requiring a default StorageClass on object-storage installations.
+local function singleBinaryValues(
+  isHighAvailability: Boolean,
+  isObjectStorage: Boolean,
+  storage: String,
+  clusterInputs: Mapping,
+): Mapping =
+  new Mapping {
+    ["replicas"] = if (isHighAvailability) 0 else 1
+    when (isObjectStorage) {
+      ["persistence"] = new Mapping { ["enabled"] = false }
+      ["extraVolumes"] =
+        List(new Mapping {
+          ["name"] = "storage"
+          ["emptyDir"] = new Mapping {}
+        })
+      ["extraVolumeMounts"] =
+        List(new Mapping {
+          ["name"] = "storage"
+          ["mountPath"] = "/var/loki"
+        })
+    }
+    when (storage == "s3Compatible") {
+      ["extraArgs"] = environmentExpansionArgs
+      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
+    }
   }
-}
 
-// The chart enables write/backend volume claims by default. In SimpleScalable mode, durable data is
-// already in S3, so retain only ephemeral local state and preserve the behavior of Engine v1.
-local function scalableStatefulTargetValues(replicas: Int, isS3: Boolean): Mapping = new Mapping {
-  ["replicas"] = replicas
-  when (isS3) {
-    ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+// The chart enables write/backend volume claims by default. In SimpleScalable mode, durable data
+// is already in object storage, so retain only ephemeral local state.
+local function scalableStatefulTargetValues(
+  replicas: Int,
+  isObjectStorage: Boolean,
+  storage: String,
+  clusterInputs: Mapping,
+): Mapping =
+  new Mapping {
+    ["replicas"] = replicas
+    when (isObjectStorage) {
+      ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+    }
+    when (storage == "s3Compatible") {
+      ["extraArgs"] = environmentExpansionArgs
+      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
+    }
   }
-}
+
+local function readTargetValues(replicas: Int, storage: String, clusterInputs: Mapping): Mapping =
+  new Mapping {
+    ["replicas"] = replicas
+    when (storage == "s3Compatible") {
+      ["extraArgs"] = environmentExpansionArgs
+      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
+    }
+  }
+
+local environmentExpansionArgs: List<String> = List("-config.expand-env=true")
+
+// Only the Secret name enters values.final.yaml. The Secret itself is created by the customer in
+// the Loki namespace and contains S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY.
+local function s3CompatibleCredentialsEnvFrom(clusterInputs: Mapping): List<Mapping> =
+  List(new Mapping {
+    ["secretRef"] = new Mapping {
+      ["name"] = clusterInputs[catalog.s3CompatibleCredentialsSecretInput.key]
+    }
+  })
 
 local function lokiValues(
   profileConfig: Mapping,
   clusterInputs: Mapping,
-  isS3: Boolean,
+  storage: String,
   replicationFactor: Int,
-): Mapping = new Mapping {
-  ["commonConfig"] = new Mapping { ["replication_factor"] = replicationFactor }
-  ["limits_config"] = new Mapping {
-    // Loki expects a duration; the product model intentionally exposes easier-to-understand weeks.
-    // COMPILE is called only after validation, so a null here is an invariant failure, not a default.
-    ["retention_period"] = "\((profile.retentionWeeks(profileConfig) as Int) * 168)h"
-  }
-  when (isS3) {
-    ["storage"] = new Mapping {
-      ["type"] = "s3"
-      ["bucketNames"] = new Mapping {
-        ["chunks"] = clusterInputs[catalog.s3BucketInput.key]
-        ["ruler"] = clusterInputs[catalog.s3BucketInput.key]
-        ["admin"] = clusterInputs[catalog.s3BucketInput.key]
+): Mapping =
+  let (objectStore = objectStoreId(storage))
+    new Mapping {
+      ["commonConfig"] = new Mapping { ["replication_factor"] = replicationFactor }
+      ["limits_config"] = new Mapping {
+        // Loki expects a duration; the product model intentionally exposes easier-to-understand weeks.
+        // COMPILE is called only after validation, so a null here is an invariant failure, not a default.
+        ["retention_period"] = "\((profile.retentionWeeks(profileConfig) as Int) * 168)h"
       }
-      ["s3"] = new Mapping { ["region"] = clusterInputs["infra.awsRegion"] }
+      when (storage == "azureBlob") {
+        ["podLabels"] = new Mapping { ["azure.workload.identity/use"] = "true" }
+      }
+      when (objectStore != null) {
+        ["storage"] = objectStorageValues(storage, clusterInputs)
+        ["schemaConfig"] = new Mapping {
+          // Initial schema for fresh Engine v2 installations. Changing storage on an existing Loki
+          // requires appending a future-dated period instead of rewriting this one.
+          ["configs"] =
+            List(new Mapping {
+              ["from"] = "2024-04-01"
+              ["store"] = "tsdb"
+              ["object_store"] = objectStore
+              ["schema"] = "v13"
+              ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
+            })
+        }
+        ["compactor"] = new Mapping { ["delete_request_store"] = objectStore }
+      }
     }
-    ["schemaConfig"] = new Mapping {
-      // Initial schema for fresh Engine v2 installations. Changing storage on an existing Loki
-      // requires appending a future-dated period instead of rewriting this one.
-      ["configs"] =
-        List(new Mapping {
-          ["from"] = "2024-04-01"
-          ["store"] = "tsdb"
-          ["object_store"] = "s3"
-          ["schema"] = "v13"
-          ["index"] = new Mapping { ["prefix"] = "index_"; ["period"] = "24h" }
-        })
+
+local function objectStorageValues(storage: String, clusterInputs: Mapping): Mapping =
+  let (bucket = bucketName(storage, clusterInputs))
+    new Mapping {
+      ["type"] = objectStoreId(storage)
+      ["bucketNames"] = new Mapping {
+        ["chunks"] = bucket
+        ["ruler"] = bucket
+        ["admin"] = bucket
+      }
+      when (storage == "s3") {
+        ["s3"] = new Mapping { ["region"] = clusterInputs["infra.awsRegion"] }
+      }
+      when (storage == "gcs") {
+        ["gcs"] = new Mapping {
+          ["chunkBufferSize"] = 0
+          ["requestTimeout"] = "0s"
+          ["enableHttp2"] = true
+        }
+      }
+      when (storage == "azureBlob") {
+        ["azure"] = new Mapping {
+          ["accountName"] = clusterInputs[catalog.azureStorageAccountInput.key]
+          ["useManagedIdentity"] = false
+          ["useFederatedToken"] = true
+        }
+      }
+      when (storage == "s3Compatible") {
+        ["s3"] = new Mapping {
+          ["endpoint"] = clusterInputs[catalog.s3CompatibleEndpointInput.key]
+          ["region"] = clusterInputs[catalog.s3CompatibleRegionInput.key]
+          ["accessKeyId"] = "${S3_ACCESS_KEY_ID}"
+          ["secretAccessKey"] = "${S3_SECRET_ACCESS_KEY}"
+          ["signatureVersion"] = "v4"
+          ["s3ForcePathStyle"] = true
+          ["insecure"] = false
+        }
+      }
     }
-    ["compactor"] = new Mapping { ["delete_request_store"] = "s3" }
-  }
-}
+
+local function bucketName(storage: String, clusterInputs: Mapping): String =
+  if (storage == "s3")
+    clusterInputs[catalog.s3BucketInput.key] as String
+  else if (storage == "gcs")
+    clusterInputs[catalog.gcsBucketInput.key] as String
+  else if (storage == "azureBlob")
+    clusterInputs[catalog.azureContainerInput.key] as String
+  else
+    clusterInputs[catalog.s3CompatibleBucketInput.key] as String
+
+local function objectStoreId(storage: String): String? =
+  if (storage == "s3" || storage == "s3Compatible")
+    "s3"
+  else if (storage == "gcs")
+    "gcs"
+  else if (storage == "azureBlob")
+    "azure"
+  else
+    null
