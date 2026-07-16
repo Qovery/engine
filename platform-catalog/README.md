@@ -14,6 +14,9 @@ pipeline — the boundary is the published OCI artifact, not this repo.
 ```text
 platform-catalog/
   catalog.yaml                 # publish manifest — the helm-freeze.yaml of config bundles
+  templates/
+    <template-key>/
+      template.yaml            # root release composition; config pins are rendered at publish time
   components/
     <component>/
       config/
@@ -68,6 +71,10 @@ The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
 production fallback. Once the bundle is pinned, an unavailable or invalid Pkl
 model makes the affected catalog operation fail closed.
 
+qovery-operator uses the same declarative runtime-input mapping as the execution-layer components,
+but remains a bootstrap descriptor outside the Operator's own execution DAG. Its cluster JWT and
+identity values are resolved by q-core in memory; the public bundle contains placeholders only.
+
 cluster-agent and shell-agent keep an intentionally empty (comments-only) `base.yaml` until their
 static Engine-v1 parity values land. Their per-cluster wiring now lives in `managed-values.yaml`:
 the bundle records the Helm paths and abstract placeholders, while q-core's release manifest records
@@ -101,12 +108,12 @@ for that swap.
 ## Publishing
 
 Manual only, for now (decided 2026-07-08). Run the `publish-platform-catalog`
-GitLab job (manual — it publishes the config bundles then the chart mirror;
-set `PLATFORM_CONFIG_COMPONENTS` / `PLATFORM_CHARTS` to a name list or `none`
+GitLab job (manual — it publishes config bundles, then the chart mirror, then root templates;
+set `PLATFORM_CONFIG_COMPONENTS` / `PLATFORM_CHARTS` / `PLATFORM_TEMPLATES` to a name list or `none`
 to restrict), or locally:
 
 ```bash
-PLATFORM_CONFIG_REGISTRY=<registry> ./scripts/publish-platform-config.sh loki
+PLATFORM_CONFIG_REGISTRY=<registry> ./scripts/publish-platform-catalog.sh
 ```
 
 Each component's `config/` directory is pushed with ORAS as one OCI artifact
@@ -119,6 +126,40 @@ Each component's `config/` directory is pushed with ORAS as one OCI artifact
 The script writes `platform-config-publish.json` (component, version, ref,
 digest) — the digest is the pin q-core records. `oras pull` of the reference
 restores the exact `config/` directory content.
+
+## Root template publication
+
+Root releases are generic OCI artifacts, not Helm charts. The final step,
+`scripts/publish-platform-catalog.sh` runs the existing bundle and chart publishers,
+then consumes both machine-readable outputs,
+from the earlier steps, verifies every `configRef` and chart version, replaces
+all config bundle pins in a temporary `template.yaml`, and only then publishes:
+
+```text
+<registry>/platform-templates/<template-key>:<release-version>
+```
+
+The artifact type is `application/vnd.qovery.platform-template.v1`; its only
+payload is `template.yaml` with media type
+`application/vnd.qovery.platform-template.layer.v1+yaml`. The script writes
+`platform-templates-publish.json`, whose manifest digest is the reviewed q-core
+catalog-lock pin. The committed source may contain an explicit
+`__PUBLISHED_CONFIG_DIGEST__` placeholder: it is never published directly, and
+rendering fails unless every reference has a matching verified publication
+output.
+
+Publication order is an invariant: bundles first, charts second, root template
+last. A partial selection is accepted only when the resulting outputs still
+cover the complete root graph. ECR repositories are infrastructure-owned and
+must include `platform-templates/<template-key>` before the first push.
+
+q-core must be updated from the emitted manifest digest, never from the mutable
+release tag. Keep every previously reviewed digest and all of its transitive
+bundle/chart content available. Rollback is a catalog-lock change back to the
+previous template digest (with the same immutable key/version identity), then a
+q-core rollout; do not move a tag and expect running pods to rediscover it.
+Already loaded pods retain their last known good digest-verified snapshot while
+a replacement lock is being rolled out.
 
 ## Chart mirroring
 
@@ -162,8 +203,8 @@ pin by digest — but bump the chart version on content changes, or settle a
   identifiers in platform-catalog/** (per-cluster values flow through q-core
   runtime inputs, not bundles). Overridable via `PLATFORM_CONFIG_REGISTRY`.
   The ECR repositories are declared in the infra Terraform,
-  currently: `platform-config/{cluster-agent,shell-agent,loki}` and
-  `charts/{loki,qovery-cluster-agent,qovery-shell-agent}` — with no lifecycle
+  currently: `platform-config/{qovery-operator,cluster-agent,shell-agent,loki}` and
+  `charts/{qovery-operator,loki,qovery-cluster-agent,qovery-shell-agent}` — with no lifecycle
   policy (retention rule: never delete a version a q-core release may still
   pin).
 - **Tag immutability**: mutable-v0 for now — a version tag may be re-pushed and

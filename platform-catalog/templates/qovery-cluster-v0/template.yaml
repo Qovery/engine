@@ -1,0 +1,258 @@
+platformTemplateRelease:
+  key: qovery-cluster-v0
+  version: 0.1.0
+  runtimeSourceValues:
+    clusterAgent.imageRepository: public.ecr.aws/r3m4q3r9/cluster-agent
+    clusterAgent.imageTag: 23234aee9339cb61d2a3619a4c1c76e95f1ec222
+    shellAgent.imageRepository: public.ecr.aws/r3m4q3r9/shell-agent
+    shellAgent.imageTag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
+    operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
+    operator.imageTag: 20ac8a8d18499654c5a0a8d44636326fd41934b2
+    engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine:v1.313.3
+    engineWorker.imageTag: v1.313.3
+  bootstrap:
+    component:
+      key: qovery-operator
+      kind: HELM
+      release:
+        name: qovery-operator
+        namespace: qovery
+      chart:
+        repository: oci://public.ecr.aws/r3m4q3r9/charts/
+        name: qovery-operator
+        version: 0.2.0
+      configRef:
+        chart: qovery-operator
+        version: v1
+        # Replaced from platform-config-publish.json before the root artifact is published.
+        digest: __PUBLISHED_CONFIG_DIGEST__
+      runtimeInputs:
+        - name: qovery.engineGatewayUrl
+          source:
+            kind: qcoreValue
+            key: engine.gatewayUrl
+          required: true
+        - name: cluster.organizationId
+          source:
+            kind: qcoreValue
+            key: cluster.organizationId
+          required: true
+        - name: cluster.id
+          source:
+            kind: qcoreValue
+            key: cluster.id
+          required: true
+        - name: cluster.jwtToken
+          source:
+            kind: qcoreValue
+            key: cluster.jwt
+          required: true
+          sensitive: true
+        - name: engineWorker.imageRepository
+          source:
+            kind: qcoreValue
+            key: engineWorker.imageRepository
+          required: true
+        - name: engineWorker.imageTag
+          source:
+            kind: qcoreValue
+            key: engineWorker.imageTag
+          required: true
+        - name: operator.imageRepository
+          source:
+            kind: qcoreValue
+            key: operator.imageRepository
+          required: true
+        - name: operator.imageTag
+          source:
+            kind: qcoreValue
+            key: operator.imageTag
+          required: true
+      images:
+        - key: qovery-operator
+          repositoryRuntimeInput: operator.imageRepository
+          tagRuntimeInput: operator.imageTag
+        - key: engine-worker
+          repositoryRuntimeInput: engineWorker.imageRepository
+          tagRuntimeInput: engineWorker.imageTag
+    compatibility:
+      minControllerVersion: 0.1.0
+      minOperatorVersion: 0.1.0
+      minRequestSchemaVersion: "1"
+      requestSchemaVersion: "1"
+  layers:
+    - key: infrastructure
+      applicability:
+        modes: [QOVERY_MANAGED]
+      mandatory: true
+      enabledByDefault: true
+      components: []
+    - key: qovery-stack
+      applicability:
+        modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
+      mandatory: true
+      enabledByDefault: true
+      components:
+        - key: cluster-agent
+          kind: HELM
+          release:
+            name: cluster-agent
+            namespace: qovery
+          chart:
+            # The trailing slash preserves the /charts path when the worker joins the chart name.
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-cluster-agent
+            version: 0.1.0
+          configRef:
+            chart: cluster-agent
+            version: v2
+            digest: sha256:c4100bc474001c116fb8c1e388a70e2aaed7afb470f2b0107173f7a3036d1ed6
+          runtimeInputs:
+            - name: qovery.agentGatewayUrl
+              source:
+                kind: qcoreValue
+                key: agent.gatewayUrl
+              required: true
+            - name: cluster.organizationId
+              source:
+                kind: qcoreValue
+                key: cluster.organizationId
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+            - name: image.repository
+              source:
+                kind: qcoreValue
+                key: clusterAgent.imageRepository
+              required: true
+            - name: image.tag
+              source:
+                kind: qcoreValue
+                key: clusterAgent.imageTag
+              required: true
+        - key: shell-agent
+          kind: HELM
+          release:
+            name: shell-agent
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-shell-agent
+            version: 0.1.0
+          configRef:
+            chart: shell-agent
+            version: v2
+            digest: sha256:b9d8c621e42a2cf500634e6006ddb41e89e05b94d9cd912d0afa8573511d1c97
+          runtimeInputs:
+            - name: qovery.agentGatewayUrl
+              source:
+                kind: qcoreValue
+                key: agent.gatewayUrl
+              required: true
+            - name: cluster.organizationId
+              source:
+                kind: qcoreValue
+                key: cluster.organizationId
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+            - name: image.repository
+              source:
+                kind: qcoreValue
+                key: shellAgent.imageRepository
+              required: true
+            - name: image.tag
+              source:
+                kind: qcoreValue
+                key: shellAgent.imageTag
+              required: true
+    - key: log-infra
+      applicability:
+        modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
+      mandatory: false
+      enabledByDefault: true
+      components:
+        - key: loki
+          kind: HELM
+          release:
+            name: loki
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: loki
+            version: 6.55.0
+          configRef:
+            chart: loki
+            version: v5
+            digest: sha256:e62a14e92dfcac3c3e8960f9c9a426109c7886cf87fb587ad8ec1b5eef40c042
+            evaluator:
+              kind: PKL
+              entrypoint: model.pkl
+          runtimeInputs:
+            - name: infra.s3BucketName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+                # the QOVERY_MANAGED source arrives with Slice 4/M3 (terraformOutput)
+            - name: infra.lokiRoleArn
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.awsRegion
+              sources:
+                - kind: qcoreValue
+                  key: cluster.region
+            - name: infra.gcsBucketName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.gcpServiceAccountEmail
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.azureStorageAccountName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.azureContainerName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.azureManagedIdentityClientId
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.s3CompatibleBucketName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.s3CompatibleEndpoint
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.s3CompatibleRegion
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]
+            - name: infra.s3CompatibleCredentialsSecretName
+              sources:
+                - kind: customerProvidedValue
+                  modes: [CUSTOMER_MANAGED]

@@ -1002,8 +1002,8 @@ test-platform-config:
           - scripts/test-platform-config.sh
 
 # Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
-# by q-core (Engine v2): per-component config bundles, then the frozen-chart
-# mirror. Manual only for now, and fully independent from the engine release
+# by q-core (Engine v2): per-component config bundles, the frozen-chart mirror,
+# then the digest-pinned root template. Manual only for now, and fully independent from the engine release
 # pipeline: a config change must never require an engine release.
 # See platform-catalog/README.md.
 publish-platform-catalog:
@@ -1017,6 +1017,8 @@ publish-platform-catalog:
     # Charts to mirror (charts: list in catalog.yaml): names, "all", or
     # "none" to skip the chart mirror.
     PLATFORM_CHARTS: "all"
+    # Root templates to render from the verified outputs and publish last.
+    PLATFORM_TEMPLATES: "all"
     # Public registry (decided 2026-07-09): the engine/q-core running on
     # customer clusters pulls bundles and charts anonymously, no creds needed.
     PLATFORM_CONFIG_REGISTRY: "public.ecr.aws/r3m4q3r9"
@@ -1038,13 +1040,13 @@ publish-platform-catalog:
     # oras and helm both reuse the docker credentials this sets up
     - ci_helper docker_login_public_prod_ecr
   script:
-    - ./scripts/publish-platform-config.sh
-    - ./scripts/publish-frozen-charts.sh
+    - ./scripts/publish-platform-catalog.sh
   artifacts:
     when: always
     paths:
       - platform-config-publish.json
       - frozen-charts-publish.json
+      - platform-templates-publish.json
     expire_in: 1 year
   tags:
     - k8s-runner

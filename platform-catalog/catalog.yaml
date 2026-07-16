@@ -10,6 +10,9 @@
 # Mutable-v0 mode: re-publishing an existing version is allowed (tags are movable),
 # q-core pins and caches by digest only. Bump `version` when q-core should re-pin.
 components:
+  - name: qovery-operator
+    chart: qovery-operator # bootstrap chart, installed by the customer-side client
+    version: v1
   - name: cluster-agent
     chart: qovery-cluster-agent # generated chart, published via helper.sh update_qovery_chart
     version: v2
@@ -27,9 +30,18 @@ components:
 # For Qovery-authored or no_sync (Qovery-modified) charts, bump the chart
 # version when content changes, or rely on digest pinning (mutable-v0).
 charts:
+  - name: qovery-operator
+    path: lib-engine/lib/common/bootstrap/charts/qovery-operator
   - name: loki
     path: lib-engine/lib/common/bootstrap/charts/loki
   - name: qovery-cluster-agent
     path: lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent
   - name: qovery-shell-agent
     path: lib-engine/lib/common/bootstrap/charts/qovery-shell-agent
+
+# Root platform template releases are generic OCI artifacts, published last
+# after every referenced config bundle and chart has been verified.
+templates:
+  - key: qovery-cluster-v0
+    version: 0.1.0
+    path: platform-catalog/templates/qovery-cluster-v0/template.yaml

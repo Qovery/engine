@@ -1,0 +1,9 @@
+image:
+  repository: "${operator.imageRepository}"
+  tag: "${operator.imageTag}"
+environmentVariables:
+  GRPC_SERVER: "${qovery.engineGatewayUrl}"
+  ORGANIZATION_ID: "${cluster.organizationId}"
+  CLUSTER_ID: "${cluster.id}"
+  CLUSTER_JWT_TOKEN: "${cluster.jwtToken}"
+  QOVERY_ENGINE_WORKER_IMAGE_REPOSITORY: "${engineWorker.imageRepository}"
