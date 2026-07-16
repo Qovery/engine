@@ -18,7 +18,7 @@ components:
     version: v2
   - name: loki
     chart: loki # frozen upstream chart, pinned in lib-engine/lib/helm-freeze.yaml
-    version: v4
+    version: v5
 
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this

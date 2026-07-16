@@ -71,7 +71,7 @@ azureContainerInput: contract.LogicalInput = new contract.LogicalInput {
   scope = "CLUSTER"
   label = "Azure Blob container"
   description = "Blob Storage container used by Loki for chunks, ruler and admin data."
-  constraints = new { pattern = "^(?!.*--)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$" }
+  constraints = new { pattern = "^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$" }
 }
 
 azureManagedIdentityInput: contract.LogicalInput = new contract.LogicalInput {

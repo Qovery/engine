@@ -137,6 +137,20 @@ assert_result "Loki VALIDATE S3-compatible endpoint without embedded credentials
   .violations[0].fieldPath == "clusterInputs.infra.s3CompatibleEndpoint"
 '
 
+newline_endpoint_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"s3Compatible","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"SCW"},"clusterInputs":{"infra.s3CompatibleBucketName":"qovery-loki-scw","infra.s3CompatibleEndpoint":"https://s3.fr-par.scw.cloud\n","infra.s3CompatibleRegion":"fr-par","infra.s3CompatibleCredentialsSecretName":"loki-object-storage"},"componentOutputs":{}}'
+newline_endpoint="$(evaluate "$LOKI_MODEL" "$newline_endpoint_request")"
+assert_result "Loki VALIDATE S3-compatible endpoint with trailing newline" "$newline_endpoint" '
+  (.violations | map(.code)) == ["INPUT_PATTERN_MISMATCH"] and
+  .violations[0].fieldPath == "clusterInputs.infra.s3CompatibleEndpoint"
+'
+
+short_azure_container_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"azureBlob","retentionWeeks":12,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AZURE"},"clusterInputs":{"infra.azureStorageAccountName":"qoveryloki","infra.azureContainerName":"a","infra.azureManagedIdentityClientId":"12345678-1234-1234-1234-123456789abc"},"componentOutputs":{}}'
+short_azure_container="$(evaluate "$LOKI_MODEL" "$short_azure_container_request")"
+assert_result "Loki VALIDATE Azure container minimum length" "$short_azure_container" '
+  (.violations | map(.code)) == ["INPUT_PATTERN_MISMATCH"] and
+  .violations[0].fieldPath == "clusterInputs.infra.azureContainerName"
+'
+
 decimal_retention_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":12.5,"highAvailability":false},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
 decimal_retention="$(evaluate "$LOKI_MODEL" "$decimal_retention_request")"
 assert_result "Loki VALIDATE decimal retention" "$decimal_retention" '

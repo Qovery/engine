@@ -137,12 +137,7 @@ local function storageProviderViolation(storage: String?, provider: String?): co
     null
 
 local function providerMatchesStorage(storage: String?, provider: String?): Boolean =
-  storage == null
-    || storage == "pvc"
-    || (storage == "s3" && provider == "AWS")
-    || (storage == "gcs" && provider == "GCP")
-    || (storage == "azureBlob" && provider == "AZURE")
-    || (storage == "s3Compatible" && provider == "SCW")
+  storageProviderViolation(storage, provider) == null
 
 local function unsupportedProvider(storage: String, expectedProvider: String, actualProvider: String?) =
   new contract.Violation {
@@ -209,7 +204,7 @@ local function inputPatternViolation(
       value is String
         && !value.isBlank
         && pattern != null
-        && !value.contains(Regex(pattern))
+        && !value.matches(Regex(pattern))
     )
       new contract.Violation {
         code = "INPUT_PATTERN_MISMATCH"

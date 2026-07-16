@@ -61,26 +61,26 @@ local function singleBinaryValues(
   storage: String,
   clusterInputs: Mapping,
 ): Mapping =
-  new Mapping {
-    ["replicas"] = if (isHighAvailability) 0 else 1
-    when (isObjectStorage) {
-      ["persistence"] = new Mapping { ["enabled"] = false }
-      ["extraVolumes"] =
-        List(new Mapping {
-          ["name"] = "storage"
-          ["emptyDir"] = new Mapping {}
-        })
-      ["extraVolumeMounts"] =
-        List(new Mapping {
-          ["name"] = "storage"
-          ["mountPath"] = "/var/loki"
-        })
-    }
-    when (storage == "s3Compatible") {
-      ["extraArgs"] = environmentExpansionArgs
-      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
-    }
-  }
+  withS3CompatibleCredentials(
+    new Mapping {
+      ["replicas"] = if (isHighAvailability) 0 else 1
+      when (isObjectStorage) {
+        ["persistence"] = new Mapping { ["enabled"] = false }
+        ["extraVolumes"] =
+          List(new Mapping {
+            ["name"] = "storage"
+            ["emptyDir"] = new Mapping {}
+          })
+        ["extraVolumeMounts"] =
+          List(new Mapping {
+            ["name"] = "storage"
+            ["mountPath"] = "/var/loki"
+          })
+      }
+    },
+    storage,
+    clusterInputs,
+  )
 
 // The chart enables write/backend volume claims by default. In SimpleScalable mode, durable data
 // is already in object storage, so retain only ephemeral local state.
@@ -90,25 +90,36 @@ local function scalableStatefulTargetValues(
   storage: String,
   clusterInputs: Mapping,
 ): Mapping =
-  new Mapping {
-    ["replicas"] = replicas
-    when (isObjectStorage) {
-      ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
-    }
-    when (storage == "s3Compatible") {
-      ["extraArgs"] = environmentExpansionArgs
-      ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
-    }
-  }
+  withS3CompatibleCredentials(
+    new Mapping {
+      ["replicas"] = replicas
+      when (isObjectStorage) {
+        ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+      }
+    },
+    storage,
+    clusterInputs,
+  )
 
 local function readTargetValues(replicas: Int, storage: String, clusterInputs: Mapping): Mapping =
-  new Mapping {
-    ["replicas"] = replicas
-    when (storage == "s3Compatible") {
+  withS3CompatibleCredentials(
+    new Mapping { ["replicas"] = replicas },
+    storage,
+    clusterInputs,
+  )
+
+local function withS3CompatibleCredentials(
+  targetValues: Mapping,
+  storage: String,
+  clusterInputs: Mapping,
+): Mapping =
+  if (storage == "s3Compatible")
+    (targetValues) {
       ["extraArgs"] = environmentExpansionArgs
       ["extraEnvFrom"] = s3CompatibleCredentialsEnvFrom(clusterInputs)
     }
-  }
+  else
+    targetValues
 
 local environmentExpansionArgs: List<String> = List("-config.expand-env=true")
 
