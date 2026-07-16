@@ -1,6 +1,8 @@
 use std::path::Path;
+use std::process::ExitStatus;
 use std::time::Duration;
 
+use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::infrastructure::models::build_platform::{BuildError, GitCmd};
 use git2::ErrorCode::Auth;
 use git2::ResetType::Hard;
@@ -59,6 +61,121 @@ where
         context: tag.to_string(),
         raw_error: error,
     })?;
+    Ok(())
+}
+
+// credential.helper shim: reads creds from GIT_USER/GIT_PASSWORD env so the token never lands
+// in argv or in .git/config (same pattern as GitLfs, see cmd/git_lfs.rs).
+const CREDENTIAL_HELPER: &str = "!f() { echo \"username=${GIT_USER}\"; echo \"password=${GIT_PASSWORD}\"; }; f";
+
+#[derive(thiserror::Error, Debug)]
+pub enum GitCliError {
+    #[error("git terminated with an execution error: {raw_error:?}")]
+    ExecutionError { raw_error: std::io::Error },
+
+    #[error("git terminated with a non success exit status: {exit_status:?}")]
+    ExitStatusError { exit_status: ExitStatus },
+
+    #[error("git aborted due to user cancel request: {raw_error_message}")]
+    Aborted { raw_error_message: String },
+
+    #[error("git command timed out: {raw_error_message}")]
+    Timeout { raw_error_message: String },
+}
+
+impl From<CommandError> for GitCliError {
+    fn from(value: CommandError) -> Self {
+        match value {
+            CommandError::TimeoutError(msg) => GitCliError::Timeout { raw_error_message: msg },
+            CommandError::Killed(msg) => GitCliError::Aborted { raw_error_message: msg },
+            CommandError::ExitStatusError(status) => GitCliError::ExitStatusError { exit_status: status },
+            CommandError::ExecutionError(err) => GitCliError::ExecutionError { raw_error: err },
+        }
+    }
+}
+
+impl From<std::io::Error> for GitCliError {
+    fn from(value: std::io::Error) -> Self {
+        GitCliError::ExecutionError { raw_error: value }
+    }
+}
+
+fn git_cli_exec(args: &[&str], envs: &[(&str, &str)], cmd_killer: &CommandKiller) -> Result<(), GitCliError> {
+    // Fail fast instead of blocking on an interactive credential/passphrase prompt.
+    let mut all_envs: Vec<(&str, &str)> = vec![("GIT_TERMINAL_PROMPT", "0")];
+    all_envs.extend_from_slice(envs);
+
+    QoveryCommand::new("git", args, &all_envs).exec_with_abort(
+        &mut |line| info!("{line}"),
+        // git writes progress ("remote: Counting objects…", "Receiving objects…") to stderr;
+        // real errors surface via a non-zero exit status → GitCliError, so keep this at debug.
+        &mut |line| debug!("{line}"),
+        cmd_killer,
+    )?;
+    Ok(())
+}
+
+/// Clones only the `sparse_path` subfolder of a repo at a tag, via the git CLI.
+///
+/// Uses partial clone (`--filter=blob:none`) + cone sparse-checkout so only the tagged leaf
+/// folder's blobs are downloaded — libgit2 can't do this. `--filter`/`--depth` are skipped for
+/// `file://` (local transport rejects them; test-only). Credentials go through the
+/// GIT_USER/GIT_PASSWORD env + credential-helper shim so the token stays out of argv and config.
+///
+/// The caller is responsible for falling back to `clone_at_tag` if the server rejects `--filter`.
+pub fn sparse_clone_at_tag(
+    repository_url: &Url,
+    tag: &str,
+    sparse_path: &str,
+    into_dir: &Path,
+    credentials: Option<(&str, &str)>,
+    cmd_killer: &CommandKiller,
+) -> Result<(), GitCliError> {
+    #[cfg(not(test))]
+    if repository_url.scheme() != "https" {
+        return Err(GitCliError::ExecutionError {
+            raw_error: std::io::Error::other("Repository URL have to start with https://"),
+        });
+    }
+
+    if into_dir.exists() {
+        let _ = std::fs::remove_dir_all(into_dir);
+    }
+
+    let dir = into_dir.to_string_lossy();
+    let dir = dir.as_ref();
+    let url = repository_url.as_str();
+    let tag_ref = format!("refs/tags/{tag}");
+    let tag_refspec = format!("+{tag_ref}:{tag_ref}");
+    let envs: Vec<(&str, &str)> = match credentials {
+        Some((login, token)) => vec![("GIT_USER", login), ("GIT_PASSWORD", token)],
+        None => vec![],
+    };
+
+    git_cli_exec(&["init", "-q", dir], &[], cmd_killer)?;
+    git_cli_exec(&["-C", dir, "remote", "add", "origin", url], &[], cmd_killer)?;
+    if credentials.is_some() {
+        git_cli_exec(&["-C", dir, "config", "credential.helper", CREDENTIAL_HELPER], &[], cmd_killer)?;
+    }
+    git_cli_exec(&["-C", dir, "config", "remote.origin.promisor", "true"], &[], cmd_killer)?;
+    git_cli_exec(
+        &["-C", dir, "config", "remote.origin.partialclonefilter", "blob:none"],
+        &[],
+        cmd_killer,
+    )?;
+    git_cli_exec(&["-C", dir, "sparse-checkout", "init", "--cone"], &[], cmd_killer)?;
+    git_cli_exec(&["-C", dir, "sparse-checkout", "set", sparse_path], &[], cmd_killer)?;
+
+    let mut fetch_args = vec!["-C", dir, "fetch"];
+    // Local transport supports neither shallow nor partial clone; skip for file:// (test-only).
+    if repository_url.scheme() != "file" {
+        fetch_args.extend_from_slice(&["--depth", "1", "--filter=blob:none"]);
+    }
+    fetch_args.extend_from_slice(&["origin", &tag_refspec]);
+    git_cli_exec(&fetch_args, &envs, cmd_killer)?;
+
+    git_cli_exec(&["-C", dir, "checkout", &tag_ref], &envs, cmd_killer)?;
+
     Ok(())
 }
 
@@ -324,7 +441,10 @@ fn remote_fetch(
 
 #[cfg(test)]
 mod tests {
-    use crate::cmd::git::{checkout, clone_at_commit, clone_at_tag, fetch, file_content_at_commit};
+    use crate::cmd::command::CommandKiller;
+    use crate::cmd::git::{
+        checkout, clone_at_commit, clone_at_tag, fetch, file_content_at_commit, sparse_clone_at_tag,
+    };
     use base64::Engine;
     use base64::engine::general_purpose;
     use git2::{Cred, CredentialType, Repository, Signature};
@@ -479,6 +599,81 @@ mod tests {
             .find_reference(&format!("refs/tags/{tag}"))
             .expect("local tag ref should exist after clone_at_tag");
         assert!(tag_ref.target().is_some(), "tag ref should point to an object");
+    }
+
+    // Builds a local repo with two blueprint leaf folders and a hierarchical tag, returns its path.
+    // file:// transport rejects --filter/--depth, so sparse_clone_at_tag exercises sparse-checkout
+    // narrowing only (blob filtering is covered by the real-remote E2E, not unit tests).
+    fn build_two_leaf_remote(remote: &DirectoryForTests, tag: &str) {
+        let repo = Repository::init(remote.path()).expect("init remote");
+        for leaf in ["aws/postgres/17", "gcp/cloud-sql/15"] {
+            fs::create_dir_all(format!("{}/{leaf}", remote.path())).expect("mkdir");
+            fs::write(format!("{}/{leaf}/qbm.yml", remote.path()), "version: 1\n").expect("write qbm.yml");
+        }
+        let mut index = repo.index().expect("index");
+        index
+            .add_all(["*"].iter(), git2::IndexAddOption::DEFAULT, None)
+            .expect("add all");
+        index.write().expect("write index");
+        let tree_id = index.write_tree().expect("write tree");
+        let tree = repo.find_tree(tree_id).expect("find tree");
+        let sig = Signature::now("Test", "test@test.com").expect("sig");
+        let commit_id = repo
+            .commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .expect("commit");
+        let commit_obj = repo.find_object(commit_id, None).expect("find object");
+        repo.tag_lightweight(tag, &commit_obj, false).expect("tag");
+    }
+
+    #[test]
+    fn test_sparse_clone_at_tag_narrows_to_leaf() {
+        let remote_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_sparse_remote".to_string());
+        let tag = "aws/postgres/17/1.0.1";
+        build_two_leaf_remote(&remote_dir, tag);
+
+        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_sparse_clone".to_string());
+        let remote_url = Url::parse(&format!("file://{}", remote_dir.path())).unwrap();
+
+        let result = sparse_clone_at_tag(
+            &remote_url,
+            tag,
+            "aws/postgres/17",
+            Path::new(&clone_dir.path()),
+            None,
+            &CommandKiller::never(),
+        );
+        assert!(result.is_ok(), "sparse_clone_at_tag failed: {:?}", result.err());
+
+        // Target leaf materialized...
+        let target = Path::new(&clone_dir.path()).join("aws/postgres/17/qbm.yml");
+        assert!(target.exists(), "expected leaf blueprint at {target:?}");
+        // ...sibling leaf narrowed out by sparse-checkout.
+        let sibling = Path::new(&clone_dir.path()).join("gcp/cloud-sql/15/qbm.yml");
+        assert!(
+            !sibling.exists(),
+            "sibling leaf {sibling:?} should be excluded by sparse-checkout"
+        );
+    }
+
+    #[test]
+    fn test_sparse_clone_at_tag_errors_on_missing_tag() {
+        // A missing tag makes the fetch fail — the caller relies on this Err to fall back to a
+        // full libgit2 clone.
+        let remote_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_sparse_missing".to_string());
+        build_two_leaf_remote(&remote_dir, "aws/postgres/17/1.0.1");
+
+        let clone_dir = DirectoryForTests::new_with_random_suffix("/tmp/engine_test_sparse_missing_clone".to_string());
+        let remote_url = Url::parse(&format!("file://{}", remote_dir.path())).unwrap();
+
+        let result = sparse_clone_at_tag(
+            &remote_url,
+            "aws/postgres/17/9.9.9",
+            "aws/postgres/17",
+            Path::new(&clone_dir.path()),
+            None,
+            &CommandKiller::never(),
+        );
+        assert!(result.is_err(), "expected error for a non-existent tag");
     }
 
     #[test]

@@ -3,6 +3,7 @@ use crate::blueprint::models::error::BlueprintError;
 use crate::blueprint::models::info::BlueprintInfo;
 use crate::blueprint::models::qovery_blueprint_manifest::{BlueprintKind, QoveryBlueprintManifest};
 use crate::blueprint::models::spec::ResolvedBlueprintSpec;
+use crate::cmd::command::CommandKiller;
 use crate::cmd::docker::Docker;
 use crate::cmd::git;
 use crate::engine_task::Task;
@@ -180,19 +181,35 @@ impl BlueprintTask {
         })?;
 
         let git_creds = request.git_credentials.clone();
-        git::clone_at_tag(&git_url, &request.tag, &clone_dir, &|_username: &str| match &git_creds {
-            Some(creds) => vec![(
-                CredentialType::USER_PASS_PLAINTEXT,
-                Cred::userpass_plaintext(&creds.login, &creds.access_token).unwrap(),
-            )],
-            None => vec![],
-        })
-        .map_err(|e| {
-            Box::new(EngineError::new_blueprint_error(
+
+        // Fetch only the tagged leaf folder via partial clone + sparse-checkout (git CLI). On any
+        // failure (e.g. self-hosted git without uploadpack.allowFilter), fall back to a full
+        // libgit2 clone of the whole tree at the tag.
+        let cancel = self.cancel_checker();
+        let cmd_killer = CommandKiller::from_cancelable(cancel.as_ref());
+        let creds = git_creds.as_ref().map(|c| (c.login.as_str(), c.access_token.as_str()));
+
+        if let Err(e) =
+            git::sparse_clone_at_tag(&git_url, &request.tag, &blueprint_info.path(), &clone_dir, creds, &cmd_killer)
+        {
+            self.logger.log(EngineEvent::Warning(
                 event_details.clone(),
-                BlueprintError::CloneError(format!("{:?}", e)),
-            ))
-        })?;
+                EventMessage::new(format!("Sparse blueprint clone failed, falling back to full clone: {e}"), None),
+            ));
+            git::clone_at_tag(&git_url, &request.tag, &clone_dir, &|_username: &str| match &git_creds {
+                Some(creds) => vec![(
+                    CredentialType::USER_PASS_PLAINTEXT,
+                    Cred::userpass_plaintext(&creds.login, &creds.access_token).unwrap(),
+                )],
+                None => vec![],
+            })
+            .map_err(|e| {
+                Box::new(EngineError::new_blueprint_error(
+                    event_details.clone(),
+                    BlueprintError::CloneError(format!("{:?}", e)),
+                ))
+            })?;
+        }
 
         let full_path = clone_dir.join(blueprint_info.path());
         if !full_path.exists() {
