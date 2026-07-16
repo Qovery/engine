@@ -4519,6 +4519,7 @@ dependencies = [
  "once_cell",
  "oneshot",
  "passwords",
+ "quick-xml",
  "rand 0.9.1",
  "regex",
  "reqwest 0.12.15",

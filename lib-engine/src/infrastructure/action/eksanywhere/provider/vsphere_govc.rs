@@ -2,6 +2,8 @@ use crate::cmd::command::{CommandKiller, ExecutableCommand, QoveryCommand};
 use crate::errors::CommandError;
 use crate::infrastructure::action::InfraLogger;
 use crate::infrastructure::models::cloud_provider::CloudProvider;
+use quick_xml::Reader;
+use quick_xml::events::{BytesStart, Event};
 use std::env;
 use std::time::Duration;
 use url::Url;
@@ -126,6 +128,43 @@ pub(super) fn log_govc_version(logger: &impl InfraLogger, govc_env: &[(String, S
     }
 }
 
+pub(super) fn validate_govc_connection(govc_env: &[(String, String)]) -> Result<(), CommandError> {
+    run_govc_command(&["session.login", "-xml"], govc_env).map(|_| ())
+}
+
+pub(super) fn is_invalid_login_fault(error: &CommandError) -> bool {
+    error
+        .message_raw()
+        .is_some_and(|details| has_invalid_login_fault(&details))
+}
+
+fn has_invalid_login_fault(xml: &str) -> bool {
+    let mut reader = Reader::from_str(xml);
+    reader.trim_text(true);
+
+    loop {
+        match reader.read_event() {
+            Ok(Event::Start(element) | Event::Empty(element)) if is_invalid_login_element(&element) => return true,
+            Ok(Event::Eof) | Err(_) => return false,
+            Ok(_) => {}
+        }
+    }
+}
+
+fn is_invalid_login_element(element: &BytesStart<'_>) -> bool {
+    if xml_local_name(element.name().as_ref()) == b"InvalidLoginFault" {
+        return true;
+    }
+
+    element.attributes().filter_map(Result::ok).any(|attribute| {
+        xml_local_name(attribute.key.as_ref()) == b"type" && xml_local_name(attribute.value.as_ref()) == b"InvalidLogin"
+    })
+}
+
+fn xml_local_name(value: &[u8]) -> &[u8] {
+    value.rsplit(|byte| *byte == b':').next().unwrap_or(value)
+}
+
 pub(super) fn run_govc_command(args: &[&str], govc_env: &[(String, String)]) -> Result<Vec<String>, CommandError> {
     execute_govc_command(args, govc_env, Duration::from_secs(45), |_| {}, |_| {})
 }
@@ -205,4 +244,37 @@ fn execute_govc_command(
         .map(|line| line.trim().to_string())
         .filter(|line| !line.is_empty())
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_invalid_login_fault;
+
+    #[test]
+    fn should_detect_structured_invalid_login_fault() {
+        let xml = r#"
+<Fault xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+  <faultcode>ServerFaultCode</faultcode>
+  <faultstring>This message may be localized.</faultstring>
+  <detail>
+    <Fault xmlns:_XMLSchema-instance="http://www.w3.org/2001/XMLSchema-instance" _XMLSchema-instance:type="InvalidLogin"></Fault>
+  </detail>
+</Fault>
+"#;
+
+        assert!(has_invalid_login_fault(xml));
+    }
+
+    #[test]
+    fn should_ignore_faultstring_without_structured_invalid_login_type() {
+        let xml = r#"
+<Fault xmlns="http://schemas.xmlsoap.org/soap/envelope/">
+  <faultcode>ServerFaultCode</faultcode>
+  <faultstring>Cannot complete login due to an incorrect user name or password.</faultstring>
+  <detail><Fault></Fault></detail>
+</Fault>
+"#;
+
+        assert!(!has_invalid_login_fault(xml));
+    }
 }
