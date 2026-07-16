@@ -22,7 +22,23 @@ use chrono::{DateTime, TimeZone, Utc};
 use tera::Context as TeraContext;
 use url::Url;
 
-const DEFAULT_GP3_DATABASE_DISK_IOPS: i32 = 3000;
+/// AWS RDS gp3 volumes switch to striped volumes once storage reaches this size, for every
+/// RDS engine except SQL Server. IOPS/throughput can't be specified below this threshold.
+/// https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html#gp3-storage
+const GP3_VOLUME_STRIPING_THRESHOLD_GIB: u32 = 400;
+
+/// AWS enforces this IOPS baseline once gp3 storage reaches the striping threshold above.
+const GP3_MINIMUM_IOPS_ABOVE_STRIPING_THRESHOLD: u32 = 12_000;
+
+/// Returns the IOPS value to apply for a gp3 volume, or `None` if IOPS must be omitted
+/// entirely (storage below the striping threshold, where AWS rejects the parameter).
+fn gp3_disk_iops_context_value(disk_size_in_gib: u32, requested_iops: u32) -> Option<u32> {
+    if disk_size_in_gib < GP3_VOLUME_STRIPING_THRESHOLD_GIB {
+        None
+    } else {
+        Some(requested_iops.max(GP3_MINIMUM_IOPS_ABOVE_STRIPING_THRESHOLD))
+    }
+}
 /////////////////////////////////////////////////////////////////
 // CONTAINER
 impl DatabaseType<AWS, Container> for PostgresSQL {
@@ -365,19 +381,10 @@ where
         context.insert("database_disk_type", &options.database_disk_type);
 
         match options.database_disk_type.as_str() {
-            "gp3" => {
-                // AWS RDS specific:
-                // - IOPS/throughput cannot be specified when storage < 400 GiB.
-                // - Minimal IOPS for GP3 is 3000
-                if options.disk_size_in_gib < 400 {
-                    context.insert("skip_database_disk_iops", &true);
-                } else if matches!(options.database_disk_iops, crate::io_models::database::DiskIOPS::Provisioned(i) if i > 3000)
-                {
-                    context.insert("database_disk_iops", &options.database_disk_iops.value());
-                } else {
-                    context.insert("database_disk_iops", &DEFAULT_GP3_DATABASE_DISK_IOPS);
-                }
-            }
+            "gp3" => match gp3_disk_iops_context_value(options.disk_size_in_gib, options.database_disk_iops.value()) {
+                None => context.insert("skip_database_disk_iops", &true),
+                Some(iops) => context.insert("database_disk_iops", &iops),
+            },
             _ => {
                 // including "gp2" variant, added for compatibility with current behavior
                 context.insert("database_disk_iops", &options.database_disk_iops.value());
@@ -490,5 +497,30 @@ where
 {
     fn to_tera_context(&self, target: &DeploymentTarget) -> Result<TeraContext, Box<EngineError>> {
         self.to_tera_context_for_container(target, &self.options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn skips_iops_below_striping_threshold() {
+        assert_eq!(gp3_disk_iops_context_value(399, 0), None);
+    }
+
+    #[test]
+    fn defaults_to_minimum_iops_at_threshold_with_no_user_value() {
+        assert_eq!(gp3_disk_iops_context_value(400, 0), Some(12_000));
+    }
+
+    #[test]
+    fn respects_user_provisioned_iops_above_minimum() {
+        assert_eq!(gp3_disk_iops_context_value(500, 16_000), Some(16_000));
+    }
+
+    #[test]
+    fn clamps_user_provisioned_iops_below_minimum_up_to_minimum() {
+        assert_eq!(gp3_disk_iops_context_value(1000, 3000), Some(12_000));
     }
 }
