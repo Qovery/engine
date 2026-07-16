@@ -1,23 +1,12 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
-module qovery.engine.platform.loki.validation
+module qovery.engine.platform.loki.validate
 
-import "catalog.pkl"
 import "contract.pkl"
+import "describe.pkl"
 import "profile.pkl"
-
-// Returns only the logical inputs active for the selected backend. Their concrete source remains
-// a q-core release-manifest concern; this model only names what Loki needs.
-function requiredInputs(
-  operation: String,
-  profileConfig: Mapping,
-  clusterContext: Mapping?,
-): List<contract.LogicalInput> =
-  let (storage = profile.storage(profileConfig))
-  let (provider = clusterContext?.getOrNull("provider") as String?)
-    if (operation == "DESCRIBE" || !providerMatchesStorage(storage, provider))
-      List()
-    else
-      catalog.inputsForStorage(storage)
+import "requirements.pkl"
+import "storage/backends.pkl" as storageBackends
+import "storage/types.pkl" as storage
 
 // VALIDATE and COMPILE share the exact same rules. COMPILE is called again immediately before
 // deployment so an old or corrupted stored profile still fails closed.
@@ -37,7 +26,7 @@ function violations(
 
 local function unknownFieldViolations(profileConfig: Mapping) =
   profileConfig.keys
-    .filter((key) -> !catalog.fieldKeys.contains(key))
+    .filter((key) -> !describe.fieldKeys.contains(key))
     .map((key) -> new contract.Violation {
       code = "UNKNOWN_FIELD"
       fieldPath = key
@@ -76,33 +65,35 @@ local function typeViolations(profileConfig: Mapping) =
 local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?) =
   let (retentionWeeks = profile.retentionWeeks(profileConfig))
   let (highAvailability = profile.highAvailability(profileConfig))
-  let (storage = profile.storage(profileConfig))
+  let (storageKey = profile.storage(profileConfig))
+  let (backend = storageBackends.find(storageKey))
   let (provider = clusterContext?.getOrNull("provider") as String?)
   let (mode = clusterContext?.getOrNull("mode") as String?)
     List(
       if (
         retentionWeeks != null
           && (
-            retentionWeeks < catalog.retentionWeeksMin || retentionWeeks > catalog.retentionWeeksMax
+            retentionWeeks < describe.retentionWeeksMin
+              || retentionWeeks > describe.retentionWeeksMax
           )
       )
         new contract.Violation {
           code = "VALUE_OUT_OF_RANGE"
           fieldPath = "retentionWeeks"
           message =
-            "Loki retentionWeeks must be between \(catalog.retentionWeeksMin) and \(catalog.retentionWeeksMax)"
+            "Loki retentionWeeks must be between \(describe.retentionWeeksMin) and \(describe.retentionWeeksMax)"
         }
       else
         null,
-      if (storage != null && !catalog.storageAllowedValues.contains(storage))
+      if (storageKey != null && !storageBackends.allowedValues.contains(storageKey))
         new contract.Violation {
           code = "VALUE_NOT_ALLOWED"
           fieldPath = "storage"
-          message = "Loki storage must be one of \(catalog.storageAllowedValues.join(", "))"
+          message = "Loki storage must be one of \(storageBackends.allowedValues.join(", "))"
         }
       else
         null,
-      if (highAvailability == true && storage == "pvc")
+      if (highAvailability == true && storageKey == storageBackends.pvc.key)
         new contract.Violation {
           code = "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE"
           fieldPath = "highAvailability"
@@ -110,10 +101,10 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
         }
       else
         null,
-      storageProviderViolation(storage, provider),
+      storageProviderViolation(storageKey, provider),
       // Managed object storage stays blocked until Terraform outputs are available before Helm
       // compile. The POC implemented here is intentionally customer-managed first.
-      if (storage != null && storage != "pvc" && mode == "QOVERY_MANAGED")
+      if (backend is storage.ObjectStorageBackend && mode == "QOVERY_MANAGED")
         new contract.Violation {
           code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
           fieldPath = "storage"
@@ -124,28 +115,23 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
         null,
     ).filter((violation) -> violation != null)
 
-local function storageProviderViolation(storage: String?, provider: String?): contract.Violation? =
-  if (storage == "s3" && provider != "AWS")
-    unsupportedProvider("s3", "AWS", provider)
-  else if (storage == "gcs" && provider != "GCP")
-    unsupportedProvider("gcs", "GCP", provider)
-  else if (storage == "azureBlob" && provider != "AZURE")
-    unsupportedProvider("azureBlob", "AZURE", provider)
-  else if (storage == "s3Compatible" && provider != "SCW")
-    unsupportedProvider("s3Compatible", "SCW", provider)
-  else
-    null
+local function storageProviderViolation(storageKey: String?, provider: String?): contract.Violation? =
+  let (backend = storageBackends.find(storageKey))
+    if (backend == null || backend.provider == null || backend.provider == provider)
+      null
+    else
+      unsupportedProvider(backend.key, backend.provider, provider)
 
-local function providerMatchesStorage(storage: String?, provider: String?): Boolean =
-  storageProviderViolation(storage, provider) == null
-
-local function unsupportedProvider(storage: String, expectedProvider: String, actualProvider: String?) =
-  new contract.Violation {
-    code = "STORAGE_PROVIDER_MISMATCH"
-    fieldPath = "storage"
-    message =
-      "Loki storage \(storage) requires provider \(expectedProvider); this cluster uses \(actualProvider)"
-  }
+local function unsupportedProvider(
+  storage: String,
+  expectedProvider: String,
+  actualProvider: String?,
+) = new contract.Violation {
+  code = "STORAGE_PROVIDER_MISMATCH"
+  fieldPath = "storage"
+  message =
+    "Loki storage \(storage) requires provider \(expectedProvider); this cluster uses \(actualProvider)"
+}
 
 local function requiredInputViolations(
   operation: String,
@@ -153,18 +139,14 @@ local function requiredInputViolations(
   clusterContext: Mapping?,
   clusterInputs: Mapping,
 ) =
-  let (storage = profile.storage(profileConfig))
-  let (inputs = catalog.inputsForStorage(storage))
+  let (storageKey = profile.storage(profileConfig))
+  let (inputs = requirements.requiredInputs(profileConfig, clusterContext))
     // Managed mode reports the execution-barrier violation above. Reporting unavailable outputs as
     // missing customer values too would add noise without giving the user another action to take.
     if (
       (operation != "VALIDATE" && operation != "COMPILE")
         || inputs.isEmpty
         || clusterContext?.getOrNull("mode") == "QOVERY_MANAGED"
-        || !providerMatchesStorage(
-          storage,
-          clusterContext?.getOrNull("provider") as String?,
-        )
     )
       List()
     else
@@ -181,7 +163,11 @@ local function requiredInputViolations(
         )
         .filter((violation) -> violation != null)
         .toList()
-        + if (operation == "COMPILE" && storage == "s3" && inputIsBlank(clusterInputs, "infra.awsRegion"))
+        + if (
+          operation == "COMPILE"
+            && storageKey == storageBackends.s3.key
+            && inputIsBlank(clusterInputs, "infra.awsRegion")
+        )
           List(new contract.Violation {
             code = "REQUIRED_INPUT_MISSING"
             fieldPath = "clusterInputs.infra.awsRegion"

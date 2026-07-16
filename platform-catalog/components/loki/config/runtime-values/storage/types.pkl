@@ -1,0 +1,18 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.types
+
+import "../contract.pkl"
+
+// Shared storage types. Product metadata belongs in backends.pkl and logical input metadata belongs
+// in inputs.pkl, keeping this module deliberately free of provider-specific values.
+open class StorageBackend {
+  key: String
+  provider: String? = null
+  inputs: List<contract.LogicalInput> = List()
+}
+
+class ObjectStorageBackend extends StorageBackend {
+  provider: String
+  objectStoreId: String
+  bucketInput: contract.LogicalInput
+}

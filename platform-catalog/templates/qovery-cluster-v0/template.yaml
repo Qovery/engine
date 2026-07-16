@@ -205,7 +205,7 @@ platformTemplateRelease:
             digest: sha256:e62a14e92dfcac3c3e8960f9c9a426109c7886cf87fb587ad8ec1b5eef40c042
             evaluator:
               kind: PKL
-              entrypoint: model.pkl
+              entrypoint: runtime-values/model.pkl
           runtimeInputs:
             - name: infra.s3BucketName
               sources:

@@ -1,22 +1,81 @@
 # Loki product configuration model
 
-You do not need to know Pkl to review this model. Read the files in this order:
+```text
+config/
+  static-values/
+    base.yaml
+    overlays/
+  runtime-values/
+    model.pkl
+    contract.pkl
+    describe.pkl
+    requirements.pkl
+    validate.pkl
+    compile.pkl
+    profile.pkl
+    storage/
+      types.pkl
+      inputs.pkl
+      backends.pkl
+      helm.pkl
+```
 
-1. `model.pkl` — short entrypoint and operation routing;
-2. `catalog.pkl` — fields shown by the Console and conditional object-storage inputs;
-3. `validation.pkl` — product rules and stable violation codes;
-4. `helm.pkl` — translation from valid product settings to Loki Helm values;
-5. `profile.pkl` — defaults and safe type conversion shared by validation and compile;
-6. `contract.pkl` — JSON response types shared with q-core.
+The files under `runtime-values/` follow the Console use cases. `model.pkl` is the only entrypoint
+called by q-core and routes each request to a small module named after the user action:
+
+| Console use case | Data source | Pkl operation and files |
+| --- | --- | --- |
+| List templates, layers and components | [`templates/qovery-cluster-v0/template.yaml`](../../../templates/qovery-cluster-v0/template.yaml), published in OCI | No Pkl call for the list. q-core then enriches every component with `DESCRIBE`. |
+| List the parameters a customer can change | Component config bundle | `DESCRIBE` → `model.pkl` → `describe.pkl` + no-op `validate.pkl`; `describe.pkl` reads `storage/backends.pkl` |
+| Refresh conditional inputs after a parameter changes | Current form draft + cluster context | `RESOLVE_REQUIREMENTS` → `model.pkl` → `describe.pkl` + `requirements.pkl` + `validate.pkl` |
+| Check constraints before saving | Current form draft + resolved inputs | `VALIDATE` → `model.pkl` → `describe.pkl` + `requirements.pkl` + `validate.pkl` |
+| Build the final Helm values for deployment | Valid saved profile + resolved inputs | `COMPILE` → the validation path above, then `compile.pkl` → `storage/helm.pkl` |
+
+This distinction is intentional: Pkl does **not** define which layers exist or which components are
+in a layer. The root template is the catalog composition source of truth. Pkl describes and
+compiles the configuration of one component after q-core has found that component in the template.
+
+Pkl imports are static: evaluating `model.pkl` resolves all of its imported modules from the bundle.
+The table describes the functions that contribute to each response, not a lazy file-loading order.
+
+## Where to look
+
+- `describe.pkl`: the editable fields, labels, defaults and field constraints rendered by the
+  Console (`retentionWeeks`, `highAvailability`, `storage`);
+- `requirements.pkl`: which logical runtime inputs become visible for the current draft;
+- `validate.pkl`: cross-field rules, provider compatibility and stable violation codes;
+- `compile.pkl`: the readable, provider-neutral Loki Helm topology;
+- `storage/helm.pkl`: the chart-specific Helm values for each storage backend;
+- `storage/types.pkl`: the shared storage types;
+- `storage/inputs.pkl`: logical runtime inputs with their labels, types and constraints;
+- `storage/backends.pkl`: the supported backend instances and provider matrix;
+- `profile.pkl`: defaults and safe type conversion shared by resolve, validate and compile;
+- `contract.pkl`: JSON response types shared with q-core;
+- `model.pkl`: routing only.
+
+There are two kinds of constraints, kept next to the value they constrain:
+
+- field constraints returned by `DESCRIBE` live in `describe.pkl`, such as retention min/max and
+  the allowed storage choices for the cluster provider;
+- logical-input constraints returned by `RESOLVE_REQUIREMENTS` live with their input in
+  `storage/inputs.pkl`, such as bucket-name, IAM-role ARN, service-account email and UUID patterns.
+
+`validate.pkl` applies both sets and adds rules involving several values, for example “high
+availability requires object storage”. This avoids duplicating constraint metadata in a separate
+generic rules file.
 
 ## Pkl syntax used here
 
 | Syntax | Meaning in this model |
 | --- | --- |
-| `import "catalog.pkl"` | Load another module from the same OCI bundle. |
+| `import "describe.pkl"` | Load another module from the same OCI bundle. |
 | `local` | Private implementation detail, omitted from rendered output. |
 | `function name(arg: Type)` | Reusable typed function. |
 | `new contract.Field { ... }` | Construct a checked contract object. Misspelled properties fail evaluation. |
+| `open class StorageBackend` | Allow the storage registry to define a stricter object-storage subtype. |
+| `class ObjectStorageBackend extends StorageBackend` | Require every object backend to declare its provider, Loki identifier, and bucket input. |
+| `backend is ObjectStorageBackend` | Narrow the type before reading object-storage-only properties. |
+| `Mapping<String, StorageBackend>` | Keep every backend in one typed registry instead of repeating provider matrices. |
 | `new Mapping { ["key"] = value }` | Build dynamic Helm/JSON key-value data. |
 | `when (condition) { ... }` | Add mapping entries only when the condition is true. |
 | `value ?? fallback` | Use `fallback` when `value` is null. |
@@ -24,8 +83,7 @@ You do not need to know Pkl to review this model. Read the files in this order:
 
 ## Operations
 
-- `DESCRIBE`: returns the complete Console field catalogue without cluster context, or the effective
-  provider-specific choices when `clusterContext` is supplied.
+- `DESCRIBE`: returns the Console fields and their effective provider-specific choices.
 - `RESOLVE_REQUIREMENTS`: activates logical inputs from the current draft, for example a GCS
   bucket and service account when `storage=gcs`.
 - `VALIDATE`: returns all product and input violations without persisting invalid configuration.
@@ -48,6 +106,13 @@ provider-specific and disables Loki data PVCs; local `/var/loki` state uses `emp
 
 The evaluator rejects a storage/provider mismatch. High availability is valid with any of the four
 object-storage values and invalid with `pvc`.
+
+`storage/backends.pkl` is the source of truth for this matrix. Adding a backend starts by declaring
+its provider, Loki object-store identifier, bucket input, and complete logical-input list there.
+`describe.pkl` derives the Console choices from that registry, `requirements.pkl` derives the
+conditional inputs, and `validate.pkl` checks provider compatibility from the same objects. Only
+chart-specific values remain in `storage/helm.pkl`; `compile.pkl` stays a
+readable overview of the resulting Loki topology.
 
 The unscoped catalog remains a capability index and therefore lists all five storage values. A
 contextual catalog read and every cluster preview narrow the `storage` field to the effective pair:

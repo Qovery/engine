@@ -3,9 +3,10 @@ module qovery.engine.platform.loki.model
 
 import "pkl:json"
 
-import "catalog.pkl"
-import "helm.pkl"
-import "validation.pkl"
+import "compile.pkl"
+import "describe.pkl"
+import "requirements.pkl"
+import "validate.pkl"
 
 // This is the only entrypoint known by q-core. It deliberately contains orchestration only:
 // 1. decode the language-neutral request supplied through prop:request;
@@ -18,17 +19,21 @@ local clusterContext = request["clusterContext"] as Mapping?
 local clusterInputs = request["clusterInputs"] as Mapping
 
 local computedViolations =
-  validation.violations(operation, profileConfig, clusterContext, clusterInputs)
+  validate.violations(operation, profileConfig, clusterContext, clusterInputs)
 
-fields = catalog.fieldsForContext(operation, clusterContext)
-requiredInputs = validation.requiredInputs(operation, profileConfig, clusterContext)
+fields = describe.fieldsForContext(clusterContext)
+requiredInputs =
+  if (operation == "DESCRIBE")
+    List()
+  else
+    requirements.requiredInputs(profileConfig, clusterContext)
 violations = computedViolations
 
 // Invalid inputs never produce partial Helm values. q-core treats a missing helmValues on a valid
 // COMPILE request as a hard error, so this remains fail-closed on both sides of the contract.
 helmValues =
   if (operation == "COMPILE" && computedViolations.isEmpty)
-    helm.compile(profileConfig, clusterInputs)
+    compile.compile(profileConfig, clusterInputs)
   else
     null
 

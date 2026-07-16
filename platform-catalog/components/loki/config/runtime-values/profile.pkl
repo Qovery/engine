@@ -1,20 +1,20 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.profile
 
-import "catalog.pkl"
+import "describe.pkl"
 
 // Centralizes defaults and type narrowing for the customer profile.
 // A null result means "wrong type". Validation can then report every problem in one response
 // instead of throwing on the first bad field.
 
 function retentionWeeks(config: Mapping): Int? =
-  let (value = config.getOrNull("retentionWeeks") ?? catalog.retentionWeeksDefault)
+  let (value = config.getOrNull("retentionWeeks") ?? describe.retentionWeeksDefault)
     if (value is Int) value else null
 
 function highAvailability(config: Mapping): Boolean? =
-  let (value = config.getOrNull("highAvailability") ?? catalog.highAvailabilityDefault)
+  let (value = config.getOrNull("highAvailability") ?? describe.highAvailabilityDefault)
     if (value is Boolean) value else null
 
 function storage(config: Mapping): String? =
-  let (value = config.getOrNull("storage") ?? catalog.storageDefault)
+  let (value = config.getOrNull("storage") ?? describe.storageDefault)
     if (value is String) value else null

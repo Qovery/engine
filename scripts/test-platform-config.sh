@@ -5,7 +5,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKL_BIN="${PKL_BIN:-pkl}"
-LOKI_MODEL="$ROOT_DIR/platform-catalog/components/loki/config/model.pkl"
+LOKI_MODEL="$ROOT_DIR/platform-catalog/components/loki/config/runtime-values/model.pkl"
 
 command -v "$PKL_BIN" >/dev/null 2>&1 || {
   echo "ERROR: Pkl 0.32 is required (set PKL_BIN to its executable)" >&2
@@ -42,7 +42,7 @@ assert_result() {
 # behavior stays below, where failures can name the operation and print the actual JSON response.
 model_count=0
 while IFS= read -r model; do
-  component_key="$(basename "$(dirname "$(dirname "$model")")")"
+  component_key="$(basename "$(dirname "$(dirname "$(dirname "$model")")")")"
   request="{\"operation\":\"DESCRIBE\",\"componentKey\":\"${component_key}\",\"profileConfig\":{},\"clusterContext\":null,\"clusterInputs\":{},\"componentOutputs\":{}}"
   response="$(evaluate "$model" "$request")"
   assert_result "$component_key DESCRIBE envelope" "$response" '
@@ -52,7 +52,7 @@ while IFS= read -r model; do
     (has("helmValues") | not)
   '
   model_count=$((model_count + 1))
-done < <(find "$ROOT_DIR/platform-catalog/components" -path '*/config/model.pkl' -type f | sort)
+done < <(find "$ROOT_DIR/platform-catalog/components" -path '*/config/runtime-values/model.pkl' -type f | sort)
 
 if [[ "$model_count" -eq 0 ]]; then
   echo "ERROR: no executable platform configuration model was found" >&2

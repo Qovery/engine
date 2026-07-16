@@ -1,0 +1,98 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.compile
+
+import "profile.pkl"
+import "storage/backends.pkl" as storageBackends
+import "storage/helm.pkl" as storageHelm
+import "storage/types.pkl" as storage
+
+// Produces Source 3 only: the Loki values derived from customer-facing product settings.
+// q-core merges this after chart defaults and context overlays.
+function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
+  let (storageKey = profile.storage(profileConfig) as String)
+  let (backend = storageBackends.find(storageKey) as storage.StorageBackend)
+  let (isObjectStorage = backend is storage.ObjectStorageBackend)
+  let (isHighAvailability = profile.highAvailability(profileConfig) == true)
+  let (writeReplicas = if (isHighAvailability) 3 else 0)
+  let (scalableReplicas = if (isHighAvailability) 3 else 0)
+  let (replicationFactor = if (isHighAvailability) writeReplicas else 1)
+  let (serviceAccount = storageHelm.serviceAccountValues(backend, clusterInputs))
+    new Mapping {
+      ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
+      ["loki"] = storageHelm.lokiValues(profileConfig, clusterInputs, backend, replicationFactor)
+      ["singleBinary"] =
+        singleBinaryValues(isHighAvailability, isObjectStorage, backend, clusterInputs)
+      ["write"] =
+        scalableStatefulTargetValues(writeReplicas, isObjectStorage, backend, clusterInputs)
+      ["read"] = readTargetValues(scalableReplicas, backend, clusterInputs)
+      ["backend"] =
+        scalableStatefulTargetValues(
+          scalableReplicas,
+          isObjectStorage,
+          backend,
+          clusterInputs,
+        )
+      when (serviceAccount != null) {
+        ["serviceAccount"] = serviceAccount
+      }
+    }
+
+// Object storage is durable; the local /var/loki data only contains ephemeral state. Disable the
+// PVC inherited from base.yaml and mount an explicit emptyDir because the container root filesystem
+// is read-only. This also avoids requiring a default StorageClass on object-storage installations.
+local function singleBinaryValues(
+  isHighAvailability: Boolean,
+  isObjectStorage: Boolean,
+  backend: storage.StorageBackend,
+  clusterInputs: Mapping,
+): Mapping =
+  storageHelm.decorateTarget(
+    new Mapping {
+      ["replicas"] = if (isHighAvailability) 0 else 1
+      when (isObjectStorage) {
+        ["persistence"] = new Mapping { ["enabled"] = false }
+        ["extraVolumes"] =
+          List(new Mapping {
+            ["name"] = "storage"
+            ["emptyDir"] = new Mapping {}
+          })
+        ["extraVolumeMounts"] =
+          List(new Mapping {
+            ["name"] = "storage"
+            ["mountPath"] = "/var/loki"
+          })
+      }
+    },
+    backend,
+    clusterInputs,
+  )
+
+// The chart enables write/backend volume claims by default. In SimpleScalable mode, durable data
+// is already in object storage, so retain only ephemeral local state.
+local function scalableStatefulTargetValues(
+  replicas: Int,
+  isObjectStorage: Boolean,
+  backend: storage.StorageBackend,
+  clusterInputs: Mapping,
+): Mapping =
+  storageHelm.decorateTarget(
+    new Mapping {
+      ["replicas"] = replicas
+      when (isObjectStorage) {
+        ["persistence"] = new Mapping { ["volumeClaimsEnabled"] = false }
+      }
+    },
+    backend,
+    clusterInputs,
+  )
+
+local function readTargetValues(
+  replicas: Int,
+  backend: storage.StorageBackend,
+  clusterInputs: Mapping,
+): Mapping =
+  storageHelm.decorateTarget(
+    new Mapping { ["replicas"] = replicas },
+    backend,
+    clusterInputs,
+  )

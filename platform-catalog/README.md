@@ -20,49 +20,43 @@ platform-catalog/
   components/
     <component>/
       config/
-        base.yaml              # source 1 — Qovery base values, identical everywhere
-                               #   ("base": the upstream chart already has its own
-                               #   defaults; this is the Qovery layer on top)
-        overlays/              # source 2 — context fragments, convention-named:
-                               #   <mode>.yaml then <provider>.yaml, kebab-cased enum
-                               #   names (e.g. customer-managed.yaml, aws.yaml)
-        managed-values.yaml    # declarative source 3 — whole-value runtime-input mapping
-        model.pkl              # optional source 3 entrypoint — orchestration + JSON output
-        contract.pkl           # language-neutral q-core response types
-        catalog.pkl            # Console field and logical-input descriptions
-        profile.pkl            # defaults and safe profile type narrowing
-        validation.pkl         # conditional requirements and validation rules
-        helm.pkl               # final Source 3 Helm-value derivation
-        README.md              # reviewer guide and the small Pkl syntax subset in use
+        static-values/
+          base.yaml            # source 1 — Qovery values valid in every context
+          overlays/            # source 2 — <mode>.yaml then <provider>.yaml
+        runtime-values/        # source 3 — values requiring resolved runtime inputs
+          managed-values.yaml  # direct whole-value mapping, or
+          model.pkl            # optional Pkl evaluator entrypoint
+          ...                  # focused evaluator/domain modules
+        README.md              # component-specific reviewer and operations guide
 ```
 
 File semantics (the contract q-core's loader implements):
 
-- an absent `base.yaml` or context overlay is an empty fragment;
-- a component without an evaluator must publish `managed-values.yaml`; an evaluator makes it optional;
+- an absent `static-values/base.yaml` or context overlay is an empty fragment;
+- a component without an evaluator must publish `runtime-values/managed-values.yaml`; an evaluator makes it optional;
 - a **present-but-invalid** YAML file is a hard compilation error;
 - merge order: `base < mode overlay < provider overlay < declarative mapping < evaluator-derived config`.
 
-`managed-values.yaml` is the deliberately small source-3 format for components that only map
-resolved runtime inputs to Helm paths. A placeholder must occupy the whole scalar value, for example
+`runtime-values/managed-values.yaml` is the deliberately small source-3 format for components that
+only map resolved runtime inputs to Helm paths. A placeholder must occupy the whole scalar value, for example
 `CLUSTER_JWT_TOKEN: "${cluster.jwtToken}"`. Defaults, conditions, partial interpolation,
 transformations, or any other logic require the component evaluator directly; there is no
 intermediate template language. q-core loads and validates the mapping against the release
 manifest's runtime-input declarations while warming the digest-pinned bundle, then renders it with
 the same generic compiler used by the previous in-manifest `managedValues` representation.
 
-An evaluator makes `managed-values.yaml` optional. When a component temporarily has both, q-core
-merges the declarative mapping before the evaluator-derived values, so derived values win. Mixing
+An evaluator makes `runtime-values/managed-values.yaml` optional. When a component temporarily has
+both, q-core merges the declarative mapping before the evaluator-derived values, so derived values win. Mixing
 the two forms is discouraged: use the declarative mapping when there is nothing to calculate, and
 the evaluator as soon as logic is required.
 
 When a component declares a Pkl evaluator in the q-core release manifest,
-`model.pkl` is the stable entrypoint for the executable source of truth for source 3. Its focused
-relative imports stay inside the same digest-pinned bundle. q-core evaluates the module set
+`runtime-values/model.pkl` is the stable entrypoint for the executable source of truth for source 3.
+Its focused relative imports stay inside the same digest-pinned bundle. q-core evaluates the module set
 with Pkl 0.32 through the language-neutral JSON contract (`DESCRIBE`,
 `RESOLVE_REQUIREMENTS`, `VALIDATE`, `COMPILE`). The model receives the request
 through the external property `request` and returns JSON through `output.text`.
-It can import only sibling `.pkl` modules through q-core's virtual `bundle:/` loader. It cannot
+It can import only `.pkl` modules from its bundle through q-core's virtual `bundle:/` loader. It cannot
 import arbitrary filesystem, package, or network modules, and it cannot read environment variables,
 files, or network resources. Only the bundle modules, Pkl standard library, and `prop:request` are
 enabled by q-core.
@@ -75,8 +69,9 @@ qovery-operator uses the same declarative runtime-input mapping as the execution
 but remains a bootstrap descriptor outside the Operator's own execution DAG. Its cluster JWT and
 identity values are resolved by q-core in memory; the public bundle contains placeholders only.
 
-cluster-agent and shell-agent keep an intentionally empty (comments-only) `base.yaml` until their
-static Engine-v1 parity values land. Their per-cluster wiring now lives in `managed-values.yaml`:
+cluster-agent and shell-agent keep an intentionally empty (comments-only)
+`static-values/base.yaml` until their static Engine-v1 parity values land. Their per-cluster wiring
+now lives in `runtime-values/managed-values.yaml`:
 the bundle records the Helm paths and abstract placeholders, while q-core's release manifest records
 the input providers (`qcoreValue`, customer value, Terraform output, and so on). The real JWT and
 cluster identifiers never enter the public bundle; q-core resolves them in memory when compiling

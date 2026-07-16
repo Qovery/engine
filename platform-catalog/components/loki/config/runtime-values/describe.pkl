@@ -1,0 +1,64 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.describe
+
+import "contract.pkl"
+import "storage/backends.pkl" as storage
+
+// Product fields stay separate from storage backend declarations. Defaults and constraints live
+// beside the metadata rendered to the Console so profile parsing and validation reuse them.
+retentionWeeksDefault: Int = 12
+retentionWeeksMin: Int = 1
+retentionWeeksMax: Int = 52
+highAvailabilityDefault: Boolean = false
+storageDefault: String = storage.pvc.key
+
+// DESCRIBE exposes all capabilities without context. Contextual operations narrow storage choices
+// through the typed backend registry, never through provider conditionals in the Console.
+fields: List<contract.Field> = fieldsWithStorageAllowedValues(storage.allowedValues)
+
+function fieldsForContext(clusterContext: Mapping?): List<contract.Field> =
+  fieldsWithStorageAllowedValues(effectiveStorageAllowedValues(clusterContext))
+
+local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<String> =
+  if (clusterContext == null)
+    storage.allowedValues
+  else
+    storage.allowedValuesForContext(
+      clusterContext.getOrNull("mode") as String?,
+      clusterContext.getOrNull("provider") as String?,
+    )
+
+local function fieldsWithStorageAllowedValues(
+  effectiveStorageValues: List<String>,
+): List<contract.Field> =
+  List(
+    new contract.Field {
+      key = "retentionWeeks"
+      type = "number"
+      required = false
+      defaultValue = "\(retentionWeeksDefault)"
+      label = "Retention period"
+      description = "Whole number of weeks to retain Loki logs."
+      constraints = new { min = retentionWeeksMin; max = retentionWeeksMax }
+    },
+    new contract.Field {
+      key = "highAvailability"
+      type = "bool"
+      required = false
+      defaultValue = "\(highAvailabilityDefault)"
+      label = "High availability"
+      description = "Uses Loki simple-scalable mode and requires object storage."
+    },
+    new contract.Field {
+      key = "storage"
+      type = "string"
+      required = false
+      defaultValue = storageDefault
+      label = "Storage"
+      description = "Storage backend used by Loki."
+      constraints = new { allowedValues = effectiveStorageValues }
+    },
+  )
+
+// Used to reject misspelled or obsolete fields instead of silently ignoring them.
+fieldKeys: Set<String> = fields.map((field) -> field.key).toSet()

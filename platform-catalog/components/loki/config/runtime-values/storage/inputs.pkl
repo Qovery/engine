@@ -1,0 +1,120 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.inputs
+
+import "../contract.pkl"
+
+// Runtime input metadata is kept whole: key, type, label, description and validation constraint.
+// requirements.pkl exposes the selected inputs; validate.pkl applies the same constraints.
+local dnsCompatibleBucketPattern: String =
+  "^(?!(?:[0-9]{1,3}\\.){3}[0-9]{1,3}$)(?=[a-z0-9.-]{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+
+s3Bucket: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.s3BucketName"
+  type = "s3BucketName"
+  scope = "CLUSTER"
+  label = "S3 bucket name"
+  description = "Bucket used by Loki for chunks, ruler and admin data."
+  constraints = new { pattern = dnsCompatibleBucketPattern }
+}
+
+s3Role: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.lokiRoleArn"
+  type = "awsIamRoleArn"
+  scope = "CLUSTER"
+  label = "Loki IAM role ARN"
+  description = "IAM role assumed by Loki through IRSA."
+  constraints = new { pattern = "^arn:aws[a-z-]*:iam::[0-9]{12}:role/[A-Za-z0-9_+=,.@/-]+$" }
+}
+
+gcsBucket: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.gcsBucketName"
+  type = "gcsBucketName"
+  scope = "CLUSTER"
+  label = "GCS bucket name"
+  description = "Google Cloud Storage bucket used by Loki for chunks, ruler and admin data."
+  constraints = new {
+    // Deliberately use the DNS-compatible subset accepted by GCS.
+    pattern = dnsCompatibleBucketPattern
+  }
+}
+
+gcpServiceAccount: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.gcpServiceAccountEmail"
+  type = "gcpServiceAccountEmail"
+  scope = "CLUSTER"
+  label = "GCP service account email"
+  description =
+    "Service account bound to the Loki Kubernetes service account through Workload Identity."
+  constraints = new { pattern = "^[^@\\s]+@[^@\\s]+\\.iam\\.gserviceaccount\\.com$" }
+}
+
+azureStorageAccount: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.azureStorageAccountName"
+  type = "azureStorageAccountName"
+  scope = "CLUSTER"
+  label = "Azure storage account"
+  description = "Storage account containing the Loki Blob Storage container."
+  constraints = new { pattern = "^[a-z0-9]{3,24}$" }
+}
+
+azureContainer: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.azureContainerName"
+  type = "azureBlobContainerName"
+  scope = "CLUSTER"
+  label = "Azure Blob container"
+  description = "Blob Storage container used by Loki for chunks, ruler and admin data."
+  constraints = new { pattern = "^(?!.*--)[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$" }
+}
+
+azureManagedIdentity: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.azureManagedIdentityClientId"
+  type = "uuid"
+  scope = "CLUSTER"
+  label = "Azure managed identity client ID"
+  description = "Managed identity used by Loki through Azure Workload Identity."
+  constraints = new {
+    pattern = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+  }
+}
+
+s3CompatibleBucket: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.s3CompatibleBucketName"
+  type = "s3BucketName"
+  scope = "CLUSTER"
+  label = "S3-compatible bucket name"
+  description = "S3-compatible bucket used by Loki for chunks, ruler and admin data."
+  constraints = new { pattern = dnsCompatibleBucketPattern }
+}
+
+s3CompatibleEndpoint: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.s3CompatibleEndpoint"
+  type = "httpsUrl"
+  scope = "CLUSTER"
+  label = "S3-compatible endpoint"
+  description = "HTTPS endpoint of the S3-compatible object store, without credentials."
+  constraints = new {
+    pattern = "^https://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?/?$"
+  }
+}
+
+s3CompatibleRegion: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.s3CompatibleRegion"
+  type = "cloudRegion"
+  scope = "CLUSTER"
+  label = "S3-compatible region"
+  description = "Region expected by the S3-compatible object store."
+  constraints = new { pattern = "^[a-z0-9][a-z0-9-]{1,62}$" }
+}
+
+s3CompatibleCredentialsSecret: contract.LogicalInput = new contract.LogicalInput {
+  key = "infra.s3CompatibleCredentialsSecretName"
+  type = "kubernetesSecretName"
+  scope = "CLUSTER"
+  label = "S3-compatible credentials Secret"
+  description =
+    "Name of a Secret in the Loki namespace containing S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY. The credentials never enter q-core."
+  constraints = new {
+    pattern =
+      "^(?=.{1,253}$)[a-z0-9](?:[-a-z0-9]*[a-z0-9])?(?:\\.[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)*$"
+  }
+}

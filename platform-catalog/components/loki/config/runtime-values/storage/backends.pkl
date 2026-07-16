@@ -1,0 +1,75 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.backends
+
+import "inputs.pkl" as storageInputs
+import "types.pkl"
+
+// One typed registry owns the product-facing storage matrix. Describe, requirements, validation,
+// and compilation all consume it, so adding a backend cannot update only one of those paths.
+pvc: types.StorageBackend = new {
+  key = "pvc"
+}
+
+s3: types.ObjectStorageBackend = new {
+  key = "s3"
+  provider = "AWS"
+  objectStoreId = "s3"
+  bucketInput = storageInputs.s3Bucket
+  inputs = List(storageInputs.s3Bucket, storageInputs.s3Role)
+}
+
+gcs: types.ObjectStorageBackend = new {
+  key = "gcs"
+  provider = "GCP"
+  objectStoreId = "gcs"
+  bucketInput = storageInputs.gcsBucket
+  inputs = List(storageInputs.gcsBucket, storageInputs.gcpServiceAccount)
+}
+
+azureBlob: types.ObjectStorageBackend = new {
+  key = "azureBlob"
+  provider = "AZURE"
+  objectStoreId = "azure"
+  bucketInput = storageInputs.azureContainer
+  inputs =
+    List(
+      storageInputs.azureStorageAccount,
+      storageInputs.azureContainer,
+      storageInputs.azureManagedIdentity,
+    )
+}
+
+s3Compatible: types.ObjectStorageBackend = new {
+  key = "s3Compatible"
+  provider = "SCW"
+  objectStoreId = "s3"
+  bucketInput = storageInputs.s3CompatibleBucket
+  inputs =
+    List(
+      storageInputs.s3CompatibleBucket,
+      storageInputs.s3CompatibleEndpoint,
+      storageInputs.s3CompatibleRegion,
+      storageInputs.s3CompatibleCredentialsSecret,
+    )
+}
+
+backends: Mapping<String, types.StorageBackend> = new {
+  [pvc.key] = pvc
+  [s3.key] = s3
+  [gcs.key] = gcs
+  [azureBlob.key] = azureBlob
+  [s3Compatible.key] = s3Compatible
+}
+
+allowedValues: List<String> = backends.keys.toList()
+
+function find(key: String?): types.StorageBackend? =
+  if (key == null) null else backends.getOrNull(key)
+
+function allowedValuesForContext(mode: String?, provider: String?): List<String> =
+  if (mode == "QOVERY_MANAGED")
+    List(pvc.key)
+  else
+    backends.keys
+      .filter((key) -> backends[key].provider == null || backends[key].provider == provider)
+      .toList()

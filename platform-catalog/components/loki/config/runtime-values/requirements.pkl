@@ -1,0 +1,19 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.requirements
+
+import "contract.pkl"
+import "profile.pkl"
+import "storage/backends.pkl" as storage
+
+// RESOLVE_REQUIREMENTS returns only the logical inputs activated by the current draft. The release
+// manifest in q-core remains responsible for finding the concrete provider of each logical input.
+function requiredInputs(
+  profileConfig: Mapping,
+  clusterContext: Mapping?,
+): List<contract.LogicalInput> =
+  let (backend = storage.find(profile.storage(profileConfig)))
+  let (provider = clusterContext?.getOrNull("provider") as String?)
+    if (backend == null || backend.provider != null && backend.provider != provider)
+      List()
+    else
+      backend.inputs
