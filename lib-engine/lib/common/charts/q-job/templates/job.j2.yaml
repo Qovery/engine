@@ -80,7 +80,7 @@ spec:
                 - key: "{{ key }}"
                   operator: In
                   values:
-                  - {{ value }}
+                  - "{{ value }}"
           {%- endfor %}
           {%- endif %}
           {%- if service.deployment_affinity_node_preferred %}
@@ -92,7 +92,7 @@ spec:
                   - key: "{{ key }}"
                     operator: In
                     values:
-                    - {{ value }}
+                    - "{{ value }}"
                   {%- endfor %}
           {%- endif %}
         {%- endif %}

@@ -926,7 +926,7 @@ mod tests {
 
         assert!(rendered.contains("requiredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/nodepool"));
-        assert!(rendered.contains("- cronjob"));
+        assert!(rendered.contains("- \"cronjob\""));
         assert!(rendered.contains("key: \"nodepool/cronjob\""));
         assert!(!rendered.contains("preferredDuringSchedulingIgnoredDuringExecution"));
         assert!(rendered.contains("karpenter.sh/do-not-disrupt"));
