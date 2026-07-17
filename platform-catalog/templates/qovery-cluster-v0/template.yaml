@@ -7,9 +7,8 @@ platformTemplateRelease:
     shellAgent.imageRepository: public.ecr.aws/r3m4q3r9/shell-agent
     shellAgent.imageTag: 2a2fb514aa6029fd80147180d68017c29c6ea4d2
     operator.imageRepository: public.ecr.aws/r3m4q3r9/qovery-operator
-    operator.imageTag: 20ac8a8d18499654c5a0a8d44636326fd41934b2
-    engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine:v1.313.3
-    engineWorker.imageTag: v1.313.3
+    operator.imageTag: f9aff159d23551c56813d3d3a9aa832be38317f4
+    engineWorker.imageRepository: public.ecr.aws/r3m4q3r9/engine
   bootstrap:
     component:
       key: qovery-operator
@@ -53,11 +52,6 @@ platformTemplateRelease:
             kind: qcoreValue
             key: engineWorker.imageRepository
           required: true
-        - name: engineWorker.imageTag
-          source:
-            kind: qcoreValue
-            key: engineWorker.imageTag
-          required: true
         - name: operator.imageRepository
           source:
             kind: qcoreValue
@@ -72,9 +66,6 @@ platformTemplateRelease:
         - key: qovery-operator
           repositoryRuntimeInput: operator.imageRepository
           tagRuntimeInput: operator.imageTag
-        - key: engine-worker
-          repositoryRuntimeInput: engineWorker.imageRepository
-          tagRuntimeInput: engineWorker.imageTag
     compatibility:
       minControllerVersion: 0.1.0
       minOperatorVersion: 0.1.0
