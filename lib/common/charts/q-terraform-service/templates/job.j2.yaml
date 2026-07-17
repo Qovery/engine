@@ -77,7 +77,7 @@ spec:
                 - key: "{{ key }}"
                   operator: In
                   values:
-                  - {{ value }}
+                  - "{{ value }}"
         {%- endfor %}
         {%- endif %}
       restartPolicy: OnFailure
