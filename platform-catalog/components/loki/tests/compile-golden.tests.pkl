@@ -1,0 +1,75 @@
+amends "pkl:test"
+
+import "../config/runtime-values/compile.pkl"
+
+// Golden COMPILE outputs, one example per storage backend. Each example renders the derived
+// Helm values as JSON — the exact representation q-core consumes — so the expected file
+// (compile-golden.tests.pkl-expected.pcf) reads as plain values.yaml-like JSON in MR diffs.
+// Review that diff when the model changes, and regenerate it with
+// `pkl test --overwrite platform-catalog/components/loki/tests/compile-golden.tests.pkl`.
+// COMPILE assumes a validated profile, so every example below is a valid configuration.
+
+local jsonRenderer = new JsonRenderer {}
+
+local function compiledJson(
+  storage: String,
+  retentionWeeks: Int,
+  highAvailability: Boolean,
+  clusterInputs: Mapping,
+): String =
+  jsonRenderer.renderValue(
+    compile.compile(
+      new Mapping {
+        ["storage"] = storage
+        ["retentionWeeks"] = retentionWeeks
+        ["highAvailability"] = highAvailability
+      },
+      clusterInputs,
+    ),
+  )
+
+examples {
+  ["pvc single binary"] {
+    compiledJson("pvc", 12, false, new Mapping {})
+  }
+
+  ["s3 on AWS"] {
+    compiledJson("s3", 12, false, new Mapping {
+      ["infra.s3BucketName"] = "qovery-loki"
+      ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+      ["infra.awsRegion"] = "eu-west-3"
+    })
+  }
+
+  ["s3 on AWS with high availability"] {
+    compiledJson("s3", 4, true, new Mapping {
+      ["infra.s3BucketName"] = "qovery-loki"
+      ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+      ["infra.awsRegion"] = "eu-west-3"
+    })
+  }
+
+  ["gcs on GCP with high availability"] {
+    compiledJson("gcs", 8, true, new Mapping {
+      ["infra.gcsBucketName"] = "qovery-loki-gcp"
+      ["infra.gcpServiceAccountEmail"] = "loki@qovery-project.iam.gserviceaccount.com"
+    })
+  }
+
+  ["azureBlob on Azure"] {
+    compiledJson("azureBlob", 6, false, new Mapping {
+      ["infra.azureStorageAccountName"] = "qoveryloki"
+      ["infra.azureContainerName"] = "loki-data"
+      ["infra.azureManagedIdentityClientId"] = "12345678-1234-1234-1234-123456789abc"
+    })
+  }
+
+  ["s3Compatible on Scaleway"] {
+    compiledJson("s3Compatible", 10, false, new Mapping {
+      ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+      ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud"
+      ["infra.s3CompatibleRegion"] = "fr-par"
+      ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+    })
+  }
+}

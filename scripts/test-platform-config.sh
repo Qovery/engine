@@ -62,6 +62,13 @@ if [[ "$model_count" -eq 0 ]]; then
   exit 1
 fi
 
+# Component test suites (pkl:test): readable business-rule facts plus golden COMPILE outputs.
+# Expected outputs live next to each suite as *.pkl-expected.pcf; when a model change is
+# intentional, regenerate them with `pkl test --overwrite <suite>` and review the diff.
+while IFS= read -r suite; do
+  "$PKL_BIN" test "$suite"
+done < <(find "$ROOT_DIR/platform-catalog/components" -path '*/tests/*.tests.pkl' -type f | sort)
+
 describe_request='{"operation":"DESCRIBE","componentKey":"loki","profileConfig":{},"clusterContext":null,"clusterInputs":{},"componentOutputs":{}}'
 describe="$(evaluate "$LOKI_MODEL" "$describe_request")"
 assert_result "Loki DESCRIBE" "$describe" '

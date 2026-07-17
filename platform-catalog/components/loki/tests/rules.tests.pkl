@@ -1,0 +1,92 @@
+amends "pkl:test"
+
+import "../config/runtime-values/requirements.pkl"
+import "../config/runtime-values/validate.pkl"
+import "../config/runtime-values/storage/backends.pkl"
+
+// Readable requirement list for the Loki configuration model. Each fact states one product
+// rule and tests the module that owns it. Golden COMPILE outputs live in
+// compile-golden.tests.pkl; the end-to-end prop:request envelope stays covered by
+// scripts/test-platform-config.sh.
+
+local awsCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" }
+local awsManaged: Mapping = new { ["mode"] = "QOVERY_MANAGED"; ["provider"] = "AWS" }
+local gcpCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "GCP" }
+
+local function config(storage: String): Mapping = new { ["storage"] = storage }
+
+local function violationCodes(
+  profileConfig: Mapping,
+  context: Mapping,
+  inputs: Mapping,
+): List<String> =
+  validate.violations("VALIDATE", profileConfig, context, inputs).map((v) -> v.code).toList()
+
+facts {
+  ["pvc requires no cluster input"] {
+    requirements.requiredInputs(config("pvc"), awsCustomer).isEmpty
+  }
+
+  ["s3 on a customer-managed AWS cluster requires the bucket and the IAM role"] {
+    requirements.requiredInputs(config("s3"), awsCustomer).map((i) -> i.key).toList()
+      == List("infra.s3BucketName", "infra.lokiRoleArn")
+  }
+
+  ["s3 is not offered on GCP"] {
+    !backends.allowedValuesForContext("CUSTOMER_MANAGED", "GCP").contains("s3")
+  }
+
+  ["Qovery-managed clusters only offer pvc"] {
+    backends.allowedValuesForContext("QOVERY_MANAGED", "AWS") == List("pvc")
+  }
+
+  ["unknown profile fields are rejected"] {
+    violationCodes(new Mapping { ["storag"] = "pvc" }, awsCustomer, new Mapping {})
+      .contains("UNKNOWN_FIELD")
+  }
+
+  ["retentionWeeks outside 1..52 is rejected"] {
+    violationCodes(
+      new Mapping { ["storage"] = "pvc"; ["retentionWeeks"] = 99 },
+      awsCustomer,
+      new Mapping {},
+    ).contains("VALUE_OUT_OF_RANGE")
+  }
+
+  ["high availability requires object storage"] {
+    violationCodes(
+      new Mapping { ["storage"] = "pvc"; ["highAvailability"] = true },
+      awsCustomer,
+      new Mapping {},
+    ).contains("HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE")
+  }
+
+  ["s3 selected on a GCP cluster is a provider mismatch"] {
+    violationCodes(config("s3"), gcpCustomer, new Mapping {})
+      .contains("STORAGE_PROVIDER_MISMATCH")
+  }
+
+  ["object storage on Qovery-managed clusters is blocked until the Terraform barrier exists"] {
+    violationCodes(config("s3"), awsManaged, new Mapping {})
+      .contains("MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE")
+  }
+
+  ["a malformed IAM role ARN is rejected by its pattern"] {
+    violationCodes(
+      config("s3"),
+      awsCustomer,
+      new Mapping { ["infra.s3BucketName"] = "my-logs"; ["infra.lokiRoleArn"] = "not-an-arn" },
+    ).contains("INPUT_PATTERN_MISMATCH")
+  }
+
+  ["a complete valid s3 configuration produces no violation"] {
+    violationCodes(
+      config("s3"),
+      awsCustomer,
+      new Mapping {
+        ["infra.s3BucketName"] = "my-logs"
+        ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+      },
+    ).isEmpty
+  }
+}
