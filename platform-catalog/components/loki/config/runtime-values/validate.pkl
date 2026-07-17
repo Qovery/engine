@@ -11,12 +11,12 @@ import "storage/types.pkl" as storage
 // VALIDATE and COMPILE share the exact same rules. COMPILE is called again immediately before
 // deployment so an old or corrupted stored profile still fails closed.
 function violations(
-  operation: String,
+  operation: contract.Operation,
   profileConfig: Mapping,
   clusterContext: Mapping?,
   clusterInputs: Mapping,
 ) =
-  if (operation == "DESCRIBE")
+  if (operation == contract.describeOperation)
     List()
   else
     unknownFieldViolations(profileConfig)
@@ -60,7 +60,7 @@ local function typeViolations(profileConfig: Mapping) =
       }
     else
       null,
-  ).filter((violation) -> violation != null)
+  ).filterNonNull()
 
 local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?) =
   let (retentionWeeks = profile.retentionWeeks(profileConfig))
@@ -68,7 +68,7 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
   let (storageKey = profile.storage(profileConfig))
   let (backend = storageBackends.find(storageKey))
   let (provider = clusterContext?.getOrNull("provider") as String?)
-  let (mode = clusterContext?.getOrNull("mode") as String?)
+  let (mode = clusterContext?.getOrNull("mode") as contract.ClusterMode?)
     List(
       if (
         retentionWeeks != null
@@ -104,7 +104,10 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
       storageProviderViolation(storageKey, provider),
       // Managed object storage stays blocked until Terraform outputs are available before Helm
       // compile. The POC implemented here is intentionally customer-managed first.
-      if (backend is storage.ObjectStorageBackend && mode == "QOVERY_MANAGED")
+      if (
+        backend is storage.ObjectStorageBackend
+          && mode == contract.qoveryManagedMode
+      )
         new contract.Violation {
           code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
           fieldPath = "storage"
@@ -113,9 +116,12 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
         }
       else
         null,
-    ).filter((violation) -> violation != null)
+    ).filterNonNull()
 
-local function storageProviderViolation(storageKey: String?, provider: String?): contract.Violation? =
+local function storageProviderViolation(
+  storageKey: String?,
+  provider: String?,
+): contract.Violation? =
   let (backend = storageBackends.find(storageKey))
     if (backend == null || backend.provider == null || backend.provider == provider)
       null
@@ -124,7 +130,7 @@ local function storageProviderViolation(storageKey: String?, provider: String?):
 
 local function unsupportedProvider(
   storage: String,
-  expectedProvider: String,
+  expectedProvider: contract.SupportedProvider,
   actualProvider: String?,
 ) = new contract.Violation {
   code = "STORAGE_PROVIDER_MISMATCH"
@@ -134,47 +140,78 @@ local function unsupportedProvider(
 }
 
 local function requiredInputViolations(
-  operation: String,
+  operation: contract.Operation,
   profileConfig: Mapping,
   clusterContext: Mapping?,
   clusterInputs: Mapping,
 ) =
-  let (storageKey = profile.storage(profileConfig))
-  let (inputs = requirements.requiredInputs(profileConfig, clusterContext))
-    // Managed mode reports the execution-barrier violation above. Reporting unavailable outputs as
-    // missing customer values too would add noise without giving the user another action to take.
+  let (mode = clusterContext?.getOrNull("mode") as contract.ClusterMode?)
+  let (provider = clusterContext?.getOrNull("provider") as String?)
+  let (backend = storageBackends.find(profile.storage(profileConfig)))
     if (
-      (operation != "VALIDATE" && operation != "COMPILE")
-        || inputs.isEmpty
-        || clusterContext?.getOrNull("mode") == "QOVERY_MANAGED"
+      !shouldValidateRequiredInputs(operation, mode)
+        || !backendMatchesProvider(backend, provider)
     )
       List()
     else
-      inputs
-        .map((input) ->
-          if (inputIsBlank(clusterInputs, input.key))
-            new contract.Violation {
-              code = "REQUIRED_INPUT_MISSING"
-              fieldPath = "clusterInputs.\(input.key)"
-              message = "Required input \(input.key) is missing"
-            }
-          else
-            inputPatternViolation(clusterInputs, input)
-        )
-        .filter((violation) -> violation != null)
-        .toList()
-        + if (
-          operation == "COMPILE"
-            && storageKey == storageBackends.s3.key
-            && inputIsBlank(clusterInputs, "infra.awsRegion")
-        )
-          List(new contract.Violation {
-            code = "REQUIRED_INPUT_MISSING"
-            fieldPath = "clusterInputs.infra.awsRegion"
-            message = "Required input infra.awsRegion is missing"
-          })
-        else
-          List()
+      customerInputViolations(
+        requirements.requiredInputs(profileConfig, clusterContext),
+        clusterInputs,
+      )
+        + compileOnlyInputViolations(operation, backend, clusterInputs)
+
+// Managed mode reports the execution-barrier violation above. Reporting unavailable outputs as
+// missing customer values too would add noise without giving the user another action to take.
+local function shouldValidateRequiredInputs(
+  operation: contract.Operation,
+  mode: contract.ClusterMode?,
+): Boolean =
+  (
+    operation == contract.validateOperation
+      || operation == contract.compileOperation
+  )
+    && mode != contract.qoveryManagedMode
+
+local function backendMatchesProvider(
+  backend: storage.StorageBackend?,
+  provider: String?,
+): Boolean =
+  backend != null
+    && (backend.provider == null || backend.provider == provider)
+
+local function customerInputViolations(
+  inputs: List<contract.LogicalInput>,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  inputs
+    .map((input) ->
+      if (inputIsBlank(clusterInputs, input.key))
+        requiredInputMissing(input.key)
+      else
+        inputPatternViolation(clusterInputs, input)
+    )
+    .filterNonNull()
+    .toList()
+
+local function compileOnlyInputViolations(
+  operation: contract.Operation,
+  backend: storage.StorageBackend?,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  if (operation != contract.compileOperation || backend == null)
+    List()
+  else
+    backend.compileOnlyInputs.keys
+      .map((name) -> backend.compileOnlyInputs[name])
+      .filter((input) -> inputIsBlank(clusterInputs, input.key))
+      .map((input) -> requiredInputMissing(input.key))
+      .toList()
+
+local function requiredInputMissing(key: String): contract.Violation = new contract.Violation {
+  code = "REQUIRED_INPUT_MISSING"
+  fieldPath = "clusterInputs.\(key)"
+  message = "Required input \(key) is missing"
+}
 
 local function inputIsBlank(clusterInputs: Mapping, key: String): Boolean =
   let (value = clusterInputs.getOrNull(key))

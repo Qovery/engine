@@ -7,12 +7,19 @@ import "../contract.pkl"
 // in inputs.pkl, keeping this module deliberately free of provider-specific values.
 open class StorageBackend {
   key: String
-  provider: String? = null
-  inputs: List<contract.LogicalInput> = List()
+  provider: contract.SupportedProvider? = null
+  customerInputs: List<contract.LogicalInput> = List()
+  compileOnlyInputs: Mapping<String, CompileInput> = new {}
+}
+
+// Internal values supplied by q-core only at compile time. Unlike LogicalInput, these declarations
+// are never exposed as customer-editable fields in the Console.
+class CompileInput {
+  key: String
 }
 
 class ObjectStorageBackend extends StorageBackend {
-  provider: String
+  provider: contract.SupportedProvider
   objectStoreId: String
   bucketInput: contract.LogicalInput
 }

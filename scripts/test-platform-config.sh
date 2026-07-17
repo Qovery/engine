@@ -6,6 +6,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKL_BIN="${PKL_BIN:-pkl}"
 LOKI_MODEL="$ROOT_DIR/platform-catalog/components/loki/config/runtime-values/model.pkl"
+LOKI_TEST="$ROOT_DIR/platform-catalog/components/loki/tests/runtime-values.test.pkl"
 
 command -v "$PKL_BIN" >/dev/null 2>&1 || {
   echo "ERROR: Pkl 0.32 is required (set PKL_BIN to its executable)" >&2
@@ -15,6 +16,8 @@ command -v jq >/dev/null 2>&1 || {
   echo "ERROR: jq is required" >&2
   exit 1
 }
+
+"$PKL_BIN" test "$LOKI_TEST"
 
 evaluate() {
   local model="$1"

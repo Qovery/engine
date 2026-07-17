@@ -24,7 +24,7 @@ local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<Str
     storage.allowedValues
   else
     storage.allowedValuesForContext(
-      clusterContext.getOrNull("mode") as String?,
+      clusterContext.getOrNull("mode") as contract.ClusterMode?,
       clusterContext.getOrNull("provider") as String?,
     )
 
@@ -34,7 +34,7 @@ local function fieldsWithStorageAllowedValues(
   List(
     new contract.Field {
       key = "retentionWeeks"
-      type = "number"
+      type = contract.numberFieldType
       required = false
       defaultValue = "\(retentionWeeksDefault)"
       label = "Retention period"
@@ -43,7 +43,7 @@ local function fieldsWithStorageAllowedValues(
     },
     new contract.Field {
       key = "highAvailability"
-      type = "bool"
+      type = contract.booleanFieldType
       required = false
       defaultValue = "\(highAvailabilityDefault)"
       label = "High availability"
@@ -51,7 +51,7 @@ local function fieldsWithStorageAllowedValues(
     },
     new contract.Field {
       key = "storage"
-      type = "string"
+      type = contract.stringFieldType
       required = false
       defaultValue = storageDefault
       label = "Storage"

@@ -1,0 +1,175 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.tests.runtimeValues
+
+amends "pkl:test"
+
+import "../config/runtime-values/compile.pkl"
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/describe.pkl"
+import "../config/runtime-values/requirements.pkl"
+import "../config/runtime-values/storage/backends.pkl" as storageBackends
+import "../config/runtime-values/storage/helm.pkl" as storageHelm
+import "../config/runtime-values/validate.pkl"
+
+local awsContext: Mapping = new Mapping {
+  ["mode"] = contract.customerManagedMode
+  ["provider"] = contract.awsProvider
+}
+
+local s3Profile: Mapping = new Mapping {
+  ["storage"] = storageBackends.s3.key
+  ["retentionWeeks"] = 12
+  ["highAvailability"] = false
+}
+
+local s3CustomerInputs: Mapping = new Mapping {
+  ["infra.s3BucketName"] = "qovery-loki"
+  ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+}
+
+local function renderCompiledValues(profileConfig: Mapping, clusterInputs: Mapping): String =
+  (new JsonRenderer {}).renderDocument(compile.compile(profileConfig, clusterInputs)).trimEnd()
+
+facts {
+  ["storage backend registry"] {
+    storageBackends.backends.keys.toSet() == storageHelm.adapters.keys.toSet()
+    storageBackends.s3.customerInputs.map((input) -> input.key)
+      == List("infra.s3BucketName", "infra.lokiRoleArn")
+    storageBackends.s3.compileOnlyInputs.keys.toList() == List("region")
+    storageBackends.s3.compileOnlyInputs["region"].key == "infra.awsRegion"
+  }
+
+  ["customer requirements exclude q-core compile inputs"] {
+    requirements.requiredInputs(s3Profile, awsContext).map((input) -> input.key)
+      == List("infra.s3BucketName", "infra.lokiRoleArn")
+    validate
+      .violations(
+        contract.validateOperation,
+        s3Profile,
+        awsContext,
+        s3CustomerInputs,
+      )
+      .isEmpty
+  }
+
+  ["compile requires q-core inputs declared by the backend"] {
+    validate
+      .violations(
+        contract.compileOperation,
+        s3Profile,
+        awsContext,
+        s3CustomerInputs,
+      )
+      .map((violation) -> violation.fieldPath)
+      == List("clusterInputs.infra.awsRegion")
+  }
+
+  ["unsupported q-core providers degrade instead of failing evaluation"] {
+    // CloudVendor is an open set: a cluster on OVH, DO, ... must still get the pvc-only catalog.
+    describe.fieldsForContext(new Mapping {
+      ["mode"] = contract.customerManagedMode
+      ["provider"] = "OVH"
+    })
+      .filter((field) -> field.key == "storage")
+      .first
+      .constraints
+      .allowedValues == List(storageBackends.pvc.key)
+    requirements
+      .requiredInputs(s3Profile, new Mapping {
+        ["mode"] = contract.customerManagedMode
+        ["provider"] = "OVH"
+      })
+      .isEmpty
+    validate
+      .violations(
+        contract.validateOperation,
+        s3Profile,
+        new Mapping {
+          ["mode"] = contract.customerManagedMode
+          ["provider"] = "OVH"
+        },
+        new Mapping {},
+      )
+      .map((violation) -> violation.code)
+      == List("STORAGE_PROVIDER_MISMATCH")
+  }
+
+  ["provider mismatch does not activate backend inputs"] {
+    validate
+      .violations(
+        contract.compileOperation,
+        s3Profile,
+        new Mapping {
+          ["mode"] = contract.customerManagedMode
+          ["provider"] = contract.gcpProvider
+        },
+        new Mapping {},
+      )
+      .map((violation) -> violation.code)
+      == List("STORAGE_PROVIDER_MISMATCH")
+  }
+}
+
+examples {
+  ["pvc"] {
+    renderCompiledValues(
+      new Mapping {
+        ["storage"] = storageBackends.pvc.key
+        ["retentionWeeks"] = 12
+        ["highAvailability"] = false
+      },
+      new Mapping {},
+    )
+  }
+
+  ["s3"] {
+    renderCompiledValues(s3Profile, (s3CustomerInputs) {
+      ["infra.awsRegion"] = "eu-west-3"
+    })
+  }
+
+  ["gcs"] {
+    renderCompiledValues(
+      new Mapping {
+        ["storage"] = storageBackends.gcs.key
+        ["retentionWeeks"] = 8
+        ["highAvailability"] = true
+      },
+      new Mapping {
+        ["infra.gcsBucketName"] = "qovery-loki-gcp"
+        ["infra.gcpServiceAccountEmail"] = "loki@qovery-project.iam.gserviceaccount.com"
+      },
+    )
+  }
+
+  ["azure blob"] {
+    renderCompiledValues(
+      new Mapping {
+        ["storage"] = storageBackends.azureBlob.key
+        ["retentionWeeks"] = 6
+        ["highAvailability"] = false
+      },
+      new Mapping {
+        ["infra.azureStorageAccountName"] = "qoveryloki"
+        ["infra.azureContainerName"] = "loki-data"
+        ["infra.azureManagedIdentityClientId"] = "12345678-1234-1234-1234-123456789abc"
+      },
+    )
+  }
+
+  ["s3 compatible"] {
+    renderCompiledValues(
+      new Mapping {
+        ["storage"] = storageBackends.s3Compatible.key
+        ["retentionWeeks"] = 10
+        ["highAvailability"] = false
+      },
+      new Mapping {
+        ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+        ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud"
+        ["infra.s3CompatibleRegion"] = "fr-par"
+        ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+      },
+    )
+  }
+}

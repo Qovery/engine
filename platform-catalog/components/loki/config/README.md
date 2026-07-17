@@ -1,23 +1,27 @@
 # Loki product configuration model
 
 ```text
-config/
-  static-values/
-    base.yaml
-    overlays/
-  runtime-values/
-    model.pkl
-    contract.pkl
-    describe.pkl
-    requirements.pkl
-    validate.pkl
-    compile.pkl
-    profile.pkl
-    storage/
-      types.pkl
-      inputs.pkl
-      backends.pkl
-      helm.pkl
+loki/
+  config/
+    static-values/
+      base.yaml
+      overlays/
+    runtime-values/
+      model.pkl
+      contract.pkl
+      describe.pkl
+      requirements.pkl
+      validate.pkl
+      compile.pkl
+      profile.pkl
+      storage/
+        types.pkl
+        inputs.pkl
+        backends.pkl
+        helm.pkl
+  tests/
+    runtime-values.test.pkl
+    runtime-values.test.pkl-expected.pcf
 ```
 
 The files under `runtime-values/` follow the Console use cases. `model.pkl` is the only entrypoint
@@ -71,6 +75,7 @@ generic rules file.
 | `import "describe.pkl"` | Load another module from the same OCI bundle. |
 | `local` | Private implementation detail, omitted from rendered output. |
 | `function name(arg: Type)` | Reusable typed function. |
+| `typealias Operation = "DESCRIBE" \| ...` | Closed vocabulary checked by Pkl instead of a free-form string. |
 | `new contract.Field { ... }` | Construct a checked contract object. Misspelled properties fail evaluation. |
 | `open class StorageBackend` | Allow the storage registry to define a stricter object-storage subtype. |
 | `class ObjectStorageBackend extends StorageBackend` | Require every object backend to declare its provider, Loki identifier, and bucket input. |
@@ -108,10 +113,13 @@ The evaluator rejects a storage/provider mismatch. High availability is valid wi
 object-storage values and invalid with `pvc`.
 
 `storage/backends.pkl` is the source of truth for this matrix. Adding a backend starts by declaring
-its provider, Loki object-store identifier, bucket input, and complete logical-input list there.
+its provider, Loki object-store identifier, bucket input, customer-input list, and internal
+compile-only input list there.
 `describe.pkl` derives the Console choices from that registry, `requirements.pkl` derives the
 conditional inputs, and `validate.pkl` checks provider compatibility from the same objects. Only
-chart-specific values remain in `storage/helm.pkl`; `compile.pkl` stays a
+chart-specific values remain in `storage/helm.pkl`; every backend must have an explicit Helm
+adapter, including backends whose adapter is a no-op. The colocalized Pkl test checks exact registry
+coverage so a new backend cannot silently compile without its chart behavior. `compile.pkl` stays a
 readable overview of the resulting Loki topology.
 
 The unscoped catalog remains a capability index and therefore lists all five storage values. A
@@ -123,10 +131,11 @@ encode this matrix or any Loki-specific provider condition.
 ## Runtime values
 
 For AWS, the model exposes only the values a user or another platform component must provide: the
-S3 bucket name and the Loki IAM role ARN. The AWS region is trusted cluster context: q-core declares
-`infra.awsRegion` as a `qcoreValue` sourced from `cluster.region`, resolves it immediately before
-`COMPILE`, and passes it in `clusterInputs`. `VALIDATE` therefore does not ask the Console for a
-region, while `COMPILE` still fails closed if q-core does not inject it.
+S3 bucket name and the Loki IAM role ARN. The AWS backend also declares `infra.awsRegion` as an
+internal compile-only input. It is trusted cluster context: q-core declares it as a `qcoreValue`
+sourced from `cluster.region`, resolves it immediately before `COMPILE`, and passes it in
+`clusterInputs`. `VALIDATE` therefore does not ask the Console for a region, while `COMPILE` derives
+the requirement from the backend registry and fails closed if q-core does not inject it.
 
 For S3-compatible storage, q-core receives only the Secret name. The customer creates that Secret
 in the Loki namespace before deployment:
@@ -167,3 +176,6 @@ Run the contract examples from the engine repository root:
 ```shell
 PKL_BIN=pkl ./scripts/test-platform-config.sh
 ```
+
+The script first runs the component-local Pkl facts and snapshots, then exercises the complete JSON
+contract through `model.pkl`.

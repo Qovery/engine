@@ -5,6 +5,38 @@ module qovery.engine.platform.loki.contract
 // Keep their property names aligned with ComponentConfigurationEvaluationResult.
 // Pkl stays an implementation detail: the Console only sees the rendered JSON.
 
+typealias Operation = "DESCRIBE" | "RESOLVE_REQUIREMENTS" | "VALIDATE" | "COMPILE"
+
+typealias InputScope = "PLATFORM_PROFILE" | "CLUSTER"
+
+// Providers for which a provider-specific backend exists: the model's own support matrix, used
+// for declarations only. Never cast the incoming clusterContext.provider with it: q-core's
+// CloudVendor is an open set (DO, OVH, ...), so context reads keep the plain String type and an
+// unsupported provider degrades to the provider-neutral choices instead of failing evaluation.
+typealias SupportedProvider = "AWS" | "GCP" | "AZURE" | "SCW"
+typealias ClusterMode = "QOVERY_MANAGED" | "CUSTOMER_MANAGED"
+typealias FieldType = "string" | "number" | "bool"
+
+describeOperation: Operation = "DESCRIBE"
+resolveRequirementsOperation: Operation = "RESOLVE_REQUIREMENTS"
+validateOperation: Operation = "VALIDATE"
+compileOperation: Operation = "COMPILE"
+
+platformProfileScope: InputScope = "PLATFORM_PROFILE"
+clusterScope: InputScope = "CLUSTER"
+
+awsProvider: SupportedProvider = "AWS"
+gcpProvider: SupportedProvider = "GCP"
+azureProvider: SupportedProvider = "AZURE"
+scalewayProvider: SupportedProvider = "SCW"
+
+qoveryManagedMode: ClusterMode = "QOVERY_MANAGED"
+customerManagedMode: ClusterMode = "CUSTOMER_MANAGED"
+
+stringFieldType: FieldType = "string"
+numberFieldType: FieldType = "number"
+booleanFieldType: FieldType = "bool"
+
 class Constraints {
   allowedValues: List<String>? = null
   min: Int? = null
@@ -17,7 +49,7 @@ class Constraints {
 // Describes one product setting that the Console can render generically.
 class Field {
   key: String
-  type: String
+  type: FieldType
   required: Boolean
   defaultValue: String?
   label: String
@@ -31,7 +63,7 @@ class Field {
 class LogicalInput {
   key: String
   type: String
-  scope: String
+  scope: InputScope
   label: String
   description: String?
   sensitive: Boolean = false

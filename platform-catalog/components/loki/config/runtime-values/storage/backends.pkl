@@ -1,6 +1,7 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.storage.backends
 
+import "../contract.pkl"
 import "inputs.pkl" as storageInputs
 import "types.pkl"
 
@@ -12,26 +13,29 @@ pvc: types.StorageBackend = new {
 
 s3: types.ObjectStorageBackend = new {
   key = "s3"
-  provider = "AWS"
+  provider = contract.awsProvider
   objectStoreId = "s3"
   bucketInput = storageInputs.s3Bucket
-  inputs = List(storageInputs.s3Bucket, storageInputs.s3Role)
+  customerInputs = List(storageInputs.s3Bucket, storageInputs.s3Role)
+  compileOnlyInputs = new {
+    ["region"] = storageInputs.awsRegion
+  }
 }
 
 gcs: types.ObjectStorageBackend = new {
   key = "gcs"
-  provider = "GCP"
+  provider = contract.gcpProvider
   objectStoreId = "gcs"
   bucketInput = storageInputs.gcsBucket
-  inputs = List(storageInputs.gcsBucket, storageInputs.gcpServiceAccount)
+  customerInputs = List(storageInputs.gcsBucket, storageInputs.gcpServiceAccount)
 }
 
 azureBlob: types.ObjectStorageBackend = new {
   key = "azureBlob"
-  provider = "AZURE"
+  provider = contract.azureProvider
   objectStoreId = "azure"
   bucketInput = storageInputs.azureContainer
-  inputs =
+  customerInputs =
     List(
       storageInputs.azureStorageAccount,
       storageInputs.azureContainer,
@@ -41,10 +45,10 @@ azureBlob: types.ObjectStorageBackend = new {
 
 s3Compatible: types.ObjectStorageBackend = new {
   key = "s3Compatible"
-  provider = "SCW"
+  provider = contract.scalewayProvider
   objectStoreId = "s3"
   bucketInput = storageInputs.s3CompatibleBucket
-  inputs =
+  customerInputs =
     List(
       storageInputs.s3CompatibleBucket,
       storageInputs.s3CompatibleEndpoint,
@@ -66,8 +70,13 @@ allowedValues: List<String> = backends.keys.toList()
 function find(key: String?): types.StorageBackend? =
   if (key == null) null else backends.getOrNull(key)
 
-function allowedValuesForContext(mode: String?, provider: String?): List<String> =
-  if (mode == "QOVERY_MANAGED")
+// `provider` stays an open String so clusters on providers without object-storage support still
+// see the provider-neutral pvc choice.
+function allowedValuesForContext(
+  mode: contract.ClusterMode?,
+  provider: String?,
+): List<String> =
+  if (mode == contract.qoveryManagedMode)
     List(pvc.key)
   else
     backends.keys

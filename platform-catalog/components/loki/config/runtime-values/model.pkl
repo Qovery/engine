@@ -4,6 +4,7 @@ module qovery.engine.platform.loki.model
 import "pkl:json"
 
 import "compile.pkl"
+import "contract.pkl"
 import "describe.pkl"
 import "requirements.pkl"
 import "validate.pkl"
@@ -13,7 +14,7 @@ import "validate.pkl"
 // 2. delegate catalogue, requirement, validation and Helm concerns to focused modules;
 // 3. render the language-neutral response as JSON.
 local request = (new json.Parser { useMapping = true }).parse(read("prop:request")) as Mapping
-local operation = request["operation"] as String
+local operation = request["operation"] as contract.Operation
 local profileConfig = request["profileConfig"] as Mapping
 local clusterContext = request["clusterContext"] as Mapping?
 local clusterInputs = request["clusterInputs"] as Mapping
@@ -23,7 +24,7 @@ local computedViolations =
 
 fields = describe.fieldsForContext(clusterContext)
 requiredInputs =
-  if (operation == "DESCRIBE")
+  if (operation == contract.describeOperation)
     List()
   else
     requirements.requiredInputs(profileConfig, clusterContext)
@@ -32,7 +33,7 @@ violations = computedViolations
 // Invalid inputs never produce partial Helm values. q-core treats a missing helmValues on a valid
 // COMPILE request as a hard error, so this remains fail-closed on both sides of the contract.
 helmValues =
-  if (operation == "COMPILE" && computedViolations.isEmpty)
+  if (operation == contract.compileOperation && computedViolations.isEmpty)
     compile.compile(profileConfig, clusterInputs)
   else
     null

@@ -13,7 +13,9 @@ function requiredInputs(
 ): List<contract.LogicalInput> =
   let (backend = storage.find(profile.storage(profileConfig)))
   let (provider = clusterContext?.getOrNull("provider") as String?)
-    if (backend == null || backend.provider != null && backend.provider != provider)
+    // Provider mismatches are reported by validate.pkl. Requirements remain empty so the Console
+    // does not ask for inputs that cannot make the selected backend valid on this cluster.
+    if (backend == null || (backend.provider != null && backend.provider != provider))
       List()
     else
-      backend.inputs
+      backend.customerInputs

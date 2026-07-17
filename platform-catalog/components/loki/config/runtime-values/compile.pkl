@@ -13,9 +13,8 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
   let (backend = storageBackends.find(storageKey) as storage.StorageBackend)
   let (isObjectStorage = backend is storage.ObjectStorageBackend)
   let (isHighAvailability = profile.highAvailability(profileConfig) == true)
-  let (writeReplicas = if (isHighAvailability) 3 else 0)
   let (scalableReplicas = if (isHighAvailability) 3 else 0)
-  let (replicationFactor = if (isHighAvailability) writeReplicas else 1)
+  let (replicationFactor = if (isHighAvailability) scalableReplicas else 1)
   let (serviceAccount = storageHelm.serviceAccountValues(backend, clusterInputs))
     new Mapping {
       ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
@@ -23,7 +22,7 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
       ["singleBinary"] =
         singleBinaryValues(isHighAvailability, isObjectStorage, backend, clusterInputs)
       ["write"] =
-        scalableStatefulTargetValues(writeReplicas, isObjectStorage, backend, clusterInputs)
+        scalableStatefulTargetValues(scalableReplicas, isObjectStorage, backend, clusterInputs)
       ["read"] = readTargetValues(scalableReplicas, backend, clusterInputs)
       ["backend"] =
         scalableStatefulTargetValues(

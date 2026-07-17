@@ -1,0 +1,405 @@
+examples {
+  ["pvc"] {
+    """
+    {
+      "deploymentMode": "SingleBinary",
+      "loki": {
+        "commonConfig": {
+          "replication_factor": 1
+        },
+        "limits_config": {
+          "retention_period": "2016h"
+        }
+      },
+      "singleBinary": {
+        "replicas": 1
+      },
+      "write": {
+        "replicas": 0
+      },
+      "read": {
+        "replicas": 0
+      },
+      "backend": {
+        "replicas": 0
+      }
+    }
+    """
+  }
+  ["s3"] {
+    """
+    {
+      "deploymentMode": "SingleBinary",
+      "loki": {
+        "commonConfig": {
+          "replication_factor": 1
+        },
+        "limits_config": {
+          "retention_period": "2016h"
+        },
+        "storage": {
+          "type": "s3",
+          "bucketNames": {
+            "chunks": "qovery-loki",
+            "ruler": "qovery-loki",
+            "admin": "qovery-loki"
+          },
+          "s3": {
+            "region": "eu-west-3"
+          }
+        },
+        "schemaConfig": {
+          "configs": [
+            {
+              "from": "2024-04-01",
+              "store": "tsdb",
+              "object_store": "s3",
+              "schema": "v13",
+              "index": {
+                "prefix": "index_",
+                "period": "24h"
+              }
+            }
+          ]
+        },
+        "compactor": {
+          "delete_request_store": "s3"
+        }
+      },
+      "singleBinary": {
+        "replicas": 1,
+        "persistence": {
+          "enabled": false
+        },
+        "extraVolumes": [
+          {
+            "name": "storage",
+            "emptyDir": {}
+          }
+        ],
+        "extraVolumeMounts": [
+          {
+            "name": "storage",
+            "mountPath": "/var/loki"
+          }
+        ]
+      },
+      "write": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "read": {
+        "replicas": 0
+      },
+      "backend": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "serviceAccount": {
+        "annotations": {
+          "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/loki"
+        }
+      }
+    }
+    """
+  }
+  ["gcs"] {
+    """
+    {
+      "deploymentMode": "SimpleScalable",
+      "loki": {
+        "commonConfig": {
+          "replication_factor": 3
+        },
+        "limits_config": {
+          "retention_period": "1344h"
+        },
+        "storage": {
+          "type": "gcs",
+          "bucketNames": {
+            "chunks": "qovery-loki-gcp",
+            "ruler": "qovery-loki-gcp",
+            "admin": "qovery-loki-gcp"
+          },
+          "gcs": {
+            "chunkBufferSize": 0,
+            "requestTimeout": "0s",
+            "enableHttp2": true
+          }
+        },
+        "schemaConfig": {
+          "configs": [
+            {
+              "from": "2024-04-01",
+              "store": "tsdb",
+              "object_store": "gcs",
+              "schema": "v13",
+              "index": {
+                "prefix": "index_",
+                "period": "24h"
+              }
+            }
+          ]
+        },
+        "compactor": {
+          "delete_request_store": "gcs"
+        }
+      },
+      "singleBinary": {
+        "replicas": 0,
+        "persistence": {
+          "enabled": false
+        },
+        "extraVolumes": [
+          {
+            "name": "storage",
+            "emptyDir": {}
+          }
+        ],
+        "extraVolumeMounts": [
+          {
+            "name": "storage",
+            "mountPath": "/var/loki"
+          }
+        ]
+      },
+      "write": {
+        "replicas": 3,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "read": {
+        "replicas": 3
+      },
+      "backend": {
+        "replicas": 3,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "serviceAccount": {
+        "annotations": {
+          "iam.gke.io/gcp-service-account": "loki@qovery-project.iam.gserviceaccount.com"
+        }
+      }
+    }
+    """
+  }
+  ["azure blob"] {
+    """
+    {
+      "deploymentMode": "SingleBinary",
+      "loki": {
+        "commonConfig": {
+          "replication_factor": 1
+        },
+        "limits_config": {
+          "retention_period": "1008h"
+        },
+        "podLabels": {
+          "azure.workload.identity/use": "true"
+        },
+        "storage": {
+          "type": "azure",
+          "bucketNames": {
+            "chunks": "loki-data",
+            "ruler": "loki-data",
+            "admin": "loki-data"
+          },
+          "azure": {
+            "accountName": "qoveryloki",
+            "useManagedIdentity": false,
+            "useFederatedToken": true
+          }
+        },
+        "schemaConfig": {
+          "configs": [
+            {
+              "from": "2024-04-01",
+              "store": "tsdb",
+              "object_store": "azure",
+              "schema": "v13",
+              "index": {
+                "prefix": "index_",
+                "period": "24h"
+              }
+            }
+          ]
+        },
+        "compactor": {
+          "delete_request_store": "azure"
+        }
+      },
+      "singleBinary": {
+        "replicas": 1,
+        "persistence": {
+          "enabled": false
+        },
+        "extraVolumes": [
+          {
+            "name": "storage",
+            "emptyDir": {}
+          }
+        ],
+        "extraVolumeMounts": [
+          {
+            "name": "storage",
+            "mountPath": "/var/loki"
+          }
+        ]
+      },
+      "write": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "read": {
+        "replicas": 0
+      },
+      "backend": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        }
+      },
+      "serviceAccount": {
+        "name": "qovery-storage",
+        "labels": {
+          "azure.workload.identity/use": "true"
+        },
+        "annotations": {
+          "azure.workload.identity/client-id": "12345678-1234-1234-1234-123456789abc"
+        }
+      }
+    }
+    """
+  }
+  ["s3 compatible"] {
+    """
+    {
+      "deploymentMode": "SingleBinary",
+      "loki": {
+        "commonConfig": {
+          "replication_factor": 1
+        },
+        "limits_config": {
+          "retention_period": "1680h"
+        },
+        "storage": {
+          "type": "s3",
+          "bucketNames": {
+            "chunks": "qovery-loki-scw",
+            "ruler": "qovery-loki-scw",
+            "admin": "qovery-loki-scw"
+          },
+          "s3": {
+            "endpoint": "https://s3.fr-par.scw.cloud",
+            "region": "fr-par",
+            "accessKeyId": "${S3_ACCESS_KEY_ID}",
+            "secretAccessKey": "${S3_SECRET_ACCESS_KEY}",
+            "signatureVersion": "v4",
+            "s3ForcePathStyle": true,
+            "insecure": false
+          }
+        },
+        "schemaConfig": {
+          "configs": [
+            {
+              "from": "2024-04-01",
+              "store": "tsdb",
+              "object_store": "s3",
+              "schema": "v13",
+              "index": {
+                "prefix": "index_",
+                "period": "24h"
+              }
+            }
+          ]
+        },
+        "compactor": {
+          "delete_request_store": "s3"
+        }
+      },
+      "singleBinary": {
+        "replicas": 1,
+        "persistence": {
+          "enabled": false
+        },
+        "extraVolumes": [
+          {
+            "name": "storage",
+            "emptyDir": {}
+          }
+        ],
+        "extraVolumeMounts": [
+          {
+            "name": "storage",
+            "mountPath": "/var/loki"
+          }
+        ],
+        "extraArgs": [
+          "-config.expand-env=true"
+        ],
+        "extraEnvFrom": [
+          {
+            "secretRef": {
+              "name": "loki-object-storage"
+            }
+          }
+        ]
+      },
+      "write": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        },
+        "extraArgs": [
+          "-config.expand-env=true"
+        ],
+        "extraEnvFrom": [
+          {
+            "secretRef": {
+              "name": "loki-object-storage"
+            }
+          }
+        ]
+      },
+      "read": {
+        "replicas": 0,
+        "extraArgs": [
+          "-config.expand-env=true"
+        ],
+        "extraEnvFrom": [
+          {
+            "secretRef": {
+              "name": "loki-object-storage"
+            }
+          }
+        ]
+      },
+      "backend": {
+        "replicas": 0,
+        "persistence": {
+          "volumeClaimsEnabled": false
+        },
+        "extraArgs": [
+          "-config.expand-env=true"
+        ],
+        "extraEnvFrom": [
+          {
+            "secretRef": {
+              "name": "loki-object-storage"
+            }
+          }
+        ]
+      }
+    }
+    """
+  }
+}
