@@ -322,7 +322,9 @@ fn render_diagnostics_log_block(header: &str, lines: &[String]) -> String {
 
 fn log_message(logger: &impl InfraLogger, trigger: UpgradeDiagnosticsTrigger, message: String) {
     match trigger {
-        UpgradeDiagnosticsTrigger::Periodic | UpgradeDiagnosticsTrigger::WorkflowCompletion => logger.info(message),
+        UpgradeDiagnosticsTrigger::Periodic | UpgradeDiagnosticsTrigger::WorkflowCompletion => {
+            tracing::info!(trigger = ?trigger, diagnostics = %message, "CAPI diagnostics collected");
+        }
         UpgradeDiagnosticsTrigger::CommandFailure => logger.warn(message),
     }
 }
@@ -717,11 +719,71 @@ fn compact_message(message: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        DiagnosticResourceKind, diagnostic_api_groups, diagnostic_resource_kinds, parse_capi_resources,
-        parse_dynamic_resource, render_diagnostics_log_block, render_upgrade_diagnostics,
+        DiagnosticResourceKind, UpgradeDiagnosticsTrigger, diagnostic_api_groups, diagnostic_resource_kinds,
+        log_message, parse_capi_resources, parse_dynamic_resource, render_diagnostics_log_block,
+        render_upgrade_diagnostics,
     };
+    use crate::errors::EngineError;
+    use crate::events::{EventMessage, InfrastructureDiffType};
+    use crate::infrastructure::action::InfraLogger;
     use crate::infrastructure::action::eksanywhere::provider::EksAnywhereProviderMode;
     use kube::api::DynamicObject;
+    use std::cell::Cell;
+    use tracing_test::traced_test;
+
+    #[derive(Default)]
+    struct RecordingInfraLogger {
+        info_count: Cell<usize>,
+        warn_count: Cell<usize>,
+    }
+
+    impl InfraLogger for RecordingInfraLogger {
+        fn info(&self, _message: impl Into<EventMessage>) {
+            self.info_count.set(self.info_count.get() + 1);
+        }
+
+        fn warn(&self, _message: impl Into<EventMessage>) {
+            self.warn_count.set(self.warn_count.get() + 1);
+        }
+
+        fn error(&self, _error: EngineError, _message: Option<impl Into<EventMessage>>) {}
+
+        fn diff(&self, _from: InfrastructureDiffType, _message: String) {}
+    }
+
+    #[test]
+    #[traced_test]
+    fn should_keep_non_failure_diagnostics_internal() {
+        let logger = RecordingInfraLogger::default();
+
+        log_message(&logger, UpgradeDiagnosticsTrigger::Periodic, "periodic diagnostics".to_string());
+        log_message(
+            &logger,
+            UpgradeDiagnosticsTrigger::WorkflowCompletion,
+            "workflow completion diagnostics".to_string(),
+        );
+
+        assert_eq!(logger.info_count.get(), 0);
+        assert_eq!(logger.warn_count.get(), 0);
+        assert!(logs_contain("periodic diagnostics"));
+        assert!(logs_contain("workflow completion diagnostics"));
+    }
+
+    #[test]
+    #[traced_test]
+    fn should_only_emit_failure_diagnostics_through_the_client_logger() {
+        let logger = RecordingInfraLogger::default();
+
+        log_message(
+            &logger,
+            UpgradeDiagnosticsTrigger::CommandFailure,
+            "failure diagnostics".to_string(),
+        );
+
+        assert_eq!(logger.info_count.get(), 0);
+        assert_eq!(logger.warn_count.get(), 1);
+        assert!(!logs_contain("failure diagnostics"));
+    }
 
     #[test]
     fn should_render_diagnostics_as_a_single_delimited_log_block() {
