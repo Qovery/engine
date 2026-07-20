@@ -15,6 +15,7 @@ const GOVC_PASSWORD: &str = "GOVC_PASSWORD";
 const GOVC_URL: &str = "GOVC_URL";
 const GOVC_INSECURE: &str = "GOVC_INSECURE";
 const GOVC_PERSIST_SESSION: &str = "GOVC_PERSIST_SESSION";
+const GOVC_FORMAT_ERROR: &str = "GOVC_FORMAT_ERROR";
 const GOVC_TLS_CERTIFICATE: &str = "GOVC_TLS_CERTIFICATE";
 const GOVC_TLS_KEY: &str = "GOVC_TLS_KEY";
 const VSPHERE_USER: &str = "VSPHERE_USER";
@@ -38,6 +39,8 @@ pub(super) fn build_govc_envs(
     inject_govc_env_if_missing(&mut envs, GOVC_URL, &[]);
     inject_govc_env_if_missing(&mut envs, GOVC_INSECURE, &[]);
     inject_govc_env_if_missing(&mut envs, GOVC_PERSIST_SESSION, &[]);
+    // The `-xml` flag formats command errors only when govc error formatting is enabled.
+    set_govc_env(&mut envs, GOVC_FORMAT_ERROR, "true");
 
     if let Some(server) = metadata.vcenter_server.as_ref()
         && !envs.iter().any(|(k, _)| k == GOVC_URL)
@@ -62,6 +65,15 @@ pub(super) fn build_govc_envs(
     }
 
     envs
+}
+
+fn set_govc_env(envs: &mut Vec<(String, String)>, name: &str, value: &str) {
+    if let Some((_, current_value)) = envs.iter_mut().find(|(current_name, _)| current_name == name) {
+        *current_value = value.to_string();
+        return;
+    }
+
+    envs.push((name.to_string(), value.to_string()));
 }
 
 fn inject_govc_env_if_missing(envs: &mut Vec<(String, String)>, env_name: &str, fallback_env_names: &[&str]) {
@@ -248,7 +260,25 @@ fn execute_govc_command(
 
 #[cfg(test)]
 mod tests {
-    use super::has_invalid_login_fault;
+    use super::{GOVC_FORMAT_ERROR, has_invalid_login_fault, set_govc_env};
+
+    #[test]
+    fn should_force_structured_govc_error_formatting() {
+        let mut envs = vec![
+            (GOVC_FORMAT_ERROR.to_string(), "false".to_string()),
+            ("GOVC_URL".to_string(), "https://vcenter.example.com".to_string()),
+        ];
+
+        set_govc_env(&mut envs, GOVC_FORMAT_ERROR, "true");
+
+        assert_eq!(
+            envs.iter()
+                .find(|(name, _)| name == GOVC_FORMAT_ERROR)
+                .map(|(_, value)| value.as_str()),
+            Some("true")
+        );
+        assert_eq!(envs.iter().filter(|(name, _)| name == GOVC_FORMAT_ERROR).count(), 1);
+    }
 
     #[test]
     fn should_detect_structured_invalid_login_fault() {

@@ -4032,6 +4032,22 @@ impl EngineError {
         )
     }
 
+    /// Creates a cloud provider credentials error while preserving provider-specific user and diagnostic details.
+    pub(crate) fn new_client_invalid_cloud_provider_credentials_with_error(
+        event_details: EventDetails,
+        user_log_message: String,
+        underlying_error: CommandError,
+    ) -> EngineError {
+        EngineError::new(
+            event_details,
+            Tag::CloudProviderClientInvalidCredentials,
+            user_log_message,
+            Some(underlying_error),
+            None,
+            None,
+        )
+    }
+
     /// Creates new error when trying to parse a version number.
     ///
     /// Arguments:
@@ -5542,7 +5558,7 @@ impl Display for EngineError {
 
 #[cfg(test)]
 mod tests {
-    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, has_transient_error_pattern};
+    use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity, Tag, has_transient_error_pattern};
     use crate::events::{EventDetails, InfrastructureStep, Stage, Transmitter};
     use crate::infrastructure::models::cloud_provider::Kind;
     use crate::io_models::QoveryIdentifier;
@@ -5625,6 +5641,33 @@ mod tests {
         // Test with non-transient error
         let err = CommandError::new("invalid configuration".to_string(), Some("syntax error".to_string()), None);
         assert!(!err.is_transient_network_error());
+    }
+
+    #[test]
+    fn test_client_invalid_cloud_provider_credentials_with_error_preserves_classification_and_details() {
+        let user_message = "vSphere authentication failed".to_string();
+        let raw_message = "structured InvalidLogin fault";
+        let cluster_id = QoveryIdentifier::new_random();
+        let engine_error = EngineError::new_client_invalid_cloud_provider_credentials_with_error(
+            EventDetails::new(
+                Some(Kind::OnPremise),
+                QoveryIdentifier::new_random(),
+                QoveryIdentifier::new_random(),
+                Uuid::new_v4().to_string(),
+                Stage::Infrastructure(InfrastructureStep::Create),
+                Transmitter::Kubernetes(Uuid::new_v4(), cluster_id.to_string()),
+            ),
+            user_message.clone(),
+            CommandError::new("credentials rejected".to_string(), Some(raw_message.to_string()), None),
+        );
+
+        assert_eq!(engine_error.tag(), &Tag::CloudProviderClientInvalidCredentials);
+        assert_eq!(engine_error.user_log_message(), user_message);
+        assert!(
+            engine_error
+                .message(ErrorMessageVerbosity::FullDetailsWithoutEnvVars)
+                .contains(raw_message)
+        );
     }
 
     #[test]

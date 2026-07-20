@@ -6,6 +6,7 @@ mod eksctl;
 mod etcd_backup;
 mod helm_charts;
 mod provider;
+mod upgrade_diagnostics;
 
 pub(crate) use helm_charts::EksAnywhereChartsConfigPrerequisites;
 
