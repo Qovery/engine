@@ -91,7 +91,15 @@ impl DockerHubCr {
             .and_then(|res| res.error_for_status())
             .and_then(|res| res.json::<LoginResponse>())
             .map(|res| res.token)
-            .map_err(|_err| ContainerRegistryError::InvalidCredentials)?;
+            .map_err(|err| {
+                if matches!(err.status(), Some(s) if s == reqwest::StatusCode::UNAUTHORIZED || s == reqwest::StatusCode::FORBIDDEN) {
+                    ContainerRegistryError::InvalidCredentials
+                } else {
+                    ContainerRegistryError::CannotInstantiateClient {
+                        raw_error_message: format!("Docker Hub login failed: {err}"),
+                    }
+                }
+            })?;
 
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));

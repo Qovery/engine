@@ -1729,6 +1729,7 @@ pub struct GithubCrOptions {
 pub struct DockerHubOptions {
     pub url: Url,
     pub username: String,
+    #[derivative(Debug = "ignore")]
     pub password: String,
 }
 
