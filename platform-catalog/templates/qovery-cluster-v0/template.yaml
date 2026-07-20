@@ -97,7 +97,7 @@ platformTemplateRelease:
           configRef:
             chart: cluster-agent
             version: v2
-            digest: sha256:c4100bc474001c116fb8c1e388a70e2aaed7afb470f2b0107173f7a3036d1ed6
+            digest: __PUBLISHED_CONFIG_DIGEST__
           runtimeInputs:
             - name: qovery.agentGatewayUrl
               source:
@@ -142,7 +142,7 @@ platformTemplateRelease:
           configRef:
             chart: shell-agent
             version: v2
-            digest: sha256:b9d8c621e42a2cf500634e6006ddb41e89e05b94d9cd912d0afa8573511d1c97
+            digest: __PUBLISHED_CONFIG_DIGEST__
           runtimeInputs:
             - name: qovery.agentGatewayUrl
               source:
@@ -175,6 +175,25 @@ platformTemplateRelease:
                 kind: qcoreValue
                 key: shellAgent.imageTag
               required: true
+    - key: cluster-foundation
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+      mandatory: false
+      enabledByDefault: false
+      components:
+        - key: qovery-priority-class
+          kind: HELM
+          release:
+            name: qovery-priority-class
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-priority-class
+            version: 0.2.0
+          configRef:
+            chart: qovery-priority-class
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
     - key: log-infra
       applicability:
         modes: [QOVERY_MANAGED, CUSTOMER_MANAGED]
@@ -193,7 +212,7 @@ platformTemplateRelease:
           configRef:
             chart: loki
             version: v5
-            digest: sha256:e62a14e92dfcac3c3e8960f9c9a426109c7886cf87fb587ad8ec1b5eef40c042
+            digest: __PUBLISHED_CONFIG_DIGEST__
             evaluator:
               kind: PKL
               entrypoint: runtime-values/model.pkl
@@ -247,3 +266,27 @@ platformTemplateRelease:
               sources:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
+    - key: log-collector
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+      mandatory: false
+      enabledByDefault: false
+      components:
+        - key: alloy
+          kind: HELM
+          release:
+            name: alloy
+            namespace: qovery
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: alloy
+            version: 1.10.0
+          dependsOn:
+            - component: loki
+              kind: requires
+            - component: qovery-priority-class
+              kind: requires
+          configRef:
+            chart: alloy
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__

@@ -118,6 +118,14 @@ chart key.
 7. Add contract fixtures for every operation and important provider/mode combination.
 8. Bump the component bundle version, publish it, and update q-core from the published digest.
 
+If the component exposes no configurable field, there is no mutation policy to declare yet: keep
+`configSchema` empty and document that boundary. As soon as a field is added, decide its mutation
+policy while authoring it rather than retrofitting the decision after customer exposure.
+
+Cross-layer dependencies belong to the root template's component descriptor. Use `requires` when
+the dependency must be enabled with the component, and `after` when it only constrains ordering if
+both components are enabled. New optional layers must start with `enabledByDefault: false`.
+
 For Pkl components, run from the Engine repository root:
 
 ```shell

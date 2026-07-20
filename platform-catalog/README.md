@@ -159,7 +159,9 @@ third, and the complete catalog snapshot last. A partial selection is accepted
 only when the resulting outputs still cover the complete root graph. ECR
 repositories are infrastructure-owned and must include both
 `platform-templates/<template-key>` and `platform-catalog/catalog` before the
-first push.
+first push. Slice 4.6 additionally requires
+`platform-config/{qovery-priority-class,alloy}` and
+`charts/{qovery-priority-class,alloy}` before publishing its first snapshot.
 
 On `main`, the manual GitLab job sends the emitted canonical reference to the
 existing authenticated q-core service-version endpoint with service type
@@ -200,7 +202,8 @@ catalog.yaml, and declare its `charts/<name>` ECR repository in the infra
 Terraform** (ECR does not auto-create repositories on push, and the publish
 scripts deliberately don't either — registry repositories live in the infra
 Terraform, like the rest of the AWS infra). Current
-scope: loki, qovery-cluster-agent, qovery-shell-agent.
+scope: loki, qovery-cluster-agent, qovery-shell-agent, qovery-priority-class,
+alloy.
 
 Caveat for later: Qovery-authored and `no_sync` charts keep a version number
 that does not change with content (agents are pinned at `0.1.0`; `no_sync`
@@ -218,9 +221,9 @@ pin by digest — but bump the chart version on content changes, or settle a
   runtime inputs, not bundles). Overridable via `PLATFORM_CONFIG_REGISTRY`.
   The ECR repositories are declared in the infra Terraform,
   currently: `platform-config/{qovery-operator,cluster-agent,shell-agent,loki}` and
-  `charts/{qovery-operator,loki,qovery-cluster-agent,qovery-shell-agent}` — with no lifecycle
-  policy (retention rule: never delete a version a q-core release may still
-  pin).
+  `charts/{qovery-operator,loki,qovery-cluster-agent,qovery-shell-agent}`. Slice 4.6 must add the four
+  repositories listed under *Root template publication* before its first push. Repositories have no
+  lifecycle policy (retention rule: never delete a version a q-core release may still pin).
 - **Tag immutability**: mutable-v0 for now — a version tag may be re-pushed and
   q-core pins/caches by **digest** only. The immutable-tag guard is kept
   commented in `scripts/publish-platform-config.sh`, ready to enable.

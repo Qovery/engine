@@ -24,7 +24,9 @@ chunksCache:
 resultsCache:
   enabled: false
 gateway:
-  enabled: false
+  # Stable cross-component endpoint: the chart routes writes to `loki` in SingleBinary mode and
+  # to `loki-write` in SimpleScalable mode.
+  enabled: true
 lokiCanary:
   enabled: false
 test:

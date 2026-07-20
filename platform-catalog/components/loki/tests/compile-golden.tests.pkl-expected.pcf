@@ -180,6 +180,9 @@ examples {
           "volumeClaimsEnabled": false
         }
       },
+      "gateway": {
+        "replicas": 3
+      },
       "serviceAccount": {
         "annotations": {
           "eks.amazonaws.com/role-arn": "arn:aws:iam::123456789012:role/loki"
@@ -262,6 +265,9 @@ examples {
         "persistence": {
           "volumeClaimsEnabled": false
         }
+      },
+      "gateway": {
+        "replicas": 3
       },
       "serviceAccount": {
         "annotations": {

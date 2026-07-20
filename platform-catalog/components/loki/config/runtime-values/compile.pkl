@@ -31,6 +31,9 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
           backend,
           clusterInputs,
         )
+      when (isHighAvailability) {
+        ["gateway"] = new Mapping { ["replicas"] = scalableReplicas }
+      }
       when (serviceAccount != null) {
         ["serviceAccount"] = serviceAccount
       }

@@ -1,0 +1,6 @@
+# Source 1 — legacy BYOK defaults. Both Qovery priority classes are installed.
+priorityClass:
+  highPriority:
+    enable: true
+  standardPriority:
+    enable: true

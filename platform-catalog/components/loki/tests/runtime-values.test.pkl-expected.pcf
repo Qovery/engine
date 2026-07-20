@@ -182,6 +182,9 @@ examples {
           "volumeClaimsEnabled": false
         }
       },
+      "gateway": {
+        "replicas": 3
+      },
       "serviceAccount": {
         "annotations": {
           "iam.gke.io/gcp-service-account": "loki@qovery-project.iam.gserviceaccount.com"

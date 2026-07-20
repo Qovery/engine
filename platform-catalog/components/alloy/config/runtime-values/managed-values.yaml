@@ -1,0 +1,1 @@
+# No runtime input: the Loki endpoint is the stable in-cluster service URL from static-values/base.yaml.

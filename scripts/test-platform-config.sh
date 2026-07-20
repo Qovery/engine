@@ -203,6 +203,7 @@ assert_result "Loki COMPILE high availability" "$ha_compile" '
   .helmValues.write.replicas == 3 and
   .helmValues.read.replicas == 3 and
   .helmValues.backend.replicas == 3 and
+  .helmValues.gateway.replicas == 3 and
   .helmValues.write.persistence.volumeClaimsEnabled == false and
   .helmValues.backend.persistence.volumeClaimsEnabled == false
 '

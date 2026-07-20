@@ -982,6 +982,7 @@ test-platform-config:
   script:
     - ./scripts/test-platform-config.sh
     - ./scripts/tests/test-render-platform-catalog.sh
+    - ./scripts/tests/test-render-platform-components.sh
   tags:
     - k8s-runner
   rules:
@@ -995,6 +996,7 @@ test-platform-config:
           - scripts/publish-platform-catalog.sh
           - scripts/test-platform-config.sh
           - scripts/tests/test-render-platform-catalog.sh
+          - scripts/tests/test-render-platform-components.sh
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         paths:
@@ -1005,6 +1007,7 @@ test-platform-config:
           - scripts/publish-platform-catalog.sh
           - scripts/test-platform-config.sh
           - scripts/tests/test-render-platform-catalog.sh
+          - scripts/tests/test-render-platform-components.sh
 
 # Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
 # by q-core (Engine v2): per-component config bundles, the frozen-chart mirror,

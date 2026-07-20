@@ -26,6 +26,12 @@ components:
   - name: loki
     chart: loki # frozen upstream chart, pinned in lib-engine/lib/helm-freeze.yaml
     version: v5
+  - name: qovery-priority-class
+    chart: qovery-priority-class # Qovery-authored bootstrap chart
+    version: v1
+  - name: alloy
+    chart: alloy # frozen upstream chart, configured from the legacy BYOK values
+    version: v1
 
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this
@@ -42,6 +48,10 @@ charts:
     path: lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent
   - name: qovery-shell-agent
     path: lib-engine/lib/common/bootstrap/charts/qovery-shell-agent
+  - name: qovery-priority-class
+    path: lib-engine/lib/common/bootstrap/charts/qovery-priority-class
+  - name: alloy
+    path: lib-engine/lib/common/bootstrap/charts/alloy
 
 # Root platform template releases are generic OCI artifacts, published last
 # after every referenced config bundle and chart has been verified.

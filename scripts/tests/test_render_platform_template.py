@@ -1,4 +1,6 @@
+import hashlib
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -8,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 class RenderPlatformTemplateTest(unittest.TestCase):
     registry = "public.ecr.aws/r3m4q3r9"
-    digest = "sha256:" + "a" * 64
+    chart_digest = "sha256:" + "a" * 64
 
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -23,12 +25,16 @@ class RenderPlatformTemplateTest(unittest.TestCase):
             self.config_entry("cluster-agent", "v2"),
             self.config_entry("shell-agent", "v2"),
             self.config_entry("loki", "v5"),
+            self.config_entry("qovery-priority-class", "v1"),
+            self.config_entry("alloy", "v1"),
         ]
         self.chart_entries = [
             self.chart_entry("qovery-operator", "0.2.0"),
             self.chart_entry("qovery-cluster-agent", "0.1.0"),
             self.chart_entry("qovery-shell-agent", "0.1.0"),
             self.chart_entry("loki", "6.55.0"),
+            self.chart_entry("qovery-priority-class", "0.2.0"),
+            self.chart_entry("alloy", "1.10.0"),
         ]
 
     def test_renders_every_config_pin_from_verified_publication_outputs(self):
@@ -38,7 +44,15 @@ class RenderPlatformTemplateTest(unittest.TestCase):
 
         rendered = self.destination.read_text(encoding="utf-8")
         self.assertNotIn("__PUBLISHED_CONFIG_DIGEST__", rendered)
-        self.assertEqual(rendered.count(self.digest), 4)
+        for entry in self.config_entries:
+            config_ref = (
+                rf"configRef:\n"
+                rf"\s+chart: {re.escape(entry['component'])}\n"
+                rf"\s+version: {re.escape(entry['version'])}\n"
+                rf"(?:\s*#[^\n]*\n)*"
+                rf"\s+digest: {re.escape(entry['digest'])}"
+            )
+            self.assertRegex(rendered, config_ref)
         self.assertIn("repository: oci://public.ecr.aws/r3m4q3r9/charts/", rendered)
 
     def test_missing_referenced_config_fails_before_a_template_is_written(self):
@@ -95,7 +109,7 @@ class RenderPlatformTemplateTest(unittest.TestCase):
             "component": component,
             "version": version,
             "ref": f"{self.registry}/platform-config/{component}:{version}",
-            "digest": self.digest,
+            "digest": "sha256:" + hashlib.sha256(f"{component}:{version}".encode()).hexdigest(),
         }
 
     def chart_entry(self, chart, version):
@@ -103,7 +117,7 @@ class RenderPlatformTemplateTest(unittest.TestCase):
             "chart": chart,
             "version": version,
             "ref": f"{self.registry}/charts/{chart}:{version}",
-            "digest": self.digest,
+            "digest": self.chart_digest,
         }
 
 
