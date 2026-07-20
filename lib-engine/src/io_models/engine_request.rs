@@ -22,6 +22,7 @@ use crate::infrastructure::models::cloud_provider::io::{ClusterAdvancedSettings,
 use crate::infrastructure::models::cloud_provider::scaleway::Scaleway;
 use crate::infrastructure::models::cloud_provider::self_managed::SelfManaged;
 use crate::infrastructure::models::container_registry::azure_container_registry::AzureContainerRegistry;
+use crate::infrastructure::models::container_registry::dockerhub_cr::DockerHubCr;
 use crate::infrastructure::models::container_registry::ecr::ECR;
 use crate::infrastructure::models::container_registry::generic_cr::GenericCr;
 use crate::infrastructure::models::container_registry::github_cr::{GithubCr, RegistryType};
@@ -1072,7 +1073,13 @@ pub enum ContainerRegistry {
         name: String,
         options: GithubCrOptions,
     },
+    DockerHub {
+        long_id: Uuid,
+        name: String,
+        options: DockerHubOptions,
+    },
 }
+
 impl ContainerRegistry {
     pub fn to_engine_container_registry(
         &self,
@@ -1195,6 +1202,16 @@ impl ContainerRegistry {
                     options.url,
                     options.username,
                     options.token,
+                )?))
+            }
+            ContainerRegistry::DockerHub { long_id, name, options } => {
+                Ok(container_registry::ContainerRegistry::DockerHub(DockerHubCr::new(
+                    context,
+                    long_id,
+                    &name,
+                    options.url,
+                    options.username,
+                    options.password,
                 )?))
             }
         }
@@ -1706,6 +1723,13 @@ pub struct GithubCrOptions {
     #[derivative(Debug = "ignore")]
     #[serde(alias = "password")]
     pub token: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Derivative)]
+pub struct DockerHubOptions {
+    pub url: Url,
+    pub username: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Derivative)]
