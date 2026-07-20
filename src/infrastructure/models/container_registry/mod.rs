@@ -12,6 +12,7 @@ use crate::io_models::QoveryIdentifier;
 use crate::io_models::context::Context;
 
 pub mod azure_container_registry;
+pub mod dockerhub_cr;
 pub mod ecr;
 pub mod errors;
 pub mod generic_cr;
@@ -98,6 +99,7 @@ pub enum ContainerRegistry {
     GcpArtifactRegistry(google_artifact_registry::GoogleArtifactRegistry),
     GenericCr(generic_cr::GenericCr),
     GithubCr(github_cr::GithubCr),
+    DockerHub(dockerhub_cr::DockerHubCr),
 }
 
 impl ContainerRegistry {
@@ -200,6 +202,7 @@ pub enum Kind {
     GcpArtifactRegistry,
     GenericCr,
     GithubCr,
+    DockerHub,
 }
 
 #[derive(Clone, PartialEq, Debug)]

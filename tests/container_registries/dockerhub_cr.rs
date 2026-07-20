@@ -1,0 +1,156 @@
+use crate::helpers::utilities::{FuncTestsSecrets, context_for_resource, engine_run_test, generate_id};
+use function_name::named;
+use qovery_engine::cmd::command::CommandKiller;
+use qovery_engine::cmd::docker::ContainerImage;
+use qovery_engine::infrastructure::models::build_platform::Image;
+use qovery_engine::infrastructure::models::container_registry::InteractWithRegistry;
+use qovery_engine::infrastructure::models::container_registry::dockerhub_cr::DockerHubCr;
+use tracing::{Level, span};
+use url::Url;
+use uuid::Uuid;
+
+#[cfg(feature = "test-local-docker")]
+#[named]
+#[test]
+#[ignore]
+fn test_dockerhub_cr() {
+    use qovery_engine::infrastructure::models::container_registry::RegistryTags;
+
+    let test_name = function_name!();
+    engine_run_test(|| {
+        let span = span!(Level::INFO, "test", name = test_name);
+        let _enter = span.enter();
+
+        let context = context_for_resource(generate_id(), generate_id());
+        let secrets = FuncTestsSecrets::new();
+        let username = secrets.DOCKER_HUB_USERNAME.expect("DOCKER_HUB_USERNAME is not set");
+        let token = secrets.DOCKER_HUB_TOKEN.expect("DOCKER_HUB_TOKEN is not set");
+        let registry_url = Url::parse("https://registry-1.docker.io").unwrap();
+        let registry_name = format!("test-{}", Uuid::new_v4());
+        let container_registry = DockerHubCr::new(
+            context.clone(),
+            Uuid::new_v4(),
+            registry_name.as_str(),
+            registry_url.clone(),
+            username.clone(),
+            token,
+        )
+        .unwrap();
+
+        let img_name = format!("engine-test-{}", Uuid::new_v4());
+        let repo_name = container_registry
+            .registry_info()
+            .get_repository_name(img_name.to_string().as_str());
+        let repo_creation = container_registry.create_repository(
+            Some(registry_name.as_str()),
+            repo_name.as_str(),
+            0,
+            RegistryTags {
+                cluster_id: None,
+                environment_id: Some(Uuid::new_v4().to_string()),
+                project_id: Some(Uuid::new_v4().to_string()),
+                resource_ttl: None,
+            },
+        );
+        assert!(repo_creation.is_ok());
+
+        // Ensure the repository is always deleted at the end, even if an assertion below panics,
+        // otherwise the test would leak repositories on Docker Hub.
+        let test_body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // given
+            let source_img = ContainerImage::new(
+                Url::parse("https://public.ecr.aws/").unwrap(),
+                "r3m4q3r9/qovery-ci".to_string(),
+                vec!["pause-3.10".to_string()],
+            );
+            let dest_img = ContainerImage::new(
+                container_registry.registry_info().get_registry_endpoint(None),
+                container_registry
+                    .registry_info()
+                    .get_image_name(img_name.to_string().as_str()),
+                vec!["test".to_string()],
+            );
+            context
+                .docker
+                .mirror(
+                    &source_img,
+                    &dest_img,
+                    &mut |line| println!("[docker mirror stdout] {line}"),
+                    &mut |line| eprintln!("[docker mirror stderr] {line}"),
+                    &CommandKiller::never(),
+                )
+                .unwrap_or_else(|err| {
+                    panic!("Failed to mirror first image from {:?} to {:?}: {err:?}", source_img, dest_img)
+                });
+            let source_img = ContainerImage::new(
+                Url::parse("https://public.ecr.aws/").unwrap(),
+                "r3m4q3r9/qovery-ci".to_string(),
+                vec!["debian-bookworm-slim".to_string()],
+            );
+            let dest_img = ContainerImage::new(
+                container_registry.get_registry_endpoint(None),
+                container_registry
+                    .registry_info()
+                    .get_image_name(img_name.to_string().as_str()),
+                vec!["test2".to_string()],
+            );
+            context
+                .docker
+                .mirror(
+                    &source_img,
+                    &dest_img,
+                    &mut |line| println!("[docker mirror stdout] {line}"),
+                    &mut |line| eprintln!("[docker mirror stderr] {line}"),
+                    &CommandKiller::never(),
+                )
+                .unwrap_or_else(|err| {
+                    panic!("Failed to mirror second image from {:?} to {:?}: {err:?}", source_img, dest_img)
+                });
+
+            // then
+            let image = Image {
+                name: container_registry
+                    .registry_info()
+                    .get_image_name(img_name.to_string().as_str()),
+                repository_name: username.clone(),
+                tag: "test".to_string(),
+                registry_name: registry_name.clone(),
+                registry_url: registry_url.clone(),
+                ..Default::default()
+            };
+            let image2 = Image {
+                name: container_registry
+                    .registry_info()
+                    .get_image_name(img_name.to_string().as_str()),
+                repository_name: username,
+                tag: "test2".to_string(),
+                registry_name,
+                registry_url,
+                ..Default::default()
+            };
+            assert!(container_registry.image_exists(&image));
+            assert!(container_registry.image_exists(&image2));
+
+            container_registry.delete_image(&image).unwrap();
+            assert!(!container_registry.image_exists(&image));
+            assert!(container_registry.image_exists(&image2));
+
+            container_registry.delete_image(&image2).unwrap();
+            assert!(!container_registry.image_exists(&image2));
+
+            image
+        }));
+
+        // Always delete the created repository, whether the test body succeeded or panicked.
+        container_registry.delete_repository(repo_name.as_str()).unwrap();
+
+        // Re-propagate any panic that happened in the test body so the test still fails.
+        let image = match test_body {
+            Ok(image) => image,
+            Err(panic) => std::panic::resume_unwind(panic),
+        };
+        assert!(!container_registry.image_exists(&image));
+
+        test_name.to_string()
+    })
+}
