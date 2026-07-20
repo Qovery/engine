@@ -21,9 +21,11 @@ pub(super) enum ProviderPreflightError {
 }
 
 impl ProviderPreflightError {
-    pub fn into_command_error(self) -> CommandError {
+    /// Returns the user-facing message associated with this classified preflight failure.
+    pub fn user_message(&self) -> &'static str {
         match self {
-            Self::VSphereCloudCredentialsRejected(error) | Self::Other(error) => error,
+            Self::VSphereCloudCredentialsRejected(_) => VSPHERE_AUTHENTICATION_ERROR_MESSAGE,
+            Self::Other(_) => VSPHERE_PREFLIGHT_ERROR_MESSAGE,
         }
     }
 }
@@ -36,7 +38,6 @@ impl From<CommandError> for ProviderPreflightError {
 
 const VSPHERE_AUTHENTICATION_ERROR_MESSAGE: &str = "vSphere authentication failed: vCenter rejected the vSphere cloud credentials configured for this cluster. Verify the associated cloud credentials and retry.";
 const VSPHERE_PREFLIGHT_ERROR_MESSAGE: &str = "vSphere preflight checks failed";
-const PROVIDER_PREFLIGHT_ERROR_MESSAGE: &str = "Provider preflight checks failed";
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct ParsedEksAnywhereClusterConfig {
@@ -53,7 +54,22 @@ pub(super) enum EksAnywhereConfigDocument {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(super) struct ParsedClusterSpec {
+    cluster_name: Option<EksAnywhereClusterName>,
     pub kubernetes_version: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct EksAnywhereClusterName(String);
+
+impl EksAnywhereClusterName {
+    fn from_config(value: &str) -> Option<Self> {
+        let value = value.trim();
+        (!value.is_empty()).then(|| Self(value.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -98,6 +114,10 @@ impl ParsedEksAnywhereClusterConfig {
             EksAnywhereConfigDocument::Cluster(spec) => Some(spec),
             _ => None,
         })
+    }
+
+    pub fn cluster_name(&self) -> Option<&EksAnywhereClusterName> {
+        self.cluster_spec()?.cluster_name.as_ref()
     }
 
     pub fn vsphere_datacenter_config(&self) -> Option<&ParsedVSphereDatacenterConfig> {
@@ -145,6 +165,11 @@ fn parse_eks_anywhere_cluster_config_from_yaml(content: &str) -> Result<ParsedEk
         match kind {
             Some("Cluster") => {
                 let spec = ParsedClusterSpec {
+                    cluster_name: value
+                        .get("metadata")
+                        .and_then(|metadata| metadata.get("name"))
+                        .and_then(Value::as_str)
+                        .and_then(EksAnywhereClusterName::from_config),
                     kubernetes_version: value
                         .get("spec")
                         .and_then(|s| s.get("kubernetesVersion"))
@@ -241,25 +266,9 @@ pub(super) fn run_provider_preflight_for_mode(
     }
 }
 
-pub(super) fn provider_preflight_user_error_message(
-    provider_mode: EksAnywhereProviderMode,
-    error: &ProviderPreflightError,
-) -> &'static str {
-    match (provider_mode, error) {
-        (EksAnywhereProviderMode::VSphere, ProviderPreflightError::VSphereCloudCredentialsRejected(_)) => {
-            VSPHERE_AUTHENTICATION_ERROR_MESSAGE
-        }
-        (EksAnywhereProviderMode::VSphere, _) => VSPHERE_PREFLIGHT_ERROR_MESSAGE,
-        (EksAnywhereProviderMode::Unknown, _) => PROVIDER_PREFLIGHT_ERROR_MESSAGE,
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        EksAnywhereProviderMode, ProviderPreflightError, parse_eks_anywhere_cluster_config_from_yaml,
-        provider_preflight_user_error_message,
-    };
+    use super::{EksAnywhereProviderMode, ProviderPreflightError, parse_eks_anywhere_cluster_config_from_yaml};
     use crate::errors::CommandError;
 
     #[test]
@@ -282,6 +291,7 @@ spec:
         assert_eq!(mode, EksAnywhereProviderMode::VSphere);
 
         let parsed = parse_eks_anywhere_cluster_config_from_yaml(yaml).expect("YAML should parse");
+        assert_eq!(parsed.cluster_name().map(|name| name.as_str()), Some("my-cluster"));
         assert_eq!(parsed.vsphere_machine_configs().count(), 1);
         assert!(parsed.vsphere_datacenter_config().is_none());
     }
@@ -313,12 +323,8 @@ metadata:
         ));
 
         assert_eq!(
-            provider_preflight_user_error_message(EksAnywhereProviderMode::VSphere, &error),
+            error.user_message(),
             "vSphere authentication failed: vCenter rejected the vSphere cloud credentials configured for this cluster. Verify the associated cloud credentials and retry."
-        );
-        assert_eq!(
-            provider_preflight_user_error_message(EksAnywhereProviderMode::Unknown, &error),
-            "Provider preflight checks failed"
         );
     }
 
@@ -327,13 +333,6 @@ metadata:
         let error =
             ProviderPreflightError::Other(CommandError::new_from_safe_message("Template not found".to_string()));
 
-        assert_eq!(
-            provider_preflight_user_error_message(EksAnywhereProviderMode::VSphere, &error),
-            "vSphere preflight checks failed"
-        );
-        assert_eq!(
-            provider_preflight_user_error_message(EksAnywhereProviderMode::Unknown, &error),
-            "Provider preflight checks failed"
-        );
+        assert_eq!(error.user_message(), "vSphere preflight checks failed");
     }
 }

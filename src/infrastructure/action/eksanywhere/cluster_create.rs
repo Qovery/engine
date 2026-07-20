@@ -6,11 +6,12 @@ use super::eksctl::{run_eks_anywhere_upgrade_cluster, run_eks_anywhere_upgrade_p
 use super::etcd_backup::run_eks_anywhere_cluster_backup;
 use super::provider::{
     EksAnywhereProviderMode, ParsedEksAnywhereClusterConfig, ProviderPreflightError, parse_eks_anywhere_cluster_config,
-    provider_preflight_user_error_message, run_provider_preflight_for_mode,
+    run_provider_preflight_for_mode,
 };
+use super::upgrade_diagnostics::{CapiDiagnosticsContext, UpgradeDiagnosticsTrigger, log_capi_upgrade_diagnostics};
 use crate::cmd::command::{ExecutableCommand, QoveryCommand};
 use crate::environment::models::types::VersionsNumber;
-use crate::errors::{CommandError, EngineError};
+use crate::errors::{CommandError, EngineError, ErrorMessageVerbosity};
 use crate::events::EventMessage;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -75,6 +76,27 @@ fn run_cluster_config_workflow(
         logger,
     )?;
 
+    let diagnostics_kube_client = match infra_ctx.mk_kube_client() {
+        Ok(client) => Some(client.client()),
+        Err(error) => {
+            logger.warn(format!(
+                "CAPI diagnostics unavailable: cannot create Kubernetes API client: {}",
+                error.message(ErrorMessageVerbosity::SafeOnly)
+            ));
+            None
+        }
+    };
+    let diagnostics_context = match (diagnostics_kube_client.as_ref(), parsed_cluster_config.cluster_name()) {
+        (Some(kube_client), Some(cluster_name)) => {
+            Some(CapiDiagnosticsContext::new(kube_client, cluster_name, provider_mode))
+        }
+        (Some(_), None) => {
+            logger.warn("CAPI diagnostics unavailable: cannot determine the cluster `metadata.name` from the EKS Anywhere config.");
+            None
+        }
+        (None, _) => None,
+    };
+
     if run_mode.should_execute_upgrade_cluster() {
         run_eks_anywhere_cluster_backup(cluster, infra_ctx, cluster_config_path, logger)
             .map_err(|error| map_cluster_backup_error(cluster, error))?;
@@ -86,9 +108,19 @@ fn run_cluster_config_workflow(
                 .map_err(|error| map_capi_backup_upload_error(cluster, error))?;
         }
 
-        run_eks_anywhere_upgrade_cluster(cluster, cluster_config_path, infra_ctx.cloud_provider(), logger)?;
+        run_eks_anywhere_upgrade_cluster(
+            cluster,
+            cluster_config_path,
+            infra_ctx.cloud_provider(),
+            diagnostics_context,
+            logger,
+        )?;
     } else {
         logger.info("Dry-run mode: skipping EKS Anywhere backup and upgrade execution.");
+    }
+
+    if let Some(context) = diagnostics_context {
+        log_capi_upgrade_diagnostics(context, logger, UpgradeDiagnosticsTrigger::WorkflowCompletion);
     }
 
     Ok(!upgrade_plan_summary.has_kubernetes_version_change())
@@ -256,7 +288,7 @@ fn run_provider_preflight_stage(
         expected_eksd_release_tag,
         logger,
     )
-    .map_err(|error| map_provider_preflight_error(cluster, provider_mode, error))
+    .map_err(|error| map_provider_preflight_error(cluster, error))
 }
 
 fn log_provider_mode(logger: &impl InfraLogger, provider_mode: EksAnywhereProviderMode) {
@@ -266,21 +298,26 @@ fn log_provider_mode(logger: &impl InfraLogger, provider_mode: EksAnywhereProvid
     }
 }
 
-fn map_provider_preflight_error(
-    cluster: &EksAnywhere,
-    provider_mode: EksAnywhereProviderMode,
-    error: ProviderPreflightError,
-) -> Box<EngineError> {
-    let message = provider_preflight_user_error_message(provider_mode, &error);
-    let command_error = error.into_command_error();
+fn map_provider_preflight_error(cluster: &EksAnywhere, error: ProviderPreflightError) -> Box<EngineError> {
+    let message = error.user_message().to_string();
+    let event_details = cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError));
 
-    Box::new(EngineError::new_unknown(
-        cluster.get_event_details(Infrastructure(InfrastructureStep::CreateError)),
-        message.to_string(),
-        Some(command_error),
-        None,
-        None,
-    ))
+    match error {
+        ProviderPreflightError::VSphereCloudCredentialsRejected(command_error) => {
+            Box::new(EngineError::new_client_invalid_cloud_provider_credentials_with_error(
+                event_details,
+                message,
+                command_error,
+            ))
+        }
+        ProviderPreflightError::Other(command_error) => Box::new(EngineError::new_unknown(
+            event_details,
+            message,
+            Some(command_error),
+            None,
+            None,
+        )),
+    }
 }
 
 fn map_cluster_backup_error(cluster: &EksAnywhere, error: CommandError) -> Box<EngineError> {
