@@ -124,10 +124,10 @@ restores the exact `config/` directory content.
 
 ## Root template publication
 
-Root releases are generic OCI artifacts, not Helm charts. The final step,
-`scripts/publish-platform-catalog.sh` runs the existing bundle and chart publishers,
-then consumes both machine-readable outputs,
-from the earlier steps, verifies every `configRef` and chart version, replaces
+Root releases are generic OCI artifacts, not Helm charts. The
+`scripts/publish-platform-catalog.sh` script runs the existing bundle and chart
+publishers, then consumes both machine-readable outputs from the earlier steps,
+verifies every `configRef` and chart version, replaces
 all config bundle pins in a temporary `template.yaml`, and only then publishes:
 
 ```text
@@ -137,24 +137,43 @@ all config bundle pins in a temporary `template.yaml`, and only then publishes:
 The artifact type is `application/vnd.qovery.platform-template.v1`; its only
 payload is `template.yaml` with media type
 `application/vnd.qovery.platform-template.layer.v1+yaml`. The script writes
-`platform-templates-publish.json`, whose manifest digest is the reviewed q-core
-catalog-lock pin. The committed source may contain an explicit
+`platform-templates-publish.json`, then renders the complete supported release
+set and its default into a separate immutable snapshot:
+
+```text
+<registry>/platform-catalog/catalog:<catalog-version>
+```
+
+That artifact contains only `catalog.yaml`, with artifact type
+`application/vnd.qovery.platform-catalog.v1` and layer media type
+`application/vnd.qovery.platform-catalog.layer.v1+yaml`. Its tag defaults to
+the commit SHA, while `platform-catalog-publish.json` reports the immutable
+`canonicalRef` (`.../catalog@sha256:...`) consumed by q-core. The committed
+template source may contain an explicit
 `__PUBLISHED_CONFIG_DIGEST__` placeholder: it is never published directly, and
 rendering fails unless every reference has a matching verified publication
 output.
 
-Publication order is an invariant: bundles first, charts second, root template
-last. A partial selection is accepted only when the resulting outputs still
-cover the complete root graph. ECR repositories are infrastructure-owned and
-must include `platform-templates/<template-key>` before the first push.
+Publication order is an invariant: bundles first, charts second, root templates
+third, and the complete catalog snapshot last. A partial selection is accepted
+only when the resulting outputs still cover the complete root graph. ECR
+repositories are infrastructure-owned and must include both
+`platform-templates/<template-key>` and `platform-catalog/catalog` before the
+first push.
 
-q-core must be updated from the emitted manifest digest, never from the mutable
-release tag. Keep every previously reviewed digest and all of its transitive
-bundle/chart content available. Rollback is a catalog-lock change back to the
-previous template digest (with the same immutable key/version identity), then a
-q-core rollout; do not move a tag and expect running pods to rediscover it.
-Already loaded pods retain their last known good digest-verified snapshot while
-a replacement lock is being rolled out.
+On `main`, the manual GitLab job sends the emitted canonical reference to the
+existing authenticated q-core service-version endpoint with service type
+`PLATFORM_CATALOG` for dev and production. Merge-request jobs publish previews
+without activating them. q-core validates and prewarms the complete graph before
+updating `engine_version(name = 'platform-catalog')`; a rejected activation
+leaves the previous database pointer and last-known-good in-memory snapshot
+unchanged. The CI signature stays in protected variables and is never written
+to publication output.
+
+Keep every activated digest and all of its transitive bundle/chart content
+available. Rollback selects a previous immutable catalog `canonicalRef` through
+the same authenticated endpoint; it does not move a tag, republish artifacts,
+or require a q-core rollout.
 
 ## Chart mirroring
 

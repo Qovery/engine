@@ -9,8 +9,11 @@ CATALOG_FILE="$ROOT_DIR/platform-catalog/catalog.yaml"
 CONFIG_OUTPUT="$ROOT_DIR/platform-config-publish.json"
 CHART_OUTPUT="$ROOT_DIR/frozen-charts-publish.json"
 TEMPLATE_OUTPUT="$ROOT_DIR/platform-templates-publish.json"
+CATALOG_OUTPUT="$ROOT_DIR/platform-catalog-publish.json"
 TEMPLATE_ARTIFACT_TYPE="application/vnd.qovery.platform-template.v1"
 TEMPLATE_LAYER_MEDIA_TYPE="application/vnd.qovery.platform-template.layer.v1+yaml"
+CATALOG_ARTIFACT_TYPE="application/vnd.qovery.platform-catalog.v1"
+CATALOG_LAYER_MEDIA_TYPE="application/vnd.qovery.platform-catalog.layer.v1+yaml"
 
 fatal() { echo "ERROR: $*" >&2; exit 1; }
 
@@ -23,6 +26,74 @@ catalog_templates() {
     in_section && $1 == "path:" { print key, version, $2 }
   ' "$CATALOG_FILE"
 }
+
+catalog_default() {
+  awk '
+    /^defaultTemplate:/ { in_section = 1; next }
+    in_section && /^[^ #]/ { in_section = 0 }
+    in_section && $1 == "key:" { key = $2 }
+    in_section && $1 == "version:" { print key, $2; exit }
+  ' "$CATALOG_FILE"
+}
+
+render_catalog() (
+  set -euo pipefail
+  local template_output="$1"
+  local destination="$2"
+  local catalog_version="$3"
+  local registry="${4%/}"
+  local render_dir expected_coordinates actual_coordinates default_key default_version
+  render_dir="$(mktemp -d)"
+  trap 'rm -rf "$render_dir"' EXIT
+  expected_coordinates="$render_dir/expected.tsv"
+  actual_coordinates="$render_dir/actual.tsv"
+
+  [ -f "$template_output" ] || fatal "template publication output $template_output does not exist"
+  jq -e --arg registry "$registry" '
+    type == "array" and length > 0 and
+    all(.[];
+      (.key | type) == "string" and
+      (.version | type) == "string" and
+      (.ref | type) == "string" and
+      (.digest | type) == "string" and
+      (.digest | test("^sha256:[0-9a-f]{64}$")) and
+      .ref == ($registry + "/platform-templates/" + .key + ":" + .version)
+    ) and
+    (group_by([.key, .version]) | all(.[]; length == 1))
+  ' "$template_output" >/dev/null || fatal "$template_output is not a valid complete template publication output"
+
+  catalog_templates | awk '{ print $1 "\t" $2 }' | sort > "$expected_coordinates"
+  jq -r '.[] | [.key, .version] | @tsv' "$template_output" | sort > "$actual_coordinates"
+  cmp -s "$expected_coordinates" "$actual_coordinates" || {
+    echo "ERROR: catalog snapshot requires every declared template release" >&2
+    diff -u "$expected_coordinates" "$actual_coordinates" >&2 || true
+    exit 1
+  }
+
+  read -r default_key default_version < <(catalog_default)
+  [ -n "$default_key" ] && [ -n "$default_version" ] || fatal "defaultTemplate is missing from $CATALOG_FILE"
+  jq -e --arg key "$default_key" --arg version "$default_version" \
+    'any(.[]; .key == $key and .version == $version)' "$template_output" >/dev/null ||
+    fatal "default template $default_key:$default_version is absent from the complete publication output"
+
+  mkdir -p "$(dirname "$destination")"
+  {
+    echo 'apiVersion: platform.qovery.com/v1alpha1'
+    echo 'kind: PlatformTemplateCatalog'
+    printf 'version: %s\n' "$(jq -Rn --arg value "$catalog_version" '$value')"
+    echo 'defaultRelease:'
+    printf '  key: %s\n' "$(jq -Rn --arg value "$default_key" '$value')"
+    printf '  version: %s\n' "$(jq -Rn --arg value "$default_version" '$value')"
+    echo 'releases:'
+    jq -r '
+      .[] |
+      "  - key: " + (.key | @json) + "\n" +
+      "    version: " + (.version | @json) + "\n" +
+      "    repository: " + (.ref | sub(":[^:]+$"; "") | @json) + "\n" +
+      "    digest: " + (.digest | @json)
+    ' "$template_output"
+  } > "$destination"
+)
 
 # Kept as a subcommand so the complete-graph renderer can be tested without a registry.
 render_template() (
@@ -223,6 +294,13 @@ if [ "${1:-}" = "render" ]; then
   exit 0
 fi
 
+if [ "${1:-}" = "render-catalog" ]; then
+  [ "$#" -eq 5 ] || fatal "usage: $0 render-catalog <template-output> <destination> <catalog-version> <registry>"
+  shift
+  render_catalog "$@"
+  exit 0
+fi
+
 command -v oras >/dev/null 2>&1 || fatal "oras CLI is required (https://oras.land)"
 command -v helm >/dev/null 2>&1 || fatal "helm CLI is required"
 command -v jq >/dev/null 2>&1 || fatal "jq is required"
@@ -279,3 +357,53 @@ done < <(catalog_templates)
 printf '%s\n' "${results[@]}" | jq -s '.' > "$TEMPLATE_OUTPUT"
 echo "--- wrote $TEMPLATE_OUTPUT"
 jq '.' "$TEMPLATE_OUTPUT"
+
+catalog_version="${PLATFORM_CATALOG_VERSION:-${CI_COMMIT_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD)}}"
+catalog_dir="$work_dir/platform-catalog"
+catalog_yaml="$catalog_dir/catalog.yaml"
+render_catalog "$TEMPLATE_OUTPUT" "$catalog_yaml" "$catalog_version" "$PLATFORM_CONFIG_REGISTRY"
+catalog_tag_ref="$PLATFORM_CONFIG_REGISTRY/platform-catalog/catalog:$catalog_version"
+echo "--- platform catalog: pushing complete snapshot $catalog_tag_ref"
+(cd "$catalog_dir" && oras push $oras_flags "$catalog_tag_ref" \
+  --artifact-type "$CATALOG_ARTIFACT_TYPE" \
+  --annotation "org.opencontainers.image.created=$created" \
+  --annotation "org.opencontainers.image.revision=$revision" \
+  --annotation "org.opencontainers.image.source=https://gitlab.com/qovery/backend/engine" \
+  "catalog.yaml:$CATALOG_LAYER_MEDIA_TYPE") || fatal "push failed for $catalog_tag_ref; ensure its ECR repository is declared by infrastructure"
+
+catalog_digest="$(oras manifest fetch $oras_flags --descriptor "$catalog_tag_ref" | jq -r '.digest')"
+[ -n "$catalog_digest" ] && [ "$catalog_digest" != "null" ] || fatal "cannot read published manifest digest for $catalog_tag_ref"
+catalog_canonical_ref="$PLATFORM_CONFIG_REGISTRY/platform-catalog/catalog@$catalog_digest"
+jq -n \
+  --arg version "$catalog_version" \
+  --arg ref "$catalog_tag_ref" \
+  --arg digest "$catalog_digest" \
+  --arg canonicalRef "$catalog_canonical_ref" \
+  '{version: $version, ref: $ref, digest: $digest, canonicalRef: $canonicalRef, activated: false}' > "$CATALOG_OUTPUT"
+
+activate_catalog() {
+  local api_host="$1"
+  local api_url="$api_host"
+  case "$api_url" in
+    http://*|https://*) ;;
+    *) api_url="https://$api_url" ;;
+  esac
+  echo "--- activating catalog $catalog_canonical_ref on $api_url"
+  curl --fail-with-body --silent --show-error --request PUT \
+    --header 'Content-Type: application/json' \
+    --header "X-Qovery-Signature: $CI_ENGINE_VERSION_CONTROLLER_TOKEN" \
+    --get "$api_url/engine/serviceVersion" \
+    --data-urlencode 'serviceType=PLATFORM_CATALOG' \
+    --data-urlencode "version=$catalog_canonical_ref" >/dev/null
+}
+
+if [ "${PLATFORM_CATALOG_ACTIVATE:-false}" = "true" ]; then
+  [ -n "${CI_ENGINE_VERSION_CONTROLLER_TOKEN:-}" ] || fatal "CI_ENGINE_VERSION_CONTROLLER_TOKEN is required to activate the catalog"
+  activate_catalog "${QOVERY_ADMIN_DEV_API:-api-admin-dev.qovery.com}"
+  activate_catalog "${QOVERY_ADMIN_API:-api-admin.qovery.com}"
+  jq '.activated = true' "$CATALOG_OUTPUT" > "$work_dir/catalog-output.json"
+  mv "$work_dir/catalog-output.json" "$CATALOG_OUTPUT"
+fi
+
+echo "--- wrote $CATALOG_OUTPUT"
+jq '.' "$CATALOG_OUTPUT"

@@ -9,6 +9,10 @@
 #
 # Mutable-v0 mode: re-publishing an existing version is allowed (tags are movable),
 # q-core pins and caches by digest only. Bump `version` when q-core should re-pin.
+defaultTemplate:
+  key: qovery-cluster-v0
+  version: 0.1.0
+
 components:
   - name: qovery-operator
     chart: qovery-operator # bootstrap chart, installed by the customer-side client

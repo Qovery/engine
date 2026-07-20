@@ -981,6 +981,7 @@ test-platform-config:
     - bash ./scripts/install-pkl.sh
   script:
     - ./scripts/test-platform-config.sh
+    - ./scripts/tests/test-render-platform-catalog.sh
   tags:
     - k8s-runner
   rules:
@@ -991,7 +992,9 @@ test-platform-config:
           - Dockerfile
           - platform-catalog/**/*
           - scripts/install-pkl.sh
+          - scripts/publish-platform-catalog.sh
           - scripts/test-platform-config.sh
+          - scripts/tests/test-render-platform-catalog.sh
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
         paths:
@@ -999,12 +1002,15 @@ test-platform-config:
           - Dockerfile
           - platform-catalog/**/*
           - scripts/install-pkl.sh
+          - scripts/publish-platform-catalog.sh
           - scripts/test-platform-config.sh
+          - scripts/tests/test-render-platform-catalog.sh
 
 # Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
 # by q-core (Engine v2): per-component config bundles, the frozen-chart mirror,
-# then the digest-pinned root template. Manual only for now, and fully independent from the engine release
-# pipeline: a config change must never require an engine release.
+# digest-pinned root templates, then the immutable complete catalog snapshot.
+# Manual only for now, and independent from the Engine release pipeline: a
+# config change must never require an Engine release.
 # See platform-catalog/README.md.
 publish-platform-catalog:
   stage: release
@@ -1017,8 +1023,11 @@ publish-platform-catalog:
     # Charts to mirror (charts: list in catalog.yaml): names, "all", or
     # "none" to skip the chart mirror.
     PLATFORM_CHARTS: "all"
-    # Root templates to render from the verified outputs and publish last.
+    # Root templates to render and publish before the complete catalog snapshot.
     PLATFORM_TEMPLATES: "all"
+    # Main-branch publication activates the resulting immutable catalog digest
+    # in q-core. MR jobs remain publish-only previews.
+    PLATFORM_CATALOG_ACTIVATE: "false"
     # Public registry (decided 2026-07-09): the engine/q-core running on
     # customer clusters pulls bundles and charts anonymously, no creds needed.
     PLATFORM_CONFIG_REGISTRY: "public.ecr.aws/r3m4q3r9"
@@ -1047,6 +1056,7 @@ publish-platform-catalog:
       - platform-config-publish.json
       - frozen-charts-publish.json
       - platform-templates-publish.json
+      - platform-catalog-publish.json
     expire_in: 1 year
   tags:
     - k8s-runner
@@ -1055,6 +1065,8 @@ publish-platform-catalog:
       when: manual
       allow_failure: true
     - if: $CI_COMMIT_BRANCH == "main"
+      variables:
+        PLATFORM_CATALOG_ACTIVATE: "true"
       when: manual
       allow_failure: true
 
