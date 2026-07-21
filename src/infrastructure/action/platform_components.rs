@@ -4,20 +4,24 @@ use crate::cmd::command::CommandKiller;
 use crate::cmd::helm::Helm;
 use crate::errors::EngineError;
 use crate::events::Stage::Infrastructure;
-use crate::events::{EventDetails, EventMessage, InfrastructureStep};
-use crate::helm::{ChartInfo, ChartValuesGenerated, HelmChartNamespaces};
+use crate::events::{EventDetails, EventMessage, InfrastructureDiffType, InfrastructureStep};
+use crate::helm::{ChartInfo, HelmChartNamespaces};
 use crate::infrastructure::infrastructure_context::InfrastructureContext;
 use crate::io_models::container::Registry;
 use crate::io_models::engine_request::InfrastructureEngineRequest;
 use crate::io_models::platform_components::{
     PlatformExecutionResult, PlatformHelmUnit, PlatformHelmUnitAction, PlatformUnitErrorCode, PlatformUnitResult,
 };
+use std::fmt::{Display, Formatter};
+use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
+use tempfile::NamedTempFile;
 use url::Url;
 use uuid::Uuid;
 
 const HELM_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(120);
+const HELM_DIFF_TIMEOUT: Duration = Duration::from_secs(120);
 const HELM_UPGRADE_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// The only request schema version this engine build understands for platform units.
@@ -30,6 +34,28 @@ const PROTECTED_PLATFORM_NAMESPACE: &str = "qovery";
 /// it at 4096 bytes. Override with `QOVERY_TERMINATION_MESSAGE_PATH` (tests, local runs).
 const DEFAULT_TERMINATION_MESSAGE_PATH: &str = "/dev/termination-log";
 const TERMINATION_MESSAGE_MAX_BYTES: usize = 4096;
+
+enum PlatformHelmDeploymentEvent<'a> {
+    ShowingDiff { chart_name: &'a str },
+    Deploying { chart_name: &'a str },
+    Deployed { chart_name: &'a str },
+}
+
+impl Display for PlatformHelmDeploymentEvent<'_> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlatformHelmDeploymentEvent::ShowingDiff { chart_name } => {
+                write!(formatter, "🔍 Showing diff for chart: {chart_name}")
+            }
+            PlatformHelmDeploymentEvent::Deploying { chart_name } => {
+                write!(formatter, "🛳️ Deploying chart: 📥 {chart_name}")
+            }
+            PlatformHelmDeploymentEvent::Deployed { chart_name } => {
+                write!(formatter, "✅ Chart {chart_name} deployed")
+            }
+        }
+    }
+}
 
 pub fn deploy_platform_components(
     infra_ctx: &InfrastructureContext,
@@ -329,22 +355,54 @@ fn apply_platform_helm_unit(
     unit: &PlatformHelmUnit,
 ) -> Result<(), (PlatformUnitErrorCode, String, Box<EngineError>)> {
     logger.info(format!(
-        "⚓ Applying platform Helm unit `{}`: release `{}` in namespace `{}` from {} {} {}",
+        "⚓ Preparing platform Helm unit `{}`: release `{}` in namespace `{}` from {} {} {}",
         unit.key, unit.release_name, unit.namespace, unit.chart.repository, unit.chart.name, unit.chart.version,
     ));
 
     let chart_dir = download_platform_chart(infra_ctx, helm, logger, event_details, unit)?;
+    let values_file = write_platform_values_to_temporary_file(unit).map_err(|err| {
+        internal_fs_error(
+            event_details,
+            format!("cannot prepare temporary Helm values for platform unit `{}`: {err}", unit.key),
+        )
+    })?;
 
     let chart_info = ChartInfo {
         name: unit.release_name.clone(),
         path: chart_dir,
         namespace: HelmChartNamespaces::Custom(unit.namespace.clone()),
         timeout_in_seconds: HELM_UPGRADE_TIMEOUT.as_secs() as i64,
-        // values_yaml may contain secrets (e.g. cluster JWT): pass it as a values file,
-        // never as command-line arguments, and never log it.
-        yaml_files_content: vec![ChartValuesGenerated::new(unit.key.clone(), unit.values_yaml.clone())],
+        // values_yaml may contain secrets (e.g. cluster JWT): keep the temporary file outside
+        // the archived workspace, never pass its contents as command-line arguments, and keep it
+        // alive until both Helm commands have completed.
+        values_files: vec![values_file.path().to_string_lossy().into_owned()],
         ..Default::default()
     };
+
+    logger.info(
+        PlatformHelmDeploymentEvent::ShowingDiff {
+            chart_name: &unit.release_name,
+        }
+        .to_string(),
+    );
+    // Keep the traditional cluster behavior: a best-effort diff must never block the deployment.
+    // Do not log the Helm error because command errors may contain sensitive values.
+    if helm
+        .upgrade_diff_with_secrets_suppressed(
+            &chart_info,
+            &[],
+            &CommandKiller::from_timeout(HELM_DIFF_TIMEOUT),
+            &mut |line| {
+                logger.diff(InfrastructureDiffType::Helm, line);
+            },
+        )
+        .is_err()
+    {
+        logger.warn(format!(
+            "Unable to show diff for chart {}; continuing deployment",
+            unit.release_name
+        ));
+    }
 
     if infra_ctx.context().is_dry_run_deploy() {
         logger.warn(format!(
@@ -354,6 +412,12 @@ fn apply_platform_helm_unit(
         return Ok(());
     }
 
+    logger.info(
+        PlatformHelmDeploymentEvent::Deploying {
+            chart_name: &unit.release_name,
+        }
+        .to_string(),
+    );
     helm.upgrade(&chart_info, &[], &CommandKiller::from_timeout(HELM_UPGRADE_TIMEOUT))
         .map_err(|err| {
             (
@@ -366,12 +430,24 @@ fn apply_platform_helm_unit(
             )
         })?;
 
-    logger.info(format!(
-        "✅ Platform Helm unit `{}` applied: release `{}` in namespace `{}`",
-        unit.key, unit.release_name, unit.namespace,
-    ));
+    logger.info(
+        PlatformHelmDeploymentEvent::Deployed {
+            chart_name: &unit.release_name,
+        }
+        .to_string(),
+    );
 
     Ok(())
+}
+
+fn write_platform_values_to_temporary_file(unit: &PlatformHelmUnit) -> std::io::Result<NamedTempFile> {
+    let mut values_file = tempfile::Builder::new()
+        .prefix("qovery-platform-values-")
+        .suffix(".yaml")
+        .tempfile()?;
+    values_file.write_all(unit.values_yaml.as_bytes())?;
+    values_file.flush()?;
+    Ok(values_file)
 }
 
 /// Downloads the unit chart from its snapshotted repository into the workspace and returns the
@@ -501,6 +577,38 @@ mod tests {
             values_yaml: "image:\n  tag: \"0.1.0\"\n".to_string(),
             images: vec![],
         }
+    }
+
+    #[test]
+    fn platform_helm_deployment_events_use_expected_messages() {
+        let chart_name = "cluster-agent";
+
+        assert_eq!(
+            PlatformHelmDeploymentEvent::ShowingDiff { chart_name }.to_string(),
+            "🔍 Showing diff for chart: cluster-agent"
+        );
+        assert_eq!(
+            PlatformHelmDeploymentEvent::Deploying { chart_name }.to_string(),
+            "🛳️ Deploying chart: 📥 cluster-agent"
+        );
+        assert_eq!(
+            PlatformHelmDeploymentEvent::Deployed { chart_name }.to_string(),
+            "✅ Chart cluster-agent deployed"
+        );
+    }
+
+    #[test]
+    fn platform_values_file_is_removed_when_dropped() {
+        let unit = valid_unit();
+        let values_file_path;
+
+        {
+            let values_file = write_platform_values_to_temporary_file(&unit).unwrap();
+            values_file_path = values_file.path().to_path_buf();
+            assert_eq!(std::fs::read_to_string(&values_file_path).unwrap(), unit.values_yaml);
+        }
+
+        assert!(!values_file_path.exists());
     }
 
     #[test]
