@@ -3,6 +3,7 @@ module qovery.engine.platform.loki.describe
 
 import "context.pkl"
 import "contract.pkl"
+import "resources/fields.pkl" as resourceFields
 import "storage/backends.pkl" as storage
 
 // Product fields stay separate from storage backend declarations. Defaults and constraints live
@@ -14,11 +15,24 @@ highAvailabilityDefault: Boolean = false
 storageDefault: String = storage.pvc.key
 
 // DESCRIBE exposes all capabilities without context. Contextual operations narrow storage choices
-// through the typed backend registry, never through provider conditionals in the Console.
-fields: List<contract.Field> = fieldsWithStorageAllowedValues(storage.allowedValues)
+// through the typed backend registry, never through provider conditionals in the Console, and
+// narrow the resource fields to the active topology, seeded from the selected profile.
+fields: List<contract.Field> =
+  fieldsWithStorageAllowedValues(storage.allowedValues) + resourceFields.allFields
 
-function fieldsForContext(clusterContext: Mapping?): List<contract.Field> =
+function fieldsFor(
+  operation: contract.Operation,
+  clusterContext: Mapping?,
+  resourceProfileName: String?,
+  highAvailability: Boolean,
+): List<contract.Field> =
   fieldsWithStorageAllowedValues(effectiveStorageAllowedValues(clusterContext))
+    + (
+      if (operation == contract.describeOperation)
+        resourceFields.allFields
+      else
+        resourceFields.activeFields(resourceProfileName, highAvailability)
+    )
 
 local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<String> =
   if (clusterContext == null)

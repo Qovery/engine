@@ -26,7 +26,7 @@ components:
     version: v2
   - name: loki
     chart: loki # frozen upstream chart, pinned in lib-engine/lib/helm-freeze.yaml
-    version: v5
+    version: v6
   - name: qovery-priority-class
     chart: qovery-priority-class # Qovery-authored bootstrap chart
     version: v1

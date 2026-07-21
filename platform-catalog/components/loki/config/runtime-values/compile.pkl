@@ -2,6 +2,8 @@
 module qovery.engine.platform.loki.compile
 
 import "profile.pkl"
+import "resources/helm.pkl" as resourcesHelm
+import "resources/targets.pkl" as resourceTargets
 import "storage/backends.pkl" as storageBackends
 import "storage/helm.pkl" as storageHelm
 import "storage/types.pkl" as storage
@@ -20,24 +22,44 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
       ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
       ["loki"] = storageHelm.lokiValues(profileConfig, clusterInputs, backend, replicationFactor)
       ["singleBinary"] =
-        singleBinaryValues(isHighAvailability, isObjectStorage, backend, clusterInputs)
+        withResources(
+          singleBinaryValues(isHighAvailability, isObjectStorage, backend, clusterInputs),
+          resourcesHelm.targetResources(profileConfig, resourceTargets.singleBinary, isHighAvailability),
+        )
       ["write"] =
-        scalableStatefulTargetValues(scalableReplicas, isObjectStorage, backend, clusterInputs)
-      ["read"] = readTargetValues(scalableReplicas, backend, clusterInputs)
+        withResources(
+          scalableStatefulTargetValues(scalableReplicas, isObjectStorage, backend, clusterInputs),
+          resourcesHelm.targetResources(profileConfig, resourceTargets.write, isHighAvailability),
+        )
+      ["read"] =
+        withResources(
+          readTargetValues(scalableReplicas, backend, clusterInputs),
+          resourcesHelm.targetResources(profileConfig, resourceTargets.`read`, isHighAvailability),
+        )
       ["backend"] =
-        scalableStatefulTargetValues(
-          scalableReplicas,
-          isObjectStorage,
-          backend,
-          clusterInputs,
+        withResources(
+          scalableStatefulTargetValues(
+            scalableReplicas,
+            isObjectStorage,
+            backend,
+            clusterInputs,
+          ),
+          resourcesHelm.targetResources(profileConfig, resourceTargets.backend, isHighAvailability),
         )
       when (isHighAvailability) {
-        ["gateway"] = new Mapping { ["replicas"] = scalableReplicas }
+        ["gateway"] =
+          withResources(
+            new Mapping { ["replicas"] = scalableReplicas },
+            resourcesHelm.targetResources(profileConfig, resourceTargets.gateway, isHighAvailability),
+          )
       }
       when (serviceAccount != null) {
         ["serviceAccount"] = serviceAccount
       }
     }
+
+local function withResources(targetValues: Mapping, resources: Mapping?): Mapping =
+  if (resources == null) targetValues else (targetValues) { ["resources"] = resources }
 
 // Object storage is durable; the local /var/loki data only contains ephemeral state. Disable the
 // PVC inherited from base.yaml and mount an explicit emptyDir because the container root filesystem

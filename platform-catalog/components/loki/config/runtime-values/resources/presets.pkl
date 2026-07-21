@@ -1,0 +1,71 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.presets
+
+import "targets.pkl"
+import "types.pkl"
+
+// Preset provenance (Slice 4.7 calibration):
+//
+// - MEDIUM is adopted verbatim from the engine v1 fleet defaults applied to every Qovery-managed
+//   Loki today (lib-engine/src/io_models/loki.rs and q-core ClusterAdvancedSettings: 300m CPU
+//   request, 1024Mi memory request, 2048Mi memory limit, uniform across the four Loki targets).
+//   A future managed-cluster migration to the platform catalog can therefore select MEDIUM and
+//   keep its pod resources unchanged. The fleet's 8000m CPU limit is dropped per the preset
+//   policy below: a ceiling that high never throttles, "no limit" states the same intent honestly.
+// - SMALL is anchored on the dev/staging minimum: a Loki single binary starts and serves low
+//   volume comfortably within 512Mi, and CPU requests size scheduling, not performance, for this
+//   bursty workload.
+// - LARGE is the last vertical step before selecting highAvailability: memory is Loki's practical
+//   scaling lever (query working set), so it doubles MEDIUM once more.
+// - The gateway (nginx) was never dimensioned by engine v1; its numbers remain proposed.
+//
+// Pending before the slice closes: confirm the SMALL/LARGE anchors and the gateway numbers against
+// the fleet's advanced-settings override distribution (loki.* keys in cluster advanced settings).
+//
+// Preset policy: no CPU limit (throttling needs an explicit isolation justification) and a memory
+// limit at twice the request as documented headroom. A published preset table is immutable:
+// changing a number requires a new bundle version and a new root template release, announced with
+// the old and new budgets (q-core docs-v2/slice-4-7-source3-resource-profiles.md).
+tables: Mapping<String, Mapping<String, types.ResourceBudget>>(
+  keys.toSet() == types.presetProfiles.toSet(),
+  types.presetProfiles.every((profileName) ->
+    this[profileName].keys.toSet() == targets.targetKeys.toSet()
+  ),
+) = new {
+  [types.smallProfile] = new {
+    [targets.singleBinary.key] = budget(100, 512)
+    [targets.`read`.key] = budget(100, 512)
+    [targets.write.key] = budget(100, 512)
+    [targets.backend.key] = budget(100, 512)
+    [targets.gateway.key] = budget(50, 64)
+  }
+  [types.mediumProfile] = new {
+    [targets.singleBinary.key] = budget(300, 1024)
+    [targets.`read`.key] = budget(300, 1024)
+    [targets.write.key] = budget(300, 1024)
+    [targets.backend.key] = budget(300, 1024)
+    [targets.gateway.key] = budget(100, 128)
+  }
+  [types.largeProfile] = new {
+    [targets.singleBinary.key] = budget(1000, 2048)
+    [targets.`read`.key] = budget(1000, 2048)
+    [targets.write.key] = budget(1000, 2048)
+    [targets.backend.key] = budget(1000, 2048)
+    [targets.gateway.key] = budget(250, 256)
+  }
+}
+
+function budgetFor(profileName: String, targetKey: String): types.ResourceBudget =
+  tables[profileName][targetKey]
+
+// The Console seed for custom fields: the selected preset's budgets, or the MEDIUM recommendation
+// when no preset numbers exist (CHART_DEFAULT, CUSTOM, or an unparsable selector).
+function seedBudget(profileName: String?, targetKey: String): types.ResourceBudget =
+  let (table = if (profileName == null) null else tables.getOrNull(profileName))
+    (table ?? tables[types.mediumProfile])[targetKey]
+
+local function budget(cpuMilli: Int, memoryMi: Int): types.ResourceBudget = new {
+  cpuMilliRequest = cpuMilli
+  memoryMiRequest = memoryMi
+  memoryMiLimit = memoryMi * 2
+}

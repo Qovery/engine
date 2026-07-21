@@ -1,0 +1,132 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.validate
+
+import "../contract.pkl"
+import "../profile.pkl"
+import "targets.pkl"
+import "types.pkl"
+
+// Custom values are checked only while the profile is CUSTOM and only for the active topology.
+// Values hidden by the current topology/profile are deliberately not validated: q-core preserves
+// them so a customer can switch back without losing input, and the compiler never reads them.
+function violations(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+): List<contract.Violation> =
+  let (profileName = profile.resourceProfile(profileConfig))
+    if (profileName == null)
+      List(new contract.Violation {
+        code = "INVALID_TYPE"
+        fieldPath = types.profileFieldKey
+        message = "Loki configuration field \(types.profileFieldKey) must be a string"
+      })
+    else if (!types.allowedProfiles.contains(profileName))
+      List(new contract.Violation {
+        code = "VALUE_NOT_ALLOWED"
+        fieldPath = types.profileFieldKey
+        message = "Loki \(types.profileFieldKey) must be one of \(types.allowedProfiles.join(", "))"
+      })
+    else if (profileName != types.customProfile)
+      List()
+    else
+      targets
+        .activeTargets(profile.highAvailability(profileConfig) == true)
+        .flatMap((target) -> targetViolations(operation, profileConfig, target))
+
+local function targetViolations(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  target: types.WorkloadTarget,
+): List<contract.Violation> =
+  requestViolations(
+    operation,
+    profileConfig,
+    targets.cpuRequestKey(target),
+    types.cpuMilliMin,
+    types.cpuMilliMax,
+  )
+    + limitViolations(profileConfig, targets.cpuLimitKey(target), types.cpuMilliMin, types.cpuMilliMax)
+    + requestViolations(
+      operation,
+      profileConfig,
+      targets.memoryRequestKey(target),
+      types.memoryMiMin,
+      types.memoryMiMax,
+    )
+    + limitViolations(profileConfig, targets.memoryLimitKey(target), types.memoryMiMin, types.memoryMiMax)
+    + limitBelowRequestViolations(profileConfig, targets.cpuRequestKey(target), targets.cpuLimitKey(target))
+    + limitBelowRequestViolations(
+      profileConfig,
+      targets.memoryRequestKey(target),
+      targets.memoryLimitKey(target),
+    )
+
+// RESOLVE_REQUIREMENTS accepts an incomplete draft, so a not-yet-entered request is only reported
+// once the configuration is checked for saving or deployment — the same lifecycle split as
+// REQUIRED_INPUT_MISSING in ../validate.pkl.
+local function requestViolations(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  key: String,
+  min: Int,
+  max: Int,
+): List<contract.Violation> =
+  let (value = profileConfig.getOrNull(key))
+    if (value != null)
+      integerViolations(value, key, min, max)
+    else if (
+      operation == contract.validateOperation || operation == contract.compileOperation
+    )
+      List(new contract.Violation {
+        code = "REQUIRED_RESOURCE_REQUEST_MISSING"
+        fieldPath = key
+        message = "Loki resource profile CUSTOM requires \(key) for the active topology"
+      })
+    else
+      List()
+
+local function limitViolations(
+  profileConfig: Mapping,
+  key: String,
+  min: Int,
+  max: Int,
+): List<contract.Violation> =
+  let (value = profileConfig.getOrNull(key))
+    if (value == null) List() else integerViolations(value, key, min, max)
+
+local function integerViolations(
+  value: Any,
+  key: String,
+  min: Int,
+  max: Int,
+): List<contract.Violation> =
+  if (!(value is Int))
+    List(new contract.Violation {
+      code = "INVALID_TYPE"
+      fieldPath = key
+      message = "Loki configuration field \(key) must be a whole number"
+    })
+  else if (value < min || value > max)
+    List(new contract.Violation {
+      code = "VALUE_OUT_OF_RANGE"
+      fieldPath = key
+      message = "Loki \(key) must be between \(min) and \(max)"
+    })
+  else
+    List()
+
+local function limitBelowRequestViolations(
+  profileConfig: Mapping,
+  requestKey: String,
+  limitKey: String,
+): List<contract.Violation> =
+  let (request = profileConfig.getOrNull(requestKey))
+  let (limit = profileConfig.getOrNull(limitKey))
+    if (request is Int && limit is Int && limit < request)
+      List(new contract.Violation {
+        code = "LIMIT_BELOW_REQUEST"
+        fieldPath = limitKey
+        message = "Loki \(limitKey) must be at least \(requestKey)"
+      })
+    else
+      List()

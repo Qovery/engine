@@ -1,0 +1,128 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.fields
+
+import "../contract.pkl"
+import "presets.pkl"
+import "targets.pkl"
+import "types.pkl"
+
+// Console-facing field descriptors. The contract has no read-only rendering, so exposing the
+// custom fields while a preset is selected would let a customer edit values that validation and
+// compilation deliberately ignore. The Slice 4.7 transparency contract is therefore served by its
+// documented fallback: the custom fields are returned only while CUSTOM is selected, and each
+// preset's numeric budgets for the active topology are published in the selector's description.
+
+profileField: contract.Field = new {
+  key = types.profileFieldKey
+  type = contract.stringFieldType
+  required = false
+  defaultValue = types.chartDefaultProfile
+  label = "Resource profile"
+  description = profileDescription
+  constraints = new { allowedValues = types.allowedProfiles }
+}
+
+// Capability view for context-free DESCRIBE: every custom key of every topology. This list is also
+// the complete allow-list that lets q-core preserve custom values hidden by the current
+// topology/profile instead of rejecting them as unknown fields.
+allFields: List<contract.Field> = List(profileField) + customFields(targets.allTargets, null)
+
+// Contextual view for the other operations: the selector carries the preset budgets of the active
+// topology, and the custom fields exist only while CUSTOM is selected.
+function activeFields(
+  resourceProfileName: String?,
+  highAvailability: Boolean,
+): List<contract.Field> =
+  let (activeTargets = targets.activeTargets(highAvailability))
+    List((profileField) { description = "\(profileDescription) \(presetSummary(activeTargets))" })
+      + (
+        if (resourceProfileName == types.customProfile)
+          customFields(activeTargets, resourceProfileName)
+        else
+          List()
+      )
+
+local profileDescription: String =
+  "CPU/memory budget applied to the active Loki workloads. CHART_DEFAULT keeps the chart's own behavior, SMALL/MEDIUM/LARGE apply Qovery's versioned budgets, CUSTOM enables the per-workload fields. Budgets are not capacity guarantees. Every resource field may be changed at any time; an update recompiles the Helm values and rolls the workloads."
+
+local function presetSummary(activeTargets: List<types.WorkloadTarget>): String =
+  types.presetProfiles
+    .map((profileName) -> "\(profileName): \(targetSummaries(profileName, activeTargets))")
+    .join("; ")
+
+local function targetSummaries(
+  profileName: String,
+  activeTargets: List<types.WorkloadTarget>,
+): String =
+  activeTargets
+    .map((target) -> "\(target.key) \(budgetSummary(presets.budgetFor(profileName, target.key)))")
+    .join(", ")
+
+local function budgetSummary(budget: types.ResourceBudget): String =
+  let (memoryLimit = budget.memoryMiLimit)
+    "\(budget.cpuMilliRequest)m/\(budget.memoryMiRequest)Mi"
+      + (if (memoryLimit == null) "" else " (limit \(memoryLimit)Mi)")
+
+local function customFields(
+  visibleTargets: List<types.WorkloadTarget>,
+  resourceProfileName: String?,
+): List<contract.Field> =
+  visibleTargets.flatMap((target) ->
+    targetFields(target, presets.seedBudget(resourceProfileName, target.key))
+  )
+
+local function targetFields(
+  target: types.WorkloadTarget,
+  seed: types.ResourceBudget,
+): List<contract.Field> =
+  List(
+    numberField(
+      targets.cpuRequestKey(target),
+      "\(target.label) CPU request (millicores)",
+      "Whole number of millicores; 500 compiles to 500m. Required for every active workload when the resource profile is CUSTOM.",
+      seed.cpuMilliRequest,
+      types.cpuMilliMin,
+      types.cpuMilliMax,
+    ),
+    numberField(
+      targets.cpuLimitKey(target),
+      "\(target.label) CPU limit (millicores)",
+      "Optional whole number of millicores; must be at least the CPU request. Leave empty to run without CPU throttling.",
+      seed.cpuMilliLimit,
+      types.cpuMilliMin,
+      types.cpuMilliMax,
+    ),
+    numberField(
+      targets.memoryRequestKey(target),
+      "\(target.label) memory request (MiB)",
+      "Whole number of mebibytes; 512 compiles to 512Mi. Required for every active workload when the resource profile is CUSTOM.",
+      seed.memoryMiRequest,
+      types.memoryMiMin,
+      types.memoryMiMax,
+    ),
+    numberField(
+      targets.memoryLimitKey(target),
+      "\(target.label) memory limit (MiB)",
+      "Optional whole number of mebibytes; must be at least the memory request. The pod is OOM-killed above this limit.",
+      seed.memoryMiLimit,
+      types.memoryMiMin,
+      types.memoryMiMax,
+    ),
+  )
+
+local function numberField(
+  fieldKey: String,
+  fieldLabel: String,
+  fieldDescription: String,
+  seedValue: Int?,
+  minValue: Int,
+  maxValue: Int,
+): contract.Field = new {
+  key = fieldKey
+  type = contract.numberFieldType
+  required = false
+  defaultValue = if (seedValue == null) null else "\(seedValue)"
+  label = fieldLabel
+  description = fieldDescription
+  constraints = new { min = minValue; max = maxValue }
+}

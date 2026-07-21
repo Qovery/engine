@@ -1,0 +1,235 @@
+amends "pkl:test"
+
+import "../config/runtime-values/compile.pkl"
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/describe.pkl"
+import "../config/runtime-values/validate.pkl"
+import "../config/runtime-values/resources/presets.pkl" as presets
+import "../config/runtime-values/resources/targets.pkl" as targets
+import "../config/runtime-values/resources/types.pkl" as resourceTypes
+
+// Readable requirement list for Slice 4.7 resource profiles (q-core
+// docs-v2/slice-4-7-source3-resource-profiles.md). Golden COMPILE outputs live in
+// compile-golden.tests.pkl; the end-to-end prop:request envelope stays covered by
+// scripts/test-platform-config.sh.
+
+local awsCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" }
+
+local s3Inputs: Mapping = new {
+  ["infra.s3BucketName"] = "qovery-loki"
+  ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+  ["infra.awsRegion"] = "eu-west-3"
+}
+
+local pvcSingleBinary: Mapping = new {
+  ["storage"] = "pvc"
+  ["retentionWeeks"] = 12
+  ["highAvailability"] = false
+}
+
+local function withProfile(base: Mapping, profileName: String): Mapping =
+  (base) { [resourceTypes.profileFieldKey] = profileName }
+
+local function validationCodes(profileConfig: Mapping): List<String> =
+  validate
+    .violations(contract.validateOperation, profileConfig, awsCustomer, new Mapping {})
+    .map((violation) -> violation.code)
+    .toList()
+
+local function validationPaths(profileConfig: Mapping): List<String> =
+  validate
+    .violations(contract.validateOperation, profileConfig, awsCustomer, new Mapping {})
+    .map((violation) -> violation.fieldPath)
+    .toList()
+
+local function customSingleBinary(cpuMilli: Any, memoryMi: Any): Mapping =
+  (withProfile(pvcSingleBinary, resourceTypes.customProfile)) {
+    ["resources.singleBinary.requests.cpuMilli"] = cpuMilli
+    ["resources.singleBinary.requests.memoryMi"] = memoryMi
+  }
+
+facts {
+  ["preset tables cover every preset and every workload target"] {
+    presets.tables.keys.toList() == resourceTypes.presetProfiles
+    resourceTypes.presetProfiles.every((profileName) ->
+      presets.tables[profileName].keys.toList() == targets.targetKeys
+    )
+  }
+
+  ["presets set no CPU limit and keep the memory limit above the request"] {
+    resourceTypes.presetProfiles.every((profileName) ->
+      targets.targetKeys.every((targetKey) ->
+        let (budget = presets.budgetFor(profileName, targetKey))
+          budget.cpuMilliLimit == null
+            && budget.memoryMiLimit != null
+            && (budget.memoryMiLimit as Int) >= budget.memoryMiRequest
+      )
+    )
+  }
+
+  ["a configuration stored before slice 4.7 compiles without any resource block"] {
+    let (compiled = compile.compile(pvcSingleBinary, new Mapping {}))
+      !(compiled["singleBinary"] as Mapping).containsKey("resources")
+        && !(compiled["write"] as Mapping).containsKey("resources")
+        && !(compiled["read"] as Mapping).containsKey("resources")
+        && !(compiled["backend"] as Mapping).containsKey("resources")
+  }
+
+  ["an explicit CHART_DEFAULT also compiles without any resource block"] {
+    let (
+      compiled =
+        compile.compile(withProfile(pvcSingleBinary, resourceTypes.chartDefaultProfile), new Mapping {})
+    )
+      !(compiled["singleBinary"] as Mapping).containsKey("resources")
+  }
+
+  ["a preset compiles its versioned budgets for the active topology only"] {
+    // MEDIUM budgets are the engine v1 fleet defaults (300m/1024Mi, memory limit 2048Mi).
+    let (compiled = compile.compile(withProfile(pvcSingleBinary, resourceTypes.mediumProfile), new Mapping {}))
+      (compiled["singleBinary"] as Mapping)["resources"]
+        == new Mapping {
+          ["requests"] = new Mapping { ["cpu"] = "300m"; ["memory"] = "1024Mi" }
+          ["limits"] = new Mapping { ["memory"] = "2048Mi" }
+        }
+        && !(compiled["write"] as Mapping).containsKey("resources")
+        && !(compiled["read"] as Mapping).containsKey("resources")
+        && !(compiled["backend"] as Mapping).containsKey("resources")
+  }
+
+  ["a high-availability preset configures the four scalable targets, not the single binary"] {
+    let (
+      compiled =
+        compile.compile(
+          new Mapping {
+            ["storage"] = "s3"
+            ["retentionWeeks"] = 12
+            ["highAvailability"] = true
+            [resourceTypes.profileFieldKey] = resourceTypes.smallProfile
+          },
+          s3Inputs,
+        )
+    )
+      List("read", "write", "backend", "gateway")
+        .every((targetKey) -> (compiled[targetKey] as Mapping).containsKey("resources"))
+        && !(compiled["singleBinary"] as Mapping).containsKey("resources")
+  }
+
+  ["CUSTOM converts integer units to Kubernetes quantities and omits absent limits"] {
+    let (
+      compiled =
+        compile.compile(
+          (customSingleBinary(500, 512)) { ["resources.singleBinary.limits.cpuMilli"] = 700 },
+          new Mapping {},
+        )
+    )
+      (compiled["singleBinary"] as Mapping)["resources"]
+        == new Mapping {
+          ["requests"] = new Mapping { ["cpu"] = "500m"; ["memory"] = "512Mi" }
+          ["limits"] = new Mapping { ["cpu"] = "700m" }
+        }
+  }
+
+  ["CUSTOM requires CPU and memory requests for every active target at save and deploy time"] {
+    validationPaths(withProfile(pvcSingleBinary, resourceTypes.customProfile))
+      == List(
+        "resources.singleBinary.requests.cpuMilli",
+        "resources.singleBinary.requests.memoryMi",
+      )
+    // A draft being edited is not spammed with missing-request violations.
+    validate
+      .violations(
+        contract.resolveRequirementsOperation,
+        withProfile(pvcSingleBinary, resourceTypes.customProfile),
+        awsCustomer,
+        new Mapping {},
+      )
+      .isEmpty
+  }
+
+  ["custom values hidden by a preset are preserved, ignored and never compiled"] {
+    let (
+      config =
+        (withProfile(pvcSingleBinary, resourceTypes.mediumProfile)) {
+          ["resources.singleBinary.requests.cpuMilli"] = "not-a-number"
+        }
+    )
+      validationCodes(config).isEmpty
+        && (compile.compile(config, new Mapping {})["singleBinary"] as Mapping)["resources"]
+          == new Mapping {
+            ["requests"] = new Mapping { ["cpu"] = "300m"; ["memory"] = "1024Mi" }
+            ["limits"] = new Mapping { ["memory"] = "2048Mi" }
+          }
+  }
+
+  ["custom values for inactive topology targets are ignored and never compiled"] {
+    let (config = (customSingleBinary(500, 512)) { ["resources.read.requests.cpuMilli"] = -5 })
+      validationCodes(config).isEmpty
+        && !(compile.compile(config, new Mapping {})["read"] as Mapping).containsKey("resources")
+  }
+
+  ["zero, negative, oversized and non-integer custom values are rejected on stable paths"] {
+    validationCodes(customSingleBinary(0, 512)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(-100, 512)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(500, 999999999)) == List("VALUE_OUT_OF_RANGE")
+    validationCodes(customSingleBinary(0.5, 512)) == List("INVALID_TYPE")
+    validationPaths(customSingleBinary(0.5, 512)) == List("resources.singleBinary.requests.cpuMilli")
+  }
+
+  ["a limit below its request is rejected independently for CPU and memory"] {
+    validationCodes(
+      (customSingleBinary(500, 512)) {
+        ["resources.singleBinary.limits.cpuMilli"] = 300
+        ["resources.singleBinary.limits.memoryMi"] = 256
+      },
+    ) == List("LIMIT_BELOW_REQUEST", "LIMIT_BELOW_REQUEST")
+  }
+
+  ["an unknown resources.profile value is rejected"] {
+    validationCodes(withProfile(pvcSingleBinary, "TURBO")) == List("VALUE_NOT_ALLOWED")
+  }
+
+  ["context-free DESCRIBE exposes the selector and every custom key of every topology"] {
+    describe.fields
+      .filter((field) -> field.key.startsWith("resources."))
+      .length == 1 + targets.allTargets.length * 4
+    describe.fields
+      .filter((field) -> field.key == resourceTypes.profileFieldKey)
+      .first
+      .constraints
+      .allowedValues == resourceTypes.allowedProfiles
+  }
+
+  ["contextual operations narrow custom fields to the active topology"] {
+    let (
+      keys =
+        describe
+          .fieldsFor(contract.validateOperation, awsCustomer, resourceTypes.customProfile, true)
+          .map((field) -> field.key)
+    )
+      keys.contains("resources.read.requests.cpuMilli")
+        && !keys.contains("resources.singleBinary.requests.cpuMilli")
+  }
+
+  ["a non-CUSTOM profile exposes no editable custom field and publishes the budgets instead"] {
+    // Without read-only rendering in the contract, an exposed field would be editable yet
+    // ignored. The selector's description carries the preset budgets for the active topology.
+    let (
+      fields =
+        describe.fieldsFor(contract.resolveRequirementsOperation, awsCustomer, resourceTypes.smallProfile, false)
+    )
+      !fields.any((field) ->
+        field.key.startsWith("resources.") && field.key != resourceTypes.profileFieldKey
+      )
+        && (
+          fields.filter((field) -> field.key == resourceTypes.profileFieldKey).first.description as String
+        ).contains("SMALL: singleBinary 100m/512Mi (limit 1024Mi)")
+  }
+
+  ["CUSTOM exposes the active topology fields seeded with the MEDIUM recommendation"] {
+    describe
+      .fieldsFor(contract.resolveRequirementsOperation, awsCustomer, resourceTypes.customProfile, false)
+      .filter((field) -> field.key == "resources.singleBinary.requests.cpuMilli")
+      .first
+      .defaultValue == "300"
+  }
+}

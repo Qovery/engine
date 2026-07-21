@@ -24,7 +24,7 @@ class RenderPlatformTemplateTest(unittest.TestCase):
             self.config_entry("qovery-operator", "v1"),
             self.config_entry("cluster-agent", "v2"),
             self.config_entry("shell-agent", "v2"),
-            self.config_entry("loki", "v5"),
+            self.config_entry("loki", "v6"),
             self.config_entry("qovery-priority-class", "v1"),
             self.config_entry("alloy", "v1"),
         ]

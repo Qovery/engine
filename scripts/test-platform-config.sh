@@ -93,9 +93,23 @@ done < <(find "$ROOT_DIR/platform-catalog/components" -path '*/tests/*.tests.pkl
 describe_request='{"operation":"DESCRIBE","componentKey":"loki","profileConfig":{},"clusterContext":null,"clusterInputs":{},"componentOutputs":{}}'
 describe="$(evaluate "$LOKI_MODEL" "$describe_request")"
 assert_result "Loki DESCRIBE" "$describe" '
-  (.fields | map(.key)) == ["retentionWeeks", "highAvailability", "storage"] and
+  (.fields | map(.key)) == [
+    "retentionWeeks", "highAvailability", "storage", "resources.profile",
+    "resources.singleBinary.requests.cpuMilli", "resources.singleBinary.limits.cpuMilli",
+    "resources.singleBinary.requests.memoryMi", "resources.singleBinary.limits.memoryMi",
+    "resources.read.requests.cpuMilli", "resources.read.limits.cpuMilli",
+    "resources.read.requests.memoryMi", "resources.read.limits.memoryMi",
+    "resources.write.requests.cpuMilli", "resources.write.limits.cpuMilli",
+    "resources.write.requests.memoryMi", "resources.write.limits.memoryMi",
+    "resources.backend.requests.cpuMilli", "resources.backend.limits.cpuMilli",
+    "resources.backend.requests.memoryMi", "resources.backend.limits.memoryMi",
+    "resources.gateway.requests.cpuMilli", "resources.gateway.limits.cpuMilli",
+    "resources.gateway.requests.memoryMi", "resources.gateway.limits.memoryMi"
+  ] and
   (.fields[] | select(.key == "retentionWeeks") | .description | startswith("Whole number")) and
   (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "s3", "gcs", "azureBlob", "s3Compatible"] and
+  (.fields[] | select(.key == "resources.profile") | .constraints.allowedValues) == ["CHART_DEFAULT", "SMALL", "MEDIUM", "LARGE", "CUSTOM"] and
+  (.fields[] | select(.key == "resources.profile") | .defaultValue) == "CHART_DEFAULT" and
   .requiredInputs == [] and
   .violations == [] and
   (has("helmValues") | not)
@@ -210,7 +224,28 @@ assert_result "Loki COMPILE" "$compile" '
   .helmValues.singleBinary.extraVolumeMounts == [{"name":"storage","mountPath":"/var/loki"}] and
   .helmValues.write.persistence.volumeClaimsEnabled == false and
   .helmValues.backend.persistence.volumeClaimsEnabled == false and
+  (.helmValues.singleBinary | has("resources") | not) and
   .helmValues.serviceAccount.annotations["eks.amazonaws.com/role-arn"] == "arn:aws:iam::123456789012:role/loki"
+'
+
+medium_profile_compile_request='{"operation":"COMPILE","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":12,"highAvailability":false,"resources.profile":"MEDIUM"},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
+medium_profile_compile="$(evaluate "$LOKI_MODEL" "$medium_profile_compile_request")"
+assert_result "Loki COMPILE MEDIUM resource profile" "$medium_profile_compile" '
+  .violations == [] and
+  .helmValues.singleBinary.resources == {"requests":{"cpu":"300m","memory":"1024Mi"},"limits":{"memory":"2048Mi"}} and
+  (.helmValues.write | has("resources") | not) and
+  (.helmValues.read | has("resources") | not) and
+  (.helmValues.backend | has("resources") | not) and
+  ([.fields[].key] | any(startswith("resources.singleBinary")) | not) and
+  (.fields[] | select(.key == "resources.profile") | .description | contains("MEDIUM: singleBinary 300m/1024Mi"))
+'
+
+custom_resources_validate_request='{"operation":"VALIDATE","componentKey":"loki","profileConfig":{"storage":"pvc","retentionWeeks":12,"highAvailability":false,"resources.profile":"CUSTOM","resources.singleBinary.requests.cpuMilli":500,"resources.singleBinary.limits.cpuMilli":300},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{}}'
+custom_resources_validate="$(evaluate "$LOKI_MODEL" "$custom_resources_validate_request")"
+assert_result "Loki VALIDATE incomplete CUSTOM resources" "$custom_resources_validate" '
+  (.violations | map(.code)) == ["REQUIRED_RESOURCE_REQUEST_MISSING", "LIMIT_BELOW_REQUEST"] and
+  (.violations | map(.fieldPath)) == ["resources.singleBinary.requests.memoryMi", "resources.singleBinary.limits.cpuMilli"] and
+  (has("helmValues") | not)
 '
 
 ha_compile_request='{"operation":"COMPILE","componentKey":"loki","profileConfig":{"storage":"s3","retentionWeeks":4,"highAvailability":true},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{"infra.s3BucketName":"qovery-loki","infra.lokiRoleArn":"arn:aws:iam::123456789012:role/loki","infra.awsRegion":"eu-west-3"},"componentOutputs":{}}'

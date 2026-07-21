@@ -28,9 +28,54 @@ local function compiledJson(
     ),
   )
 
+local function compiledJsonForProfile(
+  profileConfig: Mapping,
+  clusterInputs: Mapping,
+): String = jsonRenderer.renderValue(compile.compile(profileConfig, clusterInputs))
+
 examples {
   ["pvc single binary"] {
     compiledJson("pvc", 12, false, new Mapping {})
+  }
+
+  ["pvc single binary with MEDIUM resource profile"] {
+    compiledJsonForProfile(
+      new Mapping {
+        ["storage"] = "pvc"
+        ["retentionWeeks"] = 12
+        ["highAvailability"] = false
+        ["resources.profile"] = "MEDIUM"
+      },
+      new Mapping {},
+    )
+  }
+
+  ["s3 high availability with CUSTOM resources"] {
+    compiledJsonForProfile(
+      new Mapping {
+        ["storage"] = "s3"
+        ["retentionWeeks"] = 12
+        ["highAvailability"] = true
+        ["resources.profile"] = "CUSTOM"
+        ["resources.read.requests.cpuMilli"] = 500
+        ["resources.read.limits.cpuMilli"] = 700
+        ["resources.read.requests.memoryMi"] = 512
+        ["resources.read.limits.memoryMi"] = 1024
+        ["resources.write.requests.cpuMilli"] = 750
+        ["resources.write.limits.cpuMilli"] = 1000
+        ["resources.write.requests.memoryMi"] = 1024
+        ["resources.write.limits.memoryMi"] = 1536
+        ["resources.backend.requests.cpuMilli"] = 250
+        ["resources.backend.requests.memoryMi"] = 512
+        ["resources.gateway.requests.cpuMilli"] = 100
+        ["resources.gateway.requests.memoryMi"] = 128
+      },
+      new Mapping {
+        ["infra.s3BucketName"] = "qovery-loki"
+        ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+        ["infra.awsRegion"] = "eu-west-3"
+      },
+    )
   }
 
   ["s3 on AWS"] {

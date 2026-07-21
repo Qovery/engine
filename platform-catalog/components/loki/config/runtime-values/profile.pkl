@@ -2,6 +2,7 @@
 module qovery.engine.platform.loki.profile
 
 import "describe.pkl"
+import "resources/types.pkl" as resourceTypes
 
 // Centralizes defaults and type narrowing for the customer profile.
 // A null result means "wrong type". Validation can then report every problem in one response
@@ -17,4 +18,10 @@ function highAvailability(config: Mapping): Boolean? =
 
 function storage(config: Mapping): String? =
   let (value = config.getOrNull("storage") ?? describe.storageDefault)
+    if (value is String) value else null
+
+// A configuration stored before Slice 4.7 has no selector; it must keep compiling exactly as
+// before, so an absent value resolves to CHART_DEFAULT, never to a preset.
+function resourceProfile(config: Mapping): String? =
+  let (value = config.getOrNull(resourceTypes.profileFieldKey) ?? resourceTypes.chartDefaultProfile)
     if (value is String) value else null

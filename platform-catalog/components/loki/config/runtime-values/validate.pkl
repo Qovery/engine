@@ -6,6 +6,7 @@ import "contract.pkl"
 import "describe.pkl"
 import "profile.pkl"
 import "requirements.pkl"
+import "resources/validate.pkl" as resourcesValidate
 import "storage/backends.pkl" as storageBackends
 import "storage/types.pkl" as storage
 
@@ -23,6 +24,7 @@ function violations(
     unknownFieldViolations(profileConfig)
       + typeViolations(profileConfig)
       + valueViolations(profileConfig, clusterContext)
+      + resourcesValidate.violations(operation, profileConfig)
       + requiredInputViolations(operation, profileConfig, clusterContext, clusterInputs)
 
 local function unknownFieldViolations(profileConfig: Mapping) =

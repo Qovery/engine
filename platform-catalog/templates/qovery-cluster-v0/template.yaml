@@ -214,7 +214,7 @@ platformTemplateRelease:
               kind: requires
           configRef:
             chart: loki
-            version: v5
+            version: v6
             digest: __PUBLISHED_CONFIG_DIGEST__
             evaluator:
               kind: PKL

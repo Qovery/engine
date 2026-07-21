@@ -1,0 +1,60 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.targets
+
+import "types.pkl"
+
+// One typed registry owns the workload-target matrix. Fields, presets, validation and Helm
+// compilation all consume it, so adding a target cannot update only one of those paths.
+singleBinary: types.WorkloadTarget = new {
+  key = "singleBinary"
+  label = "Single binary"
+  activeInHighAvailability = false
+}
+
+// `read` is a Pkl keyword; the backticks keep the chart's own target name.
+`read`: types.WorkloadTarget = new {
+  key = "read"
+  label = "Read"
+  activeInHighAvailability = true
+}
+
+write: types.WorkloadTarget = new {
+  key = "write"
+  label = "Write"
+  activeInHighAvailability = true
+}
+
+backend: types.WorkloadTarget = new {
+  key = "backend"
+  label = "Backend"
+  activeInHighAvailability = true
+}
+
+gateway: types.WorkloadTarget = new {
+  key = "gateway"
+  label = "Gateway"
+  activeInHighAvailability = true
+}
+
+allTargets: List<types.WorkloadTarget> = List(singleBinary, `read`, write, backend, gateway)
+
+targetKeys: List<String> = allTargets.map((target) -> target.key)
+
+// The active set follows the selected topology: single-binary configures one workload,
+// high availability configures the simple-scalable workloads. Inactive chart targets receive no
+// resource block from Source 3.
+function activeTargets(highAvailability: Boolean): List<types.WorkloadTarget> =
+  allTargets.filter((target) -> target.activeInHighAvailability == highAvailability)
+
+// Dotted Source 3 field keys, the shared authoring convention across component templates.
+function cpuRequestKey(target: types.WorkloadTarget): String =
+  "resources.\(target.key).requests.cpuMilli"
+
+function cpuLimitKey(target: types.WorkloadTarget): String =
+  "resources.\(target.key).limits.cpuMilli"
+
+function memoryRequestKey(target: types.WorkloadTarget): String =
+  "resources.\(target.key).requests.memoryMi"
+
+function memoryLimitKey(target: types.WorkloadTarget): String =
+  "resources.\(target.key).limits.memoryMi"

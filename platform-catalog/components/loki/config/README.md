@@ -20,9 +20,20 @@ loki/
         inputs.pkl
         backends.pkl
         helm.pkl
+      resources/
+        types.pkl
+        targets.pkl
+        presets.pkl
+        fields.pkl
+        validate.pkl
+        helm.pkl
   tests/
     runtime-values.test.pkl
     runtime-values.test.pkl-expected.pcf
+    compile-golden.tests.pkl
+    compile-golden.tests.pkl-expected.pcf
+    rules.tests.pkl
+    resource-profiles.tests.pkl
 ```
 
 The files under `runtime-values/` follow the Console use cases. `model.pkl` is the only entrypoint
@@ -46,7 +57,8 @@ The table describes the functions that contribute to each response, not a lazy f
 ## Where to look
 
 - `describe.pkl`: the editable fields, labels, defaults and field constraints rendered by the
-  Console (`retentionWeeks`, `highAvailability`, `storage`);
+  Console (`retentionWeeks`, `highAvailability`, `storage`, `resources.profile` and the
+  per-workload resource fields);
 - `requirements.pkl`: which logical runtime inputs become visible for the current draft;
 - `validate.pkl`: cross-field rules, provider compatibility and stable violation codes;
 - `compile.pkl`: the readable, provider-neutral Loki Helm topology;
@@ -54,6 +66,13 @@ The table describes the functions that contribute to each response, not a lazy f
 - `storage/types.pkl`: the shared storage types;
 - `storage/inputs.pkl`: logical runtime inputs with their labels, types and constraints;
 - `storage/backends.pkl`: the supported backend instances and provider matrix;
+- `resources/types.pkl`: the profile vocabulary, integer units, bounds and budget/target types;
+- `resources/targets.pkl`: the workload-target registry and dotted Source 3 field keys;
+- `resources/presets.pkl`: the versioned `SMALL`/`MEDIUM`/`LARGE` budget tables;
+- `resources/fields.pkl`: the selector and per-workload custom fields with preset-seeded defaults;
+- `resources/validate.pkl`: the `CUSTOM` value rules (integers, bounds, required requests,
+  `limit >= request`);
+- `resources/helm.pkl`: budget-to-`resources`-block compilation;
 - `profile.pkl`: defaults and safe type conversion shared by resolve, validate and compile;
 - `contract.pkl`: vendored canonical operation and JSON response types shared with q-core;
 - `context.pkl`: Loki-specific provider and cluster-mode types;
@@ -134,6 +153,38 @@ contextual catalog read and every cluster preview narrow the `storage` field to 
 AWS=`pvc|s3`, GCP=`pvc|gcs`, Azure=`pvc|azureBlob`, Scaleway=`pvc|s3Compatible`. Qovery-managed
 clusters currently expose only `pvc`. The Console renders the returned `allowedValues`; it does not
 encode this matrix or any Loki-specific provider condition.
+
+## Resource profiles
+
+One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIUM | LARGE | CUSTOM`
+(q-core `docs-v2/slice-4-7-source3-resource-profiles.md` owns the product contract):
+
+- `CHART_DEFAULT` (the default) emits no `resources` fragment, so a configuration stored before the
+  selector existed keeps its exact compiled values — the golden tests prove byte identity;
+- `SMALL`/`MEDIUM`/`LARGE` apply the component-owned budget tables in `resources/presets.pkl`. One
+  preset is role-aware internally (each workload target gets its own budget) while the customer
+  selects a single value. Presets are resource budgets, not capacity guarantees. The first table is
+  PROVISIONAL until the Slice 4.7 calibration review approves observed numbers;
+- `CUSTOM` exposes `resources.<target>.requests|limits.cpuMilli|memoryMi` integer fields for the
+  active topology; `500` compiles to `500m` and `512` to `512Mi`. Requests are required, limits
+  stay optional, and `limit >= request` is enforced independently for CPU and memory.
+
+Transparency: the contract has no read-only rendering, so the custom fields are returned only
+while `CUSTOM` is selected — an exposed field would otherwise be editable yet ignored. Each
+preset's numeric budgets for the active topology are published in the `resources.profile` field
+description instead (the fallback defined by the slice), and the `CUSTOM` fields carry the
+`MEDIUM` recommendation in `defaultValue`. Custom values hidden by the current topology/profile
+stay in the context-free DESCRIBE allow-list: q-core preserves them, validation ignores them, and
+the compiler never reads them.
+
+Inactive chart targets receive no resource block: single-binary mode configures `singleBinary`;
+high availability configures `read`, `write`, `backend` and `gateway`. The compiled values are
+complete on their own — no namespace `LimitRange` or other admission-time default is needed to
+finish them.
+
+A published preset table is immutable. Changing a number requires a new bundle version and a new
+root template release, announced with the old and new budgets, because it changes compiled customer
+infrastructure without any customer action.
 
 ## Runtime values
 

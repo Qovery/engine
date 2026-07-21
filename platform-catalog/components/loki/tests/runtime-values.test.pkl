@@ -67,10 +67,15 @@ facts {
 
   ["unsupported q-core providers degrade instead of failing evaluation"] {
     // CloudVendor is an open set: a cluster on OVH, DO, ... must still get the pvc-only catalog.
-    describe.fieldsForContext(new Mapping {
-      ["mode"] = context.customerManagedMode
-      ["provider"] = "OVH"
-    })
+    describe.fieldsFor(
+      contract.describeOperation,
+      new Mapping {
+        ["mode"] = context.customerManagedMode
+        ["provider"] = "OVH"
+      },
+      null,
+      false,
+    )
       .filter((field) -> field.key == "storage")
       .first
       .constraints

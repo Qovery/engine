@@ -1,0 +1,46 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.types
+
+// Shared resource-profile types, product units and bounds. Target declarations belong in
+// targets.pkl, preset numbers in presets.pkl and field metadata in fields.pkl, keeping this module
+// free of target- or profile-specific values.
+
+typealias ResourceProfile = "CHART_DEFAULT" | "SMALL" | "MEDIUM" | "LARGE" | "CUSTOM"
+
+chartDefaultProfile: ResourceProfile = "CHART_DEFAULT"
+smallProfile: ResourceProfile = "SMALL"
+mediumProfile: ResourceProfile = "MEDIUM"
+largeProfile: ResourceProfile = "LARGE"
+customProfile: ResourceProfile = "CUSTOM"
+
+profileFieldKey: String = "resources.profile"
+
+presetProfiles: List<String> = List(smallProfile, mediumProfile, largeProfile)
+
+allowedProfiles: List<String> =
+  List(chartDefaultProfile, smallProfile, mediumProfile, largeProfile, customProfile)
+
+// Product units are integers: cpuMilli compiles to "<n>m" and memoryMi to "<n>Mi". Upper bounds
+// exist to catch unit mistakes (a value entered in cores, bytes or KiB) before pod scheduling.
+cpuMilliMin: Int = 1
+cpuMilliMax: Int = 64000
+memoryMiMin: Int = 1
+memoryMiMax: Int = 262144
+
+// One workload target of the Loki chart. Target names follow the chart's values keys; they are
+// bundle-owned and may evolve with the chart, never a cross-component q-core domain model.
+class WorkloadTarget {
+  key: String
+  label: String
+  activeInHighAvailability: Boolean
+}
+
+// A CPU/memory budget for one workload target. Requests are always present; limits stay optional
+// because a CPU limit throttles and a memory limit OOM-kills, so each one must be a deliberate
+// choice rather than a structural obligation.
+class ResourceBudget {
+  cpuMilliRequest: Int
+  cpuMilliLimit: Int? = null
+  memoryMiRequest: Int
+  memoryMiLimit: Int? = null
+}

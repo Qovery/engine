@@ -6,6 +6,7 @@ import "pkl:json"
 import "compile.pkl"
 import "contract.pkl"
 import "describe.pkl"
+import "profile.pkl"
 import "requirements.pkl"
 import "validate.pkl"
 
@@ -22,7 +23,13 @@ local clusterInputs = request["clusterInputs"] as Mapping
 local computedViolations =
   validate.violations(operation, profileConfig, clusterContext, clusterInputs)
 
-computedFields = describe.fieldsForContext(clusterContext)
+computedFields =
+  describe.fieldsFor(
+    operation,
+    clusterContext,
+    profile.resourceProfile(profileConfig),
+    profile.highAvailability(profileConfig) == true,
+  )
 computedRequiredInputs =
   if (operation == contract.describeOperation)
     List()

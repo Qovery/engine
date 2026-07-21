@@ -1,0 +1,62 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.resources.helm
+
+import "../profile.pkl"
+import "presets.pkl"
+import "targets.pkl"
+import "types.pkl"
+
+// Compiles the selected budget into a chart `resources` block. CHART_DEFAULT emits nothing so
+// existing bindings keep the chart behavior, and inactive chart targets receive no resource block
+// from Source 3. The compiled values are complete on their own: no namespace LimitRange or other
+// admission-time default is needed to finish the requested resources.
+function targetResources(
+  profileConfig: Mapping,
+  target: types.WorkloadTarget,
+  isHighAvailability: Boolean,
+): Mapping? =
+  if (target.activeInHighAvailability != isHighAvailability)
+    null
+  else
+    let (profileName = profile.resourceProfile(profileConfig) as String)
+      if (profileName == types.chartDefaultProfile)
+        null
+      else if (profileName == types.customProfile)
+        resourcesBlock(customBudget(profileConfig, target))
+      else
+        resourcesBlock(presets.budgetFor(profileName, target.key))
+
+// COMPILE runs only on a validated configuration, so a missing or non-integer custom request here
+// is an invariant failure, not a default.
+local function customBudget(
+  profileConfig: Mapping,
+  target: types.WorkloadTarget,
+): types.ResourceBudget = new {
+  cpuMilliRequest = profileConfig[targets.cpuRequestKey(target)] as Int
+  cpuMilliLimit = profileConfig.getOrNull(targets.cpuLimitKey(target)) as Int?
+  memoryMiRequest = profileConfig[targets.memoryRequestKey(target)] as Int
+  memoryMiLimit = profileConfig.getOrNull(targets.memoryLimitKey(target)) as Int?
+}
+
+local function resourcesBlock(budget: types.ResourceBudget): Mapping = new {
+  ["requests"] = new Mapping {
+    ["cpu"] = cpuQuantity(budget.cpuMilliRequest)
+    ["memory"] = memoryQuantity(budget.memoryMiRequest)
+  }
+  when (budget.cpuMilliLimit != null || budget.memoryMiLimit != null) {
+    ["limits"] = limitsBlock(budget)
+  }
+}
+
+local function limitsBlock(budget: types.ResourceBudget): Mapping = new {
+  when (budget.cpuMilliLimit != null) {
+    ["cpu"] = cpuQuantity(budget.cpuMilliLimit as Int)
+  }
+  when (budget.memoryMiLimit != null) {
+    ["memory"] = memoryQuantity(budget.memoryMiLimit as Int)
+  }
+}
+
+local function cpuQuantity(cpuMilli: Int): String = "\(cpuMilli)m"
+
+local function memoryQuantity(memoryMi: Int): String = "\(memoryMi)Mi"

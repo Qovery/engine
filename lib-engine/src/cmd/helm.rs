@@ -1008,6 +1008,10 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
+        if let Some(arg) = secret_visibility.cli_arg() {
+            args_string.push(arg.to_string());
+        }
+
         append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
 
