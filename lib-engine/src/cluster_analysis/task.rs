@@ -276,12 +276,17 @@ impl ClusterAnalysisTask {
     }
 
     fn report_success(&self, report: String) {
-        for line in report.lines() {
+        let running_step = match &self.request.target_analysis {
+            ClusterAnalysisRequest::CostRecommendation(_) => ClusterAnalysisStep::CostRecommendation,
+            ClusterAnalysisRequest::DeprecatedApiCheck(_) => ClusterAnalysisStep::DeprecatedApiCheck,
+        };
+
+        emit_report_lines(&report, running_step, |step, line| {
             self.logger.log(EngineEvent::Info(
-                self.get_event_details(ClusterAnalysisStep::Succeeded),
+                self.get_event_details(step),
                 EventMessage::new_from_safe(line.to_string()),
             ));
-        }
+        });
     }
 }
 
@@ -370,6 +375,23 @@ fn krr_output_format(format: AnalysisOutputFormat) -> KrrOutputFormat {
         AnalysisOutputFormat::Table => KrrOutputFormat::Table,
         AnalysisOutputFormat::Json => KrrOutputFormat::Json,
         AnalysisOutputFormat::Csv => KrrOutputFormat::Csv,
+    }
+}
+
+fn emit_report_lines(report: &str, running_step: ClusterAnalysisStep, mut emit: impl FnMut(ClusterAnalysisStep, &str)) {
+    let mut lines = report.lines().peekable();
+    if lines.peek().is_none() {
+        emit(ClusterAnalysisStep::Succeeded, "");
+        return;
+    }
+
+    while let Some(line) = lines.next() {
+        let step = if lines.peek().is_none() {
+            ClusterAnalysisStep::Succeeded
+        } else {
+            running_step.clone()
+        };
+        emit(step, line);
     }
 }
 
@@ -497,9 +519,46 @@ fn csv_escape(value: Option<&str>) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_qovery_obs_enabled, qovery_obs_namespace};
+    use super::{emit_report_lines, is_qovery_obs_enabled, qovery_obs_namespace};
+    use crate::events::ClusterAnalysisStep;
     use crate::infrastructure::models::kubernetes;
     use serde_json::json;
+
+    #[test]
+    fn marks_only_the_last_line_as_succeeded_for_a_multi_batch_report() {
+        const REPORT_LINE_COUNT: usize = 4 * 1024 + 1;
+        let report = (0..REPORT_LINE_COUNT)
+            .map(|index| format!("line-{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut emitted = Vec::with_capacity(REPORT_LINE_COUNT);
+
+        emit_report_lines(&report, ClusterAnalysisStep::CostRecommendation, |step, line| {
+            emitted.push((step, line.to_string()));
+        });
+
+        assert_eq!(emitted.len(), REPORT_LINE_COUNT);
+        assert!(
+            emitted[..REPORT_LINE_COUNT - 1]
+                .iter()
+                .all(|(step, _)| *step == ClusterAnalysisStep::CostRecommendation)
+        );
+        assert_eq!(
+            emitted.last(),
+            Some(&(ClusterAnalysisStep::Succeeded, format!("line-{}", REPORT_LINE_COUNT - 1)))
+        );
+    }
+
+    #[test]
+    fn emits_a_terminal_event_for_an_empty_report() {
+        let mut emitted = Vec::new();
+
+        emit_report_lines("", ClusterAnalysisStep::CostRecommendation, |step, line| {
+            emitted.push((step, line.to_string()));
+        });
+
+        assert_eq!(emitted, vec![(ClusterAnalysisStep::Succeeded, String::new())]);
+    }
 
     #[test]
     fn detects_qovery_obs_metrics_parameters() {
