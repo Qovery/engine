@@ -17,8 +17,10 @@ storageDefault: String = storage.pvc.key
 // DESCRIBE exposes all capabilities without context. Contextual operations narrow storage choices
 // through the typed backend registry, never through provider conditionals in the Console, and
 // narrow the resource fields to the active topology, seeded from the selected profile.
+// The Console renders fields in list order: storage comes last so it sits directly above the
+// cluster-inputs section its choice activates.
 fields: List<contract.Field> =
-  fieldsWithStorageAllowedValues(storage.allowedValues) + resourceFields.allFields
+  productFields + resourceFields.allFields + List(storageField(storage.allowedValues))
 
 function fieldsFor(
   operation: contract.Operation,
@@ -26,13 +28,14 @@ function fieldsFor(
   resourceProfileName: String?,
   highAvailability: Boolean,
 ): List<contract.Field> =
-  fieldsWithStorageAllowedValues(effectiveStorageAllowedValues(clusterContext))
+  productFields
     + (
       if (operation == contract.describeOperation)
         resourceFields.allFields
       else
         resourceFields.activeFields(resourceProfileName, highAvailability)
     )
+    + List(storageField(effectiveStorageAllowedValues(clusterContext)))
 
 local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<String> =
   if (clusterContext == null)
@@ -43,9 +46,7 @@ local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<Str
       clusterContext.getOrNull("provider") as String?,
     )
 
-local function fieldsWithStorageAllowedValues(
-  effectiveStorageValues: List<String>,
-): List<contract.Field> =
+local productFields: List<contract.Field> =
   List(
     new contract.Field {
       key = "retentionWeeks"
@@ -64,16 +65,18 @@ local function fieldsWithStorageAllowedValues(
       label = "High availability"
       description = "Uses Loki simple-scalable mode and requires object storage."
     },
-    new contract.Field {
-      key = "storage"
-      type = contract.stringFieldType
-      required = false
-      defaultValue = storageDefault
-      label = "Storage"
-      description = "Storage backend used by Loki."
-      constraints = new { allowedValues = effectiveStorageValues }
-    },
   )
+
+local function storageField(effectiveStorageValues: List<String>): contract.Field =
+  new contract.Field {
+    key = "storage"
+    type = contract.stringFieldType
+    required = false
+    defaultValue = storageDefault
+    label = "Storage"
+    description = "Storage backend used by Loki."
+    constraints = new { allowedValues = effectiveStorageValues }
+  }
 
 // Used to reject misspelled or obsolete fields instead of silently ignoring them.
 fieldKeys: Set<String> = fields.map((field) -> field.key).toSet()

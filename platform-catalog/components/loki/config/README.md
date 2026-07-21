@@ -172,10 +172,12 @@ One component-level selector, `resources.profile = CHART_DEFAULT | SMALL | MEDIU
 Transparency: the contract has no read-only rendering, so the custom fields are returned only
 while `CUSTOM` is selected — an exposed field would otherwise be editable yet ignored. Each
 preset's numeric budgets for the active topology are published in the `resources.profile` field
-description instead (the fallback defined by the slice), and the `CUSTOM` fields carry the
-`MEDIUM` recommendation in `defaultValue`. Custom values hidden by the current topology/profile
+description instead (the fallback defined by the slice, and explicitly temporary: it moves to
+dedicated read-only fields once the contract and Console support them). The `CUSTOM` fields carry
+the `MEDIUM` recommendation in `defaultValue`. Custom values hidden by the current topology/profile
 stay in the context-free DESCRIBE allow-list: q-core preserves them, validation ignores them, and
-the compiler never reads them.
+the compiler never reads them. Fields are returned in Console rendering order, with `storage` last
+so it sits directly above the cluster-inputs section its choice activates.
 
 Inactive chart targets receive no resource block: single-binary mode configures `singleBinary`;
 high availability configures `read`, `write`, `backend` and `gateway`. The compiled values are

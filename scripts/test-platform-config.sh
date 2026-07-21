@@ -94,7 +94,7 @@ describe_request='{"operation":"DESCRIBE","componentKey":"loki","profileConfig":
 describe="$(evaluate "$LOKI_MODEL" "$describe_request")"
 assert_result "Loki DESCRIBE" "$describe" '
   (.fields | map(.key)) == [
-    "retentionWeeks", "highAvailability", "storage", "resources.profile",
+    "retentionWeeks", "highAvailability", "resources.profile",
     "resources.singleBinary.requests.cpuMilli", "resources.singleBinary.limits.cpuMilli",
     "resources.singleBinary.requests.memoryMi", "resources.singleBinary.limits.memoryMi",
     "resources.read.requests.cpuMilli", "resources.read.limits.cpuMilli",
@@ -104,7 +104,8 @@ assert_result "Loki DESCRIBE" "$describe" '
     "resources.backend.requests.cpuMilli", "resources.backend.limits.cpuMilli",
     "resources.backend.requests.memoryMi", "resources.backend.limits.memoryMi",
     "resources.gateway.requests.cpuMilli", "resources.gateway.limits.cpuMilli",
-    "resources.gateway.requests.memoryMi", "resources.gateway.limits.memoryMi"
+    "resources.gateway.requests.memoryMi", "resources.gateway.limits.memoryMi",
+    "storage"
   ] and
   (.fields[] | select(.key == "retentionWeeks") | .description | startswith("Whole number")) and
   (.fields[] | select(.key == "storage") | .constraints.allowedValues) == ["pvc", "s3", "gcs", "azureBlob", "s3Compatible"] and

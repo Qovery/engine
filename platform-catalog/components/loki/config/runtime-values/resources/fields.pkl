@@ -34,7 +34,10 @@ function activeFields(
   highAvailability: Boolean,
 ): List<contract.Field> =
   let (activeTargets = targets.activeTargets(highAvailability))
-    List((profileField) { description = "\(profileDescription) \(presetSummary(activeTargets))" })
+    List((profileField) {
+      description =
+        "\(profileDescription) Preset budgets, listed here temporarily until the Console shows them as read-only fields — \(presetSummary(activeTargets))"
+    })
       + (
         if (resourceProfileName == types.customProfile)
           customFields(activeTargets, resourceProfileName)
