@@ -1,0 +1,13 @@
+amends "pkl:test"
+
+import "../config/runtime-values/compile.pkl"
+
+facts {
+  ["Loki enabled"] {
+    compile.compile(true)["environmentVariables"]["LOKI_URL"] == compile.lokiUrl
+  }
+
+  ["Loki disabled"] {
+    compile.compile(false)["environmentVariables"]["LOKI_URL"] == ""
+  }
+}

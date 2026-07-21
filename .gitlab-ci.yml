@@ -981,6 +981,7 @@ test-platform-config:
     - bash ./scripts/install-pkl.sh
   script:
     - ./scripts/test-platform-config.sh
+    - ./scripts/tests/test-publish-platform-config.sh
     - ./scripts/tests/test-render-platform-catalog.sh
     - ./scripts/tests/test-render-platform-components.sh
   tags:
@@ -991,10 +992,17 @@ test-platform-config:
         paths:
           - .gitlab-ci.yml
           - Dockerfile
+          - lib-engine/lib/common/bootstrap/charts/alloy/**/*
+          - lib-engine/lib/common/bootstrap/charts/loki/**/*
+          - lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent/**/*
+          - lib-engine/lib/common/bootstrap/charts/qovery-priority-class/**/*
           - platform-catalog/**/*
           - scripts/install-pkl.sh
           - scripts/publish-platform-catalog.sh
+          - scripts/publish-platform-config.sh
+          - scripts/sync-platform-pkl-contract.sh
           - scripts/test-platform-config.sh
+          - scripts/tests/test-publish-platform-config.sh
           - scripts/tests/test-render-platform-catalog.sh
           - scripts/tests/test-render-platform-components.sh
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
@@ -1002,10 +1010,17 @@ test-platform-config:
         paths:
           - .gitlab-ci.yml
           - Dockerfile
+          - lib-engine/lib/common/bootstrap/charts/alloy/**/*
+          - lib-engine/lib/common/bootstrap/charts/loki/**/*
+          - lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent/**/*
+          - lib-engine/lib/common/bootstrap/charts/qovery-priority-class/**/*
           - platform-catalog/**/*
           - scripts/install-pkl.sh
           - scripts/publish-platform-catalog.sh
+          - scripts/publish-platform-config.sh
+          - scripts/sync-platform-pkl-contract.sh
           - scripts/test-platform-config.sh
+          - scripts/tests/test-publish-platform-config.sh
           - scripts/tests/test-render-platform-catalog.sh
           - scripts/tests/test-render-platform-components.sh
 

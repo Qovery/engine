@@ -25,7 +25,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CATALOG_FILE="$ROOT_DIR/platform-catalog/catalog.yaml"
 COMPONENTS_DIR="$ROOT_DIR/platform-catalog/components"
-OUTPUT_FILE="$ROOT_DIR/platform-config-publish.json"
+CANONICAL_PKL_CONTRACT="$ROOT_DIR/platform-catalog/pkl/component-contract.pkl"
+OUTPUT_FILE="${PLATFORM_CONFIG_OUTPUT_FILE:-$ROOT_DIR/platform-config-publish.json}"
 ARTIFACT_TYPE="application/vnd.qovery.platform-config.v1"
 LAYER_MEDIA_TYPE="application/vnd.qovery.platform-config.layer.v1.tar+gzip"
 
@@ -34,6 +35,7 @@ fatal() { echo "ERROR: $*" >&2; exit 1; }
 command -v oras >/dev/null 2>&1 || fatal "oras CLI is required (https://oras.land)"
 command -v jq >/dev/null 2>&1 || fatal "jq is required"
 [ -n "${PLATFORM_CONFIG_REGISTRY:-}" ] || fatal "PLATFORM_CONFIG_REGISTRY is not set (e.g. public.ecr.aws/r3m4q3r9 — see platform-catalog/README.md)"
+[ -f "$CANONICAL_PKL_CONTRACT" ] || fatal "canonical Pkl contract is missing: $CANONICAL_PKL_CONTRACT"
 
 # ECR does not auto-create repositories on push. They are deliberately NOT
 # created here either: registry repositories are declared in the infra
@@ -68,6 +70,9 @@ if [ "$components" = "all" ]; then
   components=$(basename -a "$COMPONENTS_DIR"/*/)
 fi
 
+staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/platform-config.XXXXXX")"
+trap 'rm -rf "$staging_dir"' EXIT
+
 revision="${CI_COMMIT_SHA:-$(git -C "$ROOT_DIR" rev-parse HEAD)}"
 # Pin the `created` annotation to the commit date: oras would otherwise stamp
 # the push time, giving a different manifest digest for identical content.
@@ -86,6 +91,15 @@ for component in $components; do
     continue
   fi
 
+  publish_dir="$COMPONENTS_DIR/$component"
+  if [ -f "$config_dir/runtime-values/model.pkl" ]; then
+    staged_component_dir="$staging_dir/$component"
+    mkdir -p "$staged_component_dir"
+    cp -R "$config_dir" "$staged_component_dir/config"
+    cp "$CANONICAL_PKL_CONTRACT" "$staged_component_dir/config/runtime-values/contract.pkl"
+    publish_dir="$staged_component_dir"
+  fi
+
   version="$(catalog_version "$component")"
   [ -n "$version" ] || fatal "component '$component' has no version in $CATALOG_FILE"
 
@@ -101,7 +115,7 @@ for component in $components; do
   # Pushing the directory lets `oras pull` restore its exact content (oras tars
   # it and marks the layer for unpack). --disable-path-validation because we
   # push from an absolute path; the stored path stays relative ("config").
-  (cd "$COMPONENTS_DIR/$component" && oras push $oras_flags "$ref" \
+  (cd "$publish_dir" && oras push $oras_flags "$ref" \
     --artifact-type "$ARTIFACT_TYPE" \
     --annotation "org.opencontainers.image.created=$created" \
     --annotation "org.opencontainers.image.revision=$revision" \

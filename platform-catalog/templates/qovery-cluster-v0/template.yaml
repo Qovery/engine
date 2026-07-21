@@ -94,10 +94,16 @@ platformTemplateRelease:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: qovery-cluster-agent
             version: 0.1.0
+          dependsOn:
+            - component: loki
+              kind: after
           configRef:
             chart: cluster-agent
             version: v2
             digest: __PUBLISHED_CONFIG_DIGEST__
+            evaluator:
+              kind: PKL
+              entrypoint: runtime-values/model.pkl
           runtimeInputs:
             - name: qovery.agentGatewayUrl
               source:
@@ -175,12 +181,6 @@ platformTemplateRelease:
                 kind: qcoreValue
                 key: shellAgent.imageTag
               required: true
-    - key: cluster-foundation
-      applicability:
-        modes: [CUSTOMER_MANAGED]
-      mandatory: false
-      enabledByDefault: false
-      components:
         - key: qovery-priority-class
           kind: HELM
           release:
@@ -209,6 +209,9 @@ platformTemplateRelease:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: loki
             version: 6.55.0
+          dependsOn:
+            - component: qovery-priority-class
+              kind: requires
           configRef:
             chart: loki
             version: v5
@@ -266,12 +269,6 @@ platformTemplateRelease:
               sources:
                 - kind: customerProvidedValue
                   modes: [CUSTOMER_MANAGED]
-    - key: log-collector
-      applicability:
-        modes: [CUSTOMER_MANAGED]
-      mandatory: false
-      enabledByDefault: false
-      components:
         - key: alloy
           kind: HELM
           release:

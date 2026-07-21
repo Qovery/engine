@@ -1,0 +1,15 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.context
+
+// Loki's supported storage providers are narrower than q-core's open CloudVendor set. Incoming
+// providers stay plain strings; this type is used only by Loki's backend declarations.
+typealias SupportedProvider = "AWS" | "GCP" | "AZURE" | "SCW"
+typealias ClusterMode = "QOVERY_MANAGED" | "CUSTOMER_MANAGED"
+
+awsProvider: SupportedProvider = "AWS"
+gcpProvider: SupportedProvider = "GCP"
+azureProvider: SupportedProvider = "AZURE"
+scalewayProvider: SupportedProvider = "SCW"
+
+qoveryManagedMode: ClusterMode = "QOVERY_MANAGED"
+customerManagedMode: ClusterMode = "CUSTOMER_MANAGED"

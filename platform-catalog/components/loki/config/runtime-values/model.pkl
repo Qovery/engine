@@ -22,28 +22,27 @@ local clusterInputs = request["clusterInputs"] as Mapping
 local computedViolations =
   validate.violations(operation, profileConfig, clusterContext, clusterInputs)
 
-fields = describe.fieldsForContext(clusterContext)
-requiredInputs =
+computedFields = describe.fieldsForContext(clusterContext)
+computedRequiredInputs =
   if (operation == contract.describeOperation)
     List()
   else
     requirements.requiredInputs(profileConfig, clusterContext)
-violations = computedViolations
 
 // Invalid inputs never produce partial Helm values. q-core treats a missing helmValues on a valid
 // COMPILE request as a hard error, so this remains fail-closed on both sides of the contract.
-helmValues =
+computedHelmValues =
   if (operation == contract.compileOperation && computedViolations.isEmpty)
     compile.compile(profileConfig, clusterInputs)
   else
     null
 
 output {
-  value = new Mapping {
-    ["fields"] = fields
-    ["requiredInputs"] = requiredInputs
-    ["violations"] = violations
-    ["helmValues"] = helmValues
+  value = new contract.EvaluationResult {
+    fields = computedFields
+    requiredInputs = computedRequiredInputs
+    violations = computedViolations
+    helmValues = computedHelmValues
   }
   renderer = new JsonRenderer {}
 }

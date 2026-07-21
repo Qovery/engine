@@ -1,4 +1,9 @@
 fullnameOverride: alloy
+image:
+  registry: public.ecr.aws
+  repository: r3m4q3r9/pub-mirror-alloy
+  tag: v1.17.0
+  digest: sha256:41c41849989b7e054ccbadc17938ee1e5592fe26bfbc56ef3ffc109c0b0b2739
 controller:
   type: daemonset
   priorityClassName: qovery-high-priority

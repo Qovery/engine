@@ -1,6 +1,7 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.validate
 
+import "context.pkl"
 import "contract.pkl"
 import "describe.pkl"
 import "profile.pkl"
@@ -68,7 +69,7 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
   let (storageKey = profile.storage(profileConfig))
   let (backend = storageBackends.find(storageKey))
   let (provider = clusterContext?.getOrNull("provider") as String?)
-  let (mode = clusterContext?.getOrNull("mode") as contract.ClusterMode?)
+  let (mode = clusterContext?.getOrNull("mode") as context.ClusterMode?)
     List(
       if (
         retentionWeeks != null
@@ -106,7 +107,7 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
       // compile. The POC implemented here is intentionally customer-managed first.
       if (
         backend is storage.ObjectStorageBackend
-          && mode == contract.qoveryManagedMode
+          && mode == context.qoveryManagedMode
       )
         new contract.Violation {
           code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
@@ -118,10 +119,7 @@ local function valueViolations(profileConfig: Mapping, clusterContext: Mapping?)
         null,
     ).filterNonNull()
 
-local function storageProviderViolation(
-  storageKey: String?,
-  provider: String?,
-): contract.Violation? =
+local function storageProviderViolation(storageKey: String?, provider: String?): contract.Violation? =
   let (backend = storageBackends.find(storageKey))
     if (backend == null || backend.provider == null || backend.provider == provider)
       null
@@ -130,7 +128,7 @@ local function storageProviderViolation(
 
 local function unsupportedProvider(
   storage: String,
-  expectedProvider: contract.SupportedProvider,
+  expectedProvider: context.SupportedProvider,
   actualProvider: String?,
 ) = new contract.Violation {
   code = "STORAGE_PROVIDER_MISMATCH"
@@ -145,7 +143,7 @@ local function requiredInputViolations(
   clusterContext: Mapping?,
   clusterInputs: Mapping,
 ) =
-  let (mode = clusterContext?.getOrNull("mode") as contract.ClusterMode?)
+  let (mode = clusterContext?.getOrNull("mode") as context.ClusterMode?)
   let (provider = clusterContext?.getOrNull("provider") as String?)
   let (backend = storageBackends.find(profile.storage(profileConfig)))
     if (
@@ -164,18 +162,15 @@ local function requiredInputViolations(
 // missing customer values too would add noise without giving the user another action to take.
 local function shouldValidateRequiredInputs(
   operation: contract.Operation,
-  mode: contract.ClusterMode?,
+  mode: context.ClusterMode?,
 ): Boolean =
   (
     operation == contract.validateOperation
       || operation == contract.compileOperation
   )
-    && mode != contract.qoveryManagedMode
+    && mode != context.qoveryManagedMode
 
-local function backendMatchesProvider(
-  backend: storage.StorageBackend?,
-  provider: String?,
-): Boolean =
+local function backendMatchesProvider(backend: storage.StorageBackend?, provider: String?): Boolean =
   backend != null
     && (backend.provider == null || backend.provider == provider)
 

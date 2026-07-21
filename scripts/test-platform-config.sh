@@ -7,6 +7,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PKL_BIN="${PKL_BIN:-pkl}"
 LOKI_MODEL="$ROOT_DIR/platform-catalog/components/loki/config/runtime-values/model.pkl"
 LOKI_TEST="$ROOT_DIR/platform-catalog/components/loki/tests/runtime-values.test.pkl"
+CLUSTER_AGENT_MODEL="$ROOT_DIR/platform-catalog/components/cluster-agent/config/runtime-values/model.pkl"
 
 command -v "$PKL_BIN" >/dev/null 2>&1 || {
   echo "ERROR: Pkl 0.32 is required (set PKL_BIN to its executable)" >&2
@@ -16,6 +17,8 @@ command -v jq >/dev/null 2>&1 || {
   echo "ERROR: jq is required" >&2
   exit 1
 }
+
+"$ROOT_DIR/scripts/sync-platform-pkl-contract.sh" --check
 
 "$PKL_BIN" test "$LOKI_TEST"
 
@@ -61,6 +64,24 @@ if [[ "$model_count" -eq 0 ]]; then
   echo "ERROR: no executable platform configuration model was found" >&2
   exit 1
 fi
+
+cluster_agent_with_loki_request='{"operation":"COMPILE","componentKey":"cluster-agent","profileConfig":{},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{},"enabledComponents":["cluster-agent","loki"]}'
+cluster_agent_with_loki="$(evaluate "$CLUSTER_AGENT_MODEL" "$cluster_agent_with_loki_request")"
+assert_result "cluster-agent COMPILE with Loki" "$cluster_agent_with_loki" '
+  .fields == [] and
+  .requiredInputs == [] and
+  .violations == [] and
+  .helmValues.environmentVariables.LOKI_URL == "http://loki-gateway.qovery.svc"
+'
+
+cluster_agent_without_loki_request='{"operation":"COMPILE","componentKey":"cluster-agent","profileConfig":{},"clusterContext":{"mode":"CUSTOMER_MANAGED","provider":"AWS"},"clusterInputs":{},"componentOutputs":{},"enabledComponents":["cluster-agent"]}'
+cluster_agent_without_loki="$(evaluate "$CLUSTER_AGENT_MODEL" "$cluster_agent_without_loki_request")"
+assert_result "cluster-agent COMPILE without Loki" "$cluster_agent_without_loki" '
+  .fields == [] and
+  .requiredInputs == [] and
+  .violations == [] and
+  .helmValues.environmentVariables.LOKI_URL == ""
+'
 
 # Component test suites (pkl:test): readable business-rule facts plus golden COMPILE outputs.
 # Expected outputs live next to each suite as *.pkl-expected.pcf; when a model change is

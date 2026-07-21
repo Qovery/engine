@@ -7,6 +7,7 @@ PUBLISH_SCRIPT="$ROOT_DIR/scripts/publish-platform-catalog.sh"
 REGISTRY="public.ecr.aws/r3m4q3r9"
 DIGEST="sha256:$(printf 'a%.0s' {1..64})"
 CATALOG_VERSION="2026-07-20.1"
+TEMPLATE_SOURCE="$ROOT_DIR/platform-catalog/templates/qovery-cluster-v0/template.yaml"
 TEMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TEMP_DIR"' EXIT
 
@@ -28,6 +29,22 @@ assert_missing() {
     fail "$file unexpectedly contains: $unexpected"
   fi
 }
+
+layer_components() {
+  local layer="$1"
+  awk -v layer="$layer" '
+    $0 == "    - key: " layer { in_layer = 1; next }
+    in_layer && /^    - key:/ { exit }
+    in_layer && /^        - key:/ { print $3 }
+  ' "$TEMPLATE_SOURCE" | paste -sd ' ' -
+}
+
+[[ "$(layer_components qovery-stack)" == "cluster-agent shell-agent qovery-priority-class" ]] ||
+  fail "qovery-stack must contain the agents and qovery-priority-class"
+[[ "$(layer_components log-infra)" == "loki alloy" ]] ||
+  fail "log-infra must contain loki and alloy"
+assert_missing "$TEMPLATE_SOURCE" "    - key: cluster-foundation"
+assert_missing "$TEMPLATE_SOURCE" "    - key: log-collector"
 
 write_template_output() {
   local destination="$1"

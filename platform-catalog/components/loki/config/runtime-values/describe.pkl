@@ -1,6 +1,7 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.describe
 
+import "context.pkl"
 import "contract.pkl"
 import "storage/backends.pkl" as storage
 
@@ -24,7 +25,7 @@ local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<Str
     storage.allowedValues
   else
     storage.allowedValuesForContext(
-      clusterContext.getOrNull("mode") as contract.ClusterMode?,
+      clusterContext.getOrNull("mode") as context.ClusterMode?,
       clusterContext.getOrNull("provider") as String?,
     )
 

@@ -1,6 +1,11 @@
 # Source 1 — Qovery-owned base values for the upstream grafana/loki chart, PVC/filesystem
 loki:
   auth_enabled: false
+  image:
+    registry: public.ecr.aws
+    repository: r3m4q3r9/pub-mirror-loki
+    tag: 3.6.7
+    digest: sha256:3c8fd3570dd9219951a60d3f919c7f31923d10baee578b77bc26c4a0b32d092d
   storage:
     type: filesystem
   schemaConfig:
@@ -27,6 +32,11 @@ gateway:
   # Stable cross-component endpoint: the chart routes writes to `loki` in SingleBinary mode and
   # to `loki-write` in SimpleScalable mode.
   enabled: true
+  priorityClassName: qovery-high-priority
+  image:
+    # The Qovery Public ECR registry does not mirror nginx-unprivileged yet. Keep the upstream
+    # image immutable until that repository exists and this source can move with the other images.
+    digest: sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
 lokiCanary:
   enabled: false
 test:

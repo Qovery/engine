@@ -47,8 +47,10 @@ The placeholder must occupy the whole scalar. Defaults, conditions, partial inte
 transformations, conditional inputs, or cross-field validation require a Pkl evaluator directly.
 Do not grow `managed-values.yaml` into a template language.
 
-An evaluator makes the declarative mapping optional. If both are temporarily present, evaluator
-values win; mixing both forms should remain a migration state rather than the normal design.
+An evaluator makes the declarative mapping optional. Both forms may coexist when the declarative
+mapping owns independent direct leaves and the evaluator adds a disjoint conditional fragment;
+document that boundary in the component README. Evaluator values win on overlap, which should stay
+a migration mechanism rather than the normal design.
 
 ## Structure a Pkl evaluator by user action
 
@@ -72,7 +74,7 @@ Recommended evaluator tree:
 ```text
 runtime-values/
   model.pkl                    # request decoding, operation routing, JSON output only
-  contract.pkl                 # response types shared with q-core
+  contract.pkl                 # vendored copy of the canonical q-core/Pkl contract
   describe.pkl                 # fields, defaults and field-level constraints
   requirements.pkl             # conditional logical inputs
   validate.pkl                 # types, cross-field rules and stable violation codes
@@ -84,6 +86,12 @@ runtime-values/
     backends.pkl               # supported instances/capability registry
     helm.pkl                   # domain-specific adaptation to chart values, when needed
 ```
+
+The canonical contract lives in `platform-catalog/pkl/component-contract.pkl`. Every executable
+component keeps a local copy because q-core resolves imports only within that component's
+digest-pinned bundle. Run `./scripts/sync-platform-pkl-contract.sh` after changing the canonical
+file; CI rejects missing or stale copies, and publication injects the canonical file into the
+staged bundle. Component-specific types must stay outside `contract.pkl`.
 
 Split chart-specific low-level adaptation from product intent when it becomes substantial. Loki's
 `storage/helm.pkl` is such an adapter; `compile.pkl` remains readable without knowing every Loki
@@ -116,15 +124,19 @@ chart key.
 5. Declare every runtime input and its input providers in the root template.
 6. Document lifecycle restrictions, secret handling and unsupported cases in the component README.
 7. Add contract fixtures for every operation and important provider/mode combination.
-8. Bump the component bundle version, publish it, and update q-core from the published digest.
+8. Publish the component and activate a catalog snapshot containing its verified digest. During
+   mutable-v0 the version tag may stay unchanged; once tags become immutable, bump the component
+   version and update every root-template reference.
 
 If the component exposes no configurable field, there is no mutation policy to declare yet: keep
 `configSchema` empty and document that boundary. As soon as a field is added, decide its mutation
 policy while authoring it rather than retrofitting the decision after customer exposure.
 
 Cross-layer dependencies belong to the root template's component descriptor. Use `requires` when
-the dependency must be enabled with the component, and `after` when it only constrains ordering if
-both components are enabled. New optional layers must start with `enabledByDefault: false`.
+the dependency must be enabled with the component; it also orders the dependency first. Use `after`
+when ordering is required only if both components are enabled. Keep dependencies between components
+in the same layer: they document runtime requirements and protect future component-level selection.
+New optional layers must start with `enabledByDefault: false`.
 
 For Pkl components, run from the Engine repository root:
 

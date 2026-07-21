@@ -9,6 +9,7 @@ loki/
     runtime-values/
       model.pkl
       contract.pkl
+      context.pkl
       describe.pkl
       requirements.pkl
       validate.pkl
@@ -54,7 +55,8 @@ The table describes the functions that contribute to each response, not a lazy f
 - `storage/inputs.pkl`: logical runtime inputs with their labels, types and constraints;
 - `storage/backends.pkl`: the supported backend instances and provider matrix;
 - `profile.pkl`: defaults and safe type conversion shared by resolve, validate and compile;
-- `contract.pkl`: JSON response types shared with q-core;
+- `contract.pkl`: vendored canonical operation and JSON response types shared with q-core;
+- `context.pkl`: Loki-specific provider and cluster-mode types;
 - `model.pkl`: routing only.
 
 There are two kinds of constraints, kept next to the value they constrain:
@@ -111,6 +113,11 @@ provider-specific and disables Loki data PVCs; local `/var/loki` state uses `emp
 
 The evaluator rejects a storage/provider mismatch. High availability is valid with any of the four
 object-storage values and invalid with `pvc`.
+
+The Loki workload image uses the Qovery `pub-mirror-loki` Public ECR repository and is pinned by
+manifest digest. The gateway's upstream `nginx-unprivileged` image is also digest-pinned; it remains
+on Docker Hub until the corresponding Qovery mirror repository exists. The gateway uses
+`qovery-high-priority`, and the root template requires the PriorityClass component before Loki.
 
 `storage/backends.pkl` is the source of truth for this matrix. Adding a backend starts by declaring
 its provider, Loki object-store identifier, bucket input, customer-input list, and internal

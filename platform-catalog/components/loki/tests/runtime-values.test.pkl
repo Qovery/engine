@@ -5,6 +5,7 @@ amends "pkl:test"
 
 import "../config/runtime-values/compile.pkl"
 import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/context.pkl"
 import "../config/runtime-values/describe.pkl"
 import "../config/runtime-values/requirements.pkl"
 import "../config/runtime-values/storage/backends.pkl" as storageBackends
@@ -12,8 +13,8 @@ import "../config/runtime-values/storage/helm.pkl" as storageHelm
 import "../config/runtime-values/validate.pkl"
 
 local awsContext: Mapping = new Mapping {
-  ["mode"] = contract.customerManagedMode
-  ["provider"] = contract.awsProvider
+  ["mode"] = context.customerManagedMode
+  ["provider"] = context.awsProvider
 }
 
 local s3Profile: Mapping = new Mapping {
@@ -67,7 +68,7 @@ facts {
   ["unsupported q-core providers degrade instead of failing evaluation"] {
     // CloudVendor is an open set: a cluster on OVH, DO, ... must still get the pvc-only catalog.
     describe.fieldsForContext(new Mapping {
-      ["mode"] = contract.customerManagedMode
+      ["mode"] = context.customerManagedMode
       ["provider"] = "OVH"
     })
       .filter((field) -> field.key == "storage")
@@ -76,7 +77,7 @@ facts {
       .allowedValues == List(storageBackends.pvc.key)
     requirements
       .requiredInputs(s3Profile, new Mapping {
-        ["mode"] = contract.customerManagedMode
+        ["mode"] = context.customerManagedMode
         ["provider"] = "OVH"
       })
       .isEmpty
@@ -85,7 +86,7 @@ facts {
         contract.validateOperation,
         s3Profile,
         new Mapping {
-          ["mode"] = contract.customerManagedMode
+          ["mode"] = context.customerManagedMode
           ["provider"] = "OVH"
         },
         new Mapping {},
@@ -100,8 +101,8 @@ facts {
         contract.compileOperation,
         s3Profile,
         new Mapping {
-          ["mode"] = contract.customerManagedMode
-          ["provider"] = contract.gcpProvider
+          ["mode"] = context.customerManagedMode
+          ["provider"] = context.gcpProvider
         },
         new Mapping {},
       )

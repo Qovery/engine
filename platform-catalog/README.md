@@ -28,6 +28,8 @@ platform-catalog/
           model.pkl            # optional Pkl evaluator entrypoint
           ...                  # focused evaluator/domain modules
         README.md              # component-specific reviewer and operations guide
+  pkl/
+    component-contract.pkl     # canonical evaluator response contract
 ```
 
 File semantics (the contract q-core's loader implements):
@@ -60,6 +62,13 @@ It can import only `.pkl` modules from its bundle through q-core's virtual `bund
 import arbitrary filesystem, package, or network modules, and it cannot read environment variables,
 files, or network resources. Only the bundle modules, Pkl standard library, and `prop:request` are
 enabled by q-core.
+
+Each component artifact remains independently pullable and digest-pinned, so it cannot import a
+contract from another artifact. `platform-catalog/pkl/component-contract.pkl` is therefore the
+single source of truth and is vendored as `runtime-values/contract.pkl` in every executable
+component bundle. `./scripts/sync-platform-pkl-contract.sh` refreshes the repository copies,
+`test-platform-config.sh` checks parity, and the publisher injects the canonical file into its
+staging directory before creating the OCI layer.
 
 The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
 production fallback. Once the bundle is pinned, an unavailable or invalid Pkl
@@ -225,8 +234,10 @@ pin by digest — but bump the chart version on content changes, or settle a
   repositories listed under *Root template publication* before its first push. Repositories have no
   lifecycle policy (retention rule: never delete a version a q-core release may still pin).
 - **Tag immutability**: mutable-v0 for now — a version tag may be re-pushed and
-  q-core pins/caches by **digest** only. The immutable-tag guard is kept
-  commented in `scripts/publish-platform-config.sh`, ready to enable.
+  q-core pins/caches by **digest** only. Activating a new complete snapshot therefore re-pins new
+  bundle content even when its version label is unchanged. The immutable-tag guard is kept
+  commented in `scripts/publish-platform-config.sh`, ready to enable; after that transition every
+  content change requires a version bump and updated root-template reference.
 - **Version scheme**: monotonic per component (`v1`, `v2`, …) in `catalog.yaml`.
 - **Source 3 evaluator**: Pkl 0.32 is the first production implementation.
   Alternative languages are reconsidered after the Console vertical (MR-C),

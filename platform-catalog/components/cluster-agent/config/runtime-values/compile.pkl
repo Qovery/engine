@@ -1,0 +1,10 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.clusterAgent.compile
+
+lokiUrl: String = "http://loki-gateway.qovery.svc"
+
+function compile(lokiEnabled: Boolean): Mapping = new Mapping {
+  ["environmentVariables"] = new Mapping {
+    ["LOKI_URL"] = if (lokiEnabled) lokiUrl else ""
+  }
+}
