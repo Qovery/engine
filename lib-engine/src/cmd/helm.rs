@@ -32,6 +32,21 @@ const HELM_DEFAULT_TIMEOUT_IN_SECONDS: u32 = 600;
 const HELM_MAX_HISTORY: &str = "50";
 const ENGINE_POST_RENDERER_BINARY: &str = "engine_post_renderer";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum HelmDiffSecretVisibility {
+    Show,
+    Suppress,
+}
+
+impl HelmDiffSecretVisibility {
+    fn cli_arg(self) -> Option<&'static str> {
+        match self {
+            HelmDiffSecretVisibility::Show => None,
+            HelmDiffSecretVisibility::Suppress => Some("--suppress-secrets"),
+        }
+    }
+}
+
 pub enum Timeout<T> {
     Default,
     Value(T),
@@ -949,6 +964,40 @@ impl Helm {
         envs: &[(&str, &str)],
         stdout_output: &mut impl FnMut(String),
     ) -> Result<(), HelmError> {
+        self.upgrade_diff_with_secret_visibility(
+            chart,
+            envs,
+            HelmDiffSecretVisibility::Show,
+            &CommandKiller::never(),
+            stdout_output,
+        )
+    }
+
+    /// Runs Helm diff without exposing the contents of Kubernetes `Secret` objects.
+    pub fn upgrade_diff_with_secrets_suppressed(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut impl FnMut(String),
+    ) -> Result<(), HelmError> {
+        self.upgrade_diff_with_secret_visibility(
+            chart,
+            envs,
+            HelmDiffSecretVisibility::Suppress,
+            cmd_killer,
+            stdout_output,
+        )
+    }
+
+    fn upgrade_diff_with_secret_visibility(
+        &self,
+        chart: &ChartInfo,
+        envs: &[(&str, &str)],
+        secret_visibility: HelmDiffSecretVisibility,
+        cmd_killer: &CommandKiller,
+        stdout_output: &mut impl FnMut(String),
+    ) -> Result<(), HelmError> {
         let mut args_string: Vec<String> = vec![
             "diff".to_string(),
             "--output".to_string(),
@@ -958,6 +1007,10 @@ impl Helm {
             "--namespace".to_string(),
             chart.get_namespace_string(),
         ];
+
+        if let Some(arg) = secret_visibility.cli_arg() {
+            args_string.push(arg.to_string());
+        }
 
         append_engine_post_renderer_args(&mut args_string, chart);
 
@@ -1020,7 +1073,7 @@ impl Helm {
                 stderr_msg.push_str(&line);
                 warn!("chart {}: {}", chart.name, line);
             },
-            &CommandKiller::never(),
+            cmd_killer,
         );
 
         match helm_ret {
@@ -2087,6 +2140,17 @@ impl Drop for HelmRegistry<'_> {
         if let Err(err) = helm_ret {
             error!("Helm logout error: {:?}", err);
         };
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use super::HelmDiffSecretVisibility;
+
+    #[test]
+    fn helm_diff_secret_visibility_maps_to_expected_cli_flag() {
+        assert_eq!(HelmDiffSecretVisibility::Show.cli_arg(), None);
+        assert_eq!(HelmDiffSecretVisibility::Suppress.cli_arg(), Some("--suppress-secrets"));
     }
 }
 
