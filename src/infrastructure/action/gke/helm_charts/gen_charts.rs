@@ -446,7 +446,9 @@ pub(super) fn gke_helm_charts(
         .k8s_deploy_api_gateway
         .unwrap_or(false)
     {
-        // GKE autopilot already have support for Gateway API, no need to deploy it
+        // GKE ships core Gateway API CRDs, but cert-manager 1.20 now requires the ListenerSet
+        // CRD when Gateway API is the default rollout mode. That CRD is provided by our
+        // envoy-gateway-crd chart, so we must install/update the Gateway API bundle here too.
         envoy_gateway_crd = Some(
             EnvoyGatewayCrdChart::new(chart_prefix_path, HelmChartDirectoryLocation::CommonFolder, true, true)
                 .to_common_helm_chart()?,

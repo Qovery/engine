@@ -600,6 +600,8 @@ fn deploy_a_working_environment_with_domain() {
                 .find(|port| port.is_default && port.protocol == Protocol::HTTP)
                 .expect("default HTTP port should exist");
             default_http_port.path = Some("/(.*)".to_string());
+            // Ingress rewrite-target annotations use nginx capture syntax (`$1`), so the
+            // test should configure the same form the ingress renderer preserves.
             default_http_port.path_rewrite = Some("/public/$1".to_string());
             modified_environment.applications.push(application);
         }

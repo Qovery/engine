@@ -61,6 +61,10 @@ impl ToCommonHelmChart for EnvoyGatewayCrdChart {
                     value: self.include_gateway_api_crds.to_string(),
                 },
                 ChartSetValue {
+                    key: "crds.gatewayAPI.channel".to_string(),
+                    value: "standard".to_string(),
+                },
+                ChartSetValue {
                     key: "crds.envoyGateway.enabled".to_string(),
                     value: self.include_envoy_proxy_crds.to_string(),
                 },
@@ -102,6 +106,7 @@ impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
             "gatewayclasses.gateway.networking.k8s.io",
             "gateways.gateway.networking.k8s.io",
             "httproutes.gateway.networking.k8s.io",
+            "listenersets.gateway.networking.k8s.io",
         ];
 
         let envoy_crds = [
@@ -185,18 +190,7 @@ impl ChartInstallationChecker for EnvoyGatewayCrdChartChecker {
 pub struct RemoveGatewayApiValidatingAdmissionPolicyAction;
 
 impl ChartPreExecuteAction for RemoveGatewayApiValidatingAdmissionPolicyAction {
-    fn execute(&self, kubernetes_config: &Path, envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
-        use crate::cmd::kubectl::kubectl_delete_validating_admission_policy;
-
-        // `kubectl_delete_validating_admission_policy` takes `envs` by value; clone the vector
-        // to reuse it for the second deletion call.
-        kubectl_delete_validating_admission_policy(
-            kubernetes_config,
-            "safe-upgrades.gateway.networking.k8s.io",
-            envs.clone(),
-        )?;
-        kubectl_delete_validating_admission_policy(kubernetes_config, "enforce-gateway-standard-channel", envs)?;
-
+    fn execute(&self, _kubernetes_config: &Path, _envs: Vec<(&str, &str)>) -> Result<(), CommandError> {
         Ok(())
     }
 

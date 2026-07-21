@@ -488,7 +488,12 @@ pub fn deploy_parallel_charts_with_retry(
             deploy_charts_once(kube_client, kubernetes_config, envs, charts_to_retry, cmd_killer);
 
         // Add newly succeeded charts to the overall succeeded list
-        succeeded.extend(attempt_succeeded);
+        for chart_name in attempt_succeeded {
+            // A chart can fail on an earlier attempt and succeed on a later retry.
+            // Remove any recorded failures so the final result reflects the last outcome.
+            failures.remove(&chart_name);
+            succeeded.push(chart_name);
+        }
 
         // If no failures, we're done
         if attempt_failed.is_empty() {

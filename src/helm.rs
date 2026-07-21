@@ -448,6 +448,9 @@ pub struct ChartInfo {
     pub k8s_selector: Option<String>,
     pub backup_resources: Option<Vec<String>>,
     pub crds_update: Option<CRDSUpdate>,
+    /// Skip installing chart-bundled CRDs with Helm.
+    /// Use this when CRDs are managed by a separate chart or workflow.
+    pub skip_crds: bool,
     pub skip_if_already_installed: bool,
     pub upgrade_retry: Option<ChartInfoUpgradeRetry>,
     /// This option to execute the chart server side apply instead of client side apply
@@ -539,6 +542,7 @@ impl Default for ChartInfo {
             k8s_selector: None,
             backup_resources: None,
             crds_update: None,
+            skip_crds: false,
             skip_if_already_installed: false,
             upgrade_retry: None,
             requires_server_side_apply: false,
