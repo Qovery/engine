@@ -12,6 +12,8 @@ use crate::services::kube_client::GatewayClass;
 use kube::Api;
 use kube::core::params::ListParams;
 use kube::core::{Expression, Selector};
+use retry::delay::Fixed;
+use retry::{OperationResult, retry};
 use std::collections::HashSet;
 
 pub struct QoveryGatewayClassChart {
@@ -218,31 +220,39 @@ impl ChartInstallationChecker for QoveryGatewayClassChartInstallationChecker {
             )
             .into();
 
-            match block_on(gateway_classes.list(&ListParams::default().labels_from(&selector))) {
-                Ok(gateway_classes_result) => {
-                    let installed_gateway_classes: HashSet<String, std::collections::hash_map::RandomState> =
-                        HashSet::from_iter(
-                            gateway_classes_result
-                                .items
-                                .into_iter()
-                                .filter_map(|item| item.metadata.name.map(|name| name.to_lowercase())),
-                        );
-                    for required_gateway_class in self.gateway_classes_to_be_checked_after_install.iter() {
-                        if !installed_gateway_classes.contains(&required_gateway_class.to_string().to_lowercase()) {
-                            return Err(CommandError::new_from_safe_message(format!(
-                                "Error: q-gateway-class (metadata.name={required_gateway_class}) is not set"
-                            )));
+            let result = retry(Fixed::from_millis(5_000).take(24), || {
+                match block_on(gateway_classes.list(&ListParams::default().labels_from(&selector))) {
+                    Ok(gateway_classes_result) => {
+                        let installed_gateway_classes: HashSet<String, std::collections::hash_map::RandomState> =
+                            HashSet::from_iter(
+                                gateway_classes_result
+                                    .items
+                                    .into_iter()
+                                    .filter_map(|item| item.metadata.name.map(|name| name.to_lowercase())),
+                            );
+
+                        for required_gateway_class in &self.gateway_classes_to_be_checked_after_install {
+                            if !installed_gateway_classes.contains(&required_gateway_class.to_string().to_lowercase()) {
+                                return OperationResult::Retry(CommandError::new_from_safe_message(format!(
+                                    "Waiting for q-gateway-class (metadata.name={required_gateway_class}) to be created"
+                                )));
+                            }
                         }
+
+                        OperationResult::Ok(())
                     }
-                }
-                Err(e) => {
-                    return Err(CommandError::new(
-                        format!("Error trying to get q-gateway-class ({selector})",),
+                    Err(e) => OperationResult::Retry(CommandError::new(
+                        format!("Error trying to get q-gateway-class ({selector})"),
                         Some(e.to_string()),
                         None,
-                    ));
+                    )),
                 }
-            }
+            });
+
+            match result {
+                Ok(_) => {}
+                Err(retry::Error { error, .. }) => return Err(error),
+            };
         }
 
         Ok(())

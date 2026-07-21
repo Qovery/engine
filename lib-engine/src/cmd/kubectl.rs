@@ -6,7 +6,6 @@ use kube::api::{ApiResource, DeleteParams, Patch, PatchParams, PropagationPolicy
 use kube::core::GroupVersionKind;
 use kube::core::params::ListParams;
 use kube::{Api, Client, ResourceExt};
-use retry::{OperationResult, delay::Fixed};
 use semver::Version;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -896,99 +895,6 @@ where
     kubectl_apply_with_server_side_apply(kubernetes_config.as_ref(), envs, None, binding_yaml, true)
 }
 
-pub fn kubectl_delete_validating_admission_policy<P>(
-    kubernetes_config: P,
-    policy_name: &str,
-    envs: Vec<(&str, &str)>,
-) -> Result<String, CommandError>
-where
-    P: AsRef<Path>,
-{
-    info!("Deleting ValidatingAdmissionPolicy: {}", policy_name);
-
-    // Try deleting binding with both naming conventions:
-    // - Same name as policy (upstream Gateway API convention, e.g. "safe-upgrades.gateway.networking.k8s.io")
-    // - Policy name with "-binding" suffix (GKE convention, e.g. "enforce-gateway-standard-channel-binding")
-    let binding_with_suffix = format!("{}-binding", policy_name);
-    for binding_name in [policy_name, binding_with_suffix.as_str()] {
-        let binding_cmd_args = vec![
-            "delete",
-            "validatingadmissionpolicybinding",
-            binding_name,
-            "--ignore-not-found=true",
-        ];
-        match kubectl_exec_raw_output(binding_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-            Ok(output) => info!("Deleted ValidatingAdmissionPolicyBinding {}: {}", binding_name, output),
-            Err(e) => warn!("Failed to delete ValidatingAdmissionPolicyBinding {}: {:?}", binding_name, e),
-        }
-    }
-
-    let policy_cmd_args = vec![
-        "delete",
-        "validatingadmissionpolicy",
-        policy_name,
-        "--ignore-not-found=true",
-    ];
-    let result = kubectl_exec_raw_output(policy_cmd_args, kubernetes_config.as_ref(), envs.clone(), false);
-    match &result {
-        Ok(output) => info!("Deleted ValidatingAdmissionPolicy {}: {}", policy_name, output),
-        Err(e) => warn!("Failed to delete ValidatingAdmissionPolicy {}: {:?}", policy_name, e),
-    }
-
-    // Verify both the policy and binding are fully deleted
-    for (resource_kind, resource_name) in [
-        ("validatingadmissionpolicy", policy_name),
-        ("validatingadmissionpolicybinding", policy_name),
-        ("validatingadmissionpolicybinding", binding_with_suffix.as_str()),
-    ] {
-        info!("Verifying {} {} is fully deleted", resource_kind, resource_name);
-        let verify_result = retry::retry(Fixed::from(Duration::from_secs(3)).take(20), || {
-            let get_cmd_args = vec!["get", resource_kind, resource_name, "--ignore-not-found=true"];
-            match kubectl_exec_raw_output(get_cmd_args, kubernetes_config.as_ref(), envs.clone(), false) {
-                Ok(output) if output.trim().is_empty() => {
-                    info!("{} {} no longer exists", resource_kind, resource_name);
-                    OperationResult::Ok(())
-                }
-                Ok(output) => {
-                    // Resource still exists — attempt deletion again before retrying verification
-                    warn!("{} {} still exists, re-deleting and retrying...", resource_kind, resource_name);
-                    let del_args = vec!["delete", resource_kind, resource_name, "--ignore-not-found=true"];
-                    let _ = kubectl_exec_raw_output(del_args, kubernetes_config.as_ref(), envs.clone(), false);
-                    OperationResult::Retry(format!("{} {} still exists: {}", resource_kind, resource_name, output))
-                }
-                Err(e) => {
-                    let msg = e.message_safe();
-                    if msg.contains("not found") || msg.contains("NotFound") {
-                        info!("{} {} confirmed deleted (NotFound)", resource_kind, resource_name);
-                        OperationResult::Ok(())
-                    } else {
-                        warn!("Failed to verify {} {}, retrying: {:?}", resource_kind, resource_name, e);
-                        OperationResult::Retry(format!("Failed to verify {} {}: {:?}", resource_kind, resource_name, e))
-                    }
-                }
-            }
-        });
-
-        match verify_result {
-            Ok(_) => {
-                info!("Verified {} {} is fully deleted", resource_kind, resource_name);
-            }
-            Err(retry::Error { error, .. }) => {
-                return Err(CommandError::new(
-                    format!("Failed to verify {} {} deletion after 60 seconds", resource_kind, resource_name),
-                    Some(error),
-                    Some(envs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()),
-                ));
-            }
-        }
-    }
-
-    info!("Waiting additional 5 seconds for API server cache propagation...");
-    thread::sleep(Duration::from_secs(5));
-    info!("Proceeding with CRD installation");
-    result
-}
-
 pub fn kubectl_does_crd_exist(kube_client: &Client, crd_name: &str) -> bool {
     let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
 
@@ -1062,9 +968,7 @@ pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
     // ListenerSet was introduced as a standard resource in Gateway API >= 1.8.0.
     // Only require it when the installed bundle version is >= 1.8.0; older installs
     // (e.g. the version GKE ships) don't have it and should still be considered valid
-    // for core Gateway API usage. Also note that some Gateway implementations (e.g. GKE)
-    // don't support `allowedListeners.namespaces.from: All`, so ListenerSet attachments
-    // can be rejected even when the CRD exists.
+    // for core Gateway API usage.
     let min_listenerset_version = Version::new(1, 8, 0);
     match kubectl_get_gateway_api_bundle_version(kube_client) {
         Some(v) if v >= min_listenerset_version => {
@@ -1086,60 +990,6 @@ pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
 
     info!("All required Gateway API CRDs are available and established");
     true
-}
-
-/// Returns true if ListenerSet resources should be deployed based on the installed Gateway API
-/// bundle version and CRD availability. For unknown bundle versions, only deploy when the CRD
-/// actually exists to avoid apply failures on older installs.
-pub fn kubectl_should_deploy_listenerset(kube_client: &Client) -> bool {
-    kubectl_does_crd_exist(kube_client, "listenersets.gateway.networking.k8s.io")
-}
-
-/// Returns true if the Gateway CRD schema exposes the `allowedListeners` field.
-pub fn kubectl_gateway_crd_supports_allowed_listeners(kube_client: &Client) -> bool {
-    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
-    let crd = match block_on(crds.get("gateways.gateway.networking.k8s.io")) {
-        Ok(crd) => crd,
-        Err(e) => {
-            debug!("Could not fetch Gateway CRD to check allowedListeners support: {}", e);
-            return false;
-        }
-    };
-
-    let Ok(crd_value) = serde_json::to_value(&crd) else {
-        debug!("Could not serialize Gateway CRD to inspect schema");
-        return false;
-    };
-
-    let versions = crd_value
-        .get("spec")
-        .and_then(|v| v.get("versions"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    for version in versions {
-        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
-        if !served {
-            continue;
-        }
-        let allowed_listeners = version
-            .get("schema")
-            .and_then(|v| v.get("openAPIV3Schema"))
-            .and_then(|v| v.get("properties"))
-            .and_then(|v| v.get("spec"))
-            .and_then(|v| v.get("properties"))
-            .and_then(|v| v.get("listeners"))
-            .and_then(|v| v.get("items"))
-            .and_then(|v| v.get("properties"))
-            .and_then(|v| v.get("allowedListeners"));
-
-        if allowed_listeners.is_some() {
-            return true;
-        }
-    }
-
-    false
 }
 
 /// Returns the preferred served Gateway API version for the Gateway CRD (e.g. "v1" or "v1beta1").

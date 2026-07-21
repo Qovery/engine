@@ -1008,10 +1008,7 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
-        if let Some(arg) = secret_visibility.cli_arg() {
-            args_string.push(arg.to_string());
-        }
-
+        append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
 
         for value in &chart.values {
@@ -1132,6 +1129,7 @@ impl Helm {
             args_string.push("--wait".to_string())
         }
 
+        append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
 
         // overrides and files overrides
@@ -1300,6 +1298,7 @@ impl Helm {
             args_string.push("--wait".to_string())
         }
 
+        append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
 
         // overrides and files overrides
@@ -1901,6 +1900,8 @@ impl Helm {
         let mut output = String::new();
         let mut args_string: Vec<String> = vec!["template".to_string(), chart.name.to_string(), chart_path.to_string()];
 
+        append_skip_crds_arg(&mut args_string, chart);
+
         for value in &chart.values {
             args_string.push("--set".to_string());
             args_string.push(format!("{}={}", value.key, value.value));
@@ -1967,6 +1968,12 @@ fn append_engine_post_renderer_args(args: &mut Vec<String>, chart: &ChartInfo) {
 
     args.push("--post-renderer".to_string());
     args.push(post_renderer_path);
+}
+
+fn append_skip_crds_arg(args: &mut Vec<String>, chart: &ChartInfo) {
+    if chart.skip_crds {
+        args.push("--skip-crds".to_string());
+    }
 }
 
 fn helm_exec_with_output<STDOUT, STDERR>(

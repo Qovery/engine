@@ -83,6 +83,10 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
             path: self.chart_path.to_string(),
             namespace: self.namespace.clone(),
             values_files: vec![self.chart_values_path.to_string()],
+            // Gateway API and Envoy Gateway CRDs are installed by the dedicated CRD chart first.
+            // Passing --skip-crds here prevents the controller chart from reapplying bundled CRDs,
+            // which GKE rejects when it enforces the standard Gateway API channel.
+            skip_crds: true,
             values: vec![
                 // resources limits
                 ChartSetValue {
