@@ -134,6 +134,7 @@ pub fn working_environment(
         databases: vec![],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };
@@ -507,6 +508,7 @@ pub fn environment_2_app_2_routers_1_psql(
         max_parallel_deploy: 1,
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -636,6 +638,7 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         databases: vec![],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -750,6 +753,7 @@ pub fn environment_only_http_server(
         databases: vec![],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };

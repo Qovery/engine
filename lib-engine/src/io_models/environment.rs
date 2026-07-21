@@ -1,3 +1,4 @@
+use crate::environment::models::agentic_workflow::{AgenticWorkflowError, AgenticWorkflowService};
 use crate::environment::models::application::{ApplicationError, ApplicationService};
 use crate::environment::models::container::{ContainerError, ContainerService};
 use crate::environment::models::database::{DatabaseError, DatabaseService};
@@ -9,6 +10,7 @@ use crate::environment::models::terraform_service::{TerraformServiceError, Terra
 use crate::infrastructure::models::cloud_provider::CloudProvider;
 use crate::infrastructure::models::container_registry::InteractWithRegistry;
 use crate::infrastructure::models::kubernetes::Kubernetes;
+use crate::io_models::agentic_workflow::AgenticWorkflow;
 use crate::io_models::annotations_group::AnnotationsGroup;
 use crate::io_models::application::Application;
 use crate::io_models::container::Container;
@@ -49,6 +51,8 @@ pub struct EnvironmentRequest {
     pub helms: Vec<HelmChart>,
     #[serde(default)]
     pub terraform_services: Vec<TerraformService>,
+    #[serde(default)]
+    pub agentic_workflows: Vec<AgenticWorkflow>,
     #[serde(default = "default_annotations_groups")]
     pub annotations_groups: BTreeMap<Uuid, AnnotationsGroup>,
     #[serde(default = "default_labels_groups")]
@@ -128,6 +132,8 @@ pub enum DomainError {
     HelmChartError(#[from] HelmChartError),
     #[error("Invalid terraform service: {0}")]
     TerraformServiceError(#[from] TerraformServiceError),
+    #[error("Invalid agentic workflow: {0}")]
+    AgenticWorkflowError(#[from] AgenticWorkflowError),
 }
 
 impl EnvironmentRequest {
@@ -348,6 +354,14 @@ impl EnvironmentRequest {
             .collect();
         let terraform_services = terraform_services?;
 
+        let agentic_workflows: Result<Vec<Box<dyn AgenticWorkflowService>>, AgenticWorkflowError> = self
+            .agentic_workflows
+            .iter()
+            .cloned()
+            .map(|agentic_workflow| agentic_workflow.to_agentic_workflow_domain(context))
+            .collect();
+        let agentic_workflows = agentic_workflows?;
+
         Ok(Environment::new(
             self.long_id,
             self.name.clone(),
@@ -365,6 +379,7 @@ impl EnvironmentRequest {
             jobs,
             helm_charts,
             terraform_services,
+            agentic_workflows,
         ))
     }
 }

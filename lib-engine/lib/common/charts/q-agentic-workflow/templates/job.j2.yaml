@@ -1,0 +1,45 @@
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ service.kube_name }}
+  labels:
+    qovery.com/service-id: "{{ service.long_id }}"
+    qovery.com/service-type: "agentic-workflow"
+    qovery.com/environment-id: "{{ environment_long_id }}"
+    qovery.com/project-id: "{{ project_long_id }}"
+    qovery.com/deployment-id: "{{ deployment_id }}"
+    app.kubernetes.io/name: "{{ service.kube_name }}"
+    app.kubernetes.io/instance: "{{ service.long_id }}"
+    app.kubernetes.io/component: "agentic-workflow"
+    app.kubernetes.io/part-of: "{{ namespace }}"
+    app.kubernetes.io/managed-by: "qovery"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        qovery.com/service-id: "{{ service.long_id }}"
+        qovery.com/service-type: "agentic-workflow"
+        qovery.com/environment-id: "{{ environment_long_id }}"
+        qovery.com/project-id: "{{ project_long_id }}"
+        qovery.com/deployment-id: "{{ deployment_id }}"
+        app.kubernetes.io/name: "{{ service.kube_name }}"
+        app.kubernetes.io/instance: "{{ service.long_id }}"
+        app.kubernetes.io/component: "agentic-workflow"
+        app.kubernetes.io/part-of: "{{ namespace }}"
+        app.kubernetes.io/managed-by: "qovery"
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: {{ service.kube_name }}
+          image: public.ecr.aws/docker/library/busybox:stable
+          command: ["sh", "-c", "echo hello world"]
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"

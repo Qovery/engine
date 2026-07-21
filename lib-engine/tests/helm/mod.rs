@@ -165,6 +165,7 @@ fn test_environment(kube: &dyn Kubernetes, domain: &str) -> Environment {
         vec![Box::new(test_job(kube))],
         vec![], // TODO (helm): add helm charts test
         vec![],
+        vec![],
     )
 }
 
@@ -1060,6 +1061,7 @@ pub fn application_context_with_ndots(ndots: u8) -> TestInfo {
         vec![],
         vec![],
         vec![],
+        vec![],
     );
     let target = deployment_target(&test_env, &infra_ctx);
     let temp_dir = format!(
@@ -1264,6 +1266,7 @@ pub fn container_context_with_ndots(ndots: u8) -> TestInfo {
         1,
         vec![],
         vec![Box::new(container)],
+        vec![],
         vec![],
         vec![],
         vec![],
@@ -1487,6 +1490,7 @@ pub fn job_context_with_ndots(ndots: u8) -> TestInfo {
         vec![],
         vec![],
         vec![Box::new(job)],
+        vec![],
         vec![],
         vec![],
     );

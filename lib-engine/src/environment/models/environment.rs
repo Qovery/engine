@@ -3,6 +3,7 @@ use crate::infrastructure::models::cloud_provider::service::Action;
 use crate::events::{EnvironmentStep, EventDetails, Stage, Transmitter};
 use crate::io_models::context::Context;
 
+use crate::environment::models::agentic_workflow::AgenticWorkflowService;
 use crate::environment::models::application::ApplicationService;
 use crate::environment::models::container::ContainerService;
 use crate::environment::models::database::DatabaseService;
@@ -33,6 +34,7 @@ pub struct Environment {
     pub jobs: Vec<Box<dyn JobService>>,
     pub helm_charts: Vec<Box<dyn HelmChartService>>,
     pub terraform_services: Vec<Box<dyn TerraformServiceTrait>>,
+    pub agentic_workflows: Vec<Box<dyn AgenticWorkflowService>>,
 }
 
 impl Environment {
@@ -53,6 +55,7 @@ impl Environment {
         jobs: Vec<Box<dyn JobService>>,
         helm_charts: Vec<Box<dyn HelmChartService>>,
         terraform_services: Vec<Box<dyn TerraformServiceTrait>>,
+        agentic_workflows: Vec<Box<dyn AgenticWorkflowService>>,
     ) -> Self {
         let project_id = to_short_id(&project_long_id);
         let env_id = to_short_id(&long_id);
@@ -81,6 +84,7 @@ impl Environment {
             jobs,
             helm_charts,
             terraform_services,
+            agentic_workflows,
         }
     }
 
