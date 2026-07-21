@@ -5,6 +5,7 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
 
+pub mod agentic_workflow;
 pub mod application;
 pub mod database;
 pub mod helm_chart;

@@ -3,6 +3,7 @@ use crate::infrastructure::models::cloud_provider::DeploymentTarget;
 use crate::infrastructure::models::cloud_provider::service::Action;
 
 mod check_dns;
+mod deploy_agentic_workflow;
 mod deploy_application;
 mod deploy_container;
 mod deploy_database;

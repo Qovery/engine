@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use uuid::Uuid;
 
+pub mod agentic_workflow;
 pub mod annotations_group;
 pub mod application;
 mod azure;

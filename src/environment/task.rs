@@ -383,7 +383,8 @@ impl EnvironmentTask {
             .chain(environment.databases.iter().map(|x| x.as_service()))
             .chain(environment.jobs.iter().map(|x| x.as_service()))
             .chain(environment.helm_charts.iter().map(|x| x.as_service()))
-            .chain(environment.terraform_services.iter().map(|x| x.as_service()));
+            .chain(environment.terraform_services.iter().map(|x| x.as_service()))
+            .chain(environment.agentic_workflows.iter().map(|x| x.as_service()));
 
         for service in services {
             if deployed_services.contains(service.long_id()) {
@@ -571,7 +572,8 @@ impl Task for EnvironmentTask {
             .chain(environment.databases.iter().map(|x| x.as_service().long_id()))
             .chain(environment.jobs.iter().map(|x| x.as_service().long_id()))
             .chain(environment.helm_charts.iter().map(|x| x.as_service().long_id()))
-            .chain(environment.terraform_services.iter().map(|x| x.as_service().long_id()));
+            .chain(environment.terraform_services.iter().map(|x| x.as_service().long_id()))
+            .chain(environment.agentic_workflows.iter().map(|x| x.as_service().long_id()));
 
         let record = metrics_registry.start_record(environment.long_id, StepLabel::Environment, StepName::Total);
         let service_records: Vec<StepRecordHandle> = service_ids

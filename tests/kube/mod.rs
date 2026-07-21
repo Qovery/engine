@@ -74,6 +74,7 @@ pub fn kube_test_env(options: TestEnvOption) -> (InfrastructureContext, Environm
         databases: vec![],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     };

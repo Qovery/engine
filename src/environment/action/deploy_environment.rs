@@ -85,6 +85,12 @@ impl<'a> EnvironmentDeployment<'a> {
                     .iter()
                     .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
             )
+            .chain(
+                environment
+                    .agentic_workflows
+                    .iter()
+                    .map(|s| (*s.long_id(), s.as_deployment_action(), *s.action())),
+            )
     }
 
     fn services_routers_iter(

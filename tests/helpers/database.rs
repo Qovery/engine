@@ -569,6 +569,7 @@ pub fn environment_3_apps_3_databases(
         ],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -635,6 +636,7 @@ pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
         databases: vec![],
         helms: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
     }
@@ -700,6 +702,7 @@ pub fn database_test_environment_on_upgrade(context: &Context) -> EnvironmentReq
         routers: vec![],
         databases: vec![],
         terraform_services: vec![],
+        agentic_workflows: vec![],
         helms: vec![],
         annotations_groups: btreemap! {},
         labels_groups: btreemap! {},
