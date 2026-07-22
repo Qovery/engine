@@ -1,4 +1,4 @@
-use crate::cmd::kubectl::kubectl_check_gateway_api_crds_available;
+use crate::cmd::kubectl::{kubectl_check_gateway_api_crds_available, kubectl_should_deploy_listenerset};
 use crate::environment::action::DeploymentAction;
 use crate::environment::models::annotations_group::AnnotationsGroupTeraContext;
 use crate::environment::models::labels_group::LabelsGroupTeraContext;
@@ -513,8 +513,12 @@ impl<T: CloudProvider> Router<T> {
         context.insert("spec_acme_server", lets_encrypt_url);
 
         let gateway_api_crds_available = kubectl_check_gateway_api_crds_available(&target.kube.client());
-        let deploy_listenerset =
-            kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false) && gateway_api_crds_available;
+        // Keep ListenerSet deployment gated by actual ListenerSet CRD availability.
+        // This avoids assuming managed GKE has fully working ListenerSet attachment semantics
+        // just because the core Gateway API CRDs are present.
+        let deploy_listenerset = kubernetes.advanced_settings().k8s_deploy_api_gateway.unwrap_or(false)
+            && gateway_api_crds_available
+            && kubectl_should_deploy_listenerset(&target.kube.client());
 
         let resolved_gateway_api_policy_settings = resolve_gateway_api_backend_traffic_policy_settings(
             &service_gateway_api_policy_settings,
