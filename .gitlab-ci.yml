@@ -187,8 +187,6 @@ default:
 .paths-platform-config:
   paths:
     - .gitlab-ci.yml
-    - Cargo.lock
-    - Cargo.toml
     - Dockerfile
     - lib-engine/lib/common/bootstrap/charts/**/*
     - platform-catalog/**/*
@@ -997,7 +995,7 @@ test-platform-config:
   cache:
     key:
       files:
-        - Cargo.lock
+        - tools/platform-catalog-tests/Cargo.lock
       prefix: platform-catalog-tests
     paths:
       - .cargo/registry/index/
@@ -1009,7 +1007,9 @@ test-platform-config:
     - bash ./scripts/install-pkl.sh
   script:
     - ./scripts/test-platform-config.sh
-    - cargo test -p platform-catalog-tests
+    - cargo fmt --manifest-path tools/platform-catalog-tests/Cargo.toml -- --check
+    - cargo clippy --manifest-path tools/platform-catalog-tests/Cargo.toml --all-targets --locked -- -D warnings
+    - cargo test --manifest-path tools/platform-catalog-tests/Cargo.toml --locked
   tags:
     - k8s-runner
   rules:

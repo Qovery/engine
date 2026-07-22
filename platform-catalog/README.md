@@ -38,7 +38,7 @@ The catalog graph, bundle publication staging, publication failure modes, and re
 manifests are tested by the dedicated Rust crate in `tools/platform-catalog-tests`. Run it with:
 
 ```bash
-cargo test -p platform-catalog-tests
+cargo test --manifest-path tools/platform-catalog-tests/Cargo.toml --all-features
 ```
 
 File semantics (the contract q-core's loader implements):

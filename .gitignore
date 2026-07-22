@@ -1,4 +1,5 @@
 /target
+/tools/platform-catalog-tests/target/
 qovery-engine/Cargo.lock
 docker/ci/bin_versions
 docker/ci/load.sh
