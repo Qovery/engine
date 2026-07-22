@@ -1014,6 +1014,9 @@ impl Helm {
 
         append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
+        if let Some(secret_visibility_arg) = secret_visibility.cli_arg() {
+            args_string.push(secret_visibility_arg.to_string());
+        }
 
         for value in &chart.values {
             args_string.push("--set".to_string());

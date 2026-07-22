@@ -992,6 +992,72 @@ pub fn kubectl_check_gateway_api_crds_available(kube_client: &Client) -> bool {
     true
 }
 
+/// Returns true if ListenerSet resources should be deployed based on the installed Gateway API
+/// bundle version and CRD availability.
+///
+/// Why this exists:
+/// During the envoy-gateway 1.8 rollout, some managed GKE clusters exposed enough Gateway API
+/// surface to enable the stack while still not supporting ListenerSet attachment end-to-end.
+/// Requiring the ListenerSet CRD itself keeps the feature gate aligned with the live cluster
+/// instead of assuming bundle detection is always reliable.
+pub fn kubectl_should_deploy_listenerset(kube_client: &Client) -> bool {
+    kubectl_does_crd_exist(kube_client, "listenersets.gateway.networking.k8s.io")
+}
+
+/// Returns true if the Gateway CRD schema exposes the `allowedListeners` field.
+///
+/// Why this matters:
+/// Cross-namespace ListenerSet attachment depends on the parent Gateway accepting the
+/// `spec.listeners[*].allowedListeners` field. Some managed GKE clusters lag here even when
+/// other Gateway API CRDs are present, so callers use this to decide whether to rely on
+/// ListenerSet attachment or fall back to direct Gateway TLS secret references.
+pub fn kubectl_gateway_crd_supports_allowed_listeners(kube_client: &Client) -> bool {
+    let crds: Api<CustomResourceDefinition> = Api::all(kube_client.clone());
+    let crd = match block_on(crds.get("gateways.gateway.networking.k8s.io")) {
+        Ok(crd) => crd,
+        Err(e) => {
+            debug!("Could not fetch Gateway CRD to check allowedListeners support: {}", e);
+            return false;
+        }
+    };
+
+    let Ok(crd_value) = serde_json::to_value(&crd) else {
+        debug!("Could not serialize Gateway CRD to inspect schema");
+        return false;
+    };
+
+    let versions = crd_value
+        .get("spec")
+        .and_then(|v| v.get("versions"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    for version in versions {
+        let served = version.get("served").and_then(Value::as_bool).unwrap_or(false);
+        if !served {
+            continue;
+        }
+
+        let allowed_listeners = version
+            .get("schema")
+            .and_then(|v| v.get("openAPIV3Schema"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("spec"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("listeners"))
+            .and_then(|v| v.get("items"))
+            .and_then(|v| v.get("properties"))
+            .and_then(|v| v.get("allowedListeners"));
+
+        if allowed_listeners.is_some() {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Returns the preferred served Gateway API version for the Gateway CRD (e.g. "v1" or "v1beta1").
 /// Prefers v1 if served, otherwise falls back to v1beta1, or the first served version if any.
 pub fn kubectl_get_gateway_api_served_version(kube_client: &Client) -> Option<String> {
