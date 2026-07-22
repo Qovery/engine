@@ -1,0 +1,46 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.evaluation
+
+import "compile.pkl"
+import "contract.pkl"
+import "describe.pkl"
+import "profile.pkl"
+import "requirements.pkl"
+import "validate.pkl"
+
+// Pure orchestration entrypoint shared by model.pkl and the native Pkl tests. Keeping request
+// decoding and JSON rendering outside this function lets the tests exercise the exact catalogue
+// path used by q-core without spawning Pkl once per assertion.
+function evaluate(request: Mapping): contract.EvaluationResult =
+  let (operation = request["operation"] as contract.Operation)
+  let (profileConfig = request["profileConfig"] as Mapping)
+  let (clusterContext = request["clusterContext"] as Mapping?)
+  let (clusterInputs = request["clusterInputs"] as Mapping)
+  let (
+    computedViolations =
+      validate.violations(operation, profileConfig, clusterContext, clusterInputs)
+  )
+    new contract.EvaluationResult {
+      fields =
+        describe.fieldsFor(
+          operation,
+          clusterContext,
+          profile.resourceProfile(profileConfig),
+          profile.highAvailability(profileConfig) == true,
+        )
+      requiredInputs =
+        if (operation == contract.describeOperation)
+          List()
+        else
+          requirements.requiredInputs(profileConfig, clusterContext)
+      violations = computedViolations
+
+      // Invalid inputs never produce partial Helm values. q-core treats a missing
+      // helmValues on a valid COMPILE request as a hard error, so this remains
+      // fail-closed on both sides of the contract.
+      helmValues =
+        if (operation == contract.compileOperation && computedViolations.isEmpty)
+          compile.compile(profileConfig, clusterInputs)
+        else
+          null
+    }

@@ -1,0 +1,21 @@
+# Source 1 — network-free Qovery DNS-01 configuration.
+namespace: cert-manager
+externalDnsProvider: pdns
+
+clusterRole:
+  install: false
+webhookRole:
+  install: false
+
+acme:
+  letsEncrypt:
+    skipTLSVerify: false
+
+k8sDeployApiGateway: false
+k8sUseApiGateway: false
+# The legacy chart uses this flag to suppress its ingress HTTP-01 solver.
+k8sRemoveNginx: true
+
+userProvidedCertificate:
+  crt: ""
+  key: ""

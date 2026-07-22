@@ -1,0 +1,3 @@
+# Source 3 — q-core resolves the sensitive JWT directly into the namespaced Secret.
+pdns:
+  apiKey: "${cluster.jwtToken}"

@@ -184,6 +184,21 @@ default:
 .paths-scw:
   paths: ["lib-engine/**/scaleway/**/*"]
 
+.paths-platform-config:
+  paths:
+    - .gitlab-ci.yml
+    - Cargo.lock
+    - Cargo.toml
+    - Dockerfile
+    - lib-engine/lib/common/bootstrap/charts/**/*
+    - platform-catalog/**/*
+    - scripts/install-pkl.sh
+    - scripts/publish-platform-catalog.sh
+    - scripts/publish-platform-config.sh
+    - scripts/sync-platform-pkl-contract.sh
+    - scripts/test-platform-config.sh
+    - tools/platform-catalog-tests/**/*
+
 # Escape hatch: offer the job as an optional (non-blocking) manual job on any MR.
 .rules-manual-fallback:
   rules:
@@ -977,52 +992,33 @@ gitlab-release:
 test-platform-config:
   stage: build-and-lint
   extends: [.resources-minimal]
+  variables:
+    CARGO_TARGET_DIR: "$CI_PROJECT_DIR/target/platform-catalog-tests"
+  cache:
+    key:
+      files:
+        - Cargo.lock
+      prefix: platform-catalog-tests
+    paths:
+      - .cargo/registry/index/
+      - .cargo/registry/cache/
+      - .cargo/git/db/
+      - target/platform-catalog-tests/
+    policy: pull-push
   before_script:
     - bash ./scripts/install-pkl.sh
   script:
     - ./scripts/test-platform-config.sh
-    - ./scripts/tests/test-publish-platform-config.sh
-    - ./scripts/tests/test-render-platform-catalog.sh
-    - ./scripts/tests/test-render-platform-components.sh
+    - cargo test -p platform-catalog-tests
   tags:
     - k8s-runner
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        paths:
-          - .gitlab-ci.yml
-          - Dockerfile
-          - lib-engine/lib/common/bootstrap/charts/alloy/**/*
-          - lib-engine/lib/common/bootstrap/charts/loki/**/*
-          - lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent/**/*
-          - lib-engine/lib/common/bootstrap/charts/qovery-priority-class/**/*
-          - platform-catalog/**/*
-          - scripts/install-pkl.sh
-          - scripts/publish-platform-catalog.sh
-          - scripts/publish-platform-config.sh
-          - scripts/sync-platform-pkl-contract.sh
-          - scripts/test-platform-config.sh
-          - scripts/tests/test-publish-platform-config.sh
-          - scripts/tests/test-render-platform-catalog.sh
-          - scripts/tests/test-render-platform-components.sh
+        paths: !reference [.paths-platform-config, paths]
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       changes:
-        paths:
-          - .gitlab-ci.yml
-          - Dockerfile
-          - lib-engine/lib/common/bootstrap/charts/alloy/**/*
-          - lib-engine/lib/common/bootstrap/charts/loki/**/*
-          - lib-engine/lib/common/bootstrap/charts/qovery-cluster-agent/**/*
-          - lib-engine/lib/common/bootstrap/charts/qovery-priority-class/**/*
-          - platform-catalog/**/*
-          - scripts/install-pkl.sh
-          - scripts/publish-platform-catalog.sh
-          - scripts/publish-platform-config.sh
-          - scripts/sync-platform-pkl-contract.sh
-          - scripts/test-platform-config.sh
-          - scripts/tests/test-publish-platform-config.sh
-          - scripts/tests/test-render-platform-catalog.sh
-          - scripts/tests/test-render-platform-components.sh
+        paths: !reference [.paths-platform-config, paths]
 
 # Publishes the platform catalog (platform-catalog/) as OCI artifacts consumed
 # by q-core (Engine v2): per-component config bundles, the frozen-chart mirror,

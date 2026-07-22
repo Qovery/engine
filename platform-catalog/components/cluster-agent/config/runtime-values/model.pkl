@@ -3,23 +3,11 @@ module qovery.engine.platform.clusterAgent.model
 
 import "pkl:json"
 
-import "compile.pkl"
-import "contract.pkl"
+import "evaluation.pkl"
 
 local request = (new json.Parser { useMapping = true }).parse(read("prop:request")) as Mapping
-local operation = request["operation"] as contract.Operation
-local enabledComponents = (request.getOrNull("enabledComponents") as Listing?) ?? List()
-local lokiEnabled = enabledComponents.contains("loki")
-
-computedHelmValues =
-  if (operation == contract.compileOperation)
-    compile.compile(lokiEnabled)
-  else
-    null
 
 output {
-  value = new contract.EvaluationResult {
-    helmValues = computedHelmValues
-  }
+  value = evaluation.evaluate(request)
   renderer = new JsonRenderer {}
 }

@@ -1,0 +1,3 @@
+# Source 1 — Qovery DNS is the only provider supported by Slice 4.8.
+fullnameOverride: external-dns-secret
+provider: pdns

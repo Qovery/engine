@@ -3,15 +3,16 @@ amends "pkl:test"
 import "../config/runtime-values/requirements.pkl"
 import "../config/runtime-values/validate.pkl"
 import "../config/runtime-values/storage/backends.pkl"
+import "fixtures.pkl"
 
 // Readable requirement list for the Loki configuration model. Each fact states one product
 // rule and tests the module that owns it. Golden COMPILE outputs live in
-// compile-golden.tests.pkl; the end-to-end prop:request envelope stays covered by
-// scripts/test-platform-config.sh.
+// compile-golden.tests.pkl; evaluation.tests.pkl covers the end-to-end catalogue
+// orchestration used by model.pkl.
 
-local awsCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" }
-local awsManaged: Mapping = new { ["mode"] = "QOVERY_MANAGED"; ["provider"] = "AWS" }
-local gcpCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "GCP" }
+local awsCustomer = fixtures.awsCustomer
+local awsManaged = fixtures.awsManaged
+local gcpCustomer = fixtures.gcpCustomer
 
 local function config(storage: String): Mapping = new { ["storage"] = storage }
 

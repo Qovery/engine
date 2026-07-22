@@ -1,0 +1,33 @@
+# Source 1 — reviewed Service-only Qovery DNS behavior.
+annotationFilter: "external-dns.alpha.kubernetes.io/exclude notin (true)"
+triggerLoopOnEvent: true
+policy: sync
+txtPrefix: qvy-
+
+deploymentStrategy:
+  type: RollingUpdate
+image:
+  repository: public.ecr.aws/r3m4q3r9/pub-mirror-external-dns
+provider: pdns
+sources:
+  - service
+enableGatewayListenerSets: false
+
+extraArgs:
+  pdns-api-key: "$(PDNS_API_KEY)"
+env:
+  - name: PDNS_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: external-dns-secret
+        key: pdns_api_key
+
+serviceMonitor:
+  enabled: false
+resources:
+  limits:
+    cpu: 50m
+    memory: 100Mi
+  requests:
+    cpu: 50m
+    memory: 100Mi

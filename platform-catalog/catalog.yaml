@@ -33,6 +33,21 @@ components:
   - name: alloy
     chart: alloy # frozen upstream chart, configured from the legacy BYOK values
     version: v1
+  - name: cert-manager
+    chart: cert-manager # frozen upstream chart
+    version: v1
+  - name: qovery-cert-manager-webhook
+    chart: qovery-cert-manager-webhook # Qovery-authored DNS-01 solver
+    version: v1
+  - name: external-dns-secret
+    chart: external-dns-secret # Qovery-authored provider Secret chart
+    version: v1
+  - name: external-dns
+    chart: external-dns # frozen upstream chart
+    version: v1
+  - name: cert-manager-configs
+    chart: cert-manager-configs # Qovery-authored issuer and Certificate chart
+    version: v1
 
 # Frozen charts mirrored by scripts/publish-frozen-charts.sh to
 # <registry>/charts/<name>:<Chart.yaml version>, so the copy reviewed in this
@@ -53,6 +68,16 @@ charts:
     path: lib-engine/lib/common/bootstrap/charts/qovery-priority-class
   - name: alloy
     path: lib-engine/lib/common/bootstrap/charts/alloy
+  - name: cert-manager
+    path: lib-engine/lib/common/bootstrap/charts/cert-manager
+  - name: qovery-cert-manager-webhook
+    path: lib-engine/lib/common/bootstrap/charts/qovery-cert-manager-webhook
+  - name: external-dns-secret
+    path: lib-engine/lib/common/bootstrap/charts/external-dns-secret
+  - name: external-dns
+    path: lib-engine/lib/common/bootstrap/charts/external-dns
+  - name: cert-manager-configs
+    path: lib-engine/lib/common/bootstrap/charts/cert-manager-configs
 
 # Root platform template releases are generic OCI artifacts, published last
 # after every referenced config bundle and chart has been verified.

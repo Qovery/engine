@@ -3,53 +3,13 @@ module qovery.engine.platform.loki.model
 
 import "pkl:json"
 
-import "compile.pkl"
-import "contract.pkl"
-import "describe.pkl"
-import "profile.pkl"
-import "requirements.pkl"
-import "validate.pkl"
+import "evaluation.pkl"
 
-// This is the only entrypoint known by q-core. It deliberately contains orchestration only:
-// 1. decode the language-neutral request supplied through prop:request;
-// 2. delegate catalogue, requirement, validation and Helm concerns to focused modules;
-// 3. render the language-neutral response as JSON.
+// This is the only entrypoint known by q-core. Request decoding and response rendering stay here;
+// catalogue orchestration lives in evaluation.pkl so the native Pkl tests exercise the same path.
 local request = (new json.Parser { useMapping = true }).parse(read("prop:request")) as Mapping
-local operation = request["operation"] as contract.Operation
-local profileConfig = request["profileConfig"] as Mapping
-local clusterContext = request["clusterContext"] as Mapping?
-local clusterInputs = request["clusterInputs"] as Mapping
-
-local computedViolations =
-  validate.violations(operation, profileConfig, clusterContext, clusterInputs)
-
-computedFields =
-  describe.fieldsFor(
-    operation,
-    clusterContext,
-    profile.resourceProfile(profileConfig),
-    profile.highAvailability(profileConfig) == true,
-  )
-computedRequiredInputs =
-  if (operation == contract.describeOperation)
-    List()
-  else
-    requirements.requiredInputs(profileConfig, clusterContext)
-
-// Invalid inputs never produce partial Helm values. q-core treats a missing helmValues on a valid
-// COMPILE request as a hard error, so this remains fail-closed on both sides of the contract.
-computedHelmValues =
-  if (operation == contract.compileOperation && computedViolations.isEmpty)
-    compile.compile(profileConfig, clusterInputs)
-  else
-    null
 
 output {
-  value = new contract.EvaluationResult {
-    fields = computedFields
-    requiredInputs = computedRequiredInputs
-    violations = computedViolations
-    helmValues = computedHelmValues
-  }
+  value = evaluation.evaluate(request)
   renderer = new JsonRenderer {}
 }

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "lib-engine", # Should be cloned from git@github.com:Qovery/engine.git
     "app",
+    "tools/platform-catalog-tests",
 ]
 
 [profile.release]

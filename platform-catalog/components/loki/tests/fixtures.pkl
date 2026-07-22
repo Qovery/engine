@@ -1,0 +1,41 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.tests.fixtures
+
+import "../config/runtime-values/context.pkl"
+import "../config/runtime-values/storage/backends.pkl" as storage
+
+awsCustomer: Mapping = new Mapping {
+  ["mode"] = context.customerManagedMode
+  ["provider"] = context.awsProvider
+}
+
+awsManaged: Mapping = new Mapping {
+  ["mode"] = context.qoveryManagedMode
+  ["provider"] = context.awsProvider
+}
+
+gcpCustomer: Mapping = new Mapping {
+  ["mode"] = context.customerManagedMode
+  ["provider"] = context.gcpProvider
+}
+
+pvcProfile: Mapping = new Mapping {
+  ["retentionWeeks"] = 12
+  ["highAvailability"] = false
+  ["storage"] = storage.pvc.key
+}
+
+s3Profile: Mapping = new Mapping {
+  ["retentionWeeks"] = 12
+  ["highAvailability"] = false
+  ["storage"] = storage.s3.key
+}
+
+s3CustomerInputs: Mapping = new Mapping {
+  ["infra.s3BucketName"] = "qovery-loki"
+  ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+}
+
+s3Inputs: Mapping = (s3CustomerInputs) {
+  ["infra.awsRegion"] = "eu-west-3"
+}

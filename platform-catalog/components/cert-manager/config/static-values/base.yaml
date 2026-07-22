@@ -1,0 +1,67 @@
+# Source 1 — reviewed legacy BYOK values without metrics or network-stack integration.
+global:
+  leaderElection:
+    namespace: kube-system
+
+crds:
+  enabled: true
+  keep: true
+
+config:
+  apiVersion: controller.config.cert-manager.io/v1alpha1
+  kind: ControllerConfiguration
+  enableGatewayAPI: false
+  enableGatewayAPIListenerSet: false
+  featureGates:
+    ACMEHTTP01IngressPathTypeExact: false
+    ListenerSets: false
+
+startupapicheck:
+  jobAnnotations:
+    helm.sh/hook: post-install,post-upgrade
+  rbac:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+  serviceAccount:
+    annotations:
+      helm.sh/hook: post-install,post-upgrade
+
+prometheus:
+  servicemonitor:
+    enabled: false
+
+dns01RecursiveNameserversOnly: true
+dns01RecursiveNameservers: "1.1.1.1:53,8.8.8.8:53"
+
+replicaCount: 1
+strategy:
+  type: RollingUpdate
+resources:
+  limits:
+    cpu: 200m
+    memory: 1Gi
+  requests:
+    cpu: 100m
+    memory: 1Gi
+
+webhook:
+  strategy:
+    type: RollingUpdate
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+cainjector:
+  strategy:
+    type: RollingUpdate
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 1Gi

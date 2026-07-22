@@ -1,0 +1,428 @@
+amends "pkl:test"
+
+import "../config/runtime-values/compile.pkl"
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/evaluation.pkl"
+import "fixtures.pkl"
+
+// End-to-end catalogue tests. They call the same pure orchestration function as model.pkl;
+// model.pkl itself only decodes prop:request and renders this result as JSON.
+
+local awsCustomer = fixtures.awsCustomer
+local awsManaged = fixtures.awsManaged
+local gcpCustomer = fixtures.gcpCustomer
+local pvcProfile = fixtures.pvcProfile
+local s3Profile = fixtures.s3Profile
+local s3Inputs = fixtures.s3Inputs
+
+local function evaluate(
+  operation: contract.Operation,
+  profileConfig: Mapping,
+  clusterContext: Mapping?,
+  clusterInputs: Mapping,
+): contract.EvaluationResult =
+  evaluation.evaluate(new Mapping {
+    ["operation"] = operation
+    ["profileConfig"] = profileConfig
+    ["clusterContext"] = clusterContext
+    ["clusterInputs"] = clusterInputs
+  })
+
+local function codes(result: contract.EvaluationResult): List<String> =
+  result.violations.map((violation) -> violation.code).toList()
+
+local function paths(result: contract.EvaluationResult): List<String> =
+  result.violations.map((violation) -> violation.fieldPath).toList()
+
+facts {
+  ["DESCRIBE returns the complete context-free catalogue envelope"] {
+    let (result = evaluate(contract.describeOperation, new Mapping {}, null, new Mapping {}))
+      result.fields.map((field) -> field.key).toList()
+        == List(
+          "retentionWeeks",
+          "highAvailability",
+          "resources.profile",
+          "resources.singleBinary.requests.cpuMilli",
+          "resources.singleBinary.limits.cpuMilli",
+          "resources.singleBinary.requests.memoryMi",
+          "resources.singleBinary.limits.memoryMi",
+          "resources.read.requests.cpuMilli",
+          "resources.read.limits.cpuMilli",
+          "resources.read.requests.memoryMi",
+          "resources.read.limits.memoryMi",
+          "resources.write.requests.cpuMilli",
+          "resources.write.limits.cpuMilli",
+          "resources.write.requests.memoryMi",
+          "resources.write.limits.memoryMi",
+          "resources.backend.requests.cpuMilli",
+          "resources.backend.limits.cpuMilli",
+          "resources.backend.requests.memoryMi",
+          "resources.backend.limits.memoryMi",
+          "resources.gateway.requests.cpuMilli",
+          "resources.gateway.limits.cpuMilli",
+          "resources.gateway.requests.memoryMi",
+          "resources.gateway.limits.memoryMi",
+          "storage",
+        )
+        && result.fields.filter((field) -> field.key == "retentionWeeks").first.description
+          == "Whole number of weeks to retain Loki logs."
+        && result.fields.filter((field) -> field.key == "retentionWeeks").first.defaultValue == "12"
+        && result.fields.filter((field) -> field.key == "retentionWeeks").first.constraints.min == 1
+        && result.fields.filter((field) -> field.key == "retentionWeeks").first.constraints.max
+          == 52
+        && result.fields
+          .filter((field) -> field.key == "resources.profile")
+          .first
+          .constraints
+          .allowedValues
+          == List("CHART_DEFAULT", "SMALL", "MEDIUM", "LARGE", "CUSTOM")
+        && result.fields.filter((field) -> field.key == "resources.profile").first.defaultValue
+          == "CHART_DEFAULT"
+        && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "s3", "gcs", "azureBlob", "s3Compatible")
+        && result.requiredInputs.isEmpty
+        && result.violations.isEmpty
+        && result.helmValues == null
+  }
+
+  ["contextual DESCRIBE narrows storage choices for GCP"] {
+    let (result = evaluate(contract.describeOperation, new Mapping {}, gcpCustomer, new Mapping {}))
+      result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+        == List("pvc", "gcs")
+        && result.requiredInputs.isEmpty
+        && result.violations.isEmpty
+        && result.helmValues == null
+  }
+
+  ["RESOLVE_REQUIREMENTS returns AWS S3 inputs in the evaluation envelope"] {
+    let (
+      result =
+        evaluate(
+          contract.resolveRequirementsOperation,
+          s3Profile,
+          awsCustomer,
+          new Mapping {},
+        )
+    )
+      result.requiredInputs.map((input) -> input.key).toList()
+        == List("infra.s3BucketName", "infra.lokiRoleArn")
+        && result.requiredInputs.map((input) -> input.scope).toSet()
+          == Set(contract.clusterScope)
+        && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "s3")
+        && result.violations.isEmpty
+        && result.helmValues == null
+  }
+
+  ["RESOLVE_REQUIREMENTS reports provider mismatches and narrows managed clusters"] {
+    let (
+      mismatch =
+        evaluate(
+          contract.resolveRequirementsOperation,
+          s3Profile,
+          gcpCustomer,
+          new Mapping {},
+        )
+    )
+      codes(mismatch) == List("STORAGE_PROVIDER_MISMATCH")
+        && mismatch.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "gcs")
+        && mismatch.requiredInputs.isEmpty
+        && mismatch.helmValues == null
+    let (
+      managed =
+        evaluate(
+          contract.resolveRequirementsOperation,
+          pvcProfile,
+          awsManaged,
+          new Mapping {},
+        )
+    )
+      managed.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+        == List("pvc")
+        && managed.requiredInputs.isEmpty
+        && managed.violations.isEmpty
+        && managed.helmValues == null
+  }
+
+  ["VALIDATE returns stable product violation codes and paths"] {
+    let (
+      result =
+        evaluate(
+          contract.validateOperation,
+          new Mapping {
+            ["retentionWeeks"] = 0
+            ["highAvailability"] = true
+            ["storage"] = "pvc"
+          },
+          awsCustomer,
+          new Mapping {},
+        )
+    )
+      codes(result)
+        == List("VALUE_OUT_OF_RANGE", "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE")
+        && paths(result) == List("retentionWeeks", "highAvailability")
+        && result.helmValues == null
+  }
+
+  ["VALIDATE rejects malformed and mistyped S3 inputs"] {
+    let (
+      malformed =
+        evaluate(
+          contract.validateOperation,
+          s3Profile,
+          awsCustomer,
+          new Mapping {
+            ["infra.s3BucketName"] = "Upper_Bucket"
+            ["infra.lokiRoleArn"] = "bad-role"
+          },
+        )
+    )
+      codes(malformed) == List("INPUT_PATTERN_MISMATCH", "INPUT_PATTERN_MISMATCH")
+        && paths(malformed)
+          == List("clusterInputs.infra.s3BucketName", "clusterInputs.infra.lokiRoleArn")
+        && malformed.helmValues == null
+    let (
+      mistyped =
+        evaluate(
+          contract.validateOperation,
+          s3Profile,
+          awsCustomer,
+          new Mapping {
+            ["infra.s3BucketName"] = 123
+            ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
+          },
+        )
+    )
+      codes(mistyped) == List("REQUIRED_INPUT_MISSING")
+        && paths(mistyped) == List("clusterInputs.infra.s3BucketName")
+        && mistyped.helmValues == null
+  }
+
+  ["VALIDATE rejects endpoint, Azure and retention edge cases"] {
+    let (
+      credentialedEndpoint =
+        evaluate(
+          contract.validateOperation,
+          new Mapping { ["storage"] = "s3Compatible" },
+          new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "SCW" },
+          new Mapping {
+            ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+            ["infra.s3CompatibleEndpoint"] = "https://user:pass@s3.fr-par.scw.cloud"
+            ["infra.s3CompatibleRegion"] = "fr-par"
+            ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+          },
+        )
+    )
+      codes(credentialedEndpoint) == List("INPUT_PATTERN_MISMATCH")
+        && paths(credentialedEndpoint) == List("clusterInputs.infra.s3CompatibleEndpoint")
+    let (
+      newlineEndpoint =
+        evaluate(
+          contract.validateOperation,
+          new Mapping { ["storage"] = "s3Compatible" },
+          new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "SCW" },
+          new Mapping {
+            ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+            ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud\n.evil"
+            ["infra.s3CompatibleRegion"] = "fr-par"
+            ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+          },
+        )
+    )
+      codes(newlineEndpoint) == List("INPUT_PATTERN_MISMATCH")
+        && paths(newlineEndpoint) == List("clusterInputs.infra.s3CompatibleEndpoint")
+    let (
+      shortAzureContainer =
+        evaluate(
+          contract.validateOperation,
+          new Mapping { ["storage"] = "azureBlob" },
+          new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AZURE" },
+          new Mapping {
+            ["infra.azureStorageAccountName"] = "qoveryloki"
+            ["infra.azureContainerName"] = "ab"
+            ["infra.azureManagedIdentityClientId"] = "12345678-1234-1234-1234-123456789abc"
+          },
+        )
+    )
+      codes(shortAzureContainer) == List("INPUT_PATTERN_MISMATCH")
+        && paths(shortAzureContainer) == List("clusterInputs.infra.azureContainerName")
+    let (
+      decimalRetention =
+        evaluate(
+          contract.validateOperation,
+          new Mapping { ["retentionWeeks"] = 12.5; ["storage"] = "pvc" },
+          awsCustomer,
+          new Mapping {},
+        )
+    )
+      codes(decimalRetention) == List("INVALID_TYPE")
+        && paths(decimalRetention) == List("retentionWeeks")
+        && decimalRetention.violations.first.message
+          == "Loki configuration field retentionWeeks must be a whole number"
+  }
+
+  ["COMPILE fails closed when a compile-only AWS input is missing"] {
+    let (
+      result =
+        evaluate(
+          contract.compileOperation,
+          s3Profile,
+          awsCustomer,
+          (s3Inputs) { ["infra.awsRegion"] = null },
+        )
+    )
+      codes(result) == List("REQUIRED_INPUT_MISSING")
+        && paths(result) == List("clusterInputs.infra.awsRegion")
+        && result.helmValues == null
+  }
+
+  ["valid COMPILE delegates to the Helm compiler"] {
+    let (result = evaluate(contract.compileOperation, s3Profile, awsCustomer, s3Inputs))
+      result.violations.isEmpty
+        && result.helmValues == compile.compile(s3Profile, s3Inputs)
+  }
+
+  ["MEDIUM COMPILE keeps preset fields read-only and delegates to the compiler"] {
+    let (profile = (pvcProfile) { ["resources.profile"] = "MEDIUM" })
+    let (result = evaluate(contract.compileOperation, profile, awsCustomer, new Mapping {}))
+      result.violations.isEmpty
+        && result.helmValues == compile.compile(profile, new Mapping {})
+        && !result.fields.any((field) -> field.key.startsWith("resources.singleBinary"))
+        && (
+          result.fields.filter((field) -> field.key == "resources.profile").first.description
+            as String
+        ).contains("MEDIUM: singleBinary 300m/1024Mi")
+  }
+
+  ["high-availability S3 COMPILE traverses the evaluation envelope"] {
+    let (
+      profile = new Mapping {
+        ["storage"] = "s3"
+        ["retentionWeeks"] = 4
+        ["highAvailability"] = true
+      }
+    )
+    let (result = evaluate(contract.compileOperation, profile, awsCustomer, s3Inputs))
+      result.violations.isEmpty
+        && result.helmValues == compile.compile(profile, s3Inputs)
+  }
+
+  ["GCS COMPILE keeps its contextual fields and requirements"] {
+    let (
+      profile = new Mapping {
+        ["storage"] = "gcs"
+        ["retentionWeeks"] = 8
+        ["highAvailability"] = true
+      }
+    )
+    let (
+      inputs = new Mapping {
+        ["infra.gcsBucketName"] = "qovery-loki-gcp"
+        ["infra.gcpServiceAccountEmail"] = "loki@qovery-project.iam.gserviceaccount.com"
+      }
+    )
+    let (result = evaluate(contract.compileOperation, profile, gcpCustomer, inputs))
+      result.violations.isEmpty
+        && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "gcs")
+        && result.requiredInputs.map((input) -> input.key).toList()
+          == List("infra.gcsBucketName", "infra.gcpServiceAccountEmail")
+        && result.helmValues == compile.compile(profile, inputs)
+  }
+
+  ["Azure Blob COMPILE keeps its contextual fields and requirements"] {
+    let (
+      profile = new Mapping {
+        ["storage"] = "azureBlob"
+        ["retentionWeeks"] = 6
+        ["highAvailability"] = false
+      }
+    )
+    let (
+      inputs = new Mapping {
+        ["infra.azureStorageAccountName"] = "qoveryloki"
+        ["infra.azureContainerName"] = "loki-data"
+        ["infra.azureManagedIdentityClientId"] = "12345678-1234-1234-1234-123456789abc"
+      }
+    )
+    let (
+      result =
+        evaluate(
+          contract.compileOperation,
+          profile,
+          new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AZURE" },
+          inputs,
+        )
+    )
+      result.violations.isEmpty
+        && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "azureBlob")
+        && result.requiredInputs.map((input) -> input.key).toList()
+          == List(
+            "infra.azureStorageAccountName",
+            "infra.azureContainerName",
+            "infra.azureManagedIdentityClientId",
+          )
+        && result.helmValues == compile.compile(profile, inputs)
+  }
+
+  ["S3-compatible COMPILE keeps its contextual fields and requirements"] {
+    let (
+      profile = new Mapping {
+        ["storage"] = "s3Compatible"
+        ["retentionWeeks"] = 10
+        ["highAvailability"] = false
+      }
+    )
+    let (
+      inputs = new Mapping {
+        ["infra.s3CompatibleBucketName"] = "qovery-loki-scw"
+        ["infra.s3CompatibleEndpoint"] = "https://s3.fr-par.scw.cloud"
+        ["infra.s3CompatibleRegion"] = "fr-par"
+        ["infra.s3CompatibleCredentialsSecretName"] = "loki-object-storage"
+      }
+    )
+    let (
+      result =
+        evaluate(
+          contract.compileOperation,
+          profile,
+          new Mapping { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "SCW" },
+          inputs,
+        )
+    )
+      result.violations.isEmpty
+        && result.fields.filter((field) -> field.key == "storage").first.constraints.allowedValues
+          == List("pvc", "s3Compatible")
+        && result.requiredInputs.map((input) -> input.key).toList()
+          == List(
+            "infra.s3CompatibleBucketName",
+            "infra.s3CompatibleEndpoint",
+            "infra.s3CompatibleRegion",
+            "infra.s3CompatibleCredentialsSecretName",
+          )
+        && result.helmValues == compile.compile(profile, inputs)
+  }
+
+  ["invalid CUSTOM resources never produce partial Helm values"] {
+    let (
+      profile = new Mapping {
+        ["storage"] = "pvc"
+        ["retentionWeeks"] = 12
+        ["highAvailability"] = false
+        ["resources.profile"] = "CUSTOM"
+        ["resources.singleBinary.requests.cpuMilli"] = 500
+        ["resources.singleBinary.limits.cpuMilli"] = 300
+      }
+    )
+    let (result = evaluate(contract.compileOperation, profile, awsCustomer, new Mapping {}))
+      codes(result) == List("REQUIRED_RESOURCE_REQUEST_MISSING", "LIMIT_BELOW_REQUEST")
+        && paths(result)
+          == List(
+            "resources.singleBinary.requests.memoryMi",
+            "resources.singleBinary.limits.cpuMilli",
+          )
+        && result.helmValues == null
+  }
+}

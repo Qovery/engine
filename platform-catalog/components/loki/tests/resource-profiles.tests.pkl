@@ -7,19 +7,15 @@ import "../config/runtime-values/validate.pkl"
 import "../config/runtime-values/resources/presets.pkl" as presets
 import "../config/runtime-values/resources/targets.pkl" as targets
 import "../config/runtime-values/resources/types.pkl" as resourceTypes
+import "fixtures.pkl"
 
 // Readable requirement list for Slice 4.7 resource profiles (q-core
 // docs-v2/slice-4-7-source3-resource-profiles.md). Golden COMPILE outputs live in
-// compile-golden.tests.pkl; the end-to-end prop:request envelope stays covered by
-// scripts/test-platform-config.sh.
+// compile-golden.tests.pkl; evaluation.tests.pkl covers the end-to-end catalogue
+// orchestration used by model.pkl.
 
-local awsCustomer: Mapping = new { ["mode"] = "CUSTOMER_MANAGED"; ["provider"] = "AWS" }
-
-local s3Inputs: Mapping = new {
-  ["infra.s3BucketName"] = "qovery-loki"
-  ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
-  ["infra.awsRegion"] = "eu-west-3"
-}
+local awsCustomer = fixtures.awsCustomer
+local s3Inputs = fixtures.s3Inputs
 
 local pvcSingleBinary: Mapping = new {
   ["storage"] = "pvc"

@@ -287,3 +287,170 @@ platformTemplateRelease:
             chart: alloy
             version: v1
             digest: __PUBLISHED_CONFIG_DIGEST__
+    - key: dns-certificates
+      applicability:
+        modes: [CUSTOMER_MANAGED]
+      mandatory: false
+      enabledByDefault: false
+      components:
+        - key: cert-manager
+          kind: HELM
+          release:
+            name: cert-manager
+            namespace: cert-manager
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: cert-manager
+            version: v1.20.0
+          configRef:
+            chart: cert-manager
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: qovery-cert-manager-webhook
+          kind: HELM
+          release:
+            name: qovery-cert-manager-webhook
+            namespace: cert-manager
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: qovery-cert-manager-webhook
+            version: 0.2.0
+          dependsOn:
+            - component: cert-manager
+              kind: requires
+          configRef:
+            chart: qovery-cert-manager-webhook
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+        - key: external-dns-secret
+          kind: HELM
+          release:
+            name: external-dns-secret
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: external-dns-secret
+            version: 1.0.0
+          configRef:
+            chart: external-dns-secret
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true
+        - key: external-dns
+          kind: HELM
+          release:
+            name: external-dns
+            namespace: kube-system
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: external-dns
+            version: 1.21.1
+          dependsOn:
+            - component: external-dns-secret
+              kind: requires
+          configRef:
+            chart: external-dns
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: dns.managedDomain
+              source:
+                kind: qcoreValue
+                key: dns.managedDomain
+              required: true
+            - name: dns.qovery.apiUrl
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiUrl
+              required: true
+            - name: dns.qovery.apiEndpoint
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiEndpoint
+              required: true
+            - name: cluster.id
+              source:
+                kind: qcoreValue
+                key: cluster.id
+              required: true
+            - name: cluster.jwtRevision
+              source:
+                kind: qcoreValue
+                key: cluster.jwtRevision
+              required: true
+        - key: cert-manager-configs
+          kind: HELM
+          release:
+            name: cert-manager-configs
+            namespace: cert-manager
+          chart:
+            repository: oci://public.ecr.aws/r3m4q3r9/charts/
+            name: cert-manager-configs
+            version: 0.1.0
+          dependsOn:
+            - component: cert-manager
+              kind: requires
+            - component: qovery-cert-manager-webhook
+              kind: requires
+          configRef:
+            chart: cert-manager-configs
+            version: v1
+            digest: __PUBLISHED_CONFIG_DIGEST__
+          runtimeInputs:
+            - name: dns.providerKind
+              source:
+                kind: qcoreValue
+                key: dns.providerKind
+              required: true
+            - name: dns.managedDomain
+              source:
+                kind: qcoreValue
+                key: dns.managedDomain
+              required: true
+            - name: dns.qovery.apiUrl
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiUrl
+              required: true
+            - name: dns.qovery.apiEndpoint
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiEndpoint
+              required: true
+            - name: dns.qovery.apiPort
+              source:
+                kind: qcoreValue
+                key: dns.qovery.apiPort
+              required: true
+            - name: certificate.acmeEmail
+              source:
+                kind: qcoreValue
+                key: certificate.acmeEmail
+              required: true
+            - name: certificate.acmeServerUrl
+              source:
+                kind: qcoreValue
+                key: certificate.acmeServerUrl
+              required: true
+            - name: cluster.jwtToken
+              source:
+                kind: qcoreValue
+                key: cluster.jwt
+              required: true
+              sensitive: true

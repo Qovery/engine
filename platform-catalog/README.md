@@ -32,6 +32,15 @@ platform-catalog/
     component-contract.pkl     # canonical evaluator response contract
 ```
 
+## Tests
+
+The catalog graph, bundle publication staging, publication failure modes, and rendered Helm
+manifests are tested by the dedicated Rust crate in `tools/platform-catalog-tests`. Run it with:
+
+```bash
+cargo test -p platform-catalog-tests
+```
+
 File semantics (the contract q-core's loader implements):
 
 - an absent `static-values/base.yaml` or context overlay is an empty fragment;
@@ -171,6 +180,14 @@ repositories are infrastructure-owned and must include both
 first push. Slice 4.6 additionally requires
 `platform-config/{qovery-priority-class,alloy}` and
 `charts/{qovery-priority-class,alloy}` before publishing its first snapshot.
+Slice 4.8 additionally requires
+`platform-config/{cert-manager,qovery-cert-manager-webhook,external-dns-secret,external-dns,cert-manager-configs}`
+and the matching five `charts/*` repositories before publication.
+
+Slice 4.8 does not modify the legacy `qovery-cert-manager-webhook` Helm chart:
+the mirror keeps chart version `0.2.0`. Its Engine v2 config bundle selects the
+public ECR image and sets `imagePullSecrets.name` and `imagePullSecrets.value`
+to empty strings, so the catalog render creates no registry Secret.
 
 On `main`, the manual GitLab job sends the emitted canonical reference to the
 existing authenticated q-core service-version endpoint with service type
@@ -212,7 +229,8 @@ Terraform** (ECR does not auto-create repositories on push, and the publish
 scripts deliberately don't either — registry repositories live in the infra
 Terraform, like the rest of the AWS infra). Current
 scope: loki, qovery-cluster-agent, qovery-shell-agent, qovery-priority-class,
-alloy.
+alloy, cert-manager, qovery-cert-manager-webhook, external-dns-secret, external-dns, and
+cert-manager-configs.
 
 Caveat for later: Qovery-authored and `no_sync` charts keep a version number
 that does not change with content (agents are pinned at `0.1.0`; `no_sync`
@@ -231,8 +249,9 @@ pin by digest — but bump the chart version on content changes, or settle a
   The ECR repositories are declared in the infra Terraform,
   currently: `platform-config/{qovery-operator,cluster-agent,shell-agent,loki}` and
   `charts/{qovery-operator,loki,qovery-cluster-agent,qovery-shell-agent}`. Slice 4.6 must add the four
-  repositories listed under *Root template publication* before its first push. Repositories have no
-  lifecycle policy (retention rule: never delete a version a q-core release may still pin).
+  repositories listed under *Root template publication* before its first push, and Slice 4.8 must
+  add the ten DNS/certificate repositories listed there. Repositories have no lifecycle policy
+  (retention rule: never delete a version a q-core release may still pin).
 - **Tag immutability**: mutable-v0 for now — a version tag may be re-pushed and
   q-core pins/caches by **digest** only. Activating a new complete snapshot therefore re-pins new
   bundle content even when its version label is unchanged. The immutable-tag guard is kept

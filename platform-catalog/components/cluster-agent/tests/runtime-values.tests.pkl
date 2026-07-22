@@ -1,13 +1,36 @@
 amends "pkl:test"
 
 import "../config/runtime-values/compile.pkl"
+import "../config/runtime-values/contract.pkl"
+import "../config/runtime-values/evaluation.pkl"
+
+local function evaluate(
+  operation: contract.Operation,
+  enabledComponents: Listing,
+): contract.EvaluationResult =
+  evaluation.evaluate(new Mapping {
+    ["operation"] = operation
+    ["enabledComponents"] = enabledComponents
+  })
 
 facts {
-  ["Loki enabled"] {
-    compile.compile(true)["environmentVariables"]["LOKI_URL"] == compile.lokiUrl
+  ["DESCRIBE returns an empty configuration envelope"] {
+    let (result = evaluation.evaluate(new Mapping { ["operation"] = contract.describeOperation }))
+      result.fields.isEmpty
+        && result.requiredInputs.isEmpty
+        && result.violations.isEmpty
+        && result.helmValues == null
   }
 
-  ["Loki disabled"] {
-    compile.compile(false)["environmentVariables"]["LOKI_URL"] == ""
+  ["COMPILE configures Loki when the component is enabled"] {
+    let (result = evaluate(contract.compileOperation, new Listing { "loki" }))
+      result.violations.isEmpty
+        && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == compile.lokiUrl
+  }
+
+  ["COMPILE clears Loki when the component is disabled"] {
+    let (result = evaluate(contract.compileOperation, new Listing {}))
+      result.violations.isEmpty
+        && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == ""
   }
 }

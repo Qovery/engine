@@ -11,22 +11,11 @@ import "../config/runtime-values/requirements.pkl"
 import "../config/runtime-values/storage/backends.pkl" as storageBackends
 import "../config/runtime-values/storage/helm.pkl" as storageHelm
 import "../config/runtime-values/validate.pkl"
+import "fixtures.pkl"
 
-local awsContext: Mapping = new Mapping {
-  ["mode"] = context.customerManagedMode
-  ["provider"] = context.awsProvider
-}
-
-local s3Profile: Mapping = new Mapping {
-  ["storage"] = storageBackends.s3.key
-  ["retentionWeeks"] = 12
-  ["highAvailability"] = false
-}
-
-local s3CustomerInputs: Mapping = new Mapping {
-  ["infra.s3BucketName"] = "qovery-loki"
-  ["infra.lokiRoleArn"] = "arn:aws:iam::123456789012:role/loki"
-}
+local awsContext = fixtures.awsCustomer
+local s3Profile = fixtures.s3Profile
+local s3CustomerInputs = fixtures.s3CustomerInputs
 
 local function renderCompiledValues(profileConfig: Mapping, clusterInputs: Mapping): String =
   (new JsonRenderer {}).renderDocument(compile.compile(profileConfig, clusterInputs)).trimEnd()

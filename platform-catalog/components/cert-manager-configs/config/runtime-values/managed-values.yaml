@@ -1,0 +1,12 @@
+# Source 3 — direct q-core runtime-input mappings; no customer-authored field is exposed.
+managedDns:
+  - "${dns.managedDomain}"
+acme:
+  letsEncrypt:
+    emailReport: "${certificate.acmeEmail}"
+    acmeUrl: "${certificate.acmeServerUrl}"
+provider:
+  pdns:
+    apiUrl: "${dns.qovery.apiUrl}"
+    apiPort: "${dns.qovery.apiPort}"
+    apiKey: "${cluster.jwtToken}"

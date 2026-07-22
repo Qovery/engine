@@ -1,0 +1,8 @@
+# Source 3 — direct runtime-input mappings; no customer-authored field is exposed.
+domainFilters:
+  - "${dns.managedDomain}"
+txtOwnerId: "${cluster.id}"
+extraArgs:
+  pdns-server: "${dns.qovery.apiEndpoint}"
+podAnnotations:
+  qovery.com/external-dns-credential-revision: "${cluster.jwtRevision}"
