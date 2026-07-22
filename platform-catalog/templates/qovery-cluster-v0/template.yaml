@@ -297,7 +297,7 @@ platformTemplateRelease:
           kind: HELM
           release:
             name: cert-manager
-            namespace: cert-manager
+            namespace: qovery
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: cert-manager
@@ -310,7 +310,7 @@ platformTemplateRelease:
           kind: HELM
           release:
             name: qovery-cert-manager-webhook
-            namespace: cert-manager
+            namespace: qovery
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: qovery-cert-manager-webhook
@@ -326,7 +326,7 @@ platformTemplateRelease:
           kind: HELM
           release:
             name: external-dns-secret
-            namespace: kube-system
+            namespace: qovery
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: external-dns-secret
@@ -351,7 +351,7 @@ platformTemplateRelease:
           kind: HELM
           release:
             name: external-dns
-            namespace: kube-system
+            namespace: qovery
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: external-dns
@@ -398,7 +398,7 @@ platformTemplateRelease:
           kind: HELM
           release:
             name: cert-manager-configs
-            namespace: cert-manager
+            namespace: qovery
           chart:
             repository: oci://public.ecr.aws/r3m4q3r9/charts/
             name: cert-manager-configs

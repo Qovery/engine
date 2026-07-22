@@ -162,13 +162,12 @@ fn loki_supports_single_binary_and_simple_scalable_modes() {
 
 #[test]
 fn cert_manager_disables_gateway_and_service_monitor_features() {
+    let value_file = values("platform-catalog/components/cert-manager/config/static-values/base.yaml");
     let documents = render(
         "cert-manager",
         "lib-engine/lib/common/bootstrap/charts/cert-manager",
-        "cert-manager",
-        &[values(
-            "platform-catalog/components/cert-manager/config/static-values/base.yaml",
-        )],
+        "qovery",
+        std::slice::from_ref(&value_file),
         &[],
     );
 
@@ -184,17 +183,22 @@ fn cert_manager_disables_gateway_and_service_monitor_features() {
             .iter()
             .any(|document| document_kind(document) == Some("ServiceMonitor"))
     );
+
+    let static_values = parse_yaml_file(value_file);
+    assert_eq!(
+        yaml_string(&static_values, &["global", "leaderElection", "namespace"]),
+        Some("qovery")
+    );
 }
 
 #[test]
 fn qovery_webhook_uses_the_public_image_without_a_registry_secret() {
+    let value_file = values("platform-catalog/components/qovery-cert-manager-webhook/config/static-values/base.yaml");
     let documents = render(
         "qovery-cert-manager-webhook",
         "lib-engine/lib/common/bootstrap/charts/qovery-cert-manager-webhook",
-        "cert-manager",
-        &[values(
-            "platform-catalog/components/qovery-cert-manager-webhook/config/static-values/base.yaml",
-        )],
+        "qovery",
+        std::slice::from_ref(&value_file),
         &[],
     );
 
@@ -207,6 +211,9 @@ fn qovery_webhook_uses_the_public_image_without_a_registry_secret() {
         document_kind(document) == Some("Secret")
             && yaml_string(document, &["type"]) == Some("kubernetes.io/dockerconfigjson")
     }));
+
+    let static_values = parse_yaml_file(value_file);
+    assert_eq!(yaml_string(&static_values, &["certManager", "namespace"]), Some("qovery"));
 }
 
 #[test]
@@ -239,7 +246,7 @@ fn external_dns_secret_contains_only_the_encoded_provider_token() {
     let output = helm_template(
         "renamed-external-dns-secret-release",
         "lib-engine/lib/common/bootstrap/charts/external-dns-secret",
-        "kube-system",
+        "qovery",
         &[values(
             "platform-catalog/components/external-dns-secret/config/static-values/base.yaml",
         )],
@@ -266,7 +273,7 @@ fn external_dns_is_service_only_and_reloads_when_credentials_rotate() {
     let documents = render(
         "external-dns",
         "lib-engine/lib/common/bootstrap/charts/external-dns",
-        "kube-system",
+        "qovery",
         &[
             values("platform-catalog/components/external-dns/config/static-values/base.yaml"),
             runtime_values.path().to_owned(),
@@ -305,7 +312,7 @@ fn cert_manager_configs_render_dns01_resources_without_leaking_the_token() {
     let documents = render(
         "cert-manager-configs",
         "lib-engine/lib/common/bootstrap/charts/cert-manager-configs",
-        "cert-manager",
+        "qovery",
         &[
             values("platform-catalog/components/cert-manager-configs/config/static-values/base.yaml"),
             runtime_values.path().to_owned(),
@@ -340,4 +347,9 @@ fn cert_manager_configs_render_dns01_resources_without_leaking_the_token() {
         assert!(!contains_string_fragment(document, dns_token));
         assert!(!contains_string_fragment(document, &encoded_token));
     }
+
+    let static_values = parse_yaml_file(repository_path(
+        "platform-catalog/components/cert-manager-configs/config/static-values/base.yaml",
+    ));
+    assert_eq!(yaml_string(&static_values, &["namespace"]), Some("qovery"));
 }

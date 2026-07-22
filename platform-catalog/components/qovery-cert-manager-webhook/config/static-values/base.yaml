@@ -1,6 +1,6 @@
 # Source 1 — the public Qovery DNS webhook needs no registry or DNS credential value.
 certManager:
-  namespace: cert-manager
+  namespace: qovery
   serviceAccountName: cert-manager
 
 replicaCount: 1

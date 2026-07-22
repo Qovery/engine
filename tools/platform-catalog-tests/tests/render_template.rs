@@ -169,6 +169,22 @@ fn every_config_reference_is_pinned_from_verified_publication_outputs() {
 }
 
 #[test]
+fn every_component_release_uses_the_protected_qovery_namespace() {
+    let template = parse_yaml_file(repository_path("platform-catalog/templates/qovery-cluster-v0/template.yaml"));
+    let mut releases = Vec::new();
+    mappings_for_key(&template, "release", &mut releases);
+
+    assert!(!releases.is_empty(), "platform template must declare component releases");
+    for release in releases {
+        assert_eq!(
+            mapping_string(release, "namespace"),
+            Some("qovery"),
+            "every catalog component release must stay inside q-core's protected namespace"
+        );
+    }
+}
+
+#[test]
 fn missing_referenced_config_fails_before_writing_a_template() {
     let mut fixture = RenderFixture::new();
     fixture.config_entries.remove(0);

@@ -1,5 +1,5 @@
 # Source 1 — network-free Qovery DNS-01 configuration.
-namespace: cert-manager
+namespace: qovery
 externalDnsProvider: pdns
 
 clusterRole:

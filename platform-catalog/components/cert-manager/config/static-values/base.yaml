@@ -1,7 +1,7 @@
 # Source 1 — reviewed legacy BYOK values without metrics or network-stack integration.
 global:
   leaderElection:
-    namespace: kube-system
+    namespace: qovery
 
 crds:
   enabled: true
