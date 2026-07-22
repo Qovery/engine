@@ -8,7 +8,9 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tracing::{error, info, warn};
 
 use crate::cmd::command::{CommandError, CommandKiller, ExecutableCommand, QoveryCommand};
-use crate::cmd::helm::HelmCommand::{DEPENDENCY, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE};
+use crate::cmd::helm::HelmCommand::{
+    DEPENDENCY, DIFF, FETCH, LIST, LOGIN, PULL, REPO, ROLLBACK, STATUS, UNINSTALL, UPGRADE,
+};
 use crate::cmd::helm::HelmError::{
     CannotRollback, CmdError, InvalidKubeConfig, InvalidRepositoryConfig, ReleaseDoesNotExist, ReleaseNameInvalid,
 };
@@ -1008,10 +1010,7 @@ impl Helm {
             chart.get_namespace_string(),
         ];
 
-        if let Some(arg) = secret_visibility.cli_arg() {
-            args_string.push(arg.to_string());
-        }
-
+        append_helm_diff_secret_visibility_arg(&mut args_string, secret_visibility);
         append_skip_crds_arg(&mut args_string, chart);
         append_engine_post_renderer_args(&mut args_string, chart);
         if let Some(secret_visibility_arg) = secret_visibility.cli_arg() {
@@ -1057,7 +1056,7 @@ impl Helm {
                             .collect::<Vec<(String, String)>>(),
                     ),
                 );
-                return Err(CmdError(chart.name.clone(), UPGRADE, cmd_err));
+                return Err(CmdError(chart.name.clone(), DIFF, cmd_err));
             };
 
             args_string.push("-f".to_string());
@@ -1085,7 +1084,7 @@ impl Helm {
             Ok(_) => Ok(()),
             Err(err) => {
                 error!("Helm error: {:?}", err);
-                Err(CmdError(chart.name.clone(), HelmCommand::DIFF, err.into()))
+                Err(CmdError(chart.name.clone(), DIFF, err.into()))
             }
         }
     }
@@ -1977,6 +1976,12 @@ fn append_engine_post_renderer_args(args: &mut Vec<String>, chart: &ChartInfo) {
     args.push(post_renderer_path);
 }
 
+fn append_helm_diff_secret_visibility_arg(args: &mut Vec<String>, secret_visibility: HelmDiffSecretVisibility) {
+    if let Some(arg) = secret_visibility.cli_arg() {
+        args.push(arg.to_string());
+    }
+}
+
 fn append_skip_crds_arg(args: &mut Vec<String>, chart: &ChartInfo) {
     if chart.skip_crds {
         args.push("--skip-crds".to_string());
@@ -2159,12 +2164,48 @@ impl Drop for HelmRegistry<'_> {
 
 #[cfg(test)]
 mod unit_tests {
-    use super::HelmDiffSecretVisibility;
+    use super::{Helm, HelmCommand, HelmDiffSecretVisibility, HelmError, append_helm_diff_secret_visibility_arg};
+    use crate::cmd::command::CommandKiller;
+    use crate::helm::{ChartInfo, ChartValuesGenerated};
+    use std::path::Path;
 
     #[test]
-    fn helm_diff_secret_visibility_maps_to_expected_cli_flag() {
-        assert_eq!(HelmDiffSecretVisibility::Show.cli_arg(), None);
-        assert_eq!(HelmDiffSecretVisibility::Suppress.cli_arg(), Some("--suppress-secrets"));
+    fn helm_diff_secret_visibility_appends_expected_cli_arg() {
+        let mut args = vec!["diff".to_string()];
+
+        append_helm_diff_secret_visibility_arg(&mut args, HelmDiffSecretVisibility::Show);
+        assert_eq!(args, vec!["diff".to_string()]);
+
+        append_helm_diff_secret_visibility_arg(&mut args, HelmDiffSecretVisibility::Suppress);
+        assert_eq!(args, vec!["diff".to_string(), "--suppress-secrets".to_string()]);
+    }
+
+    #[test]
+    fn helm_diff_values_file_write_error_is_classified_as_diff() {
+        let temporary_directory = tempfile::tempdir().unwrap();
+        let chart = ChartInfo {
+            name: "test-release".to_string(),
+            path: temporary_directory
+                .path()
+                .join("missing-chart-directory")
+                .to_string_lossy()
+                .into_owned(),
+            yaml_files_content: vec![ChartValuesGenerated::new(
+                "values".to_string(),
+                "key: value".to_string(),
+            )],
+            ..Default::default()
+        };
+        let helm = Helm::new(Option::<&Path>::None, &[]).unwrap();
+
+        let error = helm
+            .upgrade_diff_with_secrets_suppressed(&chart, &[], &CommandKiller::never(), &mut |_| {})
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            HelmError::CmdError(release_name, HelmCommand::DIFF, _) if release_name == "test-release"
+        ));
     }
 }
 

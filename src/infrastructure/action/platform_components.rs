@@ -36,6 +36,7 @@ const DEFAULT_TERMINATION_MESSAGE_PATH: &str = "/dev/termination-log";
 const TERMINATION_MESSAGE_MAX_BYTES: usize = 4096;
 
 enum PlatformHelmDeploymentEvent<'a> {
+    RetrievingDependencies { chart_name: &'a str },
     ShowingDiff { chart_name: &'a str },
     Deploying { chart_name: &'a str },
     Deployed { chart_name: &'a str },
@@ -44,6 +45,9 @@ enum PlatformHelmDeploymentEvent<'a> {
 impl Display for PlatformHelmDeploymentEvent<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            PlatformHelmDeploymentEvent::RetrievingDependencies { chart_name } => {
+                write!(formatter, "🪤 Retrieving dependencies for chart: {chart_name}")
+            }
             PlatformHelmDeploymentEvent::ShowingDiff { chart_name } => {
                 write!(formatter, "🔍 Showing diff for chart: {chart_name}")
             }
@@ -526,6 +530,12 @@ fn download_platform_chart(
     })?;
 
     // Fetch chart dependencies, as the Helm service deployment does.
+    logger.info(
+        PlatformHelmDeploymentEvent::RetrievingDependencies {
+            chart_name: &unit.release_name,
+        }
+        .to_string(),
+    );
     helm.dependency_build(
         &unit.release_name,
         &charts_root,
@@ -583,6 +593,10 @@ mod tests {
     fn platform_helm_deployment_events_use_expected_messages() {
         let chart_name = "cluster-agent";
 
+        assert_eq!(
+            PlatformHelmDeploymentEvent::RetrievingDependencies { chart_name }.to_string(),
+            "🪤 Retrieving dependencies for chart: cluster-agent"
+        );
         assert_eq!(
             PlatformHelmDeploymentEvent::ShowingDiff { chart_name }.to_string(),
             "🔍 Showing diff for chart: cluster-agent"
