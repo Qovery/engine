@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: v2.8.3
+appVersion: v3.4.2
 description: AWS Load Balancer Controller Helm chart for Kubernetes
 home: https://github.com/aws/eks-charts
 icon: https://raw.githubusercontent.com/aws/eks-charts/master/docs/logo/aws.png
@@ -9,14 +9,15 @@ keywords:
 - load balancer
 - ingress
 - nlb
+- gateway api
 maintainers:
-- email: kishorj@users.noreply.github.com
-  name: kishorj
-  url: https://github.com/kishorj
-- email: m00nf1sh@users.noreply.github.com
-  name: m00nf1sh
-  url: https://github.com/m00nf1sh
+- email: zac-nixon@users.noreply.github.com
+  name: zac-nixon
+  url: https://github.com/zac-nixon
+- email: shraddhabang@users.noreply.github.com
+  name: shraddhabang
+  url: https://github.com/shraddhabang
 name: aws-load-balancer-controller
 sources:
 - https://github.com/aws/eks-charts
-version: 1.8.3
+version: 3.4.2

@@ -58,7 +58,7 @@ charts:
   - name: aws-load-balancer-controller
     repo_name: aws
     dest: aws-bootstrap
-    version: 1.8.3
+    version: 3.4.2
     comment: |
       This chart should be replaced by the EKS addon once it will be out
       https://github.com/aws/eks-charts/tree/gh-pages
