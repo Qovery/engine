@@ -12,17 +12,17 @@ metadata:
     {{- include "aws-load-balancer-controller.labels" . | nindent 4 }}
 webhooks:
 - clientConfig:
-    {{ if not $.Values.enableCertManager -}}
+    {{- if not $.Values.enableCertManager }}
     caBundle: {{ $tls.caCert }}
-    {{ end }}
+    {{- end }}
     service:
       name: {{ template "aws-load-balancer-controller.webhookService" . }}
       namespace: {{ $.Release.Namespace }}
       path: /mutate-v1-pod
-  failurePolicy: Fail
+  failurePolicy: {{ .Values.podMutatorWebhookConfig.failurePolicy }}
   name: mpod.elbv2.k8s.aws
   admissionReviewVersions:
-  - v1beta1
+  - v1
   namespaceSelector:
     matchExpressions:
     {{ if .Values.webhookNamespaceSelectors }}
@@ -56,11 +56,56 @@ webhooks:
     resources:
     - pods
   sideEffects: None
+- clientConfig:
+    {{- if not $.Values.enableCertManager }}
+    caBundle: {{ $tls.caCert }}
+    {{- end }}
+    service:
+      name: {{ template "aws-load-balancer-controller.webhookService" . }}
+      namespace: {{ $.Release.Namespace }}
+      path: /mutate-v1-pod-server-id
+  failurePolicy: Fail
+  name: quicid.elbv2.k8s.aws
+  admissionReviewVersions:
+    - v1
+  namespaceSelector:
+    matchExpressions:
+    {{ if .Values.webhookNamespaceSelectors }}
+    {{ toYaml .Values.webhookNamespaceSelectors | nindent 4 }}
+    {{ else }}
+      - key: elbv2.k8s.aws/quic-server-id-inject
+        operator: In
+        values:
+          - enabled
+    {{ end }}
+  objectSelector:
+    matchExpressions:
+    - key: app.kubernetes.io/name
+      operator: NotIn
+      values:
+        - {{ include "aws-load-balancer-controller.name" . }}
+    {{- if .Values.objectSelector.matchExpressions }}
+    {{- toYaml .Values.objectSelector.matchExpressions | nindent 4 }}
+    {{- end }}
+    {{- if .Values.objectSelector.matchLabels }}
+    matchLabels:
+    {{- toYaml .Values.objectSelector.matchLabels | nindent 6 }}
+    {{- end }}
+  rules:
+    - apiGroups:
+        - ""
+      apiVersions:
+        - v1
+      operations:
+        - CREATE
+      resources:
+        - pods
+  sideEffects: None
 {{- if .Values.enableServiceMutatorWebhook }}
 - clientConfig:
-    {{ if not $.Values.enableCertManager -}}
+    {{- if not $.Values.enableCertManager }}
     caBundle: {{ $tls.caCert }}
-    {{ end }}
+    {{- end }}
     service:
       name: {{ template "aws-load-balancer-controller.webhookService" . }}
       namespace: {{ $.Release.Namespace }}
@@ -68,7 +113,12 @@ webhooks:
   failurePolicy: {{ .Values.serviceMutatorWebhookConfig.failurePolicy }}
   name: mservice.elbv2.k8s.aws
   admissionReviewVersions:
-  - v1beta1
+  - v1
+  {{- if .Values.serviceMutatorWebhookConfig.namespaceSelectors }}
+  namespaceSelector:
+    matchExpressions:
+    {{- toYaml .Values.serviceMutatorWebhookConfig.namespaceSelectors | nindent 4 }}
+  {{- end }}
   objectSelector:
     matchExpressions:
     - key: app.kubernetes.io/name
@@ -95,6 +145,80 @@ webhooks:
   sideEffects: None
 {{- end }}
 - clientConfig:
+    {{- if not $.Values.enableCertManager }}
+    caBundle: {{ $tls.caCert }}
+    {{- end }}
+    service:
+      name: {{ template "aws-load-balancer-controller.webhookService" . }}
+      namespace: {{ $.Release.Namespace }}
+      path: /mutate-alb-target-control-namespace-v1-pod
+  failurePolicy: Fail
+  name: alb-target-control.namespace.elbv2.k8s.aws
+  admissionReviewVersions:
+  - v1
+  namespaceSelector:
+    matchExpressions:
+    - key: elbv2.k8s.aws/alb-target-control-agent-injection
+      operator: In
+      values:
+      - enabled
+  objectSelector:
+    matchExpressions:
+    - key: app.kubernetes.io/name
+      operator: NotIn
+      values:
+      - {{ include "aws-load-balancer-controller.name" . }}
+    - key: elbv2.k8s.aws/alb-target-control-agent-inject
+      operator: NotIn
+      values:
+      - "false"
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+  sideEffects: None
+- clientConfig:
+    {{ if not $.Values.enableCertManager -}}
+    caBundle: {{ $tls.caCert }}
+    {{ end }}
+    service:
+      name: {{ template "aws-load-balancer-controller.webhookService" . }}
+      namespace: {{ $.Release.Namespace }}
+      path: /mutate-alb-target-control-object-v1-pod
+  failurePolicy: Fail
+  name: alb-target-control.object.elbv2.k8s.aws
+  admissionReviewVersions:
+  - v1
+  namespaceSelector:
+    matchExpressions:
+    - key: elbv2.k8s.aws/alb-target-control-agent-injection
+      operator: DoesNotExist
+  objectSelector:
+    matchExpressions:
+    - key: app.kubernetes.io/name
+      operator: NotIn
+      values:
+      - {{ include "aws-load-balancer-controller.name" . }}
+    - key: elbv2.k8s.aws/alb-target-control-agent-inject
+      operator: In
+      values:
+      - "true"
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    resources:
+    - pods
+  sideEffects: None
+- clientConfig:
     {{ if not $.Values.enableCertManager -}}
     caBundle: {{ $tls.caCert }}
     {{ end }}
@@ -105,7 +229,7 @@ webhooks:
   failurePolicy: Fail
   name: mtargetgroupbinding.elbv2.k8s.aws
   admissionReviewVersions:
-  - v1beta1
+  - v1
   rules:
   - apiGroups:
     - elbv2.k8s.aws
@@ -130,9 +254,9 @@ metadata:
     {{- include "aws-load-balancer-controller.labels" . | nindent 4 }}
 webhooks:
 - clientConfig:
-    {{ if not $.Values.enableCertManager -}}
+    {{- if not $.Values.enableCertManager }}
     caBundle: {{ $tls.caCert }}
-    {{ end }}
+    {{- end }}
     service:
       name: {{ template "aws-load-balancer-controller.webhookService" . }}
       namespace: {{ $.Release.Namespace }}
@@ -140,7 +264,7 @@ webhooks:
   failurePolicy: Fail
   name: vingressclassparams.elbv2.k8s.aws
   admissionReviewVersions:
-  - v1beta1
+  - v1
   objectSelector:
     matchExpressions:
     - key: app.kubernetes.io/name
@@ -159,9 +283,9 @@ webhooks:
     - ingressclassparams
   sideEffects: None
 - clientConfig:
-    {{ if not $.Values.enableCertManager -}}
+    {{- if not $.Values.enableCertManager }}
     caBundle: {{ $tls.caCert }}
-    {{ end }}
+    {{- end }}
     service:
       name: {{ template "aws-load-balancer-controller.webhookService" . }}
       namespace: {{ $.Release.Namespace }}
@@ -169,7 +293,7 @@ webhooks:
   failurePolicy: Fail
   name: vtargetgroupbinding.elbv2.k8s.aws
   admissionReviewVersions:
-  - v1beta1
+  - v1
   rules:
   - apiGroups:
     - elbv2.k8s.aws
@@ -181,19 +305,42 @@ webhooks:
     resources:
     - targetgroupbindings
   sideEffects: None
+{{- if not $.Values.webhookConfig.disableIngressValidation }}
 - clientConfig:
-    {{ if not $.Values.enableCertManager -}}
+    {{- if not $.Values.enableCertManager }}
     caBundle: {{ $tls.caCert }}
-    {{ end }}
+    {{- end }}
     service:
       name: {{ template "aws-load-balancer-controller.webhookService" . }}
       namespace: {{ $.Release.Namespace }}
       path: /validate-networking-v1-ingress
-  failurePolicy: Fail
+  failurePolicy:  {{ $.Values.webhookConfig.ingressValdationFailurePolicy }}
   matchPolicy: Equivalent
   name: vingress.elbv2.k8s.aws
+  {{- if .Values.webhookConfig.ingressValidationObjectSelector }}
+  objectSelector:
+    {{- if .Values.webhookConfig.ingressValidationObjectSelector.matchExpressions }}
+    matchExpressions:
+    {{ toYaml .Values.webhookConfig.ingressValidationObjectSelector.matchExpressions | nindent 4 }}
+    {{- end }}
+    {{- if .Values.webhookConfig.ingressValidationObjectSelector.matchLabels }}
+    matchLabels:
+    {{ toYaml .Values.webhookConfig.ingressValidationObjectSelector.matchLabels | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.webhookConfig.ingressValidationNamespaceSelector }}
+  namespaceSelector:
+    {{- if .Values.webhookConfig.ingressValidationNamespaceSelector.matchExpressions }}
+    matchExpressions:
+    {{ toYaml .Values.webhookConfig.ingressValidationNamespaceSelector.matchExpressions | nindent 4 }}
+    {{- end }}
+    {{- if .Values.webhookConfig.ingressValidationNamespaceSelector.matchLabels }}
+    matchLabels:
+    {{ toYaml .Values.webhookConfig.ingressValidationNamespaceSelector.matchLabels | nindent 6 }}
+    {{- end }}
+  {{- end }}
   admissionReviewVersions:
-  - v1beta1
+  - v1
   rules:
   - apiGroups:
     - networking.k8s.io
@@ -205,6 +352,37 @@ webhooks:
     resources:
     - ingresses
   sideEffects: None
+{{- end }}
+{{- if .Values.controllerConfig.featureGates.GlobalAcceleratorController }}
+- clientConfig:
+    {{- if not $.Values.enableCertManager }}
+    caBundle: {{ $tls.caCert }}
+    {{- end }}
+    service:
+      name: {{ template "aws-load-balancer-controller.webhookService" . }}
+      namespace: {{ $.Release.Namespace }}
+      path: /validate-aga-k8s-aws-v1beta1-globalaccelerator
+      port: 443
+  failurePolicy: Fail
+  matchPolicy: Equivalent
+  name: vglobalaccelerator.aga.k8s.aws
+  admissionReviewVersions:
+  - v1
+  namespaceSelector: {}
+  objectSelector: {}
+  rules:
+  - apiGroups:
+    - aga.k8s.aws
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - globalaccelerators
+  sideEffects: None
+  timeoutSeconds: 10
+{{- end }}
 ---
 {{- if not $.Values.enableCertManager }}
 apiVersion: v1
@@ -232,17 +410,22 @@ spec:
   - {{ template "aws-load-balancer-controller.webhookService" . }}.{{ .Release.Namespace }}.svc
   - {{ template "aws-load-balancer-controller.webhookService" . }}.{{ .Release.Namespace }}.svc.{{ .Values.cluster.dnsDomain }}
   issuerRef:
+    {{- if .Values.certManager.issuerRef }}
+    {{- toYaml .Values.certManager.issuerRef | nindent 4 }}
+    {{- else }}
     kind: Issuer
-    name: {{ template "aws-load-balancer-controller.namePrefix" . }}-selfsigned-issuer
+    name: {{ template "aws-load-balancer-controller.namePrefix" . }}-root-issuer
+    {{- end }}
   secretName: {{ template "aws-load-balancer-controller.webhookCertSecret" . }}
----
-apiVersion: cert-manager.io/v1
-kind: Issuer
-metadata:
-  name: {{ template "aws-load-balancer-controller.namePrefix" . }}-selfsigned-issuer
-  namespace: {{ .Release.Namespace }}
-  labels:
-{{ include "aws-load-balancer-controller.labels" . | indent 4 }}
-spec:
-  selfSigned: {}
+  {{- with .Values.certManager -}}
+  {{ if .duration }}
+  duration: {{ .duration | default "8760h0m0s" | quote }}
+  {{- end }}
+  {{- if .renewBefore }}
+  renewBefore: {{ .renewBefore }}
+  {{- end }}
+  {{- if .revisionHistoryLimit }}
+  revisionHistoryLimit: {{ .revisionHistoryLimit }}
+  {{- end }}
+  {{- end }}
 {{- end }}

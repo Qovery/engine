@@ -8,7 +8,7 @@ revisionHistoryLimit: 10
 
 image:
   repository: public.ecr.aws/eks/aws-load-balancer-controller
-  tag: v2.8.3
+  tag: v3.4.2
   pullPolicy: IfNotPresent
 
 runtimeClassName: ""
@@ -39,7 +39,7 @@ serviceAccount:
   automountServiceAccountToken: true
   # List of image pull secrets to add to the Service Account.
   imagePullSecrets:
-    # - name: docker
+  # - name: docker
 
 rbac:
   # Specifies whether rbac resources should be created
@@ -69,7 +69,7 @@ resources: {}
   #   memory: 128Mi
   # requests:
   #   cpu: 100m
-  #   memory: 128Mi
+#   memory: 128Mi
 
 # priorityClassName specifies the PriorityClass to indicate the importance of controller pods
 # ref: https://kubernetes.io/docs/concepts/configuration/pod-priority-preemption/#priorityclass
@@ -91,13 +91,13 @@ configureDefaultAffinity: true
 # nodes, and other user-defined topology domains.
 #
 # more details here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
-topologySpreadConstraints: {}
+topologySpreadConstraints: []
 
 updateStrategy: {}
   # type: RollingUpdate
   # rollingUpdate:
   #   maxSurge: 1
-  #   maxUnavailable: 1
+#   maxUnavailable: 1
 
 # serviceAnnotations contains annotations to be added to the provisioned webhook service resource
 serviceAnnotations: {}
@@ -114,6 +114,22 @@ additionalLabels: {}
 
 # Enable cert-manager
 enableCertManager: false
+
+# Overrideable variables when enableCertManager is set to true
+certManager:
+  # Webhook serving certificate configuration
+  duration: "8760h0m0s"  # 1 year
+  renewBefore: "720h0m0s"  # 30 days
+  revisionHistoryLimit:
+
+  # Root CA certificate configuration
+  rootCert:
+    duration: "43800h0m0s"  # 5 years
+
+  # Optional: custom issuer reference
+  # issuerRef:
+  #   name: my-issuer
+  #   kind: ClusterIssuer
 
 # The name of the Kubernetes cluster. A non-empty value is required
 clusterName:
@@ -149,7 +165,7 @@ ingressClassParams:
     # tags:
     # loadBalancerAttributes:
     # - key:
-    #   value:
+  #   value:
 
 # To use IngressClass resource instead of annotation, before you need to install the IngressClass resource pointing to controller.
 # If specified as true, the IngressClass resource will be created.
@@ -160,6 +176,11 @@ region:
 
 # The VPC ID for the Kubernetes cluster. Set this manually when your pods are unable to use the metadata service to determine this automatically
 vpcId:
+
+# This is alternative to vpcId. Set this when your pods are unable to use the metadata service to determine VPC automatically.
+# All specified tags are used as AND filters for VPC lookup.
+vpcTags: {}
+# Name: tagValue
 
 # Custom AWS API Endpoints (serviceID1=URL1,serviceID2=URL2)
 awsApiEndpoints:
@@ -179,6 +200,11 @@ awsMaxRetries:
 # The value "instance" should be used for overlay-based CNIs, such as Calico in VXLAN or IPIP mode or
 # Cilium with masquerading enabled.
 defaultTargetType: instance
+
+# Default load balancer scheme when not specifying "alb.ingress.kubernetes.io/scheme" or
+# "service.beta.kubernetes.io/aws-load-balancer-scheme" annotations.
+# Possible values are "internal" and "internet-facing" (default "internal")
+defaultLoadBalancerScheme:
 
 # If enabled, targetHealth readiness gate will get injected to the pod spec for the matching endpoint pods (default true)
 enablePodReadinessGateInject:
@@ -201,6 +227,21 @@ logLevel:
 # The address the metric endpoint binds to. (default ":8080")
 metricsBindAddr: ""
 
+webhookConfig:
+  # disableIngressValidation disables the validation of resources of kind Ingress, false by default
+  disableIngressValidation:
+  # whether or not to fail the ingress creation if the webhook fails
+  ingressValdationFailurePolicy: Fail
+  # limit ingress validation webhook to only validate ingresses matching the objectSelector
+  ingressValidationObjectSelector:
+    matchExpressions:
+    matchLabels:
+  # limit ingress validation webhook to only validate ingresses in the namespace matching the object selector.
+  ingressValidationNamespaceSelector:
+    matchExpressions:
+    matchLabels:
+
+
 # The TCP port the Webhook server binds to. (default 9443)
 webhookBindPort:
 
@@ -210,15 +251,15 @@ webhookTLS:
   cert:
   key:
 
+# keepTLSSecret specifies whether to reuse existing TLS secret for chart upgrade when cert-manager is not being used
+keepTLSSecret: false
+
 # array of namespace selectors for the pod mutator webhook
 webhookNamespaceSelectors:
 # - key: elbv2.k8s.aws/pod-readiness-gate-inject
 #   operator: In
 #   values:
 #   - enabled
-
-# keepTLSSecret specifies whether to reuse existing TLS secret for chart upgrade
-keepTLSSecret: true
 
 # Maximum number of concurrently running reconcile loops for service (default 3)
 serviceMaxConcurrentReconciles:
@@ -228,6 +269,24 @@ targetgroupbindingMaxConcurrentReconciles:
 
 # Maximum duration of exponential backoff for targetGroupBinding reconcile failures
 targetgroupbindingMaxExponentialBackoffDelay:
+
+# Duration after which TargetGroupBinding will be requeued for reconciliation when it's waiting for AWS resources to update.
+targetgroupbindingRequeueDuration:
+
+# Maximum number of concurrently running reconcile loops for ALB gateways (default 3)
+albGatewayMaxConcurrentReconciles:
+
+# Maximum number of concurrently running reconcile loops for NLB gateways (default 3)
+nlbGatewayMaxConcurrentReconciles:
+
+# Maximum number of concurrently running reconcile loops for GlobalAccelerator objects
+globalAcceleratorMaxConcurrentReconciles:
+
+# Maximum duration of exponential backoff for GlobalAccelerator reconcile failures
+globalAcceleratorMaxExponentialBackoffDelay:
+
+# Interval at which the controller monitors the state of load balancer after creation for stabilization
+lbStabilizationMonitorInterval:
 
 # Period at which the controller forces the repopulation of its local object stores. (default 10h0m0s)
 syncPeriod:
@@ -275,17 +334,16 @@ readinessProbe:
 # We strongly discourage programming access credentials in the controller environment. You should setup IRSA or
 # comparable solutions like kube2iam, kiam etc instead.
 env:
-  # ENV_1: ""
-  # ENV_2: ""
+# ENV_1: ""
+# ENV_2: ""
 
 # Use Environment variables credentials from Secret (aws-secret) for aws-load-balancer-controller pod similarly as The EBS CSI Driver does.
 # envSecretName: aws-secret
 
 # Use envFrom to set environment variables from a Secret or ConfigMap
-envFrom: 
-  # valueFrom:
-  #   - secretKeyRef:
-  #       name: aws-load-balancer-controller
+# envFrom:
+#   - secretRef:
+#       name: my-secret
 
 # Specifies if aws-load-balancer-controller should be started in hostNetwork mode.
 # This is required if using a custom CNI where the managed control plane nodes are unable to initiate
@@ -302,25 +360,25 @@ dnsPolicy:
 
 # extraVolumeMounts are the additional volume mounts. This enables setting up IRSA on non-EKS Kubernetes cluster
 extraVolumeMounts:
-  # - name: aws-iam-token
-  #   mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
-  #   readOnly: true
+# - name: aws-iam-token
+#   mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
+#   readOnly: true
 
 # extraVolumes for the extraVolumeMounts. Useful to mount a projected service account token for example.
 extraVolumes:
-  # - name: aws-iam-token
-  #   projected:
-  #     defaultMode: 420
-  #     sources:
-  #     - serviceAccountToken:
-  #         audience: sts.amazonaws.com
-  #         expirationSeconds: 86400
-  #         path: token
+# - name: aws-iam-token
+#   projected:
+#     defaultMode: 420
+#     sources:
+#     - serviceAccountToken:
+#         audience: sts.amazonaws.com
+#         expirationSeconds: 86400
+#         path: token
 
 # defaultTags are the tags to apply to all AWS resources managed by this controller
 defaultTags: {}
   # default_tag1: value1
-  # default_tag2: value2
+# default_tag2: value2
 
 # podDisruptionBudget specifies the disruption budget for the controller pods.
 # Disruption budget will be configured only when the replicaCount is greater than 1
@@ -330,17 +388,23 @@ podDisruptionBudget: {}
 # externalManagedTags is the list of tag keys on AWS resources that will be managed externally
 externalManagedTags: []
 
-# enableEndpointSlices enables k8s EndpointSlices for IP targets instead of Endpoints (default false)
+# enableEndpointSlices enables k8s EndpointSlices for IP targets instead of Endpoints (default true)
 enableEndpointSlices:
 
 # enableBackendSecurityGroup enables shared security group for backend traffic (default true)
 enableBackendSecurityGroup:
+
+# enableManageBackendSecurityGroupRules enables controller manages security group rules (default false)
+enableManageBackendSecurityGroupRules:
 
 # backendSecurityGroup specifies backend security group id (default controller auto create backend security group)
 backendSecurityGroup:
 
 # disableRestrictedSecurityGroupRules specifies whether to disable creating port-range restricted security group rules for traffic
 disableRestrictedSecurityGroupRules:
+
+# maxTargetsPerTargetGroup specifies the maximum number of targets that the controller will attempt to add to a given ELB instance
+maxTargetsPerTargetGroup:
 
 # controllerConfig specifies controller configuration
 controllerConfig:
@@ -352,9 +416,28 @@ controllerConfig:
   # EndpointsFailOpen: true
   # EnableServiceController: true
   # EnableIPTargetType: true
+  # EnableTCPUDPListener: false
+  # EnableRGTAPI: false
   # SubnetsClusterTagCheck: true
   # NLBHealthCheckAdvancedConfig: true
+  # NLBSecurityGroup: true
   # ALBSingleSubnet: false
+  # LBCapacityReservation: true
+  # SubnetDiscoveryByReachability: true
+  # NLBGatewayAPI: true
+  # ALBGatewayAPI: true
+  # GatewayListenerSet: true
+  # GlobalAcceleratorController: false
+  # IngressPlanAnnotation: false
+  # EnhancedDefaultBehavior: false
+  # EnableDefaultTagsLowPriority: false
+  # ALBTargetControlAgent: false
+  # EnableCertificateManagement: false
+
+# see https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/guide/ingress/certificate_management/
+certManagement: {}
+  # Default PCA ARN that will be applied to all Ingresses that do not have a PCA ARN set but added the cerate-acm-cert annotation
+# defaultPCAARN: ""
 
 certDiscovery:
   allowedCertificateAuthorityARNs: "" # empty means all CAs are in scope
@@ -413,11 +496,22 @@ serviceMutatorWebhookConfig:
     #   values:
     #   - <value>
     matchLabels: {}
-      # key: value
+    # key: value
+  # array of namespace selectors for the service mutator webhook
+  namespaceSelectors:
+  # - key: <key>
+  #   operator: <operator>
+  #   values:
+  #   - <value>
   # which operations trigger the webhook
   operations:
-  - CREATE
+    - CREATE
     # - UPDATE
+
+# podMutatorWebhookConfig contains configurations specific to the service mutator webhook
+podMutatorWebhookConfig:
+  # whether or not to fail the pod creation if the webhook fails
+  failurePolicy: Ignore
 
 # serviceTargetENISGTags specifies AWS tags, in addition to the cluster tags, for finding the target ENI SG to which to add inbound rules from NLBs.
 serviceTargetENISGTags:

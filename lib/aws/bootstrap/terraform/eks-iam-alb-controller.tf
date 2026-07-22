@@ -2,7 +2,8 @@ resource "aws_iam_policy" "aws_load_balancer_controller_policy" {
   name = "qovery-alb-controller-${var.kubernetes_cluster_id}"
   description = "Policy for AWS Load Balancer Controller"
 
-  // https://kubernetes-sigs.github.io/aws-load-balancer-controller/v2.4/deploy/installation/#option-b-attach-iam-policies-to-nodes 
+  // Keep this policy aligned with upstream:
+  // https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
   policy = jsonencode({
     "Version": "2012-10-17",
     "Statement": [
@@ -34,6 +35,9 @@ resource "aws_iam_policy" "aws_load_balancer_controller_policy" {
                 "ec2:DescribeTags",
                 "ec2:GetCoipPoolUsage",
                 "ec2:DescribeCoipPools",
+                "ec2:GetSecurityGroupsForVpc",
+                "ec2:DescribeIpamPools",
+                "ec2:DescribeRouteTables",
                 "elasticloadbalancing:DescribeLoadBalancers",
                 "elasticloadbalancing:DescribeLoadBalancerAttributes",
                 "elasticloadbalancing:DescribeListeners",
@@ -43,7 +47,10 @@ resource "aws_iam_policy" "aws_load_balancer_controller_policy" {
                 "elasticloadbalancing:DescribeTargetGroups",
                 "elasticloadbalancing:DescribeTargetGroupAttributes",
                 "elasticloadbalancing:DescribeTargetHealth",
-                "elasticloadbalancing:DescribeTags"
+                "elasticloadbalancing:DescribeTags",
+                "elasticloadbalancing:DescribeTrustStores",
+                "elasticloadbalancing:DescribeListenerAttributes",
+                "elasticloadbalancing:DescribeCapacityReservation"
             ],
             "Resource": "*"
         },
@@ -214,7 +221,10 @@ resource "aws_iam_policy" "aws_load_balancer_controller_policy" {
                 "elasticloadbalancing:DeleteLoadBalancer",
                 "elasticloadbalancing:ModifyTargetGroup",
                 "elasticloadbalancing:ModifyTargetGroupAttributes",
-                "elasticloadbalancing:DeleteTargetGroup"
+                "elasticloadbalancing:DeleteTargetGroup",
+                "elasticloadbalancing:ModifyListenerAttributes",
+                "elasticloadbalancing:ModifyCapacityReservation",
+                "elasticloadbalancing:ModifyIpPools"
             ],
             "Resource": "*",
             "Condition": {
@@ -238,7 +248,8 @@ resource "aws_iam_policy" "aws_load_balancer_controller_policy" {
                 "elasticloadbalancing:ModifyListener",
                 "elasticloadbalancing:AddListenerCertificates",
                 "elasticloadbalancing:RemoveListenerCertificates",
-                "elasticloadbalancing:ModifyRule"
+                "elasticloadbalancing:ModifyRule",
+                "elasticloadbalancing:SetRulePriorities"
             ],
             "Resource": "*"
         }
