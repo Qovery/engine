@@ -389,10 +389,10 @@ platformTemplateRelease:
                 kind: qcoreValue
                 key: cluster.id
               required: true
-            - name: cluster.jwtRevision
+            - name: cluster.jwtKid
               source:
                 kind: qcoreValue
-                key: cluster.jwtRevision
+                key: cluster.jwtKid
               required: true
         - key: cert-manager-configs
           kind: HELM

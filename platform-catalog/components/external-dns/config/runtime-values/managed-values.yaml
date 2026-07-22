@@ -5,4 +5,4 @@ txtOwnerId: "${cluster.id}"
 extraArgs:
   pdns-server: "${dns.qovery.apiEndpoint}"
 podAnnotations:
-  qovery.com/external-dns-credential-revision: "${cluster.jwtRevision}"
+  qovery.com/external-dns-credential-revision: "${cluster.jwtKid}"

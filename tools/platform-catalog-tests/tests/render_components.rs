@@ -237,6 +237,13 @@ fn qovery_dns_consumers_keep_split_and_combined_endpoint_contracts() {
         yaml_string(&external_dns_values, &["extraArgs", "pdns-server"]),
         Some("${dns.qovery.apiEndpoint}")
     );
+    assert_eq!(
+        yaml_string(
+            &external_dns_values,
+            &["podAnnotations", "qovery.com/external-dns-credential-revision"]
+        ),
+        Some("${cluster.jwtKid}")
+    );
 }
 
 #[test]
