@@ -177,7 +177,6 @@ pub(super) fn gke_helm_charts(
             (true, false) => ExternalDNSSourcesMode::All,
             _ => ExternalDNSSourcesMode::Ingress,
         },
-        KubernetesKind::Gke,
     )
     .to_common_helm_chart()?;
 
