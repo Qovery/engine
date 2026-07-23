@@ -408,7 +408,6 @@ pub(super) fn eks_helm_charts(
             (true, false) => ExternalDNSSourcesMode::All,
             _ => ExternalDNSSourcesMode::Ingress,
         },
-        KubernetesKind::Eks,
     )
     .to_common_helm_chart()?;
 
