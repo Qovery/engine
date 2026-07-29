@@ -11,7 +11,7 @@ global:
   images:
     envoyGateway:
       # This is the full image name including the hub, repo, and tag.
-      image: docker.io/envoyproxy/gateway:v1.8.2
+      image: docker.io/envoyproxy/gateway:v1.8.3
       # Specify image pull policy if default behavior isn't desired.
       # Default behavior: latest images will be Always else IfNotPresent.
       pullPolicy: IfNotPresent

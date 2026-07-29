@@ -156,11 +156,11 @@ charts:
   - name: gateway-helm
     dest_folder_override: envoy-gateway
     repo_name: oci://docker.io/envoyproxy
-    version: v1.8.2
+    version: v1.8.3
   - name: gateway-crds-helm
     dest_folder_override: envoy-gateway-crd
     repo_name: oci://docker.io/envoyproxy
-    version: v1.8.2
+    version: v1.8.3
   - name: external-secrets
     repo_name: external-secrets
     version: 1.3.2
