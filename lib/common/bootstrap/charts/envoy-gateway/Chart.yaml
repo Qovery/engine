@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: v1.8.2
+appVersion: v1.8.3
 dependencies:
 - condition: crds.enabled
   name: crds
@@ -22,4 +22,4 @@ name: gateway-helm
 sources:
 - https://github.com/envoyproxy/gateway
 type: application
-version: v1.8.2
+version: v1.8.3
