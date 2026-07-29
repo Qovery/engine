@@ -16,7 +16,7 @@ metadata:
     app.kubernetes.io/managed-by: "qovery"
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 300
+  activeDeadlineSeconds: {{ service.max_duration_in_sec }}
   template:
     metadata:
       labels:
@@ -32,10 +32,21 @@ spec:
         app.kubernetes.io/managed-by: "qovery"
     spec:
       restartPolicy: Never
-      containers:
-        - name: {{ service.kube_name }}
-          image: public.ecr.aws/docker/library/busybox:stable
-          command: ["sh", "-c", "echo hello world"]
+      volumes:
+        - name: output
+          emptyDir: {}
+        - name: prompt
+          configMap:
+            name: {{ service.kube_name }}-prompt
+      initContainers:
+        - name: qovery-wait-container-output
+          # https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/#pod-sidecar-containers
+          restartPolicy: Always # this tells that the initContainer is a sidecar
+          image: public.ecr.aws/r3m4q3r9/qovery-job-output-waiter:2025-07-15T14-06-16
+          command: ["/qovery-job-output-waiter", "--watch"]
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
           resources:
             limits:
               cpu: "100m"
@@ -43,3 +54,36 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
+      containers:
+        - name: {{ service.kube_name }}
+          image: "{{ service.image_full }}"
+          volumeMounts:
+            - name: output
+              mountPath: /qovery-output
+            - name: prompt
+              mountPath: /qovery-agentic-workflow/prompt.txt
+              subPath: prompt.txt
+              readOnly: true
+          envFrom:
+            - secretRef:
+                name: {{ service.kube_name }}
+          env:
+            # A Job runs the agent once and exits; force oneshot (the ai-runner default is `server`,
+            # which starts a long-lived HTTP server and never processes the prompt). RUN_MODE is a
+            # plain clap env var (NOT one of the base64-encoded contract vars), so it is set here in
+            # plaintext, not via the Secret. See qovery-ai-runner `ai-runner/src/main.rs` (`Mode`).
+            - name: RUN_MODE
+              value: "oneshot"
+            - name: PROMPT_FILE
+              value: "/qovery-agentic-workflow/prompt.txt"
+          resources:
+            limits:
+              {%- if service.cpu_limit_in_milli %}
+              cpu: {{ service.cpu_limit_in_milli }}
+              {%- else %}
+              cpu: {{ service.cpu_request_in_milli }}
+              {%- endif %}
+              memory: {{ service.ram_limit_in_mib }}
+            requests:
+              cpu: {{ service.cpu_request_in_milli }}
+              memory: {{ service.ram_request_in_mib }}
