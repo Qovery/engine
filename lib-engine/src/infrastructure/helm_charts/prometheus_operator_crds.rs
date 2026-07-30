@@ -210,7 +210,7 @@ mod tests {
         );
         let _rm = fs::remove_dir_all(&utests_dir);
         let _mkdir =
-            fs::create_dir(Path::new(&utests_dir)).map_err(|e| format!("Error creating folder {}: {}", &utests_dir, e));
+            fs::create_dir(Path::new(&utests_dir)).map_err(|e| format!("Error creating folder {}: {}", utests_dir, e));
         let output = match Command::new("helm")
             .args([
                 "template".to_string(),
@@ -228,7 +228,7 @@ mod tests {
 
         // list all crd rendered files
         for entry in fs::read_dir(&crds_rendered)
-            .map_err(|e| format!("Error reading folder {}: {}\n{}", &crds_rendered, e, output))
+            .map_err(|e| format!("Error reading folder {}: {}\n{}", crds_rendered, e, output))
             .unwrap()
         {
             let path = entry.unwrap().path();

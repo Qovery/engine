@@ -66,7 +66,7 @@ pub fn kapsule_helm_charts(
         mk_customer_chart_override_fn(chart_config_prerequisites.customer_helm_charts_override.clone());
 
     let chart_prefix = chart_prefix_path.unwrap_or("./");
-    let chart_path = |x: &str| -> String { format!("{}/{}", &chart_prefix, x) };
+    let chart_path = |x: &str| -> String { format!("{}/{}", chart_prefix, x) };
     let prometheus_namespace = HelmChartNamespaces::Prometheus;
     let prometheus_internal_url = format!("http://prometheus-operated.{prometheus_namespace}.svc");
     let loki_namespace = HelmChartNamespaces::Logging;

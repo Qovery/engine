@@ -107,7 +107,7 @@ impl InfrastructureTask {
                 Action::Diff => InfrastructureStep::GlobalError,
             };
             let event_message =
-                EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", &infrastructure_step));
+                EventMessage::new_from_safe(format!("Kubernetes cluster failure {}", infrastructure_step));
 
             let engine_event = EngineEvent::Error(
                 engine_error.clone_engine_error_with_stage(Infrastructure(infrastructure_step)),
@@ -126,7 +126,7 @@ impl InfrastructureTask {
                 Action::Diff => InfrastructureStep::GlobalError,
             };
             let event_message =
-                EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", &infrastructure_step));
+                EventMessage::new_from_safe(format!("Kubernetes cluster successfully {}", infrastructure_step));
             let engine_event = EngineEvent::Info(
                 EventDetails::new(
                     Some(self.request.cloud_provider.kind.clone()),
@@ -160,6 +160,15 @@ impl Task for InfrastructureTask {
             self.id(),
             self.request.cloud_provider.id.as_str(),
         );
+
+        // skip_reconcile only affects the cluster-delete teardown; on any other action it is read by
+        // nothing and silently ignored. Surface the misuse instead of failing silently.
+        if self.request.skip_reconcile && !matches!(self.request.action, Action::Delete) {
+            warn!(
+                "skip_reconcile is set but action is {}; it only applies to Delete and is ignored here",
+                self.request.action
+            );
+        }
 
         self.logger.log(EngineEvent::Info(
             self.get_event_details(InfrastructureStep::Start),
@@ -271,5 +280,6 @@ impl Task for InfrastructureTask {
             self.qovery_api.clone(),
             self.request.event_details(),
         )
+        .with_skip_reconcile(self.request.skip_reconcile)
     }
 }

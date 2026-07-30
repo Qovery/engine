@@ -53,7 +53,7 @@ impl GithubCr {
         let mut headers = HeaderMap::new();
         headers.insert(ACCEPT, HeaderValue::from_static("application/vnd.github+json"));
         headers.insert("X-GitHub-Api-Version", HeaderValue::from_static("2022-11-28"));
-        let mut auth_header = HeaderValue::from_str(&format!("Bearer {}", &token)).map_err(|e| {
+        let mut auth_header = HeaderValue::from_str(&format!("Bearer {}", token)).map_err(|e| {
             ContainerRegistryError::CannotInstantiateClient {
                 raw_error_message: format!("Cannot create auth header: {e}"),
             }

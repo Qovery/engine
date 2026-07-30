@@ -310,7 +310,7 @@ where
 
             // Our terraform gives us back a file with all the info we need to deploy the remaining stuff
             let database_config =
-                get_database_terraform_config(format!("{}/database-tf-config.json", &workspace_dir,).as_str())
+                get_database_terraform_config(format!("{}/database-tf-config.json", workspace_dir,).as_str())
                     .map_err(|err| EngineError::new_terraform_error(event_details.clone(), err))?;
 
             (
@@ -388,7 +388,7 @@ where
 
     let chart = ChartInfo {
         name: format!("{}-externalname", db.fqdn_id), // here it is the fqdn id :O
-        path: format!("{}/{}", &workspace_dir, "service-chart"),
+        path: format!("{}/{}", workspace_dir, "service-chart"),
         namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
         values,
         ..Default::default()
@@ -715,7 +715,7 @@ where
                     let workspace_dir = self.workspace_directory();
                     let chart = ChartInfo {
                         name: format!("{}-externalname", self.fqdn_id),
-                        path: format!("{}/{}", &workspace_dir, "service-chart"),
+                        path: format!("{}/{}", workspace_dir, "service-chart"),
                         namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                         action: HelmAction::Destroy,
                         ..Default::default()
@@ -767,7 +767,7 @@ where
                 // Delete the service attached
                 let chart = ChartInfo {
                     name: format!("{}-externalname", self.fqdn_id), // here it is the fqdn id :O
-                    path: format!("{}/{}", &workspace_dir, "service-chart"),
+                    path: format!("{}/{}", workspace_dir, "service-chart"),
                     namespace: HelmChartNamespaces::Custom(target.environment.namespace().to_string()),
                     action: HelmAction::Destroy,
                     ..Default::default()

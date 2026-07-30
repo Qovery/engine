@@ -613,7 +613,7 @@ impl BuildPlatform for LocalDocker {
                 application: app_id,
                 raw_error_message: format!(
                     "Specified build context path {:?} does not exist within the repository",
-                    &build.git_repository.root_path
+                    build.git_repository.root_path
                 ),
             });
         }
@@ -628,7 +628,7 @@ impl BuildPlatform for LocalDocker {
                 application: app_id,
                 raw_error_message: format!(
                     "Specified build context path {:?} tries to access directory outside of his git repository",
-                    &build.git_repository.root_path,
+                    build.git_repository.root_path,
                 ),
             });
         }
@@ -685,7 +685,7 @@ impl BuildPlatform for LocalDocker {
                 application: app_id,
                 raw_error_message: format!(
                     "Specified dockerfile path {:?} does not exist within the repository",
-                    &dockerfile_path
+                    dockerfile_path
                 ),
             });
         }

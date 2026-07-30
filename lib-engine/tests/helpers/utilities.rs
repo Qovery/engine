@@ -464,7 +464,7 @@ pub fn check_all_connections(env: &EnvironmentRequest) -> Vec<bool> {
     let mut checking: Vec<bool> = Vec::with_capacity(env.routers.len());
 
     for router_to_test in &env.routers {
-        let path_to_test = format!("https://{}{}", &router_to_test.default_domain, &router_to_test.routes[0].path);
+        let path_to_test = format!("https://{}{}", router_to_test.default_domain, router_to_test.routes[0].path);
 
         checking.push(curl_path(path_to_test.as_str()));
     }

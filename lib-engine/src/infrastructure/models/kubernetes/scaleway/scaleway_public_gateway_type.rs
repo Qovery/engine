@@ -61,7 +61,7 @@ mod tests {
             let result_upper_case =
                 ScalewayPublicGatewayType::from_str(&gateway_type.to_string().to_uppercase()).unwrap();
             let result_empty_start_trailing_spaces =
-                ScalewayPublicGatewayType::from_str(format!("  {}  ", &gateway_type.to_string()).as_str()).unwrap();
+                ScalewayPublicGatewayType::from_str(format!("  {}  ", gateway_type).as_str()).unwrap();
             assert!(
                 gateway_type == result_lower_case
                     && gateway_type == result_upper_case

@@ -323,8 +323,8 @@ pub fn environment_2_app_2_routers_1_psql(
         applications: vec![
             Application {
                 long_id: application_id1.to_uuid(),
-                name: format!("{}-{}", "pg-pg-app1", &suffix),
-                kube_name: format!("{}-{}", "pg-pg-app1", &suffix),
+                name: format!("{}-{}", "pg-pg-app1", suffix),
+                kube_name: format!("{}-{}", "pg-pg-app1", suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
@@ -399,8 +399,8 @@ pub fn environment_2_app_2_routers_1_psql(
             },
             Application {
                 long_id: application_id2.to_uuid(),
-                name: format!("{}-{}", "pg-pg-app2", &suffix),
-                kube_name: format!("{}-{}", "pg-pg-app2", &suffix),
+                name: format!("{}-{}", "pg-pg-app2", suffix),
+                kube_name: format!("{}-{}", "pg-pg-app2", suffix),
                 git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
                 branch: "postgres-app".to_string(),
                 commit_id: "eb83eb61319f27f4f85a52b24f92466a75d6daac".to_string(),
@@ -549,8 +549,8 @@ pub fn echo_app_environment(context: &Context, test_domain: &str) -> Environment
         max_parallel_deploy: 1,
         applications: vec![Application {
             long_id: Uuid::new_v4(),
-            name: format!("{}-{}", "echo-app", &suffix),
-            kube_name: format!("{}-{}", "echo-app", &suffix),
+            name: format!("{}-{}", "echo-app", suffix),
+            kube_name: format!("{}-{}", "echo-app", suffix),
             /*name: "simple-app".to_string(),*/
             git_url: "https://github.com/Qovery/engine-testing.git".to_string(),
             commit_id: "2205adea1db295547b99f7b17229afd7e879b6ff".to_string(),
@@ -655,7 +655,7 @@ pub fn environment_only_http_server(
     let router_name = format!("router-{}", router_id.short());
     let suffix = generate_id();
     let application_id = Uuid::new_v4();
-    let application_name = format!("{}-{}", "mini-http", &suffix);
+    let application_name = format!("{}-{}", "mini-http", suffix);
     let application_domain = format!("{}.{}.{}", application_name, context.cluster_short_id(), test_domain);
     let settings = ApplicationAdvancedSettings {
         network_ingress_sticky_session_enable: with_sticky,

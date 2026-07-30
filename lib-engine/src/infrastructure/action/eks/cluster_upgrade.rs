@@ -72,12 +72,12 @@ pub fn upgrade_eks_cluster(
     // use the current kubernetes masters' version for workers, in order to avoid migration in one step
     context.insert(
         "kubernetes_master_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        format!("{}", kubernetes_upgrade_status.requested_version).as_str(),
     );
     // use the current master version for workers, they will be updated later
     context.insert(
         "eks_workers_version",
-        format!("{}", &kubernetes_upgrade_status.deployed_masters_version).as_str(),
+        format!("{}", kubernetes_upgrade_status.deployed_masters_version).as_str(),
     );
 
     logger.info("Upgrading Kubernetes master nodes.");
@@ -99,7 +99,7 @@ pub fn upgrade_eks_cluster(
     context.insert("enable_cluster_autoscaler", &false);
     context.insert(
         "eks_workers_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        format!("{}", kubernetes_upgrade_status.requested_version).as_str(),
     );
     let tf_resources = TerraformInfraResources::new(
         context.clone(),

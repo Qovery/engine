@@ -49,7 +49,7 @@ pub(super) fn upgrade_aks_cluster(
     let mut tera_context = cluster.to_infra_tera_context(infra_ctx)?;
     tera_context.insert(
         "kubernetes_cluster_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        format!("{}", kubernetes_upgrade_status.requested_version).as_str(),
     );
     let tf_resources = TerraformInfraResources::new(
         tera_context,

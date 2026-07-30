@@ -308,7 +308,7 @@ fn checkout<'a>(repo: &'a Repository, commit_id: &'a str) -> Result<Object<'a>, 
             .unwrap_or_default();
         let msg = format!(
             "Unable to use git object commit ID {} on repository {}: {}",
-            &commit_id, &repo_url, &err
+            commit_id, repo_url, err
         );
         Error::from_str(&msg)
     })?;

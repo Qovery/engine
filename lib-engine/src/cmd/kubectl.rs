@@ -284,7 +284,7 @@ where
 
     if let Err(err) = cmd.exec_with_output(stdout_output, stderr_output) {
         let args_string = args.join(" ");
-        let msg = format!("Error on command: kubectl {}. {:?}", args_string, &err);
+        let msg = format!("Error on command: kubectl {}. {:?}", args_string, err);
         error!("{}", &msg);
         return Err(CommandError::new_from_command_line(
             "Error while executing a kubectl command.".to_string(),
@@ -749,8 +749,8 @@ where
     let condition_format = format!(
         "--for={}",
         match condition {
-            PodCondition::Delete => format!("{:?}", &condition).to_lowercase(),
-            _ => format!("condition={:?}", &condition).to_lowercase(),
+            PodCondition::Delete => format!("{:?}", condition).to_lowercase(),
+            _ => format!("condition={:?}", condition).to_lowercase(),
         }
     );
 

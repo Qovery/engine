@@ -107,7 +107,7 @@ impl GoogleArtifactRegistry {
                 );
                 format!(
                     "{}/{}-{}/built-by-qovery",
-                    &project_name,
+                    project_name,
                     image_build_context.cluster_id.short(),
                     git_repo_truncated
                 )
@@ -115,7 +115,7 @@ impl GoogleArtifactRegistry {
             get_image_name: Box::new(move |img_name| {
                 format!(
                     "{}/{}/{img_name}",
-                    &project_name2,
+                    project_name2,
                     match img_name.starts_with("qovery-") {
                         true => img_name.to_string(),
                         false => format!("qovery-{img_name}"), // repository name must start with a letter, then forcing `qovery-` prefix
@@ -265,7 +265,7 @@ impl InteractWithRegistry for GoogleArtifactRegistry {
                 image.repository_name(),
                 image
                     .name
-                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .strip_prefix(&format!("{}/{}/", self.project_id, image.repository_name()))
                     .unwrap_or(&image.name),
             )
             .map_err(|e| ContainerRegistryError::CannotDeleteImage {
@@ -273,7 +273,7 @@ impl InteractWithRegistry for GoogleArtifactRegistry {
                 repository_name: image.repository_name().to_string(),
                 image_name: image
                     .name
-                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .strip_prefix(&format!("{}/{}/", self.project_id, image.repository_name()))
                     .unwrap_or(&image.name)
                     .to_string(),
                 raw_error_message: e.to_string(),
@@ -288,7 +288,7 @@ impl InteractWithRegistry for GoogleArtifactRegistry {
                 image.repository_name(),
                 image
                     .name
-                    .strip_prefix(&format!("{}/{}/", &self.project_id, image.repository_name()))
+                    .strip_prefix(&format!("{}/{}/", self.project_id, image.repository_name()))
                     .unwrap_or(&image.name),
                 image.tag.as_str(),
             )

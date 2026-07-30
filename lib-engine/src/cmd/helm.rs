@@ -334,7 +334,7 @@ impl Helm {
             return Err(CannotRollback(chart.name.clone()));
         }
 
-        let timeout = format!("{}s", &chart.timeout_in_seconds);
+        let timeout = format!("{}s", chart.timeout_in_seconds);
         let namespace = chart.get_namespace_string();
         let args = vec![
             "rollback",
@@ -388,7 +388,7 @@ impl Helm {
             Err(err) => return Err(err),
         }
 
-        let timeout = format!("{}s", &chart.timeout_in_seconds);
+        let timeout = format!("{}s", chart.timeout_in_seconds);
         let namespace = chart.get_namespace_string();
         let args = vec![
             "uninstall",
@@ -1038,7 +1038,7 @@ impl Helm {
         }
 
         for value_file in &chart.yaml_files_content {
-            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_path = format!("{}/{}", chart.path, value_file.filename);
             let file_create = || -> Result<(), Error> {
                 let mut file = File::create(&file_path)?;
                 file.write_all(value_file.yaml_content.as_bytes())?;
@@ -1048,7 +1048,7 @@ impl Helm {
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
                 let cmd_err = errors::CommandError::new(
-                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    format!("Error while writing yaml content to file `{}`", file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
                         envs.iter()
@@ -1102,7 +1102,7 @@ impl Helm {
         let unlock_ret = self.unlock_release(chart, envs);
         info!("Helm lock status: {:?}", unlock_ret);
 
-        let timeout_string = format!("{}s", &chart.timeout_in_seconds);
+        let timeout_string = format!("{}s", chart.timeout_in_seconds);
 
         let mut args_string: Vec<String> = vec![
             "upgrade".to_string(),
@@ -1157,7 +1157,7 @@ impl Helm {
             args_string.push(value_file.clone());
         }
         for value_file in &chart.yaml_files_content {
-            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_path = format!("{}/{}", chart.path, value_file.filename);
             let file_create = || -> Result<(), Error> {
                 let mut file = File::create(&file_path)?;
                 file.write_all(value_file.yaml_content.as_bytes())?;
@@ -1167,7 +1167,7 @@ impl Helm {
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
                 let cmd_err = errors::CommandError::new(
-                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    format!("Error while writing yaml content to file `{}`", file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
                         envs.iter()
@@ -1272,7 +1272,7 @@ impl Helm {
             .flatten()
             .is_some();
 
-        let timeout_string = format!("{}s", &chart.timeout_in_seconds);
+        let timeout_string = format!("{}s", chart.timeout_in_seconds);
 
         let mut args_string: Vec<String> = vec!["template".to_string()];
 
@@ -1326,7 +1326,7 @@ impl Helm {
             args_string.push(value_file.clone());
         }
         for value_file in &chart.yaml_files_content {
-            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_path = format!("{}/{}", chart.path, value_file.filename);
             let file_create = || -> Result<(), Error> {
                 let mut file = File::create(&file_path)?;
                 file.write_all(value_file.yaml_content.as_bytes())?;
@@ -1336,7 +1336,7 @@ impl Helm {
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
                 let cmd_err = errors::CommandError::new(
-                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    format!("Error while writing yaml content to file `{}`", file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
                         envs.iter()
@@ -1849,7 +1849,7 @@ impl Helm {
         }
 
         for value_file in &chart.yaml_files_content {
-            let file_path = format!("{}/{}", chart.path, &value_file.filename);
+            let file_path = format!("{}/{}", chart.path, value_file.filename);
             let file_create = || -> Result<(), Error> {
                 let mut file = File::create(&file_path)?;
                 file.write_all(value_file.yaml_content.as_bytes())?;
@@ -1859,7 +1859,7 @@ impl Helm {
             // no need to validate yaml as it will be done by helm
             if let Err(e) = file_create() {
                 let cmd_err = errors::CommandError::new(
-                    format!("Error while writing yaml content to file `{}`", &file_path),
+                    format!("Error while writing yaml content to file `{}`", file_path),
                     Some(format!("Content\n{}\nError: {}", value_file.yaml_content, e)),
                     Some(
                         envs.iter()
