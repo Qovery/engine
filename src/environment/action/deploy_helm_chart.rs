@@ -557,7 +557,7 @@ fn prepare_helm_chart_directory<T: CloudProvider>(
             // Merge environment variables and external secrets to replace references in values files
 
             for value in values {
-                logger.info(format!("Preparing Helm values file {}", &value.name));
+                logger.info(format!("Preparing Helm values file {}", value.name));
 
                 let lines = value.content.lines().map(Cow::Borrowed);
                 let mut output_path =
@@ -784,7 +784,7 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
             if !WHITELISTED_RESOURCES.contains(&obj.kind.as_str()) {
                 return Err(format!(
                     "Cannot deploy {} {} as it is a cluster wide resource",
-                    &obj.kind, &obj.api_version
+                    obj.kind, obj.api_version
                 ));
             }
         }
@@ -794,7 +794,7 @@ fn is_allowed_namespaced_resource(namespace: &str, kube_obj: &PartialObjectMeta<
                     "Cannot deploy {} {} as it does not target correct namespace. Found {:?} expected {}. To deploy resources outside the environment namespace (or CRD etc..) cluster-wide resource should be allowed",
                     kube_obj.types.as_ref().map(|x| x.kind.as_str()).unwrap_or(""),
                     kube_obj.metadata.name.as_deref().unwrap_or(""),
-                    &kube_obj.metadata.namespace,
+                    kube_obj.metadata.namespace,
                     namespace
                 ));
             }

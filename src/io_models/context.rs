@@ -25,6 +25,8 @@ pub struct Context {
     test_cluster: bool,
     features: Vec<Features>,
     metadata: Option<Metadata>,
+    // skipReconcile: skip the pre-destroy reconcile/apply and be tolerant of already-absent resources.
+    skip_reconcile: bool,
     // AWS Partner Network identifier tagged on AWS resources for the AWS Marketplace listing (engine-global, read at startup).
     aws_apn_id: String,
     pub docker: Arc<Docker>,
@@ -61,6 +63,7 @@ impl Context {
             test_cluster,
             features,
             metadata,
+            skip_reconcile: false,
             aws_apn_id,
             docker,
             qovery_api,
@@ -123,6 +126,16 @@ impl Context {
 
     pub fn metadata(&self) -> Option<&Metadata> {
         self.metadata.as_ref()
+    }
+
+    /// skipReconcile: skip the pre-destroy reconcile/apply and be tolerant of already-absent resources.
+    pub fn with_skip_reconcile(mut self, skip_reconcile: bool) -> Self {
+        self.skip_reconcile = skip_reconcile;
+        self
+    }
+
+    pub fn is_skip_reconcile(&self) -> bool {
+        self.skip_reconcile
     }
 
     pub fn is_dry_run_deploy(&self) -> bool {

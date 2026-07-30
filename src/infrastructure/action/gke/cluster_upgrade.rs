@@ -55,7 +55,7 @@ pub(super) fn upgrade_gke_cluster(
     let gcp_access_token_file_path = cluster.temp_dir().join("gcp-access-token");
     tera_context.insert(
         "kubernetes_cluster_version",
-        format!("{}", &kubernetes_upgrade_status.requested_version).as_str(),
+        format!("{}", kubernetes_upgrade_status.requested_version).as_str(),
     );
     let tf_resources = TerraformInfraResources::new(
         tera_context,

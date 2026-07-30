@@ -133,6 +133,17 @@ impl TerraformInfraResources {
             .map_err(|e| Box::new(EngineError::new_terraform_error(self.event_details.clone(), e)))
     }
 
+    /// Read the existing state outputs without applying: prepare files + init the backend, then read
+    /// outputs (no plan, no apply). Used by skip-reconcile deletes to avoid the hang/failure-prone apply
+    /// while still surfacing outputs so callers can run in-cluster cleanup when the cluster is reachable.
+    /// Returns Err (→ None at call sites) when init/read can't produce outputs (e.g. cluster gone).
+    pub fn init_and_read_output<T: DeserializeOwned>(&self) -> Result<T, Box<EngineError>> {
+        let envs = envs_to_slice(self.envs.as_slice());
+        self.prepare_terraform_files()?;
+        self.terraform_init(&envs)?;
+        self.output::<T>()
+    }
+
     /// Best-effort apply-before-destroy: run `apply`, and on failure fall back to reading the
     /// existing state outputs. Returns `None` when neither yields deserializable outputs (e.g. the
     /// cluster was already partially deleted), so callers can skip steps that need a live cluster

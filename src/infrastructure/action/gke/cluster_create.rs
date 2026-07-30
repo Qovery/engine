@@ -90,7 +90,7 @@ fn create_object_storage(
         match cluster.object_storage.bucket_exists(bucket_name) {
             true => {
                 // bucket already exists, just update it
-                logger.info(format!("Object storage bucket {} already exists", &bucket_name));
+                logger.info(format!("Object storage bucket {} already exists", bucket_name));
                 let existing_bucket = cluster
                     .object_storage
                     .get_bucket(bucket_name)

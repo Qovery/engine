@@ -155,6 +155,9 @@ pub struct EngineRequest<T> {
     pub target_environment: T,
     pub metadata: Option<Metadata>,
     pub archive: Option<Archive>,
+    // Skip the pre-destroy reconcile/apply on delete and be tolerant of already-absent resources.
+    #[serde(default)]
+    pub skip_reconcile: bool,
 }
 
 impl<T> EngineRequest<T> {
@@ -821,7 +824,7 @@ impl KubernetesDto {
                     self.long_id,
                     self.name.as_str(),
                     KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                     AwsRegion::from_str(self.region.as_str()).expect("This AWS region is not supported"),
                     zones.to_vec(),
                     cloud_provider,
@@ -845,7 +848,7 @@ impl KubernetesDto {
                 self.long_id,
                 self.name.clone(),
                 KubernetesVersion::from_str(&self.version)
-                    .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                    .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                 ScwZone::from_str(self.region.as_str()).unwrap_or_else(|_| {
                     panic!(
                         "cannot parse `{}`, it doesn't seem to be a valid SCW zone",
@@ -885,7 +888,7 @@ impl KubernetesDto {
                     &self.name,
                     cloud_provider,
                     KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                     GcpRegion::from_str(self.region.as_str()).unwrap_or_else(|_| {
                         panic!(
                             "cannot parse `{}`, it doesn't seem to be a valid GCP region",
@@ -930,7 +933,7 @@ impl KubernetesDto {
                     self.long_id,
                     &self.name,
                     KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                     AzureLocation::from_str(self.region.as_str()).unwrap_or_else(|_| {
                         panic!(
                             "cannot parse `{}`, it doesn't seem to be a valid Azure location",
@@ -953,7 +956,7 @@ impl KubernetesDto {
                                         |_| {
                                             panic!(
                                                 "cannot parse `{}`, it doesn't seem to be a valid Azure instance type",
-                                                &ng.instance_type,
+                                                ng.instance_type,
                                             )
                                         },
                                     ),
@@ -989,7 +992,7 @@ impl KubernetesDto {
                     self.kind,
                     self.region.to_string(),
                     KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                     serde_json::from_value::<kubernetes::self_managed::on_premise::SelfManagedOptions>(
                         self.options.clone(),
                     )
@@ -1025,7 +1028,7 @@ impl KubernetesDto {
                     self.kind,
                     self.region.to_string(),
                     KubernetesVersion::from_str(&self.version)
-                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", &self.version)),
+                        .unwrap_or_else(|_| panic!("Kubernetes version `{}` is not supported", self.version)),
                     options,
                     logger,
                     self.advanced_settings.clone(),
@@ -1099,7 +1102,7 @@ impl ContainerRegistry {
                     name.as_str(),
                     credentials,
                     Region::from_str(&options.region)
-                        .with_context(|| format!("invalid rusoto region {}", &options.region))?,
+                        .with_context(|| format!("invalid rusoto region {}", options.region))?,
                     logger,
                     tags,
                 )?))

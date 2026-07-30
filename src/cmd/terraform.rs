@@ -1069,7 +1069,7 @@ fn terraform_init(
     lock: bool,
 ) -> Result<TerraformOutput, TerraformError> {
     // issue with provider lock since 0.14 and CI, need to manage terraform lock
-    let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
+    let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
 
     // no more architectures have been added because of some not availables (mostly on mac os)
     let mut terraform_providers_lock_args = vec!["providers", "lock"];
@@ -1121,7 +1121,7 @@ fn terraform_validate(
     validators: &TerraformValidators,
 ) -> Result<TerraformOutput, TerraformError> {
     let terraform_args = vec!["validate", "-no-color"];
-    let terraform_provider_lock = format!("{}/.terraform.lock.hcl", &root_dir);
+    let terraform_provider_lock = format!("{}/.terraform.lock.hcl", root_dir);
 
     // Retry is not needed, fixing it to 1 only for the time being
     let result = retry::retry(Fixed::from_millis(3000).take(1), || {
@@ -1871,8 +1871,8 @@ terraform {
         let dest_dir = "/tmp/test";
         fs::create_dir_all(dest_dir).unwrap();
 
-        let _ = fs::write(format!("{}/.terraform.lock.hcl", &dest_dir), terraform_lock_file);
-        let _ = fs::write(format!("{}/providers.tf", &dest_dir), provider_file);
+        let _ = fs::write(format!("{}/.terraform.lock.hcl", dest_dir), terraform_lock_file);
+        let _ = fs::write(format!("{}/providers.tf", dest_dir), provider_file);
 
         let res = terraform_init_validate(dest_dir, &[], &TerraformValidators::Default);
 

@@ -577,7 +577,7 @@ pub fn environment_3_apps_3_databases(
 
 pub fn database_test_environment(context: &Context) -> EnvironmentRequest {
     let suffix = generate_id();
-    let application_name = format!("{}-{}", "simple-app", &suffix);
+    let application_name = format!("{}-{}", "simple-app", suffix);
 
     let env_id = Uuid::new_v4();
     EnvironmentRequest {

@@ -261,14 +261,14 @@ impl EnvironmentTask {
         let image_name = build.image.full_image_name_with_tag(); // .build() may have modified the image tag
         match build_result {
             Ok(_) => {
-                let msg = format!("✅ Container image {} is built and ready to use", &image_name);
+                let msg = format!("✅ Container image {} is built and ready to use", image_name);
                 logger.send_success(msg);
                 Ok(())
             }
             Err(err @ BuildError::Aborted { .. }) => {
                 let msg = format!(
                     "🚫 Container image {} build has been canceled. Either due to timeout or at user request",
-                    &image_name
+                    image_name
                 );
                 info!("{}", err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::Cancelled));
@@ -279,7 +279,7 @@ impl EnvironmentTask {
             Err(err @ BuildError::DockerError { .. }) => {
                 let msg = format!(
                     "❌ Container image {} failed to be build: Look at the build logs to understand the error",
-                    &image_name
+                    image_name
                 );
                 info!("{}", err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
@@ -288,7 +288,7 @@ impl EnvironmentTask {
                 Err(Box::new(build_result))
             }
             Err(err @ BuildError::GitError { .. }) => {
-                let msg = format!("❌ Application {} failed to be cloned: {}", &service.name(), err);
+                let msg = format!("❌ Application {} failed to be cloned: {}", service.name(), err);
                 info!("{}", err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
                 let build_result = build_platform::to_engine_error(event_details, err, msg);
@@ -296,7 +296,7 @@ impl EnvironmentTask {
                 Err(Box::new(build_result))
             }
             Err(err) => {
-                let msg = format!("❌ Container image {} failed to be build: {}", &image_name, err);
+                let msg = format!("❌ Container image {} failed to be build: {}", image_name, err);
                 let event_details = service.get_event_details(Stage::Environment(EnvironmentStep::BuiltError));
                 let build_result = build_platform::to_engine_error(event_details, err, msg);
                 logger.send_error(build_result.clone());
@@ -522,6 +522,14 @@ impl Task for EnvironmentTask {
         let _span = self.span.enter();
         info!("environment task {} started", self.id());
 
+        // skip_reconcile only affects the cluster-delete teardown; environment/service operations have no
+        // pre-destroy reconcile, so nothing reads it here. Surface it instead of a silent no-op.
+        if self.request.skip_reconcile {
+            warn!(
+                "skip_reconcile is set but has no effect on environment/service operations; it only applies to cluster delete"
+            );
+        }
+
         self.logger.log(EngineEvent::Info(
             self.get_event_details(EnvironmentStep::Start),
             EventMessage::new("🚀 Qovery Engine starts to execute the deployment".to_string(), None),
@@ -732,6 +740,7 @@ impl Task for EnvironmentTask {
             self.qovery_api.clone(),
             self.request.event_details(),
         )
+        .with_skip_reconcile(self.request.skip_reconcile)
     }
 }
 

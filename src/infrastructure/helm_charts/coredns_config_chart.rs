@@ -222,7 +222,7 @@ impl HelmChart for CoreDNSConfigChart {
         info!(
             "setting annotations and labels on {}/{}",
             &kind,
-            &format!("{}-custom", &self.chart_info.name)
+            &format!("{}-custom", self.chart_info.name)
         );
         let steps_custom = || -> Result<(), CommandError> {
             kubectl_exec_with_output(
@@ -232,8 +232,8 @@ impl HelmChart for CoreDNSConfigChart {
                     "annotate",
                     "--overwrite",
                     kind,
-                    &format!("{}-custom", &self.chart_info.name),
-                    format!("meta.helm.sh/release-name={}", &self.chart_info.name).as_str(),
+                    &format!("{}-custom", self.chart_info.name),
+                    format!("meta.helm.sh/release-name={}", self.chart_info.name).as_str(),
                 ],
                 envs.to_vec(),
                 &mut |_| {},
@@ -246,7 +246,7 @@ impl HelmChart for CoreDNSConfigChart {
                     "annotate",
                     "--overwrite",
                     kind,
-                    &format!("{}-custom", &self.chart_info.name),
+                    &format!("{}-custom", self.chart_info.name),
                     "meta.helm.sh/release-namespace=kube-system",
                 ],
                 envs.to_vec(),
@@ -260,7 +260,7 @@ impl HelmChart for CoreDNSConfigChart {
                     "label",
                     "--overwrite",
                     kind,
-                    &format!("{}-custom", &self.chart_info.name),
+                    &format!("{}-custom", self.chart_info.name),
                     "app.kubernetes.io/managed-by=Helm",
                 ],
                 envs.to_vec(),
@@ -290,16 +290,16 @@ impl HelmChart for CoreDNSConfigChart {
     ) -> Result<Option<ChartPayload>, HelmChartError> {
         info!("prepare and deploy chart {}", &self.get_chart_info().name);
         self.check_prerequisites()?;
-        let payload = match self.pre_exec(kube_client, kubernetes_config, envs, None, cmd_killer) {
-            Ok(p) => match p {
+        let payload = {
+            let p = self.pre_exec(kube_client, kubernetes_config, envs, None, cmd_killer)?;
+            match p {
                 None => {
                     return Err(HelmChartError::CommandError(CommandError::new_from_safe_message(
                         "CoreDNS configmap checksum couldn't be get, can't deploy CoreDNS chart".to_string(),
                     )));
                 }
                 Some(p) => p,
-            },
-            Err(e) => return Err(e),
+            }
         };
         if let Err(e) = self.exec(kubernetes_config, envs, None, cmd_killer) {
             error!("Error while deploying chart: {:?}", e);
@@ -409,7 +409,7 @@ impl ChartInstallationChecker for CoreDNSConfigChartChecker {
                         err = Err(CommandError::new(
                             format!(
                                 "CoreDNS pod `{}` is not running but `{}`",
-                                &coredns_pod.name_any(),
+                                coredns_pod.name_any(),
                                 pod_status_string
                             ),
                             None,

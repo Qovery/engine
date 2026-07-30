@@ -4134,8 +4134,8 @@ impl EngineError {
         safe_error: String,
     ) -> EngineError {
         let message = match nodegroup_name {
-            Some(x) => format!("Error, can't delete nodegroup '{}'. {}", x, &safe_error),
-            None => format!("Error, can't delete nodegroup. {}", &safe_error),
+            Some(x) => format!("Error, can't delete nodegroup '{}'. {}", x, safe_error),
+            None => format!("Error, can't delete nodegroup. {}", safe_error),
         };
 
         EngineError::new(event_details, Tag::CannotDeleteNodeGroup, message, None, None, None)

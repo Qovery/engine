@@ -163,9 +163,9 @@ fn sanitize_node_groups(
             || {
                 logger.info(format!(
                     "checking node group {}/{:?}, current status: {:?}",
-                    &ng.name,
-                    &ng.id.as_ref().unwrap_or(&"unknown".to_string()),
-                    &ng.status
+                    ng.name,
+                    ng.id.as_ref().unwrap_or(&"unknown".to_string()),
+                    ng.status
                 ));
                 let pool_id = match &ng.id {
                     None => {
@@ -229,7 +229,7 @@ fn sanitize_node_groups(
                         event_details.clone(),
                         CommandError::new_from_safe_message(format!(
                             "waiting for node group {} to be ready, current status: {:?}",
-                            &scw_ng.name, scw_ng.status
+                            scw_ng.name, scw_ng.status
                         )),
                     )),
                 }

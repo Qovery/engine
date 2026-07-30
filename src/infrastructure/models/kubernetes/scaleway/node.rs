@@ -848,7 +848,7 @@ impl ScwNodeGroup {
         if min_nodes > max_nodes {
             let msg = format!(
                 "The number of minimum nodes ({}) for group name {} is higher than maximum nodes ({})",
-                &group_name, &min_nodes, &max_nodes
+                group_name, min_nodes, max_nodes
             );
             return Err(CommandError::new_from_safe_message(msg));
         }

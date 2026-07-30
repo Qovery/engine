@@ -32,7 +32,7 @@ pub(super) fn get_existing_sanitized_node_groups(
         Ok(x) => x,
         Err(e) => {
             return Err(ScwNodeGroupErrors::CloudProviderApiError(CommandError::new(
-                format!("Error while trying to get SCW pool info from cluster {}.", &cluster_id),
+                format!("Error while trying to get SCW pool info from cluster {}.", cluster_id),
                 Some(e.to_string()),
                 None,
             )));
@@ -44,8 +44,8 @@ pub(super) fn get_existing_sanitized_node_groups(
         return Err(ScwNodeGroupErrors::NoNodePoolFound(CommandError::new_from_safe_message(
             format!(
                 "Error, no SCW pool found from the SCW API for cluster {}/{}",
-                &cluster_id,
-                &cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
+                cluster_id,
+                cluster_info.name.unwrap_or_else(|| "unknown cluster".to_string())
             ),
         )));
     }
@@ -57,7 +57,7 @@ pub(super) fn get_existing_sanitized_node_groups(
             return Err(ScwNodeGroupErrors::NodeGroupValidationError(
                 CommandError::new_from_safe_message(format!(
                     "Error while trying to validate SCW pool ID from cluster {}",
-                    &cluster_id
+                    cluster_id
                 )),
             ));
         }

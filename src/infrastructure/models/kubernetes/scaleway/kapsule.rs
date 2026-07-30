@@ -311,7 +311,7 @@ impl Kapsule {
                 event_details,
                 CommandError::new_from_safe_message(format!(
                     "Error, too many clusters found ({}) with this name, where 1 was expected.",
-                    &cluster_info_content.len()
+                    cluster_info_content.len()
                 )),
             )));
         }

@@ -131,7 +131,7 @@ fn check_domain_resolve_ip(domain: &str, log: &impl Fn(String), abort: &dyn Abor
             let message = format!(
                 "💥 Unable to check domain availability for '{}'. It can be due to a \
                         too long domain propagation. Note: this is not critical.",
-                &domain
+                domain
             );
             (log)(message);
         }
@@ -142,13 +142,13 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
     // We use send_success because if on_check is called it means the DB is already correctly deployed
     (log)(format!(
         "🌍 Checking DNS CNAME resolution for domain {}. Please wait, it can take some time...",
-        &custom_domain.domain,
+        custom_domain.domain,
     ));
 
     let get_domain = || {
         (log)(format!(
             "🌍 Waiting domain {} to resolve to DNS CNAME {}",
-            &custom_domain.domain, &custom_domain.target_domain
+            custom_domain.domain, custom_domain.target_domain
         ));
         custom_domain.domain.as_str()
     };
@@ -167,7 +167,7 @@ fn check_domain_resolve_cname(custom_domain: &CustomDomain, log: &impl Fn(String
         Err(_) => {
             let message = format!(
                 "💥 Resolution of CNAME for domain {} failed. Please check that you have correctly configured your CNAME. If you are using a CDN you can forget this message",
-                &custom_domain.domain
+                custom_domain.domain
             );
             (log)(message);
         }

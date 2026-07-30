@@ -130,7 +130,7 @@ fn create_object_storage(
             true => {
                 // bucket already exists, just update it, do nothing since update bucket is not yet available via SDK
                 // TODO(benjaminch): use update bucket
-                logger.info(format!("Blob container {} already exists", &bucket_name));
+                logger.info(format!("Blob container {} already exists", bucket_name));
                 // let existing_bucket = cluster
                 //     .blob_storage
                 //     .get_bucket(bucket_name)

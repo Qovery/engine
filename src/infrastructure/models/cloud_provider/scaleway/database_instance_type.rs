@@ -391,7 +391,7 @@ mod tests {
             );
             assert_eq!(
                 Ok(instance_type.clone()),
-                ScwDatabaseInstanceType::from_str(format!("  {}   ", & instance_type
+                ScwDatabaseInstanceType::from_str(format!("  {}   ", instance_type
                 .to_cloud_provider_format()) .as_str())
             );
         }

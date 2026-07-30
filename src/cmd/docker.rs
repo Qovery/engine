@@ -142,7 +142,7 @@ impl ContainerImage {
             ImageId::Digest(digest) => vec![format!("{}/{}@{}", host, &self.name, digest)],
             ImageId::Tags(tags) => tags
                 .iter()
-                .map(|tag| format!("{}/{}:{}", host, &self.name, tag))
+                .map(|tag| format!("{}/{}:{}", host, self.name, tag))
                 .collect(),
         }
     }
@@ -507,20 +507,19 @@ impl Docker {
         };
         let gcp_credentials_file_path =
             format!("{}/google-credentials.json", tmp_dir.path().to_str().unwrap_or_default());
-        match fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(&gcp_credentials_file_path)
-            .map_err(|_e| DockerError::InvalidConfig {
-                raw_error_message: "Cannot create google credentials file to connect".to_string(),
-            }) {
-            Ok(mut f) => f
-                .write(google_creds.as_bytes())
+        {
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&gcp_credentials_file_path)
+                .map_err(|_e| DockerError::InvalidConfig {
+                    raw_error_message: "Cannot create google credentials file to connect".to_string(),
+                })?;
+            f.write(google_creds.as_bytes())
                 .map_err(|_e| DockerError::InvalidConfig {
                     raw_error_message: "Cannot write into google credentials file to connect".to_string(),
-                }),
-            Err(e) => return Err(e),
+                })
         }?;
 
         QoveryCommand::new(

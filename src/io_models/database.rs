@@ -153,15 +153,15 @@ impl Database {
         let database_instance_type: Option<Box<dyn DatabaseInstanceType>> = match &self.database_instance_type {
             None => None,
             Some(database_instance_type_raw_str) => match cloud_provider.kind() {
-                Kind::Aws => match AwsDatabaseInstanceType::from_str(database_instance_type_raw_str) {
-                    Ok(t) => Some(Box::new(t)),
-                    Err(e) => return Err(e),
-                },
+                Kind::Aws => {
+                    let t = AwsDatabaseInstanceType::from_str(database_instance_type_raw_str)?;
+                    Some(Box::new(t))
+                }
                 Kind::Azure => todo!(),
-                Kind::Scw => match ScwDatabaseInstanceType::from_str(database_instance_type_raw_str) {
-                    Ok(t) => Some(Box::new(t)),
-                    Err(e) => return Err(e),
-                },
+                Kind::Scw => {
+                    let t = ScwDatabaseInstanceType::from_str(database_instance_type_raw_str)?;
+                    Some(Box::new(t))
+                }
                 Kind::Gcp => todo!(), // TODO(benjaminch): GKE integration
                 Kind::OnPremise => None,
             },

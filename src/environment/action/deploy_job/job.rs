@@ -153,11 +153,11 @@ pub async fn retrieve_output_and_terminate_pod(
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
-        .with_context(|| format!("Cannot retrieve qovery-output.json {}", &pod_name))?;
+        .with_context(|| format!("Cannot retrieve qovery-output.json {}", pod_name))?;
 
     let mut stdout = process
         .stdout()
-        .with_context(|| format!("Cannot get stdout from waiting container for pod {}", &pod_name))?;
+        .with_context(|| format!("Cannot get stdout from waiting container for pod {}", pod_name))?;
 
     // write stdout into buffer
     let mut json_str = Vec::with_capacity(4096);
@@ -218,11 +218,11 @@ pub async fn retrieve_terraform_resources(
             &AttachParams::default().container("qovery-wait-container-output"),
         )
         .await
-        .with_context(|| format!("Cannot retrieve terraform-resources.json from pod {}", &pod_name))?;
+        .with_context(|| format!("Cannot retrieve terraform-resources.json from pod {}", pod_name))?;
 
     let mut stdout = process
         .stdout()
-        .with_context(|| format!("Cannot get stdout from container for pod {}", &pod_name))?;
+        .with_context(|| format!("Cannot get stdout from container for pod {}", pod_name))?;
 
     // Read file content into buffer
     let mut json_bytes = Vec::with_capacity(8192);
