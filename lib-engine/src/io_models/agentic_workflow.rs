@@ -3,6 +3,7 @@ use crate::environment::models::agentic_workflow::{
     AgenticWorkflowConfig, AgenticWorkflowError, AgenticWorkflowService,
 };
 use crate::infrastructure::models::cloud_provider::service::Action as DomainAction;
+use crate::io_models::Action;
 use crate::io_models::context::Context;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::services_common::GitCredentials;
@@ -38,6 +39,12 @@ fn decode_hardened_field(field: &str, value: &str) -> Result<String, AgenticWork
 /// than duplicated between the io_model default and any chart/domain fallback.
 fn default_max_duration_in_sec() -> u64 {
     3_600
+}
+
+/// Spelled out because `Action` has no `Default` impl. Defaulting at all is what keeps the two repos
+/// deployable in either order: against a q-core not sending `action` yet, the engine behaves as before.
+fn default_action() -> Action {
+    Action::Create
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -114,6 +121,8 @@ pub struct AgenticWorkflow {
     pub long_id: Uuid,
     pub name: String,
     pub kube_name: String,
+    #[serde(default = "default_action")]
+    pub action: Action,
 
     #[serde(default = "default_image")]
     pub image: AgenticWorkflowImage,
@@ -157,6 +166,7 @@ impl AgenticWorkflow {
         let long_id = self.long_id;
         let name = self.name.clone();
         let kube_name = self.kube_name.clone();
+        let action = self.action;
         let config = self.into_domain_config()?;
 
         let service = models::agentic_workflow::AgenticWorkflow::new(
@@ -165,12 +175,7 @@ impl AgenticWorkflow {
             name,
             kube_name,
             config,
-            // Hardcoded on purpose: only full-environment delete (which calls `on_delete`
-            // directly) is supported today, not per-service removal during an environment
-            // update. If an AgenticWorkflow is ever removed individually rather than the whole
-            // environment, this hardcoded `Create` means the Job would be left orphaned instead
-            // of cleaned up.
-            DomainAction::Create,
+            DomainAction::from(action),
             |transmitter| context.get_event_details(transmitter),
         )?;
 
@@ -244,7 +249,7 @@ impl AgenticWorkflow {
 mod tests {
     use super::*;
 
-    /// Golden-JSON contract-sync test (plan §D4, the highest-risk seam): this is the exact JSON
+    /// Golden-JSON contract-sync test, the highest-risk seam of the integration: this is the exact JSON
     /// produced by q-core's `EngineRequestUnitTest."should serialize agentic workflow using
     /// exactly the field set the engine io-model expects"` test
     /// (corenetto/src/test/kotlin/.../EngineRequestUnitTest.kt), via `RedisEngineService.objectMapper`
@@ -257,12 +262,12 @@ mod tests {
     // Decoded values here: prompt="Investigate the incident and summarize root cause.",
     // api_key="sk-secret", mcp={"servers":[]}, access_token="resolved-token",
     // header value="application/json", instructions="Keep it under 500 characters.".
-    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4=","model":{"type":"CLAUDE","api_key":"c2stc2VjcmV0","settings":"{\"effort\":\"high\"}"},"mcp":"eyJzZXJ2ZXJzIjpbXX0=","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"cmVzb2x2ZWQtdG9rZW4=","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"YXBwbGljYXRpb24vanNvbg=="}],"instructions":"S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4="}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
+    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4=","model":{"type":"CLAUDE","api_key":"c2stc2VjcmV0","settings":"{\"effort\":\"high\"}"},"mcp":"eyJzZXJ2ZXJzIjpbXX0=","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"cmVzb2x2ZWQtdG9rZW4=","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"YXBwbGljYXRpb24vanNvbg=="}],"instructions":"S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4="}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
 
     /// Same as GOLDEN_JSON's companion "defaulted fields" q-core test: the optional fields
     /// (docker_fragment/mcp/project_repositories/host_allowlist/outputs/cpu_limit_in_milli) are
     /// present but empty/null - proving `#[serde(default)]` isn't masking a real mismatch.
-    const GOLDEN_JSON_DEFAULTS: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"","prompt":"","model":{"type":"CLAUDE","api_key":"","settings":""},"mcp":"","project_repositories":[],"host_allowlist":[],"outputs":[],"cpu_request_in_milli":500,"cpu_limit_in_milli":null,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
+    const GOLDEN_JSON_DEFAULTS: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"","prompt":"","model":{"type":"CLAUDE","api_key":"","settings":""},"mcp":"","project_repositories":[],"host_allowlist":[],"outputs":[],"cpu_request_in_milli":500,"cpu_limit_in_milli":null,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
 
     #[test]
     fn deserializes_the_q_core_golden_json_contract() {
@@ -271,7 +276,9 @@ mod tests {
 
         assert_eq!(workflow.long_id.to_string(), "eb5163b9-0e4c-4c9a-b304-9b984c85337d");
         assert_eq!(workflow.name, "my-agentic-workflow");
-        assert_eq!(workflow.kube_name, "agentic-workflow-zeb5163b9");
+        assert_eq!(workflow.kube_name, "agentic-workflow-zeb5163b9-my-agentic-workflow");
+        // Compared through the domain action because `io_models::Action` derives no `Debug`.
+        assert_eq!(DomainAction::from(workflow.action), DomainAction::Create);
         assert_eq!(workflow.image.repository, "public.ecr.aws/r3m4q3r9/qovery-ai-runner");
         assert_eq!(workflow.image.tag, "0.0.1");
         assert_eq!(workflow.docker_fragment, "RUN apt-get install -y jq");
@@ -366,6 +373,25 @@ mod tests {
             config.outputs[0].headers,
             vec![("Content-Type".to_string(), "application/json".to_string())]
         );
+    }
+
+    #[test]
+    fn wire_action_drives_the_domain_action() {
+        // Guards QOV-2086: this was hardcoded to `Create`, so `on_delete` was unreachable and a
+        // workflow removed on its own left its Job orphaned.
+        let deleted_json = GOLDEN_JSON.replacen(r#""action":"CREATE""#, r#""action":"DELETE""#, 1);
+        let workflow: AgenticWorkflow = serde_json::from_str(&deleted_json).expect("should deserialize");
+
+        assert_eq!(DomainAction::from(workflow.action), DomainAction::Delete);
+    }
+
+    #[test]
+    fn action_defaults_to_create_when_the_wire_payload_omits_it() {
+        let without_action = GOLDEN_JSON.replacen(r#""action":"CREATE","#, "", 1);
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(&without_action).expect("payload without action should deserialize");
+
+        assert_eq!(DomainAction::from(workflow.action), DomainAction::Create);
     }
 
     #[test]
