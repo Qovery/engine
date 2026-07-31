@@ -30,7 +30,7 @@ use crate::errors::CommandError;
 use crate::infrastructure::models::dns_provider::DnsProviderConfiguration;
 
 use super::KapsuleChartsConfigPrerequisites;
-use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi, SharedClusterFailureContext};
 use crate::environment::models::domain::Domain;
 use crate::infrastructure::action::deploy_helms::mk_customer_chart_override_fn;
 use crate::infrastructure::helm_charts::cert_manager_chart::CertManagerChart;
@@ -59,6 +59,7 @@ pub fn kapsule_helm_charts(
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
+    cluster_failure_context: SharedClusterFailureContext,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     info!("preparing chart configuration to be deployed");
     let kind_provider = Kind::Scw;
@@ -660,6 +661,7 @@ pub fn kapsule_helm_charts(
                         .cluster_advanced_settings
                         .envoy_gateway_controller_replicas,
                 },
+                cluster_failure_context.clone(),
             )
             .to_common_helm_chart()?,
         );

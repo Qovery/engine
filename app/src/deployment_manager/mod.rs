@@ -534,9 +534,9 @@ mod test {
     use crate::deployment_manager::{DeploymentManager, DeploymentManagerRunMode};
     use crate::grpc::engine::engine_server::{Engine, EngineServer};
     use crate::grpc::engine::{
-        ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx, EngineMessageTx,
-        GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse, TerraformResourcesRequest,
-        engine_message_rx,
+        ClusterFailureContextRequest, ClusterOutputsUpdateRequest, DeploymentInfo, DeploymentRequest, EngineMessageRx,
+        EngineMessageTx, GitTokenRequest, GitTokenResponse, ServiceVersionRequest, ServiceVersionResponse,
+        TerraformResourcesRequest, engine_message_rx,
     };
     use crate::grpc::test::new_engine_client_test;
     use crate::models::TaskSelector;
@@ -617,6 +617,13 @@ mod test {
         ) -> Result<Response<()>, Status> {
             Ok(Response::new(()))
         }
+
+        async fn send_cluster_failure_context(
+            &self,
+            _request: Request<ClusterFailureContextRequest>,
+        ) -> Result<Response<()>, Status> {
+            Err(Status::unimplemented("Not implemented"))
+        }
     }
 
     struct EngineGtwTestWithClaimErrors {
@@ -678,6 +685,13 @@ mod test {
             _request: Request<TerraformResourcesRequest>,
         ) -> Result<Response<()>, Status> {
             Ok(Response::new(()))
+        }
+
+        async fn send_cluster_failure_context(
+            &self,
+            _request: Request<ClusterFailureContextRequest>,
+        ) -> Result<Response<()>, Status> {
+            Err(Status::unimplemented("Not implemented"))
         }
     }
 
@@ -1085,6 +1099,13 @@ mod test {
             _request: Request<TerraformResourcesRequest>,
         ) -> Result<Response<()>, Status> {
             Ok(Response::new(()))
+        }
+
+        async fn send_cluster_failure_context(
+            &self,
+            _request: Request<ClusterFailureContextRequest>,
+        ) -> Result<Response<()>, Status> {
+            Err(Status::unimplemented("Not implemented"))
         }
     }
 

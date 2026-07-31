@@ -1,14 +1,15 @@
 use super::GrpcEngineClient;
 use crate::grpc::engine::{
-    ClusterOutputsUpdateRequest, ExternalSecretsAuthentication as ProtoEsa, GitTokenRequest, KubernetesProviderKind,
-    ServiceVersionRequest, TerraformResourcesRequest,
-    external_secrets_authentication::Authentication as ProtoEsaAuthentication,
+    ClusterFailureContextRequest as ProtoClusterFailureContextRequest, ClusterOutputsUpdateRequest,
+    ExternalSecretsAuthentication as ProtoEsa, GatewayConditionEntry as ProtoGatewayConditionEntry,
+    GatewayStatus as ProtoGatewayStatus, GitTokenRequest, KubernetesProviderKind, ServiceVersionRequest,
+    TerraformResourcesRequest, external_secrets_authentication::Authentication as ProtoEsaAuthentication,
 };
 use crate::tokio_utils::block_on;
 use anyhow::{Context, anyhow};
 use chrono::DateTime;
 use qovery_engine::engine_task::qovery_api::{
-    EngineServiceType, QoveryApi, TerraformResourcesRequest as EngineResourcesRequest,
+    ClusterFailureContext, EngineServiceType, QoveryApi, TerraformResourcesRequest as EngineResourcesRequest,
 };
 use qovery_engine::infrastructure::action::cluster_outputs_helper::{
     ClusterOutputsRequest, ExternalSecretsAuthentication,
@@ -175,6 +176,39 @@ impl QoveryApi for GrpcCoreServiceApi {
                 })
                 .await?;
 
+            Ok(())
+        };
+
+        with_max_retry(call, 5)
+    }
+
+    fn send_cluster_failure_context(&self, request: &ClusterFailureContext) -> anyhow::Result<()> {
+        info!("send_cluster_failure_context for cluster {}", request.cluster_id);
+
+        let proto_request = ProtoClusterFailureContextRequest {
+            jwt_token: self.jwt_token.clone(),
+            gateway_status: Some(ProtoGatewayStatus {
+                gateway_name: request.gateway_status.gateway_name.clone(),
+                conditions: request
+                    .gateway_status
+                    .conditions
+                    .iter()
+                    .map(|c| ProtoGatewayConditionEntry {
+                        r#type: c.type_.clone(),
+                        status: c.status.clone(),
+                        reason: c.reason.clone(),
+                        message: c.message.clone(),
+                    })
+                    .collect(),
+            }),
+            deployment_infrastructure_id: request.deployment_infrastructure_id.map(|id| id.to_string()),
+        };
+
+        let call = || async {
+            self.client
+                .clone()
+                .send_cluster_failure_context(proto_request.clone())
+                .await?;
             Ok(())
         };
 

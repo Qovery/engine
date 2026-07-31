@@ -20,6 +20,7 @@ service Engine {
   rpc GetGitToken(GitTokenRequest) returns (GitTokenResponse) {}
   rpc updateClusterOutputs(ClusterOutputsUpdateRequest) returns (google.protobuf.Empty) {}
   rpc sendTerraformResources(TerraformResourcesRequest) returns (google.protobuf.Empty) {}
+  rpc sendClusterFailureContext(ClusterFailureContextRequest) returns (google.protobuf.Empty) {}
 }
 
 enum DeploymentType {
@@ -173,4 +174,22 @@ message TerraformResourcesRequest {
   string terraform_id = 2;        // Service ID (UUID)
   string execution_id = 3;         // Execution ID in format "{environmentId}-{version}"
   string resources_json = 4;       // JSON array of resources
+}
+
+message GatewayConditionEntry {
+  string type = 1;
+  string status = 2;
+  optional string reason = 3;
+  optional string message = 4;
+}
+
+message GatewayStatus {
+  string gateway_name = 1;
+  repeated GatewayConditionEntry conditions = 2;
+}
+
+message ClusterFailureContextRequest {
+  string jwt_token = 1;
+  GatewayStatus gateway_status = 2;
+  optional string deployment_infrastructure_id = 3;
 }

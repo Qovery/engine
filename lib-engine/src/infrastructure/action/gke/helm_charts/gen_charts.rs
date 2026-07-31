@@ -1,6 +1,6 @@
 use super::GkeChartsConfigPrerequisites;
 use super::gen_keda_charts::generate_keda_charts;
-use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi, SharedClusterFailureContext};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -56,6 +56,7 @@ pub(super) fn gke_helm_charts(
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
+    cluster_failure_context: SharedClusterFailureContext,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let source_registry = QoverySourceRegistry::from(&Kind::Gcp);
     let get_chart_override_fn =
@@ -607,6 +608,7 @@ pub(super) fn gke_helm_charts(
                         .cluster_advanced_settings
                         .envoy_gateway_controller_replicas,
                 },
+                cluster_failure_context.clone(),
             )
             .to_common_helm_chart()?,
         );
