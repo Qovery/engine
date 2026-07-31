@@ -194,10 +194,21 @@ fn resolve_backend_decision(request: &BlueprintRequest) -> Result<BackendDecisio
     }
 }
 
-/// Joins captured `terraform plan` stdout into a single string. Truncates with an elision
-/// marker if the result exceeds [DIFF_PAYLOAD_MAX_BYTES].
+/// Strips terraform's output to show only the diff the frontend user cares about:
+/// - the trailing  apply-instructions block —> the user cannot run apply from a diff,
+/// - leading/trailing blank lines terraform pads the output with.
+fn strip_terraform_cli_framing(raw: &str) -> String {
+    raw.split_once("\nSaved the plan to:")
+        .map_or(raw, |(head, _)| head.trim_end_matches(|c: char| c == '─' || c.is_whitespace()))
+        .trim()
+        .to_string()
+}
+
+/// Joins captured `terraform plan` stdout into a single string, strips terraform's output
+/// (see [strip_terraform_cli_framing]), then truncates with an elision marker if the result
+/// exceeds [DIFF_PAYLOAD_MAX_BYTES].
 pub(crate) fn truncate_diff_payload(output: &TerraformOutput) -> String {
-    let raw = output.raw_std_output.join("\n");
+    let raw = strip_terraform_cli_framing(&output.raw_std_output.join("\n"));
     if raw.len() <= DIFF_PAYLOAD_MAX_BYTES {
         return raw;
     }
@@ -291,6 +302,24 @@ mod tests {
             raw_error_output: vec![],
         };
         assert_eq!(truncate_diff_payload(&out), "hello\nworld");
+    }
+
+    #[test]
+    fn strip_terraform_cli_framing_removes_leading_blank_and_apply_block() {
+        // Shape of a real `terraform plan -no-color -out tf_plan`: leading blank line, the diff,
+        // a `───` rule, then the apply-instructions block.
+        let raw = "\nTerraform will perform the following actions:\n\n  # aws_db_instance.db will be updated in-place\n\nPlan: 0 to add, 1 to change, 0 to destroy.\n\n─────────────────────────────────────────────\n\nSaved the plan to: tf_plan\n\nTo perform exactly these actions, run the following command to apply:\n    terraform apply \"tf_plan\"\n";
+        let cleaned = strip_terraform_cli_framing(raw);
+        assert!(cleaned.starts_with("Terraform will perform"));
+        assert!(cleaned.ends_with("Plan: 0 to add, 1 to change, 0 to destroy."));
+        assert!(!cleaned.contains("Saved the plan"));
+        assert!(!cleaned.contains("terraform apply"));
+        assert!(!cleaned.contains('─'));
+    }
+
+    #[test]
+    fn strip_terraform_cli_framing_passes_through_when_no_apply_block() {
+        assert_eq!(strip_terraform_cli_framing("hello\nworld"), "hello\nworld");
     }
 
     #[test]
