@@ -182,6 +182,7 @@ impl HelmInfraResources for GkeHelmsDeployment<'_> {
             Some(self.context.destination_folder.to_string_lossy().as_ref()),
             &*infra_ctx.context().qovery_api,
             infra_ctx.dns_provider().domain(),
+            infra_ctx.cluster_failure_context.clone(),
         )
         .map_err(|e| Box::new(EngineError::new_helm_charts_setup_error(self.context.event_details.clone(), e)))
     }

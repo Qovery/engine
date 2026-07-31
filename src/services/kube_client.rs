@@ -76,6 +76,8 @@ pub struct GatewayCondition {
     pub status: String,
     #[serde(rename = "observedGeneration")]
     pub observed_generation: Option<i64>,
+    pub reason: Option<String>,
+    pub message: Option<String>,
 }
 
 /// cert-manager Certificate CRD — used to list and patch ownerReferences during

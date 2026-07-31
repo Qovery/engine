@@ -4,6 +4,7 @@ use retry::OperationResult;
 use retry::delay::Fixed;
 use std::time::Duration;
 
+use crate::engine_task::qovery_api::{GatewayConditionEntry, GatewayStatus, SharedClusterFailureContext};
 use crate::infrastructure::helm_charts::{HelmChartResources, HelmChartResourcesConstraintType};
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::runtime::block_on;
@@ -33,6 +34,7 @@ pub struct EnvoyGatewayChart {
     priority_class: PriorityClass,
     chart_resources: HelmChartResources,
     options: EnvoyGatewayOptions,
+    cluster_failure_context: SharedClusterFailureContext,
 }
 
 impl EnvoyGatewayChart {
@@ -43,6 +45,7 @@ impl EnvoyGatewayChart {
         priority_class: PriorityClass,
         chart_resources_constraint_type: HelmChartResourcesConstraintType,
         options: EnvoyGatewayOptions,
+        cluster_failure_context: SharedClusterFailureContext,
     ) -> Self {
         Self {
             chart_path: HelmChartPath::new(
@@ -67,6 +70,7 @@ impl EnvoyGatewayChart {
                 HelmChartResourcesConstraintType::Constrained(r) => r,
             },
             options,
+            cluster_failure_context,
         }
     }
 
@@ -139,6 +143,7 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
             chart_installation_checker: Some(Box::new(EnvoyGatewayChartChecker::new(
                 self.namespace.clone(),
                 Duration::from_secs(60 * 10),
+                self.cluster_failure_context.clone(),
             ))),
             vertical_pod_autoscaler: None,
             pre_execute_action: None,
@@ -150,15 +155,21 @@ impl ToCommonHelmChart for EnvoyGatewayChart {
 pub struct EnvoyGatewayChartChecker {
     namespace: HelmChartNamespaces,
     readiness_timeout: Duration,
+    cluster_failure_context: SharedClusterFailureContext,
 }
 
 impl EnvoyGatewayChartChecker {
     const RETRY_INTERVAL: Duration = Duration::from_secs(5);
 
-    pub fn new(namespace: HelmChartNamespaces, readiness_timeout: Duration) -> Self {
+    pub fn new(
+        namespace: HelmChartNamespaces,
+        readiness_timeout: Duration,
+        cluster_failure_context: SharedClusterFailureContext,
+    ) -> Self {
         Self {
             namespace,
             readiness_timeout,
+            cluster_failure_context,
         }
     }
 
@@ -179,17 +190,12 @@ impl EnvoyGatewayChartChecker {
     }
 }
 
-impl Default for EnvoyGatewayChartChecker {
-    fn default() -> Self {
-        Self::new(HelmChartNamespaces::Qovery, Duration::from_secs(60 * 10))
-    }
-}
-
 impl ChartInstallationChecker for EnvoyGatewayChartChecker {
     fn verify_installation(&self, kube_client: &Client) -> Result<(), CommandError> {
         let gateway_name = "qovery-cluster-public-gateway";
         let namespace = self.namespace.to_string();
         let kube_client = kube_client.clone();
+        let cluster_failure_context = self.cluster_failure_context.clone();
 
         let result = retry::retry(
             Fixed::from_millis(Self::RETRY_INTERVAL.as_millis() as u64)
@@ -216,8 +222,45 @@ impl ChartInstallationChecker for EnvoyGatewayChartChecker {
                     Self::has_condition_true_for_generation(&gateway, "Programmed", expected_generation);
 
                 if !is_accepted || !is_programmed {
+                    let conditions: Vec<GatewayConditionEntry> = gateway
+                        .status
+                        .as_ref()
+                        .and_then(|s| s.conditions.as_ref())
+                        .map(|conds| {
+                            conds
+                                .iter()
+                                .filter(|c| c.type_ == "Accepted" || c.type_ == "Programmed")
+                                .map(|c| GatewayConditionEntry {
+                                    type_: c.type_.clone(),
+                                    status: c.status.clone(),
+                                    reason: c.reason.clone(),
+                                    message: c.message.clone(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    let condition_details = conditions
+                        .iter()
+                        .map(|c| {
+                            format!(
+                                "{}(status={}, reason={}, message={})",
+                                c.type_,
+                                c.status,
+                                c.reason.as_deref().unwrap_or(""),
+                                c.message.as_deref().unwrap_or(""),
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
+                    cluster_failure_context.lock().gateway_status = GatewayStatus {
+                        gateway_name: gateway_name.to_string(),
+                        conditions,
+                    };
+
                     let err = CommandError::new_from_safe_message(format!(
-                        "Waiting for gateway to be accepted and programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation})"
+                        "Waiting for gateway to be accepted and programmed (name={gateway_name}, namespace={namespace}, accepted={is_accepted}, programmed={is_programmed}, generation={expected_generation}, conditions=[{condition_details}])"
                     ));
                     return OperationResult::Retry(err);
                 }
@@ -239,6 +282,7 @@ impl ChartInstallationChecker for EnvoyGatewayChartChecker {
 
 #[cfg(test)]
 mod tests {
+    use crate::engine_task::qovery_api::SharedClusterFailureContext;
     use crate::helm::{HelmChartNamespaces, PriorityClass};
     use crate::infrastructure::helm_charts::envoy_gateway_chart::{
         EnvoyGatewayChart, EnvoyGatewayChartChecker, EnvoyGatewayOptions,
@@ -249,6 +293,11 @@ mod tests {
     };
     use std::env;
     use std::time::Duration;
+    use uuid::Uuid;
+
+    fn fake_failure_context() -> SharedClusterFailureContext {
+        SharedClusterFailureContext::new(Uuid::nil(), None)
+    }
 
     /// Makes sure chart directory containing all YAML files exists.
     #[test]
@@ -261,6 +310,7 @@ mod tests {
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
             EnvoyGatewayOptions::default(),
+            fake_failure_context(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -291,6 +341,7 @@ mod tests {
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
             EnvoyGatewayOptions::default(),
+            fake_failure_context(),
         );
 
         let current_directory = env::current_dir().expect("Impossible to get current directory");
@@ -325,6 +376,7 @@ mod tests {
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
             EnvoyGatewayOptions::default(),
+            fake_failure_context(),
         );
         let mut common_chart = chart.to_common_helm_chart().unwrap();
 
@@ -365,6 +417,7 @@ mod tests {
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
             EnvoyGatewayOptions::default(),
+            fake_failure_context(),
         );
         let common_chart = chart.to_common_helm_chart().unwrap();
         assert_eq!(
@@ -392,6 +445,7 @@ mod tests {
             PriorityClass::Default,
             HelmChartResourcesConstraintType::ChartDefault,
             EnvoyGatewayOptions { replicas: 3 },
+            fake_failure_context(),
         );
 
         let common_chart = chart.to_common_helm_chart().unwrap();

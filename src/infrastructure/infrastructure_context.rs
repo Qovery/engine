@@ -1,7 +1,9 @@
 use std::borrow::Borrow;
 use std::sync::Mutex;
 use thiserror::Error;
+use uuid::Uuid;
 
+use crate::engine_task::qovery_api::SharedClusterFailureContext;
 use crate::errors::EngineError;
 use crate::events::InfrastructureStep;
 use crate::events::Stage::Infrastructure;
@@ -48,6 +50,7 @@ pub struct InfrastructureContext {
     is_infra_deployment: bool,
     kube_client: Mutex<Option<QubeClient>>,
     kubernetes_api_deprecation_service: KubernetesApiDeprecationService,
+    pub cluster_failure_context: SharedClusterFailureContext,
 }
 
 impl InfrastructureContext {
@@ -61,6 +64,8 @@ impl InfrastructureContext {
         metrics_registry: Box<dyn MetricsRegistry>,
         is_infra_deployment: bool,
     ) -> InfrastructureContext {
+        let cluster_id = *context.cluster_long_id();
+        let deployment_infrastructure_id = extract_deployment_infrastructure_id(context.execution_id());
         InfrastructureContext {
             context,
             build_platform,
@@ -72,6 +77,7 @@ impl InfrastructureContext {
             is_infra_deployment,
             kube_client: Mutex::new(None),
             kubernetes_api_deprecation_service: KubernetesApiDeprecationService::default(),
+            cluster_failure_context: SharedClusterFailureContext::new(cluster_id, deployment_infrastructure_id),
         }
     }
 
@@ -157,4 +163,10 @@ impl InfrastructureContext {
     pub fn kubernetes_api_deprecation_service(&self) -> &KubernetesApiDeprecationService {
         &self.kubernetes_api_deprecation_service
     }
+}
+
+pub fn extract_deployment_infrastructure_id(execution_id: &str) -> Option<Uuid> {
+    execution_id
+        .rfind('-')
+        .and_then(|pos| Uuid::parse_str(&execution_id[..pos]).ok())
 }

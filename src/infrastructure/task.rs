@@ -224,6 +224,16 @@ impl Task for InfrastructureTask {
         };
         self.handle_transaction_result(self.logger.clone(), ret);
 
+        let failure_context = infra_ctx.cluster_failure_context.lock().clone();
+        if failure_context.has_data()
+            && let Err(e) = infra_ctx
+                .context()
+                .qovery_api
+                .send_cluster_failure_context(&failure_context)
+        {
+            warn!("Failed to send cluster failure context to core: {e}");
+        }
+
         // Uploading to S3 can take a lot of time, and might hit the core timeout
         // So we early drop the guard to notify core that the task is done
         drop(guard);

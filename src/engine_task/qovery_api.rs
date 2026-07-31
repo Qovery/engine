@@ -4,7 +4,59 @@ use crate::infrastructure::models::cloud_provider::service::ServiceType;
 use crate::io_models::services_common::GitCredentials;
 use anyhow::anyhow;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard};
 use uuid::Uuid;
+
+#[derive(Debug, Clone)]
+pub struct GatewayConditionEntry {
+    pub type_: String,
+    pub status: String,
+    pub reason: Option<String>,
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GatewayStatus {
+    pub gateway_name: String,
+    pub conditions: Vec<GatewayConditionEntry>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClusterFailureContext {
+    pub cluster_id: Uuid,
+    pub deployment_infrastructure_id: Option<Uuid>,
+    pub gateway_status: GatewayStatus,
+}
+
+impl ClusterFailureContext {
+    pub fn has_data(&self) -> bool {
+        !self.gateway_status.conditions.is_empty()
+    }
+}
+
+#[derive(Clone)]
+pub struct SharedClusterFailureContext {
+    inner: Arc<Mutex<ClusterFailureContext>>,
+}
+
+impl SharedClusterFailureContext {
+    pub fn new(cluster_id: Uuid, deployment_infrastructure_id: Option<Uuid>) -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(ClusterFailureContext {
+                cluster_id,
+                deployment_infrastructure_id,
+                gateway_status: GatewayStatus {
+                    gateway_name: String::new(),
+                    conditions: vec![],
+                },
+            })),
+        }
+    }
+
+    pub fn lock(&self) -> MutexGuard<'_, ClusterFailureContext> {
+        self.inner.lock().unwrap()
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub enum EngineServiceType {
@@ -31,6 +83,7 @@ pub trait QoveryApi: Send + Sync {
     fn git_token(&self, service_type: ServiceType, service_id: &Uuid) -> anyhow::Result<GitCredentials>;
     fn update_cluster_outputs(&self, cluster_state_request: &ClusterOutputsRequest) -> anyhow::Result<()>;
     fn send_terraform_resources(&self, request: &TerraformResourcesRequest) -> anyhow::Result<()>;
+    fn send_cluster_failure_context(&self, request: &ClusterFailureContext) -> anyhow::Result<()>;
 }
 
 pub struct FakeQoveryApi {}
@@ -49,6 +102,10 @@ impl QoveryApi for FakeQoveryApi {
     }
 
     fn send_terraform_resources(&self, _request: &TerraformResourcesRequest) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn send_cluster_failure_context(&self, _request: &ClusterFailureContext) -> anyhow::Result<()> {
         Ok(())
     }
 }
@@ -75,6 +132,10 @@ impl QoveryApi for StaticQoveryApi {
     }
 
     fn send_terraform_resources(&self, _request: &TerraformResourcesRequest) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    fn send_cluster_failure_context(&self, _request: &ClusterFailureContext) -> anyhow::Result<()> {
         Ok(())
     }
 }

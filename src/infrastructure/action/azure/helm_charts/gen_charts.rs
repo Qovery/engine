@@ -1,4 +1,4 @@
-use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi};
+use crate::engine_task::qovery_api::{EngineServiceType, QoveryApi, SharedClusterFailureContext};
 use crate::environment::models::domain::Domain;
 use crate::errors::CommandError;
 use crate::helm::{
@@ -55,6 +55,7 @@ pub(super) fn aks_helm_charts(
     chart_prefix_path: Option<&str>,
     qovery_api: &dyn QoveryApi,
     domain: &Domain,
+    cluster_failure_context: SharedClusterFailureContext,
 ) -> Result<Vec<Vec<Box<dyn HelmChart>>>, CommandError> {
     let azure_load_balancer_ip_allocations = match chart_config_prerequisites
         .cluster_advanced_settings
@@ -571,6 +572,7 @@ pub(super) fn aks_helm_charts(
                         .cluster_advanced_settings
                         .envoy_gateway_controller_replicas,
                 },
+                cluster_failure_context.clone(),
             )
             .to_common_helm_chart()?,
         );
