@@ -19,6 +19,11 @@ loki:
   limits_config:
     ingestion_rate_mb: 20
     ingestion_burst_size_mb: 30
+    # Loki 3.x defaults max_line_size to 256KB (2.x was unlimited); apps emitting
+    # bigger single lines got their entries rejected with 400 and dropped by Alloy.
+    # Truncate instead of reject so oversized lines are kept up to 1MB.
+    max_line_size: 1MB
+    max_line_size_truncate: true
     reject_old_samples: true
     reject_old_samples_max_age: 168h
     max_concurrent_tail_requests: 100
