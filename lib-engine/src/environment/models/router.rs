@@ -955,6 +955,8 @@ fn get_service_name(port: &Port, default_service_name: &str) -> String {
 // LetsEncrypt has a limit that wildcard certificates can only be generated with DNS01 challenge, which requires us to have access to the dns of the client.
 // So we must use HTTP01 challenge, by specifing each ASN domain we want to generate a certificate for. (and hopping client have correctly set their DNS records)
 // Wildcard domains if for now a special case, were clients give us access to their cloudflare DNS, so we can generate wildcard certificates for them.
+// LetsEncrypt also rejects an order as soon as one of its names is already covered by another wildcard of the same order.
+// So a name matched by a requested wildcard must be left out (I.e: tata.toto.com when *.toto.com is requested), else no certificate is issued at all.
 fn generate_certificate_alternative_names(
     custom_domains: &[CustomDomain],
     cluster_domain: &str,
@@ -970,15 +972,17 @@ fn generate_certificate_alternative_names(
         return vec![];
     }
 
-    let mut alternative_domains = BTreeSet::new();
-    for custom_domain in deduplicate_custom_domains(custom_domains)
-        .iter()
+    let eligible_custom_domains: Vec<CustomDomain> = deduplicate_custom_domains(custom_domains)
+        .into_iter()
         // we filter out domain that belongs to our cluster, we dont need to create certificate for them
         // we keep wildcard domains, as we will need to create certificate for them
         .filter(|domain| {
             (domain.is_wildcard() || !domain.domain.ends_with(cluster_domain)) && domain.generate_certificate
         })
-    {
+        .collect();
+
+    let mut alternative_domains = BTreeSet::new();
+    for custom_domain in &eligible_custom_domains {
         // We always want the root domain to be in the certificate (I.e: example.com, or if *.example.com -> example.com)
         alternative_domains.insert(custom_domain.domain_without_wildcard().to_string());
 
@@ -998,8 +1002,16 @@ fn generate_certificate_alternative_names(
         }
     }
 
+    // Wildcards only enter the set through the is_wildcard() branch above, so the eligible wildcard
+    // domains are exactly the wildcards of the set.
+    let wildcard_domains: Vec<&CustomDomain> = eligible_custom_domains
+        .iter()
+        .filter(|custom_domain| custom_domain.is_wildcard())
+        .collect();
+
     alternative_domains
         .into_iter()
+        .filter(|domain| !wildcard_domains.iter().any(|wildcard| wildcard.covers(domain)))
         .map(|domain| CustomDomainDataTemplate { domain })
         .collect()
 }
@@ -1338,6 +1350,169 @@ mod tests {
                 .collect::<BTreeSet<_>>()
                 .len(),
             certificate_names.len()
+        );
+    }
+
+    #[test]
+    pub fn test_certificate_alternative_names_skip_names_matched_by_a_requested_wildcard() {
+        // LetsEncrypt rejects the whole order when one of its names is already matched by another
+        // wildcard of the same order. I.e: tata.toto.com is superfluous when *.toto.com is requested.
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "*.toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+            CustomDomain {
+                domain: "*.tata.toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+        ];
+
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+
+        let certificate_names = generate_certificate_alternative_names(&custom_domains, "cluster.com", &[&port_http]);
+
+        assert_eq!(
+            certificate_names
+                .iter()
+                .map(|certificate_name| certificate_name.domain.as_str())
+                .collect::<HashSet<&str>>(),
+            hashset!["toto.com", "*.toto.com", "*.tata.toto.com"]
+        );
+    }
+
+    #[test]
+    pub fn test_certificate_alternative_names_skip_port_subdomains_matched_by_a_requested_wildcard() {
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "*.toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+            CustomDomain {
+                domain: "toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+        ];
+
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+        let port_grpc = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 8080,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let certificate_names =
+            generate_certificate_alternative_names(&custom_domains, "cluster.com", &[&port_http, &port_grpc]);
+
+        // http.toto.com and grpc.toto.com are both matched by *.toto.com
+        assert_eq!(
+            certificate_names
+                .iter()
+                .map(|certificate_name| certificate_name.domain.as_str())
+                .collect::<HashSet<&str>>(),
+            hashset!["toto.com", "*.toto.com"]
+        );
+    }
+
+    #[test]
+    pub fn test_certificate_alternative_names_keep_names_a_requested_wildcard_does_not_match() {
+        // a wildcard matches a single label, so *.toto.com does not match http.tata.toto.com
+        let custom_domains = vec![
+            CustomDomain {
+                domain: "*.toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+            CustomDomain {
+                domain: "tata.toto.com".to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            },
+        ];
+
+        let port_http = Port {
+            long_id: Default::default(),
+            name: "http".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 80,
+            is_default: true,
+            service_name: None,
+            namespace: None,
+        };
+        let port_grpc = Port {
+            long_id: Default::default(),
+            name: "grpc".to_string(),
+            protocol: PortProtocol::HTTP {
+                public: Some(HttpPublicPortConfig {
+                    path: "/".to_string(),
+                    path_rewrite: None,
+                }),
+            },
+            port: 8080,
+            is_default: false,
+            service_name: None,
+            namespace: None,
+        };
+
+        let certificate_names =
+            generate_certificate_alternative_names(&custom_domains, "cluster.com", &[&port_http, &port_grpc]);
+
+        assert_eq!(
+            certificate_names
+                .iter()
+                .map(|certificate_name| certificate_name.domain.as_str())
+                .collect::<HashSet<&str>>(),
+            hashset!["toto.com", "*.toto.com", "http.tata.toto.com", "grpc.tata.toto.com"]
         );
     }
 

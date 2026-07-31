@@ -91,6 +91,29 @@ impl CustomDomain {
     pub fn domain_without_wildcard(&self) -> &str {
         self.domain.strip_prefix(Self::WILDCARD_PREFIX).unwrap_or(&self.domain)
     }
+
+    /// Returns true if this wildcard domain matches `domain` the way DNS resolves a wildcard.
+    /// A wildcard matches exactly one label, so `*.toto.com` covers `tata.toto.com` but neither
+    /// `http.tata.toto.com`, `*.tata.toto.com`, nor the apex `toto.com` itself.
+    pub fn covers(&self, domain: &str) -> bool {
+        // a wildcard is a name to request on its own, it is never covered by another wildcard
+        if !self.is_wildcard() || domain.starts_with(Self::WILDCARD_PREFIX) {
+            return false;
+        }
+
+        // dns names are case insensitive, and custom domains reach us verbatim from the customer
+        let domain = domain.to_ascii_lowercase();
+        let parent_domain = self.domain_without_wildcard().to_ascii_lowercase();
+
+        let Some(label) = domain
+            .strip_suffix(parent_domain.as_str())
+            .and_then(|label| label.strip_suffix('.'))
+        else {
+            return false;
+        };
+
+        !label.is_empty() && !label.contains('.')
+    }
 }
 
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
@@ -512,13 +535,108 @@ mod tests {
     use crate::environment::models::domain::ToTerraformString;
     use crate::infrastructure::models::kubernetes::scaleway::scaleway_public_gateway_type::ScalewayPublicGatewayType;
     use crate::io_models::models::{
-        HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters, NatGatewayType,
+        CustomDomain, HostPathType, KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit, NatGatewayParameters,
+        NatGatewayType,
     };
     use serde::Deserialize;
     use serde_derive::Serialize;
     use serde_with::DisplayFromStr;
     use std::str::FromStr;
     use strum::IntoEnumIterator;
+
+    #[test]
+    fn test_custom_domain_covers() {
+        // setup:
+        struct TestCase<'a> {
+            wildcard: &'a str,
+            domain: &'a str,
+            expected: bool,
+            description: &'a str,
+        }
+
+        let test_cases = vec![
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "tata.toto.com",
+                expected: true,
+                description: "direct subdomain is covered",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "toto.com",
+                expected: false,
+                description: "a wildcard never covers its own apex",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "http.tata.toto.com",
+                expected: false,
+                description: "a wildcard matches a single label only",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "*.tata.toto.com",
+                expected: false,
+                description: "a wildcard does not cover a nested wildcard",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "nottoto.com",
+                expected: false,
+                description: "lookalike suffix is not covered",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "com",
+                expected: false,
+                description: "parent of the wildcard is not covered",
+            },
+            TestCase {
+                wildcard: "*.toto.com",
+                domain: "*.toto.com",
+                expected: false,
+                description: "a wildcard does not cover itself",
+            },
+            TestCase {
+                wildcard: "toto.com",
+                domain: "tata.toto.com",
+                expected: false,
+                description: "a non wildcard domain covers nothing",
+            },
+            TestCase {
+                wildcard: "*.Toto.com",
+                domain: "tata.TOTO.com",
+                expected: true,
+                description: "dns names are case insensitive",
+            },
+            TestCase {
+                wildcard: "*.TOTO.com",
+                domain: "TOTO.com",
+                expected: false,
+                description: "apex is still not covered whatever the case",
+            },
+        ];
+
+        for tc in test_cases {
+            // execute:
+            let custom_domain = CustomDomain {
+                domain: tc.wildcard.to_string(),
+                target_domain: "".to_string(),
+                generate_certificate: true,
+                use_cdn: false,
+            };
+
+            // verify:
+            assert_eq!(
+                tc.expected,
+                custom_domain.covers(tc.domain),
+                "case {} : '{}' covers '{}'",
+                tc.description,
+                tc.wildcard,
+                tc.domain
+            );
+        }
+    }
 
     #[test]
     fn test_kubernetes_cpu_resource_unit_to_string() {
