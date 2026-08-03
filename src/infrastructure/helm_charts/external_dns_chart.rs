@@ -80,17 +80,13 @@ pub struct ExternalDNSChart {
 
 impl ExternalDNSChart {
     fn gateway_api_sources() -> Vec<ExternalDNSSource> {
-        // HACK(QOV-2106): external-dns 0.21.0 watches TLSRoute through the deprecated
-        // `gateway.networking.k8s.io/v1alpha2` API, while current Gateway API CRDs only
-        // serve it at `v1`. The TLSRoute informer then fails to sync and external-dns exits
-        // fatally after 60s. Re-enable GatewayTlsRoute after upstream fixes
-        // https://github.com/kubernetes-sigs/external-dns/issues/6247 and bump the chart.
-        vec![
-            ExternalDNSSource::GatewayHttpRoute,
-            ExternalDNSSource::GatewayGrpcRoute,
-            ExternalDNSSource::GatewayTcpRoute,
-            ExternalDNSSource::GatewayUdpRoute,
-        ]
+        // HACK(QOV-2106): external-dns 0.21.0 watches TCPRoute, UDPRoute, and TLSRoute through
+        // the `gateway.networking.k8s.io/v1alpha2` API. Qovery installs the standard Gateway API
+        // channel, which does not install TCPRoute or UDPRoute and serves TLSRoute only at `v1`.
+        // Each unavailable informer fails to sync and makes external-dns exit fatally after 60s.
+        // Re-enable TCPRoute and UDPRoute when Qovery installs their experimental CRDs. Re-enable
+        // TLSRoute after external-dns supports its served `v1` API. https://github.com/kubernetes-sigs/external-dns/issues/6247
+        vec![ExternalDNSSource::GatewayHttpRoute, ExternalDNSSource::GatewayGrpcRoute]
     }
 
     pub fn new(
@@ -886,19 +882,26 @@ mod tests {
         )
     }
 
-    /// QOV-2106 — TLSRoute must be excluded until external-dns supports Gateway API `v1`.
+    /// QOV-2106 — Routes unavailable in Qovery's standard Gateway API installation must be excluded.
     #[test]
-    fn external_dns_chart_excludes_tls_route_for_every_gateway_api_mode() {
+    fn external_dns_chart_excludes_incompatible_gateway_routes_for_every_gateway_api_mode() {
         use crate::infrastructure::helm_charts::external_dns_chart::ExternalDNSSource;
 
         for mode in [ExternalDNSSourcesMode::GatewayApi, ExternalDNSSourcesMode::All] {
             let mode_label = format!("{mode:?}");
             let chart = make_external_dns_chart(mode);
-            assert!(
-                !chart.sources.contains(&ExternalDNSSource::GatewayTlsRoute),
-                "TLSRoute must be excluded in {mode_label} mode"
-            );
+            for source in [
+                ExternalDNSSource::GatewayTcpRoute,
+                ExternalDNSSource::GatewayUdpRoute,
+                ExternalDNSSource::GatewayTlsRoute,
+            ] {
+                assert!(
+                    !chart.sources.contains(&source),
+                    "{source} must be excluded in {mode_label} mode"
+                );
+            }
             assert!(chart.sources.contains(&ExternalDNSSource::GatewayHttpRoute));
+            assert!(chart.sources.contains(&ExternalDNSSource::GatewayGrpcRoute));
             assert!(chart.sources.contains(&ExternalDNSSource::Service));
         }
     }
