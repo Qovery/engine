@@ -1,7 +1,7 @@
 use crate::helm::HelmChartError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa, HelmChartNamespaces, VpaConfig,
-    VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
+    ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartSetValue, CommonChart, CommonChartVpa,
+    HelmChartNamespaces, VpaConfig, VpaContainerPolicy, VpaTargetRef, VpaTargetRefApiVersion, VpaTargetRefKind,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartReplicaType, HelmChartResources,
@@ -120,6 +120,12 @@ impl ToCommonHelmChart for AwsLoadBalancerControllerChart {
                         value: self.aws_apn_id.clone(),
                     },
                 ],
+                // Chart ships cert-manager CRs (enableCertManager: true): patching them requires the
+                // cert-manager webhook, which can be briefly unavailable (single replica, node churn).
+                upgrade_retry: Some(ChartInfoUpgradeRetry {
+                    nb_retry: 5,
+                    delay_in_milli_sec: 30_000,
+                }),
                 ..Default::default()
             },
             vertical_pod_autoscaler: match &self.chart_vpa {
@@ -296,5 +302,34 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    /// Chart ships cert-manager CRs (enableCertManager: true), so upgrades are validated by the
+    /// cert-manager webhook which can be briefly unavailable (single replica, node churn).
+    /// Upgrades must retry instead of failing the whole infrastructure deployment.
+    #[test]
+    fn aws_alb_controller_chart_has_upgrade_retry_test() {
+        // setup:
+        let chart = AwsLoadBalancerControllerChart::new(
+            None,
+            "arn:aws:iam::123456789012:role/eks-alb-ingress-controller".to_string(),
+            "cluster-name".to_string(),
+            HelmChartResourcesConstraintType::ChartDefault,
+            HelmChartReplicaType::Fixed(1u32),
+            HelmChartVpaType::EnabledWithChartDefault,
+            true,
+            "not-set".to_string(),
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify:
+        let upgrade_retry = common_chart
+            .chart_info
+            .upgrade_retry
+            .expect("upgrade_retry should be set to survive transient cert-manager webhook unavailability");
+        assert!(upgrade_retry.nb_retry > 0);
+        assert!(upgrade_retry.delay_in_milli_sec > 0);
     }
 }

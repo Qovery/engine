@@ -3,8 +3,8 @@ use std::path::Path;
 use crate::cmd::kubectl::{PodCondition, kubectl_exec_wait_for_pods_condition};
 use crate::errors::CommandError;
 use crate::helm::{
-    ChartInfo, ChartInstallationChecker, ChartPreExecuteAction, ChartSetValue, CommonChart, HelmChartError,
-    HelmChartNamespaces, UpdateStrategy,
+    ChartInfo, ChartInfoUpgradeRetry, ChartInstallationChecker, ChartPreExecuteAction, ChartSetValue, CommonChart,
+    HelmChartError, HelmChartNamespaces, UpdateStrategy,
 };
 use crate::infrastructure::helm_charts::{
     HelmChartDirectoryLocation, HelmChartPath, HelmChartResources, HelmChartResourcesConstraintType,
@@ -108,6 +108,13 @@ impl ToCommonHelmChart for QoveryCertManagerWebhookChart {
                         value: self.chart_resources.request_memory.to_helm_chart_value(),
                     },
                 ],
+                // Chart ships cert-manager CRs (pki.yaml): patching them requires the cert-manager
+                // webhook, which can be briefly unavailable (single replica, node churn). The
+                // pre-execute wait below reduces the race but is non-fatal, so retry as well.
+                upgrade_retry: Some(ChartInfoUpgradeRetry {
+                    nb_retry: 5,
+                    delay_in_milli_sec: 30_000,
+                }),
                 ..Default::default()
             },
             chart_installation_checker: Some(Box::new(QoveryCertManagerWebhookChartChecker::new())),
@@ -290,5 +297,37 @@ mod tests {
             "Some fields are missing in values file, add those (make sure they still exist in chart values), fields: {}",
             missing_fields.unwrap_or_default().join(",")
         );
+    }
+
+    /// Chart ships cert-manager CRs (Certificate/Issuer in pki.yaml), so upgrades are validated by
+    /// the cert-manager webhook which can be briefly unavailable (single replica, node churn).
+    /// The pre-execute wait reduces the race but is non-fatal; upgrades must also retry.
+    #[test]
+    fn qovery_cert_manager_webhook_chart_has_upgrade_retry_test() {
+        // setup:
+        let chart = QoveryCertManagerWebhookChart::new(
+            None,
+            QoveryDnsConfig {
+                api_url: Url::parse("https://whatever.com").expect("Error parsing URL"),
+                api_key: "whatever".to_string(),
+                api_url_scheme_and_domain: "whatever".to_string(),
+                api_url_port: "whatever".to_string(),
+            },
+            HelmChartResourcesConstraintType::ChartDefault,
+            UpdateStrategy::RollingUpdate,
+            HelmChartNamespaces::CertManager,
+            HelmChartNamespaces::CertManager,
+        );
+
+        // execute:
+        let common_chart = chart.to_common_helm_chart().unwrap();
+
+        // verify:
+        let upgrade_retry = common_chart
+            .chart_info
+            .upgrade_retry
+            .expect("upgrade_retry should be set to survive transient cert-manager webhook unavailability");
+        assert!(upgrade_retry.nb_retry > 0);
+        assert!(upgrade_retry.delay_in_milli_sec > 0);
     }
 }
