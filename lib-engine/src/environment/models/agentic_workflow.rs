@@ -12,6 +12,7 @@ use crate::utilities::to_short_id;
 use base64::Engine;
 use base64::engine::general_purpose;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use tera::Context as TeraContext;
 use uuid::Uuid;
@@ -41,6 +42,53 @@ pub struct AgenticWorkflowOutput {
     pub instructions: String,
 }
 
+/// Repeated header names are kept: collapsing is a rendering concern, handled in
+/// [`run_inputs_json`].
+#[derive(Clone, Debug)]
+pub struct AgenticWorkflowRunPayload {
+    pub body: String,
+    pub headers: Vec<(String, String)>,
+}
+
+const WEBHOOK_BODY_INPUT_KEY: &str = "WEBHOOK_BODY";
+const WEBHOOK_HEADERS_INPUT_KEY: &str = "WEBHOOK_HEADERS";
+
+/// Renders the shape `ai-runner` requires at `INPUTS_FILE`: a flat object of `string -> string`,
+/// which it folds into the prompt as `{{WEBHOOK_BODY}}` / `{{WEBHOOK_HEADERS}}` substitutions plus
+/// a `# INPUTS` section (`ai-runner/src/prompt_builder.rs`). Headers are a serialized JSON *string*
+/// because a nested object would not parse as `HashMap<String, String>` there.
+///
+/// `"{}"` when there is no payload, never empty: the file is always mounted and `load_inputs`
+/// treats an unparseable one as fatal.
+///
+/// `BTreeMap` for deterministic key order, so an unchanged workflow does not churn its Helm release.
+fn run_inputs_json(payload: &Option<AgenticWorkflowRunPayload>) -> String {
+    let Some(payload) = payload else {
+        return "{}".to_string();
+    };
+
+    let mut headers: BTreeMap<&str, String> = BTreeMap::new();
+    for (name, value) in &payload.headers {
+        headers
+            .entry(name.as_str())
+            .and_modify(|existing| {
+                // RFC 9110 §5.3: repeated field names are equivalent to one comma-joined value.
+                existing.push_str(", ");
+                existing.push_str(value);
+            })
+            .or_insert_with(|| value.clone());
+    }
+
+    let mut inputs: BTreeMap<&str, String> = BTreeMap::new();
+    inputs.insert(WEBHOOK_BODY_INPUT_KEY, payload.body.clone());
+    inputs.insert(
+        WEBHOOK_HEADERS_INPUT_KEY,
+        serde_json::to_string(&headers).unwrap_or_else(|_| "{}".to_string()),
+    );
+
+    serde_json::to_string(&inputs).unwrap_or_else(|_| "{}".to_string())
+}
+
 /// Extra configuration beyond `long_id/name/kube_name`, bundled into a single struct so that
 /// `AgenticWorkflow::new` stays readable despite the growing field count.
 #[derive(Clone, Debug)]
@@ -64,6 +112,8 @@ pub struct AgenticWorkflowConfig {
     pub ram_limit_in_mib: KubernetesMemoryResourceUnit,
     pub output_variable_validation_pattern: String,
     pub max_duration_in_sec: u64,
+    /// Absent for a deploy with no triggering event.
+    pub run_payload: Option<AgenticWorkflowRunPayload>,
 }
 
 impl AgenticWorkflowConfig {
@@ -180,6 +230,7 @@ impl AgenticWorkflow {
                 kube_name: self.kube_name.clone(),
                 image_full: self.config.image_full(),
                 prompt_b64: general_purpose::STANDARD.encode(self.config.prompt.as_bytes()),
+                inputs_json_b64: general_purpose::STANDARD.encode(run_inputs_json(&self.config.run_payload).as_bytes()),
                 cpu_request_in_milli: self.config.cpu_request_in_milli.to_string(),
                 cpu_limit_in_milli: self.config.cpu_limit_in_milli.as_ref().map(|c| c.to_string()),
                 ram_request_in_mib: self.config.ram_request_in_mib.to_string(),
@@ -399,6 +450,9 @@ pub(crate) struct ServiceTeraContext {
     /// Base64-encoded prompt content, rendered into a ConfigMap `binaryData` key so arbitrary
     /// prompt text never needs YAML-safe escaping.
     pub(crate) prompt_b64: String,
+    /// Base64 like `prompt_b64`, for the same reason: arbitrary external text that must not need
+    /// YAML escaping.
+    pub(crate) inputs_json_b64: String,
     pub(crate) cpu_request_in_milli: String,
     pub(crate) cpu_limit_in_milli: Option<String>,
     pub(crate) ram_request_in_mib: String,
@@ -418,7 +472,7 @@ pub(crate) struct AgenticWorkflowTeraContext {
 
 #[cfg(test)]
 mod tests {
-    use super::{AgenticWorkflowTeraContext, ServiceTeraContext};
+    use super::{AgenticWorkflowRunPayload, AgenticWorkflowTeraContext, ServiceTeraContext, run_inputs_json};
     use crate::io_models::models::EnvironmentVariable;
     use base64::Engine;
     use base64::engine::general_purpose;
@@ -443,6 +497,7 @@ mod tests {
                 kube_name: "test-agentic-workflow".to_string(),
                 image_full: "public.ecr.aws/r3m4q3r9/qovery-ai-runner:1.0.0".to_string(),
                 prompt_b64: "aGVsbG8gd29ybGQ=".to_string(),
+                inputs_json_b64: "eyJXRUJIT09LX0JPRFkiOiJ7XCJpc3N1ZVwiOntcImtleVwiOlwiUU9WLTFcIn19IiwiV0VCSE9PS19IRUFERVJTIjoie1wiY29udGVudC10eXBlXCI6XCJhcHBsaWNhdGlvbi9qc29uXCIsXCJ4LWF0bGFzc2lhbi13ZWJob29rLWlkZW50aWZpZXJcIjpcImFiYy0xMjNcIn0ifQ==".to_string(),
                 cpu_request_in_milli: "500m".to_string(),
                 cpu_limit_in_milli: Some("1000m".to_string()),
                 ram_request_in_mib: "512Mi".to_string(),
@@ -603,5 +658,79 @@ mod tests {
         assert!(rendered.contains("name: test-agentic-workflow-prompt"));
         assert!(rendered.contains("binaryData"));
         assert!(rendered.contains("aGVsbG8gd29ybGQ="));
+    }
+
+    fn webhook_run_payload() -> AgenticWorkflowRunPayload {
+        AgenticWorkflowRunPayload {
+            body: "{\"issue\":{\"key\":\"QOV-1\"}}".to_string(),
+            headers: vec![
+                ("x-atlassian-webhook-identifier".to_string(), "abc-123".to_string()),
+                ("content-type".to_string(), "application/json".to_string()),
+            ],
+        }
+    }
+
+    /// A nested headers object would not parse as `HashMap<String, String>` in `load_inputs`.
+    #[test]
+    fn run_inputs_json_renders_body_and_headers_as_flat_string_values() {
+        let rendered = run_inputs_json(&Some(webhook_run_payload()));
+
+        assert_eq!(
+            rendered,
+            r#"{"WEBHOOK_BODY":"{\"issue\":{\"key\":\"QOV-1\"}}","WEBHOOK_HEADERS":"{\"content-type\":\"application/json\",\"x-atlassian-webhook-identifier\":\"abc-123\"}"}"#
+        );
+    }
+
+    /// An empty file would break every run without a triggering event, i.e. every manual deploy.
+    #[test]
+    fn run_inputs_json_renders_an_empty_object_when_there_is_no_payload() {
+        assert_eq!(run_inputs_json(&None), "{}");
+    }
+
+    /// RFC 9110 §5.3; last-wins would silently drop a forwarded-for hop.
+    #[test]
+    fn run_inputs_json_comma_joins_repeated_header_names() {
+        let payload = AgenticWorkflowRunPayload {
+            body: String::new(),
+            headers: vec![
+                ("x-forwarded-for".to_string(), "203.0.113.1".to_string()),
+                ("x-forwarded-for".to_string(), "203.0.113.2".to_string()),
+            ],
+        };
+
+        let rendered = run_inputs_json(&Some(payload));
+
+        assert!(
+            rendered.contains(r#"\"x-forwarded-for\":\"203.0.113.1, 203.0.113.2\""#),
+            "got: {rendered}"
+        );
+    }
+
+    #[test]
+    fn renders_prompt_config_map_with_base64_inputs_json() {
+        let rendered = render_template(prompt_config_map_template(), build_agentic_workflow_tera_context());
+
+        assert!(rendered.contains("inputs.json:"));
+        assert!(rendered.contains("eyJXRUJIT09LX0JPRFkiOiJ7XCJpc3N1ZVwiOntcImtleVwiOlwiUU9WLTFcIn19IiwiV0VCSE9PS19IRUFERVJTIjoie1wiY29udGVudC10eXBlXCI6XCJhcHBsaWNhdGlvbi9qc29uXCIsXCJ4LWF0bGFzc2lhbi13ZWJob29rLWlkZW50aWZpZXJcIjpcImFiYy0xMjNcIn0ifQ=="));
+    }
+
+    #[test]
+    fn renders_job_template_with_inputs_file_mount_and_env_var() {
+        let rendered = render_template(job_template(), build_agentic_workflow_tera_context());
+
+        assert!(rendered.contains("INPUTS_FILE"));
+        assert!(rendered.contains("/qovery-agentic-workflow/inputs.json"));
+        assert!(rendered.contains("subPath: inputs.json"));
+    }
+
+    /// The engine base64-encodes every Secret value, so a path routed there would reach the
+    /// container encoded and `ai-runner` would open a nonsense filename.
+    #[test]
+    fn inputs_file_path_is_not_base64_encoded_into_the_secret() {
+        let job = render_template(job_template(), build_agentic_workflow_tera_context());
+        let secret = render_template(secret_template(), build_agentic_workflow_tera_context());
+
+        assert!(job.contains("value: \"/qovery-agentic-workflow/inputs.json\""));
+        assert!(!secret.contains("INPUTS_FILE"));
     }
 }

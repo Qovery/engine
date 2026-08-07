@@ -64,6 +64,11 @@ spec:
               mountPath: /qovery-agentic-workflow/prompt.txt
               subPath: prompt.txt
               readOnly: true
+            # Second key on the same ConfigMap, so no extra volume is needed.
+            - name: prompt
+              mountPath: /qovery-agentic-workflow/inputs.json
+              subPath: inputs.json
+              readOnly: true
           envFrom:
             - secretRef:
                 name: {{ service.kube_name }}
@@ -76,6 +81,10 @@ spec:
               value: "oneshot"
             - name: PROMPT_FILE
               value: "/qovery-agentic-workflow/prompt.txt"
+            # Plaintext here, not via the Secret: like PROMPT_FILE this is a plain path, and the
+            # engine base64-encodes every Secret value. See ai-runner's `load_inputs`.
+            - name: INPUTS_FILE
+              value: "/qovery-agentic-workflow/inputs.json"
           resources:
             limits:
               {%- if service.cpu_limit_in_milli %}
