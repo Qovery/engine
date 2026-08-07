@@ -7,31 +7,8 @@ use crate::io_models::Action;
 use crate::io_models::context::Context;
 use crate::io_models::models::{KubernetesCpuResourceUnit, KubernetesMemoryResourceUnit};
 use crate::io_models::services_common::GitCredentials;
-use base64::Engine;
-use base64::engine::general_purpose;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-/// Base64-decode (STANDARD alphabet) a "hardened" wire field into its canonical form.
-///
-/// q-core base64-encodes the sensitive/opaque agentic-workflow fields — `api_key`, the git
-/// access token, `prompt`, `mcp`, output `instructions`, and header values — so they never appear
-/// in plaintext in the engine-request JSON (QOV-2086). The engine reverses that here, at the
-/// io-model → domain boundary, so everything downstream (env-var construction, prompt ConfigMap)
-/// keeps working with canonical values exactly as it did before any encoding existed.
-///
-/// Strict on purpose: q-core encoding and this decoding ship together (lockstep), so a value that
-/// isn't valid base64 / UTF-8 is a contract violation worth failing on, not something to pass
-/// through silently. An empty string decodes to an empty string, so unset optional fields are
-/// unaffected.
-fn decode_hardened_field(field: &str, value: &str) -> Result<String, AgenticWorkflowError> {
-    let bytes = general_purpose::STANDARD
-        .decode(value)
-        .map_err(|e| AgenticWorkflowError::InvalidConfig(format!("field '{field}' is not valid base64: {e}")))?;
-    String::from_utf8(bytes).map_err(|e| {
-        AgenticWorkflowError::InvalidConfig(format!("field '{field}' does not base64-decode to valid UTF-8: {e}"))
-    })
-}
 
 /// Default `.spec.activeDeadlineSeconds` for an AgenticWorkflow Job. Agent (Claude Code) tasks
 /// routinely run for several minutes, well past the busybox-stub's original 300s default, so
@@ -111,6 +88,32 @@ pub struct AgenticWorkflowOutput {
     pub instructions: String,
 }
 
+/// Mirror of webhook-receiver's `MAX_GENERIC_HOOK_BODY_BYTES`, held only to enforce the ordering
+/// asserted below. It lives in another repo and can therefore drift; the assertion is what turns
+/// drift into a build failure instead of a runtime surprise.
+const WEBHOOK_RECEIVER_MAX_BODY_BYTES: usize = 256 * 1024;
+
+/// Bounds body + headers, so it must stay **looser** than webhook-receiver's body-only cap: were
+/// they equal, a body accepted at the edge would fail here as soon as it carried one header. The
+/// headroom keeps this guard unreachable via the webhook path, leaving it as defence in depth for
+/// other callers. Upper bound is the ConfigMap it shares with `prompt.txt` (~1 MiB), measured
+/// base64-inflated: 384 KiB becomes ~512 KiB.
+pub const MAX_RUN_PAYLOAD_BYTES: usize = 384 * 1024;
+
+const _: () = assert!(WEBHOOK_RECEIVER_MAX_BODY_BYTES < MAX_RUN_PAYLOAD_BYTES);
+
+/// The webhook event a run is reacting to (QOV-2084), as opposed to the workflow's static config.
+///
+/// Like the workflow's static fields, `body` and header values arrive verbatim and are used as-is.
+/// Header names are also plain, so [`AgenticWorkflowHeader`] is plain end to end.
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct AgenticWorkflowRunPayload {
+    pub body: String,
+    /// A `Vec` because HTTP permits repeated header names.
+    #[serde(default)]
+    pub headers: Vec<AgenticWorkflowHeader>,
+}
+
 /// `AgenticWorkflow` wire payload sent by q-core's `EngineRequest.AgenticWorkflow` (see
 /// `q-core/.../deployment/model/EngineRequest.kt`). Field names are plain snake_case on
 /// purpose: q-core serializes with Jackson's `PropertyNamingStrategies.SNAKE_CASE`, which
@@ -156,6 +159,11 @@ pub struct AgenticWorkflow {
     pub output_variable_validation_pattern: String,
     #[serde(default = "default_max_duration_in_sec")]
     pub max_duration_in_sec: u64,
+
+    /// Absent for a deploy with no triggering event. `#[serde(default)]` keeps the engine
+    /// deployable against a q-core that does not send it yet.
+    #[serde(default)]
+    pub payload: Option<AgenticWorkflowRunPayload>,
 }
 
 impl AgenticWorkflow {
@@ -182,56 +190,71 @@ impl AgenticWorkflow {
         Ok(Box::new(service))
     }
 
-    /// Build the domain [`AgenticWorkflowConfig`], reversing q-core's transit base64-encoding on
-    /// the hardened fields (see [`decode_hardened_field`]). Split out from
-    /// `to_agentic_workflow_domain` so the full decode wiring is unit-testable without
-    /// constructing a `Context`.
+    /// Build the domain [`AgenticWorkflowConfig`] from q-core's plain JSON wire fields. Split out
+    /// from `to_agentic_workflow_domain` so the conversion is unit-testable without constructing a
+    /// `Context`.
     fn into_domain_config(self) -> Result<AgenticWorkflowConfig, AgenticWorkflowError> {
-        // Repos/outputs are built before the struct so the fallible per-repo / per-output decodes
-        // can fold their errors in one pass (`collect::<Result<Vec<_>>>()`).
         let project_repositories = self
             .project_repositories
             .into_iter()
-            .map(|repo| {
-                let git_token = repo
-                    .git_credentials
-                    .map(|creds| decode_hardened_field("git_credentials.access_token", &creds.access_token))
-                    .transpose()?;
-                Ok(models::agentic_workflow::AgenticWorkflowProjectRepository {
-                    url: repo.url,
-                    branch: repo.branch,
-                    git_token,
-                })
+            .map(|repo| models::agentic_workflow::AgenticWorkflowProjectRepository {
+                url: repo.url,
+                branch: repo.branch,
+                git_token: repo.git_credentials.map(|creds| creds.access_token),
             })
-            .collect::<Result<Vec<_>, AgenticWorkflowError>>()?;
+            .collect::<Vec<_>>();
 
         let outputs = self
             .outputs
             .into_iter()
-            .map(|output| {
-                let headers = output
+            .map(|output| models::agentic_workflow::AgenticWorkflowOutput {
+                name: output.name,
+                url: output.url,
+                headers: output.headers.into_iter().map(|h| (h.name, h.value)).collect(),
+                instructions: output.instructions,
+            })
+            .collect::<Vec<_>>();
+
+        let run_payload = self
+            .payload
+            // q-core always sends the field, using an empty payload for "no triggering event", so
+            // emptiness — not absence — is what must collapse to `None` here. Otherwise every
+            // manually deployed workflow would render empty `WEBHOOK_*` inputs, and ai-runner would
+            // append a stray `# INPUTS` block to its prompt.
+            .filter(|payload| !(payload.body.is_empty() && payload.headers.is_empty()))
+            .map(|payload| {
+                // Verbatim: q-core sends the payload as plain JSON.
+                let body = payload.body;
+                let headers = payload
                     .headers
                     .into_iter()
-                    .map(|h| Ok((h.name, decode_hardened_field("outputs.headers.value", &h.value)?)))
-                    .collect::<Result<Vec<_>, AgenticWorkflowError>>()?;
-                Ok(models::agentic_workflow::AgenticWorkflowOutput {
-                    name: output.name,
-                    url: output.url,
-                    headers,
-                    instructions: decode_hardened_field("outputs.instructions", &output.instructions)?,
-                })
+                    .map(|h| (h.name, h.value))
+                    .collect::<Vec<(String, String)>>();
+
+                let total_bytes = body.len()
+                    + headers
+                        .iter()
+                        .map(|(name, value)| name.len() + value.len())
+                        .sum::<usize>();
+                if total_bytes > MAX_RUN_PAYLOAD_BYTES {
+                    return Err(AgenticWorkflowError::InvalidConfig(format!(
+                        "run payload is {total_bytes} bytes, over the {MAX_RUN_PAYLOAD_BYTES} byte limit"
+                    )));
+                }
+
+                Ok(models::agentic_workflow::AgenticWorkflowRunPayload { body, headers })
             })
-            .collect::<Result<Vec<_>, AgenticWorkflowError>>()?;
+            .transpose()?;
 
         Ok(AgenticWorkflowConfig {
             image_repository: self.image.repository,
             image_tag: self.image.tag,
             docker_fragment: self.docker_fragment,
-            prompt: decode_hardened_field("prompt", &self.prompt)?,
+            prompt: self.prompt,
             model_type: self.model.model_type,
-            model_api_key: decode_hardened_field("model.api_key", &self.model.api_key)?,
+            model_api_key: self.model.api_key,
             model_settings: self.model.settings,
-            mcp: decode_hardened_field("mcp", &self.mcp)?,
+            mcp: self.mcp,
             project_repositories,
             host_allowlist: self.host_allowlist,
             outputs,
@@ -241,6 +264,7 @@ impl AgenticWorkflow {
             ram_limit_in_mib: KubernetesMemoryResourceUnit::MebiByte(self.ram_limit_in_mib),
             output_variable_validation_pattern: self.output_variable_validation_pattern,
             max_duration_in_sec: self.max_duration_in_sec,
+            run_payload,
         })
     }
 }
@@ -255,19 +279,14 @@ mod tests {
     /// (corenetto/src/test/kotlin/.../EngineRequestUnitTest.kt), via `RedisEngineService.objectMapper`
     /// (Jackson `PropertyNamingStrategies.SNAKE_CASE`). If this ever fails to deserialize, or the
     /// q-core golden literal drifts from this one, the wire contract between the two repos is broken.
-    // The "hardened" fields (`prompt`, `api_key`, `mcp`, git `access_token`, output
-    // `instructions`, header `value`) are base64-encoded on the wire by q-core (QOV-2086) so
-    // secrets/opaque blobs never appear in plaintext in the request JSON. The io-model holds them
-    // as-received (still encoded); the engine reverses the encoding in `to_agentic_workflow_domain`.
-    // Decoded values here: prompt="Investigate the incident and summarize root cause.",
-    // api_key="sk-secret", mcp={"servers":[]}, access_token="resolved-token",
-    // header value="application/json", instructions="Keep it under 500 characters.".
-    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4=","model":{"type":"CLAUDE","api_key":"c2stc2VjcmV0","settings":"{\"effort\":\"high\"}"},"mcp":"eyJzZXJ2ZXJzIjpbXX0=","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"cmVzb2x2ZWQtdG9rZW4=","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"YXBwbGljYXRpb24vanNvbg=="}],"instructions":"S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4="}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
+    // Static agentic-workflow fields are plain JSON strings on the q-core/engine wire contract.
+    // The run payload is likewise plain JSON and reaches the domain configuration verbatim.
+    const GOLDEN_JSON: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"RUN apt-get install -y jq","prompt":"Investigate the incident and summarize root cause.","model":{"type":"CLAUDE","api_key":"sk-secret","settings":"{\"effort\":\"high\"}"},"mcp":"{\"servers\":[]}","project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"resolved-token","expired_at":"1970-01-01T00:00:00Z"}}],"host_allowlist":["api.github.com"],"outputs":[{"name":"slack","url":"https://hooks.slack.com/services/x","headers":[{"name":"Content-Type","value":"application/json"}],"instructions":"Keep it under 500 characters."}],"cpu_request_in_milli":500,"cpu_limit_in_milli":1000,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600,"payload":{"body":"{\"issue\":{\"key\":\"QOV-1\"}}","headers":[{"name":"x-atlassian-webhook-identifier","value":"abc-123"},{"name":"content-type","value":"application/json"}]}}"#;
 
     /// Same as GOLDEN_JSON's companion "defaulted fields" q-core test: the optional fields
     /// (docker_fragment/mcp/project_repositories/host_allowlist/outputs/cpu_limit_in_milli) are
     /// present but empty/null - proving `#[serde(default)]` isn't masking a real mismatch.
-    const GOLDEN_JSON_DEFAULTS: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"","prompt":"","model":{"type":"CLAUDE","api_key":"","settings":""},"mcp":"","project_repositories":[],"host_allowlist":[],"outputs":[],"cpu_request_in_milli":500,"cpu_limit_in_milli":null,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600}"#;
+    const GOLDEN_JSON_DEFAULTS: &str = r#"{"long_id":"eb5163b9-0e4c-4c9a-b304-9b984c85337d","name":"my-agentic-workflow","kube_name":"agentic-workflow-zeb5163b9-my-agentic-workflow","action":"CREATE","image":{"repository":"public.ecr.aws/r3m4q3r9/qovery-ai-runner","tag":"0.0.1"},"docker_fragment":"","prompt":"","model":{"type":"CLAUDE","api_key":"","settings":""},"mcp":"","project_repositories":[],"host_allowlist":[],"outputs":[],"cpu_request_in_milli":500,"cpu_limit_in_milli":null,"ram_request_in_mib":512,"ram_limit_in_mib":1024,"output_variable_validation_pattern":"^[a-zA-Z_][a-zA-Z0-9_]*$","max_duration_in_sec":3600,"payload":{"body":"","headers":[]}}"#;
 
     #[test]
     fn deserializes_the_q_core_golden_json_contract() {
@@ -282,16 +301,11 @@ mod tests {
         assert_eq!(workflow.image.repository, "public.ecr.aws/r3m4q3r9/qovery-ai-runner");
         assert_eq!(workflow.image.tag, "0.0.1");
         assert_eq!(workflow.docker_fragment, "RUN apt-get install -y jq");
-        // Hardened fields are held as-received (base64); the engine decodes them at the
-        // io-model → domain boundary via `decode_hardened_field` (see its unit tests below).
-        assert_eq!(
-            workflow.prompt,
-            "SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4="
-        );
+        assert_eq!(workflow.prompt, "Investigate the incident and summarize root cause.");
         assert_eq!(workflow.model.model_type, AgenticWorkflowModelType::Claude);
-        assert_eq!(workflow.model.api_key, "c2stc2VjcmV0");
+        assert_eq!(workflow.model.api_key, "sk-secret");
         assert_eq!(workflow.model.settings, "{\"effort\":\"high\"}");
-        assert_eq!(workflow.mcp, "eyJzZXJ2ZXJzIjpbXX0=");
+        assert_eq!(workflow.mcp, "{\"servers\":[]}");
         assert_eq!(workflow.project_repositories.len(), 1);
         assert_eq!(workflow.project_repositories[0].url, "https://github.com/qovery/demo");
         assert_eq!(workflow.project_repositories[0].branch, "main");
@@ -300,14 +314,14 @@ mod tests {
             .as_ref()
             .expect("git_credentials should be present");
         assert_eq!(git_credentials.login, "x-access-token");
-        assert_eq!(git_credentials.access_token, "cmVzb2x2ZWQtdG9rZW4=");
+        assert_eq!(git_credentials.access_token, "resolved-token");
         assert_eq!(workflow.host_allowlist, vec!["api.github.com".to_string()]);
         assert_eq!(workflow.outputs.len(), 1);
         assert_eq!(workflow.outputs[0].name, "slack");
         assert_eq!(workflow.outputs[0].url.as_deref(), Some("https://hooks.slack.com/services/x"));
         assert_eq!(workflow.outputs[0].headers[0].name, "Content-Type");
-        assert_eq!(workflow.outputs[0].headers[0].value, "YXBwbGljYXRpb24vanNvbg==");
-        assert_eq!(workflow.outputs[0].instructions, "S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4=");
+        assert_eq!(workflow.outputs[0].headers[0].value, "application/json");
+        assert_eq!(workflow.outputs[0].instructions, "Keep it under 500 characters.");
         assert_eq!(workflow.cpu_request_in_milli, 500);
         assert_eq!(workflow.cpu_limit_in_milli, Some(1000));
         assert_eq!(workflow.ram_request_in_mib, 512);
@@ -355,17 +369,13 @@ mod tests {
     }
 
     #[test]
-    fn into_domain_config_decodes_every_hardened_field() {
-        // Guards the decode wiring: if any hardened field's `decode_hardened_field` call were
-        // dropped in `into_domain_config`, its value would stay base64 here (and the container
-        // would then receive a double-encoded value). The golden's hardened fields are base64.
+    fn into_domain_config_preserves_plain_static_fields_verbatim() {
         let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
         let config = workflow.into_domain_config().expect("domain config should build");
 
         assert_eq!(config.prompt, "Investigate the incident and summarize root cause.");
         assert_eq!(config.model_api_key, "sk-secret");
         assert_eq!(config.mcp, "{\"servers\":[]}");
-        // NOT hardened — must pass through unchanged (a spurious decode here would corrupt it).
         assert_eq!(config.model_settings, "{\"effort\":\"high\"}");
         assert_eq!(config.project_repositories[0].git_token.as_deref(), Some("resolved-token"));
         assert_eq!(config.outputs[0].instructions, "Keep it under 500 characters.");
@@ -395,28 +405,173 @@ mod tests {
     }
 
     #[test]
-    fn decode_hardened_field_decodes_a_base64_value() {
-        assert_eq!(decode_hardened_field("api_key", "c2stc2VjcmV0").unwrap(), "sk-secret");
+    fn deserializes_the_run_payload_body_and_headers() {
+        let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        let payload = workflow.payload.as_ref().expect("payload should be present");
+
+        assert_eq!(payload.body, "{\"issue\":{\"key\":\"QOV-1\"}}");
+        assert_eq!(payload.headers.len(), 2);
+        assert_eq!(payload.headers[0].name, "x-atlassian-webhook-identifier");
+        assert_eq!(payload.headers[0].value, "abc-123");
     }
 
     #[test]
-    fn decode_hardened_field_maps_empty_to_empty() {
-        // Unset optional hardened fields arrive as an empty string and must stay empty, not error.
-        assert_eq!(decode_hardened_field("mcp", "").unwrap(), "");
+    fn payload_is_none_when_the_wire_payload_omits_it() {
+        // Deployability in either order.
+        let without_payload = GOLDEN_JSON_DEFAULTS.replacen(r#","payload":{"body":"","headers":[]}"#, "", 1);
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(&without_payload).expect("payload-less request should deserialize");
+
+        assert!(workflow.payload.is_none());
+    }
+
+    /// q-core sends the payload unconditionally and expresses "no triggering event" as an empty one,
+    /// so an empty payload must collapse to no run payload at all. Were it carried through, every
+    /// manual deploy would render empty `WEBHOOK_*` inputs and ai-runner would append a stray
+    /// `# INPUTS` block to the prompt.
+    #[test]
+    fn an_empty_wire_payload_produces_no_run_payload() {
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(GOLDEN_JSON_DEFAULTS).expect("defaults golden should deserialize");
+        assert!(workflow.payload.is_some(), "q-core always sends the field");
+
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        assert!(config.run_payload.is_none());
+    }
+
+    /// The payload must reach the domain untouched, including values that happen to parse as base64.
+    #[test]
+    fn into_domain_config_carries_the_run_payload_verbatim() {
+        let workflow: AgenticWorkflow = serde_json::from_str(GOLDEN_JSON).expect("golden JSON should deserialize");
+        let config = workflow.into_domain_config().expect("domain config should build");
+        let payload = config.run_payload.expect("run payload should be present");
+
+        assert_eq!(payload.body, "{\"issue\":{\"key\":\"QOV-1\"}}");
+        assert_eq!(
+            payload.headers,
+            vec![
+                ("x-atlassian-webhook-identifier".to_string(), "abc-123".to_string()),
+                ("content-type".to_string(), "application/json".to_string()),
+            ]
+        );
+    }
+
+    /// The exact value a decode-on-receive engine would silently corrupt: `"abcd"` is both plausible
+    /// webhook content and valid base64 (decoding to non-UTF-8 bytes).
+    #[test]
+    fn a_body_that_looks_like_base64_is_not_decoded() {
+        let json = GOLDEN_JSON.replacen(r#"{\"issue\":{\"key\":\"QOV-1\"}}"#, "abcd", 1);
+        let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
+
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        assert_eq!(config.run_payload.expect("run payload should be present").body, "abcd");
+    }
+
+    /// The ordering of the two caps is asserted at compile time; this covers the behaviour that
+    /// ordering exists for - a body accepted at the edge, plus headers, must still deploy.
+    #[test]
+    fn a_body_at_the_receiver_limit_plus_headers_still_builds_a_domain_config() {
+        let body = "x".repeat(WEBHOOK_RECEIVER_MAX_BODY_BYTES);
+        let headers =
+            r#"[{"name":"authorization","value":"Bearer token"},{"name":"content-type","value":"application/json"}]"#;
+        let json = GOLDEN_JSON
+            .replacen(r#"{\"issue\":{\"key\":\"QOV-1\"}}"#, &body, 1)
+            .replacen(
+                r#"[{"name":"x-atlassian-webhook-identifier","value":"abc-123"},{"name":"content-type","value":"application/json"}]"#,
+                headers,
+                1,
+            );
+        let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
+
+        let config = workflow
+            .into_domain_config()
+            .expect("a body at webhook-receiver's limit plus headers must not be rejected here");
+
+        let payload = config.run_payload.expect("run payload should be present");
+        assert_eq!(payload.body.len(), WEBHOOK_RECEIVER_MAX_BODY_BYTES);
     }
 
     #[test]
-    fn decode_hardened_field_errors_on_invalid_base64() {
-        // A raw plaintext key ('-' isn't in the STANDARD alphabet) is a contract violation under
-        // the lockstep encoding: q-core must send it base64-encoded.
-        let err = decode_hardened_field("api_key", "sk-ant-plaintext").unwrap_err();
+    fn into_domain_config_rejects_a_run_payload_over_the_size_cap() {
+        // Failing here with a clear message beats a Kubernetes rejection at apply time.
+        let oversized = "x".repeat(MAX_RUN_PAYLOAD_BYTES + 1);
+        let json = GOLDEN_JSON.replacen(r#"{\"issue\":{\"key\":\"QOV-1\"}}"#, &oversized, 1);
+        let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("should deserialize");
+
+        let err = workflow.into_domain_config().unwrap_err();
+
         assert!(matches!(err, AgenticWorkflowError::InvalidConfig(_)));
+        assert!(format!("{err}").contains("run payload"));
     }
 
     #[test]
-    fn decode_hardened_field_errors_on_valid_base64_that_is_not_utf8() {
-        // "//4=" is valid base64 for the bytes 0xFF 0xFE, which are not valid UTF-8.
-        let err = decode_hardened_field("prompt", "//4=").unwrap_err();
-        assert!(matches!(err, AgenticWorkflowError::InvalidConfig(_)));
+    fn into_domain_config_preserves_base64_looking_static_fields_verbatim() {
+        let json = GOLDEN_JSON
+            .replacen(
+                "Investigate the incident and summarize root cause.",
+                "SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4=",
+                1,
+            )
+            .replacen("sk-secret", "c2stc2VjcmV0", 1)
+            .replacen(r#"{\"servers\":[]}"#, "eyJzZXJ2ZXJzIjpbXX0=", 1)
+            .replacen("resolved-token", "cmVzb2x2ZWQtdG9rZW4=", 1)
+            .replacen("application/json", "YXBwbGljYXRpb24vanNvbg==", 1)
+            .replacen("Keep it under 500 characters.", "S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4=", 1);
+        let workflow: AgenticWorkflow = serde_json::from_str(&json).expect("base64-looking JSON should deserialize");
+
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        assert_eq!(
+            config.prompt,
+            "SW52ZXN0aWdhdGUgdGhlIGluY2lkZW50IGFuZCBzdW1tYXJpemUgcm9vdCBjYXVzZS4="
+        );
+        assert_eq!(config.model_api_key, "c2stc2VjcmV0");
+        assert_eq!(config.mcp, "eyJzZXJ2ZXJzIjpbXX0=");
+        assert_eq!(
+            config.project_repositories[0].git_token.as_deref(),
+            Some("cmVzb2x2ZWQtdG9rZW4=")
+        );
+        assert_eq!(config.outputs[0].instructions, "S2VlcCBpdCB1bmRlciA1MDAgY2hhcmFjdGVycy4=");
+        assert_eq!(
+            config.outputs[0].headers,
+            vec![("Content-Type".to_string(), "YXBwbGljYXRpb24vanNvbg==".to_string())]
+        );
+    }
+
+    #[test]
+    fn into_domain_config_preserves_empty_static_fields_verbatim() {
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(GOLDEN_JSON_DEFAULTS).expect("defaults golden should deserialize");
+
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        assert_eq!(config.prompt, "");
+        assert_eq!(config.model_api_key, "");
+        assert_eq!(config.mcp, "");
+    }
+
+    #[test]
+    fn into_domain_config_preserves_empty_repository_and_output_fields_verbatim() {
+        let json = GOLDEN_JSON_DEFAULTS
+            .replacen(
+                r#""project_repositories":[]"#,
+                r#""project_repositories":[{"url":"https://github.com/qovery/demo","branch":"main","git_credentials":{"login":"x-access-token","access_token":"","expired_at":"1970-01-01T00:00:00Z"}}]"#,
+                1,
+            )
+            .replacen(
+                r#""outputs":[]"#,
+                r#""outputs":[{"name":"slack","headers":[{"name":"Content-Type","value":""}],"instructions":""}]"#,
+                1,
+            );
+        let workflow: AgenticWorkflow =
+            serde_json::from_str(&json).expect("empty static-field JSON should deserialize");
+
+        let config = workflow.into_domain_config().expect("domain config should build");
+
+        assert_eq!(config.project_repositories[0].git_token.as_deref(), Some(""));
+        assert_eq!(config.outputs[0].headers, vec![("Content-Type".to_string(), "".to_string())]);
+        assert_eq!(config.outputs[0].instructions, "");
     }
 }
