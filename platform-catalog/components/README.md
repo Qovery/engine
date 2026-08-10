@@ -75,6 +75,10 @@ Recommended evaluator tree:
 runtime-values/
   model.pkl                    # request decoding, operation routing, JSON output only
   contract.pkl                 # vendored copy of the canonical q-core/Pkl contract
+  sdk/                         # vendored copy of the shared authoring SDK
+    request.pkl                # request decoding, typed readers, test request builder
+    validate.pkl               # canonical violation codes and generic validators
+    result.pkl                 # EvaluationResult envelope with the fail-closed COMPILE gate
   describe.pkl                 # fields, defaults and field-level constraints
   requirements.pkl             # conditional logical inputs
   validate.pkl                 # types, cross-field rules and stable violation codes
@@ -87,11 +91,19 @@ runtime-values/
     helm.pkl                   # domain-specific adaptation to chart values, when needed
 ```
 
-The canonical contract lives in `platform-catalog/pkl/component-contract.pkl`. Every executable
-component keeps a local copy because q-core resolves imports only within that component's
-digest-pinned bundle. Run `./scripts/sync-platform-pkl-contract.sh` after changing the canonical
-file; CI rejects missing or stale copies, and publication injects the canonical file into the
-staged bundle. Component-specific types must stay outside `contract.pkl`.
+The canonical contract and authoring SDK live in `platform-catalog/pkl/` (see its
+[README](../pkl/README.md)). Every executable component keeps a local copy because q-core resolves
+imports only within that component's digest-pinned bundle. Run `./scripts/sync-platform-pkl-sdk.sh`
+after changing a canonical file; CI rejects missing, stale, or extraneous copies, and publication
+fails on out-of-sync copies and injects the canonical files into the staged bundle.
+Component-specific types must stay outside `contract.pkl` and `sdk/`.
+
+Use the SDK instead of re-implementing its concerns: `model.pkl` decodes the request with
+`sdk/request.pkl`, evaluation reads the request through its typed accessors and builds the response
+with `sdk/result.pkl` — whose envelope owns the "no helmValues while violations exist" gate — and
+validators reuse the canonical violation codes and generic checks in `sdk/validate.pkl`. The
+layering check enforces the boundary in both directions: any module may import `sdk/` (aliased
+`sdk<Module>`), while SDK modules may import only `contract.pkl`.
 
 Split chart-specific low-level adaptation from product intent when it becomes substantial. Loki's
 `storage/helm.pkl` is such an adapter; `compile.pkl` remains readable without knowing every Loki

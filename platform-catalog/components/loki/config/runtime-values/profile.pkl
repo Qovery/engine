@@ -1,27 +1,30 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.profile
 
-import "describe.pkl"
-import "resources/types.pkl" as resourceTypes
+import "product.pkl"
+import "resources/types.pkl" as resourcesTypes
+import "storage/backends.pkl" as storageBackends
 
 // Centralizes defaults and type narrowing for the customer profile.
 // A null result means "wrong type". Validation can then report every problem in one response
 // instead of throwing on the first bad field.
+// Each default is read from the module that owns the concept, never from the presentation layer,
+// so a feature package never reaches through this reader back into describe.pkl.
 
 function retentionWeeks(config: Mapping): Int? =
-  let (value = config.getOrNull("retentionWeeks") ?? describe.retentionWeeksDefault)
+  let (value = config.getOrNull("retentionWeeks") ?? product.retentionWeeksDefault)
     if (value is Int) value else null
 
 function highAvailability(config: Mapping): Boolean? =
-  let (value = config.getOrNull("highAvailability") ?? describe.highAvailabilityDefault)
+  let (value = config.getOrNull("highAvailability") ?? product.highAvailabilityDefault)
     if (value is Boolean) value else null
 
 function storage(config: Mapping): String? =
-  let (value = config.getOrNull("storage") ?? describe.storageDefault)
+  let (value = config.getOrNull("storage") ?? storageBackends.defaultKey)
     if (value is String) value else null
 
 // A configuration stored before Slice 4.7 has no selector; it must keep compiling exactly as
 // before, so an absent value resolves to CHART_DEFAULT, never to a preset.
 function resourceProfile(config: Mapping): String? =
-  let (value = config.getOrNull(resourceTypes.profileFieldKey) ?? resourceTypes.chartDefaultProfile)
+  let (value = config.getOrNull(resourcesTypes.profileFieldKey) ?? resourcesTypes.chartDefaultProfile)
     if (value is String) value else null

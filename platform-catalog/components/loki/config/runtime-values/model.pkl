@@ -1,15 +1,12 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.model
 
-import "pkl:json"
-
 import "evaluation.pkl"
+import "sdk/request.pkl" as sdkRequest
 
 // This is the only entrypoint known by q-core. Request decoding and response rendering stay here;
 // catalogue orchestration lives in evaluation.pkl so the native Pkl tests exercise the same path.
-local request = (new json.Parser { useMapping = true }).parse(read("prop:request")) as Mapping
-
 output {
-  value = evaluation.evaluate(request)
+  value = evaluation.evaluate(sdkRequest.decode(read("prop:request")))
   renderer = new JsonRenderer {}
 }

@@ -193,7 +193,7 @@ default:
     - scripts/install-pkl.sh
     - scripts/publish-platform-catalog.sh
     - scripts/publish-platform-config.sh
-    - scripts/sync-platform-pkl-contract.sh
+    - scripts/sync-platform-pkl-sdk.sh
     - scripts/test-platform-config.sh
     - tools/platform-catalog-tests/**/*
 

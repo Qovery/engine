@@ -1,7 +1,6 @@
 @ModuleInfo { minPklVersion = "0.32.0" }
 module qovery.engine.platform.loki.resources.helm
 
-import "../profile.pkl"
 import "presets.pkl"
 import "targets.pkl"
 import "types.pkl"
@@ -12,19 +11,18 @@ import "types.pkl"
 // admission-time default is needed to finish the requested resources.
 function targetResources(
   profileConfig: Mapping,
+  profileName: String,
   target: types.WorkloadTarget,
   isHighAvailability: Boolean,
 ): Mapping? =
   if (target.activeInHighAvailability != isHighAvailability)
     null
+  else if (profileName == types.chartDefaultProfile)
+    null
+  else if (profileName == types.customProfile)
+    resourcesBlock(customBudget(profileConfig, target))
   else
-    let (profileName = profile.resourceProfile(profileConfig) as String)
-      if (profileName == types.chartDefaultProfile)
-        null
-      else if (profileName == types.customProfile)
-        resourcesBlock(customBudget(profileConfig, target))
-      else
-        resourcesBlock(presets.budgetFor(profileName, target.key))
+    resourcesBlock(presets.budgetFor(profileName, target.key))
 
 // COMPILE runs only on a validated configuration, so a missing or non-integer custom request here
 // is an invariant failure, not a default.

@@ -7,20 +7,28 @@ loki/
       base.yaml
       overlays/
     runtime-values/
-      model.pkl
-      contract.pkl
-      context.pkl
-      describe.pkl
+      model.pkl          # L5 entrypoint: decodes prop:request, renders JSON
+      evaluation.pkl     # L4 builds the EvaluationResult envelope
+      describe.pkl       # L3 one module per contract operation, composition only
       requirements.pkl
       validate.pkl
       compile.pkl
-      profile.pkl
-      storage/
+      profile.pkl        # L1 typed reads of the stored draft
+      contract.pkl       # L0 vocabulary, no dependencies
+      context.pkl
+      product.pkl
+      sdk/               # L0 vendored authoring SDK (machine-synced, see ../../../pkl/README.md)
+        request.pkl
+        validate.pkl
+        result.pkl
+      storage/           # L2 self-contained feature package
         types.pkl
         inputs.pkl
         backends.pkl
+        requirements.pkl
+        validate.pkl
         helm.pkl
-      resources/
+      resources/         # L2 self-contained feature package
         types.pkl
         targets.pkl
         presets.pkl
@@ -56,16 +64,24 @@ The table describes the functions that contribute to each response, not a lazy f
 
 ## Where to look
 
-- `describe.pkl`: the editable fields, labels, defaults and field constraints rendered by the
-  Console (`retentionWeeks`, `highAvailability`, `storage`, `resources.profile` and the
-  per-workload resource fields);
-- `requirements.pkl`: which logical runtime inputs become visible for the current draft;
-- `validate.pkl`: cross-field rules, provider compatibility and stable violation codes;
-- `compile.pkl`: the readable, provider-neutral Loki Helm topology;
-- `storage/helm.pkl`: the chart-specific Helm values for each storage backend;
+- `describe.pkl`: the labels, descriptions and Console ordering of the editable fields
+  (`retentionWeeks`, `highAvailability`, `storage`, `resources.profile` and the per-workload
+  resource fields). Presentation only — every default and bound is owned by the module that owns
+  the concept, so this layer stays a pure consumer;
+- `requirements.pkl`: resolves the draft, then asks each feature package which of its inputs the
+  selection activates;
+- `validate.pkl`: the operation gate, the rules for the product fields that belong to no feature
+  package, and one call per feature package;
+- `compile.pkl`: the readable, provider-neutral Loki Helm topology. It resolves the draft once and
+  passes plain values down, which is what lets the feature packages stay independent of it;
+- `product.pkl`: defaults and bounds for the settings that belong to no feature package;
+- `storage/helm.pkl`: the whole `loki:` chart block plus the per-backend Helm adapters;
 - `storage/types.pkl`: the shared storage types;
 - `storage/inputs.pkl`: logical runtime inputs with their labels, types and constraints;
 - `storage/backends.pkl`: the supported backend instances and provider matrix;
+- `storage/requirements.pkl`: the inputs the selected backend activates;
+- `storage/validate.pkl`: storage type/value rules, provider compatibility and the required-input
+  checks for the backend's customer and compile-only inputs;
 - `resources/types.pkl`: the profile vocabulary, integer units, bounds and budget/target types;
 - `resources/targets.pkl`: the workload-target registry and dotted Source 3 field keys;
 - `resources/presets.pkl`: the versioned `SMALL`/`MEDIUM`/`LARGE` budget tables;
@@ -75,6 +91,10 @@ The table describes the functions that contribute to each response, not a lazy f
 - `resources/helm.pkl`: budget-to-`resources`-block compilation;
 - `profile.pkl`: defaults and safe type conversion shared by resolve, validate and compile;
 - `contract.pkl`: vendored canonical operation and JSON response types shared with q-core;
+- `sdk/`: vendored authoring SDK — request decoding and typed readers (`sdk/request.pkl`), the
+  canonical violation codes and generic validators (`sdk/validate.pkl`), and the result envelope
+  owning the fail-closed COMPILE gate (`sdk/result.pkl`). Machine-synced from
+  `platform-catalog/pkl/sdk`, never edited here;
 - `context.pkl`: Loki-specific provider and cluster-mode types;
 - `model.pkl`: routing only.
 
@@ -239,3 +259,22 @@ PKL_BIN=pkl ./scripts/test-platform-config.sh
 
 The script first runs the component-local Pkl facts and snapshots, then exercises the complete JSON
 contract through `model.pkl`.
+
+## Module layering
+
+The tree above is not a convention, it is a checked invariant. `tools/platform-catalog-tests/tests/
+module_layering.rs` parses every import in the published bundles and fails on: a feature package
+importing anything but `contract.pkl`/`context.pkl` from the root; one feature package importing
+another; a cross-package import whose alias is not `<package><Module>`; a same-package import that
+is aliased; an entrypoint that imports anything but `sdk/request.pkl` and `evaluation.pkl`; any
+import added to the vendored contract; and a vendored `sdk/` module importing anything but
+`contract.pkl` or another `sdk/` module. Importing `sdk/` is allowed from every module — it is the
+shared authoring layer, not a feature package. The same file also proves each of those rules fires,
+so the check cannot silently stop matching. Run it with:
+
+```shell
+cargo test --manifest-path tools/platform-catalog-tests/Cargo.toml --test module_layering
+```
+
+The feature-to-root allow-list is a ratchet: it may shrink, never grow. Removing `context.pkl` from
+it means moving `SupportedProvider` — a storage concept — into `storage/types.pkl`.

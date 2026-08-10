@@ -1,0 +1,67 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/request.pkl"
+
+// The decode/build pair is the SDK's wire-format boundary: decode is what model.pkl feeds to the
+// evaluation, build is what native component tests feed to the same evaluation. Proving they
+// produce the same shape keeps test requests honest stand-ins for production requests.
+
+local fullRequestJson =
+  """
+  {
+    "operation": "VALIDATE",
+    "profileConfig": {"retentionWeeks": 12},
+    "clusterContext": null,
+    "clusterInputs": {"infra.s3BucketName": "qovery-loki"},
+    "enabledComponents": ["loki"]
+  }
+  """
+
+local fullRequest = request.decode(fullRequestJson)
+
+facts {
+  ["decode produces the same shape as build"] {
+    fullRequest
+      == request.build(
+        contract.validateOperation,
+        new Mapping { ["retentionWeeks"] = 12 },
+        null,
+        new Mapping { ["infra.s3BucketName"] = "qovery-loki" },
+        List("loki"),
+      )
+  }
+
+  ["typed readers expose the decoded request"] {
+    request.operation(fullRequest) == contract.validateOperation
+    request.profileConfig(fullRequest) == new Mapping { ["retentionWeeks"] = 12 }
+    request.clusterContext(fullRequest) == null
+    request.clusterInputs(fullRequest) == new Mapping { ["infra.s3BucketName"] = "qovery-loki" }
+    request.enabledComponents(fullRequest) == List("loki")
+  }
+
+  ["readers degrade to empty values on a partial request"] {
+    let (partial = request.decode(#"{"operation": "DESCRIBE"}"#))
+      request.operation(partial) == contract.describeOperation
+        && request.profileConfig(partial) == new Mapping {}
+        && request.clusterContext(partial) == null
+        && request.clusterInputs(partial) == new Mapping {}
+        && request.enabledComponents(partial) == List()
+  }
+
+  ["cluster context is preserved when present"] {
+    let (
+      contextual =
+        request.decode(
+          """
+          {"operation": "COMPILE", "clusterContext": {"mode": "CUSTOMER_MANAGED", "provider": "AWS"}}
+          """,
+        )
+    )
+      request.clusterContext(contextual)
+        == new Mapping {
+          ["mode"] = "CUSTOMER_MANAGED"
+          ["provider"] = "AWS"
+        }
+  }
+}

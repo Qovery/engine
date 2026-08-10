@@ -1,0 +1,34 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.result
+
+import "../contract.pkl"
+
+// Builds the EvaluationResult envelope and encodes the fail-closed invariant once: helmValues
+// exist only for a COMPILE with no violation. q-core treats a missing helmValues on a valid
+// COMPILE request as a hard error, so the gate remains fail-closed on both sides of the contract.
+// The compiler is a supplier so an invalid or non-COMPILE request never evaluates it, not even
+// partially: compilation narrows a validated draft with `as` casts that must stay unreachable
+// while violations exist.
+
+// Parameters colliding with an EvaluationResult property carry a `result` prefix: inside the
+// object body an unqualified name resolves to the object's own property before the enclosing
+// scope, so `fields = fields` would be self-referential and overflow.
+function envelope(
+  operation: contract.Operation,
+  resultFields: List<contract.Field>,
+  resultRequiredInputs: List<contract.LogicalInput>,
+  resultViolations: List<contract.Violation>,
+  compiler: () -> Mapping,
+): contract.EvaluationResult = new contract.EvaluationResult {
+  fields = resultFields
+  requiredInputs = resultRequiredInputs
+  violations = resultViolations
+  helmValues = gatedHelmValues(operation, resultViolations, compiler)
+}
+
+function gatedHelmValues(
+  operation: contract.Operation,
+  violations: List<contract.Violation>,
+  compiler: () -> Mapping,
+): Mapping? =
+  if (operation == contract.compileOperation && violations.isEmpty) compiler.apply() else null

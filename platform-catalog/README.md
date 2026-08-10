@@ -26,10 +26,14 @@ platform-catalog/
         runtime-values/        # source 3 — values requiring resolved runtime inputs
           managed-values.yaml  # direct whole-value mapping, or
           model.pkl            # optional Pkl evaluator entrypoint
+          contract.pkl         # vendored canonical contract (machine-synced)
+          sdk/                 # vendored authoring SDK (machine-synced)
           ...                  # focused evaluator/domain modules
         README.md              # component-specific reviewer and operations guide
   pkl/
-    component-contract.pkl     # canonical evaluator response contract
+    contract.pkl               # canonical evaluator response contract
+    sdk/                       # canonical authoring SDK — see pkl/README.md
+    tests/                     # native SDK tests, never published
 ```
 
 ## Tests
@@ -73,11 +77,12 @@ files, or network resources. Only the bundle modules, Pkl standard library, and 
 enabled by q-core.
 
 Each component artifact remains independently pullable and digest-pinned, so it cannot import a
-contract from another artifact. `platform-catalog/pkl/component-contract.pkl` is therefore the
-single source of truth and is vendored as `runtime-values/contract.pkl` in every executable
-component bundle. `./scripts/sync-platform-pkl-contract.sh` refreshes the repository copies,
-`test-platform-config.sh` checks parity, and the publisher injects the canonical file into its
-staging directory before creating the OCI layer.
+contract from another artifact. `platform-catalog/pkl/` is therefore the single source of truth
+for the shared Pkl authoring SDK: `pkl/contract.pkl` is vendored as `runtime-values/contract.pkl`
+and `pkl/sdk/` as `runtime-values/sdk/` in every executable component bundle (see
+[pkl/README.md](pkl/README.md)). `./scripts/sync-platform-pkl-sdk.sh` refreshes the repository
+copies, `test-platform-config.sh` checks parity, and the publisher fails on out-of-sync copies and
+injects the canonical files into its staging directory before creating the OCI layer.
 
 The Kotlin Loki deriver remains a test oracle during Slice 4; it is not a
 production fallback. Once the bundle is pinned, an unavailable or invalid Pkl

@@ -2,7 +2,7 @@
 module qovery.engine.platform.loki.tests.fixtures
 
 import "../config/runtime-values/context.pkl"
-import "../config/runtime-values/storage/backends.pkl" as storage
+import "../config/runtime-values/storage/backends.pkl" as storageBackends
 
 awsCustomer: Mapping = new Mapping {
   ["mode"] = context.customerManagedMode
@@ -22,13 +22,13 @@ gcpCustomer: Mapping = new Mapping {
 pvcProfile: Mapping = new Mapping {
   ["retentionWeeks"] = 12
   ["highAvailability"] = false
-  ["storage"] = storage.pvc.key
+  ["storage"] = storageBackends.pvc.key
 }
 
 s3Profile: Mapping = new Mapping {
   ["retentionWeeks"] = 12
   ["highAvailability"] = false
-  ["storage"] = storage.s3.key
+  ["storage"] = storageBackends.s3.key
 }
 
 s3CustomerInputs: Mapping = new Mapping {

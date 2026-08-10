@@ -1,0 +1,138 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.validate
+
+import "../context.pkl"
+import "../contract.pkl"
+import "../sdk/validate.pkl" as sdkValidate
+import "backends.pkl"
+import "requirements.pkl"
+import "types.pkl"
+
+// Every rule about the storage choice and the inputs it activates. The caller resolves the draft
+// and the cluster context into plain values, so this package never reads profileConfig itself.
+// VALIDATE and COMPILE share these rules: COMPILE is called again immediately before deployment
+// so an old or corrupted stored profile still fails closed.
+function violations(
+  operation: contract.Operation,
+  storageKey: String?,
+  highAvailability: Boolean?,
+  mode: context.ClusterMode?,
+  provider: String?,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  let (backend = backends.find(storageKey))
+    typeViolations(storageKey)
+      + valueViolations(storageKey, backend, highAvailability, mode, provider)
+      + requiredInputViolations(operation, backend, storageKey, mode, provider, clusterInputs)
+
+// A null key means profile.pkl could not narrow the stored value to a String.
+local function typeViolations(storageKey: String?): List<contract.Violation> =
+  if (storageKey != null)
+    List()
+  else
+    List(sdkValidate.invalidType("storage", "Loki configuration field storage must be a string"))
+
+local function valueViolations(
+  storageKey: String?,
+  backend: types.StorageBackend?,
+  highAvailability: Boolean?,
+  mode: context.ClusterMode?,
+  provider: String?,
+): List<contract.Violation> =
+  sdkValidate.collect(
+    List(
+      sdkValidate.enumValue(
+        "storage",
+        storageKey,
+        backends.allowedValues,
+        "Loki storage must be one of \(backends.allowedValues.join(", "))",
+      ),
+      if (highAvailability == true && storageKey == backends.pvc.key)
+        new contract.Violation {
+          code = "HIGH_AVAILABILITY_REQUIRES_OBJECT_STORAGE"
+          fieldPath = "highAvailability"
+          message = "Loki high availability requires object storage"
+        }
+      else
+        null,
+      providerViolation(backend, provider),
+      // Managed object storage stays blocked until Terraform outputs are available before Helm
+      // compile. The POC implemented here is intentionally customer-managed first.
+      if (backend is types.ObjectStorageBackend && mode == context.qoveryManagedMode)
+        new contract.Violation {
+          code = "MANAGED_OBJECT_STORAGE_EXECUTION_NOT_AVAILABLE"
+          fieldPath = "storage"
+          message =
+            "Loki object storage on Qovery-managed clusters requires the Terraform output execution barrier"
+        }
+      else
+        null,
+    ),
+  )
+
+local function providerViolation(
+  backend: types.StorageBackend?,
+  provider: String?,
+): contract.Violation? =
+  if (backend == null || backends.matchesProvider(backend, provider))
+    null
+  else
+    new contract.Violation {
+      code = "STORAGE_PROVIDER_MISMATCH"
+      fieldPath = "storage"
+      message =
+        "Loki storage \(backend.key) requires provider \(backend.provider); this cluster uses \(provider)"
+    }
+
+local function requiredInputViolations(
+  operation: contract.Operation,
+  backend: types.StorageBackend?,
+  storageKey: String?,
+  mode: context.ClusterMode?,
+  provider: String?,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  if (
+    !shouldValidateRequiredInputs(operation, mode) || !backends.matchesProvider(backend, provider)
+  )
+    List()
+  else
+    customerInputViolations(requirements.requiredInputs(storageKey, provider), clusterInputs)
+      + compileOnlyInputViolations(operation, backend, clusterInputs)
+
+// Managed mode reports the execution-barrier violation above. Reporting unavailable outputs as
+// missing customer values too would add noise without giving the user another action to take.
+local function shouldValidateRequiredInputs(
+  operation: contract.Operation,
+  mode: context.ClusterMode?,
+): Boolean =
+  (operation == contract.validateOperation || operation == contract.compileOperation)
+    && mode != context.qoveryManagedMode
+
+// A missing value is the customer's action to take before pattern conformance matters, so the two
+// SDK checks chain: absence wins, then a present value is checked against its declared constraint.
+local function customerInputViolations(
+  inputs: List<contract.LogicalInput>,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  sdkValidate.collect(
+    inputs.map((input) ->
+      sdkValidate.requiredInput(clusterInputs, input.key)
+        ?? sdkValidate.inputPattern(clusterInputs, input)
+    ),
+  )
+
+local function compileOnlyInputViolations(
+  operation: contract.Operation,
+  backend: types.StorageBackend?,
+  clusterInputs: Mapping,
+): List<contract.Violation> =
+  if (operation != contract.compileOperation || backend == null)
+    List()
+  else
+    sdkValidate.collect(
+      backend.compileOnlyInputs.keys
+        .map((name) -> backend.compileOnlyInputs[name])
+        .map((input) -> sdkValidate.requiredInput(clusterInputs, input.key))
+        .toList(),
+    )

@@ -2,7 +2,7 @@ amends "pkl:test"
 
 import "../config/runtime-values/requirements.pkl"
 import "../config/runtime-values/validate.pkl"
-import "../config/runtime-values/storage/backends.pkl"
+import "../config/runtime-values/storage/backends.pkl" as storageBackends
 import "fixtures.pkl"
 
 // Readable requirement list for the Loki configuration model. Each fact states one product
@@ -34,11 +34,11 @@ facts {
   }
 
   ["s3 is not offered on GCP"] {
-    !backends.allowedValuesForContext("CUSTOMER_MANAGED", "GCP").contains("s3")
+    !storageBackends.allowedValuesForContext("CUSTOMER_MANAGED", "GCP").contains("s3")
   }
 
   ["Qovery-managed clusters only offer pvc"] {
-    backends.allowedValuesForContext("QOVERY_MANAGED", "AWS") == List("pvc")
+    storageBackends.allowedValuesForContext("QOVERY_MANAGED", "AWS") == List("pvc")
   }
 
   ["unknown profile fields are rejected"] {

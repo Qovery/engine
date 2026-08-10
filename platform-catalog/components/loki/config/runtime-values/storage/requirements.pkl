@@ -1,0 +1,16 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.storage.requirements
+
+import "../contract.pkl"
+import "backends.pkl"
+
+// The logical inputs activated by the selected backend. The release manifest in q-core remains
+// responsible for finding the concrete provider of each logical input.
+function requiredInputs(storageKey: String?, provider: String?): List<contract.LogicalInput> =
+  let (backend = backends.find(storageKey))
+    // Provider mismatches are reported by validate.pkl. Requirements remain empty so the Console
+    // does not ask for inputs that cannot make the selected backend valid on this cluster.
+    if (!backends.matchesProvider(backend, provider))
+      List()
+    else
+      backend?.customerInputs ?? List()

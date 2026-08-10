@@ -1,0 +1,12 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.loki.product
+
+// Defaults and bounds for the product settings that belong to no feature package. They live here
+// rather than in describe.pkl so the low-level draft reader (profile.pkl) never depends on the
+// Console-facing presentation layer. Same role as resources/types.pkl for the resource package.
+
+retentionWeeksDefault: Int = 12
+retentionWeeksMin: Int = 1
+retentionWeeksMax: Int = 52
+
+highAvailabilityDefault: Boolean = false

@@ -3,15 +3,15 @@ module qovery.engine.platform.clusterAgent.evaluation
 
 import "compile.pkl"
 import "contract.pkl"
+import "sdk/request.pkl" as sdkRequest
+import "sdk/result.pkl" as sdkResult
 
 // Pure orchestration entrypoint shared by model.pkl and the native Pkl tests.
 function evaluate(request: Mapping): contract.EvaluationResult =
-  let (operation = request["operation"] as contract.Operation)
-  let (enabledComponents = (request.getOrNull("enabledComponents") as Listing?) ?? List())
-    new contract.EvaluationResult {
-      helmValues =
-        if (operation == contract.compileOperation)
-          compile.compile(enabledComponents.contains("loki"))
-        else
-          null
-    }
+  sdkResult.envelope(
+    sdkRequest.operation(request),
+    List(),
+    List(),
+    List(),
+    () -> compile.compile(sdkRequest.enabledComponents(request).contains("loki")),
+  )

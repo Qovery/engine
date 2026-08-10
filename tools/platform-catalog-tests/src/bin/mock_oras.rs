@@ -1,6 +1,6 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process;
 
 fn required_path(name: &str) -> PathBuf {
@@ -14,6 +14,52 @@ fn fail(message: &str) -> ! {
     process::exit(1);
 }
 
+fn assert_file_matches(expected_path: &Path, staged_path: &Path, subject: &str) {
+    let expected = fs::read(expected_path)
+        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", expected_path.display())));
+    let staged = fs::read(staged_path)
+        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", staged_path.display())));
+    if staged != expected {
+        fail(&format!("staged {subject} differs from the canonical {subject}"));
+    }
+}
+
+fn relative_files(directory: &Path, prefix: &Path, files: &mut Vec<PathBuf>) {
+    let entries = fs::read_dir(directory)
+        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", directory.display())));
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|error| fail(&format!("unreadable entry under {}: {error}", directory.display())))
+            .path();
+        let relative = prefix.join(path.file_name().unwrap_or_else(|| fail("directory entry has no name")));
+        if path.is_dir() {
+            relative_files(&path, &relative, files);
+        } else {
+            files.push(relative);
+        }
+    }
+}
+
+/// The staged directory must be a byte-identical copy of the canonical one: a missing, stale, or
+/// extraneous vendored SDK file in a published bundle is a publication failure.
+fn assert_directory_matches(expected_directory: &Path, staged_directory: &Path, subject: &str) {
+    if !staged_directory.is_dir() {
+        fail(&format!("staged component does not contain the vendored {subject}"));
+    }
+    let mut expected_files = Vec::new();
+    relative_files(expected_directory, Path::new(""), &mut expected_files);
+    expected_files.sort();
+    let mut staged_files = Vec::new();
+    relative_files(staged_directory, Path::new(""), &mut staged_files);
+    staged_files.sort();
+    if expected_files != staged_files {
+        fail(&format!("staged {subject} file set differs from the canonical {subject}"));
+    }
+    for relative in &expected_files {
+        assert_file_matches(&expected_directory.join(relative), &staged_directory.join(relative), subject);
+    }
+}
+
 fn inspect_push() {
     let current_directory = env::current_dir().unwrap_or_else(|error| fail(&error.to_string()));
     let expected_component_directory = required_path("EXPECTED_COMPONENT_DIR");
@@ -25,15 +71,16 @@ fn inspect_push() {
         fail("staged component does not contain its Pkl model");
     }
 
-    let expected_contract = required_path("EXPECTED_CONTRACT");
-    let staged_contract = current_directory.join("config/runtime-values/contract.pkl");
-    let expected = fs::read(&expected_contract)
-        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", expected_contract.display())));
-    let staged = fs::read(&staged_contract)
-        .unwrap_or_else(|error| fail(&format!("failed to read {}: {error}", staged_contract.display())));
-    if staged != expected {
-        fail("staged Pkl contract differs from the canonical contract");
-    }
+    assert_file_matches(
+        &required_path("EXPECTED_CONTRACT"),
+        &current_directory.join("config/runtime-values/contract.pkl"),
+        "Pkl contract",
+    );
+    assert_directory_matches(
+        &required_path("EXPECTED_SDK_DIR"),
+        &current_directory.join("config/runtime-values/sdk"),
+        "Pkl SDK",
+    );
 
     let marker = required_path("MOCK_MARKER");
     fs::write(&marker, [])

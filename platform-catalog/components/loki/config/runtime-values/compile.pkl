@@ -3,38 +3,42 @@ module qovery.engine.platform.loki.compile
 
 import "profile.pkl"
 import "resources/helm.pkl" as resourcesHelm
-import "resources/targets.pkl" as resourceTargets
+import "resources/targets.pkl" as resourcesTargets
 import "storage/backends.pkl" as storageBackends
 import "storage/helm.pkl" as storageHelm
-import "storage/types.pkl" as storage
+import "storage/types.pkl" as storageTypes
 
 // Produces Source 3 only: the Loki values derived from customer-facing product settings.
 // q-core merges this after chart defaults and context overlays.
+// COMPILE runs only on a validated configuration, so every narrowing below is an invariant, not a
+// default. Resolving the draft here is what lets the feature packages take plain values.
 function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
   let (storageKey = profile.storage(profileConfig) as String)
-  let (backend = storageBackends.find(storageKey) as storage.StorageBackend)
-  let (isObjectStorage = backend is storage.ObjectStorageBackend)
+  let (backend = storageBackends.find(storageKey) as storageTypes.StorageBackend)
+  let (isObjectStorage = backend is storageTypes.ObjectStorageBackend)
   let (isHighAvailability = profile.highAvailability(profileConfig) == true)
+  let (retentionWeeks = profile.retentionWeeks(profileConfig) as Int)
+  let (resourceProfileName = profile.resourceProfile(profileConfig) as String)
   let (scalableReplicas = if (isHighAvailability) 3 else 0)
   let (replicationFactor = if (isHighAvailability) scalableReplicas else 1)
   let (serviceAccount = storageHelm.serviceAccountValues(backend, clusterInputs))
     new Mapping {
       ["deploymentMode"] = if (isHighAvailability) "SimpleScalable" else "SingleBinary"
-      ["loki"] = storageHelm.lokiValues(profileConfig, clusterInputs, backend, replicationFactor)
+      ["loki"] = storageHelm.lokiValues(retentionWeeks, clusterInputs, backend, replicationFactor)
       ["singleBinary"] =
         withResources(
           singleBinaryValues(isHighAvailability, isObjectStorage, backend, clusterInputs),
-          resourcesHelm.targetResources(profileConfig, resourceTargets.singleBinary, isHighAvailability),
+          resourcesHelm.targetResources(profileConfig, resourceProfileName, resourcesTargets.singleBinary, isHighAvailability),
         )
       ["write"] =
         withResources(
           scalableStatefulTargetValues(scalableReplicas, isObjectStorage, backend, clusterInputs),
-          resourcesHelm.targetResources(profileConfig, resourceTargets.write, isHighAvailability),
+          resourcesHelm.targetResources(profileConfig, resourceProfileName, resourcesTargets.write, isHighAvailability),
         )
       ["read"] =
         withResources(
           readTargetValues(scalableReplicas, backend, clusterInputs),
-          resourcesHelm.targetResources(profileConfig, resourceTargets.`read`, isHighAvailability),
+          resourcesHelm.targetResources(profileConfig, resourceProfileName, resourcesTargets.`read`, isHighAvailability),
         )
       ["backend"] =
         withResources(
@@ -44,13 +48,13 @@ function compile(profileConfig: Mapping, clusterInputs: Mapping): Mapping =
             backend,
             clusterInputs,
           ),
-          resourcesHelm.targetResources(profileConfig, resourceTargets.backend, isHighAvailability),
+          resourcesHelm.targetResources(profileConfig, resourceProfileName, resourcesTargets.backend, isHighAvailability),
         )
       when (isHighAvailability) {
         ["gateway"] =
           withResources(
             new Mapping { ["replicas"] = scalableReplicas },
-            resourcesHelm.targetResources(profileConfig, resourceTargets.gateway, isHighAvailability),
+            resourcesHelm.targetResources(profileConfig, resourceProfileName, resourcesTargets.gateway, isHighAvailability),
           )
       }
       when (serviceAccount != null) {
@@ -67,7 +71,7 @@ local function withResources(targetValues: Mapping, resources: Mapping?): Mappin
 local function singleBinaryValues(
   isHighAvailability: Boolean,
   isObjectStorage: Boolean,
-  backend: storage.StorageBackend,
+  backend: storageTypes.StorageBackend,
   clusterInputs: Mapping,
 ): Mapping =
   storageHelm.decorateTarget(
@@ -96,7 +100,7 @@ local function singleBinaryValues(
 local function scalableStatefulTargetValues(
   replicas: Int,
   isObjectStorage: Boolean,
-  backend: storage.StorageBackend,
+  backend: storageTypes.StorageBackend,
   clusterInputs: Mapping,
 ): Mapping =
   storageHelm.decorateTarget(
@@ -112,7 +116,7 @@ local function scalableStatefulTargetValues(
 
 local function readTargetValues(
   replicas: Int,
-  backend: storage.StorageBackend,
+  backend: storageTypes.StorageBackend,
   clusterInputs: Mapping,
 ): Mapping =
   storageHelm.decorateTarget(

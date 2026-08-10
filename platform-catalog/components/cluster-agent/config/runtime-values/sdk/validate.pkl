@@ -1,0 +1,121 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.validate
+
+import "../contract.pkl"
+
+// Component-agnostic validation primitives. Violation codes are part of the machine-readable
+// q-core/Console contract: the canonical codes live here so components reuse them instead of
+// minting near-duplicates. Business rules stay in the component; messages are passed in whenever
+// they name a component concept, so migrating to these helpers never changes a rendered message.
+
+unknownFieldCode: String = "UNKNOWN_FIELD"
+invalidTypeCode: String = "INVALID_TYPE"
+requiredFieldMissingCode: String = "REQUIRED_FIELD_MISSING"
+requiredInputMissingCode: String = "REQUIRED_INPUT_MISSING"
+valueNotAllowedCode: String = "VALUE_NOT_ALLOWED"
+valueOutOfRangeCode: String = "VALUE_OUT_OF_RANGE"
+lengthOutOfRangeCode: String = "LENGTH_OUT_OF_RANGE"
+inputPatternMismatchCode: String = "INPUT_PATTERN_MISMATCH"
+
+// The `violation` prefix avoids shadowing the Violation properties inside the object body, where
+// an unqualified `code = code` would be self-referential — same convention as result.envelope.
+function violation(
+  violationCode: String,
+  violationPath: String,
+  violationMessage: String,
+): contract.Violation = new contract.Violation {
+  code = violationCode
+  fieldPath = violationPath
+  message = violationMessage
+}
+
+// Accumulates rule results written as nullable expressions, so a validator can state every rule
+// once and report all failures in a single response instead of stopping at the first one.
+function collect(candidates: List<contract.Violation?>): List<contract.Violation> =
+  candidates.filterNonNull()
+
+function invalidType(fieldPath: String, message: String): contract.Violation =
+  violation(invalidTypeCode, fieldPath, message)
+
+function required(fieldPath: String, value: Any?, message: String): contract.Violation? =
+  if (value == null) violation(requiredFieldMissingCode, fieldPath, message) else null
+
+// A null value means the caller could not narrow the type; that is an INVALID_TYPE concern, so
+// value checks deliberately accept null as "nothing to check here".
+function enumValue(
+  fieldPath: String,
+  value: String?,
+  allowedValues: List<String>,
+  message: String,
+): contract.Violation? =
+  if (value != null && !allowedValues.contains(value))
+    violation(valueNotAllowedCode, fieldPath, message)
+  else
+    null
+
+function intRange(
+  fieldPath: String,
+  value: Int,
+  min: Int,
+  max: Int,
+  message: String,
+): contract.Violation? =
+  if (value < min || value > max) violation(valueOutOfRangeCode, fieldPath, message) else null
+
+function stringLength(
+  fieldPath: String,
+  value: String,
+  minLength: Int,
+  maxLength: Int,
+  message: String,
+): contract.Violation? =
+  if (value.length < minLength || value.length > maxLength)
+    violation(lengthOutOfRangeCode, fieldPath, message)
+  else
+    null
+
+// Rejects misspelled or obsolete draft fields instead of silently ignoring them. The allow-list
+// should be the context-free DESCRIBE catalogue, so a value hidden by the current topology stays
+// acceptable.
+function unknownFields(
+  profileConfig: Mapping,
+  knownFieldKeys: Set<String>,
+  componentLabel: String,
+): List<contract.Violation> =
+  profileConfig.keys
+    .filter((key) -> !knownFieldKeys.contains(key))
+    .map((key) ->
+      violation(
+        unknownFieldCode,
+        key as String,
+        "\(componentLabel) does not define configuration field \(key)",
+      )
+    )
+    .toList()
+
+// A required input is missing when it is absent, not a string, or blank: q-core forwards inputs
+// as strings, so any other shape gives the customer the same action to take.
+function requiredInput(clusterInputs: Mapping, key: String): contract.Violation? =
+  if (inputIsBlank(clusterInputs, key))
+    violation(requiredInputMissingCode, "clusterInputs.\(key)", "Required input \(key) is missing")
+  else
+    null
+
+function inputIsBlank(clusterInputs: Mapping, key: String): Boolean =
+  let (value = clusterInputs.getOrNull(key))
+    if (value is String) value.isBlank else true
+
+// Pattern conformance of a present input value against the constraint declared on the logical
+// input. Absence is reported by [requiredInput]; both checks stay independent so a validator can
+// apply them at different lifecycle phases.
+function inputPattern(clusterInputs: Mapping, input: contract.LogicalInput): contract.Violation? =
+  let (value = clusterInputs.getOrNull(input.key))
+  let (pattern = input.constraints.pattern)
+    if (value is String && !value.isBlank && pattern != null && !value.matches(Regex(pattern)))
+      violation(
+        inputPatternMismatchCode,
+        "clusterInputs.\(input.key)",
+        "Input \(input.key) does not match the expected \(input.type) format",
+      )
+    else
+      null

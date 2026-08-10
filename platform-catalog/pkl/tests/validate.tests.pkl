@@ -1,0 +1,121 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/validate.pkl"
+
+local sampleInput: contract.LogicalInput = new {
+  key = "infra.s3BucketName"
+  type = "s3BucketName"
+  scope = contract.clusterScope
+  label = "S3 bucket name"
+  constraints = new { pattern = "^[a-z0-9-]+$" }
+}
+
+local unconstrainedInput: contract.LogicalInput = new {
+  key = "infra.freeForm"
+  type = "freeForm"
+  scope = contract.clusterScope
+  label = "Free-form input"
+}
+
+facts {
+  ["violation builds a contract violation"] {
+    validate.violation("SOME_CODE", "some.path", "some message")
+      == new contract.Violation {
+        code = "SOME_CODE"
+        fieldPath = "some.path"
+        message = "some message"
+      }
+  }
+
+  ["collect drops passed rules and preserves order"] {
+    validate
+      .collect(
+        List(
+          null,
+          validate.invalidType("first", "first message"),
+          null,
+          validate.invalidType("second", "second message"),
+        ),
+      )
+      .map((violation) -> violation.fieldPath) == List("first", "second")
+    validate.collect(List(null, null)) == List()
+  }
+
+  ["required accepts any present value and rejects null"] {
+    validate.required("field", "value", "field is required") == null
+    validate.required("field", false, "field is required") == null
+    validate.required("field", null, "field is required")?.code == validate.requiredFieldMissingCode
+  }
+
+  ["enumValue checks membership and leaves type errors to the caller"] {
+    validate.enumValue("storage", "pvc", List("pvc", "s3"), "not allowed") == null
+    validate.enumValue("storage", "nfs", List("pvc", "s3"), "not allowed")?.code
+      == validate.valueNotAllowedCode
+    validate.enumValue("storage", null, List("pvc", "s3"), "not allowed") == null
+  }
+
+  ["intRange accepts the bounds and rejects values outside them"] {
+    validate.intRange("retentionWeeks", 1, 1, 52, "out of range") == null
+    validate.intRange("retentionWeeks", 52, 1, 52, "out of range") == null
+    validate.intRange("retentionWeeks", 0, 1, 52, "out of range")?.code
+      == validate.valueOutOfRangeCode
+    validate.intRange("retentionWeeks", 53, 1, 52, "out of range")?.code
+      == validate.valueOutOfRangeCode
+  }
+
+  ["stringLength accepts the bounds and rejects lengths outside them"] {
+    validate.stringLength("name", "abc", 3, 5, "bad length") == null
+    validate.stringLength("name", "abcde", 3, 5, "bad length") == null
+    validate.stringLength("name", "ab", 3, 5, "bad length")?.code
+      == validate.lengthOutOfRangeCode
+    validate.stringLength("name", "abcdef", 3, 5, "bad length")?.code
+      == validate.lengthOutOfRangeCode
+  }
+
+  ["unknownFields rejects keys outside the catalogue with the component label"] {
+    validate.unknownFields(
+      new Mapping {
+        ["retentionWeeks"] = 12
+        ["retentionWeks"] = 12
+      },
+      Set("retentionWeeks"),
+      "Loki",
+    )
+      == List(new contract.Violation {
+        code = "UNKNOWN_FIELD"
+        fieldPath = "retentionWeks"
+        message = "Loki does not define configuration field retentionWeks"
+      })
+    validate.unknownFields(new Mapping { ["retentionWeeks"] = 12 }, Set("retentionWeeks"), "Loki")
+      == List()
+  }
+
+  ["requiredInput treats absent, blank and non-string values as missing"] {
+    validate.requiredInput(new Mapping { ["infra.key"] = "value" }, "infra.key") == null
+    validate.requiredInput(new Mapping {}, "infra.key")
+      == new contract.Violation {
+        code = "REQUIRED_INPUT_MISSING"
+        fieldPath = "clusterInputs.infra.key"
+        message = "Required input infra.key is missing"
+      }
+    validate.requiredInput(new Mapping { ["infra.key"] = "  " }, "infra.key")?.code
+      == validate.requiredInputMissingCode
+    validate.requiredInput(new Mapping { ["infra.key"] = 123 }, "infra.key")?.code
+      == validate.requiredInputMissingCode
+  }
+
+  ["inputPattern checks only present values against a declared pattern"] {
+    validate.inputPattern(new Mapping { ["infra.s3BucketName"] = "qovery-loki" }, sampleInput)
+      == null
+    validate.inputPattern(new Mapping { ["infra.s3BucketName"] = "Upper_Bucket" }, sampleInput)
+      == new contract.Violation {
+        code = "INPUT_PATTERN_MISMATCH"
+        fieldPath = "clusterInputs.infra.s3BucketName"
+        message = "Input infra.s3BucketName does not match the expected s3BucketName format"
+      }
+    validate.inputPattern(new Mapping {}, sampleInput) == null
+    validate.inputPattern(new Mapping { ["infra.freeForm"] = "anything" }, unconstrainedInput)
+      == null
+  }
+}

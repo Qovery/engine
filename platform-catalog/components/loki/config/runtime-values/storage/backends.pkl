@@ -3,7 +3,7 @@ module qovery.engine.platform.loki.storage.backends
 
 import "../context.pkl"
 import "../contract.pkl"
-import "inputs.pkl" as storageInputs
+import "inputs.pkl"
 import "types.pkl"
 
 // One typed registry owns the product-facing storage matrix. Describe, requirements, validation,
@@ -16,10 +16,10 @@ s3: types.ObjectStorageBackend = new {
   key = "s3"
   provider = context.awsProvider
   objectStoreId = "s3"
-  bucketInput = storageInputs.s3Bucket
-  customerInputs = List(storageInputs.s3Bucket, storageInputs.s3Role)
+  bucketInput = inputs.s3Bucket
+  customerInputs = List(inputs.s3Bucket, inputs.s3Role)
   compileOnlyInputs = new {
-    ["region"] = storageInputs.awsRegion
+    ["region"] = inputs.awsRegion
   }
 }
 
@@ -27,20 +27,20 @@ gcs: types.ObjectStorageBackend = new {
   key = "gcs"
   provider = context.gcpProvider
   objectStoreId = "gcs"
-  bucketInput = storageInputs.gcsBucket
-  customerInputs = List(storageInputs.gcsBucket, storageInputs.gcpServiceAccount)
+  bucketInput = inputs.gcsBucket
+  customerInputs = List(inputs.gcsBucket, inputs.gcpServiceAccount)
 }
 
 azureBlob: types.ObjectStorageBackend = new {
   key = "azureBlob"
   provider = context.azureProvider
   objectStoreId = "azure"
-  bucketInput = storageInputs.azureContainer
+  bucketInput = inputs.azureContainer
   customerInputs =
     List(
-      storageInputs.azureStorageAccount,
-      storageInputs.azureContainer,
-      storageInputs.azureManagedIdentity,
+      inputs.azureStorageAccount,
+      inputs.azureContainer,
+      inputs.azureManagedIdentity,
     )
 }
 
@@ -48,13 +48,13 @@ s3Compatible: types.ObjectStorageBackend = new {
   key = "s3Compatible"
   provider = context.scalewayProvider
   objectStoreId = "s3"
-  bucketInput = storageInputs.s3CompatibleBucket
+  bucketInput = inputs.s3CompatibleBucket
   customerInputs =
     List(
-      storageInputs.s3CompatibleBucket,
-      storageInputs.s3CompatibleEndpoint,
-      storageInputs.s3CompatibleRegion,
-      storageInputs.s3CompatibleCredentialsSecret,
+      inputs.s3CompatibleBucket,
+      inputs.s3CompatibleEndpoint,
+      inputs.s3CompatibleRegion,
+      inputs.s3CompatibleCredentialsSecret,
     )
 }
 
@@ -68,8 +68,17 @@ backends: Mapping<String, types.StorageBackend> = new {
 
 allowedValues: List<String> = backends.keys.toList()
 
+// Provider-neutral default: a fresh configuration keeps the chart's persistent-volume storage.
+// Owned here rather than in describe.pkl so the draft reader resolves it without the Console layer.
+defaultKey: String = pvc.key
+
 function find(key: String?): types.StorageBackend? =
   if (key == null) null else backends.getOrNull(key)
+
+// A backend is usable on a cluster when it is provider-neutral or matches the cluster provider.
+// An unknown key never matches: the caller reports it as a value violation instead.
+function matchesProvider(backend: types.StorageBackend?, provider: String?): Boolean =
+  backend != null && (backend.provider == null || backend.provider == provider)
 
 // `provider` stays an open String so clusters on providers without object-storage support still
 // see the provider-neutral pvc choice.

@@ -3,16 +3,13 @@ module qovery.engine.platform.loki.describe
 
 import "context.pkl"
 import "contract.pkl"
-import "resources/fields.pkl" as resourceFields
-import "storage/backends.pkl" as storage
+import "product.pkl"
+import "resources/fields.pkl" as resourcesFields
+import "storage/backends.pkl" as storageBackends
 
-// Product fields stay separate from storage backend declarations. Defaults and constraints live
-// beside the metadata rendered to the Console so profile parsing and validation reuse them.
-retentionWeeksDefault: Int = 12
-retentionWeeksMin: Int = 1
-retentionWeeksMax: Int = 52
-highAvailabilityDefault: Boolean = false
-storageDefault: String = storage.pvc.key
+// Presentation only: labels, descriptions, ordering and the constraints rendered to the Console.
+// Defaults and bounds are owned by the module that owns the concept — product.pkl for the product
+// settings, storage/backends.pkl for the storage default — so this layer stays a pure consumer.
 
 // DESCRIBE exposes all capabilities without context. Contextual operations narrow storage choices
 // through the typed backend registry, never through provider conditionals in the Console, and
@@ -20,7 +17,7 @@ storageDefault: String = storage.pvc.key
 // The Console renders fields in list order: storage comes last so it sits directly above the
 // cluster-inputs section its choice activates.
 fields: List<contract.Field> =
-  productFields + resourceFields.allFields + List(storageField(storage.allowedValues))
+  productFields + resourcesFields.allFields + List(storageField(storageBackends.allowedValues))
 
 function fieldsFor(
   operation: contract.Operation,
@@ -31,17 +28,17 @@ function fieldsFor(
   productFields
     + (
       if (operation == contract.describeOperation)
-        resourceFields.allFields
+        resourcesFields.allFields
       else
-        resourceFields.activeFields(resourceProfileName, highAvailability)
+        resourcesFields.activeFields(resourceProfileName, highAvailability)
     )
     + List(storageField(effectiveStorageAllowedValues(clusterContext)))
 
 local function effectiveStorageAllowedValues(clusterContext: Mapping?): List<String> =
   if (clusterContext == null)
-    storage.allowedValues
+    storageBackends.allowedValues
   else
-    storage.allowedValuesForContext(
+    storageBackends.allowedValuesForContext(
       clusterContext.getOrNull("mode") as context.ClusterMode?,
       clusterContext.getOrNull("provider") as String?,
     )
@@ -52,16 +49,16 @@ local productFields: List<contract.Field> =
       key = "retentionWeeks"
       type = contract.numberFieldType
       required = false
-      defaultValue = "\(retentionWeeksDefault)"
+      defaultValue = "\(product.retentionWeeksDefault)"
       label = "Retention period"
       description = "Whole number of weeks to retain Loki logs."
-      constraints = new { min = retentionWeeksMin; max = retentionWeeksMax }
+      constraints = new { min = product.retentionWeeksMin; max = product.retentionWeeksMax }
     },
     new contract.Field {
       key = "highAvailability"
       type = contract.booleanFieldType
       required = false
-      defaultValue = "\(highAvailabilityDefault)"
+      defaultValue = "\(product.highAvailabilityDefault)"
       label = "High availability"
       description = "Uses Loki simple-scalable mode and requires object storage."
     },
@@ -72,7 +69,7 @@ local function storageField(effectiveStorageValues: List<String>): contract.Fiel
     key = "storage"
     type = contract.stringFieldType
     required = false
-    defaultValue = storageDefault
+    defaultValue = storageBackends.defaultKey
     label = "Storage"
     description = "Storage backend used by Loki."
     constraints = new { allowedValues = effectiveStorageValues }

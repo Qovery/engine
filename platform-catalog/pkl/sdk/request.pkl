@@ -1,0 +1,47 @@
+@ModuleInfo { minPklVersion = "0.32.0" }
+module qovery.engine.platform.sdk.request
+
+import "pkl:json"
+
+import "../contract.pkl"
+
+// Decoding and safe access to the q-core evaluation request. `operation` is the dispatch key and
+// stays strict; every other accessor degrades to an empty value so a component reports violations
+// instead of failing on a partial draft. Components read the request only through these functions,
+// so the request wire format is owned here and in contract.pkl, never in a component bundle.
+
+function decode(source: Resource | String): Mapping =
+  (new json.Parser { useMapping = true }).parse(source) as Mapping
+
+function operation(request: Mapping): contract.Operation =
+  request["operation"] as contract.Operation
+
+function profileConfig(request: Mapping): Mapping =
+  (request.getOrNull("profileConfig") as Mapping?) ?? new Mapping {}
+
+function clusterContext(request: Mapping): Mapping? =
+  request.getOrNull("clusterContext") as Mapping?
+
+function clusterInputs(request: Mapping): Mapping =
+  (request.getOrNull("clusterInputs") as Mapping?) ?? new Mapping {}
+
+function enabledComponents(request: Mapping): List<String> =
+  ((request.getOrNull("enabledComponents") as Listing?) ?? new Listing {})
+    .toList()
+    .map((component) -> component as String)
+
+// Test and golden support: builds a request with the exact shape produced by [decode], so native
+// Pkl tests exercise the same read path as production without hand-rolling the wire format.
+function build(
+  requestOperation: contract.Operation,
+  requestProfileConfig: Mapping,
+  requestClusterContext: Mapping?,
+  requestClusterInputs: Mapping,
+  requestEnabledComponents: List<String>,
+): Mapping = new Mapping {
+  ["operation"] = requestOperation
+  ["profileConfig"] = requestProfileConfig
+  ["clusterContext"] = requestClusterContext
+  ["clusterInputs"] = requestClusterInputs
+  ["enabledComponents"] = requestEnabledComponents.toListing()
+}

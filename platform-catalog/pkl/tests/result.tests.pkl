@@ -1,0 +1,80 @@
+amends "pkl:test"
+
+import "../contract.pkl"
+import "../sdk/result.pkl"
+
+local sampleField: contract.Field = new {
+  key = "retentionWeeks"
+  type = contract.numberFieldType
+  required = false
+  label = "Retention period"
+}
+
+local sampleViolation: contract.Violation = new {
+  code = "VALUE_OUT_OF_RANGE"
+  fieldPath = "retentionWeeks"
+  message = "out of range"
+}
+
+// A compiler that must never run: the fail-closed gate is only real if an invalid or non-COMPILE
+// request cannot reach compilation at all.
+local unreachableCompiler = () -> throw("the compiler must not be evaluated")
+
+facts {
+  ["a valid COMPILE evaluates the compiler into helmValues"] {
+    let (
+      compiled =
+        result.envelope(
+          contract.compileOperation,
+          List(sampleField),
+          List(),
+          List(),
+          () -> new Mapping { ["deploymentMode"] = "SingleBinary" },
+        )
+    )
+      compiled.helmValues == new Mapping { ["deploymentMode"] = "SingleBinary" }
+        && compiled.fields == List(sampleField)
+        && compiled.requiredInputs == List()
+        && compiled.violations == List()
+  }
+
+  ["a COMPILE with violations fails closed without evaluating the compiler"] {
+    let (
+      rejected =
+        result.envelope(
+          contract.compileOperation,
+          List(),
+          List(),
+          List(sampleViolation),
+          unreachableCompiler,
+        )
+    )
+      rejected.helmValues == null && rejected.violations == List(sampleViolation)
+  }
+
+  ["non-COMPILE operations never evaluate the compiler"] {
+    result
+      .envelope(contract.describeOperation, List(), List(), List(), unreachableCompiler)
+      .helmValues == null
+    result
+      .envelope(contract.validateOperation, List(), List(), List(), unreachableCompiler)
+      .helmValues == null
+    result
+      .envelope(
+        contract.resolveRequirementsOperation,
+        List(),
+        List(),
+        List(),
+        unreachableCompiler,
+      )
+      .helmValues == null
+  }
+
+  ["gatedHelmValues applies the same gate directly"] {
+    result.gatedHelmValues(contract.compileOperation, List(), () -> new Mapping { ["a"] = 1 })
+      == new Mapping { ["a"] = 1 }
+    result.gatedHelmValues(contract.compileOperation, List(sampleViolation), unreachableCompiler)
+      == null
+    result.gatedHelmValues(contract.validateOperation, List(), unreachableCompiler) == null
+  }
+}

@@ -2,36 +2,38 @@
 module qovery.engine.platform.loki.resources.validate
 
 import "../contract.pkl"
-import "../profile.pkl"
 import "targets.pkl"
 import "types.pkl"
 
 // Custom values are checked only while the profile is CUSTOM and only for the active topology.
 // Values hidden by the current topology/profile are deliberately not validated: q-core preserves
 // them so a customer can switch back without losing input, and the compiler never reads them.
+// The selector and the topology arrive already resolved, so this package never reads the draft
+// for anything but its own dotted keys.
 function violations(
   operation: contract.Operation,
   profileConfig: Mapping,
+  profileName: String?,
+  highAvailability: Boolean,
 ): List<contract.Violation> =
-  let (profileName = profile.resourceProfile(profileConfig))
-    if (profileName == null)
-      List(new contract.Violation {
-        code = "INVALID_TYPE"
-        fieldPath = types.profileFieldKey
-        message = "Loki configuration field \(types.profileFieldKey) must be a string"
-      })
-    else if (!types.allowedProfiles.contains(profileName))
-      List(new contract.Violation {
-        code = "VALUE_NOT_ALLOWED"
-        fieldPath = types.profileFieldKey
-        message = "Loki \(types.profileFieldKey) must be one of \(types.allowedProfiles.join(", "))"
-      })
-    else if (profileName != types.customProfile)
-      List()
-    else
-      targets
-        .activeTargets(profile.highAvailability(profileConfig) == true)
-        .flatMap((target) -> targetViolations(operation, profileConfig, target))
+  if (profileName == null)
+    List(new contract.Violation {
+      code = "INVALID_TYPE"
+      fieldPath = types.profileFieldKey
+      message = "Loki configuration field \(types.profileFieldKey) must be a string"
+    })
+  else if (!types.allowedProfiles.contains(profileName))
+    List(new contract.Violation {
+      code = "VALUE_NOT_ALLOWED"
+      fieldPath = types.profileFieldKey
+      message = "Loki \(types.profileFieldKey) must be one of \(types.allowedProfiles.join(", "))"
+    })
+  else if (profileName != types.customProfile)
+    List()
+  else
+    targets
+      .activeTargets(highAvailability)
+      .flatMap((target) -> targetViolations(operation, profileConfig, target))
 
 local function targetViolations(
   operation: contract.Operation,

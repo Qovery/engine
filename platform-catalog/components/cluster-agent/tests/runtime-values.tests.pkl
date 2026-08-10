@@ -3,18 +3,18 @@ amends "pkl:test"
 import "../config/runtime-values/compile.pkl"
 import "../config/runtime-values/contract.pkl"
 import "../config/runtime-values/evaluation.pkl"
+import "../config/runtime-values/sdk/request.pkl" as sdkRequest
 
 local function evaluate(
   operation: contract.Operation,
-  enabledComponents: Listing,
+  enabledComponents: List<String>,
 ): contract.EvaluationResult =
-  evaluation.evaluate(new Mapping {
-    ["operation"] = operation
-    ["enabledComponents"] = enabledComponents
-  })
+  evaluation.evaluate(
+    sdkRequest.build(operation, new Mapping {}, null, new Mapping {}, enabledComponents),
+  )
 
 facts {
-  ["DESCRIBE returns an empty configuration envelope"] {
+  ["DESCRIBE returns an empty configuration envelope even for a partial request"] {
     let (result = evaluation.evaluate(new Mapping { ["operation"] = contract.describeOperation }))
       result.fields.isEmpty
         && result.requiredInputs.isEmpty
@@ -23,13 +23,13 @@ facts {
   }
 
   ["COMPILE configures Loki when the component is enabled"] {
-    let (result = evaluate(contract.compileOperation, new Listing { "loki" }))
+    let (result = evaluate(contract.compileOperation, List("loki")))
       result.violations.isEmpty
         && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == compile.lokiUrl
   }
 
   ["COMPILE clears Loki when the component is disabled"] {
-    let (result = evaluate(contract.compileOperation, new Listing {}))
+    let (result = evaluate(contract.compileOperation, List()))
       result.violations.isEmpty
         && (result.helmValues as Mapping)["environmentVariables"]["LOKI_URL"] == ""
   }

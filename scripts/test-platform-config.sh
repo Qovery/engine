@@ -9,14 +9,14 @@ if ! command -v "$PKL_BIN" >/dev/null 2>&1; then
   exit 1
 fi
 
-"$ROOT_DIR/scripts/sync-platform-pkl-contract.sh" --check
+"$ROOT_DIR/scripts/sync-platform-pkl-sdk.sh" --check
 
 suite_count=0
 while IFS= read -r suite; do
   "$PKL_BIN" test "$suite"
   suite_count=$((suite_count + 1))
 done < <(
-  find "$ROOT_DIR/platform-catalog/components" -type f \
+  find "$ROOT_DIR/platform-catalog/components" "$ROOT_DIR/platform-catalog/pkl" -type f \
     \( -name '*.test.pkl' -o -name '*.tests.pkl' \) \
     | sort
 )
