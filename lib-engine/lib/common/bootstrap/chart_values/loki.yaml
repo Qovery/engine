@@ -12,6 +12,15 @@ loki:
     # for simple usage, without high throughput, you can use the 1 replica only
     # note: replication is assured by the storage backend
     replication_factor: 1
+  server:
+    # Loki caps gRPC messages at 4MB by default. In SimpleScalable mode the querier streams
+    # query results back to the query-frontend over gRPC; large results (wide time ranges /
+    # high-cardinality streams) exceed 4MB and fail with:
+    #   "error notifying frontend about finished query"
+    #   err="grpc: received message larger than max (7522145 vs. 4194304)"
+    # Raise both directions to 25MB (applies to every component sharing this config).
+    grpc_server_max_recv_msg_size: 26214400
+    grpc_server_max_send_msg_size: 26214400
   ingester:
     chunk_idle_period: 3m
     chunk_block_size: 262144
