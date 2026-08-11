@@ -765,6 +765,7 @@ impl Docker {
                 format!("--builder={DEFAULT_BUILDER_NAME}",)
             },
             "--progress=plain".to_string(),
+            "--provenance=false".to_string(),
             if push_after_build {
                 "--output=type=registry".to_string() // tell buildkit to push image to registry
             } else {
