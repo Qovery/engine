@@ -6,6 +6,7 @@ loki/
     static-values/
       base.yaml
       overlays/
+        qovery-karpenter.yaml   # Source 2 capability overlay selected by q-core
     runtime-values/
       model.pkl          # L5 entrypoint: decodes prop:request, renders JSON
       evaluation.pkl     # L4 builds the EvaluationResult envelope
@@ -157,6 +158,13 @@ The Loki workload image uses the Qovery `pub-mirror-loki` Public ECR repository 
 manifest digest. The gateway's upstream `nginx-unprivileged` image is also digest-pinned; it remains
 on Docker Hub until the corresponding Qovery mirror repository exists. The gateway uses
 `qovery-high-priority`, and the root template requires the PriorityClass component before Loki.
+
+When q-core resolves the typed `QOVERY_KARPENTER` cluster capability, Source 2 loads
+`static-values/overlays/qovery-karpenter.yaml`. The overlay applies Qovery's stable-nodepool
+affinity and toleration policy to `singleBinary`, `write`, `read`, `backend`, and the gateway.
+Self-managed Karpenter installations never select this Qovery-specific overlay. The capability is
+preparatory for Qovery-managed Engine v2 clusters; the current customer-managed Engine v2 flow
+cannot select it.
 
 `storage/backends.pkl` is the source of truth for this matrix. Adding a backend starts by declaring
 its provider, Loki object-store identifier, bucket input, customer-input list, and internal

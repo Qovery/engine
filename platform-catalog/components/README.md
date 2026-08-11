@@ -8,9 +8,10 @@ layout:
 components/<component>/config/
   static-values/
     base.yaml                  # source 1: Qovery values valid in every context
-    overlays/                  # source 2: static mode/provider fragments
+    overlays/                  # source 2: static mode/provider/capability fragments
       customer-managed.yaml
       aws.yaml
+      qovery-karpenter.yaml
   runtime-values/              # source 3: values that require resolved runtime inputs
     managed-values.yaml        # simple whole-value mapping, or
     model.pkl                  # evaluator entrypoint when logic is required
@@ -26,12 +27,19 @@ chart defaults
   < static-values/base.yaml
   < static-values/overlays/<mode>.yaml
   < static-values/overlays/<provider>.yaml
+  < static-values/overlays/<capability>.yaml (enabled capabilities in enum declaration order)
   < runtime-values/managed-values.yaml
   < evaluator-produced values
 ```
 
 Missing base values or overlays are empty fragments. Never put secrets, customer identifiers, or
 account-specific values in this public directory.
+
+q-core selects capability overlays from the target cluster's typed capabilities. Name each file
+after the lower-kebab-case capability token; for example, `QOVERY_KARPENTER` selects
+`qovery-karpenter.yaml`.
+Every source uses recursive RFC 7386 merging: maps preserve unrelated nested keys, scalars and
+lists replace earlier values, and `null` deletes an unprotected key.
 
 ## Choose the smallest source 3
 

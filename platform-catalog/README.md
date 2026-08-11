@@ -22,7 +22,7 @@ platform-catalog/
       config/
         static-values/
           base.yaml            # source 1 — Qovery values valid in every context
-          overlays/            # source 2 — <mode>.yaml then <provider>.yaml
+          overlays/            # source 2 — <mode>, <provider>, then enabled <capability> overlays
         runtime-values/        # source 3 — values requiring resolved runtime inputs
           managed-values.yaml  # direct whole-value mapping, or
           model.pkl            # optional Pkl evaluator entrypoint
@@ -50,7 +50,13 @@ File semantics (the contract q-core's loader implements):
 - an absent `static-values/base.yaml` or context overlay is an empty fragment;
 - a component without an evaluator must publish `runtime-values/managed-values.yaml`; an evaluator makes it optional;
 - a **present-but-invalid** YAML file is a hard compilation error;
-- merge order: `base < mode overlay < provider overlay < declarative mapping < evaluator-derived config`.
+- merge order: `base < mode overlay < provider overlay < capability overlays < declarative mapping < evaluator-derived config`.
+
+Capability overlays are selected by q-core from the typed capabilities of the target cluster and
+merged in capability enum declaration order. Their filenames use the lower-kebab-case capability
+token, for example `QOVERY_KARPENTER` selects `overlays/qovery-karpenter.yaml`.
+All fragments use RFC 7386 merge semantics: maps merge recursively, scalars and lists replace the
+previous value, and `null` deletes a key unless q-core protects that path.
 
 `runtime-values/managed-values.yaml` is the deliberately small source-3 format for components that
 only map resolved runtime inputs to Helm paths. A placeholder must occupy the whole scalar value, for example

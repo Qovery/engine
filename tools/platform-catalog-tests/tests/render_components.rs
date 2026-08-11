@@ -42,6 +42,34 @@ fn any_document_contains_key(documents: &[Value], expected: &str) -> bool {
     documents.iter().any(|document| contains_key(document, expected))
 }
 
+fn assert_workload_scheduling_matches(
+    documents: &[Value],
+    kind: &str,
+    name: &str,
+    overlay: &Value,
+    overlay_section: &str,
+) {
+    let workload = document_by_kind_and_name(documents, kind, name)
+        .unwrap_or_else(|| panic!("missing rendered Loki workload {kind}/{name}"));
+    let pod_spec = yaml_path(workload, &["spec", "template", "spec"])
+        .unwrap_or_else(|| panic!("missing pod spec for rendered Loki workload {kind}/{name}"));
+
+    assert_eq!(
+        yaml_path(pod_spec, &["affinity", "nodeAffinity"]),
+        yaml_path(overlay, &[overlay_section, "affinity", "nodeAffinity"]),
+        "unexpected node affinity for rendered Loki workload {kind}/{name}"
+    );
+    assert_eq!(
+        yaml_path(pod_spec, &["tolerations"]),
+        yaml_path(overlay, &[overlay_section, "tolerations"]),
+        "unexpected tolerations for rendered Loki workload {kind}/{name}"
+    );
+    assert!(
+        yaml_path(pod_spec, &["affinity", "podAntiAffinity"]).is_some(),
+        "missing chart pod anti-affinity for rendered Loki workload {kind}/{name}"
+    );
+}
+
 #[test]
 fn priority_classes_render_with_expected_names() {
     let documents = render(
@@ -158,6 +186,106 @@ fn loki_supports_single_binary_and_simple_scalable_modes() {
         &simple_scalable,
         "proxy_pass       http://loki-write.qovery.svc.cluster.local:3100$request_uri;"
     ));
+}
+
+#[test]
+fn loki_qovery_karpenter_capability_overlay_matches_legacy_scheduling_and_renders() {
+    let chart = "lib-engine/lib/common/bootstrap/charts/loki";
+    let base_values = values("platform-catalog/components/loki/config/static-values/base.yaml");
+    let capability_overlay =
+        values("platform-catalog/components/loki/config/static-values/overlays/qovery-karpenter.yaml");
+    let legacy_overlay = values("lib-engine/lib/common/bootstrap/chart_values/loki_with_karpenter.yaml");
+    let overlay_values = parse_yaml_file(&capability_overlay);
+    let legacy_values = parse_yaml_file(legacy_overlay);
+
+    for section in ["write", "read", "backend", "singleBinary"] {
+        assert_eq!(
+            yaml_path(&overlay_values, &[section]),
+            yaml_path(&legacy_values, &[section]),
+            "Loki Qovery Karpenter scheduling for {section} must remain compatible with Engine v1"
+        );
+    }
+
+    let single_binary_documents = render(
+        "loki",
+        chart,
+        "qovery",
+        &[base_values.clone(), capability_overlay.clone()],
+        &[
+            "--set",
+            "deploymentMode=SingleBinary",
+            "--set",
+            "singleBinary.replicas=1",
+            "--set",
+            "backend.replicas=0",
+            "--set",
+            "read.replicas=0",
+            "--set",
+            "write.replicas=0",
+        ],
+    );
+
+    for (kind, name, overlay_section) in [
+        ("StatefulSet", "loki", "singleBinary"),
+        ("Deployment", "loki-gateway", "gateway"),
+    ] {
+        assert_workload_scheduling_matches(&single_binary_documents, kind, name, &overlay_values, overlay_section);
+    }
+
+    // Representative subset of Source 3 values emitted by compile.pkl for HA S3 with custom resources.
+    let source_3_values = write_runtime_values(
+        r#"deploymentMode: SimpleScalable
+loki:
+  storage:
+    type: s3
+    bucketNames:
+      chunks: qovery-loki
+      ruler: qovery-loki
+      admin: qovery-loki
+singleBinary:
+  replicas: 0
+write:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 750m
+      memory: 1Gi
+read:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+backend:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+gateway:
+  replicas: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+"#,
+    );
+    let simple_scalable_documents = render(
+        "loki",
+        chart,
+        "qovery",
+        &[base_values, capability_overlay, source_3_values.path().to_path_buf()],
+        &[],
+    );
+
+    for (kind, name, overlay_section) in [
+        ("StatefulSet", "loki-write", "write"),
+        ("Deployment", "loki-read", "read"),
+        ("StatefulSet", "loki-backend", "backend"),
+        ("Deployment", "loki-gateway", "gateway"),
+    ] {
+        assert_workload_scheduling_matches(&simple_scalable_documents, kind, name, &overlay_values, overlay_section);
+    }
 }
 
 #[test]

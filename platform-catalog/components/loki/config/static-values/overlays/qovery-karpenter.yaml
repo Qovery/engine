@@ -1,0 +1,84 @@
+write:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: NotIn
+                values: [spot]
+              - key: karpenter.sh/nodepool
+                operator: In
+                values: [stable]
+  tolerations:
+    - key: nodepool/stable
+      operator: Exists
+      effect: NoSchedule
+
+read:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: NotIn
+                values: [spot]
+              - key: karpenter.sh/nodepool
+                operator: In
+                values: [stable]
+  tolerations:
+    - key: nodepool/stable
+      operator: Exists
+      effect: NoSchedule
+
+backend:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: NotIn
+                values: [spot]
+              - key: karpenter.sh/nodepool
+                operator: In
+                values: [stable]
+  tolerations:
+    - key: nodepool/stable
+      operator: Exists
+      effect: NoSchedule
+
+singleBinary:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: NotIn
+                values: [spot]
+              - key: karpenter.sh/nodepool
+                operator: In
+                values: [stable]
+  tolerations:
+    - key: nodepool/stable
+      operator: Exists
+      effect: NoSchedule
+
+gateway:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: NotIn
+                values: [spot]
+              - key: karpenter.sh/nodepool
+                operator: In
+                values: [stable]
+  tolerations:
+    - key: nodepool/stable
+      operator: Exists
+      effect: NoSchedule
